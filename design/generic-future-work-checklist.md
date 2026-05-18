@@ -206,32 +206,42 @@ be checked, while preserving precise ambiguity diagnostics.
 
 Design checklist:
 
-- [ ] Support inference for calls such as `Factory::make(1)` when a static method
+- [x] Support inference for calls such as `Factory::make(1)` when a static method
   signature mentions class type parameters in argument positions and produces a
   unique `Factory<int>` receiver.
-- [ ] Keep explicit receiver types authoritative:
+- [x] Keep explicit receiver types authoritative:
   `Factory<string>::make(...)` must not be rewritten by argument inference.
-- [ ] Keep target/return-context inference as the first choice when present, then
+- [x] Keep target/return-context inference as the first choice when present, then
   use argument-based receiver inference only for otherwise unbound raw generic
   static calls.
-- [ ] Integrate method-level type-parameter inference and class receiver
+- [x] Integrate method-level type-parameter inference and class receiver
   inference so method type arguments and class type arguments do not bind each
   other inconsistently.
-- [ ] Reject calls with ambiguous overload-derived bindings, unbound required
+- [x] Reject calls with ambiguous overload-derived bindings, unbound required
   class type parameters, conflicting defaulted parameters, or failed bounds.
-- [ ] Define diagnostics that suggest the explicit spelling, for example
+- [x] Define diagnostics that suggest the explicit spelling, for example
   `Factory<int>::make(...)`.
 
 Implementation checklist:
 
-- [ ] Reuse constructor/method generic inference helpers for static method
+- [x] Reuse constructor/method generic inference helpers for static method
   variant selection before final receiver substitution.
-- [ ] Thread named-call argument mapping into static receiver inference.
-- [ ] Preserve inferred receiver types through IR, JIT specialization keys, and
+- [x] Thread named-call argument mapping into static receiver inference.
+- [x] Preserve inferred receiver types through IR, JIT specialization keys, and
   AOT expression metadata.
-- [ ] Add tests for argument inference, defaults, bounds, named arguments,
+- [x] Add tests for argument inference, defaults, bounds, named arguments,
   overload ambiguity, method-level generic interaction, AST/IR/JIT/tiered modes,
   and source-stripped AOT.
+
+Verification performed for Phase 7:
+
+- `./run_tests.sh -d qore/misc/generic-classes.qtest`
+- `build/qore --exec-mode=ast examples/test/qore/misc/generic-classes.qtest`
+- `build/qore --exec-mode=ir examples/test/qore/misc/generic-classes.qtest`
+- `build/qore --exec-mode=jit examples/test/qore/misc/generic-classes.qtest`
+- `build/qore --exec-mode=tiered examples/test/qore/misc/generic-classes.qtest`
+- `build/qcc -o build/generic-classes-qtest-aot examples/test/qore/misc/generic-classes.qtest`
+- `build/generic-classes-qtest-aot`
 
 ## Phase 8: Core, Qlib, And Shipped Binary Module Generic API Rollout
 

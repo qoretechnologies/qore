@@ -341,6 +341,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             const QoreTypeInfo* inferred_receiver = func->parseInferClassReceiverTypeInfo(loc, argTypeInfo,
                 named_args ? &arg_names : nullptr, class_ctx, err, parse_context.expected_type_info,
                 constructor_call || infer_class_receiver_from_args,
+                has_explicit_type_args ? &explicit_type_args : nullptr,
                 receiver_inference_call_desc
                     ? receiver_inference_call_desc
                     : (constructor_call ? "constructor call" : "generic class call"));

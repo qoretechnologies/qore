@@ -2336,9 +2336,16 @@ struct ClassReceiverInferenceResult {
     bool ambiguous = false;
 };
 
-static bool qore_score_class_receiver_inference_candidate(const AbstractFunctionSignature* sig,
+static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunctionVariant* variant,
         const type_vec_t& arg_types, const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
-        int& score, int& nperfect, int& score_len) {
+        const type_vec_t* explicit_type_args, int& score, int& nperfect, int& score_len) {
+    QoreTypeParamInstantiation method_inst;
+    if (!qore_infer_signature_type_args(variant, arg_types, supplied, receiver_type_info, &method_inst,
+            explicit_type_args)) {
+        return false;
+    }
+
+    AbstractFunctionSignature* sig = variant->getSignature();
     score = 0;
     nperfect = 0;
     score_len = sig->numParams();
@@ -2347,7 +2354,8 @@ static bool qore_score_class_receiver_inference_candidate(const AbstractFunction
         bool pos_supplied = supplied ? (pi < supplied->size() && (*supplied)[pi]) : (pi < arg_types.size());
         const QoreTypeInfo* actual = pos_supplied && pi < arg_types.size() ? arg_types[pi] : nullptr;
         bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(actual);
-        const QoreTypeInfo* formal = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
+        const QoreTypeInfo* formal = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info,
+            &method_inst);
 
         qore_type_result_e rc = QTI_UNASSIGNED;
         qore_type_result_e max_rc = QTI_UNASSIGNED;
@@ -2392,7 +2400,8 @@ static bool qore_score_class_receiver_inference_candidate(const AbstractFunction
 
 const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const name_vec_t* argNames, const qore_class_private* class_ctx,
-        int& err, const QoreTypeInfo* expected_type_info, bool infer_from_args, const char* call_desc) const {
+        int& err, const QoreTypeInfo* expected_type_info, bool infer_from_args,
+        const type_vec_t* explicit_type_args, const char* call_desc) const {
     const QoreClass* cls = getClass();
     if (!cls || !cls->hasTypeParameters()) {
         return nullptr;
@@ -2497,8 +2506,9 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
             int candidate_score;
             int candidate_nperfect;
             int candidate_score_len;
-            if (!qore_score_class_receiver_inference_candidate(sig, *candidate_arg_types, supplied,
-                    receiver_type_info, candidate_score, candidate_nperfect, candidate_score_len)) {
+            if (!qore_score_class_receiver_inference_candidate(*i, *candidate_arg_types, supplied,
+                    receiver_type_info, explicit_type_args, candidate_score, candidate_nperfect,
+                    candidate_score_len)) {
                 continue;
             }
 

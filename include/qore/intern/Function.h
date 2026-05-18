@@ -1457,12 +1457,14 @@ public:
         @param err parse error flag
         @param expected_type_info surrounding expected type hint, or nullptr
         @param infer_from_args true to infer from formal/actual constructor arguments
+        @param explicit_type_args explicit method/function type arguments, or nullptr
         @return the inferred parameterized class type, or nullptr if no unique inference is available
     */
     DLLLOCAL const QoreTypeInfo* parseInferClassReceiverTypeInfo(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t* argNames,
             const qore_class_private* class_ctx, int& err, const QoreTypeInfo* expected_type_info,
-            bool infer_from_args, const char* call_desc = nullptr) const;
+            bool infer_from_args, const type_vec_t* explicit_type_args = nullptr,
+            const char* call_desc = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {

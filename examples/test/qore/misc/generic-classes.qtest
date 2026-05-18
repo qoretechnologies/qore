@@ -705,6 +705,18 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         string explicit_receiver_static = SourceGenericStaticChooser<int>::choose<string>(30, "thirty");
         assertEq("thirty", explicit_receiver_static);
+
+        string inferred_receiver_static = SourceGenericStaticChooser::choose(31, "thirty-one");
+        assertEq("thirty-one", inferred_receiver_static);
+
+        string explicit_method_inferred_receiver_static = SourceGenericStaticChooser::choose<string>(32, "thirty-two");
+        assertEq("thirty-two", explicit_method_inferred_receiver_static);
+
+        string named_inferred_receiver_static = SourceGenericStaticChooser::choose(right: "thirty-three", left: 33);
+        assertEq("thirty-three", named_inferred_receiver_static);
+
+        int mixed_inferred_receiver_static = SourceGenericStaticChooser::choose("thirty-four", 34);
+        assertEq(34, mixed_inferred_receiver_static);
     }
 
     genericHashDecls() {
@@ -897,6 +909,52 @@ public class GenericClassTypesTest inherits QUnit::Test {
                 "class Box<T: int> { constructor(T value) {} static Box<T> make(T value) { "
                 "return new Box<T>(value); } } sub t() { auto b = Box::make(\"x\"); }",
                 "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "bool sub t() { string s = Box::choose(1, \"x\"); return s == \"x\"; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "bool sub t() { string s = Box::choose<string>(1, \"x\"); return s == \"x\"; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "bool sub t() { string s = Box::choose(right: \"x\", left: 1); return s == \"x\"; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { static U choose<U>(T left, U right) { return right; } "
+                "static U choose<U>(list<T> left, U right) { return right; } } "
+                "sub t() { string s = Box::choose((1, 2), \"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { static U choose<U>(T left, U right) { return right; } } "
+                "sub t() { string s = Box::choose(\"bad\", \"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { static U choose<U: int>(T left, U right) { return right; } } "
+                "sub t() { int i = Box::choose(1, \"x\"); }", "generic-classes"));
         }
     }
 
@@ -1242,6 +1300,13 @@ public class GenericClassTypesTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
                 "sub t() { string s = Box<int>::choose<string>(1, \"x\"); }", "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "sub t() { string s = Box::choose<string>(1, \"x\"); }", "generic-classes");
             p.callFunction("t");
         }
 
