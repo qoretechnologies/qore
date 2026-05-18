@@ -3299,7 +3299,7 @@ public class SomethingDataType inherits AnythingDataType {
 }
 
 #! Output record iterator for Mapper objects with an input data provider
-public class MapperOutputRecordIterator inherits AbstractDataProviderRecordIterator {
+public class MapperOutputRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! the mapper
         Mapper mapper;

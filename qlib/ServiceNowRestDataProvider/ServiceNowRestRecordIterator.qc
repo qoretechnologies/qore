@@ -25,7 +25,7 @@
 #! contains all public definitions in the ServiceNowRestDataProvider module
 public namespace ServiceNowRestDataProvider {
 #! Defines the record iterator class for Table-based iterators
-public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIterator {
+public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     public {
     }
 

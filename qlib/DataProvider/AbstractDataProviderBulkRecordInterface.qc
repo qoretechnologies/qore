@@ -159,7 +159,7 @@ public class AbstractDataProviderBulkRecordInterface {
     #! Returns a standard record iterator for this bulk iterator
     /** @return a standard record iterator for this bulk iterator
     */
-    AbstractDataProviderRecordIterator getRecordIterator() {
+    AbstractDataProviderRecordIterator<hash<auto>> getRecordIterator() {
         return new DataProviderBulkRecordIterator(self);
     }
 

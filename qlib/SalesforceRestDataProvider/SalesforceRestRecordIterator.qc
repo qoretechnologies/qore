@@ -25,7 +25,7 @@
 #! contains all public definitions in the SalesforceRestDataProvider module
 public namespace SalesforceRestDataProvider {
 #! Defines the record iterator class for Table-based iterators
-public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIterator {
+public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     public {
     }
 

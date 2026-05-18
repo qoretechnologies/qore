@@ -105,10 +105,10 @@ public class AbstractODataEntityDataProvider inherits CdsRestDataProviderBase {
     abstract private string getEntityUri(*string id);
 
     #! Template method: subclasses implement to create a record iterator
-    abstract private AbstractDataProviderRecordIterator createRecordIterator(*hash<auto> where_cond, *hash<auto> search_options);
+    abstract private AbstractDataProviderRecordIterator<hash<auto>> createRecordIterator(*hash<auto> where_cond, *hash<auto> search_options);
 
     #! Returns an iterator for zero or more records matching the search options
-    private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private DataProvider::AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         checkRecordInit();
         return createRecordIterator(where_cond, search_options);

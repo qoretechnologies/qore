@@ -25,7 +25,7 @@
 #! contains all public definitions in the DbDataProvider module
 public namespace DbDataProvider {
 #! Defines the record iterator class for Table-based iterators
-public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterator {
+public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! the statement being iterated
         AbstractSQLStatement stmt;

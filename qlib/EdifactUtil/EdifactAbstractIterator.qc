@@ -44,7 +44,7 @@ while (i.next()) {
 }
         @endcode
     */
-    public class EdifactAbstractIterator inherits EdifactBase, Qore::AbstractIterator {
+    public class EdifactAbstractIterator inherits EdifactBase, Qore::AbstractIterator<hash<auto>> {
         private {
             #! List of parsed segment strings
             list<string> m_segments;

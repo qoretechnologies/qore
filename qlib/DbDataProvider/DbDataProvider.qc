@@ -230,7 +230,7 @@ public class DbDataProvider inherits DbDataProviderBase {
 
         @see requestSearchRecordsImpl()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         return new DbSelectRecordIterator(db.getDatasource(), where_cond, search_options);
     }
 

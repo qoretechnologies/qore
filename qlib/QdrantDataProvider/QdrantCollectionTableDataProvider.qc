@@ -187,7 +187,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
     /** @param where_cond the search criteria
         @param search_options the search options after processing by validateSearchOptions()
     */
-    private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private DataProvider::AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return new QdrantSearchRecordIterator(rest, collection_name, where_cond, search_options);
     }

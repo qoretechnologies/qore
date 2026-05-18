@@ -29,7 +29,7 @@ public namespace JotformDataProvider {
 /** This iterator handles JotForm's offset-based pagination,
     fetching pages on-demand as the iterator progresses.
 */
-public class JotformRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class JotformRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client for API calls
         JotformRestClient::JotformRestClient rest;

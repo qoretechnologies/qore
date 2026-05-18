@@ -149,7 +149,7 @@ public class SmartSheetSheetDataProvider inherits SmartSheetDataProviderBase {
         @param search_options search options (rowId, columns, limit)
         @return an iterator for matching rows
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return new SmartSheetRecordIterator(rest, sheet_id, record_info, where_cond,
             search_options);

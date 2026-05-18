@@ -102,7 +102,7 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
     }
 
     #! Creates a record iterator
-    private AbstractDataProviderRecordIterator createRecordIterator(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> createRecordIterator(*hash<auto> where_cond, *hash<auto> search_options) {
         string entity_path = companyId
             ? sprintf("companies(%s)/%s", companyId, name)
             : record_info.entity_name;

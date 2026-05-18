@@ -317,7 +317,7 @@ public class ModelVersionsDataProvider inherits AbstractDataProvider {
         };
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(
             *hash<auto> where_cond, *hash<auto> search_options) {
         list<hash<auto>> versions = registry.listVersions(model_name);
 
@@ -361,7 +361,7 @@ public class ModelVersionsDataProvider inherits AbstractDataProvider {
 #! Simple record iterator wrapping a list iterator
 /** @since QoreModelRegistry 2.0
 */
-public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator {
+public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         list<hash<auto>> data;
         int pos = -1;

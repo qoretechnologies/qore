@@ -155,14 +155,14 @@ public namespace EdifactUtil {
         }
 
         #! Returns an iterator for the data
-        AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
             bool summary_only = search_options.summary_only ?? True;
             return new EdifactSchemaDataProviderRecordIterator(m_schema, summary_only, m_cache_warnings);
         }
     }
 
     #! Record iterator for EDIFACT schema data provider
-    class EdifactSchemaDataProviderRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+    class EdifactSchemaDataProviderRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
         private {
             hash<auto> m_record;
             bool m_done = False;

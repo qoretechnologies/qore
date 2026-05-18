@@ -44,7 +44,7 @@ public const DefaultFields = (
 );
 
 #! Record iterator that generates configurable test records in-memory
-public class GeneratorRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class GeneratorRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private:internal {
         #! Total records to generate
         int count;

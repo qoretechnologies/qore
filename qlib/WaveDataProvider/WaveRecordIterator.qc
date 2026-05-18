@@ -29,7 +29,7 @@ public namespace WaveDataProvider {
 /** This iterator handles Wave's page-number-based pagination,
     fetching pages on-demand as the iterator progresses.
 */
-public class WaveRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class WaveRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client for API calls
         WaveRestClient::WaveRestClient rest;
