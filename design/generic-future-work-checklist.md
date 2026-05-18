@@ -81,34 +81,41 @@ Implementation checklist:
 
 ## Phase 3: Specialized Generic Code Generation
 
-Goal: allow JIT/AOT to emit specialized bodies for concrete generic
-instantiations without changing source-visible semantics.
+Goal: allow IR/JIT to emit specialized bodies for concrete generic
+instantiations without changing source-visible semantics, while preserving AOT
+compatibility through runtime-resolved generic metadata.
 
 Design checklist:
 
-- [ ] Decide which execution tier owns specialization: parse IR, JIT lowering,
-  AOT emission, or a staged combination.
-- [ ] Define specialization cache keys for class receiver type arguments,
+- [x] Decide which execution tier owns specialization: specialized IR is
+  lowered at dispatch time from the source body, JIT compiles that specialized
+  IR when JIT or tiered execution is active, and AOT keeps using serialized
+  generic metadata resolved at runtime.
+- [x] Define specialization cache keys for class receiver type arguments,
   method/function type arguments, static generic calls, and parameterized
   hashdecl-derived records.
-- [ ] Keep the substitution-based interpreter path as the correctness baseline.
-- [ ] Define invalidation and reuse rules for source-stripped AOT and module
-  loading.
-- [ ] Define when specialization is skipped, such as raw generic calls,
-  unresolved type parameters, dynamic calls, or excessive cache growth.
-- [ ] Define observability rules so reflection and stack traces still describe
+- [x] Keep the substitution-based interpreter path as the correctness baseline.
+- [x] Define invalidation and reuse rules for source-stripped AOT and module
+  loading: specialized IR is owned by the source variant and reused for the
+  lifetime of that variant; source-stripped AOT bodies remain generic and
+  resolve type metadata through the AOT type table at runtime.
+- [x] Define when specialization is skipped, such as calls without concrete
+  generic context, source-stripped AOT bodies, and failed specialized lowering.
+  These paths use the substitution-based AST or runtime-metadata execution path.
+- [x] Define observability rules so reflection and stack traces still describe
   the source method/function.
 
 Implementation checklist:
 
-- [ ] Introduce an internal specialization descriptor.
-- [ ] Intern or cache descriptors per program.
-- [ ] Clone or lower IR with concrete substituted types.
-- [ ] Make JIT lookup specialization-aware while keeping fallback execution.
-- [ ] Preserve AOT compatibility with older binaries by feature-gating new
-  metadata.
-- [ ] Add correctness tests that compare specialized and non-specialized paths.
-- [ ] Add stress tests for cache reuse and mixed instantiations.
+- [x] Introduce an internal specialization descriptor.
+- [x] Intern or cache descriptors per variant.
+- [x] Clone or lower IR with concrete substituted types.
+- [x] Make JIT lookup specialization-aware while keeping fallback execution.
+- [x] Preserve AOT compatibility without adding new metadata by serializing
+  generic hashdecl type paths and resolving them through the runtime
+  receiver/type-argument context.
+- [x] Add correctness tests that compare specialized and non-specialized paths.
+- [x] Add stress tests for cache reuse and mixed instantiations.
 - [ ] Add performance-focused smoke tests only after correctness is stable.
 
 ## Phase 4: Doxygen And User Documentation

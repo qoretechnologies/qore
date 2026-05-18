@@ -4098,6 +4098,13 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals, new_hd->loc, nullptr)
                 ->result;
         }
+        const QoreTypeInfo* hd_type_info = qore_substitute_type_params(new_hd->hd->getTypeInfo(),
+            qore_get_current_receiver_type_info());
+        const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hd_type_info);
+        if (!hd) {
+            error = "hashdecl construction target could not be resolved after generic type substitution";
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -4110,7 +4117,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             builder.setBlock(normal_block);
             return inst->result;
         }
-        return builder.createNewHashDeclFromHash(new_hd->hd, new_hd->runtime_check, hash_val, new_hd->loc)->result;
+        return builder.createNewHashDeclFromHash(hd, new_hd->runtime_check, hash_val, new_hd->loc)->result;
     }
     if (auto* new_ch = dynamic_cast<const NewComplexHashNode*>(node)) {
         if (!exception_stack.empty()) {
@@ -4536,7 +4543,9 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
         // This ensures local variable references in the hash initializer are properly
         // lowered as individual IR instructions (LoadLocal etc.), enabling correct AOT
         // serialization instead of baking pre-evaluated values into the AST.
-        const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
+        const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(vrn->getTypeInfo(),
+            qore_get_current_receiver_type_info());
+        const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
         if (hd && vrn->isHashDeclConstruct()) {
             // Undo ast_delegate_count: hashdecl args are fully lowered via IR,
             // not delegated to AST evaluation

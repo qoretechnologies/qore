@@ -399,6 +399,35 @@ class SourceGenericStaticChooser<T> {
     }
 }
 
+class SourceSpecializedOps<T> {
+    T identity(T value) {
+        T local = value;
+        return local;
+    }
+
+    list<T> wrap(T value) {
+        list<T> rv();
+        rv += value;
+        return rv;
+    }
+
+    hash<SourceGenericResult<T>> result(T value) {
+        hash<SourceGenericResult<T>> rv(("value": value, "values": (value,)));
+        return rv;
+    }
+
+    static hash<SourceGenericResult<T>> staticResult(T value) {
+        hash<SourceGenericResult<T>> rv(("value": value, "values": (value,)));
+        return rv;
+    }
+
+    static U choose<U>(T left, U right) {
+        T saved = left;
+        U rv = right;
+        return rv;
+    }
+}
+
 namespace SourceGenericNs {
     class Box<T> {
         T echo(T value) {
@@ -452,6 +481,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("generic hashdecls", \genericHashDecls());
         addTestCase("generic wildcards", \genericWildcards());
         addTestCase("expression-site inference", \expressionSiteInference());
+        addTestCase("specialized generic execution", \specializedGenericExecution());
         addTestCase("source generic iterators", \sourceGenericIterators());
         addTestCase("source generic poll operations", \sourceGenericPollOperations());
         addTestCase("builtin iterator element types", \builtinIteratorElementTypes());
@@ -835,6 +865,42 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
     SourceGenericBox<int> makeInferredSourceGenericBox() {
         return new SourceGenericBox(37);
+    }
+
+    specializedGenericExecution() {
+        SourceSpecializedOps<int> int_ops();
+        SourceSpecializedOps<string> string_ops();
+
+        assertEq(1, int_ops.identity(1));
+        assertEq(2, int_ops.identity(2));
+        assertEq("a", string_ops.identity("a"));
+        assertEq("b", string_ops.identity("b"));
+
+        list<int> int_list = int_ops.wrap(3);
+        assertEq((3,), int_list);
+        list<string> string_list = string_ops.wrap("c");
+        assertEq(("c",), string_list);
+
+        hash<SourceGenericResult<int>> int_result = int_ops.result(4);
+        assertEq(4, int_result.value);
+        assertEq((4,), int_result.values);
+        assertEq("hash<SourceGenericResult<int>>", int_result.fullType());
+
+        hash<SourceGenericResult<string>> string_result = string_ops.result("d");
+        assertEq("d", string_result.value);
+        assertEq(("d",), string_result.values);
+        assertEq("hash<SourceGenericResult<string>>", string_result.fullType());
+
+        hash<SourceGenericResult<int>> static_int_result = SourceSpecializedOps<int>::staticResult(5);
+        assertEq(5, static_int_result.value);
+        assertEq("hash<SourceGenericResult<int>>", static_int_result.fullType());
+
+        hash<SourceGenericResult<string>> static_string_result = SourceSpecializedOps<string>::staticResult("e");
+        assertEq("e", static_string_result.value);
+        assertEq("hash<SourceGenericResult<string>>", static_string_result.fullType());
+
+        assertEq("right", SourceSpecializedOps<int>::choose<string>(6, "right"));
+        assertEq(7, SourceSpecializedOps<string>::choose<int>("left", 7));
     }
 
     sourceGenericIterators() {

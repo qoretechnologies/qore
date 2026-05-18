@@ -159,7 +159,12 @@ void QoreIRToLLVM::initTypes() {
     void_type = llvm::Type::getVoidTy(ctx);
 }
 
+const QoreTypeInfo* QoreIRToLLVM::specializeType(const QoreTypeInfo* ti) const {
+    return current_ir_func ? current_ir_func->specializeType(ti) : ti;
+}
+
 llvm::Value* QoreIRToLLVM::getTypeInfoPointerArg(const QoreTypeInfo* ti) {
+    ti = specializeType(ti);
     if (!ti) {
         return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
     }
@@ -172,6 +177,7 @@ static std::string qore_ir_get_type_path(const QoreTypeInfo* ti) {
 }
 
 llvm::Value* QoreIRToLLVM::getTypePathArg(const QoreTypeInfo* ti) {
+    ti = specializeType(ti);
     return builder->CreateGlobalStringPtr(qore_ir_get_type_path(ti));
 }
 
@@ -8163,6 +8169,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         variant = vrn->getVariant();
                         object_type_info = vrn->getTypeInfo();
                     }
+                    object_type_info = specializeType(object_type_info);
                     assert(qc);
                     llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(qc));
@@ -8447,7 +8454,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                         llvm::Value* key_boxed = boxValue(key_val, inv->operands[0].id);
                                         llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
                                         llvm::Value* type_ptr = builder->CreateGlobalStringPtr(
-                                            qore_ir_get_type_path(prn->getTypeInfo()));
+                                            qore_ir_get_type_path(specializeType(prn->getTypeInfo())));
                                         auto helper = module.getOrInsertFunction(
                                             "qore_rt_create_member_hash_ref_aot",
                                             llvm::FunctionType::get(i64_type,
@@ -8616,6 +8623,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         typeInfo = ncl->typeInfo;
                         is_list = true;
                     }
+                    typeInfo = specializeType(typeInfo);
                     if (!typeInfo || (!is_hash && !is_list)) {
                         return setExpressionFallbackError(error, inst,
                                 "VrnConstruct invoke with lowered operand has no complex hash/list target metadata");
@@ -8672,11 +8680,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 bool runtime_check = false;
                 if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                         inv->expr.getInternalNode())) {
-                    hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
+                    hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(vrn->getTypeInfo()));
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(
                         inv->expr.getInternalNode())) {
-                    hd = nhd->hd;
+                    hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(nhd->hd->getTypeInfo()));
                     runtime_check = nhd->runtime_check;
                 }
                 if (!hd) {
@@ -8690,7 +8698,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         runtime_check ? 1 : 0);
                 if (aot_mode) {
                     // AOT: resolve hashdecl by namespace path at runtime
-                    std::string hd_path = hd->getNamespacePath();
+                    std::string hd_path = qore_get_aot_serializable_type_path(hd->getTypeInfo());
                     llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                     auto helper = module.getOrInsertFunction(
                             "qore_rt_new_hash_decl_from_hash_by_path",
@@ -8734,8 +8742,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* val_boxed = boxValue(val, inv->operands[0].id);
                 auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
                     inv->expr.getInternalNode());
+                const QoreTypeInfo* ti = specializeType(io_node->getInstanceTypeInfo());
                 if (!aot_mode) {
-                    const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
                     llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(ti));
                     llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
@@ -8743,7 +8751,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {val_boxed, ti_as_ptr});
                 } else {
-                    const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
                     std::string type_path = qore_ir_get_type_path(ti);
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     auto helper = module.getOrInsertFunction("qore_rt_instanceof_by_type_path",
@@ -8777,7 +8784,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(
                         inv->expr.getInternalNode());
                     if (cast_node) {
-                        const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
+                        const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
                         std::string type_path = ti ? qore_ir_get_type_path(ti)
                             : (inv->invoke_opcode == QoreIROpcode::CastList ? "list" : "");
                         llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
@@ -12252,7 +12259,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     llvm::Value* key_boxed = boxValue(key_val, prinst->operands[0].id);
                                     llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
                                     llvm::Value* type_ptr = builder->CreateGlobalStringPtr(
-                                        qore_ir_get_type_path(prinst->node->getTypeInfo()));
+                                        qore_ir_get_type_path(specializeType(prinst->node->getTypeInfo())));
                                     auto helper = module.getOrInsertFunction(
                                         "qore_rt_create_member_hash_ref_aot",
                                         llvm::FunctionType::get(i64_type,
@@ -12465,6 +12472,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     typeInfo = ncl->typeInfo;
                     is_list = true;
                 }
+                typeInfo = specializeType(typeInfo);
                 if (!typeInfo || (!is_hash && !is_list)) {
                     return setExpressionFallbackError(error, inst,
                             "VrnConstruct with lowered operand has no complex hash/list target metadata");
@@ -12547,7 +12555,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // namespace path because compile-time pointers are not stable.
                 std::string hd_path = !nhdfh_inst->hd_path.empty()
                     ? nhdfh_inst->hd_path
-                    : (nhdfh_inst->hd ? nhdfh_inst->hd->getNamespacePath() : "");
+                    : (nhdfh_inst->hd ? qore_get_aot_serializable_type_path(nhdfh_inst->hd->getTypeInfo()) : "");
                 if (hd_path.empty()) {
                     error = "NewHashDeclFromHash is missing hashdecl path";
                     return false;
@@ -14368,7 +14376,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
                 auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
                     expr_inst->expr.getInternalNode());
-                const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                const QoreTypeInfo* ti = specializeType(io_node->getInstanceTypeInfo());
                 llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(ti));
                 llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
@@ -14388,7 +14396,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* val = getVal(inst->operands[0].id, error);
                 if (!val) { return false; }
                 llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
-                const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                const QoreTypeInfo* ti = specializeType(io_node->getInstanceTypeInfo());
                 std::string type_path = qore_ir_get_type_path(ti);
                 llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                 auto iobtp_ft = llvm::FunctionType::get(i64_type,
@@ -14566,7 +14574,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(
                     expr_inst->expr.getInternalNode());
                 if (cast_node) {
-                    const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
+                    const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
                     std::string type_path = ti ? qore_ir_get_type_path(ti)
                         : (inst->opcode == QoreIROpcode::CastList ? "list" : "");
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);

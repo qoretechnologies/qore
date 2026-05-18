@@ -124,6 +124,13 @@ static const TypedHashDecl* resolveNewHashDeclFromHashTarget(
         return nullptr;
     }
     const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, inst.hd_path.c_str());
+    if (!hd) {
+        std::string error;
+        QoreAOTTypeResolver resolver(pgm);
+        const QoreTypeInfo* ti = resolver.resolve(inst.hd_path.c_str(), error);
+        ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
+        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    }
     if (!hd && xsink) {
         xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
             inst.hd_path.c_str());
@@ -2058,10 +2065,14 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             if (inv->expr.hasNode()) {
                 auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
                 if (vrn) {
-                    hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
+                    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(vrn->getTypeInfo(),
+                        qore_get_current_receiver_type_info());
+                    hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(inv->expr.getInternalNode())) {
-                    hd = nhd->hd;
+                    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(nhd->hd->getTypeInfo(),
+                        qore_get_current_receiver_type_info());
+                    hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
                     runtime_check = nhd->runtime_check;
                 }
             }

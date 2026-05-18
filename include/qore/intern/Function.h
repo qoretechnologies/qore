@@ -40,6 +40,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "qore/intern/QoreJITException.h"
@@ -818,6 +819,9 @@ protected:
     mutable bool uses_argv = true;  // Conservative: assume used unless proven otherwise
     //! True if self is actually referenced in the function body (set during IR lowering)
     mutable bool uses_self = true;  // Conservative: assume used unless proven otherwise
+    //! Specialized IR functions keyed by concrete receiver and method type arguments
+    mutable std::mutex specialized_ir_mutex;
+    mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -836,6 +840,17 @@ protected:
         rather than silently falling back to AST.
     */
     DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false) const;
+    DLLLOCAL QoreIRFunction* lowerIRFunction(const char* name, const std::string& unique_name,
+            const QoreTypeInfo* specialization_receiver_type_info,
+            const QoreTypeParamInstantiation* specialization_type_param_instantiation,
+            bool mark_failure, bool raise_on_failure) const;
+    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIR(const char* name,
+            const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation,
+            bool raise_on_failure) const;
+    DLLLOCAL QoreValue evalSpecializedIR(const char* name, const QoreIRFunction* ir,
+            ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
+            bool caller_has_frame_boundary) const;
 
     //! Attempt JIT compilation; called via std::call_once
     DLLLOCAL void attemptJITCompilation() const;

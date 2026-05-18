@@ -4523,23 +4523,21 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     }
 }
 
-void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure) const {
+QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,
+        const QoreTypeInfo* specialization_receiver_type_info,
+        const QoreTypeParamInstantiation* specialization_type_param_instantiation,
+        bool mark_failure, bool raise_on_failure) const {
     assert(pgm);
     assert(statements);
 
-    // Make the IR function name unique per variant to avoid name collisions in the
-    // JIT's compiled_functions map.  Multiple closures (or overloaded functions) can
-    // share the same display name (e.g. "<anonymous closure>"), but each variant has
-    // its own LocalVar pointers baked into IR/JIT code, so they must compile to
-    // distinct JIT entries.  A monotonic counter is needed in addition to the address
-    // because when a variant is destroyed and a new one allocated at the same address,
-    // the old JIT cache entry would be returned with stale LocalVar pointers.
-    static std::atomic<uint64_t> variant_counter{0};
-    std::string unique_name = std::string(name) + "@" + std::to_string((uintptr_t)this)
-        + "_" + std::to_string(variant_counter.fetch_add(1));
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
     // Store the return type info for type coercion in Return opcode lowering
-    func->return_type_info = getReturnTypeInfo();
+    func->return_type_info = qore_substitute_type_params(getReturnTypeInfo(), specialization_receiver_type_info,
+        specialization_type_param_instantiation);
+    func->specialization_receiver_type_info = specialization_receiver_type_info;
+    if (specialization_type_param_instantiation && !specialization_type_param_instantiation->empty()) {
+        func->specialization_type_param_instantiation = *specialization_type_param_instantiation;
+    }
     // Record which locals are pre-instantiated by the calling convention so the JIT
     // skips instantiation/uninstantiation for them.
     for (unsigned i = 0; i < signature.numParams(); ++i) {
@@ -4579,11 +4577,41 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
     auto* entry = func->createBlock("entry");
     builder.setBlock(entry);
 
+    struct IRTypeSpecializationGuard {
+        const QoreTypeInfo* old_receiver = nullptr;
+        const QoreTypeParamInstantiation* old_type_inst = nullptr;
+        bool restore_receiver = false;
+        bool restore_type_inst = false;
+
+        IRTypeSpecializationGuard(const QoreTypeInfo* receiver_type_info,
+                const QoreTypeParamInstantiation* type_param_instantiation) {
+            if (receiver_type_info) {
+                old_receiver = runtime_set_receiver_type_info(receiver_type_info);
+                restore_receiver = true;
+            }
+            if (type_param_instantiation && !type_param_instantiation->empty()) {
+                old_type_inst = runtime_set_type_param_instantiation(type_param_instantiation);
+                restore_type_inst = true;
+            }
+        }
+
+        ~IRTypeSpecializationGuard() {
+            if (restore_type_inst) {
+                runtime_set_type_param_instantiation(old_type_inst);
+            }
+            if (restore_receiver) {
+                runtime_set_receiver_type_info(old_receiver);
+            }
+        }
+    } specialization_guard(specialization_receiver_type_info, specialization_type_param_instantiation);
+
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
     std::string error;
     if (!lowering.lowerStatementBlock(statements, error)) {
-        ir_lower_failed = true;
+        if (mark_failure) {
+            ir_lower_failed = true;
+        }
         delete func;
         printd(2, "UserVariantBase::attemptIRLowering() '%s' failed: %s\n", name, error.c_str());
         if (pgm) {
@@ -4594,13 +4622,15 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
                 "IR lowering of '%s' failed: %s (silent AST fallback disabled)",
                 name ? name : "<fn>", error.c_str());
         }
-        return;
+        return nullptr;
     }
     if (!irBlockHasTerminatorFunc(builder.getBlock())) {
         builder.createReturnNothing();
     }
     if (!QoreIRVerifier::verify(*func, error)) {
-        ir_lower_failed = true;
+        if (mark_failure) {
+            ir_lower_failed = true;
+        }
         delete func;
         printd(2, "UserVariantBase::attemptIRLowering() '%s' verification failed: %s\n", name, error.c_str());
         if (pgm) {
@@ -4611,7 +4641,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
                 "IR verification of '%s' failed: %s (silent AST fallback disabled)",
                 name ? name : "<fn>", error.c_str());
         }
-        return;
+        return nullptr;
     }
 
     // Keep signature-owned slots reserved after lowering as well.  This is
@@ -4634,7 +4664,9 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
     std::string handler_compile_error;
     int handlers_compiled = lowering.compileAllHandlerIRs(handler_compile_error);
     if (handlers_compiled < 0) {
-        ir_lower_failed = true;
+        if (mark_failure) {
+            ir_lower_failed = true;
+        }
         delete func;
         printd(2, "UserVariantBase::attemptIRLowering() '%s' handler compilation failed: %s\n",
             name, handler_compile_error.c_str());
@@ -4646,7 +4678,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
                 "IR handler lowering for '%s' failed: %s (silent AST fallback disabled)",
                 name ? name : "<fn>", handler_compile_error.c_str());
         }
-        return;
+        return nullptr;
     }
 
     // Classify locals as IR-only vs AST-visible for optimization
@@ -4764,6 +4796,25 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
     func->direct_params_eligible = all_params_ir_only && all_params_have_slots
         && all_params_direct_safe && !signature.argvid;
 
+    printd(3, "UserVariantBase::lowerIRFunction() '%s' lowered to IR (%d guards)\n", name, func->num_guards);
+    return func;
+}
+
+void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure) const {
+    // Make the IR function name unique per variant to avoid name collisions in the
+    // JIT's compiled_functions map.  Multiple closures (or overloaded functions) can
+    // share the same display name (e.g. "<anonymous closure>"), but each variant has
+    // its own LocalVar pointers baked into IR/JIT code, so they must compile to
+    // distinct JIT entries.  A monotonic counter is needed in addition to the address
+    // because when a variant is destroyed and a new one allocated at the same address,
+    // the old JIT cache entry would be returned with stale LocalVar pointers.
+    static std::atomic<uint64_t> variant_counter{0};
+    std::string unique_name = std::string(name) + "@" + std::to_string(reinterpret_cast<uintptr_t>(this))
+        + "_" + std::to_string(variant_counter.fetch_add(1));
+    QoreIRFunction* func = lowerIRFunction(name, unique_name, nullptr, nullptr, true, raise_on_failure);
+    if (!func) {
+        return;
+    }
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
     printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
@@ -5084,6 +5135,163 @@ void UserVariantBase::attemptJITRecompilation() const {
         orig_name.c_str());
 }
 
+static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_instantiation) {
+    return (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
+        || (type_param_instantiation && !type_param_instantiation->empty());
+}
+
+static std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_instantiation) {
+    std::string key;
+    if (receiver_type_info) {
+        key += "R:";
+        key += QoreTypeInfo::getPath(receiver_type_info);
+    }
+    if (type_param_instantiation && !type_param_instantiation->empty()) {
+        key += "|M:";
+        key += std::to_string(reinterpret_cast<uintptr_t>(type_param_instantiation->owner));
+        key += "<";
+        for (size_t i = 0, e = type_param_instantiation->type_args.size(); i < e; ++i) {
+            if (i) {
+                key += ",";
+            }
+            key += QoreTypeInfo::getPath(type_param_instantiation->type_args[i]);
+        }
+        key += ">";
+    }
+    return key;
+}
+
+const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_instantiation,
+        bool raise_on_failure) const {
+    if (!statements || !qore_has_generic_specialization_context(receiver_type_info, type_param_instantiation)) {
+        return nullptr;
+    }
+
+    std::string key = qore_make_generic_specialization_key(receiver_type_info, type_param_instantiation);
+    {
+        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        auto it = specialized_ir_cache.find(key);
+        if (it != specialized_ir_cache.end()) {
+            return it->second.get();
+        }
+    }
+
+    static std::atomic<uint64_t> specialization_counter{0};
+    std::string unique_name = std::string(name ? name : "<fn>") + "@spec"
+        + std::to_string(reinterpret_cast<uintptr_t>(this))
+        + "_" + std::to_string(specialization_counter.fetch_add(1));
+    std::unique_ptr<QoreIRFunction> ir(lowerIRFunction(name, unique_name, receiver_type_info,
+        type_param_instantiation, false, raise_on_failure));
+    if (!ir) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+    auto it = specialized_ir_cache.emplace(std::move(key), std::move(ir)).first;
+    return it->second.get();
+}
+
+QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
+        ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
+        bool caller_has_frame_boundary) const {
+    ThreadFrameBoundaryHelper tfbh(!caller_has_frame_boundary);
+
+    if (self && signature.selfid) {
+        signature.selfid->instantiateSelf(self);
+    }
+
+    assert(signature.argvid);
+    signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
+
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+
+        if (!gate || (gate->enter(xsink) >= 0)) {
+            for (LocalVar* lv : ir->ast_visible_body_locals) {
+                if (!lv->closureUse()) {
+                    lv->instantiate(getParseOptions(pgm->getParseOptions()));
+                }
+            }
+
+            const AbstractStatement* old_stmt;
+            const QoreProgramLocation* old_loc;
+            QoreParseOptions old_po;
+            swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(),
+                getParseOptions(pgm->getParseOptions()), old_stmt, old_loc, old_po);
+
+            QoreValue ir_return_value;
+            bool ok = false;
+            qore_exec_mode_t exec_mode = pgm->getExecMode();
+            if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+                std::string error;
+                ok = QoreJIT::instance().executeWithFallback(*ir, ir_return_value, xsink, error,
+                    ir->cached_pre_instantiated);
+                if (!*xsink && qore_jit_deopt_requested()) {
+                    ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
+                        ir->cached_pre_instantiated, (!self && signature.selfid) ? signature.selfid : nullptr,
+                        statements, pgm);
+                }
+            } else {
+                ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
+                    ir->cached_pre_instantiated, (!self && signature.selfid) ? signature.selfid : nullptr,
+                    statements, pgm);
+            }
+
+            if (ok && !*xsink) {
+                val = ir_return_value;
+            } else if (!*xsink) {
+                if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
+                    QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
+                }
+                if (pgm) {
+                    pgm->recordIRFallback("specialized execution: runtime failure");
+                }
+                xsink->raiseException("IR-EXECUTION-ERROR",
+                    "specialized IR execution of '%s' failed without raising an exception; "
+                    "this is a bug in the IR interpreter (silent AST fallback disabled)",
+                    name ? name : "<fn>");
+            }
+
+            swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
+
+            for (int i = static_cast<int>(ir->ast_visible_body_locals.size()) - 1; i >= 0; --i) {
+                if (!ir->ast_visible_body_locals[i]->closureUse()) {
+                    ir->ast_visible_body_locals[i]->uninstantiate(xsink);
+                }
+            }
+
+            if (gate) {
+                gate->exit();
+            }
+        }
+    }
+
+    signature.argvid->uninstantiate(xsink);
+    if (self && signature.selfid) {
+        signature.selfid->uninstantiateSelf();
+    }
+
+    if (!*xsink) {
+        const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
+            qore_get_current_receiver_type_info());
+        if (rt && QoreTypeInfo::hasType(rt)) {
+            if (val.isNothing()) {
+                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+                if (*xsink) {
+                    xsink->overrideLocation(*signature.getParseLocation());
+                    xsink->appendLastDescription(": block missing return statement");
+                }
+            } else {
+                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+            }
+        }
+    }
+    return val;
+}
+
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, bool caller_has_frame_boundary) const {
     assert(pgm);
@@ -5105,6 +5313,24 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             tier = TIER_AST;
         } else if (cached_ir) {
             tier = TIER_IR;
+        }
+    }
+
+    if (tier != TIER_AST && statements && !cached_aot_fn) {
+        const QoreTypeInfo* specialization_receiver_type_info = qore_get_current_receiver_type_info();
+        const QoreTypeParamInstantiation* specialization_type_param_instantiation =
+            runtime_get_type_param_instantiation();
+        if (qore_has_generic_specialization_context(specialization_receiver_type_info,
+                specialization_type_param_instantiation)) {
+            const QoreIRFunction* specialized_ir = getOrCreateSpecializedIR(name, specialization_receiver_type_info,
+                specialization_type_param_instantiation, false);
+            if (specialized_ir) {
+                return evalSpecializedIR(name, specialized_ir, argv, self, xsink, caller_has_frame_boundary);
+            }
+            if (pgm) {
+                pgm->recordIRFallback("generic specialization unavailable");
+            }
+            tier = TIER_AST;
         }
     }
 

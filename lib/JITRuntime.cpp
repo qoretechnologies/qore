@@ -2711,6 +2711,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path(const char
     }
     const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
     if (!hd) {
+        std::string error;
+        QoreAOTTypeResolver resolver(pgm);
+        const QoreTypeInfo* ti = resolver.resolve(hd_path, error);
+        ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
+        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    }
+    if (!hd) {
         if (xsink) {
             xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
                 hd_path ? hd_path : "<null>");
@@ -7122,6 +7129,9 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         return toBits(QoreValue());
     }
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(self);
+    if (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info)) {
+        return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
+    }
 
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
@@ -11796,6 +11806,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     // Fall through to the slow path in that case.
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb || !qore_rt_method_fast_call_eligible(variant)
+            || (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
             || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
         // Use evalTmpArgs to preserve ReferenceNode values in pre-evaluated args
         ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);

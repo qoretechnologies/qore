@@ -289,10 +289,20 @@ Parameterized type information is preserved through all construction paths:
 carry `object_type_info` so constructors and static calls have a concrete
 substitution context before a usable `self` exists.
 
+When a source method or function executes with concrete generic receiver or
+method type arguments, the IR/JIT dispatcher can lower and cache a specialized
+IR body for that type-argument tuple. The specialized body stores the concrete
+receiver type and method type-parameter instantiation, substitutes those types
+while lowering and while emitting LLVM type metadata, and keeps the
+substitution-based AST path as the correctness fallback.
+
 AOT type resolution parses nested serialized type paths for parameterized
 classes and hashdecls. Class raw-compatibility flags are protected by
 `QORE_AOT_FEAT_CLASS_RAW_GENERIC`; generic type paths are interned through the
-existing type-table mechanism.
+existing type-table mechanism. Source-stripped AOT does not emit separate
+native bodies for every generic instantiation; it preserves generic type paths
+and resolves them with the current runtime receiver or method type-argument
+context.
 
 ## Implemented Core Conversions
 
@@ -351,24 +361,27 @@ For `~/src/qore/git/module-*`, migrate generic APIs conservatively:
 
 The following are intentionally not part of this implementation:
 
-- monomorphized code generation per type argument
-- inference of class type arguments at arbitrary expression sites
+- source-stripped AOT native body generation per type-argument tuple
+- API metadata for structured wildcard type arguments
 
-Concrete class and hashdecl type arguments are invariant. `auto` remains a
-concrete type argument, not a wildcard. Raw compatibility attributes are
-migration aids for specific legacy APIs, not a substitute for wildcard
-annotations.
+Concrete class and hashdecl type arguments are invariant unless the annotation
+uses an explicit wildcard. `auto` remains a concrete type argument, not a
+wildcard. Raw compatibility attributes are migration aids for specific legacy
+APIs, not a substitute for wildcard annotations.
 
-Execution is currently reified and substitution-based. The runtime keeps one
-class or function body and substitutes type parameters for parsing, runtime
-checks, IR, JIT fallback, and AOT metadata. It does not yet create specialized
-compiled bodies for each type-argument tuple.
+Execution is reified and substitution-based in the AST and AOT metadata paths.
+For source bodies, IR/JIT execution can now cache specialized IR bodies for
+concrete receiver and method type arguments. These specializations are internal
+execution artifacts; reflection, diagnostics, and stack traces continue to
+describe the source method or function.
 
 Class type argument inference is intentionally conservative. Method-level
 generic calls can infer call-local type arguments from supplied arguments, and
-generic classes may use defaults for omitted type arguments. General inference
-from constructor arguments, assignment target types, or broader expression
-context remains future work.
+generic classes can infer class type arguments from constructor arguments,
+assignment targets, and return contexts where the expected type is reliable.
+Static factory receiver inference remains limited to target or return contexts;
+raw static calls without an expected type still require explicit class type
+arguments when method type checking needs a substitution context.
 
 The future-work checklist is tracked in
 `design/generic-future-work-checklist.md`.
@@ -386,5 +399,5 @@ The generic class test covers source generics, multiple type parameters,
 defaults, bounds, namespaces, overloads, inheritance, static generic methods,
 method-level generics, explicit generic call type arguments, generic hashdecls,
 generic hashdecl inheritance, wildcard type arguments, iterators, poll
-operations, raw compatibility attributes, and expected parse or runtime
-failures.
+operations, raw compatibility attributes, specialized generic execution paths,
+and expected parse or runtime failures.

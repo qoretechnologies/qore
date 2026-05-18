@@ -2239,7 +2239,7 @@ static bool writeNewHashDeclFromHash(AOTInstWriteCtx& ctx) {
     std::string hd_path_storage;
     const char* hd_path = nullptr;
     if (ni->hd) {
-        hd_path_storage = ni->hd->getNamespacePath();
+        hd_path_storage = qore_get_aot_serializable_type_path(ni->hd->getTypeInfo());
         hd_path = hd_path_storage.c_str();
     } else if (!ni->hd_path.empty()) {
         hd_path = ni->hd_path.c_str();

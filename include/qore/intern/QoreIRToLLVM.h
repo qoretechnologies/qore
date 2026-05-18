@@ -626,6 +626,7 @@ private:
     // Return either a JIT-safe QoreTypeInfo* constant or an AOT-safe type-path string.
     llvm::Value* getTypeInfoPointerArg(const QoreTypeInfo* ti);
     llvm::Value* getTypePathArg(const QoreTypeInfo* ti);
+    const QoreTypeInfo* specializeType(const QoreTypeInfo* ti) const;
 
     // Collect all unique LocalVar* pointers from the IR function
     void collectLocals(const QoreIRFunction& func);

@@ -43,6 +43,7 @@
 #include <vector>
 
 #include <qore/Qore.h>
+#include <qore/intern/QoreTypeInfo.h>
 
 class LocalVar;
 class Var;
@@ -2254,6 +2255,23 @@ public:
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
     const QoreTypeInfo* return_type_info = nullptr;
+
+    //! Concrete receiver type used when this IR function is specialized for a generic class instantiation
+    const QoreTypeInfo* specialization_receiver_type_info = nullptr;
+
+    //! Concrete method/function type arguments used when this IR function is specialized for a generic call
+    QoreTypeParamInstantiation specialization_type_param_instantiation;
+
+    bool hasTypeSpecialization() const {
+        return specialization_receiver_type_info || !specialization_type_param_instantiation.empty();
+    }
+
+    const QoreTypeInfo* specializeType(const QoreTypeInfo* ti) const {
+        return hasTypeSpecialization()
+            ? qore_substitute_type_params(ti, specialization_receiver_type_info,
+                specialization_type_param_instantiation.empty() ? nullptr : &specialization_type_param_instantiation)
+            : ti;
+    }
 
     // Owned source location objects for AOT-deserialized instructions.
     // In JIT mode, inst->loc points into the parse tree (owned elsewhere).

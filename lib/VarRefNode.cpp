@@ -538,16 +538,18 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
     // NOTE: VRN_OBJECT is handled separately by the NewObject IR opcode, which calls
     // qore_class_private::execConstructor() directly. This method only handles the
     // non-object typed container construction cases.
+    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(typeInfo,
+        qore_get_current_receiver_type_info());
     switch (vrn_type) {
         case VRN_HASHDECL:
-            return typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(typeInfo))
+            return typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
                 ->newHash(parse_args, runtime_check, xsink);
 
         case VRN_COMPLEXHASH:
-            return qore_hash_private::newComplexHash(typeInfo, parse_args, xsink);
+            return qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink);
 
         case VRN_COMPLEXLIST:
-            return qore_list_private::newComplexList(typeInfo, new_args, xsink);
+            return qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
 
         default:
             assert(false);
@@ -563,26 +565,28 @@ QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink)
 QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     ReferenceHolder<> value(xsink);
 
+    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(typeInfo,
+        qore_get_current_receiver_type_info());
     switch (vrn_type) {
         case VRN_OBJECT: {
-            assert(QoreTypeInfo::getUniqueReturnClass(typeInfo));
+            assert(QoreTypeInfo::getUniqueReturnClass(runtime_type_info));
             value = qore_class_private::execConstructor(
-                *QoreTypeInfo::getUniqueReturnClass(typeInfo), rc, variant, args, xsink, typeInfo
+                *QoreTypeInfo::getUniqueReturnClass(runtime_type_info), rc, variant, args, xsink, runtime_type_info
             );
             break;
         }
 
         case VRN_HASHDECL:
-            value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(typeInfo))
+            value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
                 ->newHash(parse_args, runtime_check, xsink);
             break;
 
         case VRN_COMPLEXHASH:
-            value = qore_hash_private::newComplexHash(typeInfo, parse_args, xsink);
+            value = qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink);
             break;
 
         case VRN_COMPLEXLIST:
-            value = qore_list_private::newComplexList(typeInfo, new_args, xsink);
+            value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
             break;
 
         default:
