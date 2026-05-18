@@ -14,6 +14,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("basic formatting", \testBasicFormatting());
         addTestCase("parse directives", \testParseDirectives());
         addTestCase("class formatting", \testClassFormatting());
+        addTestCase("generic declarations", \testGenericDeclarations());
         addTestCase("function formatting", \testFunctionFormatting());
         addTestCase("if-else chains", \testIfElseChains());
         addTestCase("loops", \testLoops());
@@ -112,6 +113,51 @@ class Foo {
         # Methods should NOT have sub keyword
         assertTrue(result !~ /sub getX/, "method should not have sub keyword");
         assertTrue(result !~ /sub constructor/, "constructor should not have sub keyword");
+    }
+
+    testGenericDeclarations() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+class Box<T: int = int> [legacy_raw] {
+    T value;
+}
+
+class Child<T> inherits Box<T> {
+}
+
+hashdecl Result<T: int = int> {
+    T value;
+}
+
+hashdecl ChildResult<T> inherits Result<T> {
+    string name;
+}
+
+T sub identity<T>(T value) {
+    return value;
+}
+
+class GenericMethods {
+    T echo<T>(T value) {
+        return value;
+    }
+}
+
+sub test(Box<? extends int> source, Box<? super int> sink, Box<?> any) {
+}
+";
+        string result = fmt.format(src);
+        assertRegex("generic class parameters", "class Box<T: int = int> \\[legacy_raw\\] \\{", result);
+        assertRegex("generic class inheritance", "class Child<T> inherits Box<T> \\{", result);
+        assertRegex("generic hashdecl parameters", "hashdecl Result<T: int = int> \\{", result);
+        assertRegex("generic hashdecl inheritance", "hashdecl ChildResult<T> inherits Result<T> \\{", result);
+        assertRegex("extends wildcard", "Box<\\? extends int> source", result);
+        assertRegex("super wildcard", "Box<\\? super int> sink", result);
+        assertRegex("unbounded wildcard", "Box<\\?> any", result);
+        assertRegex("generic function declaration", "T sub identity<T>\\(T value\\)", result);
+        assertRegex("generic method declaration", "T echo<T>\\(T value\\)", result);
+        assertEq(result, fmt.format(result), "generic declaration formatting is idempotent");
     }
 
     testFunctionFormatting() {

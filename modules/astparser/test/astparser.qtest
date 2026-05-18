@@ -427,6 +427,8 @@ sub test() {
         addTestCase("getNodesInfo line indexing", \testGetNodesInfo());
         addTestCase("Generic class CST", \testGenericClassGetNodesInfo());
         addTestCase("Generic inheritance CST", \testGenericInheritanceGetNodesInfo());
+        addTestCase("Generic hashdecl CST", \testGenericHashdeclGetNodesInfo());
+        addTestCase("Generic wildcard CST", \testGenericWildcardGetNodesInfo());
 %ifdef HasAstTreeSearcher
         addTestCase("Scope symbols", \testScopeSymbols());
         addTestCase("Doc comments", \testDocComments());
@@ -535,6 +537,26 @@ sub test() {
             }
         }
         return result;
+    }
+
+    # Helper: recursively count CST nodes of a given type
+    private static int countNodesByType(hash<auto> node, string typeName) {
+        int count = node.type == typeName ? 1 : 0;
+        if (node.children) {
+            foreach auto child in (node.children) {
+                count += countNodesByType(child, typeName);
+            }
+        }
+        return count;
+    }
+
+    # Helper: recursively count CST nodes of a given type in top-level nodes
+    private static int countNodesByType(list<auto> nodes, string typeName) {
+        int count = 0;
+        foreach auto node in (nodes) {
+            count += countNodesByType(node, typeName);
+        }
+        return count;
     }
 
     # Helper: get text from the deepest leaf node (recursive)
@@ -1348,9 +1370,9 @@ sub make() {
 
         *hash<auto> typeParams = findChildByField(classNode, "type_parameters");
         assertTrue(exists(typeParams), "class has type parameter list");
-        list<auto> params = findAllChildrenByType(typeParams, "identifier");
+        list<auto> params = findAllChildrenByType(typeParams, "type_parameter");
         assertEq(1, params.size(), "one type parameter");
-        assertEq("T", params[0].text, "type parameter text");
+        assertEq("T", findChildByField(params[0], "name").text, "type parameter text");
     }
 
     testGenericInheritanceGetNodesInfo() {
@@ -1390,6 +1412,65 @@ class Child<T> inherits Box<T> {
         *hash<auto> typeArg = findChildByType(genericType, "type");
         assertTrue(exists(typeArg), "generic superclass has type argument");
         assertEq("T", getLeafText(typeArg), "generic superclass type argument");
+    }
+
+    testGenericHashdeclGetNodesInfo() {
+        string testCode = "
+%new-style
+hashdecl Result<T: int = int> {
+    T value;
+}
+
+hashdecl Child<T> inherits Result<T> {
+    string name;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash<auto> resultHash = findNodeByType(nodes, "hashdecl_declaration");
+        assertTrue(exists(resultHash), "hashdecl node found");
+        *hash<auto> typeParams = findChildByField(resultHash, "type_parameters");
+        assertTrue(exists(typeParams), "hashdecl has type parameter list");
+        *hash<auto> typeParam = findChildByType(typeParams, "type_parameter");
+        assertTrue(exists(typeParam), "hashdecl has type parameter");
+        assertEq("T", findChildByField(typeParam, "name").text, "type parameter name");
+        assertEq("int", getLeafText(findChildByField(typeParam, "bound")), "type parameter bound");
+        assertEq("int", getLeafText(findChildByField(typeParam, "default")), "type parameter default");
+
+        *hash<auto> childHash;
+        foreach auto node in (nodes) {
+            if (node.type != "hashdecl_declaration") {
+                continue;
+            }
+            *hash<auto> nameChild = findChildByField(node, "name");
+            if (exists(nameChild) && nameChild.text == "Child") {
+                childHash = node;
+                break;
+            }
+        }
+        assertTrue(exists(childHash), "child hashdecl node found");
+        *hash<auto> superclass = findChildByType(findChildByType(childHash, "superclass_list"), "superclass");
+        assertTrue(exists(findChildByType(superclass, "generic_type")), "hashdecl superclass is generic type");
+    }
+
+    testGenericWildcardGetNodesInfo() {
+        string testCode = "
+%new-style
+class Box<T> {
+}
+
+sub test(Box<? extends int> source, Box<? super int> sink, Box<?> any) {
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        assertEq(3, countNodesByType(nodes, "wildcard_type"), "three wildcard type args");
     }
 
 %ifdef HasAstTreeSearcher

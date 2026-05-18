@@ -213,7 +213,8 @@ public class CSTTranslator {
             return node.text;
         }
         # For scoped_identifier, reconstruct full path
-        if (node.type == "scoped_identifier") {
+        if (node.type == "scoped_identifier" || node.type == "generic_type" || node.type == "type"
+                || node.type == "wildcard_type") {
             return extractText(node);
         }
         # For other complex types, try to get all text
@@ -281,6 +282,55 @@ public class CSTTranslator {
         int fc = loc.start_column;
         int ll = loc.end_line;
         int lc = loc.end_column;
+
+        if (fl < 0 || fl >= sourceLines.size()) {
+            return "";
+        }
+        if (ll >= sourceLines.size()) {
+            ll = sourceLines.size() - 1;
+        }
+
+        if (fl == ll) {
+            string line = sourceLines[fl];
+            if (fc >= line.size()) {
+                return "";
+            }
+            if (lc > line.size()) {
+                lc = line.size();
+            }
+            return line.substr(fc, lc - fc);
+        }
+
+        string result = "";
+        for (int i = fl; i <= ll; ++i) {
+            if (i >= sourceLines.size()) {
+                break;
+            }
+            string line = sourceLines[i];
+            if (i == fl) {
+                if (fc < line.size()) {
+                    result += line.substr(fc);
+                }
+            } else if (i == ll) {
+                if (lc > line.size()) {
+                    lc = line.size();
+                }
+                result += "\n" + line.substr(0, lc);
+            } else {
+                result += "\n" + line;
+            }
+        }
+        return result;
+    }
+
+    #! Extract text from a parent node start up to a child node start
+    private string extractTextBeforeChild(hash<auto> parent, hash<auto> child) {
+        hash<auto> parentLoc = parent.loc;
+        hash<auto> childLoc = child.loc;
+        int fl = parentLoc.start_line;
+        int fc = parentLoc.start_column;
+        int ll = childLoc.start_line;
+        int lc = childLoc.start_column;
 
         if (fl < 0 || fl >= sourceLines.size()) {
             return "";
@@ -537,7 +587,8 @@ public class CSTTranslator {
                 *hash<auto> scName;
                 if (exists sc.children) {
                     foreach hash<auto> child in (sc.children) {
-                        if (child.type == "identifier" || child.type == "scoped_identifier") {
+                        if (child.type == "identifier" || child.type == "scoped_identifier"
+                                || child.type == "generic_type") {
                             scName = child;
                             break;
                         }
@@ -586,6 +637,14 @@ public class CSTTranslator {
         };
         if (exists mods) {
             result.modifiers = mods;
+        }
+        *hash<auto> typeParams = findField(node, "type_parameters");
+        if (exists typeParams) {
+            result.typeParameters = extractText(typeParams);
+        }
+        *hash<auto> compatAttrs = findType(node, "class_compatibility_attributes");
+        if (exists compatAttrs) {
+            result.compatAttributes = extractText(compatAttrs);
         }
         if (inheritsList.size() > 0) {
             result."inherits" = inheritsList;
@@ -812,6 +871,10 @@ public class CSTTranslator {
             result.returnType = {"nodetype": ANT_Expression, "kind": AEK_Name,
                 "name": {"name": extractText(returnType)}, "loc": returnType.loc};
         }
+        *hash<auto> typeParams = findField(node, "type_parameters");
+        if (exists typeParams) {
+            result.typeParameters = extractText(typeParams);
+        }
         if (exists paramList) {
             result.params = translateExpression(paramList);
         }
@@ -851,6 +914,10 @@ public class CSTTranslator {
         if (exists returnType) {
             result.returnType = {"nodetype": ANT_Expression, "kind": AEK_Name,
                 "name": {"name": extractText(returnType)}, "loc": returnType.loc};
+        }
+        *hash<auto> typeParams = findField(node, "type_parameters");
+        if (exists typeParams) {
+            result.typeParameters = extractText(typeParams);
         }
         if (exists paramList) {
             result.params = translateExpression(paramList);
@@ -999,6 +1066,17 @@ public class CSTTranslator {
         };
         if (exists mods) {
             result.modifiers = mods;
+        }
+        *hash<auto> typeParams = findField(node, "type_parameters");
+        if (exists typeParams) {
+            result.typeParameters = extractText(typeParams);
+        }
+        *hash<auto> scList = findType(node, "superclass_list");
+        if (exists scList) {
+            string inherited = trim(extractText(scList));
+            if (inherited =~ /^inherits\s+/) {
+                result."inherits" = trim(inherited.substr(8));
+            }
         }
         if (members.size() > 0) {
             result.declarations = members;
@@ -1759,9 +1837,13 @@ public class CSTTranslator {
 
     private hash<auto> translateCallExpr(hash<auto> node) {
         *hash<auto> funcNode = findField(node, "function");
+        *hash<auto> genericArgs = findField(node, "generic_call_arguments");
 
         # Arguments are in the argument_list child
         *hash<auto> argList = findType(node, "argument_list");
+        if (!exists argList && exists genericArgs) {
+            argList = findType(genericArgs, "argument_list");
+        }
 
         hash<auto> result = {
             "nodetype": ANT_Expression,
@@ -1770,6 +1852,9 @@ public class CSTTranslator {
         };
         if (exists funcNode) {
             result.target = translateExpression(funcNode);
+        }
+        if (exists genericArgs && exists argList) {
+            result.typeArguments = extractTextBeforeChild(genericArgs, argList);
         }
         if (exists argList) {
             result.args = translateExpression(argList);

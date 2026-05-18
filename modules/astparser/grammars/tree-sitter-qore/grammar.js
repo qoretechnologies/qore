@@ -50,6 +50,7 @@ module.exports = grammar({
     [$.function_declaration, $.closure_expression],
     [$.function_declaration, $.simple_type],
     [$.function_declaration, $.simple_type, $.scoped_identifier],
+    [$.function_declaration, $.primary_expression, $.generic_type],
     [$.argument_list, $.parameter_list],
     [$.parameter, $.primary_expression],
     [$._statement, $._top_level_item],
@@ -70,6 +71,7 @@ module.exports = grammar({
     [$.simple_type, $.complex_type],
     [$.simple_type, $.generic_type],
     [$.simple_type, $.scoped_identifier],
+    [$.type_parameter, $.simple_type],
     [$.scoped_identifier],
     [$._type_keyword, $.simple_type, $.complex_type],
     // case < identifier could be comparison value or start of <Type> cast
@@ -290,8 +292,14 @@ module.exports = grammar({
 
     type_parameter_list: $ => seq(
       '<',
-      commaSep1($.identifier),
+      commaSep1($.type_parameter),
       '>',
+    ),
+
+    type_parameter: $ => seq(
+      field('name', $.identifier),
+      optional(seq(':', field('bound', $.type))),
+      optional(seq('=', field('default', $.type))),
     ),
 
     superclass_list: $ => seq(
@@ -337,6 +345,7 @@ module.exports = grammar({
       optional($.modifiers),
       optional(field('return_type', $.type)),
       field('name', $.identifier),
+      optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
       optional(seq('returns', field('returns', $.type))),
       choice(
@@ -399,6 +408,7 @@ module.exports = grammar({
       optional(field('return_type', $.type)),
       choice('sub', $.identifier, $.scoped_identifier),
       field('name', optional(choice($.identifier, $.scoped_identifier))),
+      optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
       optional(seq('returns', field('returns', $.type))),
       choice(
@@ -466,6 +476,7 @@ module.exports = grammar({
       optional($.modifiers),
       'hashdecl',
       field('name', choice($.identifier, $.scoped_identifier)),
+      optional(field('type_parameters', $.type_parameter_list)),
       optional($.superclass_list),
       '{',
       repeat(choice($.hashdecl_member, $.parse_directive)),
@@ -926,14 +937,16 @@ module.exports = grammar({
 
     argument_list: $ => seq(
       '(',
-      optional(seq(
-        choice(
-          commaSep1($.named_argument),
-          seq(commaSep1($._expression), optional(seq(',', commaSep1($.named_argument)))),
-        ),
-        optional(','),
-      )),
+      optional($._argument_list_body),
       ')',
+    ),
+
+    _argument_list_body: $ => seq(
+      choice(
+        commaSep1($.named_argument),
+        seq(commaSep1($._expression), optional(seq(',', commaSep1($.named_argument)))),
+      ),
+      optional(','),
     ),
 
     named_argument: $ => seq(
@@ -1332,6 +1345,7 @@ module.exports = grammar({
         $.simple_type,
         $.complex_type,
         $.nullable_type,
+        $.wildcard_type,
       ),
       optional('!'),  // non-null type modifier: hash<auto!> etc.
     )),
@@ -1412,6 +1426,14 @@ module.exports = grammar({
       '<',
       commaSep1($.type),
       '>',
+    ),
+
+    wildcard_type: $ => seq(
+      '?',
+      optional(choice(
+        seq('extends', field('bound', $.type)),
+        seq('super', field('bound', $.type)),
+      )),
     ),
 
     // Parameter types for code<> signature, supporting varargs
