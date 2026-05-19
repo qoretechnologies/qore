@@ -44,8 +44,10 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(parse_context.typeInfo);
         if (qc) {
             ReferenceHolder<> holder(this, nullptr);
-            val = new ScopedObjectCallNode(loc, qc, takeArgs(), parse_context.typeInfo);
-            //return parse_init_value(val, parse_context) || err ? -1 : 0;
+            const QoreTypeInfo* object_type_info = parse_context.typeInfo;
+            val = new ScopedObjectCallNode(loc, qc, takeArgs(), object_type_info);
+            parse_context.typeInfo = nullptr;
+            parse_context.analysis.clear();
             if (parse_init_value(val, parse_context) && !err) {
                 err = -1;
             }

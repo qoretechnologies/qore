@@ -2939,7 +2939,7 @@ static const QoreTypeInfo* qore_rt_resolve_element_type_path(const char* type_pa
         xsink->raiseException("AOT-TYPE-ERROR",
             "%s cannot resolve list element type '%s': %s", op, type_path, error.c_str());
     }
-    return ti;
+    return qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
 }
 
 static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path, const char* op,
@@ -2964,11 +2964,12 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path,
         xsink->raiseException("AOT-TYPE-ERROR",
             "%s cannot resolve container type '%s': %s", op, type_path, error.c_str());
     }
-    return ti;
+    return qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo,
         uint64_t hash_bits, ExceptionSink* xsink) {
+    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
     if (!typeInfo) {
         if (xsink) {
             xsink->raiseException("HASH-INIT-ERROR",
@@ -3003,6 +3004,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(co
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo,
         uint64_t value_bits, ExceptionSink* xsink) {
+    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
     if (!typeInfo) {
         if (xsink) {
             xsink->raiseException("LIST-INIT-ERROR",
@@ -3028,6 +3030,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value_by_type_path(c
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type,
         ExceptionSink* xsink) {
+    element_type = qore_substitute_type_params(element_type, qore_get_current_receiver_type_info());
     QoreListNode* list = new QoreListNode(element_type ? element_type : autoTypeInfo);
     return toBits(QoreValue(list));
 }
@@ -3069,6 +3072,7 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
 
     if (list_val.isNothing()) {
         // Auto-vivify empty list (already has refcount 1 from new)
+        element_type = qore_substitute_type_params(element_type, qore_get_current_receiver_type_info());
         QoreListNode* l = new QoreListNode(element_type ? element_type : autoTypeInfo);
         l->push(push_val.refSelf(), xsink);
         QoreValue result(l);
@@ -3188,6 +3192,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue
 // --- Container construction helpers ---
 
 static const QoreTypeInfo* qore_rt_get_declared_list_value_type(const QoreTypeInfo* typeInfo) {
+    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
     const QoreTypeInfo* vtype = QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
     if (!vtype) {
         vtype = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
@@ -3196,6 +3201,7 @@ static const QoreTypeInfo* qore_rt_get_declared_list_value_type(const QoreTypeIn
 }
 
 static const QoreTypeInfo* qore_rt_get_declared_hash_value_type(const QoreTypeInfo* typeInfo) {
+    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
     const QoreTypeInfo* vtype = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
     if (!vtype) {
         vtype = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
@@ -4303,6 +4309,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list(int64_t capacity, Except
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list_typed(int64_t capacity,
         const QoreTypeInfo* element_type, ExceptionSink* xsink) {
+    element_type = qore_substitute_type_params(element_type, qore_get_current_receiver_type_info());
     QoreListNode* list = new QoreListNode(element_type ? element_type : autoTypeInfo);
     if (capacity > 0) {
         qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));

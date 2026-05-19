@@ -158,6 +158,12 @@ class SourceGenericBodyBase<T> {
         rv += value;
         return rv;
     }
+
+    hash<string, T> collectHash(string key, T value) {
+        hash<string, T> rv();
+        rv{key} = value;
+        return rv;
+    }
 }
 
 class SourceFixedBodyChild2 inherits SourceGenericBodyBase<int> {
@@ -598,6 +604,8 @@ public class GenericClassTypesTest inherits QUnit::Test {
         SourceFixedBodyChild2 fixed_body2();
         list<int> collected = fixed_body2.collectBase(7);
         assertEq((7,), collected);
+        hash<string, int> collected_hash = fixed_body2.collectHash("seven", 7);
+        assertEq(7, collected_hash.seven);
     }
 
     staticGenericMethods() {
@@ -864,6 +872,10 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertTrue(returned_box instanceof SourceGenericBox<int>);
         assertEq(37, returned_box.get());
 
+        SourceGenericBase<int> returned_base = self.makeExplicitGenericChildAsBase();
+        assertTrue(returned_base instanceof SourceGenericChild<int>);
+        assertEq(38, returned_base.echo(38));
+
         {
             Program p(PO_NEW_STYLE);
             p.parse("class Pair<K, V = string> { constructor(K key) {} } "
@@ -960,6 +972,10 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
     SourceGenericBox<int> makeInferredSourceGenericBox() {
         return new SourceGenericBox(37);
+    }
+
+    SourceGenericBase<int> makeExplicitGenericChildAsBase() {
+        return new SourceGenericChild<int>();
     }
 
     specializedGenericExecution() {

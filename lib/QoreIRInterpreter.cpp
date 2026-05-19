@@ -168,6 +168,10 @@ static QoreHashNode* makeImplicitHashForLValueType(const QoreTypeInfo* typeInfo,
     return new QoreHashNode(QoreTypeInfo::getElementType(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)));
 }
 
+static const QoreTypeInfo* substituteRuntimeTypeParams(const QoreTypeInfo* typeInfo) {
+    return qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
+}
+
 //! Extract the base VarRefNode from a (possibly complex) lvalue expression tree.
 /** Walks the tree by following the "left" / "base" operand of operator nodes that
     can serve as lvalue wrappers (square brackets, hash deref, shift, splice, etc.).
@@ -2206,8 +2210,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 return list_val.refSelf();
             }
             if (list_val.isNothing()) {
-                const QoreTypeInfo* elem_type = inv->element_type
-                    ? inv->element_type : autoTypeInfo;
+                const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
+                    inv->element_type ? inv->element_type : autoTypeInfo);
                 QoreListNode* l = new QoreListNode(elem_type);
                 l->push(push_val.refSelf(), xsink);
                 return QoreValue(l);
@@ -3780,9 +3784,10 @@ next_instruction:
             }
             case QoreIROpcode::MakeList: {
                 const auto* ml = static_cast<const QoreIRMakeListInstruction*>(inst);
-                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexList(ml->typeInfo);
+                const QoreTypeInfo* typeInfo = substituteRuntimeTypeParams(ml->typeInfo);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
                 if (!declared_vtype) {
-                    declared_vtype = QoreTypeInfo::getReturnComplexListOrNothing(ml->typeInfo);
+                    declared_vtype = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
                 }
                 if (declared_vtype == anyTypeInfo) {
                     declared_vtype = nullptr;
@@ -3829,9 +3834,10 @@ next_instruction:
             }
             case QoreIROpcode::MakeHash: {
                 const auto* mh = static_cast<const QoreIRMakeHashInstruction*>(inst);
-                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexHash(mh->typeInfo);
+                const QoreTypeInfo* typeInfo = substituteRuntimeTypeParams(mh->typeInfo);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
                 if (!declared_vtype) {
-                    declared_vtype = QoreTypeInfo::getReturnComplexHashOrNothing(mh->typeInfo);
+                    declared_vtype = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
                 }
                 if (declared_vtype == anyTypeInfo) {
                     declared_vtype = nullptr;
@@ -3890,9 +3896,10 @@ next_instruction:
                 const auto& ckeys = mhck->keys;
                 size_t n = ckeys.size();
                 assert(n == inst->operands.size());
-                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexHash(mhck->typeInfo);
+                const QoreTypeInfo* typeInfo = substituteRuntimeTypeParams(mhck->typeInfo);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
                 if (!declared_vtype) {
-                    declared_vtype = QoreTypeInfo::getReturnComplexHashOrNothing(mhck->typeInfo);
+                    declared_vtype = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
                 }
                 if (declared_vtype == anyTypeInfo) {
                     declared_vtype = nullptr;
@@ -3940,7 +3947,8 @@ next_instruction:
             }
             case QoreIROpcode::CreateEmptyList: {
                 // element_type is the element type (e.g., bool); QoreListNode wraps it to list<bool>
-                const QoreTypeInfo* elem_type = inst->element_type ? inst->element_type : autoTypeInfo;
+                const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
+                    inst->element_type ? inst->element_type : autoTypeInfo);
                 QoreListNode* list = new QoreListNode(elem_type);
                 setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(list), xsink);
                 ++ip;
@@ -3973,8 +3981,8 @@ next_instruction:
                 } else if (list_val.isNothing()) {
                     // Use element type from instruction (set by lowerPush) for proper
                     // coercion (e.g., list<softint> converts "3" to 3)
-                    const QoreTypeInfo* elem_type = inst->element_type
-                        ? inst->element_type : autoTypeInfo;
+                    const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
+                        inst->element_type ? inst->element_type : autoTypeInfo);
                     QoreListNode* l = new QoreListNode(elem_type);
                     l->push(push_val.refSelf(), xsink);
                     result = QoreValue(l);
@@ -4002,7 +4010,8 @@ next_instruction:
                 QoreValue cap_val = getIRValue(values, inst->operands[0]);
                 int64_t capacity = cap_val.getAsBigInt();
                 // element_type is the element type (e.g., bool); QoreListNode wraps it to list<bool>
-                const QoreTypeInfo* elem_type = inst->element_type ? inst->element_type : autoTypeInfo;
+                const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
+                    inst->element_type ? inst->element_type : autoTypeInfo);
                 QoreListNode* list = new QoreListNode(elem_type);
                 if (capacity > 0) {
                     qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
