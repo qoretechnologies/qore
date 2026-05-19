@@ -27,6 +27,7 @@
 %modern
 
 %requires RestClientIo
+%requires GeminiRestClient
 
 %try-module json
 %define NoJson
@@ -36,7 +37,7 @@
 module QoreLlmUtils {
     version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
-        "completions across HTTP/OpenAI-compatible, Anthropic, and Qorus AI Gateway";
+        "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and callback API gateways";
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
@@ -51,14 +52,24 @@ module QoreLlmUtils {
     The %QoreLlmUtils module provides a pluggable LLM backend abstraction for Qore
     AI modules that need to make chat completion calls. An LLM (Large Language Model)
     is an AI system like ChatGPT or Claude that generates text responses.  It supports
-    three modes:
+    four modes:
 
     - \b http: Calls an OpenAI-compatible \c /v1/chat/completions endpoint
       (SGLang, vLLM, OpenAI, Azure OpenAI, etc.) with optional JSON schema
       enforcement via \c response_format.
     - \b anthropic: Calls the Anthropic Messages API (\c /v1/messages) with
       native tool-use-based JSON extraction when an output schema is provided.
-    - \b qorus: Calls the Qorus AI Gateway via \c UserApi::callRestApi().
+    - \b gemini: Calls the Google Gemini \c generateContent API with native
+      function calling, structured outputs, and streaming.
+    - \b callback: Calls a caller-supplied OpenAI-compatible dispatcher, for
+      example an application gateway, tenant proxy, or metered AI routing layer.
+
+    The module also includes @ref QoreLlmUtils::PromptSecretProtector
+    "PromptSecretProtector", a provider-neutral helper for keeping
+    user-supplied credentials out of model-visible prompts by replacing them
+    with request-local placeholders, restoring them only at a caller's tool
+    execution boundary, and redacting protected values from execution errors
+    or logs.
 
     @par Example: HTTP mode (OpenAI-compatible)
     @code{.py}
@@ -92,5 +103,9 @@ printf("Structured output: %s\n", result.content);
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
-      HTTP/OpenAI-compatible, Anthropic, and Qorus AI Gateway modes
+      HTTP/OpenAI-compatible, Anthropic, Gemini, and callback gateway modes
+    - Added @ref QoreLlmUtils::PromptSecretProtector
+      "PromptSecretProtector" for generic prompt credential placeholders and
+      redaction support, including execution-boundary redaction of restored
+      protected values
 */

@@ -26,15 +26,16 @@ public namespace QoreLlmUtils {
 
 #! Configuration for the LLM backend
 /** Specifies how to connect to the LLM — via an OpenAI-compatible HTTP
-    endpoint, the Anthropic Messages API, or a custom callback (e.g., for
-    routing through an API gateway).
+    endpoint, the Anthropic Messages API, the Google Gemini API, or a custom
+    callback (e.g., for routing through an API gateway).
 */
 public hashdecl LlmBackendConfig {
     #! Mode: "http" for OpenAI-compatible, "anthropic" for Anthropic Messages API,
     #! "sglang" for SGLang servers (OpenAI-compatible + local defaults),
+    #! "gemini" for Google Gemini generateContent,
     #! "callback" for a custom API call function
     string mode;
-    #! Base URL of the LLM service (required for "http", "anthropic", and "sglang" modes)
+    #! Base URL of the LLM service (required for "http", "anthropic", and "sglang" modes; optional for "gemini")
     *string url;
     #! Model name to pass in the request
     *string model;
@@ -56,8 +57,32 @@ public hashdecl LlmBackendConfig {
     #! Callback mode: a callable that performs the API call and returns
     #! the response hash in OpenAI-compatible format
     *code<hash<auto>(string, string, hash<auto>)> api_callback;
+    #! Callback mode method hint passed to @ref api_callback; default "POST"
+    string callback_method = "POST";
+    #! Callback mode endpoint/path hint passed to @ref api_callback; default "chat/completions"
+    string callback_path = "chat/completions";
     #! Initial retry delay in milliseconds for exponential backoff; default 1000
     int retry_delay_ms = 1000;
+}
+
+#! Per-call request overrides for LLM calls
+/** Lets callers keep a long-lived backend for one provider/connection while
+    selecting a different model for individual tasks.  This is important for
+    applications that intentionally mix model tiers (for example: a low-cost
+    summarization pass, a stronger planning pass, and a premium review pass)
+    without rebuilding the backend object.
+*/
+public hashdecl LlmRequestOptions {
+    #! Model name for this call; overrides @ref LlmBackendConfig::model
+    *string model;
+    #! Maximum tokens for this call; overrides @ref LlmBackendConfig::max_tokens
+    *int max_tokens;
+    #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
+    *float temperature;
+    #! JSON schema to request structured output when the backend supports it
+    *hash<auto> output_schema;
+    #! Provider-specific request body fields merged into the generated body
+    *hash<auto> body_options;
 }
 
 #! Result from an LLM completion call
@@ -119,6 +144,10 @@ public hashdecl ToolDefinition {
 
 #! Response from a multi-turn chat call
 public hashdecl ChatResponse {
+    #! Provider response ID when available
+    *string id;
+    #! Model used by the provider when available
+    *string model;
     #! Why the LLM stopped: "end_turn" (normal), "tool_use" (wants tool calls),
     #! "max_tokens" (hit limit), or "stop_sequence"
     string stop_reason;
@@ -128,6 +157,8 @@ public hashdecl ChatResponse {
     *list<hash<ChatToolCall>> tool_calls;
     #! Token usage information
     hash<auto> usage;
+    #! Raw provider response when callers need provider-specific metadata
+    *hash<auto> raw;
 }
 
 #! A streaming event from a chat completion
@@ -144,12 +175,14 @@ public hashdecl ChatStreamEvent {
 
 #! Pluggable LLM backend for chat completions
 /** Provides a unified interface for making LLM chat completion calls across
-    multiple providers.  Supports three backends:
+    multiple providers.  Supports four backends:
 
     - \b http: OpenAI-compatible \c /v1/chat/completions with optional
       \c response_format for JSON schema enforcement.
     - \b anthropic: Anthropic Messages API (\c /v1/messages) with tool-use-based
       structured extraction when an output schema is provided.
+    - \b gemini: Google Gemini \c generateContent with native function calling
+      and structured JSON responses.
     - \b callback: Custom API dispatch via a user-provided callable.
 
     Thread-safe: the underlying REST client is lazily initialized behind a mutex.
@@ -197,6 +230,10 @@ public class LlmBackend {
         int retry_delay_ms;
         #! Callback for custom API dispatch
         *code<hash<auto>(string, string, hash<auto>)> api_callback;
+        #! Method hint passed to callback dispatchers
+        string callback_method;
+        #! Endpoint/path hint passed to callback dispatchers
+        string callback_path;
         #! REST client for HTTP/Anthropic modes (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
@@ -211,10 +248,11 @@ public class LlmBackend {
     */
     constructor(hash<LlmBackendConfig> config) {
         mode = config.mode;
-        if (mode != "http" && mode != "anthropic" && mode != "sglang" && mode != "callback") {
+        if (mode != "http" && mode != "anthropic" && mode != "sglang"
+                && mode != "gemini" && mode != "callback") {
             throw "LLM-CONFIG-ERROR",
                 sprintf("invalid mode %y; expected \"http\", \"anthropic\", \"sglang\", "
-                    "or \"callback\"", mode);
+                    "\"gemini\", or \"callback\"", mode);
         }
 
         if (mode == "http" || mode == "anthropic" || mode == "sglang") {
@@ -225,6 +263,17 @@ public class LlmBackend {
 %ifdef NoJson
             throw "LLM-DEPENDENCY-ERROR",
                 "json module is required for HTTP/Anthropic/SGLang mode but is not available";
+%endif
+            url = config.url;
+        }
+        if (mode == "gemini") {
+            if (!config.api_key.val()) {
+                throw "LLM-CONFIG-ERROR",
+                    "api_key is required for \"gemini\" mode";
+            }
+%ifdef NoJson
+            throw "LLM-DEPENDENCY-ERROR",
+                "json module is required for Gemini mode but is not available";
 %endif
             url = config.url;
         }
@@ -239,6 +288,8 @@ public class LlmBackend {
         max_retries = config.max_retries;
         retry_delay_ms = config.retry_delay_ms;
         api_callback = config.api_callback;
+        callback_method = config.callback_method;
+        callback_path = config.callback_path;
         if (mode == "callback" && !api_callback) {
             throw "LLM-CONFIG-ERROR",
                 "api_callback is required for callback mode";
@@ -256,21 +307,27 @@ public class LlmBackend {
         @throw LLM-ERROR if the completion request fails
     */
     hash<LlmCompletionResult> complete(string system_prompt, string user_prompt,
-            *hash<auto> output_schema) {
+            *hash<auto> output_schema, *hash<LlmRequestOptions> opts) {
         switch (mode) {
             case "http":
             case "sglang":
-                return completeHttp(system_prompt, user_prompt, output_schema);
+                return completeHttp(system_prompt, user_prompt, output_schema,
+                    opts);
             case "anthropic":
-                return completeAnthropic(system_prompt, user_prompt, output_schema);
+                return completeAnthropic(system_prompt, user_prompt,
+                    output_schema, opts);
+            case "gemini":
+                return completeGemini(system_prompt, user_prompt, output_schema,
+                    opts);
             case "callback":
-                return completeCallback(system_prompt, user_prompt, output_schema);
+                return completeCallback(system_prompt, user_prompt,
+                    output_schema, opts);
         }
         # unreachable — mode validated in constructor
         throw "LLM-ERROR", sprintf("unsupported mode %y", mode);
     }
 
-    /** @return the configured backend mode ("http", "anthropic", "sglang", or "callback") */
+    /** @return the configured backend mode ("http", "anthropic", "sglang", "gemini", or "callback") */
     string getMode() {
         return mode;
     }
@@ -297,14 +354,16 @@ public class LlmBackend {
         @throw LLM-ERROR if the chat request fails
     */
     hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
-            *list<hash<ToolDefinition>> tools) {
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         switch (mode) {
             case "http":
             case "sglang":
             case "callback":
-                return chatHttp(messages, tools);
+                return chatHttp(messages, tools, opts);
             case "anthropic":
-                return chatAnthropic(messages, tools);
+                return chatAnthropic(messages, tools, opts);
+            case "gemini":
+                return chatGemini(messages, tools, opts);
         }
         throw "LLM-ERROR", sprintf("unsupported mode %y", mode);
     }
@@ -343,8 +402,9 @@ llm.chatStream(
 );
         @endcode
     */
-    chatStream(list<hash<ChatMessage>> messages, code callback,
-            *list<hash<ToolDefinition>> tools) {
+    chatStream(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback,
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
 %ifdef NoJson
         throw "LLM-ERROR", "the json module is required for streaming chat";
 %else
@@ -352,15 +412,19 @@ llm.chatStream(
             throw "LLM-ERROR",
                 "streaming is not supported in callback mode; use chat() instead";
         }
+        if (mode == "gemini") {
+            chatStreamGemini(messages, callback, tools, opts);
+            return;
+        }
         ensureRestClient();
 
         # Build the request body (same as chat but with stream=true)
         hash<auto> body;
         if (mode == "anthropic") {
-            body = buildAnthropicBody(messages, tools);
+            body = buildAnthropicBody(messages, tools, opts);
             body.stream = True;
         } else {
-            body = buildHttpBody(messages, tools);
+            body = buildHttpBody(messages, tools, opts);
             body.stream = True;
         }
 
@@ -446,6 +510,492 @@ llm.chatStream(
 %endif
     }
 
+    #! OpenAI-compatible chat-completions facade
+    /** Accepts an OpenAI \c /v1/chat/completions-style request body, dispatches
+        it through this backend's native adapter, and returns an
+        OpenAI-compatible response hash.  This lets applications keep one
+        external wire contract while using provider-native backends such as
+        Gemini internally.
+
+        @param body OpenAI-compatible chat-completions request
+        @return OpenAI-compatible chat-completions response
+
+        @throw LLM-ERROR if the backend call fails
+    */
+    hash<auto> chatCompletions(hash<auto> body) {
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
+        list<hash<ChatMessage>> messages =
+            cast<list<hash<ChatMessage>>>(parsed.messages);
+        *list<hash<ToolDefinition>> tools =
+            cast<*list<hash<ToolDefinition>>>(parsed.tools);
+        hash<LlmRequestOptions> options =
+            cast<hash<LlmRequestOptions>>(parsed.options);
+        hash<ChatResponse> response = chat(messages, tools, options);
+        return chatResponseToOpenAi(response,
+            options.model ?? getRequestModel(NOTHING));
+    }
+
+    #! Streaming OpenAI-compatible chat-completions facade
+    /** Accepts an OpenAI \c /v1/chat/completions-style request body, streams
+        OpenAI-compatible chunks to @a delta_cb, and returns an accumulated
+        OpenAI-compatible final response.
+
+        @param body OpenAI-compatible chat-completions request
+        @param delta_cb callback receiving OpenAI-compatible stream chunks
+        @return accumulated OpenAI-compatible final response
+
+        @throw LLM-ERROR if the backend call fails
+    */
+    hash<auto> chatCompletionsStream(hash<auto> body,
+            code<nothing(hash<auto>)> delta_cb) {
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
+        list<hash<ChatMessage>> messages =
+            cast<list<hash<ChatMessage>>>(parsed.messages);
+        *list<hash<ToolDefinition>> tools =
+            cast<*list<hash<ToolDefinition>>>(parsed.tools);
+        hash<LlmRequestOptions> options =
+            cast<hash<LlmRequestOptions>>(parsed.options);
+        hash<auto> state = newOpenAiStreamState(options.model
+            ?? getRequestModel(NOTHING));
+        chatStream(messages, sub (hash<ChatStreamEvent> event) {
+            *hash<auto> chunk = chatStreamEventToOpenAiChunk(\state, event);
+            if (chunk) {
+                delta_cb(chunk);
+            }
+        }, tools, options);
+        return streamStateToOpenAiResponse(state);
+    }
+
+    #! Parses an OpenAI-compatible request for provider-native dispatch
+    private hash<auto> parseOpenAiChatCompletionsRequest(hash<auto> body) {
+        hash<LlmRequestOptions> options_h = <LlmRequestOptions>{};
+        if (body.model.val()) {
+            options_h.model = body.model;
+        }
+        if (exists body.max_completion_tokens) {
+            options_h.max_tokens = body.max_completion_tokens;
+        } else if (exists body.max_tokens) {
+            options_h.max_tokens = body.max_tokens;
+        }
+        if (exists body.temperature) {
+            options_h.temperature = body.temperature;
+        }
+
+        hash<auto!> body_options;
+        if (body.generationConfig.typeCode() == NT_HASH) {
+            body_options.generationConfig = body.generationConfig;
+        }
+        if (exists body.tool_choice) {
+            if (mode == "gemini") {
+                *hash<auto> tool_cfg = openAiToolChoiceToGeminiConfig(
+                    body.tool_choice);
+                if (tool_cfg) {
+                    body_options.toolConfig = tool_cfg;
+                }
+            } else {
+                body_options.tool_choice = body.tool_choice;
+            }
+        }
+        *hash<auto> output_schema = getOpenAiResponseSchema(body);
+        if (output_schema) {
+            if (mode == "gemini") {
+                options_h.output_schema = output_schema;
+            } else {
+                body_options.response_format = body.response_format;
+            }
+        }
+        if (body_options) {
+            options_h.body_options = body_options;
+        }
+
+        return {
+            "messages": openAiMessagesToChatMessages(body.messages ?? ()),
+            "tools": openAiToolsToToolDefinitions(body.tools),
+            "options": options_h,
+        };
+    }
+
+    private static list<hash<ChatMessage>> openAiMessagesToChatMessages(
+            list<auto> raw_messages) {
+        list<hash<ChatMessage>> messages = ();
+        foreach auto raw in (raw_messages) {
+            if (raw.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> msg = cast<hash<auto>>(raw);
+            hash<ChatMessage> out_h = <ChatMessage>{
+                "role": msg.role ?? "user",
+            };
+            if (msg.content.typeCode() == NT_LIST) {
+                list<hash<ContentPart>> parts = ();
+                foreach auto raw_part in (msg.content) {
+                    if (raw_part.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    hash<auto> part = cast<hash<auto>>(raw_part);
+                    if (part.type == "text" && part.text.val()) {
+                        hash<ContentPart> cp = <ContentPart>{
+                            "type": "text",
+                            "text": part.text,
+                        };
+                        push parts, cp;
+                    } else if (part.type == "image_url") {
+                        *hash<ContentPart> cp =
+                            dataUrlToContentPart(part.image_url.url);
+                        if (cp) {
+                            push parts, cp;
+                        }
+                    } else if (part.type == "file") {
+                        *hash<ContentPart> cp =
+                            dataUrlToContentPart(part."file".file_data);
+                        if (cp) {
+                            push parts, cp;
+                        }
+                    }
+                }
+                if (parts) {
+                    out_h.content_parts = parts;
+                }
+            } else if (msg.content.val()) {
+                out_h.content = msg.content.toString();
+            }
+
+            if (msg.tool_calls) {
+                list<hash<ChatToolCall>> tool_calls = ();
+                foreach auto raw_tc in (msg.tool_calls) {
+                    if (raw_tc.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    hash<auto> tc = cast<hash<auto>>(raw_tc);
+                    hash<ChatToolCall> tool_call = <ChatToolCall>{
+                        "id": tc.id ?? tc.function.name ?? "tool-call",
+                        "name": tc.function.name,
+                        "arguments": parseOpenAiToolArguments(
+                            tc.function.arguments),
+                    };
+                    push tool_calls, tool_call;
+                }
+                if (tool_calls) {
+                    out_h.tool_calls = tool_calls;
+                }
+            }
+            if (msg.tool_call_id.val()) {
+                out_h.tool_call_id = msg.tool_call_id;
+            }
+            if (msg.name.val()) {
+                out_h.name = msg.name;
+            }
+            push messages, out_h;
+        }
+        return messages;
+    }
+
+    private static *list<hash<ToolDefinition>> openAiToolsToToolDefinitions(
+            auto raw_tools) {
+        if (raw_tools.typeCode() != NT_LIST || !raw_tools) {
+            return NOTHING;
+        }
+        list<hash<ToolDefinition>> tools = ();
+        foreach auto raw_tool in (raw_tools) {
+            if (raw_tool.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> tool = cast<hash<auto>>(raw_tool);
+            if (tool.type == "function" && tool.function.name.val()) {
+                push tools, <ToolDefinition>{
+                    "name": tool.function.name,
+                    "description": tool.function.description,
+                    "parameters": tool.function.parameters,
+                };
+            }
+        }
+        return tools ? tools : NOTHING;
+    }
+
+    private static *hash<ContentPart> dataUrlToContentPart(*string url) {
+        if (!url.val()) {
+            return NOTHING;
+        }
+        *list<*string> m = regex_extract(url,
+            "^data:([^;]+);base64,(.*)$");
+        if (!m || !m[0].val() || !m[1].val()) {
+            return NOTHING;
+        }
+        try {
+            return <ContentPart>{
+                "type": "image",
+                "mime_type": m[0],
+                "data": parse_base64_string(m[1]),
+            };
+        } catch () {
+            return NOTHING;
+        }
+    }
+
+    private static *hash<auto> parseOpenAiToolArguments(auto raw) {
+        if (!exists raw) {
+            return {};
+        }
+        if (raw.typeCode() == NT_HASH) {
+            return cast<hash<auto>>(raw);
+        }
+        if (raw.typeCode() == NT_STRING && raw.val()) {
+            auto parsed = parse_json(raw);
+            return parsed.typeCode() == NT_HASH
+                ? cast<hash<auto>>(parsed) : {"value": parsed};
+        }
+        return {};
+    }
+
+    private static *hash<auto> getOpenAiResponseSchema(hash<auto> body) {
+        if (body.response_format.typeCode() == NT_HASH
+                && body.response_format.type == "json_schema"
+                && body.response_format.json_schema.schema.typeCode()
+                    == NT_HASH) {
+            return body.response_format.json_schema.schema;
+        }
+        return NOTHING;
+    }
+
+    private static *hash<auto> openAiToolChoiceToGeminiConfig(auto choice) {
+        if (!exists choice) {
+            return NOTHING;
+        }
+        hash<auto!> cfg;
+        if (choice == "none") {
+            cfg.functionCallingConfig = {"mode": "NONE"};
+        } else if (choice == "required") {
+            cfg.functionCallingConfig = {"mode": "ANY"};
+        } else if (choice == "auto") {
+            cfg.functionCallingConfig = {"mode": "AUTO"};
+        } else if (choice.typeCode() == NT_HASH && choice.function.name.val()) {
+            cfg.functionCallingConfig = {
+                "mode": "ANY",
+                "allowedFunctionNames": (choice.function.name,),
+            };
+        }
+        return cfg ? cfg : NOTHING;
+    }
+
+    private static hash<auto> chatResponseToOpenAi(hash<ChatResponse> response,
+            *string requested_model) {
+        hash<auto!> message;
+        message.role = "assistant";
+        message.content = response.content;
+        if (response.tool_calls) {
+            list<hash<auto>> tool_calls = ();
+            foreach hash<ChatToolCall> tc in (response.tool_calls) {
+                push tool_calls, chatToolCallToOpenAi(tc);
+            }
+            message.tool_calls = tool_calls;
+        }
+        hash<auto!> rv = {
+            "object": "chat.completion",
+            "choices": ({
+                "index": 0,
+                "message": message,
+                "finish_reason": genericStopReasonToOpenAi(
+                    response.stop_reason),
+            },),
+            "usage": response.usage,
+        };
+        if (response.id.val()) {
+            rv.id = response.id;
+        }
+        *string model = response.model ?? requested_model;
+        if (model.val()) {
+            rv.model = model;
+        }
+        return rv;
+    }
+
+    private static hash<auto> chatToolCallToOpenAi(hash<ChatToolCall> tc) {
+        return {
+            "id": tc.id,
+            "type": "function",
+            "function": {
+                "name": tc.name,
+                "arguments": make_json(tc.arguments ?? {}),
+            },
+        };
+    }
+
+    private static string genericStopReasonToOpenAi(*string reason) {
+        switch (reason) {
+            case "tool_use":
+                return "tool_calls";
+            case "max_tokens":
+                return "length";
+            case "stop_sequence":
+                return "content_filter";
+            case "end_turn":
+                return "stop";
+            default:
+                return reason ?? "stop";
+        }
+    }
+
+    private static hash<auto> newOpenAiStreamState(*string model) {
+        return {
+            "id": NOTHING,
+            "model": model,
+            "content": "",
+            "tool_calls": (),
+            "finish_reason": NOTHING,
+            "usage": NOTHING,
+        };
+    }
+
+    private static *hash<auto> chatStreamEventToOpenAiChunk(
+            reference<hash<auto>> state, hash<ChatStreamEvent> event) {
+        if (event.raw) {
+            updateOpenAiStreamStateFromRaw(\state, event.raw);
+        }
+        hash<auto!> delta;
+        if (!event.done && event.delta.val()) {
+            state.content += event.delta;
+            delta.content = event.delta;
+        }
+        list<hash<auto>> streamed = getOpenAiToolCallDeltas(\state,
+            event.raw);
+        if (streamed) {
+            delta.tool_calls = streamed;
+            if (event.done) {
+                state.finish_reason = "tool_calls";
+            }
+        }
+        if (event.done) {
+            if (!state.finish_reason.val()) {
+                state.finish_reason = "stop";
+            }
+            return makeOpenAiStreamChunk(state, delta,
+                state.finish_reason);
+        }
+        if (!delta) {
+            return NOTHING;
+        }
+        return makeOpenAiStreamChunk(state, delta, NOTHING);
+    }
+
+    private static updateOpenAiStreamStateFromRaw(
+            reference<hash<auto>> state, *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        if (raw.responseId.val()) {
+            state.id = raw.responseId;
+        } else if (raw.id.val()) {
+            state.id = raw.id;
+        }
+        if (raw.model.val()) {
+            state.model = raw.model;
+        }
+        if (raw.usageMetadata.typeCode() == NT_HASH) {
+            state.usage = normalizeGeminiUsage(raw.usageMetadata);
+        } else if (raw.usage.typeCode() == NT_HASH) {
+            state.usage = raw.usage;
+        }
+        *string finish_reason = raw.candidates[0].finishReason;
+        if (finish_reason.val()) {
+            state.finish_reason = state.tool_calls
+                ? "tool_calls" : geminiFinishReasonToOpenAi(finish_reason);
+        } else if (raw.choices[0].finish_reason.val()) {
+            state.finish_reason = raw.choices[0].finish_reason;
+        }
+    }
+
+    private static list<hash<auto>> getOpenAiToolCallDeltas(
+            reference<hash<auto>> state, *hash<auto> raw) {
+        if (!raw) {
+            return ();
+        }
+        list<hash<auto>> streamed = ();
+        foreach hash<auto> part in (raw.candidates[0].content.parts ?? ()) {
+            if (!part.functionCall) {
+                continue;
+            }
+            int idx = state.tool_calls.size();
+            hash<auto> tc = {
+                "id": part.functionCall.id ?? sprintf("tool-%d", idx + 1),
+                "type": "function",
+                "function": {
+                    "name": part.functionCall.name,
+                    "arguments": make_json(part.functionCall.args ?? {}),
+                },
+            };
+            state.tool_calls += tc;
+            streamed += {
+                "index": idx,
+                "id": tc.id,
+                "type": "function",
+                "function": tc.function,
+            };
+        }
+        return streamed;
+    }
+
+    private static string geminiFinishReasonToOpenAi(*string reason) {
+        switch (reason) {
+            case "STOP":
+                return "stop";
+            case "MAX_TOKENS":
+                return "length";
+            case "SAFETY":
+            case "RECITATION":
+                return "content_filter";
+            default:
+                return reason ?? "stop";
+        }
+    }
+
+    private static hash<auto> makeOpenAiStreamChunk(hash<auto> state,
+            *hash<auto> delta, *string finish_reason) {
+        hash<auto!> rv = {
+            "object": "chat.completion.chunk",
+            "choices": ({
+                "index": 0,
+                "delta": delta ?? {},
+                "finish_reason": finish_reason,
+            },),
+        };
+        if (state.id.val()) {
+            rv.id = state.id;
+        }
+        if (state.model.val()) {
+            rv.model = state.model;
+        }
+        if (state.usage) {
+            rv.usage = state.usage;
+        }
+        return rv;
+    }
+
+    private static hash<auto> streamStateToOpenAiResponse(hash<auto> state) {
+        hash<auto!> message = {
+            "role": "assistant",
+            "content": state.content.val() ? state.content : NOTHING,
+        };
+        if (state.tool_calls) {
+            message.tool_calls = state.tool_calls;
+        }
+        hash<auto!> rv = {
+            "object": "chat.completion",
+            "choices": ({
+                "index": 0,
+                "message": message,
+                "finish_reason": state.finish_reason ?? "stop",
+            },),
+            "usage": state.usage ?? {},
+        };
+        if (state.id.val()) {
+            rv.id = state.id;
+        }
+        if (state.model.val()) {
+            rv.model = state.model;
+        }
+        return rv;
+    }
+
     #! Estimates the token count for a text string
     /** When a tokenizer is provided, returns the exact token count.
         Otherwise uses a heuristic of ~4 characters per token (typical
@@ -474,19 +1024,31 @@ llm.chatStream(
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
             if (!rest_client) {
-                rest_client = new RestClientIo::RestClientIo({
-                    "url": url,
-                    "connect_timeout": connect_timeout_ms,
-                    "timeout": timeout_ms,
-                    "data": "json",
-                });
+                if (mode == "gemini") {
+                    hash<auto!> opts = {
+                        "apikey": api_key,
+                        "connect_timeout": connect_timeout_ms,
+                        "timeout": timeout_ms,
+                    };
+                    if (url.val()) {
+                        opts.url = url;
+                    }
+                    rest_client = new GeminiRestClient::GeminiRestClientIo(opts);
+                } else {
+                    rest_client = new RestClientIo::RestClientIo({
+                        "url": url,
+                        "connect_timeout": connect_timeout_ms,
+                        "timeout": timeout_ms,
+                        "data": "json",
+                    });
+                }
             }
         }
     }
 
     #! Completes via OpenAI-compatible /v1/chat/completions endpoint
     private hash<LlmCompletionResult> completeHttp(string system_prompt, string user_prompt,
-            *hash<auto> output_schema) {
+            *hash<auto> output_schema, *hash<LlmRequestOptions> opts) {
         ensureRestClient();
 
         hash<auto> body = {
@@ -494,11 +1056,12 @@ llm.chatStream(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ),
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_tokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
         };
-        if (model_name.val()) {
-            body.model = model_name;
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
         }
         if (output_schema) {
             body.response_format = {
@@ -510,6 +1073,7 @@ llm.chatStream(
                 },
             };
         }
+        body = mergeRequestBodyOptions(body, opts);
 
         *hash<auto> hdr;
         if (api_key.val()) {
@@ -534,14 +1098,41 @@ llm.chatStream(
         };
     }
 
+    #! Completes via Google Gemini generateContent
+    private hash<LlmCompletionResult> completeGemini(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildGeminiBody((
+            <ChatMessage>{"role": "system", "content": system_prompt},
+            <ChatMessage>{"role": "user", "content": user_prompt},
+        ), NOTHING, output_schema, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost(getGeminiGeneratePath(opts), body);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Gemini completion request failed: %s",
+                ex.desc), ex;
+        }
+
+        return <LlmCompletionResult>{
+            "content": extractGeminiText(resp.body),
+            "usage": normalizeGeminiUsage(resp.body.usageMetadata),
+        };
+    }
+
     #! Completes via Anthropic Messages API /v1/messages
     private hash<LlmCompletionResult> completeAnthropic(string system_prompt, string user_prompt,
-            *hash<auto> output_schema) {
+            *hash<auto> output_schema, *hash<LlmRequestOptions> opts) {
         ensureRestClient();
 
         hash<auto> body = {
-            "model": model_name ?? "claude-sonnet-4-20250514",
-            "max_tokens": max_tokens,
+            "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
+            "max_tokens": getRequestMaxTokens(opts),
             "system": system_prompt,
             "messages": (
                 {"role": "user", "content": user_prompt},
@@ -562,6 +1153,7 @@ llm.chatStream(
             );
             body.tool_choice = {"type": "tool", "name": tool_name};
         }
+        body = mergeRequestBodyOptions(body, opts);
 
         hash<auto> hdr = {
             "anthropic-version": anthropic_version,
@@ -613,17 +1205,19 @@ llm.chatStream(
         @throw LLM-ERROR if the callback fails
     */
     private hash<LlmCompletionResult> completeCallback(string system_prompt,
-            string user_prompt, *hash<auto> output_schema) {
+            string user_prompt, *hash<auto> output_schema,
+            *hash<LlmRequestOptions> opts) {
         hash<auto> body = {
             "messages": (
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ),
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_tokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
         };
-        if (model_name.val()) {
-            body.model = model_name;
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
         }
         if (output_schema) {
             body.response_format = {
@@ -635,10 +1229,11 @@ llm.chatStream(
                 },
             };
         }
+        body = mergeRequestBodyOptions(body, opts);
 
         hash<auto> resp;
         try {
-            resp = api_callback("PUT", "ai/v1/chat/completions", body);
+            resp = api_callback(callback_method, callback_path, body);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("callback API call failed: %s", ex.desc), ex;
         }
@@ -651,9 +1246,9 @@ llm.chatStream(
             "usage": usage,
         };
     }
-    #! Chat via OpenAI-compatible endpoint (also used for Qorus mode)
+    #! Chat via an OpenAI-compatible endpoint or callback dispatcher
     private hash<ChatResponse> chatHttp(list<hash<ChatMessage>> messages,
-            *list<hash<ToolDefinition>> tools) {
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         if (mode != "callback") {
             ensureRestClient();
         }
@@ -714,11 +1309,12 @@ llm.chatStream(
 
         hash<auto> body = {
             "messages": api_messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_tokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
         };
-        if (model_name.val()) {
-            body.model = model_name;
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
         }
 
         # Add tool definitions
@@ -737,6 +1333,7 @@ llm.chatStream(
             }
             body.tools = tool_defs;
         }
+        body = mergeRequestBodyOptions(body, opts);
 
         *hash<auto> hdr;
         if (api_key.val()) {
@@ -744,11 +1341,11 @@ llm.chatStream(
         }
 
         hash<auto> resp;
-        string endpoint = (mode == "callback") ? "ai/v1/chat/completions"
+        string endpoint = (mode == "callback") ? callback_path
             : "/v1/chat/completions";
         try {
             if (mode == "callback") {
-                resp = api_callback("PUT", endpoint, body);
+                resp = api_callback(callback_method, endpoint, body);
             } else {
                 resp = withRetry(hash<auto> sub () {
                     return rest_client.restPost(endpoint, body, hdr);
@@ -806,16 +1403,19 @@ llm.chatStream(
         }
 
         return <ChatResponse>{
+            "id": response_data.id,
+            "model": response_data.model,
             "stop_reason": stop_reason,
             "content": msg.content,
             "tool_calls": parsed_tool_calls,
             "usage": response_data.usage ?? {},
+            "raw": response_data,
         };
     }
 
     #! Chat via Anthropic Messages API
     private hash<ChatResponse> chatAnthropic(list<hash<ChatMessage>> messages,
-            *list<hash<ToolDefinition>> tools) {
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         ensureRestClient();
 
         # Extract system message and build Anthropic message list
@@ -914,8 +1514,8 @@ llm.chatStream(
         }
 
         hash<auto> body = {
-            "model": model_name ?? "claude-sonnet-4-20250514",
-            "max_tokens": max_tokens,
+            "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
+            "max_tokens": getRequestMaxTokens(opts),
             "messages": api_messages,
         };
         if (system_prompt.val()) {
@@ -935,6 +1535,7 @@ llm.chatStream(
             }
             body.tools = tool_defs;
         }
+        body = mergeRequestBodyOptions(body, opts);
 
         hash<auto> hdr = {
             "anthropic-version": anthropic_version,
@@ -973,11 +1574,82 @@ llm.chatStream(
         }
 
         return <ChatResponse>{
+            "id": resp.body.id,
+            "model": resp.body.model,
             "stop_reason": resp.body.stop_reason ?? "end_turn",
             "content": text_content,
             "tool_calls": parsed_tool_calls,
             "usage": resp.body.usage ?? {},
+            "raw": resp.body,
         };
+    }
+
+    #! Chat via Google Gemini generateContent
+    private hash<ChatResponse> chatGemini(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildGeminiBody(messages, tools,
+            opts.output_schema, opts);
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost(getGeminiGeneratePath(opts), body);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Gemini chat request failed: %s",
+                ex.desc), ex;
+        }
+
+        hash<ChatResponse> rv = parseGeminiChatResponse(resp.body);
+        rv.model = getGeminiModelName(opts);
+        return rv;
+    }
+
+    #! Streams Gemini generateContent SSE events as generic ChatStreamEvent deltas
+    private chatStreamGemini(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback,
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        hash<auto> body = buildGeminiBody(messages, tools,
+            opts.output_schema, opts);
+        GeminiRestClient::GeminiResponseSseStreamIo stream =
+            getGeminiClient().openStreamingConnection(
+                getGeminiBareModelName(getGeminiModelName(opts)), body,
+                NOTHING, timeout_ms);
+        on_exit stream.close();
+
+        while (True) {
+            *hash<SseMessageInfo> evt = stream.readEvent(timeout_ms);
+            if (!evt) {
+                callback(<ChatStreamEvent>{"done": True});
+                break;
+            }
+            if (!evt.data.val() || evt.data == "[DONE]") {
+                callback(<ChatStreamEvent>{"done": True});
+                break;
+            }
+
+            *hash<auto> parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch () {
+                continue;
+            }
+
+            string delta = extractGeminiText(parsed);
+            *string finish_reason = parsed.candidates[0].finishReason;
+            if (delta.val()) {
+                callback(<ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+            }
+            if (finish_reason.val()) {
+                callback(<ChatStreamEvent>{"done": True, "raw": parsed});
+                break;
+            }
+        }
     }
     #! Executes an HTTP call with retry and exponential backoff for transient errors
     /** Retries on 429 (rate limit) and 5xx (server error) responses.
@@ -1024,9 +1696,280 @@ llm.chatStream(
         }
     }
 
+    #! Returns the Gemini REST client
+    private GeminiRestClient::GeminiRestClientIo getGeminiClient() {
+        ensureRestClient();
+        return cast<GeminiRestClient::GeminiRestClientIo>(rest_client);
+    }
+
+    #! Returns the request model, allowing per-call task routing
+    private *string getRequestModel(*hash<LlmRequestOptions> opts) {
+        return opts.model ?? model_name;
+    }
+
+    #! Returns the max-token setting for this request
+    private int getRequestMaxTokens(*hash<LlmRequestOptions> opts) {
+        return opts.max_tokens ?? max_tokens;
+    }
+
+    #! Returns the temperature setting for this request
+    private float getRequestTemperature(*hash<LlmRequestOptions> opts) {
+        return opts.temperature ?? temperature;
+    }
+
+    #! Merges provider-specific request body options after generic fields
+    private static hash<auto> mergeRequestBodyOptions(hash<auto> body,
+            *hash<LlmRequestOptions> opts) {
+        if (!opts.body_options) {
+            return body;
+        }
+        hash<auto!> rv;
+        rv += body;
+        foreach string key in (keys opts.body_options) {
+            rv{key} = opts.body_options{key};
+        }
+        return rv;
+    }
+
+    #! Returns the Gemini model, defaulting to the stable Flash model
+    private string getGeminiModelName(*hash<LlmRequestOptions> opts) {
+        return getRequestModel(opts) ?? "gemini-2.5-flash";
+    }
+
+    #! Returns the Gemini generateContent REST path
+    private string getGeminiGeneratePath(*hash<LlmRequestOptions> opts) {
+        return getGeminiModelResource(getGeminiModelName(opts))
+            + ":generateContent";
+    }
+
+    #! Returns the Gemini model resource for REST calls
+    private static string getGeminiModelResource(string model) {
+        return model =~ /^models\// ? model : "models/" + model;
+    }
+
+    #! Returns the bare Gemini model name required by streaming helper APIs
+    private static string getGeminiBareModelName(string model) {
+        return regex_subst(model, "^models/", "");
+    }
+
+    #! Builds a Gemini generateContent request body
+    private hash<auto> buildGeminiBody(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools,
+            *hash<auto> output_schema, *hash<LlmRequestOptions> opts) {
+        list<hash<auto>> contents = ();
+        list<hash<auto>> system_parts = ();
+
+        foreach hash<ChatMessage> msg in (messages) {
+            if (msg.role == "system") {
+                list<hash<auto>> parts = buildGeminiContentParts(msg);
+                if (parts) {
+                    system_parts += parts;
+                }
+                continue;
+            }
+
+            list<hash<auto>> parts;
+            if (msg.role == "tool") {
+                parts = ({
+                    "functionResponse": {
+                        "name": msg.name ?? msg.tool_call_id ?? "tool_result",
+                        "response": parseGeminiToolResponse(msg.content),
+                    },
+                },);
+                push contents, {"role": "user", "parts": parts};
+                continue;
+            }
+
+            parts = buildGeminiContentParts(msg);
+            if (msg.role == "assistant" && msg.tool_calls) {
+                foreach hash<ChatToolCall> tc in (msg.tool_calls) {
+                    push parts, {
+                        "functionCall": {
+                            "name": tc.name,
+                            "args": tc.arguments ?? {},
+                        },
+                    };
+                }
+            }
+            if (!parts) {
+                parts = ({"text": msg.content ?? ""},);
+            }
+            push contents, {
+                "role": msg.role == "assistant" ? "model" : "user",
+                "parts": parts,
+            };
+        }
+
+        hash<auto!> body;
+        body.contents = contents;
+        if (system_parts) {
+            body.systemInstruction = {"parts": system_parts};
+        }
+
+        hash<auto!> generation_config = {
+            "maxOutputTokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
+        };
+        if (output_schema) {
+            generation_config.responseMimeType = "application/json";
+            generation_config.responseSchema = output_schema;
+        }
+        body.generationConfig = generation_config;
+
+        if (tools && tools.size()) {
+            list<hash<auto>> declarations = ();
+            foreach hash<ToolDefinition> td in (tools) {
+                push declarations, {
+                    "name": td.name,
+                    "description": td.description ?? "",
+                    "parameters": td.parameters
+                        ?? {"type": "object", "properties": {}},
+                };
+            }
+            body.tools = ({"functionDeclarations": declarations},);
+        }
+        body = mergeGeminiRequestBodyOptions(body, opts);
+        return body;
+    }
+
+    #! Merges provider-specific request body options into a Gemini request
+    private static hash<auto> mergeGeminiRequestBodyOptions(hash<auto> body,
+            *hash<LlmRequestOptions> opts) {
+        if (!opts.body_options) {
+            return body;
+        }
+        hash<auto!> rv;
+        rv += body;
+        foreach string key in (keys opts.body_options) {
+            if (key == "generationConfig"
+                    && rv.generationConfig.typeCode() == NT_HASH
+                    && opts.body_options{key}.typeCode() == NT_HASH) {
+                hash<auto!> gc;
+                gc += rv.generationConfig;
+                gc += opts.body_options{key};
+                rv.generationConfig = gc;
+            } else {
+                rv{key} = opts.body_options{key};
+            }
+        }
+        return rv;
+    }
+
+    #! Builds Gemini content parts from a generic chat message
+    private static list<hash<auto>> buildGeminiContentParts(hash<ChatMessage> msg) {
+        list<hash<auto>> parts = ();
+        if (msg.content_parts) {
+            foreach hash<ContentPart> part in (msg.content_parts) {
+                if (part.type == "image" && part.data) {
+                    push parts, {
+                        "inlineData": {
+                            "mimeType": part.mime_type ?? "image/png",
+                            "data": make_base64_string(part.data),
+                        },
+                    };
+                } else if (part.type == "text" && part.text.val()) {
+                    push parts, {"text": part.text};
+                }
+            }
+        } else if (msg.content.val()) {
+            push parts, {"text": msg.content};
+        }
+        return parts;
+    }
+
+    #! Parses an OpenAI-style tool-result string into Gemini functionResponse.response
+    private static hash<auto> parseGeminiToolResponse(*string content) {
+        if (!content.val()) {
+            return {};
+        }
+        try {
+            auto parsed = parse_json(content);
+            return parsed.typeCode() == NT_HASH
+                ? cast<hash<auto>>(parsed)
+                : {"result": parsed};
+        } catch () {
+            return {"result": content};
+        }
+    }
+
+    #! Parses a Gemini response into a generic ChatResponse
+    private static hash<ChatResponse> parseGeminiChatResponse(hash<auto> body) {
+        hash<auto> cand = body.candidates[0] ?? {};
+        list<string> text_parts = ();
+        *list<hash<ChatToolCall>> tool_calls;
+        int tc_index;
+        foreach hash<auto> part in (cand.content.parts ?? ()) {
+            if (part.text.val()) {
+                push text_parts, part.text;
+            } else if (part.functionCall) {
+                if (!tool_calls) {
+                    tool_calls = ();
+                }
+                push tool_calls, <ChatToolCall>{
+                    "id": part.functionCall.id ?? sprintf("gemini-tool-%d",
+                        ++tc_index),
+                    "name": part.functionCall.name,
+                    "arguments": part.functionCall.args ?? {},
+                };
+            }
+        }
+
+        return <ChatResponse>{
+            "id": body.responseId ?? body.id,
+            "model": body.model,
+            "stop_reason": tool_calls ? "tool_use"
+                : mapGeminiFinishReason(cand.finishReason),
+            "content": text_parts ? text_parts.join("") : NOTHING,
+            "tool_calls": tool_calls,
+            "usage": normalizeGeminiUsage(body.usageMetadata),
+            "raw": body,
+        };
+    }
+
+    #! Extracts text parts from a Gemini response/chunk
+    private static string extractGeminiText(hash<auto> body) {
+        list<string> parts = ();
+        foreach hash<auto> part in (body.candidates[0].content.parts ?? ()) {
+            if (part.text.val()) {
+                push parts, part.text;
+            }
+        }
+        return parts.join("");
+    }
+
+    #! Maps Gemini usage metadata to the OpenAI-style counters used by callers
+    private static hash<auto> normalizeGeminiUsage(auto usage) {
+        int prompt_tokens = usage.promptTokenCount ?? 0;
+        int completion_tokens = usage.candidatesTokenCount ?? 0;
+        int total_tokens = usage.totalTokenCount
+            ?? (prompt_tokens + completion_tokens);
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "input_tokens": prompt_tokens,
+            "output_tokens": completion_tokens,
+        };
+    }
+
+    #! Maps Gemini finishReason values to QoreLlmUtils stop reasons
+    private static string mapGeminiFinishReason(*string reason) {
+        switch (reason) {
+            case "STOP":
+                return "end_turn";
+            case "MAX_TOKENS":
+                return "max_tokens";
+            case "SAFETY":
+            case "RECITATION":
+                return "stop_sequence";
+            default:
+                return reason ?? "end_turn";
+        }
+    }
+
     #! Builds the HTTP/OpenAI message body for chatStream()
     private hash<auto> buildHttpBody(list<hash<ChatMessage>> messages,
-            *list<hash<ToolDefinition>> tools) {
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         list<hash<auto>> api_messages = ();
         foreach hash<ChatMessage> msg in (messages) {
             hash<auto!> api_msg();
@@ -1078,11 +2021,12 @@ llm.chatStream(
 
         hash<auto> body = {
             "messages": api_messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_tokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
         };
-        if (model_name.val()) {
-            body.model = model_name;
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
         }
         if (tools) {
             list<auto> tool_defs = ();
@@ -1099,12 +2043,12 @@ llm.chatStream(
             }
             body.tools = tool_defs;
         }
-        return body;
+        return mergeRequestBodyOptions(body, opts);
     }
 
     #! Builds the Anthropic message body for chatStream()
     private hash<auto> buildAnthropicBody(list<hash<ChatMessage>> messages,
-            *list<hash<ToolDefinition>> tools) {
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         *string sys_prompt;
         list<hash<auto>> api_messages = ();
         list<hash<auto>> pending_tool_results = ();
@@ -1169,8 +2113,8 @@ llm.chatStream(
         }
 
         hash<auto> body = {
-            "model": model_name ?? "claude-sonnet-4-20250514",
-            "max_tokens": max_tokens,
+            "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
+            "max_tokens": getRequestMaxTokens(opts),
             "messages": api_messages,
         };
         if (sys_prompt.val()) {
@@ -1188,7 +2132,7 @@ llm.chatStream(
             }
             body.tools = tool_defs;
         }
-        return body;
+        return mergeRequestBodyOptions(body, opts);
     }
 }
 

@@ -27,13 +27,13 @@ public namespace QoreVisionExtraction {
 #! Configuration for VisionLlmClient
 /** Specifies how to connect to the vision LLM. Supports all modes from
     @ref QoreLlmUtils::LlmBackend "LlmBackend": HTTP/OpenAI, Anthropic,
-    and custom API gateways via callback.
+    Gemini, and custom API gateways via callback.
 
     For backward compatibility, \c "openai" is accepted as an alias for \c "http".
 */
 public hashdecl VisionLlmConfig {
     #! Mode: "http"/"openai" for OpenAI-compatible, "anthropic" for Anthropic,
-    #! "callback" for a custom API dispatch function
+    #! "gemini" for Google Gemini, or "callback" for a custom API dispatch function
     string mode;
     #! Base URL of the LLM service (required for "http" and "anthropic" modes)
     *string url;
@@ -53,6 +53,10 @@ public hashdecl VisionLlmConfig {
     *string system_prompt;
     #! Callback mode: a callable for custom API dispatch
     *code<hash<auto>(string, string, hash<auto>)> api_callback;
+    #! Callback mode method hint passed to the API dispatch callable; default "POST"
+    string callback_method = "POST";
+    #! Callback mode endpoint/path hint passed to the API dispatch callable; default "chat/completions"
+    string callback_path = "chat/completions";
 }
 
 #! Result from a vision extraction operation
@@ -71,8 +75,8 @@ public hashdecl VisionExtractionResult {
 /** Sends images to vision-capable LLMs and extracts text, descriptions,
     tables, or structured data.  Built on
     @ref QoreLlmUtils::LlmBackend "LlmBackend" — supports all backend modes
-    including HTTP/OpenAI-compatible endpoints, Anthropic Messages API, and
-    custom API gateways.
+    including HTTP/OpenAI-compatible endpoints, Anthropic Messages API,
+    Gemini, and custom API gateways.
 
     @par Example: Describe an image using a callback API
     @code{.py}
@@ -82,6 +86,9 @@ public hashdecl VisionExtractionResult {
 VisionLlmClient client(<VisionLlmConfig>{
     "mode": "callback",
     "model": "gpt-4o",
+    "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+        return callApiGateway(method, path, body);
+    },
 });
 binary img = ReadOnlyFile::readBinaryFile("photo.jpg");
 hash<VisionExtractionResult> result = client.describeImage(img, "image/jpeg");
@@ -139,10 +146,10 @@ public class VisionLlmClient {
         }
 
         if (backend_mode != "http" && backend_mode != "anthropic"
-                && backend_mode != "callback") {
+                && backend_mode != "gemini" && backend_mode != "callback") {
             throw "VISION-CONFIG-ERROR",
                 sprintf("invalid mode %y; expected \"http\", \"openai\", "
-                    "\"anthropic\", or \"callback\"", config.mode);
+                    "\"anthropic\", \"gemini\", or \"callback\"", config.mode);
         }
 
         hash<QoreLlmUtils::LlmBackendConfig> llm_config(<QoreLlmUtils::LlmBackendConfig>{
@@ -154,6 +161,8 @@ public class VisionLlmClient {
             "connect_timeout_ms": config.connect_timeout_ms,
             "timeout_ms": config.timeout_ms,
             "anthropic_version": config.anthropic_version,
+            "callback_method": config.callback_method,
+            "callback_path": config.callback_path,
         });
         if (config.api_callback) {
             llm_config.api_callback = config.api_callback;

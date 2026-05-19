@@ -54,7 +54,8 @@ module QoreVisionExtraction {
     data.
 
     Built on @ref QoreLlmUtils::LlmBackend "LlmBackend" — supports all
-    backend modes including HTTP/OpenAI, Anthropic, and Qorus AI Gateway.
+    backend modes including HTTP/OpenAI, Anthropic, Gemini, and callback
+    API gateways.
 
     @par Example: Describe an image
     @code{.py}
@@ -76,7 +77,7 @@ printf("Description: %s\n", result.text);
 
     @subsection qorevisionextraction_1_0 QoreVisionExtraction Module Version 1.0
     - Initial release with @ref QoreVisionExtraction::VisionLlmClient "VisionLlmClient"
-      supporting OpenAI, Anthropic, and Qorus AI Gateway modes
+      supporting OpenAI, Anthropic, Gemini, and callback gateway modes
     - Image description, table extraction, text extraction, and structured extraction
     - Custom system prompts and output schemas
 */

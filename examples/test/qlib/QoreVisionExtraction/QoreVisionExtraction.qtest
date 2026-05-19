@@ -19,8 +19,11 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
         addTestCase("VisionLlmClient - invalid mode", \visionInvalidModeTest());
         addTestCase("VisionLlmClient - valid http config", \visionValidHttpTest());
         addTestCase("VisionLlmClient - valid anthropic config", \visionValidAnthropicTest());
+        addTestCase("VisionLlmClient - valid gemini config", \visionValidGeminiTest());
         addTestCase("VisionLlmClient - openai backward compat", \visionOpenaiCompatTest());
         addTestCase("VisionLlmClient - callback mode", \visionCallbackModeTest());
+        addTestCase("VisionLlmClient - callback dispatch options",
+            \visionCallbackDispatchOptionsTest());
         addTestCase("VisionLlmClient - custom system prompt", \visionCustomPromptTest());
         addTestCase("VisionLlmConfig - defaults", \visionConfigDefaultsTest());
 
@@ -59,6 +62,15 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
         assertTrue(True);
     }
 
+    visionValidGeminiTest() {
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "gemini",
+            "model": "gemini-2.5-flash",
+            "api_key": "test-key",
+        });
+        assertTrue(True);
+    }
+
     visionOpenaiCompatTest() {
         # "openai" should be accepted as alias for "http"
         VisionLlmClient client(<VisionLlmConfig>{
@@ -76,6 +88,35 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
             "model": "gpt-4o",
         });
         assertTrue(True);
+    }
+
+    visionCallbackDispatchOptionsTest() {
+        list<hash<auto>> calls = ();
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "callback",
+            "model": "gpt-4o",
+            "callback_method": "PUT",
+            "callback_path": "ai/v1/chat/completions",
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> b) {
+                push calls, {"method": m, "path": p, "body": b};
+                return {
+                    "choices": (
+                        {"message": {"content": "vision ok"}, "finish_reason": "stop"},
+                    ),
+                    "usage": {"total_tokens": 1},
+                };
+            },
+        });
+
+        hash<VisionExtractionResult> rv = client.describeImage(
+            parse_base64_string("aW1n"), "image/png", "describe");
+
+        assertEq("vision ok", rv.text);
+        assertEq(1, calls.size());
+        assertEq("PUT", calls[0].method);
+        assertEq("ai/v1/chat/completions", calls[0].path);
+        assertEq("gpt-4o", calls[0].body.model);
+        assertEq("describe", calls[0].body.messages[1].content[1].text);
     }
 
     visionCustomPromptTest() {
