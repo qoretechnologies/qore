@@ -299,7 +299,7 @@ public class GeminiResponseSseStream {
         if (!headers."Content-Type") {
             headers."Content-Type" = "application/json";
         }
-        return call_function_args("to_json", (body,));
+        return make_json(body);
 %endif
     }
 
@@ -428,7 +428,7 @@ public class GeminiResponseSseStreamIo {
                 if (!headers."Content-Type") {
                     headers."Content-Type" = "application/json";
                 }
-                payload = call_function_args("to_json", (body,));
+                payload = make_json(body);
             } else {
                 if (!headers."Content-Type") {
                     headers."Content-Type" = "application/json";

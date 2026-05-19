@@ -85,6 +85,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiChatRequestAndTextResponseTest());
         addTestCase("LlmBackend gemini tool call response",
             \geminiToolCallResponseTest());
+        addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
+            \geminiOpenAiChatCompletionsFacadeTest());
+        addTestCase("LlmBackend OpenAI chat facade converts tool turns",
+            \geminiOpenAiToolTurnsFacadeTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
         addTestCase("PromptSecretProtector protects and restores credentials",
             \promptSecretProtectRestoreTest());
@@ -388,6 +392,194 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             gemini_handler.requests[0].path);
         assertEq("lookup customer",
             gemini_handler.requests[0].body.contents[0].parts[0].text);
+    }
+
+    geminiOpenAiChatCompletionsFacadeTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-pro:generateContent": {
+                "code": 200,
+                "body": {
+                    "responseId": "gemini-openai-1",
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": (
+                                {"text": "done"},
+                                {
+                                    "functionCall": {
+                                        "name": "lookup",
+                                        "args": {"key": "customer"},
+                                    },
+                                },
+                            ),
+                        },
+                    },),
+                    "usageMetadata": {
+                        "promptTokenCount": 9,
+                        "candidatesTokenCount": 4,
+                        "totalTokenCount": 13,
+                    },
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-pro",
+            "messages": (
+                {"role": "system", "content": "be concise"},
+                {
+                    "role": "user",
+                    "content": (
+                        {"type": "text", "text": "inspect this"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "data:image/png;base64,aW1n",
+                            },
+                        },
+                    ),
+                },
+            ),
+            "max_completion_tokens": 256,
+            "temperature": 0.1,
+            "generationConfig": {
+                "thinkingConfig": {"thinkingBudget": 32},
+            },
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"ok": {"type": "boolean"}},
+                    },
+                },
+            },
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "description": "lookup data",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"key": {"type": "string"}},
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "lookup"},
+            },
+        });
+
+        assertEq("gemini-openai-1", rv.id,
+            "Gemini responseId is exposed as OpenAI id");
+        assertEq("gemini-2.5-pro", rv.model,
+            "requested model is exposed in OpenAI response");
+        assertEq("done", rv.choices[0].message.content,
+            "text content is normalized");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "Gemini function call maps to OpenAI tool_calls finish reason");
+        assertEq("lookup",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "function call name is normalized");
+        assertEq("{\"key\":\"customer\"}",
+            rv.choices[0].message.tool_calls[0].function.arguments,
+            "function call arguments are serialized");
+        assertEq(13, rv.usage.total_tokens,
+            "Gemini usage is normalized");
+
+        assertEq("be concise",
+            gemini_handler.requests[0].body.systemInstruction.parts[0].text,
+            "system message moved to Gemini systemInstruction");
+        assertEq("inspect this",
+            gemini_handler.requests[0].body.contents[0].parts[0].text,
+            "OpenAI user text block converted");
+        assertEq("image/png",
+            gemini_handler.requests[0].body.contents[0].parts[1].inlineData.mimeType,
+            "OpenAI image URL MIME type converted");
+        assertEq("aW1n",
+            gemini_handler.requests[0].body.contents[0].parts[1].inlineData.data,
+            "OpenAI image URL payload converted");
+        assertEq(256,
+            gemini_handler.requests[0].body.generationConfig.maxOutputTokens,
+            "max_completion_tokens maps to maxOutputTokens");
+        assertEq(0.1,
+            gemini_handler.requests[0].body.generationConfig.temperature,
+            "temperature maps to generationConfig");
+        assertEq(32,
+            gemini_handler.requests[0].body.generationConfig.thinkingConfig.thinkingBudget,
+            "provider generationConfig is preserved");
+        assertEq("application/json",
+            gemini_handler.requests[0].body.generationConfig.responseMimeType,
+            "json_schema response format maps to Gemini JSON mode");
+        assertEq("lookup",
+            gemini_handler.requests[0].body.tools[0].functionDeclarations[0].name,
+            "OpenAI function tool declaration converted");
+        assertEq("ANY",
+            gemini_handler.requests[0].body.toolConfig.functionCallingConfig.mode,
+            "named tool choice forces function calling");
+        assertEq("lookup",
+            gemini_handler.requests[0].body.toolConfig.functionCallingConfig.allowedFunctionNames[0],
+            "named tool choice limits the allowed function");
+    }
+
+    geminiOpenAiToolTurnsFacadeTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {"parts": ({"text": "used tool"},)},
+                    },),
+                    "usageMetadata": {"totalTokenCount": 5},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "messages": (
+                {"role": "user", "content": "lookup customer"},
+                {
+                    "role": "assistant",
+                    "tool_calls": ({
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "lookup",
+                            "arguments": "{\"key\":\"customer\"}",
+                        },
+                    },),
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call-1",
+                    "name": "lookup",
+                    "content": "{\"ok\":true}",
+                },
+            ),
+        });
+
+        assertEq("used tool", rv.choices[0].message.content,
+            "facade returns normalized assistant text");
+        assertEq("model", gemini_handler.requests[0].body.contents[1].role,
+            "assistant tool call is represented as model content");
+        assertEq("lookup",
+            gemini_handler.requests[0].body.contents[1].parts[0].functionCall.name,
+            "assistant function call name converted");
+        assertEq("customer",
+            gemini_handler.requests[0].body.contents[1].parts[0].functionCall.args.key,
+            "assistant function call JSON arguments parsed");
+        assertEq("lookup",
+            gemini_handler.requests[0].body.contents[2].parts[0].functionResponse.name,
+            "tool result name converted");
+        assertEq(True,
+            gemini_handler.requests[0].body.contents[2].parts[0].functionResponse.response.ok,
+            "tool result JSON parsed");
     }
 
     hashdeclDefaultsTest() {

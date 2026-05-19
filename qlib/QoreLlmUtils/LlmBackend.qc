@@ -75,6 +75,8 @@ public hashdecl LlmRequestOptions {
     *int max_tokens;
     #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
     *float temperature;
+    #! JSON schema to request structured output when the backend supports it
+    *hash<auto> output_schema;
     #! Provider-specific request body fields merged into the generated body
     *hash<auto> body_options;
 }
@@ -138,6 +140,10 @@ public hashdecl ToolDefinition {
 
 #! Response from a multi-turn chat call
 public hashdecl ChatResponse {
+    #! Provider response ID when available
+    *string id;
+    #! Model used by the provider when available
+    *string model;
     #! Why the LLM stopped: "end_turn" (normal), "tool_use" (wants tool calls),
     #! "max_tokens" (hit limit), or "stop_sequence"
     string stop_reason;
@@ -147,6 +153,8 @@ public hashdecl ChatResponse {
     *list<hash<ChatToolCall>> tool_calls;
     #! Token usage information
     hash<auto> usage;
+    #! Raw provider response when callers need provider-specific metadata
+    *hash<auto> raw;
 }
 
 #! A streaming event from a chat completion
@@ -485,6 +493,492 @@ llm.chatStream(
                 });
             }
         }
+    }
+
+    #! OpenAI-compatible chat-completions facade
+    /** Accepts an OpenAI \c /v1/chat/completions-style request body, dispatches
+        it through this backend's native adapter, and returns an
+        OpenAI-compatible response hash.  This lets applications keep one
+        external wire contract while using provider-native backends such as
+        Gemini internally.
+
+        @param body OpenAI-compatible chat-completions request
+        @return OpenAI-compatible chat-completions response
+
+        @throw LLM-ERROR if the backend call fails
+    */
+    hash<auto> chatCompletions(hash<auto> body) {
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
+        list<hash<ChatMessage>> messages =
+            cast<list<hash<ChatMessage>>>(parsed.messages);
+        *list<hash<ToolDefinition>> tools =
+            cast<*list<hash<ToolDefinition>>>(parsed.tools);
+        hash<LlmRequestOptions> options =
+            cast<hash<LlmRequestOptions>>(parsed.options);
+        hash<ChatResponse> response = chat(messages, tools, options);
+        return chatResponseToOpenAi(response,
+            options.model ?? getRequestModel(NOTHING));
+    }
+
+    #! Streaming OpenAI-compatible chat-completions facade
+    /** Accepts an OpenAI \c /v1/chat/completions-style request body, streams
+        OpenAI-compatible chunks to @a delta_cb, and returns an accumulated
+        OpenAI-compatible final response.
+
+        @param body OpenAI-compatible chat-completions request
+        @param delta_cb callback receiving OpenAI-compatible stream chunks
+        @return accumulated OpenAI-compatible final response
+
+        @throw LLM-ERROR if the backend call fails
+    */
+    hash<auto> chatCompletionsStream(hash<auto> body,
+            code<nothing(hash<auto>)> delta_cb) {
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
+        list<hash<ChatMessage>> messages =
+            cast<list<hash<ChatMessage>>>(parsed.messages);
+        *list<hash<ToolDefinition>> tools =
+            cast<*list<hash<ToolDefinition>>>(parsed.tools);
+        hash<LlmRequestOptions> options =
+            cast<hash<LlmRequestOptions>>(parsed.options);
+        hash<auto> state = newOpenAiStreamState(options.model
+            ?? getRequestModel(NOTHING));
+        chatStream(messages, sub (hash<ChatStreamEvent> event) {
+            *hash<auto> chunk = chatStreamEventToOpenAiChunk(\state, event);
+            if (chunk) {
+                delta_cb(chunk);
+            }
+        }, tools, options);
+        return streamStateToOpenAiResponse(state);
+    }
+
+    #! Parses an OpenAI-compatible request for provider-native dispatch
+    private hash<auto> parseOpenAiChatCompletionsRequest(hash<auto> body) {
+        hash<LlmRequestOptions> options_h = <LlmRequestOptions>{};
+        if (body.model.val()) {
+            options_h.model = body.model;
+        }
+        if (exists body.max_completion_tokens) {
+            options_h.max_tokens = body.max_completion_tokens;
+        } else if (exists body.max_tokens) {
+            options_h.max_tokens = body.max_tokens;
+        }
+        if (exists body.temperature) {
+            options_h.temperature = body.temperature;
+        }
+
+        hash<auto!> body_options;
+        if (body.generationConfig.typeCode() == NT_HASH) {
+            body_options.generationConfig = body.generationConfig;
+        }
+        if (exists body.tool_choice) {
+            if (mode == "gemini") {
+                *hash<auto> tool_cfg = openAiToolChoiceToGeminiConfig(
+                    body.tool_choice);
+                if (tool_cfg) {
+                    body_options.toolConfig = tool_cfg;
+                }
+            } else {
+                body_options.tool_choice = body.tool_choice;
+            }
+        }
+        *hash<auto> output_schema = getOpenAiResponseSchema(body);
+        if (output_schema) {
+            if (mode == "gemini") {
+                options_h.output_schema = output_schema;
+            } else {
+                body_options.response_format = body.response_format;
+            }
+        }
+        if (body_options) {
+            options_h.body_options = body_options;
+        }
+
+        return {
+            "messages": openAiMessagesToChatMessages(body.messages ?? ()),
+            "tools": openAiToolsToToolDefinitions(body.tools),
+            "options": options_h,
+        };
+    }
+
+    private static list<hash<ChatMessage>> openAiMessagesToChatMessages(
+            list<auto> raw_messages) {
+        list<hash<ChatMessage>> messages = ();
+        foreach auto raw in (raw_messages) {
+            if (raw.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> msg = cast<hash<auto>>(raw);
+            hash<ChatMessage> out_h = <ChatMessage>{
+                "role": msg.role ?? "user",
+            };
+            if (msg.content.typeCode() == NT_LIST) {
+                list<hash<ContentPart>> parts = ();
+                foreach auto raw_part in (msg.content) {
+                    if (raw_part.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    hash<auto> part = cast<hash<auto>>(raw_part);
+                    if (part.type == "text" && part.text.val()) {
+                        hash<ContentPart> cp = <ContentPart>{
+                            "type": "text",
+                            "text": part.text,
+                        };
+                        push parts, cp;
+                    } else if (part.type == "image_url") {
+                        *hash<ContentPart> cp =
+                            dataUrlToContentPart(part.image_url.url);
+                        if (cp) {
+                            push parts, cp;
+                        }
+                    } else if (part.type == "file") {
+                        *hash<ContentPart> cp =
+                            dataUrlToContentPart(part."file".file_data);
+                        if (cp) {
+                            push parts, cp;
+                        }
+                    }
+                }
+                if (parts) {
+                    out_h.content_parts = parts;
+                }
+            } else if (msg.content.val()) {
+                out_h.content = msg.content.toString();
+            }
+
+            if (msg.tool_calls) {
+                list<hash<ChatToolCall>> tool_calls = ();
+                foreach auto raw_tc in (msg.tool_calls) {
+                    if (raw_tc.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    hash<auto> tc = cast<hash<auto>>(raw_tc);
+                    hash<ChatToolCall> tool_call = <ChatToolCall>{
+                        "id": tc.id ?? tc.function.name ?? "tool-call",
+                        "name": tc.function.name,
+                        "arguments": parseOpenAiToolArguments(
+                            tc.function.arguments),
+                    };
+                    push tool_calls, tool_call;
+                }
+                if (tool_calls) {
+                    out_h.tool_calls = tool_calls;
+                }
+            }
+            if (msg.tool_call_id.val()) {
+                out_h.tool_call_id = msg.tool_call_id;
+            }
+            if (msg.name.val()) {
+                out_h.name = msg.name;
+            }
+            push messages, out_h;
+        }
+        return messages;
+    }
+
+    private static *list<hash<ToolDefinition>> openAiToolsToToolDefinitions(
+            auto raw_tools) {
+        if (raw_tools.typeCode() != NT_LIST || !raw_tools) {
+            return NOTHING;
+        }
+        list<hash<ToolDefinition>> tools = ();
+        foreach auto raw_tool in (raw_tools) {
+            if (raw_tool.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> tool = cast<hash<auto>>(raw_tool);
+            if (tool.type == "function" && tool.function.name.val()) {
+                push tools, <ToolDefinition>{
+                    "name": tool.function.name,
+                    "description": tool.function.description,
+                    "parameters": tool.function.parameters,
+                };
+            }
+        }
+        return tools ? tools : NOTHING;
+    }
+
+    private static *hash<ContentPart> dataUrlToContentPart(*string url) {
+        if (!url.val()) {
+            return NOTHING;
+        }
+        *list<*string> m = regex_extract(url,
+            "^data:([^;]+);base64,(.*)$");
+        if (!m || !m[0].val() || !m[1].val()) {
+            return NOTHING;
+        }
+        try {
+            return <ContentPart>{
+                "type": "image",
+                "mime_type": m[0],
+                "data": parse_base64_string(m[1]),
+            };
+        } catch () {
+            return NOTHING;
+        }
+    }
+
+    private static *hash<auto> parseOpenAiToolArguments(auto raw) {
+        if (!exists raw) {
+            return {};
+        }
+        if (raw.typeCode() == NT_HASH) {
+            return cast<hash<auto>>(raw);
+        }
+        if (raw.typeCode() == NT_STRING && raw.val()) {
+            auto parsed = parse_json(raw);
+            return parsed.typeCode() == NT_HASH
+                ? cast<hash<auto>>(parsed) : {"value": parsed};
+        }
+        return {};
+    }
+
+    private static *hash<auto> getOpenAiResponseSchema(hash<auto> body) {
+        if (body.response_format.typeCode() == NT_HASH
+                && body.response_format.type == "json_schema"
+                && body.response_format.json_schema.schema.typeCode()
+                    == NT_HASH) {
+            return body.response_format.json_schema.schema;
+        }
+        return NOTHING;
+    }
+
+    private static *hash<auto> openAiToolChoiceToGeminiConfig(auto choice) {
+        if (!exists choice) {
+            return NOTHING;
+        }
+        hash<auto!> cfg;
+        if (choice == "none") {
+            cfg.functionCallingConfig = {"mode": "NONE"};
+        } else if (choice == "required") {
+            cfg.functionCallingConfig = {"mode": "ANY"};
+        } else if (choice == "auto") {
+            cfg.functionCallingConfig = {"mode": "AUTO"};
+        } else if (choice.typeCode() == NT_HASH && choice.function.name.val()) {
+            cfg.functionCallingConfig = {
+                "mode": "ANY",
+                "allowedFunctionNames": (choice.function.name,),
+            };
+        }
+        return cfg ? cfg : NOTHING;
+    }
+
+    private static hash<auto> chatResponseToOpenAi(hash<ChatResponse> response,
+            *string requested_model) {
+        hash<auto!> message;
+        message.role = "assistant";
+        message.content = response.content;
+        if (response.tool_calls) {
+            list<hash<auto>> tool_calls = ();
+            foreach hash<ChatToolCall> tc in (response.tool_calls) {
+                push tool_calls, chatToolCallToOpenAi(tc);
+            }
+            message.tool_calls = tool_calls;
+        }
+        hash<auto!> rv = {
+            "object": "chat.completion",
+            "choices": ({
+                "index": 0,
+                "message": message,
+                "finish_reason": genericStopReasonToOpenAi(
+                    response.stop_reason),
+            },),
+            "usage": response.usage,
+        };
+        if (response.id.val()) {
+            rv.id = response.id;
+        }
+        *string model = response.model ?? requested_model;
+        if (model.val()) {
+            rv.model = model;
+        }
+        return rv;
+    }
+
+    private static hash<auto> chatToolCallToOpenAi(hash<ChatToolCall> tc) {
+        return {
+            "id": tc.id,
+            "type": "function",
+            "function": {
+                "name": tc.name,
+                "arguments": make_json(tc.arguments ?? {}),
+            },
+        };
+    }
+
+    private static string genericStopReasonToOpenAi(*string reason) {
+        switch (reason) {
+            case "tool_use":
+                return "tool_calls";
+            case "max_tokens":
+                return "length";
+            case "stop_sequence":
+                return "content_filter";
+            case "end_turn":
+                return "stop";
+            default:
+                return reason ?? "stop";
+        }
+    }
+
+    private static hash<auto> newOpenAiStreamState(*string model) {
+        return {
+            "id": NOTHING,
+            "model": model,
+            "content": "",
+            "tool_calls": (),
+            "finish_reason": NOTHING,
+            "usage": NOTHING,
+        };
+    }
+
+    private static *hash<auto> chatStreamEventToOpenAiChunk(
+            reference<hash<auto>> state, hash<ChatStreamEvent> event) {
+        if (event.raw) {
+            updateOpenAiStreamStateFromRaw(\state, event.raw);
+        }
+        hash<auto!> delta;
+        if (!event.done && event.delta.val()) {
+            state.content += event.delta;
+            delta.content = event.delta;
+        }
+        list<hash<auto>> streamed = getOpenAiToolCallDeltas(\state,
+            event.raw);
+        if (streamed) {
+            delta.tool_calls = streamed;
+            if (event.done) {
+                state.finish_reason = "tool_calls";
+            }
+        }
+        if (event.done) {
+            if (!state.finish_reason.val()) {
+                state.finish_reason = "stop";
+            }
+            return makeOpenAiStreamChunk(state, delta,
+                state.finish_reason);
+        }
+        if (!delta) {
+            return NOTHING;
+        }
+        return makeOpenAiStreamChunk(state, delta, NOTHING);
+    }
+
+    private static updateOpenAiStreamStateFromRaw(
+            reference<hash<auto>> state, *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        if (raw.responseId.val()) {
+            state.id = raw.responseId;
+        } else if (raw.id.val()) {
+            state.id = raw.id;
+        }
+        if (raw.model.val()) {
+            state.model = raw.model;
+        }
+        if (raw.usageMetadata.typeCode() == NT_HASH) {
+            state.usage = normalizeGeminiUsage(raw.usageMetadata);
+        } else if (raw.usage.typeCode() == NT_HASH) {
+            state.usage = raw.usage;
+        }
+        *string finish_reason = raw.candidates[0].finishReason;
+        if (finish_reason.val()) {
+            state.finish_reason = state.tool_calls
+                ? "tool_calls" : geminiFinishReasonToOpenAi(finish_reason);
+        } else if (raw.choices[0].finish_reason.val()) {
+            state.finish_reason = raw.choices[0].finish_reason;
+        }
+    }
+
+    private static list<hash<auto>> getOpenAiToolCallDeltas(
+            reference<hash<auto>> state, *hash<auto> raw) {
+        if (!raw) {
+            return ();
+        }
+        list<hash<auto>> streamed = ();
+        foreach hash<auto> part in (raw.candidates[0].content.parts ?? ()) {
+            if (!part.functionCall) {
+                continue;
+            }
+            int idx = state.tool_calls.size();
+            hash<auto> tc = {
+                "id": part.functionCall.id ?? sprintf("tool-%d", idx + 1),
+                "type": "function",
+                "function": {
+                    "name": part.functionCall.name,
+                    "arguments": make_json(part.functionCall.args ?? {}),
+                },
+            };
+            state.tool_calls += tc;
+            streamed += {
+                "index": idx,
+                "id": tc.id,
+                "type": "function",
+                "function": tc.function,
+            };
+        }
+        return streamed;
+    }
+
+    private static string geminiFinishReasonToOpenAi(*string reason) {
+        switch (reason) {
+            case "STOP":
+                return "stop";
+            case "MAX_TOKENS":
+                return "length";
+            case "SAFETY":
+            case "RECITATION":
+                return "content_filter";
+            default:
+                return reason ?? "stop";
+        }
+    }
+
+    private static hash<auto> makeOpenAiStreamChunk(hash<auto> state,
+            *hash<auto> delta, *string finish_reason) {
+        hash<auto!> rv = {
+            "object": "chat.completion.chunk",
+            "choices": ({
+                "index": 0,
+                "delta": delta ?? {},
+                "finish_reason": finish_reason,
+            },),
+        };
+        if (state.id.val()) {
+            rv.id = state.id;
+        }
+        if (state.model.val()) {
+            rv.model = state.model;
+        }
+        if (state.usage) {
+            rv.usage = state.usage;
+        }
+        return rv;
+    }
+
+    private static hash<auto> streamStateToOpenAiResponse(hash<auto> state) {
+        hash<auto!> message = {
+            "role": "assistant",
+            "content": state.content.val() ? state.content : NOTHING,
+        };
+        if (state.tool_calls) {
+            message.tool_calls = state.tool_calls;
+        }
+        hash<auto!> rv = {
+            "object": "chat.completion",
+            "choices": ({
+                "index": 0,
+                "message": message,
+                "finish_reason": state.finish_reason ?? "stop",
+            },),
+            "usage": state.usage ?? {},
+        };
+        if (state.id.val()) {
+            rv.id = state.id;
+        }
+        if (state.model.val()) {
+            rv.model = state.model;
+        }
+        return rv;
     }
 
     #! Estimates the token count for a text string
@@ -884,10 +1378,13 @@ llm.chatStream(
         }
 
         return <ChatResponse>{
+            "id": response_data.id,
+            "model": response_data.model,
             "stop_reason": stop_reason,
             "content": msg.content,
             "tool_calls": parsed_tool_calls,
             "usage": response_data.usage ?? {},
+            "raw": response_data,
         };
     }
 
@@ -1052,10 +1549,13 @@ llm.chatStream(
         }
 
         return <ChatResponse>{
+            "id": resp.body.id,
+            "model": resp.body.model,
             "stop_reason": resp.body.stop_reason ?? "end_turn",
             "content": text_content,
             "tool_calls": parsed_tool_calls,
             "usage": resp.body.usage ?? {},
+            "raw": resp.body,
         };
     }
 
@@ -1064,7 +1564,8 @@ llm.chatStream(
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         ensureRestClient();
 
-        hash<auto> body = buildGeminiBody(messages, tools, NOTHING, opts);
+        hash<auto> body = buildGeminiBody(messages, tools,
+            opts.output_schema, opts);
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
@@ -1075,13 +1576,16 @@ llm.chatStream(
                 ex.desc), ex;
         }
 
-        return parseGeminiChatResponse(resp.body);
+        hash<ChatResponse> rv = parseGeminiChatResponse(resp.body);
+        rv.model = getGeminiModelName(opts);
+        return rv;
     }
 
     #! Streams Gemini generateContent SSE events as generic ChatStreamEvent deltas
     private chatStreamGemini(list<hash<ChatMessage>> messages, code callback,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
-        hash<auto> body = buildGeminiBody(messages, tools, NOTHING, opts);
+        hash<auto> body = buildGeminiBody(messages, tools,
+            opts.output_schema, opts);
         GeminiRestClient::GeminiResponseSseStreamIo stream =
             getGeminiClient().openStreamingConnection(
                 getGeminiBareModelName(getGeminiModelName(opts)), body,
@@ -1385,11 +1889,14 @@ llm.chatStream(
         }
 
         return <ChatResponse>{
+            "id": body.responseId ?? body.id,
+            "model": body.model,
             "stop_reason": tool_calls ? "tool_use"
                 : mapGeminiFinishReason(cand.finishReason),
             "content": text_parts ? text_parts.join("") : NOTHING,
             "tool_calls": tool_calls,
             "usage": normalizeGeminiUsage(body.usageMetadata),
+            "raw": body,
         };
     }
 
