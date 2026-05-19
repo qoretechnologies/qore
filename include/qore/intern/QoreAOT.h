@@ -37,8 +37,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <list>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -63,9 +65,30 @@ class QoreStringNode;
 class QoreTypeInfo;
 class QoreValue;
 class StatementBlock;
+class TypedHashDecl;
 class UserVariantBase;
 class Var;
 class qore_class_private;
+
+//! Key for source-stripped AOT hashdecl path resolution.
+/** A serialized hashdecl path can contain generic receiver type variables; the same
+    path must therefore be cached separately for each active receiver type context. */
+struct QoreAOTHashDeclPathCacheKey {
+    std::string path;
+    const QoreTypeInfo* receiver_type_info = nullptr;
+
+    bool operator==(const QoreAOTHashDeclPathCacheKey& other) const {
+        return receiver_type_info == other.receiver_type_info && path == other.path;
+    }
+};
+
+struct QoreAOTHashDeclPathCacheKeyHash {
+    size_t operator()(const QoreAOTHashDeclPathCacheKey& key) const {
+        size_t path_hash = std::hash<std::string>()(key.path);
+        size_t receiver_hash = std::hash<const QoreTypeInfo*>()(key.receiver_type_info);
+        return path_hash ^ (receiver_hash + 0x9e3779b97f4a7c15ULL + (path_hash << 6) + (path_hash >> 2));
+    }
+};
 
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
 struct QoreAOTCallTarget {
@@ -125,6 +148,11 @@ struct QoreAOTContext {
     //! Populated during buildAOTContext() to avoid per-call dynamic_cast in qore_rt_call_direct_aot()
     //! Size == num_exprs; entries with func==nullptr are not CallDirect slots.
     QoreAOTCallTarget* call_targets = nullptr;
+
+    //! Lazily resolved hashdecl paths used by source-stripped AOT typed-container helpers.
+    std::mutex hashdecl_path_cache_mutex;
+    std::unordered_map<QoreAOTHashDeclPathCacheKey, const TypedHashDecl*, QoreAOTHashDeclPathCacheKeyHash>
+        hashdecl_path_cache;
 
     //! Source locations for per-line runtime_loc tracking in AOT mode.
     //! Indexed by location slot assigned during LLVM codegen. Populated from serialized

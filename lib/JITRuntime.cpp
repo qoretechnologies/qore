@@ -54,6 +54,7 @@
 #include <cstdio>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -261,6 +262,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_create_local_ref_aot", reinterpret_cast<void*>(&qore_rt_create_local_ref_aot) },
     { "qore_rt_create_member_hash_ref_aot", reinterpret_cast<void*>(&qore_rt_create_member_hash_ref_aot) },
     { "qore_rt_new_hash_decl_aot", reinterpret_cast<void*>(&qore_rt_new_hash_decl_aot) },
+    { "qore_rt_new_hash_decl_from_hash_by_path_cached",
+        reinterpret_cast<void*>(&qore_rt_new_hash_decl_from_hash_by_path_cached) },
     { "qore_rt_new_complex_hash_aot", reinterpret_cast<void*>(&qore_rt_new_complex_hash_aot) },
     { "qore_rt_new_complex_list_aot", reinterpret_cast<void*>(&qore_rt_new_complex_list_aot) },
     { "qore_rt_lvalue_load_aot", reinterpret_cast<void*>(&qore_rt_lvalue_load_aot) },
@@ -2722,6 +2725,64 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path(const char
             xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
                 hd_path ? hd_path : "<null>");
         }
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_hash_decl_from_hash(hd, hash_bits, runtime_check, xsink);
+}
+
+static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext* ctx, const char* hd_path,
+        ExceptionSink* xsink) {
+    if (!ctx || !hd_path || !*hd_path) {
+        return nullptr;
+    }
+
+    const QoreTypeInfo* receiver_type_info = qore_get_current_receiver_type_info();
+    QoreAOTHashDeclPathCacheKey key{hd_path, receiver_type_info};
+
+    {
+        std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
+        auto i = ctx->hashdecl_path_cache.find(key);
+        if (i != ctx->hashdecl_path_cache.end()) {
+            return i->second;
+        }
+    }
+
+    QoreProgram* pgm = ctx->pgm ? ctx->pgm : getProgram();
+    if (!pgm) {
+        if (xsink) {
+            xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s': no program context", hd_path);
+        }
+        return nullptr;
+    }
+
+    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
+    if (!hd) {
+        std::string error;
+        QoreAOTTypeResolver resolver(pgm);
+        const QoreTypeInfo* ti = resolver.resolve(hd_path, error);
+        if (ti) {
+            ti = qore_substitute_type_params(ti, receiver_type_info);
+            hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+        }
+    }
+    if (!hd) {
+        if (xsink) {
+            xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'", hd_path);
+        }
+        return nullptr;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
+        ctx->hashdecl_path_cache.emplace(std::move(key), hd);
+    }
+    return hd;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(QoreAOTContext* ctx,
+        const char* hd_path, uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink) {
+    const TypedHashDecl* hd = qore_rt_resolve_hashdecl_path_cached(ctx, hd_path, xsink);
+    if (!hd || (xsink && *xsink)) {
         return toBits(QoreValue());
     }
     return qore_rt_new_hash_decl_from_hash(hd, hash_bits, runtime_check, xsink);
@@ -12779,6 +12840,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_hash_decl_fr
         const char* hd_path, uint64_t hash_bits, int32_t runtime_check,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_hash_decl_from_hash_by_path(hd_path, hash_bits,
+            runtime_check, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached_throwing(
+        QoreAOTContext* ctx, const char* hd_path, uint64_t hash_bits, int32_t runtime_check,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_hash_decl_from_hash_by_path_cached(ctx, hd_path, hash_bits,
             runtime_check, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();

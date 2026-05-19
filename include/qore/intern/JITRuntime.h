@@ -231,6 +231,7 @@ class Var;
 class ClosureVarValue;
 class AbstractStatement;
 class QoreTypeInfo;
+class TypedHashDecl;
 
 //! Instantiate a local variable on the Qore thread-local variable stack.
 //! Must be called once per local at JIT function entry before any loads/stores.
@@ -581,6 +582,10 @@ uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink*
 uint64_t qore_rt_new_complex_list_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Create a new typed hash from an already-evaluated hash initializer
+uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDecl* hd, uint64_t hash_bits, int32_t runtime_check,
+    ExceptionSink* xsink);
+uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(QoreAOTContext* ctx, const char* hd_path,
+    uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(const char* type_path, uint64_t hash_bits,
     ExceptionSink* xsink);

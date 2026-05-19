@@ -8701,11 +8701,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     std::string hd_path = qore_get_aot_serializable_type_path(hd->getTypeInfo());
                     llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                     auto helper = module.getOrInsertFunction(
-                            "qore_rt_new_hash_decl_from_hash_by_path",
+                            "qore_rt_new_hash_decl_from_hash_by_path_cached",
                             llvm::FunctionType::get(i64_type,
-                                {ptr_type, i64_type, i32_type, ptr_type}, false));
+                                {ptr_type, ptr_type, i64_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper,
-                            {hd_path_str, hash_boxed, rtcheck, xsink_arg});
+                            {aot_ctx_arg, hd_path_str, hash_boxed, rtcheck, xsink_arg});
                 } else {
                     // JIT: direct pointer is valid within the same process
                     llvm::Value* hd_ptr = llvm::ConstantInt::get(i64_type,
@@ -12562,13 +12562,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                 auto nhdfhp_ft = llvm::FunctionType::get(i64_type,
-                        {ptr_type, i64_type, i32_type, ptr_type}, false);
+                        {ptr_type, ptr_type, i64_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction(
-                        "qore_rt_new_hash_decl_from_hash_by_path", nhdfhp_ft);
+                        "qore_rt_new_hash_decl_from_hash_by_path_cached", nhdfhp_ft);
                 auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_new_hash_decl_from_hash_by_path_throwing", nhdfhp_ft);
+                        "qore_rt_new_hash_decl_from_hash_by_path_cached_throwing", nhdfhp_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
-                        {hd_path_str, hash_boxed, rtcheck, xsink_arg},
+                        {aot_ctx_arg, hd_path_str, hash_boxed, rtcheck, xsink_arg},
                         module, llvm_func, inst);
             } else {
                 // JIT: direct pointer is valid within the same process
