@@ -302,7 +302,10 @@ classes and hashdecls. Class raw-compatibility flags are protected by
 existing type-table mechanism. Source-stripped AOT does not emit separate
 native bodies for every generic instantiation; it preserves generic type paths
 and resolves them with the current runtime receiver or method type-argument
-context.
+context. Hot source-stripped AOT hashdecl construction caches resolved
+hashdecl paths per receiver type context, so repeated construction of
+parameterized generic result records does not redo path parsing and type
+substitution on every iteration.
 
 ## Implemented Core Conversions
 
@@ -395,7 +398,11 @@ still require rollout work:
 - Source-stripped AOT native body generation per type-argument tuple remains
   future work. Source-stripped AOT preserves generic metadata and resolves it at
   runtime, but it does not yet emit a separate native entry point for every
-  concrete generic instantiation.
+  concrete generic instantiation. Current benchmark data does not justify that
+  extra code size and metadata complexity: after caching source-stripped AOT
+  hashdecl path resolution per receiver type context, AOT is at or faster than
+  IR/JIT/tiered execution on the focused generic dispatch and hashdecl-heavy
+  kernels in `bench/generic-aot-specialization.qr`.
 - Static factory receiver inference remains conservative when there is no
   assignment target or return context. Calls such as `Factory<int>::make(...)`
   are fully typed, and target/return contexts can infer the receiver type, but a

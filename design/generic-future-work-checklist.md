@@ -202,9 +202,9 @@ Benchmark and decision:
 - Benchmark harness: `bench/generic-aot-specialization.qr`
 - Mode comparison runner: `bench/run_generic_aot_specialization.sh`
 - Reproduction command used on 2026-05-19:
-  `bench/run_generic_aot_specialization.sh`
-- Generated executable sizes in this run: source-included AOT was 135,152
-  bytes; source-stripped AOT was 102,384 bytes.
+  `SAMPLES=3 WARMUP=1 INNER=100000 HASH_INNER=100000 bench/run_generic_aot_specialization.sh --no-header`
+- Generated executable sizes in this run: source-included AOT was 173,520
+  bytes; source-stripped AOT was 128,464 bytes.
 - Go/no-go threshold: implement native source-stripped AOT specialization only
   if source-stripped AOT is at least 15% slower than both JIT/tiered and
   source-included AOT on at least two generic call kernels, or if a real qlib or
@@ -212,11 +212,12 @@ Benchmark and decision:
   missing source-stripped specialization after allocation and I/O costs are
   excluded.
 - Current local result: source-stripped AOT is faster than source-included AOT
-  and faster than AST/IR/JIT/tiered for `generic_class_method`,
-  `method_generic_function`, and `static_generic_method`. The
-  `generic_hashdecl_records` kernel is allocation-heavy and source-stripped AOT
-  is slower than IR/JIT there, but the result does not isolate a generic
-  specialization cost.
+  and faster than AST/IR/JIT/tiered for the generic dispatch kernels and the
+  generic hashdecl-heavy kernels. The earlier source-stripped AOT regression in
+  `generic_hashdecl_records` and `hashdecl_construct_only` was caused by
+  repeated runtime hashdecl path/type resolution, not by missing native generic
+  body specialization; caching the resolved hashdecl path per receiver type
+  context removed that bottleneck.
 - Decision: do not implement native AOT generic specialization now. Keep the
   implementation checklist above as deferred design work if future benchmarks
   cross the threshold.
@@ -225,10 +226,14 @@ Local benchmark summary:
 
 | Kernel | AST ms | IR ms | JIT ms | Tiered ms | AOT incl src ms | AOT stripped ms |
 |--------|--------|-------|--------|-----------|-----------------|-----------------|
-| `generic_class_method` | 1057.694 | 1433.209 | 1063.251 | 1052.938 | 1001.991 | 977.711 |
-| `method_generic_function` | 573.735 | 740.399 | 574.295 | 570.135 | 530.621 | 493.835 |
-| `static_generic_method` | 679.576 | 804.968 | 700.982 | 697.431 | 589.445 | 565.109 |
-| `generic_hashdecl_records` | 130.925 | 102.474 | 107.967 | 108.085 | 128.976 | 122.704 |
+| `generic_class_method` | 262.611 | 360.501 | 267.444 | 266.100 | 250.058 | 247.946 |
+| `method_generic_function` | 140.949 | 184.225 | 141.035 | 141.190 | 129.654 | 126.564 |
+| `static_generic_method` | 169.982 | 201.376 | 165.400 | 161.370 | 143.847 | 141.285 |
+| `generic_hashdecl_records` | 269.318 | 208.901 | 215.763 | 205.598 | 189.837 | 185.545 |
+| `typed_list_literal` | 119.842 | 92.851 | 92.714 | 92.688 | 95.984 | 92.411 |
+| `plain_hash_record` | 224.366 | 185.240 | 183.156 | 181.801 | 166.164 | 160.850 |
+| `hashdecl_construct_only` | 235.484 | 165.982 | 178.659 | 167.580 | 165.078 | 159.793 |
+| `hashdecl_access_only` | 77.009 | 58.946 | 60.098 | 59.226 | 61.654 | 57.528 |
 
 ## Phase 7: Broader Static Factory Receiver Inference
 
