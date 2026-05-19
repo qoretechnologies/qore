@@ -88,17 +88,15 @@ public list<string> sub find_qore_files(string path) {
 
     list<string> ret = ();
 
-    ListIterator<string> it = d.listFiles().iterator();
-    while (it.next()) {
-        string fpath = sprintf("%s%s%s", path, DirSep, it.getValue());
+    foreach string entry in (d.listFiles()) {
+        string fpath = sprintf("%s%s%s", path, DirSep, entry);
         if (is_valid_qore_file(fpath)) {
             push ret, fpath;
         }
     }
 
-    it = d.listDirs().iterator();
-    while (it.next()) {
-        string targ = path + DirSep + it.getValue();
+    foreach string entry in (d.listDirs()) {
+        string targ = path + DirSep + entry;
         if (hstat(targ).type == "DIRECTORY") {
             try {
                 ret += find_qore_files(targ);
