@@ -1,0 +1,319 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ql_sshutil.qpp
+
+    Qore sshutil module enums, hashdecls, constants, and functions
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "sshutil-module.h"
+
+//! Host-key decision values.
+/** @since sshutil 1.0
+*/
+enum Qore::SshUtil::SshHostKeyDecision : string {
+    //! The observed host key matched an existing trusted record.
+    Matched = "matched",
+    //! Persistent TOFU accepted and durably stored the observed host key.
+    Added = "added",
+    //! Explicit session-only TOFU accepted the key without durable persistence.
+    AcceptedSession = "accepted-session",
+    //! No trusted record matched the observed host key.
+    Unknown = "unknown",
+    //! A trusted record exists for the host, but the observed key is different.
+    Mismatch = "mismatch",
+    //! The observed host key matched a revoked key.
+    Revoked = "revoked",
+    //! The backing host-key store failed.
+    StoreError = "store-error",
+    //! A provider/store returned a malformed response.
+    InvalidResponse = "invalid-response",
+    //! A provider callback failed.
+    ProviderError = "provider-error",
+    //! Verification or persistence exceeded the operation deadline.
+    Timeout = "timeout",
+};
+
+//! Client authentication ordering.
+/** @since sshutil 1.0
+*/
+enum Qore::SshUtil::SshClientAuthOrder : string {
+    //! Explicit caller keys are tried before provider candidates.
+    ExplicitFirst = "explicit-first",
+    //! Provider candidates are tried before explicit caller keys.
+    ProviderFirst = "provider-first",
+};
+
+//! Process-user credential fallback policy used when a client identity provider is configured.
+/** @since sshutil 1.0
+*/
+enum Qore::SshUtil::SshClientIdentityFallbackPolicy : string {
+    //! Do not use process-user SSH agent or default key discovery.
+    Disabled = "disabled",
+    //! Allow process-user SSH agent fallback.
+    Agent = "agent",
+    //! Allow process-user default key discovery fallback.
+    DefaultKeys = "default-keys",
+    //! Allow process-user SSH agent and default key discovery fallback.
+    AgentAndDefaultKeys = "agent-and-default-keys",
+};
+
+//! Provider callback purpose values.
+/** @since sshutil 1.0
+*/
+enum Qore::SshUtil::SshProviderPurpose : string {
+    //! Client identity candidate lookup or secret retrieval.
+    ClientIdentity = "client-identity",
+    //! Server host-key lookup or secret retrieval.
+    ServerHostKey = "server-host-key",
+    //! Remote server host-key verification.
+    HostKeyVerify = "host-key-verify",
+    //! Remote server host-key TOFU acceptance.
+    HostKeyAccept = "host-key-accept",
+    //! Explicit remote server host-key approval.
+    HostKeyApprove = "host-key-approve",
+};
+
+//! Client identity candidate kinds.
+/** @since sshutil 1.0
+*/
+enum Qore::SshUtil::SshClientIdentityCandidateKind : string {
+    //! Process-user SSH agent candidate.
+    Agent = "agent",
+    //! Filesystem private-key path candidate.
+    File = "file",
+    //! Provider-backed in-memory key candidate.
+    InMemory = "in-memory",
+    //! Provider-specific non-secret key reference.
+    Reference = "reference",
+};
+
+//! Private key material kinds.
+/** @since sshutil 1.0
+*/
+enum Qore::SshUtil::SshPrivateKeyMaterialKind : string {
+    //! Private key material is available as in-memory text.
+    Text = "text",
+    //! Private key material is available as in-memory binary data.
+    Data = "data",
+    //! Private key material is available as a filesystem path.
+    File = "file",
+    //! Private key material is identified by a non-secret reference.
+    Reference = "reference",
+};
+
+//! Public key metadata. No field contains private key data.
+/** @since sshutil 1.0
+*/
+hashdecl Qore::SshUtil::SshPublicKeyInfo {
+    //! SSH public-key algorithm name.
+    string algorithm;
+    //! Raw SSH public-key blob when available.
+    *binary public_key_blob;
+    //! OpenSSH public-key text when available.
+    *string openssh_public_key;
+    //! SHA256 fingerprint without private key material.
+    *string sha256_fingerprint;
+    //! Optional SHA1 fingerprint.
+    *string sha1_fingerprint;
+    //! Optional MD5 fingerprint.
+    *string md5_fingerprint;
+    //! Optional non-secret comment.
+    *string comment;
+    //! Generic non-secret source kind such as "file", "agent", "provider", or "transport".
+    *string source_kind;
+    //! Generic non-secret source identifier, if any.
+    *string source_id;
+}
+
+//! Client identity candidate descriptor. This hash never contains private key data or passphrases.
+/** @since sshutil 1.0
+*/
+hashdecl Qore::SshUtil::SshClientIdentityCandidate {
+    //! Candidate kind.
+    enum<SshClientIdentityCandidateKind> kind;
+    //! Optional public key information.
+    *hash<SshPublicKeyInfo> public_key_info;
+    //! Filesystem path, for default filesystem implementations.
+    *string path;
+    //! Provider-specific non-secret reference.
+    *string reference;
+    //! Optional algorithm hint.
+    *string algorithm_hint;
+    //! Non-fatal candidate flag; key retrieval/import failures are otherwise fatal.
+    bool optional = False;
+    //! Optional non-secret comment.
+    *string comment;
+}
+
+//! Short-lived private key material returned at point of need.
+/** @since sshutil 1.0
+*/
+hashdecl Qore::SshUtil::SshPrivateKeyMaterial {
+    //! Material kind.
+    enum<SshPrivateKeyMaterialKind> kind;
+    //! Private key text, if returned in memory.
+    *string private_key_text;
+    //! Private key binary data, if returned in memory.
+    *binary private_key_data;
+    //! Public key text, if returned with the private key.
+    *string public_key_text;
+    //! Filesystem path, for default filesystem implementations.
+    *string path;
+    //! Provider-specific non-secret reference.
+    *string reference;
+    //! Optional passphrase reference. This is not the passphrase value.
+    *string passphrase_ref;
+    //! Optional secret reference. This is not the secret value.
+    *string secret_ref;
+    //! Optional key format hint.
+    *string format;
+    //! Optional algorithm hint.
+    *string algorithm_hint;
+    //! Optional non-secret source kind.
+    *string source_kind;
+}
+
+//! Host-key trust record descriptor.
+/** @since sshutil 1.0
+*/
+hashdecl Qore::SshUtil::SshHostKeyRecord {
+    //! Original or pattern host value.
+    string host;
+    //! SSH port.
+    int port;
+    //! Normalized host or host pattern, if applicable.
+    *string normalized_host;
+    //! Trusted public key information.
+    hash<SshPublicKeyInfo> key_info;
+    //! Optional OpenSSH marker such as "@revoked".
+    *string marker;
+    //! Optional time when the record was added.
+    *date added;
+    //! Optional time when the record was updated.
+    *date updated;
+    //! Optional policy name.
+    *string policy;
+    //! Optional non-secret comment.
+    *string comment;
+}
+
+//! Structured host-key decision info suitable for exception payloads and audit.
+/** @since sshutil 1.0
+*/
+hashdecl Qore::SshUtil::SshHostKeyDecisionInfo {
+    //! Host-key decision.
+    enum<SshHostKeyDecision> decision;
+    //! Observed server public key.
+    hash<SshPublicKeyInfo> observed_key;
+    //! Matched trusted record, if any.
+    *hash<SshHostKeyRecord> matched_record;
+    //! Non-secret diagnostic string.
+    *string diagnostic;
+    //! Non-secret provider/store diagnostic code.
+    *string diagnostic_code;
+}
+
+//! Generic provider context. Application-specific data belongs only in opaque_context.
+/** @since sshutil 1.0
+*/
+hashdecl Qore::SshUtil::SshProviderContext {
+    //! Provider callback purpose.
+    enum<SshProviderPurpose> purpose;
+    //! Optional connection name.
+    *string connection_name;
+    //! Optional listener name.
+    *string listener_name;
+    //! Original logical host supplied by the caller.
+    *string original_host;
+    //! Normalized logical host.
+    *string normalized_host;
+    //! SSH port.
+    *int port;
+    //! SSH username.
+    *string username;
+    //! Host-key policy name.
+    *string host_key_policy;
+    //! Client authentication ordering policy.
+    *enum<SshClientAuthOrder> client_auth_order;
+    //! Client identity fallback policy.
+    *enum<SshClientIdentityFallbackPolicy> client_identity_fallback_policy;
+    //! Absolute monotonic deadline in clock_getnanos() nanoseconds.
+    int deadline_ns;
+    //! Remaining operation budget in nanoseconds, recomputed per callback.
+    int remaining_ns;
+    //! Opaque application context. Generic modules must not inspect, persist, branch on, or log it.
+    *hash<auto> opaque_context;
+}
+
+//! Provider/store set used by higher-level connection code as an aggregate convenience only.
+/** @since sshutil 1.0
+*/
+hashdecl Qore::SshUtil::SshProviderSet {
+    //! Client identity provider object.
+    *AbstractSshClientIdentityProvider client_identity_provider;
+    //! Client identity provider registry name.
+    *string client_identity_provider_name;
+    //! Server host-key provider object.
+    *AbstractSshServerHostKeyProvider server_host_key_provider;
+    //! Server host-key provider registry name.
+    *string server_host_key_provider_name;
+    //! Host-key store object.
+    *AbstractSshHostKeyStore host_key_store;
+    //! Host-key store registry name.
+    *string host_key_store_name;
+}
+
+/** @defgroup sshutil_functions SSH Utility Functions
+ */
+///@{
+namespace Qore::SshUtil;
+
+//! Normalizes a logical SSH host according to the v1 OpenSSH-compatible baseline.
+/** The function strips at most one trailing root dot and lowercases ASCII A-Z only. Non-ASCII
+    bytes are preserved verbatim; no IDNA or punycode conversion is performed.
+
+    @since sshutil 1.0
+*/
+string normalize_ssh_host(string host) [flags=CONSTANT; dom=DEFAULT] {
+    return sshutil_normalize_ssh_host(host);
+}
+
+//! Formats a logical host and port for OpenSSH known_hosts host matching.
+/** Port 22 with a non-IPv6 host is returned as the normalized host. Non-default ports and IPv6
+    literals are returned in \c "[host]:port" form.
+
+    @since sshutil 1.0
+*/
+string format_known_hosts_host(string host, int port = 22) [flags=CONSTANT; dom=DEFAULT] {
+    return sshutil_format_known_hosts_host(host, port);
+}
+
+//! Returns the stable exception name for a non-success host-key decision.
+/** @return an exception name such as \c "SSH2-HOSTKEY-UNKNOWN", or @ref nothing for success decisions
+
+    @since sshutil 1.0
+*/
+*string get_host_key_decision_exception_name(enum<SshHostKeyDecision> decision, string prefix = "SSH2") [flags=CONSTANT; dom=DEFAULT] {
+    return sshutil_get_host_key_decision_exception_name(decision, prefix);
+}
+///@}

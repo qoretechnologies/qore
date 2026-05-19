@@ -1,0 +1,66 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_FilesystemSshServerHostKeyProvider.qpp
+
+    Qore sshutil module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "sshutil-module.h"
+
+//! Descriptor-only default server host-key provider preserving filesystem path behavior.
+/** This class does not read private keys. It returns ordered descriptors that SSH server modules
+    can import using their native SSH library integrations.
+
+    @since sshutil 1.0
+*/
+qclass FilesystemSshServerHostKeyProvider [arg=FilesystemSshServerHostKeyProviderData* p; ns=Qore::SshUtil;
+    vparent=AbstractSshServerHostKeyProvider];
+
+//! Creates the provider.
+/** @param key_paths private-key paths to expose as ordered server host-key material descriptors
+    @param passphrase_ref optional non-secret passphrase reference for encrypted keys
+
+    @since sshutil 1.0
+*/
+FilesystemSshServerHostKeyProvider::constructor(list<string> key_paths, *string passphrase_ref) {
+    self->setPrivate(CID_FILESYSTEMSSHSERVERHOSTKEYPROVIDER,
+        new FilesystemSshServerHostKeyProviderData(key_paths, passphrase_ref, xsink));
+}
+
+//! Copying is not supported.
+/**
+    @throw SSHUTIL-SERVER-HOST-KEY-PROVIDER-COPY-ERROR copying the provider is not supported
+*/
+FilesystemSshServerHostKeyProvider::copy() {
+    xsink->raiseException("SSHUTIL-SERVER-HOST-KEY-PROVIDER-COPY-ERROR",
+        "copying FilesystemSshServerHostKeyProvider objects is not supported");
+}
+
+//! Returns ordered server host-key material descriptors for a listener.
+/**
+    @since sshutil 1.0
+*/
+list<hash<SshPrivateKeyMaterial>> FilesystemSshServerHostKeyProvider::getServerHostKeyMaterial(hash<auto> ctxt) {
+    (void)ctxt;
+    return p->getServerHostKeyMaterial(xsink);
+}

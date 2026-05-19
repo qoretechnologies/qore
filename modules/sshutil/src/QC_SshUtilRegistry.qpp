@@ -1,0 +1,122 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_SshUtilRegistry.qpp
+
+    Qore sshutil module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "sshutil-module.h"
+
+//! Thread-safe registry for provider/store objects.
+/** Higher-level configuration should store stable registry names; runtime code resolves those names
+    to process-local provider/store objects through this registry.
+
+    @since sshutil 1.0
+*/
+qclass SshUtilRegistry [arg=SshUtilRegistryData* p; ns=Qore::SshUtil];
+
+//! Registers a client identity provider.
+/** @throw SSHUTIL-REGISTRY-ERROR the name is invalid or already registered and \c replace is False
+*/
+static SshUtilRegistry::registerClientIdentityProvider(string name, AbstractSshClientIdentityProvider provider,
+        bool replace = False) {
+    SshUtilRegistry::registerClientIdentityProvider(name->c_str(), provider, replace, xsink);
+}
+
+//! Deregisters a client identity provider.
+/** @return the previously registered provider or NOTHING
+*/
+static *AbstractSshClientIdentityProvider SshUtilRegistry::deregisterClientIdentityProvider(string name) {
+    return SshUtilRegistry::deregisterClientIdentityProvider(name->c_str());
+}
+
+//! Returns a client identity provider by registry name.
+/** @return the registered provider or NOTHING
+*/
+static *AbstractSshClientIdentityProvider SshUtilRegistry::getClientIdentityProvider(string name) {
+    return SshUtilRegistry::getClientIdentityProvider(name->c_str());
+}
+
+//! Returns the registered client identity provider names.
+/** @return the registered provider names
+*/
+static list<string> SshUtilRegistry::listClientIdentityProviders() {
+    return SshUtilRegistry::listClientIdentityProviders(xsink);
+}
+
+//! Registers a server host-key provider.
+/** @throw SSHUTIL-REGISTRY-ERROR the name is invalid or already registered and \c replace is False
+*/
+static SshUtilRegistry::registerServerHostKeyProvider(string name, AbstractSshServerHostKeyProvider provider,
+        bool replace = False) {
+    SshUtilRegistry::registerServerHostKeyProvider(name->c_str(), provider, replace, xsink);
+}
+
+//! Deregisters a server host-key provider.
+/** @return the previously registered provider or NOTHING
+*/
+static *AbstractSshServerHostKeyProvider SshUtilRegistry::deregisterServerHostKeyProvider(string name) {
+    return SshUtilRegistry::deregisterServerHostKeyProvider(name->c_str());
+}
+
+//! Returns a server host-key provider by registry name.
+/** @return the registered provider or NOTHING
+*/
+static *AbstractSshServerHostKeyProvider SshUtilRegistry::getServerHostKeyProvider(string name) {
+    return SshUtilRegistry::getServerHostKeyProvider(name->c_str());
+}
+
+//! Returns the registered server host-key provider names.
+/** @return the registered provider names
+*/
+static list<string> SshUtilRegistry::listServerHostKeyProviders() {
+    return SshUtilRegistry::listServerHostKeyProviders(xsink);
+}
+
+//! Registers a host-key store.
+/** @throw SSHUTIL-REGISTRY-ERROR the name is invalid or already registered and \c replace is False
+*/
+static SshUtilRegistry::registerHostKeyStore(string name, AbstractSshHostKeyStore store, bool replace = False) {
+    SshUtilRegistry::registerHostKeyStore(name->c_str(), store, replace, xsink);
+}
+
+//! Deregisters a host-key store.
+/** @return the previously registered store or NOTHING
+*/
+static *AbstractSshHostKeyStore SshUtilRegistry::deregisterHostKeyStore(string name) {
+    return SshUtilRegistry::deregisterHostKeyStore(name->c_str());
+}
+
+//! Returns a host-key store by registry name.
+/** @return the registered store or NOTHING
+*/
+static *AbstractSshHostKeyStore SshUtilRegistry::getHostKeyStore(string name) {
+    return SshUtilRegistry::getHostKeyStore(name->c_str());
+}
+
+//! Returns the registered host-key store names.
+/** @return the registered store names
+*/
+static list<string> SshUtilRegistry::listHostKeyStores() {
+    return SshUtilRegistry::listHostKeyStores(xsink);
+}

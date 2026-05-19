@@ -1,13 +1,13 @@
 # SSH Credential & Host-Key Trust Provider
 
-- **Status:** Proposed
+- **Status:** Accepted; phase 1 in progress
 - **Date:** 2026-05-18
 - **Tracking issue:** qoretechnologies/qore#5336
-- **Affected components:** new Qore `qlib/` module; `module-ssh` (libssh, server); `module-ssh2` (libssh2, client); `Ssh2Connections`; SFTP `FileLocationHandler`
+- **Affected components:** new Qore `sshutil` binary module; `module-ssh` (libssh, server); `module-ssh2` (libssh2, client); `Ssh2Connections`; SFTP `FileLocationHandler`
 
 ## 1. Summary
 
-Introduce a pluggable SSH key and host-key trust provider abstraction, shipped as a Qore `qlib/` module and shared by `module-ssh` (server) and `module-ssh2` (client).
+Introduce a pluggable SSH key and host-key trust provider abstraction, shipped as the Qore `sshutil` binary module and shared by `module-ssh` (server) and `module-ssh2` (client).
 
 The abstraction lets embedding applications whose logical security principals do not map to the OS user running the process manage SSH host-key trust and SSH private-key material per logical principal, per connection, or per listener. Existing filesystem and SSH-agent behavior remains available; applications are no longer forced to choose between the process user's filesystem trust domain and disabling verification.
 
@@ -53,7 +53,9 @@ The shared layer is therefore a Qore-level contract plus typed key-material and 
 
 ## 6. Module
 
-A new generic qlib module **`SshCredentialProvider`** (namespace `SshCredentialProvider`), following the `ConnectionProvider` / `DataProvider` style: `.qm` manifest, namespace-scoped abstract classes, typed hashes, default implementations, and a registration registry. Targets `%requires qore >= 2.0` (matches `ConnectionProvider`).
+A new generic binary module **`sshutil`** (namespace `Qore::SshUtil`) defines the typed SSH provider contract. It provides namespace-scoped abstract classes, typed hashes, string-backed enums, descriptor-only default filesystem implementations, and a registration registry. The module is delivered with Qore and targets `%requires qore >= 2.3`.
+
+The contract is intentionally a binary module rather than a qlib module because downstream QPP/C++ code must be able to reference the provider/store class types directly. This allows `module-ssh` and `module-ssh2` to expose typed APIs instead of accepting generic `object` values and duck-typing method names.
 
 ## 7. Architecture
 
@@ -166,10 +168,10 @@ For identity keys the binary module derives canonical `SshPublicKeyInfo` from th
 
 | # | Question | Resolution | Rationale |
 |---|---|---|---|
-| 1 | Module / namespace name | `SshCredentialProvider` (module + namespace) | Parallels `ConnectionProvider`/`DataProvider`; dominant content is credential/key provision; host-key store is a sibling within it |
+| 1 | Module / namespace name | `sshutil` binary module, namespace `Qore::SshUtil` | Binary modules use lower-case names by convention; the scope covers credentials, server host identity, and host-key trust, so `sshutil` is broader and more accurate than a credential-only name |
 | 2 | Independent setters vs aggregate | Independent setters canonical; optional `SshProviderSet` aggregate at the connection layer that decomposes to them | Keeps the "sibling interfaces, not a god object" principle; aggregate is convenience only |
 | 3 | Deadline field name/type | `deadline_ns` (absolute monotonic int ns, `clock_getnanos()` domain) **and** `remaining_ns` (recomputed per call); both authoritative | Verified Qore fn is `clock_getnanos()`; delegating providers need a duration, in-process enforcement needs the absolute deadline |
-| 4 | Opt-in/override option shapes | `SshClientAuthOrder::{ExplicitFirst(default), ProviderFirst}`; fallback via the Q5 enum | Single typed enums; explicit-first preserves least surprise |
+| 4 | Opt-in/override option shapes | `SshClientAuthOrder::{ExplicitFirst(default), ProviderFirst}`; fallback via the client identity fallback enum | Single typed enums; explicit-first preserves least surprise |
 | 5 | Client identity fallback enum | `SshClientIdentityFallbackPolicy::{Disabled, Agent, DefaultKeys, AgentAndDefaultKeys}` | `Disabled` avoids confusion with Qore `NOTHING`; default `Disabled` when a provider is set, legacy behavior otherwise |
 | 6 | Session-only success decision name | `AcceptedSession` | Clear tie to "session-only TOFU"; rejects `AcceptedEphemeral` |
 | 7 | Exception names (invalid resp / provider fail) | `SSH2-HOSTKEY-INVALID-RESPONSE`, `SSH2-HOSTKEY-PROVIDER-ERROR` (+ parallel `SSH-HOSTKEY-*` server-side) | Consistent with existing `SSH2-HOSTKEY-*` family; mapping is normative/tested |
@@ -181,18 +183,18 @@ For identity keys the binary module derives canonical `SshPublicKeyInfo` from th
 | 13 | Default filesystem store format | v1: OpenSSH `known_hosts` only; alternative serialization deferred | Interoperable, matches current behavior, no new on-disk format; locks §7.3 normalization to OpenSSH |
 | 14 | Resolved peer IPs as store context | Not in v1; logical host only | Avoids implicit DNS/reverse-DNS trust expansion |
 | 15 | Serialized provider/store reference model | Stable registry name + runtime resolution via registration registry | Mirrors `ConnectionSchemeCache`/`registerFactory`; no object/secret serialization |
-| 16 | Min Qore version / compile guards | qlib `%requires qore >= 2.0`; guards `HAVE_LIBSSH2_KNOWNHOST_API`, `HAVE_LIBSSH2_PUBLICKEY_FROMMEMORY`; `module-ssh` in-memory host-key import needs libssh `ssh_pki_import_privkey_base64` | Matches `ConnectionProvider` floor; reuses existing guards |
+| 16 | Min Qore version / compile guards | Qore `%requires qore >= 2.3`; `module-ssh` and `module-ssh2` hard-depend on `sshutil`; guards `HAVE_LIBSSH2_KNOWNHOST_API`, `HAVE_LIBSSH2_PUBLICKEY_FROMMEMORY`; `module-ssh` in-memory host-key import needs libssh `ssh_pki_import_privkey_base64` | QPP/C++ module APIs need binary-module class types; `sshutil` is shipped with Qore 2.3 |
 
 ## 11. Remaining (implementation-time, not design-blocking)
 
 - Exact numeric libssh / libssh2 minimum versions, confirmed against the CI build matrix when wiring the binary modules (the relevant guards are fixed; only the numeric floors need build verification).
 - `module-ssh` in-memory host-key import: confirm the precise libssh API/version available on all CI targets (Alpine cmake 4 matrix).
 
-These do not block freezing the phase-1 qlib contract.
+These do not block freezing the phase-1 binary-module contract.
 
 ## 12. Phasing
 
-1. Define the `SshCredentialProvider` qlib contract: typed hashes, the three abstract classes, default filesystem/agent implementations, registration registry, focused unit tests.
+1. Define the `sshutil` binary module contract: typed hashes, the three abstract classes, default filesystem/agent implementations, registration registry, focused unit tests.
 2. Keep the explicit `TrustOnFirstUseSession` policy as the temporary compatibility path for embedders with no trust store yet.
 3. Expose readable `host_key_policy`, explicit empty `known_hosts`, and `verify_host_key` in connection/data-provider construction paths.
 4. Wire `module-ssh2` to host-key stores and client identity providers.
