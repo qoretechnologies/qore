@@ -54,9 +54,9 @@ struct QoreParseContext;
 class RuntimeConfig;
 
 #if defined(__GNUC__) || defined(__clang__)
-#define QORE_NODE_NEW_DELETE_NOINLINE __attribute__((noinline))
+#define QORE_NODE_ALLOC_NOINLINE __attribute__((noinline))
 #else
-#define QORE_NODE_NEW_DELETE_NOINLINE
+#define QORE_NODE_ALLOC_NOINLINE
 #endif
 
 //! The base class for all value and parse types in Qore expression trees
@@ -66,7 +66,7 @@ class RuntimeConfig;
 class AbstractQoreNode : public QoreReferenceCounter {
 public:
     //! custom operator new that zero-initializes memory to avoid valgrind warnings about uninitialized bitfield padding
-    DLLLOCAL static void* operator new(size_t size) QORE_NODE_NEW_DELETE_NOINLINE {
+    DLLLOCAL static void* operator new(size_t size) QORE_NODE_ALLOC_NOINLINE {
         void* ptr = ::operator new(size);
         // Only zero-initialize the base-class portion to avoid unnecessary work
         memset(ptr, 0, sizeof(AbstractQoreNode));
@@ -74,7 +74,7 @@ public:
     }
 
     //! custom operator new[] for arrays
-    DLLLOCAL static void* operator new[](size_t size) QORE_NODE_NEW_DELETE_NOINLINE {
+    DLLLOCAL static void* operator new[](size_t size) QORE_NODE_ALLOC_NOINLINE {
         void* ptr = ::operator new[](size);
         // Zero-initialize the entire allocated memory to avoid uninitialized padding in any element
         memset(ptr, 0, size);
@@ -82,22 +82,22 @@ public:
     }
 
     //! standard delete operator
-    DLLLOCAL static void operator delete(void* ptr) noexcept QORE_NODE_NEW_DELETE_NOINLINE {
+    DLLLOCAL static void operator delete(void* ptr) noexcept QORE_NODE_ALLOC_NOINLINE {
         ::operator delete(ptr);
     }
 
     //! standard sized delete operator
-    DLLLOCAL static void operator delete(void* ptr, size_t) noexcept QORE_NODE_NEW_DELETE_NOINLINE {
+    DLLLOCAL static void operator delete(void* ptr, size_t) noexcept QORE_NODE_ALLOC_NOINLINE {
         ::operator delete(ptr);
     }
 
     //! standard delete[] operator
-    DLLLOCAL static void operator delete[](void* ptr) noexcept QORE_NODE_NEW_DELETE_NOINLINE {
+    DLLLOCAL static void operator delete[](void* ptr) noexcept QORE_NODE_ALLOC_NOINLINE {
         ::operator delete[](ptr);
     }
 
     //! standard sized delete[] operator
-    DLLLOCAL static void operator delete[](void* ptr, size_t) noexcept QORE_NODE_NEW_DELETE_NOINLINE {
+    DLLLOCAL static void operator delete[](void* ptr, size_t) noexcept QORE_NODE_ALLOC_NOINLINE {
         ::operator delete[](ptr);
     }
 
@@ -409,7 +409,7 @@ protected:
     DLLEXPORT virtual ~AbstractQoreNode();
 };
 
-#undef QORE_NODE_NEW_DELETE_NOINLINE
+#undef QORE_NODE_ALLOC_NOINLINE
 
 //! The base class for all types in Qore expression trees that cannot throw an exception when deleted
 /**

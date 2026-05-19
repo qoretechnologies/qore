@@ -106,3 +106,24 @@ static void sshutil_module_delete() {
     SshUtilRegistry::clear(&xsink);
     SshUtilNS.clear(&xsink);
 }
+
+// public accessors for the abstract provider classes; dependent modules (ssh2,
+// ssh) call these from their own module init (which runs after the sshutil
+// dependency has been loaded and initialized) instead of referencing the
+// class-pointer data symbols directly. A function symbol is bound lazily, so
+// the dependent module's dlopen() succeeds even though Qore dlopen()s the
+// requesting module before loading its dependencies; the call itself happens
+// later, once sshutil is initialized. Resolving via a uniquely-named exported
+// function (rather than the QC_* data symbol) also avoids the symbol collision
+// that occurs when the dependent module declares its own QC_* global.
+extern "C" DLLEXPORT QoreClass* sshutil_get_abstract_ssh_client_identity_provider_class() {
+    return QC_ABSTRACTSSHCLIENTIDENTITYPROVIDER;
+}
+
+extern "C" DLLEXPORT QoreClass* sshutil_get_abstract_ssh_server_host_key_provider_class() {
+    return QC_ABSTRACTSSHSERVERHOSTKEYPROVIDER;
+}
+
+extern "C" DLLEXPORT QoreClass* sshutil_get_abstract_ssh_host_key_store_class() {
+    return QC_ABSTRACTSSHHOSTKEYSTORE;
+}

@@ -78,9 +78,15 @@ DLLLOCAL extern TypedHashDecl* hashdeclSshHostKeyDecisionInfo;
 DLLLOCAL extern TypedHashDecl* hashdeclSshProviderContext;
 DLLLOCAL extern TypedHashDecl* hashdeclSshProviderSet;
 
+// sshutil-internal class-pointer globals (defined by the qpp-generated code).
+// Dependent modules (ssh2, ssh) must NOT reference these directly; they obtain
+// the classes through the public accessor functions declared below.
 DLLLOCAL extern QoreClass* QC_ABSTRACTSSHCLIENTIDENTITYPROVIDER;
 DLLLOCAL extern QoreClass* QC_ABSTRACTSSHSERVERHOSTKEYPROVIDER;
 DLLLOCAL extern QoreClass* QC_ABSTRACTSSHHOSTKEYSTORE;
+
+// public accessor function declarations (also installed as <qore/sshutil.h>)
+#include <qore/sshutil.h>
 
 class AbstractSshClientIdentityProviderData : public AbstractPrivateData {
 };
