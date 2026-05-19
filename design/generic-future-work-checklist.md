@@ -5,11 +5,10 @@ generic class, generic hashdecl, static generic method, method-level generic,
 default type argument, bounded type argument, and explicit generic call type
 argument implementation.
 
-Phases 1-5 are complete in the current branch. The open follow-on work starts at
-Phase 6 and is intentionally split by risk: native AOT specialization affects
-performance and code size, static factory inference changes accepted syntax, and
-API rollout touches broad public surfaces in core qlib and shipped binary
-modules.
+Phases 1-5 and 7 are complete in the current branch. Phase 6 now has a
+benchmark-driven go/no-go gate and does not justify implementation with the
+current results. The remaining open rollout work is Phase 8, which touches broad
+public surfaces in core qlib and shipped binary modules.
 
 ## Phase 1: Variance And Wildcard Type Arguments
 
@@ -166,10 +165,10 @@ it only if the speedup justifies the code size and metadata complexity.
 
 Design checklist:
 
-- [ ] Add benchmarks that compare AST, IR, JIT, current AOT, and source-stripped
+- [x] Add benchmarks that compare AST, IR, JIT, current AOT, and source-stripped
   AOT for hot generic class methods, method-level generic functions, static
   generic methods, and generic hashdecl-heavy result records.
-- [ ] Define a minimum improvement threshold before implementing native AOT
+- [x] Define a minimum improvement threshold before implementing native AOT
   specialization, for example a material speedup on hot generic dispatch or type
   substitution benchmarks without unacceptable binary growth.
 - [ ] Define specialization keys for AOT native entry points: source body id,
@@ -196,7 +195,40 @@ Implementation checklist:
 - [ ] Add correctness tests for source-stripped modules with mixed
   instantiations, nested generic hashdecls, static generic methods, and fallback
   paths.
-- [ ] Add performance tests that report both runtime and generated artifact size.
+- [x] Add performance tests that report both runtime and generated artifact size.
+
+Benchmark and decision:
+
+- Benchmark harness: `bench/generic-aot-specialization.qr`
+- Mode comparison runner: `bench/run_generic_aot_specialization.sh`
+- Reproduction command used on 2026-05-19:
+  `bench/run_generic_aot_specialization.sh`
+- Generated executable sizes in this run: source-included AOT was 135,152
+  bytes; source-stripped AOT was 102,384 bytes.
+- Go/no-go threshold: implement native source-stripped AOT specialization only
+  if source-stripped AOT is at least 15% slower than both JIT/tiered and
+  source-included AOT on at least two generic call kernels, or if a real qlib or
+  module workload shows at least 15% generic-dispatch overhead attributable to
+  missing source-stripped specialization after allocation and I/O costs are
+  excluded.
+- Current local result: source-stripped AOT is faster than source-included AOT
+  and faster than AST/IR/JIT/tiered for `generic_class_method`,
+  `method_generic_function`, and `static_generic_method`. The
+  `generic_hashdecl_records` kernel is allocation-heavy and source-stripped AOT
+  is slower than IR/JIT there, but the result does not isolate a generic
+  specialization cost.
+- Decision: do not implement native AOT generic specialization now. Keep the
+  implementation checklist above as deferred design work if future benchmarks
+  cross the threshold.
+
+Local benchmark summary:
+
+| Kernel | AST ms | IR ms | JIT ms | Tiered ms | AOT incl src ms | AOT stripped ms |
+|--------|--------|-------|--------|-----------|-----------------|-----------------|
+| `generic_class_method` | 1057.694 | 1433.209 | 1063.251 | 1052.938 | 1001.991 | 977.711 |
+| `method_generic_function` | 573.735 | 740.399 | 574.295 | 570.135 | 530.621 | 493.835 |
+| `static_generic_method` | 679.576 | 804.968 | 700.982 | 697.431 | 589.445 | 565.109 |
+| `generic_hashdecl_records` | 130.925 | 102.474 | 107.967 | 108.085 | 128.976 | 122.704 |
 
 ## Phase 7: Broader Static Factory Receiver Inference
 
