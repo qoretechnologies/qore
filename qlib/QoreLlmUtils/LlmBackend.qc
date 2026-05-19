@@ -57,6 +57,10 @@ public hashdecl LlmBackendConfig {
     #! Callback mode: a callable that performs the API call and returns
     #! the response hash in OpenAI-compatible format
     *code<hash<auto>(string, string, hash<auto>)> api_callback;
+    #! Callback mode method hint passed to @ref api_callback; default "POST"
+    string callback_method = "POST";
+    #! Callback mode endpoint/path hint passed to @ref api_callback; default "chat/completions"
+    string callback_path = "chat/completions";
     #! Initial retry delay in milliseconds for exponential backoff; default 1000
     int retry_delay_ms = 1000;
 }
@@ -226,6 +230,10 @@ public class LlmBackend {
         int retry_delay_ms;
         #! Callback for custom API dispatch
         *code<hash<auto>(string, string, hash<auto>)> api_callback;
+        #! Method hint passed to callback dispatchers
+        string callback_method;
+        #! Endpoint/path hint passed to callback dispatchers
+        string callback_path;
         #! REST client for HTTP/Anthropic modes (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
@@ -280,6 +288,8 @@ public class LlmBackend {
         max_retries = config.max_retries;
         retry_delay_ms = config.retry_delay_ms;
         api_callback = config.api_callback;
+        callback_method = config.callback_method;
+        callback_path = config.callback_path;
         if (mode == "callback" && !api_callback) {
             throw "LLM-CONFIG-ERROR",
                 "api_callback is required for callback mode";
@@ -1214,7 +1224,7 @@ llm.chatStream(
 
         hash<auto> resp;
         try {
-            resp = api_callback("PUT", "ai/v1/chat/completions", body);
+            resp = api_callback(callback_method, callback_path, body);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("callback API call failed: %s", ex.desc), ex;
         }
@@ -1227,7 +1237,7 @@ llm.chatStream(
             "usage": usage,
         };
     }
-    #! Chat via OpenAI-compatible endpoint (also used for Qorus mode)
+    #! Chat via an OpenAI-compatible endpoint or callback dispatcher
     private hash<ChatResponse> chatHttp(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         if (mode != "callback") {
@@ -1320,11 +1330,11 @@ llm.chatStream(
         }
 
         hash<auto> resp;
-        string endpoint = (mode == "callback") ? "ai/v1/chat/completions"
+        string endpoint = (mode == "callback") ? callback_path
             : "/v1/chat/completions";
         try {
             if (mode == "callback") {
-                resp = api_callback("PUT", endpoint, body);
+                resp = api_callback(callback_method, endpoint, body);
             } else {
                 resp = withRetry(hash<auto> sub () {
                     return rest_client.restPost(endpoint, body, hdr);

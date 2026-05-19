@@ -67,9 +67,9 @@ module QoreRagUtils {
     (@ref QoreTokenizerUtils for ONNX embeddings/rerankers, @ref OpenAiRestClient,
     @ref VoyageRestClient, @ref SGLangRestClient, Qdrant, pgvector, etc.)
     has to write its own backend-selection ladder and orchestration logic.
-    %QoreRagUtils centralises that pattern so multiple consumers — Qorus
-    instances, the AI Gateway, standalone tools — converge on the same
-    pluggable composition.
+    %QoreRagUtils centralises that pattern so multiple consumers —
+    applications, HTTP gateways, and standalone tools — converge on the
+    same pluggable composition.
 
     @par Abstract building blocks
 

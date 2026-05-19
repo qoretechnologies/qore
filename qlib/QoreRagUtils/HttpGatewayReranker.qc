@@ -23,7 +23,7 @@
 */
 
 public namespace QoreRagUtils {
-#! Gateway-backed reranker — calls a Qorus AI Gateway \c /ai/rerank endpoint
+#! Gateway-backed reranker — calls an HTTP AI gateway \c /ai/rerank endpoint
 /** Uses a generic @ref RestClientIo::RestClientIo "RestClientIo" to call the
     gateway-defined \c /ai/rerank route.
 

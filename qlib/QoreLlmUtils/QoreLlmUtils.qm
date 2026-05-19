@@ -37,7 +37,7 @@
 module QoreLlmUtils {
     version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
-        "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and Qorus AI Gateway";
+        "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and callback API gateways";
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
@@ -61,7 +61,8 @@ module QoreLlmUtils {
       native tool-use-based JSON extraction when an output schema is provided.
     - \b gemini: Calls the Google Gemini \c generateContent API with native
       function calling, structured outputs, and streaming.
-    - \b qorus: Calls the Qorus AI Gateway via \c UserApi::callRestApi().
+    - \b callback: Calls a caller-supplied OpenAI-compatible dispatcher, for
+      example an application gateway, tenant proxy, or metered AI routing layer.
 
     The module also includes @ref QoreLlmUtils::PromptSecretProtector
     "PromptSecretProtector", a provider-neutral helper for keeping
@@ -102,7 +103,7 @@ printf("Structured output: %s\n", result.content);
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
-      HTTP/OpenAI-compatible, Anthropic, Gemini, and Qorus AI Gateway modes
+      HTTP/OpenAI-compatible, Anthropic, Gemini, and callback gateway modes
     - Added @ref QoreLlmUtils::PromptSecretProtector
       "PromptSecretProtector" for generic prompt credential placeholders and
       redaction support, including execution-boundary redaction of restored

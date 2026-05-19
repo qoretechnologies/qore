@@ -79,6 +79,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend config - defaults", \configDefaultsTest());
         addTestCase("LlmBackend getMode/getModel", \gettersTest());
         addTestCase("LlmBackend callback mode - missing callback", \callbackNoCallbackTest());
+        addTestCase("LlmBackend callback mode - dispatch options",
+            \callbackDispatchOptionsTest());
         addTestCase("LlmBackend request options override model",
             \requestOptionsOverrideModelTest());
         addTestCase("LlmBackend gemini chat request and text response",
@@ -246,6 +248,38 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 new LlmBackend(<LlmBackendConfig>{"mode": "callback"});
             }
         );
+    }
+
+    callbackDispatchOptionsTest() {
+        list<hash<auto>> calls = ();
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "model": "default-model",
+            "callback_method": "PUT",
+            "callback_path": "ai/v1/chat/completions",
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> b) {
+                push calls, {"method": m, "path": p, "body": b};
+                return {
+                    "choices": ({"message": {"content": "ok"}, "finish_reason": "stop"},),
+                    "usage": {"total_tokens": 1},
+                };
+            },
+        });
+
+        hash<LlmCompletionResult> complete_rv = llm.complete("system", "prompt");
+        hash<ChatResponse> chat_rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "hello"},
+        ));
+
+        assertEq("ok", complete_rv.content);
+        assertEq("ok", chat_rv.content);
+        assertEq(2, calls.size());
+        assertEq("PUT", calls[0].method);
+        assertEq("ai/v1/chat/completions", calls[0].path);
+        assertEq("default-model", calls[0].body.model);
+        assertEq("PUT", calls[1].method);
+        assertEq("ai/v1/chat/completions", calls[1].path);
+        assertEq("hello", calls[1].body.messages[0].content);
     }
 
     requestOptionsOverrideModelTest() {
