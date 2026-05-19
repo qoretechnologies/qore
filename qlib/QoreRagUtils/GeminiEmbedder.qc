@@ -61,7 +61,7 @@ public class GeminiEmbedder inherits AbstractEmbedder {
         *GeminiRestClient::GeminiRestClientIo rest_client;
         #! Cached embedding dimension (from config or auto-detected)
         *int cached_dimension;
-        #! Guard for lazy initialization
+        #! Guard for lazy initialization and cached dimension updates
         Mutex init_mutex();
     }
 
@@ -110,11 +110,13 @@ public class GeminiEmbedder inherits AbstractEmbedder {
 
     #! Returns the embedding dimension produced by this backend
     int getDimension() {
-        if (exists cached_dimension) {
-            return cached_dimension;
+        *int dimension = getCachedDimension();
+        if (exists dimension) {
+            return dimension;
         }
         encode(" ");
-        return cached_dimension ?? -1;
+        dimension = getCachedDimension();
+        return dimension ?? -1;
     }
 
     #! Returns the configured model name
@@ -134,8 +136,9 @@ public class GeminiEmbedder inherits AbstractEmbedder {
                     "parts": ({"text": text},),
                 },
             };
-            if (exists cached_dimension) {
-                req.outputDimensionality = cached_dimension;
+            *int dimension = getCachedDimension();
+            if (exists dimension) {
+                req.outputDimensionality = dimension;
             }
             if (config.options.taskType.val()) {
                 req.taskType = config.options.taskType;
@@ -170,12 +173,26 @@ public class GeminiEmbedder inherits AbstractEmbedder {
         list<list<float>> result = ();
         foreach hash<auto> item in (embeddings) {
             list<float> vec = validateAndCastVector(item.values, resp.body);
-            if (!exists cached_dimension) {
-                cached_dimension = vec.size();
-            }
+            setCachedDimensionIfMissing(vec.size());
             push result, vec;
         }
         return result;
+    }
+
+    #! Returns the cached embedding dimension
+    private *int getCachedDimension() {
+        init_mutex.lock();
+        on_exit init_mutex.unlock();
+        return cached_dimension;
+    }
+
+    #! Sets the cached embedding dimension if it has not already been set
+    private setCachedDimensionIfMissing(int dimension) {
+        init_mutex.lock();
+        on_exit init_mutex.unlock();
+        if (!exists cached_dimension) {
+            cached_dimension = dimension;
+        }
     }
 
     #! Returns the Gemini resource name for the configured model
