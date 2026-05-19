@@ -92,6 +92,45 @@ int sub benchGenericHashdeclRecords(int inner) {
     return checksum;
 }
 
+int sub benchTypedListLiteral(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1, i + 2);
+        checksum += values[1];
+    }
+    return checksum;
+}
+
+int sub benchPlainHashRecord(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1, i + 2);
+        hash<auto> result = ("value": i, "values": values);
+        checksum += result.value + result.values[1];
+    }
+    return checksum;
+}
+
+int sub benchGenericHashdeclConstructOnly(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1, i + 2);
+        hash<BenchGenericResult<int>> result(("value": i, "values": values));
+        checksum += i;
+    }
+    return checksum;
+}
+
+int sub benchGenericHashdeclAccessOnly(int inner) {
+    list<int> values = (1, 2, 3);
+    hash<BenchGenericResult<int>> result(("value": 1, "values": values));
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += result.value + result.values[1];
+    }
+    return checksum;
+}
+
 hash<BenchTiming> sub measureKernel(string mode, string kernel, int inner, int samples, int warmup, code<int()> fn) {
     int checksum = 0;
     for (int i = 0; i < warmup; i++) {
@@ -204,5 +243,13 @@ class BenchGenericAotSpecialization {
             int sub () { return benchStaticGenericMethod(inner); }));
         printTiming(measureKernel(mode, "generic_hashdecl_records", hash_inner, samples, warmup,
             int sub () { return benchGenericHashdeclRecords(hash_inner); }));
+        printTiming(measureKernel(mode, "typed_list_literal", hash_inner, samples, warmup,
+            int sub () { return benchTypedListLiteral(hash_inner); }));
+        printTiming(measureKernel(mode, "plain_hash_record", hash_inner, samples, warmup,
+            int sub () { return benchPlainHashRecord(hash_inner); }));
+        printTiming(measureKernel(mode, "hashdecl_construct_only", hash_inner, samples, warmup,
+            int sub () { return benchGenericHashdeclConstructOnly(hash_inner); }));
+        printTiming(measureKernel(mode, "hashdecl_access_only", hash_inner, samples, warmup,
+            int sub () { return benchGenericHashdeclAccessOnly(hash_inner); }));
     }
 }
