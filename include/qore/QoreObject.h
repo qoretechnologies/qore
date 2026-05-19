@@ -408,10 +408,10 @@ public:
     DLLEXPORT const QoreClass* getClass() const;
 
     //! returns the concrete parameterized object type, if any
-    DLLLOCAL const QoreTypeInfo* getInstantiatedTypeInfo() const;
+    DLLEXPORT const QoreTypeInfo* getInstantiatedTypeInfo() const;
 
     //! sets the concrete parameterized object type during construction or copying
-    DLLLOCAL void setInstantiatedTypeInfo(const QoreTypeInfo* typeInfo);
+    DLLEXPORT void setInstantiatedTypeInfo(const QoreTypeInfo* typeInfo);
 
     //! returns the name of the class
     /**

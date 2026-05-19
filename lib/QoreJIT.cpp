@@ -733,6 +733,22 @@ void QoreJIT::startBackgroundThread() {
     }
 }
 
+void QoreJIT::releaseBgCompileWorkRefs(BgCompileWork& work) {
+    for (auto* v : work.variant_refs) {
+        v->deref();
+    }
+    work.variant_refs.clear();
+}
+
+void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
+    releaseBgCompileWorkRefs(work);
+
+    int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    if (remaining == 0) {
+        bg_queue_empty_cv.notify_all();
+    }
+}
+
 void QoreJIT::bgCompileThreadLoop() {
     // Background worker thread loop — compiles functions while main thread executes IR
     while (bg_thread_running.load(std::memory_order_acquire)) {
@@ -750,7 +766,7 @@ void QoreJIT::bgCompileThreadLoop() {
                 }
                 continue;  // Shutdown signal or spurious wakeup, check loop condition
             }
-            work = bg_compile_queue.front();
+            work = std::move(bg_compile_queue.front());
             bg_compile_queue.pop();
         }
 
@@ -790,11 +806,7 @@ void QoreJIT::bgCompileThreadLoop() {
                 fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", saved_func_name.c_str(), error.c_str());
             }
             // Mark compilation as failed; uvb->jit_compile_failed will be set by evalTiered
-            // Decrement active work and signal if queue is now empty
-            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
-            if (remaining == 0) {
-                bg_queue_empty_cv.notify_all();
-            }
+            finishBgCompileWork(work);
             continue;
         }
 
@@ -804,11 +816,7 @@ void QoreJIT::bgCompileThreadLoop() {
             if (getenv("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] work item uvb is null, skipping\n");
             }
-            // Decrement active work and signal if queue is now empty
-            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
-            if (remaining == 0) {
-                bg_queue_empty_cv.notify_all();
-            }
+            finishBgCompileWork(work);
             continue;
         }
 
@@ -819,11 +827,7 @@ void QoreJIT::bgCompileThreadLoop() {
             if (getenv("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] compilation state is %d (not pending), skipping '%s'\n", state, saved_func_name.c_str());
             }
-            // Decrement active work and signal if queue is now empty
-            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
-            if (remaining == 0) {
-                bg_queue_empty_cv.notify_all();
-            }
+            finishBgCompileWork(work);
             continue;
         }
 
@@ -835,11 +839,7 @@ void QoreJIT::bgCompileThreadLoop() {
             }
             // Mark as failed
             const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.store(2, std::memory_order_release);
-            // Decrement active work and signal if queue is now empty
-            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
-            if (remaining == 0) {
-                bg_queue_empty_cv.notify_all();
-            }
+            finishBgCompileWork(work);
             continue;
         }
 
@@ -874,15 +874,11 @@ void QoreJIT::bgCompileThreadLoop() {
             }
         }
 
-        // Decrement active work counter after successful completion and signal if queue is now empty
-        int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
-        if (remaining == 0) {
-            bg_queue_empty_cv.notify_all();
-        }
+        finishBgCompileWork(work);
     }
 }
 
-void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction* ir_func,
+void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
         void* deopt_counter, const std::vector<BatchCallee>* callees) {
     // Skip if LLVM is not initialized (IR-only or tiered mode without explicit JIT).
     // LLVM is initialized by compileFunction/compileFunctionBatch (called from
@@ -898,6 +894,11 @@ void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction*
     // NOTE: callers (evalTiered) already guard with CAS 0→1 on jit_compile_state
     // so we do NOT re-check here — the state is already 1 when we're called.
 
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        return;
+    }
+
     // Increment active work counter before adding to queue
     bg_active_work.fetch_add(1, std::memory_order_relaxed);
 
@@ -905,16 +906,23 @@ void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction*
     work.uvb = uvb;
     work.ir_func = ir_func;
     work.deopt_ptr = deopt_counter;
+    work.variant_refs.reserve(1 + (callees ? callees->size() : 0));
+    work.variant_refs.push_back(const_cast<AbstractQoreFunctionVariant*>(variant)->ref());
     if (callees) {
         work.callees = *callees;
         work.has_callees = true;
+        for (const auto& callee : work.callees) {
+            if (callee.variant) {
+                work.variant_refs.push_back(const_cast<AbstractQoreFunctionVariant*>(callee.variant)->ref());
+            }
+        }
     } else {
         work.has_callees = false;
     }
 
     {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
-        bg_compile_queue.push(work);
+        bg_compile_queue.push(std::move(work));
     }
     bg_queue_cv.notify_one();
 
@@ -956,7 +964,7 @@ void QoreJIT::shutdown() {
             if (bg_compile_queue.empty()) {
                 break;
             }
-            work = bg_compile_queue.front();
+            work = std::move(bg_compile_queue.front());
             bg_compile_queue.pop();
         }
 
@@ -984,6 +992,7 @@ void QoreJIT::shutdown() {
             UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
             mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
         }
+        finishBgCompileWork(work);
     }
 
     // Then shut down LLVM (acquire compile_mutex to serialize with any ongoing compilation)

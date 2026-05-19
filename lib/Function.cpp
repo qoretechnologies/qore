@@ -5034,6 +5034,13 @@ void UserVariantBase::attemptJITCompilation() const {
     // background compilation which doesn't hold any Qore mutexes during the lengthy
     // LLVM phases.
 
+    const AbstractQoreFunctionVariant* self_variant = dynamic_cast<const AbstractQoreFunctionVariant*>(this);
+    if (!self_variant) {
+        jit_compile_state.store(2, std::memory_order_release);
+        jit_compile_failed = true;
+        return;
+    }
+
     void* deopt_ptr = getDeoptCounterPtr();
 
     // Collect direct callees that have cached IR for batch compilation
@@ -5051,10 +5058,10 @@ void UserVariantBase::attemptJITCompilation() const {
         }
         printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch enqueued with %d callees\n",
             cached_ir->name.c_str(), (int)callees.size());
-        QoreJIT::instance().enqueueBgCompile(this, cached_ir, deopt_ptr, &callees);
+        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir, deopt_ptr, &callees);
     } else {
         // No eligible callees: single-function background compilation
-        QoreJIT::instance().enqueueBgCompile(this, cached_ir, deopt_ptr);
+        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir, deopt_ptr);
     }
 
     printd(3, "UserVariantBase::attemptJITCompilation() '%s' enqueued for background compilation\n",

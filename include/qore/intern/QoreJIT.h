@@ -146,7 +146,7 @@ public:
     //! Enqueue a function for background JIT compilation.
     //! The function stays at IR tier until compilation finishes in the background.
     //! Safe to call from any thread, including during tiered execution.
-    void enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction* ir_func,
+    void enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
             void* deopt_counter, const std::vector<BatchCallee>* callees = nullptr);
 
     //! Wait for all pending background compilations to complete.
@@ -194,6 +194,7 @@ private:
         const QoreIRFunction* ir_func;                      //!< IR representation
         void* deopt_ptr;                                    //!< deopt counter pointer
         std::vector<BatchCallee> callees;                   //!< direct callees (if any)
+        std::vector<AbstractQoreFunctionVariant*> variant_refs; //!< refs keeping queued variants alive
         bool has_callees = false;                           //!< true if callees should be compiled
     };
 
@@ -211,6 +212,12 @@ private:
 
     //! Initialize and start the background compilation thread
     void startBackgroundThread();
+
+    //! Release variant refs held by a background work item.
+    void releaseBgCompileWorkRefs(BgCompileWork& work);
+
+    //! Complete a background work item: release refs, update active count, and notify waiters.
+    void finishBgCompileWork(BgCompileWork& work);
 };
 
 #endif

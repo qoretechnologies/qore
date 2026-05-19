@@ -2329,6 +2329,23 @@ static bool type_spec_accept_object(const QoreClass& type_class, const QoreClass
     return false;
 }
 
+static bool qore_generic_container_value_may_fold_to(const QoreTypeInfo* target_ti,
+        const QoreTypeInfo* source_ti) {
+    if (!QoreTypeInfo::hasType(target_ti) || !QoreTypeInfo::hasType(source_ti)) {
+        return false;
+    }
+
+    const QoreTypeInfo* hash_value_type = QoreTypeInfo::getComplexHashValueType(source_ti);
+    if ((hash_value_type == autoTypeInfo || hash_value_type == autoNoNarrowTypeInfo)
+            && QoreTypeInfo::parseAcceptsReturns(target_ti, NT_HASH)) {
+        return true;
+    }
+
+    const QoreTypeInfo* list_value_type = QoreTypeInfo::getComplexListValueType(source_ti);
+    return (list_value_type == autoTypeInfo || list_value_type == autoNoNarrowTypeInfo)
+        && QoreTypeInfo::parseAcceptsReturns(target_ti, NT_LIST);
+}
+
 bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
         bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreHashNode* h,
         bool& err) const {
@@ -2337,7 +2354,8 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
     if (QoreTypeInfo::equal(u.ti, ti)) {
         return true;
     }
-    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)) {
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
+            && !qore_generic_container_value_may_fold_to(u.ti, ti)) {
         return false;
     }
 
@@ -2367,6 +2385,16 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
 
+        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, hn) == QTI_NOT_EQUAL
+                && !QoreTypeInfo::retypeValue(hn, u.ti, xsink)) {
+            ha.swap(hn);
+            err = true;
+            if (xsink && *xsink) {
+                xsink->appendLastDescription(" (while folding values into type 'hash<%s>')",
+                    QoreTypeInfo::getName(u.ti));
+            }
+            return true;
+        }
         u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
         ha.swap(hn);
         if (xsink && *xsink) {
@@ -2387,7 +2415,8 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     if (QoreTypeInfo::equal(u.ti, ti)) {
         return true;
     }
-    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)) {
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
+            && !qore_generic_container_value_may_fold_to(u.ti, ti)) {
         return false;
     }
 
@@ -2416,6 +2445,16 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     // now we have to fold the value types into our type
     for (size_t i = 0; i < l->size(); ++i) {
         QoreValue ln(lp->takeExists(i));
+        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, ln) == QTI_NOT_EQUAL
+                && !QoreTypeInfo::retypeValue(ln, u.ti, xsink)) {
+            lp->swap(i, ln);
+            err = true;
+            if (xsink && *xsink) {
+                xsink->appendLastDescription(" (while folding values into type 'list<%s>')",
+                    QoreTypeInfo::getName(u.ti));
+            }
+            return true;
+        }
         u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, ln, lvhelper);
         lp->swap(i, ln);
         if (xsink && *xsink) {
