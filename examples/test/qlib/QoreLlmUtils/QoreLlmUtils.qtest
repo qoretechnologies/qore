@@ -6,13 +6,65 @@
 */
 
 %modern
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/GeminiRestClient.qm
 %requires ../../../../qlib/QoreLlmUtils
 %requires Util
 %requires QUnit
 
+%try-module json
+%define NoJson
+%endtry
+
 %exec-class QoreLlmUtilsTest
 
+class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        hash<string, hash<auto>> responses;
+        Mutex m();
+    }
+
+    constructor(hash<string, hash<auto>> responses) {
+        self.responses = responses;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        hash<auto> parsed = body.val() ? parse_json(body) : {};
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "api_key": hdr."x-goog-api-key",
+            "body": parsed,
+        };
+        *hash<auto> resp = responses{cx.raw_path};
+        if (!resp) {
+            return makeResponse(404,
+                "{\"error\":{\"status\":\"NOT_FOUND\",\"message\":\"Not Found\"}}",
+                {"Content-Type": MimeTypeJson});
+        }
+        int code = resp.code ?? 200;
+        string out = resp.body.typeCode() == NT_STRING
+            ? resp.body : make_json(resp.body);
+        return makeResponse(code, out, {"Content-Type": MimeTypeJson});
+    }
+}
+
 public class QoreLlmUtilsTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeGeminiLlmHandler gemini_handler;
+    }
+
     constructor() : Test("QoreLlmUtilsTest", "1.0") {
         addTestCase("LlmBackend config validation - invalid mode", \configInvalidModeTest());
         addTestCase("LlmBackend config validation - http requires url", \configHttpNoUrlTest());
@@ -29,6 +81,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend callback mode - missing callback", \callbackNoCallbackTest());
         addTestCase("LlmBackend request options override model",
             \requestOptionsOverrideModelTest());
+        addTestCase("LlmBackend gemini chat request and text response",
+            \geminiChatRequestAndTextResponseTest());
+        addTestCase("LlmBackend gemini tool call response",
+            \geminiToolCallResponseTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
         addTestCase("PromptSecretProtector protects and restores credentials",
             \promptSecretProtectRestoreTest());
@@ -39,6 +95,45 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("PromptSecretProtector redacts sensitive keys and text",
             \promptSecretRedactSensitiveValueTest());
         set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        };
+        http = new HttpServer(http_opts);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private checkGeminiModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private installGeminiHandler(hash<string, hash<auto>> responses) {
+        if (gemini_handler) {
+            http.removeHandler("gemini-llm");
+        }
+        gemini_handler = new FakeGeminiLlmHandler(responses);
+        http.setHandler("gemini-llm", "/", MimeTypeJson, gemini_handler);
+    }
+
+    private LlmBackend makeGeminiBackend(*string model) {
+        return new LlmBackend(<LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": model ?? "gemini-2.5-flash",
+            "api_key": "gemini-test-key",
+            "max_tokens": 512,
+            "temperature": 0.0,
+        });
     }
 
     # ===================== Config Validation Tests =====================
@@ -173,6 +268,126 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("cheap-task-model", captured.model);
         assertEq(0.2, captured.temperature);
         assertEq("low", captured.reasoning_effort);
+    }
+
+    geminiChatRequestAndTextResponseTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-pro:generateContent": {
+                "code": 200,
+                "body": {
+                    "responseId": "gemini-chat-1",
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({"text": "done"},),
+                        },
+                    },),
+                    "usageMetadata": {
+                        "promptTokenCount": 7,
+                        "candidatesTokenCount": 3,
+                        "totalTokenCount": 10,
+                    },
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "system", "content": "be precise"},
+            <ChatMessage>{
+                "role": "user",
+                "content_parts": (
+                    <ContentPart>{"type": "text", "text": "inspect"},
+                    <ContentPart>{
+                        "type": "image",
+                        "data": parse_base64_string("aW1n"),
+                        "mime_type": "image/png",
+                    },
+                ),
+            },
+        ), (
+            <ToolDefinition>{
+                "name": "lookup",
+                "description": "lookup data",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"key": {"type": "string"}},
+                },
+            },
+        ), <LlmRequestOptions>{
+            "model": "gemini-2.5-pro",
+            "max_tokens": 128,
+            "temperature": 0.2,
+            "body_options": {
+                "generationConfig": {
+                    "thinkingConfig": {"thinkingBudget": 64},
+                },
+            },
+        });
+
+        assertEq("done", rv.content);
+        assertEq("end_turn", rv.stop_reason);
+        assertEq(10, rv.usage.total_tokens);
+        assertEq(1, gemini_handler.requests.size());
+        assertEq("/v1beta/models/gemini-2.5-pro:generateContent",
+            gemini_handler.requests[0].path);
+        assertEq("POST", gemini_handler.requests[0].method);
+        assertEq("gemini-test-key", gemini_handler.requests[0].api_key);
+        assertEq("be precise",
+            gemini_handler.requests[0].body.systemInstruction.parts[0].text);
+        assertEq("inspect",
+            gemini_handler.requests[0].body.contents[0].parts[0].text);
+        assertEq("image/png",
+            gemini_handler.requests[0].body.contents[0].parts[1].inlineData.mimeType);
+        assertEq("aW1n",
+            gemini_handler.requests[0].body.contents[0].parts[1].inlineData.data);
+        assertEq(128,
+            gemini_handler.requests[0].body.generationConfig.maxOutputTokens);
+        assertEq(0.2,
+            gemini_handler.requests[0].body.generationConfig.temperature);
+        assertEq(64,
+            gemini_handler.requests[0].body.generationConfig.thinkingConfig.thinkingBudget);
+        assertEq("lookup",
+            gemini_handler.requests[0].body.tools[0].functionDeclarations[0].name);
+    }
+
+    geminiToolCallResponseTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({
+                                "functionCall": {
+                                    "name": "lookup",
+                                    "args": {"key": "customer"},
+                                },
+                            },),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 4},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "lookup customer"},
+        ), (
+            <ToolDefinition>{"name": "lookup"},
+        ));
+
+        assertEq("tool_use", rv.stop_reason);
+        assertEq("lookup", rv.tool_calls[0].name);
+        assertEq("customer", rv.tool_calls[0].arguments.key);
+        assertEq("/v1beta/models/gemini-2.5-flash:generateContent",
+            gemini_handler.requests[0].path);
+        assertEq("lookup customer",
+            gemini_handler.requests[0].body.contents[0].parts[0].text);
     }
 
     hashdeclDefaultsTest() {
