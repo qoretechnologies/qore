@@ -2206,8 +2206,8 @@ and s.name = %v and t.name = %v order by i.name, ic.key_ordinal", schema, name);
                 # check primary key index and add filegroup to primary key definition
                 if (i.value.primary && !primaryKey.empty()) {
                     MssqlPrimaryKey pk = cast<MssqlPrimaryKey>(primaryKey);
-                    if (i.value.filegroup && !pk.filegroup)
-                        pk.filegroup = i.value.filegroup;
+                    if (i.value.filegroup && !pk.getTablespace())
+                        pk.setTablespace(i.value.filegroup);
                     continue;
                 }
                 # check unique indexes to make sure they are not matched with a unique constraint
