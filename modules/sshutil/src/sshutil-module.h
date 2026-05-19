@@ -78,9 +78,11 @@ DLLLOCAL extern TypedHashDecl* hashdeclSshHostKeyDecisionInfo;
 DLLLOCAL extern TypedHashDecl* hashdeclSshProviderContext;
 DLLLOCAL extern TypedHashDecl* hashdeclSshProviderSet;
 
-DLLLOCAL extern QoreClass* QC_ABSTRACTSSHCLIENTIDENTITYPROVIDER;
-DLLLOCAL extern QoreClass* QC_ABSTRACTSSHSERVERHOSTKEYPROVIDER;
-DLLLOCAL extern QoreClass* QC_ABSTRACTSSHHOSTKEYSTORE;
+// these abstract provider class pointers are resolved by the ssh2 module across the
+// shared-library boundary, so they must have default (exported) visibility
+DLLEXPORT extern QoreClass* QC_ABSTRACTSSHCLIENTIDENTITYPROVIDER;
+DLLEXPORT extern QoreClass* QC_ABSTRACTSSHSERVERHOSTKEYPROVIDER;
+DLLEXPORT extern QoreClass* QC_ABSTRACTSSHHOSTKEYSTORE;
 
 class AbstractSshClientIdentityProviderData : public AbstractPrivateData {
 };
