@@ -75,7 +75,7 @@ public class QppDocIndex {
         if (!d.chdir(dir_path)) {
             return index;
         }
-        list<string> files = d.listFiles(regex: "\\.meta\\.json$");
+        list<string> files = d.listFileNames(regex: "\\.meta\\.json$");
         foreach string fname in (files) {
             string path = dir_path + "/" + fname;
             string content = ReadOnlyFile::readTextFile(path);
@@ -83,7 +83,7 @@ public class QppDocIndex {
             QppDocIndex::indexMetadata(meta, \index);
         }
         # recurse into subdirectories (per-module metadata layout)
-        list<string> subdirs = d.listDirs();
+        list<string> subdirs = d.listDirNames();
         foreach string subdir in (subdirs) {
             hash<string, hash<auto>> sub_index =
                 QppDocIndex::buildFromDirectory(dir_path + "/" + subdir);

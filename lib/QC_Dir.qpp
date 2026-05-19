@@ -54,8 +54,10 @@ QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const
             return nullptr;
     }
 
+    const QoreTypeInfo* value_type = full ? hashdeclDirStatInfo->getTypeInfo() : stringTypeInfo;
+
     // avoid memory leaks...
-    ReferenceHolder<QoreListNode> lst(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> lst(new QoreListNode(value_type), xsink);
 
     DIR *dptr = opendir(dirname.c_str());
     if (!dptr) {
@@ -65,7 +67,12 @@ QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const
     ON_BLOCK_EXIT(closedir, dptr);
 
     struct dirent *de;
+    int cancel_check = 0;
     while ((de = readdir(dptr))) {
+        if (++cancel_check % 100 == 0 && qore_check_cancel(xsink, "directory listing")) {
+            return nullptr;
+        }
+
         if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, ".."))
             continue;
 
@@ -166,7 +173,7 @@ QoreHashNode* qore_qd_private::hstat(ExceptionSink *xsink) const {
     return stat_to_hash(sbuf);
 }
 
-//! file status information hash as returned by @ref Qore::Dir::list() "Dir::list()", @ref Qore::Dir::listFiles() "Dir::listFiles()", and @ref Qore::Dir::listDirs() "Dir::listDirs()" if the appropriate arguments are used
+//! file status information hash as returned by @ref Qore::Dir::listInfo() "Dir::listInfo()", @ref Qore::Dir::listFileInfo() "Dir::listFileInfo()", @ref Qore::Dir::listDirInfo() "Dir::listDirInfo()", or by @ref Qore::Dir::list() "Dir::list()", @ref Qore::Dir::listFiles() "Dir::listFiles()", and @ref Qore::Dir::listDirs() "Dir::listDirs()" if the appropriate arguments are used
 /** @since %Qore 0.8.13
 */
 hashdecl DirStatInfo inherits StatInfo {
@@ -482,17 +489,41 @@ nothing Dir::rmdir(string subdir) [flags=NAMED_ARGS] {
       d->rmdir(subdir->getBuffer(), xsink);
 }
 
+//! Get all entry names in this directory, except \c "." and \c ".." directories; if any errors occur an exception is thrown
+/**
+    @returns a list of all entry names in the directory (except \c "." and \c ".." directories)
+
+    @par Example:
+    @code{.py}
+try {
+    foreach string e in (d.list()) {
+        printf("entry: %s\n", e);
+    }
+} catch (hash<ExceptionInfo> ex) {
+    stderr.printf("%s: %s", ex.err, ex.desc);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+ */
+list<string> Dir::list() {
+   return d->list(xsink, -1, 0, 0, false);
+}
+
 //! Get all entries in this directory, except \c "." and \c ".." directories; if any errors occur an exception is thrown
 /** This method uses \c stat() system call internally to get detailed info about directory entries if the \c full parameter is @ref True "True". If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
 
     @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
 
-    @returns a list of all entries in the directory (except \c "." and \c ".." directories); if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+    @returns a list of all entries in the directory (except \c "." and \c ".." directories); if \a full is @ref True "True", then each element is a @ref Qore::DirStatInfo "DirStatInfo" hash, otherwise each element is a string name
 
     @par Example:
     @code{.py}
 try {
-    map printf("entry: %s\n", $1), d.list();
+    foreach hash<DirStatInfo> e in (d.list(full: True)) {
+        printf("entry: %s size: %d\n", e.name, e.size);
+    }
 } catch (hash<ExceptionInfo> ex) {
     stderr.printf("%s: %s", ex.err, ex.desc);
 }
@@ -502,25 +533,67 @@ try {
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
     @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
  */
-list<auto> Dir::list(bool full = False) [flags=NAMED_ARGS] {
+union<list<string>, list<hash<DirStatInfo>>> Dir::list(bool full) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, 0, 0, full);
+}
+
+//! Gets all entry names in the directory that match the given regular expression (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+
+    @return a list of all entry names in the directory that match the given regular expression (except \c "." and \c ".." directories)
+
+    @par Example:
+    @code{.py}
+foreach string e in (d.list("\\.txt$")) {
+    printf("entry: %s\n", e);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+ */
+list<string> Dir::list(string regex) [flags=NAMED_ARGS] {
+   return d->list(xsink, -1, regex, 0, false);
+}
+
+//! Gets all entry names in the directory that match the given regular expression and options (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of all entry names in the directory that match the given regular expression (except \c "." and \c ".." directories)
+
+    @par Example:
+    @code{.py}
+list<string> entries = d.list(regex: "^data-", regex_options: RE_Caseless);
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+ */
+list<string> Dir::list(string regex, softint regex_options) [flags=NAMED_ARGS] {
+   return d->list(xsink, -1, regex, (int)regex_options, false);
 }
 
 //! Gets all entries in the directory that match the given regular expression (except \c "." and \c ".." directories); if any errors occur an exception is thrown
 /** This method uses \c stat() system call internally to get info about directory entries. If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
 
     @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
-    @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
     @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
 
-    @return a list of all entries in the directory that match the given regular expression (except \c "." and \c ".." directories); if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+    @return a list of all entries in the directory that match the given regular expression (except \c "." and \c ".." directories); if \a full is @ref True "True", then each element is a @ref Qore::DirStatInfo "DirStatInfo" hash, otherwise each element is a string name
 
     @par Example:
     @code{.py}
 try {
-    foreach string e in (d.list("\\.txt$")) {
-        printf("entry: %s\n");
+    foreach hash<DirStatInfo> e in (d.list(regex: "\\.txt$", full: True)) {
+        printf("entry: %s size: %d\n", e.name, e.size);
     }
 } catch (hash<ExceptionInfo> ex) {
     stderr.printf("%s: %s", ex.err, ex.desc);
@@ -530,16 +603,140 @@ try {
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
     @throw REGEX-COMPILATION-ERROR error in regular expression
+
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
+ */
+union<list<string>, list<hash<DirStatInfo>>> Dir::list(string regex, softbool full) [flags=NAMED_ARGS] {
+   return d->list(xsink, -1, regex, 0, full);
+}
+
+//! Gets all entries in the directory that match the given regular expression and options (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/** This method uses \c stat() system call internally to get info about directory entries. If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
+
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options bitwise-or'ed @ref regex_constants "regex option constants"
+    @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @return a list of all entries in the directory that match the given regular expression (except \c "." and \c ".." directories); if \a full is @ref True "True", then each element is a @ref Qore::DirStatInfo "DirStatInfo" hash, otherwise each element is a string name
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
     @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
  */
-list<auto> Dir::list(string regex, softint regex_options = 0, softbool full = False) [flags=NAMED_ARGS] {
+union<list<string>, list<hash<DirStatInfo>>> Dir::list(string regex, softint regex_options, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, regex, (int)regex_options, full);
 }
 
+//! Get all entry names in this directory, except \c "." and \c ".." directories; if any errors occur an exception is thrown
+/**
+    @return a list of all entry names in the directory
+
+    @par Example:
+    @code{.py}
+list<string> entries = d.listNames();
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+
+    @since %Qore 2.3
+ */
+list<string> Dir::listNames() {
+   return d->list(xsink, -1, 0, 0, false);
+}
+
+//! Gets all entry names in the directory that match the given regular expression and options (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of all matching entry names in the directory
+
+    @par Example:
+    @code{.py}
+list<string> text_entries = d.listNames(regex: "\\.txt$", regex_options: RE_Caseless);
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+
+    @since %Qore 2.3
+ */
+list<string> Dir::listNames(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
+   return d->list(xsink, -1, regex, (int)regex_options, false);
+}
+
+//! Get all entry status hashes in this directory, except \c "." and \c ".." directories; if any errors occur an exception is thrown
+/**
+    @return a list of @ref Qore::DirStatInfo "DirStatInfo" hashes for all entries in the directory
+
+    @par Example:
+    @code{.py}
+foreach hash<DirStatInfo> entry in (d.listInfo()) {
+    printf("%s: %d bytes\n", entry.name, entry.size);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+
+    @since %Qore 2.3
+ */
+list<hash<DirStatInfo>> Dir::listInfo() {
+   return d->list(xsink, -1, 0, 0, true);
+}
+
+//! Gets all entry status hashes in the directory that match the given regular expression and options (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of @ref Qore::DirStatInfo "DirStatInfo" hashes for all matching entries in the directory
+
+    @par Example:
+    @code{.py}
+foreach hash<DirStatInfo> entry in (d.listInfo(regex: "\\.txt$")) {
+    printf("%s: %d bytes\n", entry.name, entry.size);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+
+    @since %Qore 2.3
+ */
+list<hash<DirStatInfo>> Dir::listInfo(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
+   return d->list(xsink, -1, regex, (int)regex_options, true);
+}
+
+//! Retrieves all file names in this directory; if any errors occur an exception is thrown
+/**
+    @return a list of all file names in the current directory of the object
+
+    @par Example:
+    @code{.py}
+foreach string e in (d.listFiles()) {
+    printf("file: %s\n", e);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+ */
+list<string> Dir::listFiles() {
+   return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, false);
+}
+
 //! Retrieves all files in this directory; if any errors occur an exception is thrown
-/** This method uses \c stat() system call internally to get info about directory entries. If a stat() call fails for a file, the file is skipped and information about this file is not included in the returned list.
+/** This method uses \c stat() system call internally to get info about directory entries if the \c full parameter is @ref True "True". If a stat() call fails for a file, the file is skipped and information about this file is not included in the returned list.
 
     @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
 
@@ -547,12 +744,8 @@ list<auto> Dir::list(string regex, softint regex_options = 0, softbool full = Fa
 
     @par Example:
     @code{.py}
-try {
-    foreach string e in (d.listFiles()) {
-        printf("entry: %s\n");
-    }
-} catch (hash<ExceptionInfo> ex) {
-    stderr.printf("%s: %s", ex.err, ex.desc);
+foreach hash<DirStatInfo> file in (d.listFiles(full: True)) {
+    printf("file: %s size: %d\n", file.name, file.size);
 }
     @endcode
 
@@ -560,30 +753,75 @@ try {
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
     @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
  */
-list<auto> Dir::listFiles(bool full = False) [flags=NAMED_ARGS] {
+union<list<string>, list<hash<DirStatInfo>>> Dir::listFiles(bool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, full);
 }
 
+//! Retrieves all file names in the directory that match the given regular expression; if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+
+    @return a list of all file names in the directory that match the given regular expression
+
+    @par Example:
+    @code{.py}
+foreach string e in (d.listFiles("\\.txt$")) {
+    printf("file: %s\n", e);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+ */
+list<string> Dir::listFiles(string regex) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFMT^S_IFDIR, regex, 0, false);
+}
+
+//! Retrieves all file names in the directory that match the given regular expression and options; if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of all file names in the directory that match the given regular expression
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+ */
+list<string> Dir::listFiles(string regex, softint regex_options) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, false);
+}
+
 //! Retrieves all files in the directory that match the given regular expression; if any errors occur an exception is thrown
-/** This method uses \c stat() system call internally to get info about directory entries. If a stat() call fails for a file, the file is skipped and information about this file is not included in the returned list.
+/** This method uses \c stat() system call internally to get info about directory entries if the \c full parameter is @ref True "True". If a stat() call fails for a file, the file is skipped and information about this file is not included in the returned list.
 
     @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
-    @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
     @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
 
     @return a list of all files in the directory that match the given regular expression; if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
 
-    @par Example:
-    @code{.py}
-try {
-    foreach string e in (d.listFiles("\\.txt$")) {
-        printf("entry: %s\n");
-    }
-} catch (hash<ExceptionInfo> ex) {
-    stderr.printf("%s: %s", ex.err, ex.desc);
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
+ */
+union<list<string>, list<hash<DirStatInfo>>> Dir::listFiles(string regex, softbool full) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFMT^S_IFDIR, regex, 0, full);
 }
-    @endcode
+
+//! Retrieves all files in the directory that match the given regular expression and options; if any errors occur an exception is thrown
+/** This method uses \c stat() system call internally to get info about directory entries if the \c full parameter is @ref True "True". If a stat() call fails for a file, the file is skipped and information about this file is not included in the returned list.
+
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options bitwise-or'ed @ref regex_constants "regex option constants"
+    @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @return a list of all files in the directory that match the given regular expression; if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
 
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
@@ -591,55 +829,82 @@ try {
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
     @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
  */
-list<auto> Dir::listFiles(string regex, softint regex_options = 0, softbool full = False) [flags=NAMED_ARGS] {
+union<list<string>, list<hash<DirStatInfo>>> Dir::listFiles(string regex, softint regex_options, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, full);
 }
 
-//! Retrieves all subdirectory entries in this directory, except \c "." and \c ".." directories; if any errors occur an exception is thrown
-/** This method uses \c stat() system call internally to get info about directory entries. If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
-
-    @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
-
-    @return a list of all subdirectory entries in this directory, except \c "." and \c ".." directories; if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+//! Retrieves all file names in this directory; if any errors occur an exception is thrown
+/**
+    @return a list of all file names in the current directory of the object
 
     @par Example:
     @code{.py}
-try {
-    foreach string e in (d.listDirs()) {
-        printf("entry: %s\n");
-    }
-} catch (hash<ExceptionInfo> ex) {
-    stderr.printf("%s: %s", ex.err, ex.desc);
-}
+ListIterator<string> it = d.listFileNames().iterator();
     @endcode
 
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
-    @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3
  */
-list<auto> Dir::listDirs(bool full = False) [flags=NAMED_ARGS] {
-   return d->list(xsink, S_IFDIR, 0, 0, full);
+list<string> Dir::listFileNames() {
+   return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, false);
 }
 
-//! Gets all subdirectory entries in the directory that match the given regular expression (except \c "." and \c ".." directories); if any errors occur an exception is thrown
-/** This method uses \c stat() system call internally to get info about directory entries. If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
-
+//! Retrieves all file names in the directory that match the given regular expression and options; if any errors occur an exception is thrown
+/**
     @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
     @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
-    @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
 
-    @return a list of all subdirectory entries in the directory that match the given regular expression (except \c "." and \c ".." directories); if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+    @return a list of all matching file names in the directory
 
     @par Example:
     @code{.py}
-try {
-    foreach string e in (d.listDirs("^pgsql-")) {
-        printf("entry: %s\n");
-    }
-} catch (hash<ExceptionInfo> ex) {
-    stderr.printf("%s: %s", ex.err, ex.desc);
+list<string> text_files = d.listFileNames(regex: "\\.txt$", regex_options: RE_Caseless);
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+
+    @since %Qore 2.3
+ */
+list<string> Dir::listFileNames(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, false);
+}
+
+//! Retrieves all file status hashes in this directory; if any errors occur an exception is thrown
+/**
+    @return a list of @ref Qore::DirStatInfo "DirStatInfo" hashes for all files in the directory
+
+    @par Example:
+    @code{.py}
+list<hash<DirStatInfo>> files = d.listFileInfo();
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+
+    @since %Qore 2.3
+ */
+list<hash<DirStatInfo>> Dir::listFileInfo() {
+   return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, true);
+}
+
+//! Retrieves all file status hashes in the directory that match the given regular expression and options; if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of @ref Qore::DirStatInfo "DirStatInfo" hashes for all matching files in the directory
+
+    @par Example:
+    @code{.py}
+foreach hash<DirStatInfo> file in (d.listFileInfo(regex: "\\.log$")) {
+    printf("%s: %d bytes\n", file.name, file.size);
 }
     @endcode
 
@@ -648,10 +913,202 @@ try {
     @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
-    @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3
  */
-list<auto> Dir::listDirs(string regex, softint regex_options = 0, softbool full = False) [flags=NAMED_ARGS] {
+list<hash<DirStatInfo>> Dir::listFileInfo(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, true);
+}
+
+//! Retrieves all subdirectory names in this directory, except \c "." and \c ".." directories; if any errors occur an exception is thrown
+/**
+    @return a list of all subdirectory names in this directory
+
+    @par Example:
+    @code{.py}
+foreach string e in (d.listDirs()) {
+    printf("dir: %s\n", e);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+ */
+list<string> Dir::listDirs() {
+   return d->list(xsink, S_IFDIR, 0, 0, false);
+}
+
+//! Retrieves all subdirectory entries in this directory, except \c "." and \c ".." directories; if any errors occur an exception is thrown
+/** This method uses \c stat() system call internally to get info about directory entries if the \c full parameter is @ref True "True". If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
+
+    @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @return a list of all subdirectory entries in this directory; if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+
+    @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
+ */
+union<list<string>, list<hash<DirStatInfo>>> Dir::listDirs(bool full) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFDIR, 0, 0, full);
+}
+
+//! Gets all subdirectory names in the directory that match the given regular expression (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+
+    @return a list of all subdirectory names in the directory that match the given regular expression
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+ */
+list<string> Dir::listDirs(string regex) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFDIR, regex, 0, false);
+}
+
+//! Gets all subdirectory names in the directory that match the given regular expression and options (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of all subdirectory names in the directory that match the given regular expression
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+ */
+list<string> Dir::listDirs(string regex, softint regex_options) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFDIR, regex, (int)regex_options, false);
+}
+
+//! Gets all subdirectory entries in the directory that match the given regular expression (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/** This method uses \c stat() system call internally to get info about directory entries if the \c full parameter is @ref True "True". If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
+
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @return a list of all subdirectory entries in the directory that match the given regular expression; if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
+ */
+union<list<string>, list<hash<DirStatInfo>>> Dir::listDirs(string regex, softbool full) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFDIR, regex, 0, full);
+}
+
+//! Gets all subdirectory entries in the directory that match the given regular expression and options (except \c "." and \c ".." directories); if any errors occur an exception is thrown
+/** This method uses \c stat() system call internally to get info about directory entries if the \c full parameter is @ref True "True". If a stat() call fails for an entry, the entry is skipped and information about it is not included in the returned list.
+
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options bitwise-or'ed @ref regex_constants "regex option constants"
+    @param full if @ref True "True" then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @return a list of all subdirectory entries in the directory that match the given regular expression; if \a full is @ref True "True", then the return value is a list of @ref Qore::DirStatInfo "DirStatInfo" hashes, otherwise a simple list of string names is returned
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+
+    @since %Qore 0.8.8 added the \a full parameter
+    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
+ */
+union<list<string>, list<hash<DirStatInfo>>> Dir::listDirs(string regex, softint regex_options, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, regex, (int)regex_options, full);
+}
+
+//! Retrieves all subdirectory names in this directory; if any errors occur an exception is thrown
+/**
+    @return a list of all subdirectory names in this directory
+
+    @par Example:
+    @code{.py}
+foreach string dir_name in (d.listDirNames()) {
+    printf("directory: %s\n", dir_name);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+
+    @since %Qore 2.3
+ */
+list<string> Dir::listDirNames() {
+   return d->list(xsink, S_IFDIR, 0, 0, false);
+}
+
+//! Retrieves all subdirectory names in the directory that match the given regular expression and options; if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of all matching subdirectory names in the directory
+
+    @par Example:
+    @code{.py}
+list<string> data_dirs = d.listDirNames(regex: "^data-", regex_options: RE_Caseless);
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+
+    @since %Qore 2.3
+ */
+list<string> Dir::listDirNames(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFDIR, regex, (int)regex_options, false);
+}
+
+//! Retrieves all subdirectory status hashes in this directory; if any errors occur an exception is thrown
+/**
+    @return a list of @ref Qore::DirStatInfo "DirStatInfo" hashes for all subdirectories in this directory
+
+    @par Example:
+    @code{.py}
+foreach hash<DirStatInfo> dir_info in (d.listDirInfo()) {
+    printf("%s: %d bytes\n", dir_info.name, dir_info.size);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+
+    @since %Qore 2.3
+ */
+list<hash<DirStatInfo>> Dir::listDirInfo() {
+   return d->list(xsink, S_IFDIR, 0, 0, true);
+}
+
+//! Retrieves all subdirectory status hashes in the directory that match the given regular expression and options; if any errors occur an exception is thrown
+/**
+    @param regex a regular expression string used to filter the arguments (note that this is not a glob, but rather a regular expression string)
+    @param regex_options optional bitwise-or'ed @ref regex_constants "regex option constants"
+
+    @return a list of @ref Qore::DirStatInfo "DirStatInfo" hashes for all matching subdirectories in the directory
+
+    @par Example:
+    @code{.py}
+foreach hash<DirStatInfo> dir_info in (d.listDirInfo(regex: "^data-")) {
+    printf("%s: %d bytes\n", dir_info.name, dir_info.size);
+}
+    @endcode
+
+    @throw DIR-READ-ERROR no directory is set
+    @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
+    @throw REGEX-COMPILATION-ERROR error in regular expression
+    @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
+
+    @since %Qore 2.3
+ */
+list<hash<DirStatInfo>> Dir::listDirInfo(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
+   return d->list(xsink, S_IFDIR, regex, (int)regex_options, true);
 }
 
 //! Create and open a File object in the current directory of the Dir object

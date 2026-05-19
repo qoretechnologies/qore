@@ -13,6 +13,7 @@ class DirTest inherits QUnit::Test {
     constructor() : QUnit::Test("Dir", "1.0") {
         addTestCase("DirTest", \dirTest());
         addTestCase("Dir named calls", \namedCallTest());
+        addTestCase("Dir typed listing", \typedListingTest());
         addTestCase("issue3192 test", \issue3192Test());
         addTestCase("DirStatInfo inherits StatInfo", \dirStatInfoTest());
         set_return_value(main());
@@ -90,6 +91,84 @@ class DirTest inherits QUnit::Test {
         assertTrue(child.removeFile(filename: filename));
         assertFalse(child.removeFile(filename: filename));
         d.rmdir(subdir: subdir);
+    }
+
+    typedListingTest() {
+%ifdef Windows
+        testSkip("skipping because the test is being run on Windows");
+%endif
+
+        string tmpdirPath = sprintf(tmp_location() + DirSep + "qoretest" + get_random_string());
+        string subdir = "typed_subdir";
+        string fileA = "alpha.txt";
+        string fileB = "beta.log";
+        string fileAPath = tmpdirPath + DirSep + fileA;
+        string fileBPath = tmpdirPath + DirSep + fileB;
+        string subdirPath = tmpdirPath + DirSep + subdir;
+
+        Dir d();
+        assertEq(False, d.chdir(tmpdirPath));
+        assertEq(1, d.create());
+        on_exit system("rm -rf " + tmpdirPath);
+
+        d.mkdir(subdir);
+        {
+            File f();
+            f.open2(fileAPath, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("abc\n");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(fileBPath, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("def\n");
+            f.close();
+        }
+
+        list<string> entries = sort(d.listNames());
+        assertEq((fileA, fileB, subdir), entries);
+        assertEq("list<string>", entries.fullType());
+
+        list<hash<DirStatInfo>> entry_info = d.listInfo(regex: "^alpha");
+        assertEq(1, entry_info.size());
+        assertEq(fileA, entry_info[0].name);
+        assertEq("list<hash<DirStatInfo>>", entry_info.fullType());
+
+        list<string> files = sort(d.listFiles());
+        assertEq((fileA, fileB), files);
+        assertEq("list<string>", files.fullType());
+
+        ListIterator<string> it = d.listFiles().iterator();
+        assertTrue(it.next());
+        string first_file = it.getValue();
+        assertTrue(first_file == fileA || first_file == fileB);
+
+        list<string> txt_files = d.listFileNames(regex: "\\.txt$");
+        assertEq((fileA,), txt_files);
+        assertEq("list<string>", txt_files.fullType());
+
+        list<hash<DirStatInfo>> txt_info = d.listFileInfo(regex: "\\.txt$");
+        assertEq(1, txt_info.size());
+        assertEq(fileA, txt_info[0].name);
+        assertEq("list<hash<DirStatInfo>>", txt_info.fullType());
+
+        list<string> dirs = d.listDirNames();
+        assertEq((subdir,), dirs);
+        assertEq("list<string>", dirs.fullType());
+
+        list<hash<DirStatInfo>> dir_info = d.listDirInfo();
+        assertEq(1, dir_info.size());
+        assertEq(subdir, dir_info[0].name);
+        assertEq("list<hash<DirStatInfo>>", dir_info.fullType());
+
+        union<list<string>, list<hash<DirStatInfo>>> legacy_names = d.listFiles(full: False);
+        assertEq("list<string>", legacy_names.fullType());
+        assertEq((fileA, fileB), sort(legacy_names));
+
+        union<list<string>, list<hash<DirStatInfo>>> legacy_info =
+            d.listFiles(regex: "\\.txt$", regex_options: 0, full: True);
+        assertEq("list<hash<DirStatInfo>>", legacy_info.fullType());
+        assertEq(fileA, legacy_info[0].name);
     }
 
     issue3192Test() {

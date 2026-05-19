@@ -816,9 +816,19 @@ cargo install tree-sitter-cli@0.26.5
       - syntax: \c union<int, \c string> for a type accepting either int or string
       - supports or-nothing modifier: \c *union<int, \c string> accepts NOTHING as well
       - works with complex types: \c list<union<int, \c string>>, \c hash<string, \c union<int, \c bool>>
+      - supports alternatives with the same outer container type, such as
+        <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt> and
+        <tt>union&lt;hash&lt;string, string&gt;, hash&lt;string, int&gt;&gt;</tt>
       - integrates with typedef: \c typedef \c IntOrString \c = \c union<int, \c string>;
       - supports parse-time type narrowing after type checks
       - constraints: maximum 100 member types, at most one soft type, no soft+non-soft of same base type
+    - @ref Qore::Dir "Dir" directory-listing methods now expose stronger return types:
+      - no-\c full file/directory listing calls return concrete \c list<string> values
+      - \c full variants return <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>
+      - new concrete helper methods @ref Qore::Dir::listNames() "listNames()",
+        @ref Qore::Dir::listInfo() "listInfo()", @ref Qore::Dir::listFileNames() "listFileNames()",
+        @ref Qore::Dir::listFileInfo() "listFileInfo()", @ref Qore::Dir::listDirNames() "listDirNames()",
+        and @ref Qore::Dir::listDirInfo() "listDirInfo()" avoid boolean-dependent return types
     - new @ref auto_no_narrow "auto!" syntax to disable parse-time type narrowing
       (<a href="https://github.com/qoretechnologies/qore/issues/5080">issue 5080</a>)
       - @ref auto_no_narrow "auto!", @ref auto_no_narrow "hash<auto!>", @ref auto_no_narrow "list<auto!>" prevent parse-time type inference errors
@@ -1241,6 +1251,9 @@ cargo install tree-sitter-cli@0.26.5
       - added \c -M / \c --modern and \c -G / \c --enable-debug short command-line options
       - unqualified symbol resolution now prioritizes \c ::Qore entries to prevent user namespace overrides of
         system symbols
+      - fixed runtime assignment and return-value selection for union types whose alternatives share the same
+        complex container base type but have different value types, such as
+        <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt>
       - fixed non-blocking file and socket poll reads to ensure NUL-terminated strings when converting poll buffers
       - fixed scheduling of closure values created in object scope with the @ref background "background operator" so
         stale captured objects are rejected before thread creation and valid captured objects stay alive until the

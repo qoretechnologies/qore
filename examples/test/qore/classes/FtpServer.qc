@@ -321,7 +321,7 @@ class FtpServer {
                 } else if (pwd) {
                     Dir dir();
                     dir.chdir(pwd);
-                    auto files = dir.list(".*", 0, True);
+                    list<hash<DirStatInfo>> files = dir.listInfo(regex: ".*");
                     string result;
                     map result += $1.name + "\r\n", files;
                     data.send(result);

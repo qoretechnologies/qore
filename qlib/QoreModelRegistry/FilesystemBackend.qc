@@ -163,7 +163,7 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         if (!d.chdir(getTenantDir())) {
             return result;
         }
-        foreach string entry in (d.listDirs()) {
+        foreach string entry in (d.listDirNames()) {
             push result, entry;
         }
         return sort(result);
@@ -282,7 +282,7 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         # Delete all files in directory
         Dir d();
         d.chdir(model_dir);
-        foreach string entry in (d.listFiles()) {
+        foreach string entry in (d.listFileNames()) {
             unlink(model_dir + DirSep + entry);
         }
         rmdir(model_dir);
@@ -310,11 +310,11 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         if (!d.chdir(base_path)) {
             return result;
         }
-        foreach string entry in (d.listDirs()) {
+        foreach string entry in (d.listDirNames()) {
             # A tenant directory contains model subdirectories with registry.json
             Dir td();
             if (td.chdir(base_path + DirSep + entry)) {
-                foreach string subdir in (td.listDirs()) {
+                foreach string subdir in (td.listDirNames()) {
                     if (is_file(base_path + DirSep + entry + DirSep + subdir
                             + DirSep + "registry.json")) {
                         push result, entry;
@@ -456,11 +456,11 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         Dir d();
         d.chdir(dir);
         # Delete subdirectories first
-        foreach string subdir in (d.listDirs()) {
+        foreach string subdir in (d.listDirNames()) {
             FilesystemBackend::deleteDirRecursive(dir + DirSep + subdir);
         }
         # Delete files
-        foreach string f in (d.listFiles()) {
+        foreach string f in (d.listFileNames()) {
             unlink(dir + DirSep + f);
         }
         rmdir(dir);

@@ -88,14 +88,14 @@ public list<string> sub find_qore_files(string path) {
 
     list<string> ret = ();
 
-    foreach string entry in (d.listFiles()) {
+    foreach string entry in (d.listFileNames()) {
         string fpath = sprintf("%s%s%s", path, DirSep, entry);
         if (is_valid_qore_file(fpath)) {
             push ret, fpath;
         }
     }
 
-    foreach string entry in (d.listDirs()) {
+    foreach string entry in (d.listDirNames()) {
         string targ = path + DirSep + entry;
         if (hstat(targ).type == "DIRECTORY") {
             try {

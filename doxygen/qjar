@@ -185,7 +185,7 @@ class QJar {
         d.chdir(path);
 
         # get class files for all java files
-        foreach string fn in (d.listFiles("\\.java$")) {
+        foreach string fn in (d.listFileNames("\\.java$")) {
             string cls = basename(fn);
             cls =~ s/\.java$//;
             cls = ns + cls;
@@ -205,7 +205,7 @@ class QJar {
             }
         }
 
-        foreach string dir in (d.listDirs()) {
+        foreach string dir in (d.listDirNames()) {
             getClasses(path + DirSep + dir, ns + dir + "::");
         }
     }

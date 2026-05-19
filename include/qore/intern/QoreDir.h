@@ -202,8 +202,8 @@ public:
         @param stat_filter set to -1 to get everything, otherwise use S_* constants from stat() to filter for particular file types
         @param regex an optional regular expression to filter the resulting list
         @param regex_options optional regular expression options
-        @param full if false a list of file name is returned, if true then a list of hashes corresponding to the stat() information is returned
-        @return a list of the results
+        @param full if false a list of file names is returned, if true then a list of DirStatInfo hashes is returned
+        @return a typed list of the results
     */
     DLLEXPORT QoreListNode* list(ExceptionSink* xsink, int stat_filter, const QoreString* regex = nullptr, int regex_options = 0, bool full = false) const;
 

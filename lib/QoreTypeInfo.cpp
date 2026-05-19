@@ -2337,6 +2337,9 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
     if (QoreTypeInfo::equal(u.ti, ti)) {
         return true;
     }
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)) {
+        return false;
+    }
 
     // try to fold values into our type; value types are not identical;
     // we have to get a new hash
@@ -2383,6 +2386,9 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     const QoreTypeInfo* ti = l->getValueTypeInfo();
     if (QoreTypeInfo::equal(u.ti, ti)) {
         return true;
+    }
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)) {
+        return false;
     }
 
     // try to fold values into our type; value types are not identical;
