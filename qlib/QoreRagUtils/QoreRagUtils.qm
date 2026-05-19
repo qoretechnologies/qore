@@ -35,6 +35,7 @@
 %requires(reexport) VoyageRestClient
 %requires(reexport) SGLangRestClient
 %requires(reexport) BgeM3RestClient
+%requires(reexport) GeminiRestClient
 
 module QoreRagUtils {
     version = "1.0.1";
@@ -82,6 +83,7 @@ module QoreRagUtils {
     - Embedders: @ref QoreRagUtils::LocalOnnxEmbedder "LocalOnnxEmbedder",
       @ref QoreRagUtils::OpenAiEmbedder "OpenAiEmbedder",
       @ref QoreRagUtils::VoyageEmbedder "VoyageEmbedder",
+      @ref QoreRagUtils::GeminiEmbedder "GeminiEmbedder",
       @ref QoreRagUtils::SGLangEmbedder "SGLangEmbedder",
       @ref QoreRagUtils::BgeM3FastApiEmbedder "BgeM3FastApiEmbedder"
     - Rerankers: @ref QoreRagUtils::LocalOnnxReranker "LocalOnnxReranker",
@@ -148,7 +150,7 @@ foreach hash<RetrievalHit> hit in (hits) {
 public namespace QoreRagUtils {
 #! Configuration for an embedder backend
 public hashdecl EmbedderConfig {
-    #! Backend identifier — implementation-specific (e.g. "local-onnx", "openai", "voyage", "sglang")
+    #! Backend identifier — implementation-specific (e.g. "local-onnx", "openai", "voyage", "gemini", "sglang")
     *string backend;
     #! Path to a local model file (used by ONNX embedder)
     *string model_path;

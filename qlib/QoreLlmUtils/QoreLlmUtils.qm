@@ -27,6 +27,7 @@
 %modern
 
 %requires RestClientIo
+%requires GeminiRestClient
 
 %try-module json
 %define NoJson
@@ -36,7 +37,7 @@
 module QoreLlmUtils {
     version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
-        "completions across HTTP/OpenAI-compatible, Anthropic, and Qorus AI Gateway";
+        "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and Qorus AI Gateway";
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
@@ -51,13 +52,15 @@ module QoreLlmUtils {
     The %QoreLlmUtils module provides a pluggable LLM backend abstraction for Qore
     AI modules that need to make chat completion calls. An LLM (Large Language Model)
     is an AI system like ChatGPT or Claude that generates text responses.  It supports
-    three modes:
+    four modes:
 
     - \b http: Calls an OpenAI-compatible \c /v1/chat/completions endpoint
       (SGLang, vLLM, OpenAI, Azure OpenAI, etc.) with optional JSON schema
       enforcement via \c response_format.
     - \b anthropic: Calls the Anthropic Messages API (\c /v1/messages) with
       native tool-use-based JSON extraction when an output schema is provided.
+    - \b gemini: Calls the Google Gemini \c generateContent API with native
+      function calling, structured outputs, and streaming.
     - \b qorus: Calls the Qorus AI Gateway via \c UserApi::callRestApi().
 
     The module also includes @ref QoreLlmUtils::PromptSecretProtector
@@ -99,7 +102,7 @@ printf("Structured output: %s\n", result.content);
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
-      HTTP/OpenAI-compatible, Anthropic, and Qorus AI Gateway modes
+      HTTP/OpenAI-compatible, Anthropic, Gemini, and Qorus AI Gateway modes
     - Added @ref QoreLlmUtils::PromptSecretProtector
       "PromptSecretProtector" for generic prompt credential placeholders and
       redaction support, including execution-boundary redaction of restored

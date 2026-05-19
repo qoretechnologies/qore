@@ -20,10 +20,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \configAnthropicNoUrlTest());
         addTestCase("LlmBackend config - valid http mode", \configValidHttpTest());
         addTestCase("LlmBackend config - valid anthropic mode", \configValidAnthropicTest());
+        addTestCase("LlmBackend config - valid gemini mode", \configValidGeminiTest());
+        addTestCase("LlmBackend config validation - gemini requires api_key",
+            \configGeminiNoApiKeyTest());
         addTestCase("LlmBackend config - valid callback mode", \configValidCallbackTest());
         addTestCase("LlmBackend config - defaults", \configDefaultsTest());
         addTestCase("LlmBackend getMode/getModel", \gettersTest());
         addTestCase("LlmBackend callback mode - missing callback", \callbackNoCallbackTest());
+        addTestCase("LlmBackend request options override model",
+            \requestOptionsOverrideModelTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
         addTestCase("PromptSecretProtector protects and restores credentials",
             \promptSecretProtectRestoreTest());
@@ -84,6 +89,24 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("claude-sonnet-4-20250514", llm.getModel());
     }
 
+    configValidGeminiTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "gemini",
+            "model": "gemini-2.5-flash",
+            "api_key": "test-key",
+        });
+        assertEq("gemini", llm.getMode());
+        assertEq("gemini-2.5-flash", llm.getModel());
+    }
+
+    configGeminiNoApiKeyTest() {
+        assertThrows("LLM-CONFIG-ERROR", "api_key is required",
+            sub () {
+                LlmBackend llm(<LlmBackendConfig>{"mode": "gemini"});
+            }
+        );
+    }
+
     configValidCallbackTest() {
         LlmBackend llm(<LlmBackendConfig>{
             "mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; },
@@ -124,6 +147,32 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 new LlmBackend(<LlmBackendConfig>{"mode": "callback"});
             }
         );
+    }
+
+    requestOptionsOverrideModelTest() {
+        hash<auto> captured;
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "model": "default-model",
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> b) {
+                captured = b;
+                return {
+                    "choices": ({"message": {"content": "ok"}, "finish_reason": "stop"},),
+                    "usage": {},
+                };
+            },
+        });
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "hello"},
+        ), NOTHING, <LlmRequestOptions>{
+            "model": "cheap-task-model",
+            "temperature": 0.2,
+            "body_options": {"reasoning_effort": "low"},
+        });
+        assertEq("ok", rv.content);
+        assertEq("cheap-task-model", captured.model);
+        assertEq(0.2, captured.temperature);
+        assertEq("low", captured.reasoning_effort);
     }
 
     hashdeclDefaultsTest() {
