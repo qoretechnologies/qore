@@ -402,7 +402,8 @@ llm.chatStream(
 );
         @endcode
     */
-    chatStream(list<hash<ChatMessage>> messages, code callback,
+    chatStream(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         if (mode == "callback") {
             throw "LLM-ERROR",
@@ -1592,7 +1593,8 @@ llm.chatStream(
     }
 
     #! Streams Gemini generateContent SSE events as generic ChatStreamEvent deltas
-    private chatStreamGemini(list<hash<ChatMessage>> messages, code callback,
+    private chatStreamGemini(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         hash<auto> body = buildGeminiBody(messages, tools,
             opts.output_schema, opts);
