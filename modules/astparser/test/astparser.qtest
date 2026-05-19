@@ -429,6 +429,7 @@ sub test() {
         addTestCase("Generic inheritance CST", \testGenericInheritanceGetNodesInfo());
         addTestCase("Generic hashdecl CST", \testGenericHashdeclGetNodesInfo());
         addTestCase("Generic wildcard CST", \testGenericWildcardGetNodesInfo());
+        addTestCase("Generic object type CST", \testGenericObjectTypeGetNodesInfo());
 %ifdef HasAstTreeSearcher
         addTestCase("Scope symbols", \testScopeSymbols());
         addTestCase("Doc comments", \testDocComments());
@@ -1471,6 +1472,36 @@ sub test(Box<? extends int> source, Box<? super int> sink, Box<?> any) {
 
         list nodes = tree.getNodesInfo();
         assertEq(3, countNodesByType(nodes, "wildcard_type"), "three wildcard type args");
+    }
+
+    testGenericObjectTypeGetNodesInfo() {
+        string testCode = "
+%new-style
+hashdecl SocketPollResultInfo {
+    string event;
+}
+
+sub test() {
+    object<Queue<hash<SocketPollResultInfo>>> q;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash<auto> functionNode = findNodeByType(nodes, "function_declaration");
+        assertTrue(exists(functionNode), "function node found");
+        *hash<auto> blockNode = findChildByType(functionNode, "block");
+        assertTrue(exists(blockNode), "function block found");
+        *hash<auto> localDecl = findChildByType(blockNode, "local_variable_declaration");
+        assertTrue(exists(localDecl), "local variable declaration found");
+        *hash<auto> typeNode = findChildByField(localDecl, "type");
+        assertTrue(exists(typeNode), "local variable declaration has a type");
+        *hash<auto> objectType = findChildByType(typeNode, "complex_type");
+        assertTrue(exists(objectType), "object generic type parsed as a type");
+        assertEq(2, countNodesByType(objectType, "complex_type"), "object type contains nested hash type");
+        assertEq(1, countNodesByType(objectType, "generic_type"), "object type contains Queue generic type");
     }
 
 %ifdef HasAstTreeSearcher

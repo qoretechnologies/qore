@@ -1395,6 +1395,13 @@ module.exports = grammar({
         $.type,
         '>',
       ),
+      // object<ClassType>
+      seq(
+        'object',
+        '<',
+        $.type,
+        '>',
+      ),
       // date<absolute> or date<relative>
       seq(
         'date',
