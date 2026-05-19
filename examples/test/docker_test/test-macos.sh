@@ -33,7 +33,7 @@ elif [ "$PM" = "homebrew" ]; then
     # requires Eigen3, c-ares, Kerberos, and ICU unconditionally. brew
     # install is idempotent (no-op if already installed), so this is safe
     # to run on a fresh image too.
-    REQUIRED_BREW_PKGS=(eigen krb5 c-ares icu4c)
+    REQUIRED_BREW_PKGS=(eigen krb5 c-ares icu4c coreutils)
     for pkg in "${REQUIRED_BREW_PKGS[@]}"; do
         if ! brew list "$pkg" >/dev/null 2>&1; then
             echo "=== Installing missing Homebrew package: $pkg ==="
@@ -42,7 +42,7 @@ elif [ "$PM" = "homebrew" ]; then
     done
 
     # Add keg-only package paths so CMake/find_program can locate them
-    export PATH="${HB}/opt/bison/bin:${HB}/opt/flex/bin:${PATH}"
+    export PATH="${HB}/opt/coreutils/libexec/gnubin:${HB}/opt/bison/bin:${HB}/opt/flex/bin:${PATH}"
     # Ensure linker and pkg-config find Homebrew libraries (including keg-only)
     KEG_PKGS=(icu4c openssl@3 libxml2 libxslt zlib bzip2 expat readline ncurses libffi sqlite openldap krb5 c-ares libarchive curl libtool ossp-uuid libyaml)
     for pkg in "${KEG_PKGS[@]}"; do

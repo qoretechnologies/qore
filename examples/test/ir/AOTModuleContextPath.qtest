@@ -26,6 +26,17 @@ class AOTModuleContextPathTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    private string runQoreScriptWithTimeout(string module_dir, string script_path) {
+        return backquote(sprintf(
+            "{ if command -v timeout >/dev/null 2>&1; then "
+            "timeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s; rc=$?; "
+            "elif command -v gtimeout >/dev/null 2>&1; then "
+            "gtimeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s; rc=$?; "
+            "else echo 'GNU timeout command not found'; rc=127; fi; echo EXIT=$rc; } 2>&1",
+            libqore_dir, libqore_dir, module_dir, qore_bin, script_path,
+            libqore_dir, libqore_dir, module_dir, qore_bin, script_path));
+    }
+
     moduleInitUsesRuntimeQmodPath() {
         string tmp_dir = make_tmp_dir();
         on_exit remove_tree(tmp_dir);
@@ -121,9 +132,7 @@ printf(\"loaded=%y\\n\", AOTModuleHashDuringInit::loaded());
 ");
         f.close();
 
-        string run_out = backquote(sprintf(
-            "timeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1; echo EXIT=$?",
-            libqore_dir, libqore_dir, tmp_dir, qore_bin, script_path));
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("loaded=True\nEXIT=0\n", run_out,
             "AOT module init must not hold the module-manager lock while get_module_hash() runs");
     }
@@ -197,9 +206,7 @@ printf(\"seen=%y\\n\", AOTModuleLoadsModuleInInit::seen());
 ");
         f.close();
 
-        string run_out = backquote(sprintf(
-            "timeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1; echo EXIT=$?",
-            libqore_dir, libqore_dir, tmp_dir, qore_bin, script_path));
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("seen=True\nEXIT=0\n", run_out,
             "nested module loads from AOT module init must not leak into the outer module context");
     }
