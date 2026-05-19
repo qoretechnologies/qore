@@ -25,6 +25,14 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend getMode/getModel", \gettersTest());
         addTestCase("LlmBackend callback mode - missing callback", \callbackNoCallbackTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
+        addTestCase("PromptSecretProtector protects and restores credentials",
+            \promptSecretProtectRestoreTest());
+        addTestCase("PromptSecretProtector redacts nested values",
+            \promptSecretRedactNestedTest());
+        addTestCase("PromptSecretProtector redacts restored values",
+            \promptSecretRedactProtectedValuesTest());
+        addTestCase("PromptSecretProtector redacts sensitive keys and text",
+            \promptSecretRedactSensitiveValueTest());
         set_return_value(main());
     }
 
@@ -125,5 +133,79 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(10000, config.connect_timeout_ms);
         assertEq(120000, config.timeout_ms);
         assertEq("2023-06-01", config.anthropic_version);
+    }
+
+    promptSecretProtectRestoreTest() {
+        string raw_secret = "qore-test-secret-value-12345";
+        string text = "create a connection using API key " + raw_secret;
+        *hash<auto> placeholders = PromptSecretProtector::protectText(\text);
+        assertTrue(placeholders.val());
+        assertFalse(text.find(raw_secret) >= 0);
+        assertTrue(text.find("<credential-1>") >= 0);
+        assertEq(raw_secret, placeholders."<credential-1>");
+
+        string context_text = PromptSecretProtector::buildSystemContext(placeholders);
+        assertTrue(context_text.find("<credential-1>") >= 0);
+        assertFalse(context_text.find(raw_secret) >= 0);
+
+        hash<auto> args = {
+            "options": {"apikey": "<credential-1>"},
+            "list": ("<credential-1>", "plain"),
+        };
+        hash<auto> restored = cast<hash<auto>>(
+            PromptSecretProtector::restorePlaceholders(args, placeholders));
+        assertEq(raw_secret, restored.options.apikey);
+        assertEq(raw_secret, restored.list[0]);
+    }
+
+    promptSecretRedactNestedTest() {
+        string raw_secret = "qore-test-secret-value-24680";
+        string text = "API key " + raw_secret;
+        *hash<auto> placeholders = PromptSecretProtector::protectText(\text);
+        hash<auto> value = {
+            "options": {"apikey": "<credential-1>"},
+            "nested": ({"token": "<credential-1>"},),
+        };
+        hash<auto> redacted = cast<hash<auto>>(
+            PromptSecretProtector::redactPlaceholders(value, placeholders));
+        assertEq("<redacted>", redacted.options.apikey);
+        assertEq("<redacted>", redacted.nested[0].token);
+        assertFalse(sprintf("%y", redacted).find(raw_secret) >= 0);
+    }
+
+    promptSecretRedactProtectedValuesTest() {
+        string raw_secret = "qore-test-secret-value-67890";
+        string text = "create using api key " + raw_secret;
+        *hash<auto> placeholders = PromptSecretProtector::protectText(\text);
+        hash<auto> value = {
+            "message": "tool failed with apikey=" + raw_secret,
+            "args": {"apikey": raw_secret, "note": "<credential-1>"},
+        };
+        hash<auto> redacted = cast<hash<auto>>(
+            PromptSecretProtector::redactProtectedValues(value, placeholders));
+        assertFalse(sprintf("%y", redacted).find(raw_secret) >= 0);
+        assertEq("<redacted>", redacted.args.apikey);
+        assertEq("<redacted>", redacted.args.note);
+        assertTrue(redacted.message.find("<redacted>") >= 0);
+    }
+
+    promptSecretRedactSensitiveValueTest() {
+        hash<auto> value = {
+            "apikey": "secret-value-12345",
+            "nested": {
+                "plain": "use api key secret-value-67890",
+                "url": "https://example.com",
+                "url_with_auth": "https://user:secret-value-99999@example.com/path",
+            },
+            "svalue": "secret-value-54321",
+        };
+        hash<auto> redacted = cast<hash<auto>>(
+            PromptSecretProtector::redactSensitiveValue(value));
+        assertEq("<redacted>", redacted.apikey);
+        assertEq("<redacted>", redacted.svalue);
+        assertFalse(redacted.nested.plain.find("secret-value-67890") >= 0);
+        assertEq("https://example.com", redacted.nested.url);
+        assertEq("https://user:<redacted>@example.com/path",
+            redacted.nested.url_with_auth);
     }
 }

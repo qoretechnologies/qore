@@ -60,6 +60,13 @@ module QoreLlmUtils {
       native tool-use-based JSON extraction when an output schema is provided.
     - \b qorus: Calls the Qorus AI Gateway via \c UserApi::callRestApi().
 
+    The module also includes @ref QoreLlmUtils::PromptSecretProtector
+    "PromptSecretProtector", a provider-neutral helper for keeping
+    user-supplied credentials out of model-visible prompts by replacing them
+    with request-local placeholders, restoring them only at a caller's tool
+    execution boundary, and redacting protected values from execution errors
+    or logs.
+
     @par Example: HTTP mode (OpenAI-compatible)
     @code{.py}
 %modern
@@ -93,4 +100,8 @@ printf("Structured output: %s\n", result.content);
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
       HTTP/OpenAI-compatible, Anthropic, and Qorus AI Gateway modes
+    - Added @ref QoreLlmUtils::PromptSecretProtector
+      "PromptSecretProtector" for generic prompt credential placeholders and
+      redaction support, including execution-boundary redaction of restored
+      protected values
 */
