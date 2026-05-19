@@ -345,11 +345,28 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
             set(CURRENT_MODULE_NAME ${_module_name})
             configure_file(${QORE_USERMODULE_DOXYGEN_TEMPLATE} ${_working_dir}/Doxyfile @ONLY)
 
+            if (WIN32 OR MSYS OR MINGW)
+                set(_qore_qjar_module_dir "${_working_dir}")
+                if (DEFINED QORE_MODULE_DIR_FOR_DOCS AND NOT "${QORE_MODULE_DIR_FOR_DOCS}" STREQUAL "")
+                    set(_qore_qjar_module_dir "${_qore_qjar_module_dir}\\;${QORE_MODULE_DIR_FOR_DOCS}")
+                elseif (DEFINED ENV{QORE_MODULE_DIR} AND NOT "$ENV{QORE_MODULE_DIR}" STREQUAL "")
+                    set(_qore_qjar_module_dir "${_qore_qjar_module_dir}\\;$ENV{QORE_MODULE_DIR}")
+                endif()
+            else()
+                set(_qore_qjar_module_dir "${_working_dir}")
+                if (DEFINED QORE_MODULE_DIR_FOR_DOCS AND NOT "${QORE_MODULE_DIR_FOR_DOCS}" STREQUAL "")
+                    set(_qore_qjar_module_dir "${_qore_qjar_module_dir}:${QORE_MODULE_DIR_FOR_DOCS}")
+                elseif (DEFINED ENV{QORE_MODULE_DIR} AND NOT "$ENV{QORE_MODULE_DIR}" STREQUAL "")
+                    set(_qore_qjar_module_dir "${_qore_qjar_module_dir}:$ENV{QORE_MODULE_DIR}")
+                endif()
+            endif()
+            set(_qore_qjar_env QORE_MODULE_DIR=${_qore_qjar_module_dir} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
+
             add_custom_target(${_docs_targ}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_dox_output}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_working_dir}/Doxyfile
                 COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${_dox_output}/html ${_dox_output}/html/search
-                COMMAND QORE_MODULE_DIR=${_working_dir} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
+                COMMAND ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java
                 WORKING_DIRECTORY ${_working_dir}
                 COMMENT "Generating API documentation with Doxygen"

@@ -1,0 +1,67 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_FilesystemSshClientIdentityProvider.qpp
+
+    Qore sshutil module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "sshutil-module.h"
+
+//! Descriptor-only default client identity provider for filesystem keys and SSH agent fallback.
+/** This class does not read private keys. It returns ordered descriptors that SSH client modules
+    can import using their native SSH library integrations.
+
+    @since sshutil 1.0
+*/
+qclass FilesystemSshClientIdentityProvider [arg=FilesystemSshClientIdentityProviderData* p; ns=Qore::SshUtil;
+    vparent=AbstractSshClientIdentityProvider];
+
+//! Creates the provider.
+/** @param key_paths private-key paths to expose as ordered filesystem candidates
+    @param agent include an SSH agent candidate before file candidates
+    @param optional mark returned candidates optional
+
+    @since sshutil 1.0
+*/
+FilesystemSshClientIdentityProvider::constructor(*list<string> key_paths, bool agent = False, bool optional = False) {
+    self->setPrivate(CID_FILESYSTEMSSHCLIENTIDENTITYPROVIDER,
+        new FilesystemSshClientIdentityProviderData(key_paths, agent, optional, xsink));
+}
+
+//! Copying is not supported.
+/**
+    @throw SSHUTIL-CLIENT-IDENTITY-PROVIDER-COPY-ERROR copying the provider is not supported
+*/
+FilesystemSshClientIdentityProvider::copy() {
+    xsink->raiseException("SSHUTIL-CLIENT-IDENTITY-PROVIDER-COPY-ERROR",
+        "copying FilesystemSshClientIdentityProvider objects is not supported");
+}
+
+//! Returns ordered client authentication candidates for the given context.
+/**
+    @since sshutil 1.0
+*/
+list<hash<SshClientIdentityCandidate>> FilesystemSshClientIdentityProvider::getClientIdentityCandidates(hash<auto> ctxt) {
+    (void)ctxt;
+    return p->getClientIdentityCandidates(xsink);
+}

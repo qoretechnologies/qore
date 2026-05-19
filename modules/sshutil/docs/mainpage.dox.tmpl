@@ -1,0 +1,36 @@
+/** @mainpage %Qore sshutil Module
+
+    @tableofcontents
+
+    @section sshutilintro sshutil Module Introduction
+
+    The %sshutil binary module provides typed SSH client identity provider,
+    SSH server host-key provider, and remote host-key trust-store contracts for
+    binary modules and Qore code.
+
+    The module defines only generic SSH vocabulary: hosts, ports, usernames,
+    public-key metadata, short-lived private-key material descriptors, host-key
+    trust decisions, provider context fields, and registry names.  Storage,
+    tenancy, authorization, and secret-manager integration belong to embedding
+    applications and are passed through only as opaque context.
+
+    @section sshutiloverview API Overview
+
+    The main abstract classes are:
+
+    - @ref Qore::SshUtil::AbstractSshClientIdentityProvider for ordered client
+      public-key authentication candidates
+    - @ref Qore::SshUtil::AbstractSshServerHostKeyProvider for listener host
+      identity key material
+    - @ref Qore::SshUtil::AbstractSshHostKeyStore for remote host-key
+      verification, TOFU acceptance, and explicit approval
+
+    The module also provides descriptor-only filesystem providers preserving
+    existing file-path based behavior where callers explicitly choose it, plus
+    @ref Qore::SshUtil::SshUtilRegistry for runtime lookup by stable names.
+
+    @section sshutilreleasenotes sshutil Module Release Notes
+
+    This module is always delivered with %Qore and therefore mirrors the %Qore
+    version.
+*/

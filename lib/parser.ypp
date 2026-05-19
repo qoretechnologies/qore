@@ -1942,7 +1942,7 @@ DLLLOCAL int yylex(LEX_PARAMETERS);
 // returns a Qore-specific hint for common foreign-syntax mistakes (Python/JS/Java users
 // typing the wrong literal/keyword), or nullptr if no hint applies.  The bison message
 // passed in uses "%error-verbose": "syntax error, unexpected X, expecting Y or Z".
-DLLLOCAL static const char* qore_syntax_hint(const char* str) {
+static const char* qore_syntax_hint(const char* str) {
     if (!str) {
         return nullptr;
     }

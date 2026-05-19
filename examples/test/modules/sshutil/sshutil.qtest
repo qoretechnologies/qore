@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  sshutil.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%requires sshutil
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class SshUtilTest
+
+class TestHostKeyStore inherits SshUtil::AbstractSshHostKeyStore {
+    private hash<SshUtil::SshHostKeyDecisionInfo> makeDecision(
+            enum<SshUtil::SshHostKeyDecision> decision,
+            hash<SshUtil::SshPublicKeyInfo> observed_key) {
+        return <SshUtil::SshHostKeyDecisionInfo>{
+            "decision": decision,
+            "observed_key": observed_key,
+        };
+    }
+
+    hash<SshUtil::SshHostKeyDecisionInfo> verifyHostKey(hash<auto> ctxt, hash<auto> observed_key) {
+        return makeDecision(SshUtil::SshHostKeyDecision::Matched, cast<hash<SshUtil::SshPublicKeyInfo>>(observed_key));
+    }
+
+    hash<SshUtil::SshHostKeyDecisionInfo> acceptHostKeyIfAbsent(hash<auto> ctxt, hash<auto> observed_key) {
+        return makeDecision(SshUtil::SshHostKeyDecision::Added, cast<hash<SshUtil::SshPublicKeyInfo>>(observed_key));
+    }
+
+    hash<SshUtil::SshHostKeyDecisionInfo> approveHostKey(hash<auto> ctxt, hash<auto> expected_observed_key,
+            hash<auto> record) {
+        @assert(cast<hash<SshUtil::SshHostKeyRecord>>(record).host == "example.com");
+        return makeDecision(SshUtil::SshHostKeyDecision::AcceptedSession,
+            cast<hash<SshUtil::SshPublicKeyInfo>>(expected_observed_key));
+    }
+}
+
+public class SshUtilTest inherits QUnit::Test {
+    constructor() : Test("sshutil", "1.0") {
+        addTestCase("string-backed enums and exception names", \testEnums());
+        addTestCase("host normalization", \testHostNormalization());
+        addTestCase("filesystem client identity provider", \testFilesystemClientIdentityProvider());
+        addTestCase("filesystem server host-key provider", \testFilesystemServerHostKeyProvider());
+        addTestCase("host-key store dispatch", \testHostKeyStoreDispatch());
+        addTestCase("provider registry", \testProviderRegistry());
+
+        set_return_value(main());
+    }
+
+    private hash<SshUtil::SshProviderContext> makeContext(
+            enum<SshUtil::SshProviderPurpose> purpose = SshUtil::SshProviderPurpose::HostKeyVerify) {
+        int now = clock_getnanos();
+        return <SshUtil::SshProviderContext>{
+            "purpose": purpose,
+            "connection_name": "test-connection",
+            "original_host": "Example.COM.",
+            "normalized_host": SshUtil::normalize_ssh_host("Example.COM."),
+            "port": 22,
+            "username": "test-user",
+            "host_key_policy": "reject",
+            "client_auth_order": SshUtil::SshClientAuthOrder::ExplicitFirst,
+            "client_identity_fallback_policy": SshUtil::SshClientIdentityFallbackPolicy::Disabled,
+            "deadline_ns": now + 1000000000,
+            "remaining_ns": 1000000000,
+            "opaque_context": {"opaque": True},
+        };
+    }
+
+    private hash<SshUtil::SshPublicKeyInfo> makePublicKeyInfo() {
+        return <SshUtil::SshPublicKeyInfo>{
+            "algorithm": "ssh-ed25519",
+            "openssh_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest",
+            "sha256_fingerprint": "SHA256:test",
+            "source_kind": "transport",
+        };
+    }
+
+    testEnums() {
+        string decision = SshUtil::SshHostKeyDecision::AcceptedSession;
+        assertEq("accepted-session", decision);
+
+        assertEq(SshUtil::SshHostKeyDecision::InvalidResponse, SshUtil::SshHostKeyDecisionMap{"invalid-response"});
+        assertEq("SSH2-HOSTKEY-UNKNOWN",
+            SshUtil::get_host_key_decision_exception_name(SshUtil::SshHostKeyDecision::Unknown));
+        assertEq("SSH-HOSTKEY-PROVIDER-ERROR",
+            SshUtil::get_host_key_decision_exception_name(SshUtil::SshHostKeyDecision::ProviderError, "SSH"));
+        assertEq(NOTHING,
+            SshUtil::get_host_key_decision_exception_name(SshUtil::SshHostKeyDecision::Matched));
+        assertEq(NOTHING, SshUtil::get_host_key_decision_exception_name(SshUtil::SshHostKeyDecision::Added));
+        assertEq(NOTHING,
+            SshUtil::get_host_key_decision_exception_name(SshUtil::SshHostKeyDecision::AcceptedSession));
+
+        assertThrows("RUNTIME-CAST-ERROR", sub () {
+            enum<SshUtil::SshHostKeyDecision> invalid = cast<enum<SshUtil::SshHostKeyDecision>>("invalid");
+            assertEq(SshUtil::SshHostKeyDecision::Unknown, invalid);
+        });
+    }
+
+    testHostNormalization() {
+        assertEq("example.com", SshUtil::normalize_ssh_host("Example.COM."));
+        assertEq("example.com.", SshUtil::normalize_ssh_host("Example.COM.."));
+        assertEq("täst.example", SshUtil::normalize_ssh_host("Täst.EXAMPLE."));
+        assertEq("example.com", SshUtil::format_known_hosts_host("Example.COM.", 22));
+        assertEq("[example.com]:2222", SshUtil::format_known_hosts_host("Example.COM.", 2222));
+        assertEq("[2001:db8::1]:22", SshUtil::format_known_hosts_host("2001:DB8::1", 22));
+    }
+
+    testFilesystemClientIdentityProvider() {
+        SshUtil::FilesystemSshClientIdentityProvider provider(("/tmp/test-id-ed25519", "/tmp/test-id-rsa"), True,
+            True);
+        list<hash<SshUtil::SshClientIdentityCandidate>> candidates =
+            provider.getClientIdentityCandidates(makeContext(SshUtil::SshProviderPurpose::ClientIdentity));
+
+        assertEq(3, candidates.size());
+        assertEq(SshUtil::SshClientIdentityCandidateKind::Agent, candidates[0].kind);
+        assertEq(True, candidates[0].optional);
+        assertEq("ssh-agent", candidates[0].comment);
+        assertEq(SshUtil::SshClientIdentityCandidateKind::File, candidates[1].kind);
+        assertEq("/tmp/test-id-ed25519", candidates[1].path);
+        assertEq(SshUtil::SshClientIdentityCandidateKind::File, candidates[2].kind);
+        assertEq("/tmp/test-id-rsa", candidates[2].path);
+        assertEq(NOTHING, provider.getPrivateKeyMaterial(makeContext(), candidates[0]));
+    }
+
+    testFilesystemServerHostKeyProvider() {
+        SshUtil::FilesystemSshServerHostKeyProvider provider(("/tmp/ssh_host_ed25519_key", "/tmp/ssh_host_rsa_key"),
+            "server-key-passphrase");
+        list<hash<SshUtil::SshPrivateKeyMaterial>> server_keys =
+            provider.getServerHostKeyMaterial(makeContext(SshUtil::SshProviderPurpose::ServerHostKey));
+
+        assertEq(2, server_keys.size());
+        assertEq(SshUtil::SshPrivateKeyMaterialKind::File, server_keys[0].kind);
+        assertEq("/tmp/ssh_host_ed25519_key", server_keys[0].path);
+        assertEq("server-key-passphrase", server_keys[0].passphrase_ref);
+        assertEq("file", server_keys[0].source_kind);
+        assertEq("/tmp/ssh_host_rsa_key", server_keys[1].path);
+    }
+
+    testHostKeyStoreDispatch() {
+        TestHostKeyStore store();
+        hash<SshUtil::SshPublicKeyInfo> observed_key = makePublicKeyInfo();
+        hash<SshUtil::SshProviderContext> ctxt = makeContext();
+
+        assertEq(SshUtil::SshHostKeyDecision::Matched, store.verifyHostKey(ctxt, observed_key).decision);
+        assertEq(SshUtil::SshHostKeyDecision::Added, store.acceptHostKeyIfAbsent(ctxt, observed_key).decision);
+
+        hash<SshUtil::SshHostKeyRecord> record = <SshUtil::SshHostKeyRecord>{
+            "host": "example.com",
+            "port": 22,
+            "normalized_host": "example.com",
+            "key_info": observed_key,
+            "policy": "manual",
+        };
+        assertEq(SshUtil::SshHostKeyDecision::AcceptedSession,
+            store.approveHostKey(ctxt, observed_key, record).decision);
+    }
+
+    testProviderRegistry() {
+        string suffix = get_random_string();
+        string client_name = "client-" + suffix;
+        string server_name = "server-" + suffix;
+        string store_name = "store-" + suffix;
+        SshUtil::FilesystemSshClientIdentityProvider client_provider((), True);
+        SshUtil::FilesystemSshServerHostKeyProvider server_provider(("/tmp/key",));
+        TestHostKeyStore store();
+
+        on_exit {
+            SshUtil::SshUtilRegistry::deregisterClientIdentityProvider(client_name);
+            SshUtil::SshUtilRegistry::deregisterServerHostKeyProvider(server_name);
+            SshUtil::SshUtilRegistry::deregisterHostKeyStore(store_name);
+        }
+
+        SshUtil::SshUtilRegistry::registerClientIdentityProvider(client_name, client_provider);
+        assertTrue(inlist(client_name, SshUtil::SshUtilRegistry::listClientIdentityProviders()));
+        assertTrue(SshUtil::SshUtilRegistry::getClientIdentityProvider(client_name) != NOTHING);
+        assertThrows("SSHUTIL-REGISTRY-ERROR", \SshUtil::SshUtilRegistry::registerClientIdentityProvider(),
+            (client_name, client_provider));
+        SshUtil::SshUtilRegistry::registerClientIdentityProvider(client_name, client_provider, True);
+
+        SshUtil::SshUtilRegistry::registerServerHostKeyProvider(server_name, server_provider);
+        assertTrue(inlist(server_name, SshUtil::SshUtilRegistry::listServerHostKeyProviders()));
+        assertTrue(SshUtil::SshUtilRegistry::getServerHostKeyProvider(server_name) != NOTHING);
+
+        SshUtil::SshUtilRegistry::registerHostKeyStore(store_name, store);
+        assertTrue(inlist(store_name, SshUtil::SshUtilRegistry::listHostKeyStores()));
+        assertTrue(SshUtil::SshUtilRegistry::getHostKeyStore(store_name) != NOTHING);
+
+        assertThrows("SSHUTIL-REGISTRY-ERROR", \SshUtil::SshUtilRegistry::registerHostKeyStore(),
+            ("bad name", store));
+
+        assertTrue(SshUtil::SshUtilRegistry::deregisterClientIdentityProvider(client_name) != NOTHING);
+        assertFalse(inlist(client_name, SshUtil::SshUtilRegistry::listClientIdentityProviders()));
+    }
+}

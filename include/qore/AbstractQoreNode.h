@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -53,6 +53,12 @@ class LocalVar;
 struct QoreParseContext;
 class RuntimeConfig;
 
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_NODE_DELETE_NOINLINE __attribute__((noinline))
+#else
+#define QORE_NODE_DELETE_NOINLINE
+#endif
+
 //! The base class for all value and parse types in Qore expression trees
 /**
    Defines the interface for all value and parse types in Qore expression trees.  Default implementations are given for most virtual functions.
@@ -76,12 +82,22 @@ public:
     }
 
     //! standard delete operator
-    DLLLOCAL static void operator delete(void* ptr) noexcept {
+    DLLLOCAL static void operator delete(void* ptr) noexcept QORE_NODE_DELETE_NOINLINE {
+        ::operator delete(ptr);
+    }
+
+    //! standard sized delete operator
+    DLLLOCAL static void operator delete(void* ptr, size_t) noexcept QORE_NODE_DELETE_NOINLINE {
         ::operator delete(ptr);
     }
 
     //! standard delete[] operator
-    DLLLOCAL static void operator delete[](void* ptr) noexcept {
+    DLLLOCAL static void operator delete[](void* ptr) noexcept QORE_NODE_DELETE_NOINLINE {
+        ::operator delete[](ptr);
+    }
+
+    //! standard sized delete[] operator
+    DLLLOCAL static void operator delete[](void* ptr, size_t) noexcept QORE_NODE_DELETE_NOINLINE {
         ::operator delete[](ptr);
     }
 
@@ -389,6 +405,8 @@ protected:
     */
     DLLEXPORT virtual ~AbstractQoreNode();
 };
+
+#undef QORE_NODE_DELETE_NOINLINE
 
 //! The base class for all types in Qore expression trees that cannot throw an exception when deleted
 /**
