@@ -64,6 +64,7 @@ class QoreProgram;
 class QoreStringNode;
 class QoreTypeInfo;
 class QoreValue;
+struct QoreModuleInitContext;
 class StatementBlock;
 class TypedHashDecl;
 class UserVariantBase;
@@ -447,6 +448,12 @@ extern "C" QoreStringNode* qore_aot_module_init_v3(
     const char* mod_name,
     const QoreAOTFunc* functions, int num_functions
 );
+
+//! Captures the module loader path before entering the generated AOT module init implementation.
+extern "C" void qore_aot_set_module_init_context_path(QoreModuleInitContext* ctx);
+
+//! Clears the captured module loader path after generated AOT module init returns.
+extern "C" void qore_aot_clear_module_init_context_path();
 
 //! Legacy C ABI entry point called by AOT-compiled modules from their generated qore_module_ns_init()
 extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns);

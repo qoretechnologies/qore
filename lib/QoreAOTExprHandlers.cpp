@@ -40,6 +40,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureParseNode.h"
@@ -692,6 +693,14 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
 
 static bool write_expr_runtime_const_ref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        std::string path;
+        if (qore_aot_resolve_runtime_constant_path(rcr, ctx.const_reverse_map, path)) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
+            ctx.writer.writeStringRef(path.c_str());
+            return true;
+        }
+    }
     if (ctx.const_reverse_map) {
         auto it = ctx.const_reverse_map->find(node);
         if (it != ctx.const_reverse_map->end()) {

@@ -452,14 +452,8 @@ public:
         return findModuleUnlocked(name);
     }
 
-    //! Load a module into a program without acquiring the module manager mutex
-    /** This is equivalent to what QoreAbstractModule::reexport() does internally.
-        Must only be called from within a module loading context where the mutex is
-        already held (e.g., from within module_ns_init callbacks).
-    */
-    DLLLOCAL void loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm) {
-        loadModuleIntern(xsink, xsink, name, pgm);
-    }
+    //! Load a reexported module into a program using the current module-load locking context.
+    DLLLOCAL void loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm);
 
     //! find a module by name without locking; the caller must hold the mutex
     DLLLOCAL QoreAbstractModule* findModuleUnlocked(const char* name) {

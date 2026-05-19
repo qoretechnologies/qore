@@ -174,7 +174,7 @@ void QoreAbstractModule::reexport(ExceptionSink& xsink, QoreProgram* pgm) const 
         }
 
         if (!qore_program_private::get(*pgm)->hasFeature(i->c_str())) {
-            QMM.loadModuleIntern(xsink, xsink, i->c_str(), pgm);
+            QMM.loadModuleForReexport(xsink, i->c_str(), pgm);
         }
     }
 }
@@ -776,6 +776,11 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     return xsink ? -1 : 0;
 }
 
+void QoreModuleManager::loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm) {
+    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+    loadModuleIntern(xsink, xsink, name, pgm);
+}
+
 int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
         qore_binary_module_desc_t desc_fn, const char* path) {
     // Populate mod_info up front so the feature name is known before taking the
@@ -835,7 +840,10 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     }
 
     // mirror qore_check_load_module_intern: merge the module's namespace into tpgm
-    mi->addToProgram(tpgm, xsink);
+    {
+        AutoUnlocker au(module_load_depth == 0 ? &mutex : nullptr);
+        mi->addToProgram(tpgm, xsink);
+    }
     return xsink ? -1 : 0;
 }
 
@@ -919,7 +927,7 @@ static void check_module_version(QoreAbstractModule* mi, mod_op_e op, version_li
 }
 
 static int qore_check_load_module_intern(QoreAbstractModule* mi, mod_op_e op, version_list_t* version,
-        QoreProgram* pgm, ExceptionSink& xsink) {
+        QoreProgram* pgm, ExceptionSink& xsink, QoreThreadLock* unlock_lock = nullptr) {
     if (xsink) {
         return -1;
     }
@@ -934,6 +942,12 @@ static int qore_check_load_module_intern(QoreAbstractModule* mi, mod_op_e op, ve
     }
 
     if (pgm) {
+        // Module namespace init can execute Qore code (especially for AOT user
+        // modules represented as binary modules).  Keep the global module map
+        // serialized for lookup/registration, but do not hold it while applying
+        // the module to a Program; init code may legitimately inspect or load
+        // modules and the mutex is intentionally non-recursive.
+        AutoUnlocker au(unlock_lock);
         mi->addToProgram(pgm, xsink);
         if (xsink) {
             return -1;
@@ -1006,6 +1020,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     //printd(5, "QoreModuleManager::loadModuleIntern() name: '%s' path: '%s' reexport: %d pgm: %p\n", name,
     //    raw_path ? raw_path : "n/a", reexport, pgm);
+    QoreThreadLock* unlock_lock = module_load_depth == 0 ? &mutex : nullptr;
 
     // check for special "qore" feature
     if (!raw_path && !strcmp(name, "qore")) {
@@ -1147,7 +1162,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         //    "injected: %d reinjected: %d\n", name, load_opt & QMLO_INJECT, load_opt & QMLO_REINJECT, mi,
         //    mi->getName(), mi->getFileName(), mi->isInjected(), mi->isReInjected());
 
-        int rc = qore_check_load_module_intern(mi, op, version, pgm, xsink);
+        int rc = qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock);
         // make sure to add reexport info if the module should be reexported
         if (reexport && !xsink) {
             ModuleReExportHelper mrh(mi, true);
@@ -1175,7 +1190,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
         mi = loadUserModuleFromSource(xsink, wsink, raw_path ? raw_path : name, name, pgm, src, reexport,
             pholder.release(), warning_mask);
-        return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+        return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
     }
 
     // see if this is actually a path
@@ -1218,7 +1233,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
         }
 
-        return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+        return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
     }
 
     // otherwise, try to find module in the module path
@@ -1288,7 +1303,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 }
                 mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
                     pgm, load_opt, mod_desc_func);
-                return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+                return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
             }
         }
 
@@ -1318,7 +1333,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 }
                 mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
                     pgm, load_opt, mod_desc_func);
-                return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+                return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
             }
         }
 
@@ -1334,7 +1349,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             }
             mi = loadUserModuleFromPath(xsink, wsink, str.c_str(), name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
-            return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+            return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
         }
 
         // check whether it is a module folder
@@ -1349,7 +1364,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             //printd(5, "ModuleManager::loadModule(%s) found separated module: %s\n", name, modulePath.c_str());
             mi = loadSeparatedModule(xsink, wsink, modulePath.c_str(), name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
-            return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+            return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
         }
     }
 

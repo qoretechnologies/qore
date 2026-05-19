@@ -59,6 +59,7 @@ class Var;
 class UserVariantBase;
 class QoreParseListNode;
 class ExceptionSink;
+class RuntimeConstantRefNode;
 struct QoreProgramLocation;
 
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation);
@@ -69,6 +70,10 @@ typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReve
 //! Adds a constant value and any nested hash/list node values to the AOT reverse map.
 void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
     const QoreValue& v, const std::string& path);
+
+//! Resolves a RuntimeConstantRefNode to an AOT-serializable constant path.
+bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
+    const AOTConstantReverseMap* const_reverse_map, std::string& path);
 
 //! Resolves a top-level or encoded nested AOT constant path to a runtime value.
 QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,

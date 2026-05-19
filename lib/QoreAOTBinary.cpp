@@ -1309,6 +1309,100 @@ void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
     aot_add_constant_value_reverse_mappings_impl(crm, v, path, seen, true);
 }
 
+static bool qore_aot_resolve_runtime_constant_path_impl(const RuntimeConstantRefNode* node,
+        const AOTConstantReverseMap* const_reverse_map, std::string& path,
+        std::unordered_set<const AbstractQoreNode*>& seen_nodes,
+        std::unordered_set<const ConstantEntry*>& seen_entries) {
+    if (!node) {
+        return false;
+    }
+
+    const AbstractQoreNode* abstract_node = node;
+    if (!seen_nodes.insert(abstract_node).second) {
+        return false;
+    }
+
+    if (const_reverse_map) {
+        if (const std::string* mapped_path = aotFindConstantReverseMapPath(const_reverse_map, abstract_node)) {
+            path = *mapped_path;
+            return true;
+        }
+    }
+
+    ConstantEntry* ce = node->getConstantEntry();
+    if (!ce) {
+        return false;
+    }
+
+    if (!seen_entries.insert(ce).second) {
+        return false;
+    }
+
+    auto resolve_value_node = [&](const QoreValue& v) -> bool {
+        if (!v.hasNode()) {
+            return false;
+        }
+
+        const AbstractQoreNode* value_node = v.getInternalNode();
+        if (auto* nested_rcr = dynamic_cast<const RuntimeConstantRefNode*>(value_node)) {
+            // Follow alias chains before accepting a root mapping for the stored
+            // node; otherwise `const A = B; const B = C;` can resolve only one
+            // level deep.
+            if (qore_aot_resolve_runtime_constant_path_impl(nested_rcr, const_reverse_map, path,
+                    seen_nodes, seen_entries)) {
+                return true;
+            }
+        }
+
+        if (const_reverse_map) {
+            if (const std::string* mapped_path = aotFindConstantReverseMapPath(const_reverse_map, value_node)) {
+                path = *mapped_path;
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    if (resolve_value_node(ce->val)) {
+        return true;
+    }
+
+    QoreValue referenced_value = ce->getReferencedValue();
+    bool resolved = resolve_value_node(referenced_value);
+    referenced_value.discard(nullptr);
+    if (resolved) {
+        return true;
+    }
+
+    if (!const_reverse_map) {
+        path = ce->getName();
+        return !path.empty();
+    }
+
+    return false;
+}
+
+bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
+        const AOTConstantReverseMap* const_reverse_map, std::string& path) {
+    path.clear();
+    std::unordered_set<const AbstractQoreNode*> seen_nodes;
+    std::unordered_set<const ConstantEntry*> seen_entries;
+    return qore_aot_resolve_runtime_constant_path_impl(node, const_reverse_map, path,
+        seen_nodes, seen_entries);
+}
+
+static void aot_add_constant_root_reverse_mapping(AOTConstantReverseMap& crm,
+        const QoreValue& v, const std::string& path) {
+    if (!v.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = v.getInternalNode();
+    if (node && crm.find(node) == crm.end()) {
+        crm.emplace(node, path);
+    }
+}
+
 static bool aot_constant_path_belongs_to_fqns(const std::string& path,
         const std::unordered_set<std::string>& excluded_fqns,
         const std::string& excluded_direct_fqn) {
@@ -4452,24 +4546,9 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                         return it->second;
                     }
                     if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(n)) {
-                        ConstantEntry* ce = rcr->getConstantEntry();
-                        if (ce) {
-                            if (ce->val.hasNode()) {
-                                auto it2 = writer.const_reverse_map->find(ce->val.getInternalNode());
-                                if (it2 != writer.const_reverse_map->end()) {
-                                    return it2->second;
-                                }
-                            }
-                            QoreValue sv = ce->getReferencedValue();
-                            std::string rv;
-                            if (sv.hasNode()) {
-                                auto it2 = writer.const_reverse_map->find(sv.getInternalNode());
-                                if (it2 != writer.const_reverse_map->end()) {
-                                    rv = it2->second;
-                                }
-                            }
-                            sv.discard(nullptr);
-                            return rv;
+                        std::string path;
+                        if (qore_aot_resolve_runtime_constant_path(rcr, writer.const_reverse_map, path)) {
+                            return path;
                         }
                     }
                     return std::string();
@@ -5397,16 +5476,23 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
     // Add namespace constants
     ConstConstantListIterator nsi(ns->constant);
     while (nsi.next()) {
-        QoreValue v = nsi.getValue();
-        if (!v.hasNode()) {
-            continue;
-        }
+        const ConstantEntry* ce = nsi.getEntry();
         std::string ns_path = ns->path;
         if (ns_path.size() >= 2) {
             ns_path = ns_path.substr(2);  // strip leading "::"
         }
         std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
+        if (ce->hasInitExpr()) {
+            aot_add_constant_root_reverse_mapping(crm, ce->val, fqn);
+            continue;
+        }
+        QoreValue v = ce->getReferencedValue();
+        if (!v.hasNode()) {
+            v.discard(nullptr);
+            continue;
+        }
         qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+        v.discard(nullptr);
     }
 
     // Add class constants within this namespace
@@ -5419,12 +5505,19 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
         std::string class_prefix = std::string(qc->getPath() + 2) + "::";  // strip leading "::"
         ConstConstantListIterator cci(qore_class_private::get(*qc)->constlist);
         while (cci.next()) {
-            QoreValue v = cci.getValue();
-            if (!v.hasNode()) {
+            const ConstantEntry* ce = cci.getEntry();
+            std::string fqn = class_prefix + cci.getName();
+            if (ce->hasInitExpr()) {
+                aot_add_constant_root_reverse_mapping(crm, ce->val, fqn);
                 continue;
             }
-            std::string fqn = class_prefix + cci.getName();
+            QoreValue v = ce->getReferencedValue();
+            if (!v.hasNode()) {
+                v.discard(nullptr);
+                continue;
+            }
             qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+            v.discard(nullptr);
         }
     }
 
@@ -5450,12 +5543,19 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
     // Add class constants
     ConstConstantListIterator cci(cls_priv->constlist);
     while (cci.next()) {
-        QoreValue v = cci.getValue();
-        if (!v.hasNode()) {
+        const ConstantEntry* ce = cci.getEntry();
+        std::string fqn = class_prefix + cci.getName();
+        if (ce->hasInitExpr()) {
+            aot_add_constant_root_reverse_mapping(crm, ce->val, fqn);
             continue;
         }
-        std::string fqn = class_prefix + cci.getName();
+        QoreValue v = ce->getReferencedValue();
+        if (!v.hasNode()) {
+            v.discard(nullptr);
+            continue;
+        }
         qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+        v.discard(nullptr);
     }
 
     // Add namespace constants from the class's enclosing namespace hierarchy
@@ -5465,16 +5565,23 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
             // Iterate namespace constants using the ConstantList directly
             ConstConstantListIterator nsi(ns_priv->constant);
             while (nsi.next()) {
-                QoreValue v = nsi.getValue();
-                if (!v.hasNode()) {
-                    continue;
-                }
+                const ConstantEntry* ce = nsi.getEntry();
                 std::string ns_path = ns_priv->path;
                 if (ns_path.size() >= 2) {
                     ns_path = ns_path.substr(2);  // strip leading "::"
                 }
                 std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
+                if (ce->hasInitExpr()) {
+                    aot_add_constant_root_reverse_mapping(crm, ce->val, fqn);
+                    continue;
+                }
+                QoreValue v = ce->getReferencedValue();
+                if (!v.hasNode()) {
+                    v.discard(nullptr);
+                    continue;
+                }
                 qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+                v.discard(nullptr);
             }
             // Walk up to parent namespace
             ns_priv = ns_priv->parent;
@@ -7187,34 +7294,13 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // RuntimeConstantRefNode: reference to a compile-time constant
     // Look up the constant's evaluated value node in the reverse map
     if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
-        ConstantEntry* ce = rcr->getConstantEntry();
-        if (ce && const_reverse_map) {
-            // ce->val may be:
-            // 1. The actual value (QoreHashNode etc.) — check if it's in the reverse map
-            // 2. Another RuntimeConstantRefNode — follow the chain to saved_val
-            const AbstractQoreNode* val_node = nullptr;
-            if (ce->val.hasNode()) {
-                val_node = ce->val.getInternalNode();
-                auto it = const_reverse_map->find(val_node);
-                if (it != const_reverse_map->end()) {
-                    writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
-                    writer.writeStringRef(it->second.c_str());
-                    return true;
-                }
-            }
-            // Try saved_val (the resolved constant value after all indirection)
-            QoreValue sv = ce->getReferencedValue();
-            if (sv.hasNode() && sv.getInternalNode() != val_node) {
-                auto it = const_reverse_map->find(sv.getInternalNode());
-                if (it != const_reverse_map->end()) {
-                    writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
-                    writer.writeStringRef(it->second.c_str());
-                    sv.discard(nullptr);
-                    return true;
-                }
-            }
-            sv.discard(nullptr);
+        std::string path;
+        if (qore_aot_resolve_runtime_constant_path(rcr, const_reverse_map, path)) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
+            writer.writeStringRef(path.c_str());
+            return true;
         }
+        ConstantEntry* ce = rcr->getConstantEntry();
         if (ce && ce->isExternalStub()) {
             return false;
         }

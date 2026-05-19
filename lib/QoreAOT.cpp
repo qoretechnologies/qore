@@ -2023,9 +2023,19 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
         if (!ce) {
             continue;
         }
+        std::string fqn = ns_path + ce->name;
+        if (ce->hasInitExpr()) {
+            if (ce->val.hasNode()) {
+                const AbstractQoreNode* node = ce->val.getInternalNode();
+                if (node && crm.find(node) == crm.end()) {
+                    crm.emplace(node, fqn);
+                }
+            }
+            continue;
+        }
         QoreValue v = ce->getReferencedValue();
         if (v.hasNode()) {
-            qore_aot_add_constant_value_reverse_mappings(crm, v, ns_path + ce->name);
+            qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
         }
         v.discard(nullptr);
     }
@@ -2040,11 +2050,24 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
         std::string class_prefix = std::string(qc->getPath() + 2) + "::";  // strip leading "::"
         ConstConstantListIterator cci(qore_class_private::get(*qc)->constlist);
         while (cci.next()) {
-            QoreValue v = cci.getValue();
-            if (!v.hasNode()) {
+            const ConstantEntry* ce = cci.getEntry();
+            std::string fqn = class_prefix + cci.getName();
+            if (ce->hasInitExpr()) {
+                if (ce->val.hasNode()) {
+                    const AbstractQoreNode* node = ce->val.getInternalNode();
+                    if (node && crm.find(node) == crm.end()) {
+                        crm.emplace(node, fqn);
+                    }
+                }
                 continue;
             }
-            qore_aot_add_constant_value_reverse_mappings(crm, v, class_prefix + cci.getName());
+            QoreValue v = ce->getReferencedValue();
+            if (!v.hasNode()) {
+                v.discard(nullptr);
+                continue;
+            }
+            qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+            v.discard(nullptr);
         }
     }
 
@@ -2169,6 +2192,9 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
             continue;
         }
         std::string fqn = ns_path + ce->name;
+        if (pending_fqns.find(fqn) != pending_fqns.end()) {
+            addConstantRootReverseMapping(crm, ce->val, fqn);
+        }
         QoreValue v = ce->getReferencedValue();
         if (v.hasNode()) {
             // Init contexts are deserialized before init functions execute. A direct
@@ -2193,8 +2219,13 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
         ConstConstantListIterator cci(qore_class_private::get(*qc)->constlist);
         while (cci.next()) {
             std::string fqn = class_prefix + cci.getName();
-            QoreValue v = cci.getValue();
+            const ConstantEntry* ce = cci.getEntry();
+            if (pending_fqns.find(fqn) != pending_fqns.end()) {
+                addConstantRootReverseMapping(crm, ce->val, fqn);
+            }
+            QoreValue v = ce->getReferencedValue();
             if (!v.hasNode()) {
+                v.discard(nullptr);
                 continue;
             }
             // See namespace-constant handling above for the direct-only pending rule.
@@ -2203,6 +2234,7 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
             } else {
                 qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
             }
+            v.discard(nullptr);
         }
     }
 
@@ -2322,39 +2354,7 @@ static const ConstantEntry* getAOTLoadConstantEntry(const RuntimeConstantRefNode
 
 static bool getAOTRuntimeConstantPath(const RuntimeConstantRefNode* node,
         const AOTConstantReverseMap* const_reverse_map, std::string& path) {
-    path.clear();
-    if (!node) {
-        return false;
-    }
-    ConstantEntry* ce = node->getConstantEntry();
-    if (!ce) {
-        return false;
-    }
-
-    if (const_reverse_map) {
-        if (ce->val.hasNode()) {
-            auto it = const_reverse_map->find(ce->val.getInternalNode());
-            if (it != const_reverse_map->end()) {
-                path = it->second;
-                return true;
-            }
-        }
-
-        QoreValue sv = ce->getReferencedValue();
-        if (sv.hasNode()) {
-            auto it = const_reverse_map->find(sv.getInternalNode());
-            if (it != const_reverse_map->end()) {
-                path = it->second;
-                sv.discard(nullptr);
-                return true;
-            }
-        }
-        sv.discard(nullptr);
-        return false;
-    }
-
-    path = ce->getName();
-    return !path.empty();
+    return qore_aot_resolve_runtime_constant_path(node, const_reverse_map, path);
 }
 
 static std::string getAOTRuntimeConstantDiagnostic(const RuntimeConstantRefNode* node) {
@@ -2437,16 +2437,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
     std::unique_ptr<AOTConstantReverseMap> local_init_base_crm;
     if (!init_base_const_reverse_map) {
-        if (const_reverse_map && pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
-            // Build the pending-safe view from the namespace tree currently being
-            // compiled.  Script AOT can compile relative source modules from
-            // separate module programs; using the script program root here would
-            // omit those module-local pending constants.
+        if (const_reverse_map) {
+            // The caller builds this map from every namespace tree visible to the
+            // compilation unit, including embedded source modules.  Keep that
+            // full view for init functions; per-constant filtering below removes
+            // unsafe self/nested pending paths without dropping sibling module
+            // constants referenced by the init expression.
+            init_base_const_reverse_map = const_reverse_map;
+        } else if (pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
             local_init_base_crm.reset(new AOTConstantReverseMap(
                 buildPendingSafeConstantReverseMap(ns, *pending_init_constant_fqns)));
             init_base_const_reverse_map = local_init_base_crm.get();
-        } else {
-            init_base_const_reverse_map = const_reverse_map;
         }
     }
 
@@ -5102,8 +5103,7 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
             "__qore_aot_module_init_adapter", module);
 
         auto arg_it = init_adapter_fn->arg_begin();
-        llvm::Value* ctx_arg = &*arg_it++;  // QoreModuleInitContext* (unused)
-        (void)ctx_arg;
+        llvm::Value* ctx_arg = &*arg_it++;  // QoreModuleInitContext*
         llvm::Value* xsink_arg = &*arg_it;
 
         auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", init_adapter_fn);
@@ -5112,8 +5112,18 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
 
         llvm::IRBuilder<> builder(entry_bb);
 
+        auto* set_ctx_path_fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+        auto set_ctx_path_fn = module.getOrInsertFunction("qore_aot_set_module_init_context_path",
+            set_ctx_path_fn_type);
+        builder.CreateCall(set_ctx_path_fn, {ctx_arg});
+
         // Call the init impl
         llvm::Value* result = builder.CreateCall(init_impl_fn);
+
+        auto* clear_ctx_path_fn_type = llvm::FunctionType::get(void_type, {}, false);
+        auto clear_ctx_path_fn = module.getOrInsertFunction("qore_aot_clear_module_init_context_path",
+            clear_ctx_path_fn_type);
+        builder.CreateCall(clear_ctx_path_fn, {});
 
         // Check if result is non-null
         llvm::Value* is_null = builder.CreateICmpEQ(result,

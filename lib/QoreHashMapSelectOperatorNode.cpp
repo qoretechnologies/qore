@@ -59,8 +59,14 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     QoreParseAnalysis value_analysis;
     QoreParseAnalysis select_analysis;
     int err = 0;
+    // Preserve the assignment/lvalue hint for final return-type narrowing only.
+    // The hint is a full hash type and must not leak into the key, value, or
+    // select subexpressions; otherwise nested hashes in the mapped value can be
+    // parsed as if their members had the outer hash's value type.
+    const QoreTypeInfo* expected_hint = parse_context.expected_type_info;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
+        parse_context.expected_type_info = nullptr;
         err = parse_init_value(e[2], parse_context);
         iterator_analysis = parse_context.analysis;
     }
@@ -76,6 +82,7 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 
         // check key expression
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = nullptr;
         {
             QoreParseContextAnalysisHelper ah(parse_context);
             if (parse_init_value(e[0], parse_context) && !err) {
@@ -85,6 +92,7 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
         }
         // check value expression2
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = nullptr;
         {
             QoreParseContextAnalysisHelper ah(parse_context);
             if (parse_init_value(e[1], parse_context) && !err) {
@@ -95,6 +103,7 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
         expTypeInfo2 = parse_context.typeInfo;
         // check select expression
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = nullptr;
         {
             QoreParseContextAnalysisHelper ah(parse_context);
             if (parse_init_value(e[3], parse_context) && !err) {
@@ -105,7 +114,7 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     }
 
     parse_context.typeInfo = QoreHashMapOperatorNode::setReturnTypeInfo(returnTypeInfo, expTypeInfo2,
-        iteratorTypeInfo);
+        iteratorTypeInfo, expected_hint);
     parse_context.analysis.clear();
     if (parse_context.typeInfo) {
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);

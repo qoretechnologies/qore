@@ -36,6 +36,7 @@
 #include <atomic>
 #include <cstdlib>
 
+#include <qore/ModuleManager.h>
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_program_private.h"
@@ -8752,6 +8753,21 @@ static std::string aot_module_path;
 static const QoreAOTFunc* aot_module_funcs = nullptr;
 static int aot_module_num_funcs = 0;
 
+//! Runtime .qmod path passed by the module loader to generated API-2 AOT module init adapters.
+static thread_local std::string aot_module_init_context_path;
+
+extern "C" DLLEXPORT void qore_aot_set_module_init_context_path(QoreModuleInitContext* ctx) {
+    if (ctx && !ctx->path.empty()) {
+        aot_module_init_context_path = ctx->path;
+    } else {
+        aot_module_init_context_path.clear();
+    }
+}
+
+extern "C" DLLEXPORT void qore_aot_clear_module_init_context_path() {
+    aot_module_init_context_path.clear();
+}
+
 static void append_unique_module_paths(std::vector<std::string>& target, const std::vector<std::string>& source) {
     for (const std::string& path : source) {
         bool seen = false;
@@ -9661,6 +9677,18 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
         printd(5, "AOT module ns_init: no program for '%s'!\n", mod_name ? mod_name : "(unknown)");
         return;
     }
+
+    struct ModuleContextSuspendHelper {
+        QoreModuleContext* old;
+
+        ModuleContextSuspendHelper() : old(get_module_context()) {
+            set_module_context(nullptr);
+        }
+
+        ~ModuleContextSuspendHelper() {
+            set_module_context(old);
+        }
+    } module_context_suspender;
 
     // Get the module program's root namespace
     RootQoreNamespace* mod_root = mod_pgm->getRootNS();
@@ -10736,6 +10764,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     const char* mod_name,
     const QoreAOTFunc* functions, int num_functions
 ) {
+    std::string runtime_module_path = std::move(aot_module_init_context_path);
+    aot_module_init_context_path.clear();
+    const char* module_context_path = runtime_module_path.empty() ? label : runtime_module_path.c_str();
+
     // Phase 1.5 load-time profiling (temporary): QORE_AOT_LOAD_TRACE=1
     // emits per-phase wall-clock timing so we can see where module
     // load spends its budget — expectation is near-instant
@@ -10783,8 +10815,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
 
-    // Set script path from the label so `get_script_dir()` returns the
-    // module's .qmod directory when init functions execute under a
+    // Set script path from the runtime module path when available, so
+    // `get_script_dir()` returns the module's .qmod directory when init
+    // functions execute under a
     // ProgramThreadCountContextHelper(shadow=local_pgm) in ns_init.
     // Constants like
     //     const FooLogo = File::readTextFile(get_script_dir() + "/foo-logo.svg");
@@ -10792,9 +10825,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // is empty, concat emits "/foo-logo.svg" (leading slash), and every
     // downstream registerApp(...) call raises AOT-PENDING-CONSTANT when the
     // constant never populates.  Mirrors v1's setScriptPath(label) at the
-    // equivalent construction site.
-    if (label) {
-        local_pgm->setScriptPath(label);
+    // equivalent construction site.  The compile-time label is still used
+    // below for diagnostics and source-hash checks.
+    if (module_context_path) {
+        local_pgm->setScriptPath(module_context_path);
     }
 
     // Apply inherited plus compiled-in module path lists BEFORE loading
@@ -11038,7 +11072,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Also update globals for early ns_init entry.
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
-    aot_module_path = label ? label : "";
+    aot_module_path = module_context_path ? module_context_path : "";
     aot_module_funcs = functions;
     aot_module_num_funcs = num_functions;
     {
@@ -11048,7 +11082,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
         state.init_descriptors = std::move(init_descriptors);
-        state.path = label ? label : "";
+        state.path = module_context_path ? module_context_path : "";
         // Store metadata copy for ns_init to build init function contexts
         if (!state.init_descriptors.empty()) {
             state.metadata.assign(metadata, metadata + metadata_len);

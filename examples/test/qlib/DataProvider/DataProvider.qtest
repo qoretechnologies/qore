@@ -574,6 +574,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("string test", \stringTest());
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
+        addTestCase("filtered hash map type hint test", \filteredHashMapTypeHintTest());
         addTestCase("optional typed hash field test", \optionalTypedHashFieldTest());
         addTestCase("generic record iterator test", \genericRecordIteratorTest());
         addTestCase("pipeline test", \pipelineTest());
@@ -599,6 +600,21 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, row.id);
         assertEq("alpha", row.name);
         assertFalse(i.next());
+    }
+
+    filteredHashMapTypeHintTest() {
+        hash<string, bool> path_vars = {"name": True};
+        *hash<string, bool> query_set;
+
+        hash<string, AbstractDataField> fields = map {$1: new QoreDataField({
+            "name": $1,
+            "type": AbstractDataProviderTypeMap."softstring",
+            "desc": sprintf("URI path variable %y", $1),
+        })}, keys path_vars, !query_set{$1};
+
+        assertEq(1, fields.size());
+        assertEq("name", fields.name.getName());
+        assertEq("softstring", fields.name.getTypeName());
     }
 
     private checkYaml() {

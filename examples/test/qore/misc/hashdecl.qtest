@@ -5,6 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires reflection
 
 %exec-class HashDeclTest
 
