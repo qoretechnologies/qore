@@ -38,7 +38,7 @@ class FakeEmbedderFactory inherits QoreRagUtils::AbstractEmbedderFactory {
 
 class FakeReranker inherits QoreRagUtils::AbstractReranker {
     list<hash<QoreRagUtils::RerankResult>> rerank(string query,
-            list<string> documents, int top_k) {
+            list<string> documents, int top_k, *hash<auto> opts) {
         return ();
     }
 }

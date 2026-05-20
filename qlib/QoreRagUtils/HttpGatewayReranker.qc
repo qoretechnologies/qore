@@ -69,19 +69,26 @@ public class HttpGatewayReranker inherits AbstractReranker {
     }
 
     #! Re-ranks a list of documents against a query and returns the top-K
-    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k) {
+    /** @param opts when non-empty, every key/value is forwarded into the
+        request body so the upstream gateway sees vendor-specific options
+        (e.g. \c max_chunks_per_doc, \c rank_fields, \c truncation) without
+        the gateway client having to know about them; reserved keys
+        (\c query, \c documents, \c top_k, \c model) cannot be overridden
+        from \c opts
+    */
+    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
+            *hash<auto> opts) {
         if (!documents) {
             return ();
         }
         ensureRestClient();
 
-        hash<auto> body = {
-            "query": query,
-            "documents": documents,
-            "top_k": top_k,
-        };
+        hash<auto> body = opts ?? {};
+        body."query" = query;
+        body."documents" = documents;
+        body."top_k" = top_k;
         if (config.model.val()) {
-            body.model = config.model;
+            body."model" = config.model;
         }
 
         *hash<auto> hdr;
