@@ -70,6 +70,11 @@ is not blocking.
   active plugin lowering callbacks, invokes them before built-in expression
   handlers, returns callback-provided IR results, and reports claimed-node
   `NotApplicable` results as `PLUGIN-LOWERING-CLAIM-VIOLATED`.
+- Phase 5's first DataFrame slice is implemented as a class-backed plugin
+  type: the existing `DataFrame` object/private-data API is preserved while
+  the module registers plugin operations for column subscripts, row subscripts,
+  and inclusive row-range slices; core `[]` parsing/runtime dispatch can route
+  matching plugin operations in AST, IR, and JIT paths.
 
 ---
 
@@ -2653,16 +2658,20 @@ matching.
 
 ### Phase 5 — make `dataframe` a native plugin data type (M)
 
-- Because `dataframe` has not been released, change `DataFrame` from the
+- [x] Because `dataframe` has not been released, change `DataFrame` from the
   current class/private-data representation to a native data type if that
-  produces cleaner value, ownership, and operator semantics.
-- Register `DataFrame` via the plugin protocol.
-- Subscript: `df["col"]`, `df[1..10]`.
-- Comparison and predicate operators returning bitmap masks.
-- Lazy expression DSL through registered operators.
-- Surface `DataFrame` through the `reflection` module (per the Phase 1
+  produces cleaner value, ownership, and operator semantics. The implemented
+  decision is to keep the class/private-data representation as the public
+  ownership model and register that class type as the plugin type; replacing
+  the public object with `NT_PLUGIN_VALUE` would lose the existing method
+  surface without improving ownership.
+- [x] Register `DataFrame` via the plugin protocol.
+- [x] Subscript: `df["col"]`, `df[1..10]`.
+- [ ] Comparison and predicate operators returning bitmap masks.
+- [ ] Lazy expression DSL through registered operators.
+- [x] Surface `DataFrame` through the `reflection` module (per the Phase 1
   precedent for `buffer<T>`) so QLS, doxygen, and Qore-side
-  metaprogramming see the new type.
+  metaprogramming see the new type through `PluginRegistry` metadata.
 
 Validates the protocol on a more complex second consumer. Unlocks the
 Polars / pandas-style ergonomics for DataFrame.

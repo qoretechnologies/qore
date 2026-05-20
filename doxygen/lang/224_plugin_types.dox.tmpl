@@ -235,6 +235,12 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     as an unclaimed generic matcher: it may inspect a node and return
     \c NotApplicable without violating the claim contract.
 
+    The core parser/runtime also resolves matching \c subscript and variadic
+    receiver-call plugin operations for native syntax where supported by the
+    operation descriptor. For example, the dataframe module registers
+    \c subscript operations so \c df["name"] and \c df[0..9] work in normal AST
+    execution as well as in IR/JIT execution.
+
     @section plugin_types_llvm Optional LLVM Codegen Extension
 
     The stable plugin ABI always supports runtime-helper dispatch. Modules that

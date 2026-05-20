@@ -12,6 +12,7 @@
 
 #include "QC_DataFrame.h"
 #include "QC_GroupedDataFrame.h"
+#include "df_plugin.h"
 
 static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void dataframe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns,
@@ -59,6 +60,8 @@ static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     // Phase 3: Add classes with methods
     DFNS.addSystemClass(initDataFrameClass(DFNS));
     DFNS.addSystemClass(initGroupedDataFrameClass(DFNS));
+
+    registerDataFramePluginTypes(ctx, xsink);
 }
 
 static void dataframe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns,

@@ -31,6 +31,9 @@ using namespace QoreDataFrameNS;
     hash<DataFrameShape> shape = df.shape();
     printf("Shape: %y\n", shape);
     printf("Columns: %y\n", df.columnNames());
+    printf("Ages: %y\n", df["age"]);
+    printf("First row: %y\n", df[0]);
+    printf("First two rows: %s\n", df[0..1].toString());
     printf("%s\n", df.toString());
     @endcode
 

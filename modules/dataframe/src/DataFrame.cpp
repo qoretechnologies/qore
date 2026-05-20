@@ -307,6 +307,56 @@ QoreDataFrame* QoreDataFrame::slice(int64_t start, int64_t end,
     return sliceRows(start, end - start, xsink);
 }
 
+QoreDataFrame* QoreDataFrame::sliceRange(const QoreValue& start_index, const QoreValue& stop_index,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!n_rows) {
+        return new QoreDataFrame();
+    }
+
+    bool no_start = start_index.isNothing();
+    bool no_stop = stop_index.isNothing();
+    int64_t start = no_start ? 0 : start_index.getAsBigInt();
+    int64_t stop = no_stop ? n_rows - 1 : stop_index.getAsBigInt();
+
+    if ((no_start && stop < 0) || (no_stop && start >= n_rows)) {
+        return new QoreDataFrame();
+    }
+
+    if (start < stop) {
+        if (start >= n_rows || stop < 0) {
+            return new QoreDataFrame();
+        }
+        if (start < 0) {
+            start = 0;
+        }
+        if (stop >= n_rows) {
+            stop = n_rows - 1;
+        }
+        return sliceRows(start, stop - start + 1, xsink);
+    }
+
+    if (stop > n_rows - 1 || start < 0) {
+        return new QoreDataFrame();
+    }
+    if (stop < 0) {
+        stop = 0;
+    }
+    if (start >= n_rows) {
+        start = n_rows - 1;
+    }
+
+    std::vector<int64_t> indices;
+    indices.reserve(start - stop + 1);
+    for (int64_t i = start; i >= stop; --i) {
+        if (indices.size() && !(indices.size() % 100) && qore_check_cancel(xsink, "slicing DataFrame range")) {
+            return nullptr;
+        }
+        indices.push_back(i);
+    }
+    return selectRows(indices, xsink);
+}
+
 QoreListNode* QoreDataFrame::toRecords(ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "converting DataFrame to records")) {
         return nullptr;

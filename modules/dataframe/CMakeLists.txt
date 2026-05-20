@@ -68,6 +68,7 @@ set(DF_QPP_SRC
 # C++ source files
 set(DF_CPP_SRC
     src/dataframe-module.cpp
+    src/df_plugin.cpp
     src/df_column.cpp
     src/DataFrame.cpp
     src/GroupedDataFrame.cpp

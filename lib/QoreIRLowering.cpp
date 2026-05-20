@@ -247,6 +247,88 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
     return val.getTypeInfo();
 }
 
+static QoreIRPluginOperationRef pluginOperationRefFromInfo(const QorePluginResolvedOperationInfo& info) {
+    QoreIRPluginOperationRef ref;
+    ref.global_operation_id = info.global_operation_id;
+    ref.module_name = info.module_name;
+    ref.local_operation_id = info.local_operation_id;
+    ref.canonical_signature_version = info.canonical_signature_version;
+    ref.signature_hash = info.signature_hash;
+    return ref;
+}
+
+static QoreIRValue tryDescriptorPluginSubscriptLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreValue&, const QoreSquareBracketsOperatorNode* op,
+        std::string& error) {
+    QorePluginResolvedOperationInfo info;
+    int rc = qore_plugin_resolve_program_operation_info(parse_context ? parse_context->pgm : nullptr,
+        getExprTypeInfo(op->getLeft()), getExprTypeInfo(op->getRight()), "subscript",
+        QorePluginHelperAbi::SubscriptValue, info, nullptr);
+    if (rc > 0) {
+        return QoreIRValue();
+    }
+    if (rc < 0) {
+        error = "failed to resolve descriptor-based plugin subscript operation";
+        return QoreIRValue();
+    }
+
+    QoreIRValue lhs = lowering.lowerExpression(op->getLeft(), error);
+    if (!lhs.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue rhs = lowering.lowerExpression(op->getRight(), error);
+    if (!rhs.isValid()) {
+        return QoreIRValue();
+    }
+    return builder.createPluginOp(QoreIROpcode::PluginSubscript, pluginOperationRefFromInfo(info), {lhs, rhs},
+        op->loc)->result;
+}
+
+static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreValue&, const QoreSquareBracketsRangeOperatorNode* op,
+        std::string& error) {
+    QorePluginResolvedOperationInfo info;
+    int rc = qore_plugin_resolve_program_operation_info(parse_context ? parse_context->pgm : nullptr,
+        getExprTypeInfo(op->get(0)), nullptr, "slice", QorePluginHelperAbi::CallValueList, info, nullptr);
+    if (rc > 0) {
+        return QoreIRValue();
+    }
+    if (rc < 0) {
+        error = "failed to resolve descriptor-based plugin slice operation";
+        return QoreIRValue();
+    }
+    if (info.signature.arity != 0xff) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue seq = lowering.lowerExpression(op->get(0), error);
+    if (!seq.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue start = lowering.lowerExpression(op->get(1), error);
+    if (!start.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue end = lowering.lowerExpression(op->get(2), error);
+    if (!end.isValid()) {
+        return QoreIRValue();
+    }
+    return builder.createPluginOp(QoreIROpcode::PluginCall, pluginOperationRefFromInfo(info), {seq, start, end},
+        op->loc)->result;
+}
+
+static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreValue& expr, const AbstractQoreNode* node,
+        std::string& error) {
+    if (auto* subscript = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return tryDescriptorPluginSubscriptLowering(lowering, builder, parse_context, expr, subscript, error);
+    }
+    if (auto* slice = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        return tryDescriptorPluginSliceLowering(lowering, builder, parse_context, expr, slice, error);
+    }
+    return QoreIRValue();
+}
+
 QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_parse_context)
         : builder(n_builder), parse_context(n_parse_context) {
 }
@@ -277,9 +359,6 @@ QoreIRValue QoreIRLowering::tryPluginLowering(const QoreValue& expr, std::string
     if (qore_plugin_get_lowering_infos(parse_context ? parse_context->pgm : nullptr, node->getType(), lowerers,
             nullptr)) {
         error = "failed to query plugin lowering callbacks";
-        return QoreIRValue();
-    }
-    if (lowerers.empty()) {
         return QoreIRValue();
     }
 
@@ -330,7 +409,7 @@ QoreIRValue QoreIRLowering::tryPluginLowering(const QoreValue& expr, std::string
         }
     }
 
-    return QoreIRValue();
+    return tryDescriptorPluginLowering(*this, builder, parse_context, expr, node, error);
 }
 
 bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,

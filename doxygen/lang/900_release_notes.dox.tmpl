@@ -1754,6 +1754,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - join operations: inner, left, right, outer, cross with hash join algorithm
       - reshape: pivot (long to wide), melt (wide to long), withColumn (immutable column add)
       - window functions: rowNumber, lag, lead, cumSum, rollingMean with partition/order support
+      - native plugin-operator access: \c df["column"] returns a column list, \c df[row]
+        returns a row hash, and \c df[start..stop] returns an inclusive row-range DataFrame
       - streaming CSV reader with type inference from first 100 rows
       - Parquet I/O via Apache Arrow (\c #ifdef \c HAVE_ARROW gated, \c MISSING-FEATURE-ERROR fallback)
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)

@@ -57,6 +57,16 @@ struct QorePluginLoweringInfo {
     QorePluginLoweringCallback lowering = nullptr;
 };
 
+struct QorePluginResolvedOperationInfo {
+    uint32_t global_operation_id = 0;
+    std::string module_name;
+    uint16_t local_operation_id = 0;
+    std::string operation_name;
+    QorePluginOperationSignature signature = {};
+    uint8_t canonical_signature_version = QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
+    uint64_t signature_hash = 0;
+};
+
 struct QorePluginModuleHandle {
     static constexpr uint64_t Magic = 0x516f7265506c6731ULL; // "QorePlg1"
 
@@ -132,6 +142,13 @@ DLLLOCAL int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id,
     QorePluginLLVMCodegenInfo& info, ExceptionSink* xsink);
 DLLLOCAL int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
     std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink);
+DLLLOCAL int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+    const QoreTypeInfo* rhs_type, const char* operation_name, QorePluginHelperAbi helper_abi,
+    QorePluginResolvedOperationInfo& info, ExceptionSink* xsink);
+DLLLOCAL QoreValue qore_plugin_try_dispatch_binary(QoreProgram* pgm, const char* operation_name,
+    QorePluginHelperAbi helper_abi, QoreValue lhs, QoreValue rhs, bool& matched, ExceptionSink* xsink);
+DLLLOCAL QoreValue qore_plugin_try_dispatch_call(QoreProgram* pgm, const char* operation_name,
+    QoreValue self, const QoreListNode* args, bool& matched, ExceptionSink* xsink);
 DLLLOCAL bool qore_plugin_is_value_node(const AbstractQoreNode* node);
 DLLLOCAL const QoreTypeInfo* qore_plugin_get_value_type_info(const AbstractQoreNode* node);
 DLLLOCAL int qore_plugin_serialize_value_node(const AbstractQoreNode* node,

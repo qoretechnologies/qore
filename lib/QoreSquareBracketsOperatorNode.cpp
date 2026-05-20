@@ -32,6 +32,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QorePluginRegistry.h"
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
@@ -64,6 +65,32 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
+
+    if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
+        QorePluginResolvedOperationInfo plugin_op;
+        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, "subscript",
+            QorePluginHelperAbi::SubscriptValue, plugin_op, parse_xsink);
+        if (plugin_rc < 0 && !err) {
+            err = -1;
+        } else if (!plugin_rc) {
+            typeInfo = plugin_op.signature.return_type;
+            parse_context.typeInfo = typeInfo;
+            parse_context.analysis.clear();
+            if (parse_context.typeInfo) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+                parse_context.analysis.known_type = parse_context.typeInfo;
+                if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+                    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+                }
+            }
+            if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            }
+            return err;
+        }
+    }
 
     bool rti_is_list = QoreTypeInfo::isType(rti, NT_LIST);
     bool rti_can_be_list = rti_is_list ? true : QoreTypeInfo::parseReturns(rti, NT_LIST);
@@ -304,6 +331,13 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
+
+    bool plugin_matched = false;
+    QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "subscript",
+        QorePluginHelperAbi::SubscriptValue, *lh, *rh, plugin_matched, xsink);
+    if (*xsink || plugin_matched) {
+        return plugin_result;
+    }
 
     return doSquareBrackets(*lh, *rh, true, xsink);
 }

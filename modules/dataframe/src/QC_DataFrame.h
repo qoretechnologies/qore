@@ -73,6 +73,10 @@ public:
     //! Get a slice [start, end) as a new DataFrame
     DLLLOCAL QoreDataFrame* slice(int64_t start, int64_t end, ExceptionSink* xsink) const;
 
+    //! Get an inclusive row range as a new DataFrame
+    DLLLOCAL QoreDataFrame* sliceRange(const QoreValue& start_index, const QoreValue& stop_index,
+        ExceptionSink* xsink) const;
+
     // --- Conversion ---
 
     //! Convert to list<hash<auto>>

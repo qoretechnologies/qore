@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QorePluginRegistry.h"
 
 QoreString QoreSquareBracketsRangeOperatorNode::op_str("x[m..n] operator expression");
 
@@ -88,7 +89,21 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
         }
     }
 
-    if (QoreTypeInfo::hasType(typeInfo0)) {
+    bool plugin_range = false;
+    if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
+        QorePluginResolvedOperationInfo plugin_op;
+        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, typeInfo0, nullptr, "slice",
+            QorePluginHelperAbi::CallValueList, plugin_op, parse_xsink);
+        if (plugin_rc < 0 && !err) {
+            err = -1;
+        } else if (!plugin_rc) {
+            typeInfo = plugin_op.signature.return_type;
+            plugin_range = true;
+        }
+    }
+
+    if (QoreTypeInfo::hasType(typeInfo0) && !plugin_range) {
         if (QoreTypeInfo::isType(typeInfo0, NT_LIST))
             typeInfo = typeInfo0;
         else if (QoreTypeInfo::isType(typeInfo0, NT_STRING))
@@ -173,6 +188,19 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     ValueEvalRefHolder stop_index(rc, e[2], xsink);
     if (*xsink)
         return QoreValue();
+
+    ReferenceHolder<QoreListNode> plugin_args(new QoreListNode(autoTypeInfo), xsink);
+    plugin_args->push(start_index->refSelf(), xsink);
+    plugin_args->push(stop_index->refSelf(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool plugin_matched = false;
+    QoreValue plugin_result = qore_plugin_try_dispatch_call(getProgram(), "slice", *seq, *plugin_args,
+        plugin_matched, xsink);
+    if (*xsink || plugin_matched) {
+        return plugin_result;
+    }
 
     bool empty = !getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink);
     if (*xsink)

@@ -588,6 +588,9 @@ uint64_t dispatchResolvedDenseBufferUnary(const ResolvedPluginOperation& op, voi
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginDenseBufferUnaryHelper>(op.runtime_helper);
     uint64_t rv = helper(result_buffer_data, result_size, value_data, value_size, value_stride, xsink);
+    if (xsink && *xsink) {
+        return nothingBits();
+    }
     return verifyPluginResult(op, "dense-buffer-unary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
 }
 
@@ -600,6 +603,9 @@ uint64_t dispatchResolvedDenseBufferBinary(const ResolvedPluginOperation& op, vo
     auto helper = reinterpret_cast<PluginDenseBufferBinaryHelper>(op.runtime_helper);
     uint64_t rv = helper(result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride, rhs_data, rhs_size,
         rhs_stride, xsink);
+    if (xsink && *xsink) {
+        return nothingBits();
+    }
     return verifyPluginResult(op, "dense-buffer-binary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
 }
 
@@ -1613,6 +1619,174 @@ int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
     return 0;
 }
 
+int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+        const QoreTypeInfo* rhs_type, const char* operation_name, QorePluginHelperAbi helper_abi,
+        QorePluginResolvedOperationInfo& info, ExceptionSink* xsink) {
+    info = QorePluginResolvedOperationInfo();
+    if (!lhs_type || !operation_name || !*operation_name) {
+        return 1;
+    }
+
+    std::set<std::string> active_modules;
+    if (pgm) {
+        active_modules = getActivePluginModuleSet(pgm, xsink);
+        if (hasException(xsink)) {
+            return -1;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    int n = 0;
+    for (const auto& module_pair : plugin_modules) {
+        const RegisteredPluginModule& module = module_pair.second;
+        if (pgm && active_modules.find(module.module_name) == active_modules.end()) {
+            continue;
+        }
+        for (const RegisteredPluginOperation& op : module.operations) {
+            if (checkPluginRegistryCancel(n, xsink, "plugin registry typed operation resolution")) {
+                return -1;
+            }
+            ++n;
+            if (op.operation_name != operation_name || op.signature.helper_abi != helper_abi) {
+                continue;
+            }
+
+            bool arity_ok = false;
+            if (rhs_type) {
+                arity_ok = op.signature.arity == 2;
+            } else if (helper_abi == QorePluginHelperAbi::CallValueList) {
+                arity_ok = op.signature.arity == 0xff;
+            } else {
+                arity_ok = op.signature.arity == 1;
+            }
+            if (!arity_ok) {
+                continue;
+            }
+            bool may_not_match = false;
+            if (!qore_type_is_assignable_from(op.signature.primary_type, lhs_type, may_not_match)
+                    || may_not_match) {
+                continue;
+            }
+            if (rhs_type && (!qore_type_is_assignable_from(op.signature.secondary_type, rhs_type, may_not_match)
+                    || may_not_match)) {
+                continue;
+            }
+
+            info.global_operation_id = op.global_id;
+            info.module_name = module.module_name;
+            info.local_operation_id = op.local_id;
+            info.operation_name = op.operation_name;
+            info.signature = op.signature;
+            info.canonical_signature_version = op.canonical_signature_version;
+            info.signature_hash = op.signature_hash;
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int resolveProgramOperationInfoForValues(QoreProgram* pgm, QoreValue lhs, const QoreValue* rhs,
+        const char* operation_name, QorePluginHelperAbi helper_abi, QorePluginResolvedOperationInfo& info,
+        ExceptionSink* xsink) {
+    info = QorePluginResolvedOperationInfo();
+    if (!operation_name || !*operation_name) {
+        return 1;
+    }
+
+    std::set<std::string> active_modules;
+    if (pgm) {
+        active_modules = getActivePluginModuleSet(pgm, xsink);
+        if (hasException(xsink)) {
+            return -1;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    int n = 0;
+    for (const auto& module_pair : plugin_modules) {
+        const RegisteredPluginModule& module = module_pair.second;
+        if (pgm && active_modules.find(module.module_name) == active_modules.end()) {
+            continue;
+        }
+        for (const RegisteredPluginOperation& op : module.operations) {
+            if (checkPluginRegistryCancel(n, xsink, "plugin registry value operation resolution")) {
+                return -1;
+            }
+            ++n;
+            if (op.operation_name != operation_name || op.signature.helper_abi != helper_abi) {
+                continue;
+            }
+
+            bool arity_ok = false;
+            if (rhs) {
+                arity_ok = op.signature.arity == 2;
+            } else if (helper_abi == QorePluginHelperAbi::CallValueList) {
+                arity_ok = op.signature.arity == 0xff;
+            } else {
+                arity_ok = op.signature.arity == 1;
+            }
+            if (!arity_ok) {
+                continue;
+            }
+            if (qore_type_is_assignable_from(op.signature.primary_type, lhs) == QTI_NOT_EQUAL) {
+                continue;
+            }
+            if (rhs && qore_type_is_assignable_from(op.signature.secondary_type, *rhs) == QTI_NOT_EQUAL) {
+                continue;
+            }
+
+            info.global_operation_id = op.global_id;
+            info.module_name = module.module_name;
+            info.local_operation_id = op.local_id;
+            info.operation_name = op.operation_name;
+            info.signature = op.signature;
+            info.canonical_signature_version = op.canonical_signature_version;
+            info.signature_hash = op.signature_hash;
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+QoreValue qore_plugin_try_dispatch_binary(QoreProgram* pgm, const char* operation_name,
+        QorePluginHelperAbi helper_abi, QoreValue lhs, QoreValue rhs, bool& matched, ExceptionSink* xsink) {
+    matched = false;
+    if (helper_abi != QorePluginHelperAbi::BinaryValue && helper_abi != QorePluginHelperAbi::SubscriptValue) {
+        return QoreValue();
+    }
+
+    QorePluginResolvedOperationInfo info;
+    int rc = resolveProgramOperationInfoForValues(pgm, lhs, &rhs, operation_name, helper_abi, info, xsink);
+    if (rc) {
+        return QoreValue();
+    }
+
+    matched = true;
+    uint64_t rv = helper_abi == QorePluginHelperAbi::SubscriptValue
+        ? qore_rt_plugin_subscript(info.global_operation_id, bitsFromValue(lhs), bitsFromValue(rhs), xsink)
+        : qore_rt_plugin_binary(info.global_operation_id, bitsFromValue(lhs), bitsFromValue(rhs), xsink);
+    return valueFromBits(rv);
+}
+
+QoreValue qore_plugin_try_dispatch_call(QoreProgram* pgm, const char* operation_name, QoreValue self,
+        const QoreListNode* args, bool& matched, ExceptionSink* xsink) {
+    matched = false;
+    QorePluginResolvedOperationInfo info;
+    int rc = resolveProgramOperationInfoForValues(pgm, self, nullptr, operation_name,
+        QorePluginHelperAbi::CallValueList, info, xsink);
+    if (rc) {
+        return QoreValue();
+    }
+
+    matched = true;
+    QoreValue args_value(const_cast<QoreListNode*>(args));
+    uint64_t rv = qore_rt_plugin_call(info.global_operation_id, bitsFromValue(self), bitsFromValue(args_value),
+        xsink);
+    return valueFromBits(rv);
+}
+
 bool qore_plugin_is_value_node(const AbstractQoreNode* node) {
     return get_node_type(node) == NT_PLUGIN_VALUE;
 }
@@ -2411,6 +2585,9 @@ extern "C" uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t 
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginUnaryHelper>(op.runtime_helper);
     uint64_t rv = helper(value_bits, xsink);
+    if (xsink && *xsink) {
+        return nothingBits();
+    }
     return verifyPluginResult(op, "unary", rv, value_bits, true, 0, false, xsink) ? nothingBits() : rv;
 }
 
@@ -2425,6 +2602,9 @@ extern "C" uint64_t qore_rt_plugin_binary(uint32_t global_operation_id, uint64_t
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
     uint64_t rv = helper(lhs_bits, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        return nothingBits();
+    }
     return verifyPluginResult(op, "binary", rv, lhs_bits, true, rhs_bits, true, xsink) ? nothingBits() : rv;
 }
 
@@ -2439,6 +2619,9 @@ extern "C" uint64_t qore_rt_plugin_call(uint32_t global_operation_id, uint64_t s
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginCallHelper>(op.runtime_helper);
     uint64_t rv = helper(self_bits, args_list_bits, xsink);
+    if (xsink && *xsink) {
+        return nothingBits();
+    }
     return verifyPluginResult(op, "call", rv, self_bits, true, args_list_bits, true, xsink) ? nothingBits() : rv;
 }
 
@@ -2465,6 +2648,9 @@ extern "C" uint64_t qore_rt_plugin_subscript(uint32_t global_operation_id, uint6
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
     uint64_t rv = helper(container_bits, key_bits, xsink);
+    if (xsink && *xsink) {
+        return nothingBits();
+    }
     return verifyPluginResult(op, "subscript", rv, container_bits, true, key_bits, true, xsink)
         ? nothingBits() : rv;
 }
@@ -2480,6 +2666,9 @@ extern "C" uint64_t qore_rt_plugin_construct(uint32_t global_operation_id, uint6
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginConstructHelper>(op.runtime_helper);
     uint64_t rv = helper(args_list_bits, xsink);
+    if (xsink && *xsink) {
+        return nothingBits();
+    }
     return verifyPluginResult(op, "construct", rv, 0, false, args_list_bits, true, xsink) ? nothingBits() : rv;
 }
 

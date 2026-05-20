@@ -12,6 +12,8 @@
     - Typed columns: \c float64 (Eigen3-backed), \c int64, \c string, \c bool, \c date
     - Null/missing value support with per-column null masks
     - SQL-like operations: select, filter, sort, groupby, join, pivot, melt, window functions
+    - Native plugin-operator support: \c frame["column"] for columns,
+      \c frame[row] for row hashes, and \c frame[start..stop] for row slices
     - I/O: CSV (streaming reader), Parquet (optional Apache Arrow), database (Qore DBI)
     - ML integration: toMatrix/toVector/fromMatrix for zero-overhead ML feeding
     - Thread-safe with cooperative cancellation support
@@ -62,6 +64,18 @@ foreach hash<DataFrame::ColumnStats> stat in (stats) {
 }
     @endcode
 
+    DataFrame also registers native plugin-operator operations for common
+    access patterns. Row slices use normal inclusive Qore range semantics,
+    including open-ended forms:
+
+    @code{.py}
+list<auto> names = employees["name"];
+hash<auto> second_row = employees[1];
+DataFrame::DataFrame first_two = employees[0..1];
+DataFrame::DataFrame reversed = employees[2..0];
+DataFrame::DataFrame from_second = employees[1..];
+    @endcode
+
     CSV option hashes can also be typed explicitly:
 
     @code{.py}
@@ -85,6 +99,8 @@ tsv.writeCSV("employees-copy.tsv", options);
     @subsection dataframe_1_0 dataframe Module Version 1.0
     - initial public release with full SQL-like query operations, CSV/Parquet/database I/O,
       and ML integration
+    - native plugin-operator access with column, row, and inclusive row-range
+      subscripts
     - API metadata and generated Doxygen signatures identify DataFrame-returning
       operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
       @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result

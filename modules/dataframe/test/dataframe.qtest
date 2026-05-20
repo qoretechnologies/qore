@@ -27,6 +27,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("typeInferenceTest", \typeInferenceTest());
         addTestCase("metadataTest", \metadataTest());
         addTestCase("accessTest", \accessTest());
+        addTestCase("pluginOperatorTest", \pluginOperatorTest());
         addTestCase("roundTripTest", \roundTripTest());
         addTestCase("mutationTest", \mutationTest());
         addTestCase("describeTest", \describeTest());
@@ -178,6 +179,33 @@ sub invalid_dataframe_api() {
         hash<auto> row = df.getRow(1);
         assertEq(20, row.a, "getRow a");
         assertEq("y", row.b, "getRow b");
+    }
+
+    pluginOperatorTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"id": 1, "name": "Alice", "score": 95.5},
+             {"id": 2, "name": "Bob",   "score": 88.0},
+             {"id": 3, "name": "Carol", "score": 92.0},
+             {"id": 4, "name": "Dave",  "score": 79.0}));
+
+        assertEq((1, 2, 3, 4), df["id"], "string subscript returns a column");
+        hash<auto> row = df[2];
+        assertEq("Carol", row.name, "integer subscript returns a row");
+        assertEq(92.0, row.score, "integer subscript preserves row values");
+
+        DataFrame::DataFrame middle = df[1..2];
+        assertEq(2, middle.numRows(), "range subscript returns a DataFrame");
+        assertEq(("Bob", "Carol"), middle["name"], "range subscript keeps inclusive order");
+
+        DataFrame::DataFrame reverse = df[2..1];
+        assertEq(("Carol", "Bob"), reverse["name"], "reverse range subscript is supported");
+
+        assertEq(("Alice", "Bob"), df[..1]["name"], "open-start range subscript is supported");
+        assertEq(("Carol", "Dave"), df[2..]["name"], "open-end range subscript is supported");
+        assertEq(0, df[99..100].numRows(), "range subscript outside row bounds is empty");
     }
 
     roundTripTest() {
