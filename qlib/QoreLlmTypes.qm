@@ -133,6 +133,19 @@ public hashdecl LlmBackendConfig {
     #! Callback mode: a callable that performs the API call and returns
     #! the response hash in OpenAI-compatible format
     *code<hash<auto>(string, string, hash<auto>)> api_callback;
+    #! Callback mode streaming dispatcher (counterpart to @ref api_callback)
+    /** Caller-supplied function that performs the API call AND fires
+        @a delta_cb once per upstream stream chunk (OpenAI-compatible
+        shape).  Required for @ref CallbackLlmProvider::chatStream(); when
+        unset, the provider falls back to invoking @ref api_callback once
+        (single non-streamed call surfaced as a synthetic single-delta
+        event followed by a terminal @c done event) so callers that depend
+        on streaming get a coherent event sequence either way.
+
+        The signature is \c (method, path, body, delta_cb) → @ref nothing
+        where each call to @c delta_cb passes one OpenAI-shaped
+        \c chat.completion.chunk hash. */
+    *code api_stream_callback;
     #! Callback mode method hint passed to @ref api_callback; default "POST"
     string callback_method = "POST";
     #! Callback mode endpoint/path hint passed to @ref api_callback; default "chat/completions"

@@ -29,8 +29,13 @@ public namespace QoreLlmUtils {
     an application gateway, tenant proxy, or metered AI router intercepts
     LLM traffic between the @ref LlmBackend and the underlying provider.
 
-    Streaming is not supported in callback mode — use @ref chat()
-    or have the gateway expose streaming through a different transport.
+    Streaming is supported when @ref LlmBackendConfig::api_stream_callback
+    is set: the provider invokes it with a per-chunk delta callback and
+    forwards each OpenAI-shaped chunk to the caller as a
+    @ref QoreLlmUtils::ChatStreamEvent.  When @ref api_stream_callback is
+    unset, @ref chatStream() falls back to a single @ref chat() call and
+    surfaces it as one synthetic content delta plus a terminal \c done
+    event — so callers always see a coherent event sequence.
 */
 public class CallbackLlmProvider inherits AbstractLlmProvider {
     private {
@@ -119,6 +124,164 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
         }
 
         return parseOpenAiChatResponse(resp);
+    }
+
+    #! Streams a chat completion through the caller-supplied stream callback
+    /** When @ref LlmBackendConfig::api_stream_callback is set, builds the
+        OpenAI-shaped chat-completions body, dispatches it through the
+        caller's stream callback, and forwards each OpenAI-shaped chunk
+        the callback emits as a @ref QoreLlmUtils::ChatStreamEvent to
+        @a callback.
+
+        When @ref api_stream_callback is unset, falls back to the
+        non-streaming @ref chat() implementation and emits the result as
+        a single synthetic content delta event followed by a terminal
+        \c done event.  This preserves the contract that
+        @ref chatStream() always fires at least one @c done event so the
+        caller's accumulator terminates cleanly.
+
+        @param messages list of @ref ChatMessage hashes
+        @param callback receives each @ref ChatStreamEvent as it arrives,
+            with \c done=True on the final event
+        @param tools optional tool definitions
+        @param opts per-call request overrides
+
+        @throw LLM-ERROR the upstream call failed
+
+        @par Example: route an agent's streaming chat through an
+        application-level gateway that adds tenant headers and forwards
+        the SSE response to the live UI
+
+        @code{.py}
+LlmBackend backend(<LlmBackendConfig>{
+    "mode": "callback",
+    "api_callback": hash<auto> sub (string m, string p, hash<auto> body) {
+        # Non-streaming fallback path; required for the agent loop's
+        # max-iterations safety net
+        return tenant_gateway.dispatch(body, NOTHING);
+    },
+    "api_stream_callback": sub (string m, string p, hash<auto> body, code dcb) {
+        # Forward each upstream chunk to the caller; the gateway already
+        # parses SSE and surfaces structured chunks
+        tenant_gateway.dispatch(body, sub (hash<auto> chunk) { dcb(chunk); });
+    },
+});
+backend.chatStream(history,
+    sub (hash<ChatStreamEvent> ev) {
+        if (ev.delta.val()) {
+            ui.append(ev.delta);
+        }
+        if (ev.done) {
+            ui.finish();
+        }
+    });
+        @endcode
+    */
+    chatStream(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback,
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        if (!config_h.api_stream_callback) {
+            # Fallback: single non-streamed call surfaced as one delta +
+            # terminal done.  Mirrors the contract a real streaming
+            # provider would produce so the caller's event accumulator
+            # always sees a coherent sequence.
+            hash<ChatResponse> resp = chat(messages, tools, opts);
+            if (resp.content.val()) {
+                callback(<ChatStreamEvent>{
+                    "delta": resp.content,
+                    "done": False,
+                });
+            }
+            # Synthesize an OpenAI-shaped terminal chunk so callers that
+            # accumulate via `event.raw` see a consistent shape.
+            hash<auto> terminal_raw = {
+                "object": "chat.completion.chunk",
+                "choices": ({
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": resp.tool_calls
+                        ? "tool_calls" : "stop",
+                },),
+            };
+            if (resp.id.val()) {
+                terminal_raw.id = resp.id;
+            }
+            if (resp.model.val()) {
+                terminal_raw.model = resp.model;
+            }
+            if (resp.usage) {
+                terminal_raw.usage = resp.usage;
+            }
+            callback(<ChatStreamEvent>{
+                "done": True,
+                "raw": terminal_raw,
+            });
+            return;
+        }
+
+        hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
+        body.stream = True;
+        body.stream_options = {"include_usage": True};
+
+        bool saw_terminal = False;
+        try {
+            config_h.api_stream_callback(callback_method, callback_path,
+                body, sub (hash<auto> chunk) {
+                    *hash<ChatStreamEvent> event =
+                        openAiChunkToChatStreamEvent(chunk);
+                    if (event) {
+                        if (event.done) {
+                            saw_terminal = True;
+                        }
+                        callback(event);
+                    }
+                });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("callback chat stream failed: %s",
+                ex.desc), ex;
+        }
+
+        # Safety net for malformed providers that close the stream
+        # without an OpenAI-style finish_reason chunk: ensure the
+        # caller's accumulator always sees a terminal `done` event so it
+        # never deadlocks waiting for one.  Skipped when the upstream
+        # already emitted a terminal chunk (the common case).
+        if (!saw_terminal) {
+            callback(<ChatStreamEvent>{"done": True});
+        }
+    }
+
+    #! Translates an OpenAI-shaped streaming chunk into a @ref ChatStreamEvent
+    /** Maps the conventional OpenAI \c chat.completion.chunk shape
+        (\c choices[0].delta.content + \c choices[0].finish_reason) into
+        @ref ChatStreamEvent fields.  Tool-call deltas, usage, and any
+        other provider-specific metadata stay on @ref ChatStreamEvent::raw
+        so caller-side accumulators can introspect them without losing
+        information.
+
+        @return @ref nothing for chunks that carry no actionable signal
+            (no content delta, no terminal flag — typically the initial
+            \c role assistant chunk OpenAI emits before content); a
+            populated event otherwise
+    */
+    private static *hash<ChatStreamEvent> openAiChunkToChatStreamEvent(hash<auto> chunk) {
+        *hash<auto> choice = chunk.choices[0];
+        *string content_delta = choice.delta.content;
+        bool done = choice.finish_reason.val() ? True : False;
+        # Suppress completely empty intermediate chunks (e.g. the role
+        # frame OpenAI emits first).  Tool-call deltas reach the caller
+        # via `raw` so they aren't lost.
+        bool has_tool_call_delta = choice.delta.tool_calls
+            && choice.delta.tool_calls.typeCode() == NT_LIST
+            && choice.delta.tool_calls.size() > 0;
+        if (!content_delta.val() && !done && !has_tool_call_delta) {
+            return;
+        }
+        return <ChatStreamEvent>{
+            "delta": content_delta,
+            "raw": chunk,
+            "done": done,
+        };
     }
 
     #! Builds an OpenAI-shaped chat-completions request body
@@ -270,11 +433,17 @@ public class CallbackLlmProviderFactory inherits AbstractLlmProviderFactory {
     }
 
     hash<LlmProviderInfo> getInfo() {
+        # Streaming support depends on whether the caller populates
+        # `api_stream_callback` on the LlmBackendConfig.  The static
+        # `supports_streaming` flag reflects the capability of the
+        # provider class (`chatStream()` is implemented and produces a
+        # coherent event sequence even when the stream callback is unset
+        # — falling back to a single delta + done from the sync chat()).
         return <LlmProviderInfo>{
             "mode": getMode(),
             "display_name": getDisplayName(),
             "module_name": Class::getClass(self).getModuleName(),
-            "supports_streaming": False,
+            "supports_streaming": True,
             "supports_tools": True,
             "supports_structured_output": True,
             "supports_multimodal": True,
