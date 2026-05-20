@@ -1,0 +1,326 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/GcpAuth.qm
+
+%try-module json >= 1.11
+%define NoJson
+%endtry
+
+%exec-class GcpAuthTest
+
+# Fake token endpoint: accepts grant_type=urn:ietf:...jwt-bearer and emits a
+# canned token response.  Used by the offline service-account JWT-bearer test.
+class FakeGcpTokenHandler inherits AbstractHttpRequestHandler {
+    public {
+        string last_grant_type;
+        string last_assertion;
+        int call_count = 0;
+        hash<auto> token_response = {
+            "access_token": "fake-access-token",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        };
+        # Toggle to return an HTTP 400-shaped error
+        bool error_mode = False;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        ++call_count;
+        # parse form-encoded body
+        string body_str = body ? body.toString("UTF-8") : "";
+        hash<auto> form = {};
+        foreach string pair in (body_str.split("&")) {
+            list<string> kv = pair.split("=");
+            if (kv.size() == 2) {
+                form{decode_url(kv[0])} = decode_url(kv[1]);
+            }
+        }
+        last_grant_type = form.grant_type ?? "";
+        last_assertion = form.assertion ?? "";
+
+        if (error_mode) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 400,
+                "{\"error\":\"invalid_grant\",\"error_description\":\"test\"}");
+        }
+        return makeResponse({"Content-Type": MimeTypeJson}, 200,
+            make_json(token_response));
+    }
+}
+
+# Fake GCE metadata server: emits a canned token at the standard path.
+class FakeGcpMetadataHandler inherits AbstractHttpRequestHandler {
+    public {
+        string last_header_metadata_flavor = "";
+        int call_count = 0;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        ++call_count;
+        last_header_metadata_flavor = hdr."metadata-flavor" ?? "";
+        return makeResponse({"Content-Type": MimeTypeJson}, 200,
+            "{\"access_token\":\"mds-token\",\"expires_in\":1800,\"token_type\":\"Bearer\"}");
+    }
+}
+
+public class GcpAuthTest inherits QUnit::Test {
+    private {
+        HttpServer token_http;
+        HttpServer mds_http;
+        int token_port;
+        int mds_port;
+        FakeGcpTokenHandler token_handler;
+        FakeGcpMetadataHandler mds_handler;
+        string sa_path;
+    }
+
+    constructor() : Test("GcpAuth Test", "1.0") {
+        addTestCase("service-account JWT-bearer round-trip",
+            \saJwtBearerTest());
+        addTestCase("service-account token cache hits",
+            \saCacheTest());
+        addTestCase("metadata-server token retrieval",
+            \mdsTest());
+        addTestCase("metadata-server sets Metadata-Flavor: Google",
+            \mdsHeaderTest());
+        addTestCase("ADC chain resolves to explicit SA path",
+            \adcChainTest());
+        addTestCase("missing access_token throws",
+            \missingTokenErrorTest());
+
+        try {
+            setup();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("setup error: %s\n", get_exception_string(ex));
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    private setup() {
+%ifdef NoJson
+        # json module is required; tests will skip individually
+%endif
+        Logger logger("test", LoggerLevel::getLevelInfo());
+
+        token_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        token_handler = new FakeGcpTokenHandler();
+        token_http.setDefaultHandler("token", token_handler);
+        token_port = token_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        mds_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        mds_handler = new FakeGcpMetadataHandler();
+        mds_http.setDefaultHandler("mds", mds_handler);
+        mds_port = mds_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # write a usable RSA service-account file
+        sa_path = tmp_location() + "/gcp_auth_test_sa_" + get_random_string(8) + ".json";
+        File f();
+        f.open2(sa_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(make_json({
+            "type": "service_account",
+            "project_id": "test-project",
+            "private_key_id": "key-id-1",
+            "private_key": TestPrivateKey,
+            "client_email": "test@test-project.iam.gserviceaccount.com",
+            "token_uri": "http://localhost:" + token_port + "/token",
+        }));
+        f.close();
+    }
+
+    globalTearDown() {
+        if (sa_path && is_file(sa_path)) {
+            unlink(sa_path);
+        }
+        delete token_http;
+        delete mds_http;
+    }
+
+    static checkJson(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    private saJwtBearerTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+
+        string token = GcpAuth::getAccessTokenFromServiceAccountFile(sa_path,
+            ("https://www.googleapis.com/auth/cloud-platform",));
+        assertEq("fake-access-token", token);
+        assertEq(1, token_handler.call_count);
+        assertEq("urn:ietf:params:oauth:grant-type:jwt-bearer",
+            token_handler.last_grant_type);
+        # assertion looks like a JWT: header.payload.signature
+        assertTrue(token_handler.last_assertion =~ /^[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+$/,
+            "assertion must be a base64url-encoded JWT");
+
+        # decode the payload and verify the scope claim is at the top level
+        list<string> parts = token_handler.last_assertion.split(".");
+        string b64 = parts[1];
+        b64 += strmul("=", (4 - (b64.size() % 4)) % 4);
+        b64 =~ s/-/+/g;
+        b64 =~ s/_/\//g;
+        binary raw = parse_base64_string(b64);
+        hash<auto> payload = parse_json(raw.toString("UTF-8"));
+        assertEq("test@test-project.iam.gserviceaccount.com", payload.iss);
+        assertEq("http://localhost:" + token_port + "/token", payload.aud);
+        assertEq("https://www.googleapis.com/auth/cloud-platform", payload.scope);
+        assertTrue(payload.exp.typeCode() == NT_INT && payload.exp > payload.iat);
+    }
+
+    private saCacheTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+
+        list<string> scopes = ("https://www.googleapis.com/auth/cloud-platform",);
+        # call N times; only the first must hit the token endpoint
+        for (int i = 0; i < 3; ++i) {
+            string token = GcpAuth::getAccessTokenFromServiceAccountFile(sa_path, scopes);
+            assertEq("fake-access-token", token);
+        }
+        assertEq(1, token_handler.call_count, "cache must hit after first call");
+
+        # force_refresh must re-fetch
+        string token = GcpAuth::getAccessTokenFromServiceAccountFile(sa_path, scopes,
+            {"force_refresh": True});
+        assertEq("fake-access-token", token);
+        assertEq(2, token_handler.call_count);
+    }
+
+    private mdsTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        mds_handler.call_count = 0;
+
+        string token = GcpAuth::getAccessTokenFromMetadataServer(
+            ("https://www.googleapis.com/auth/cloud-platform",),
+            {"metadata_endpoint": "http://localhost:" + mds_port});
+        assertEq("mds-token", token);
+        assertEq(1, mds_handler.call_count);
+
+        # cache hit
+        token = GcpAuth::getAccessTokenFromMetadataServer(
+            ("https://www.googleapis.com/auth/cloud-platform",),
+            {"metadata_endpoint": "http://localhost:" + mds_port});
+        assertEq("mds-token", token);
+        assertEq(1, mds_handler.call_count);
+    }
+
+    private mdsHeaderTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        mds_handler.last_header_metadata_flavor = "";
+        GcpAuth::getAccessTokenFromMetadataServer(("x",),
+            {"metadata_endpoint": "http://localhost:" + mds_port});
+        assertEq("Google", mds_handler.last_header_metadata_flavor,
+            "GCP metadata server requires Metadata-Flavor: Google");
+    }
+
+    private adcChainTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+
+        # explicit path wins over env var
+        string token = GcpAuth::getAccessToken(sa_path,
+            ("https://www.googleapis.com/auth/cloud-platform",));
+        assertEq("fake-access-token", token);
+        assertEq(1, token_handler.call_count);
+
+        # NOTHING + GOOGLE_APPLICATION_CREDENTIALS env var
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+        *string saved_env = getenv("GOOGLE_APPLICATION_CREDENTIALS");
+        on_exit {
+            saved_env.val()
+                ? setenv("GOOGLE_APPLICATION_CREDENTIALS", saved_env)
+                : unsetenv("GOOGLE_APPLICATION_CREDENTIALS");
+        }
+        setenv("GOOGLE_APPLICATION_CREDENTIALS", sa_path);
+        token = GcpAuth::getAccessToken(NOTHING,
+            ("https://www.googleapis.com/auth/cloud-platform",));
+        assertEq("fake-access-token", token);
+        assertEq(1, token_handler.call_count);
+    }
+
+    private missingTokenErrorTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        hash<auto> saved = token_handler.token_response;
+        on_exit token_handler.token_response = saved;
+
+        token_handler.token_response = {"expires_in": 60};  # no access_token
+        assertThrows("GCP-AUTH-ERROR", sub () {
+            GcpAuth::getAccessTokenFromServiceAccountFile(sa_path,
+                ("https://www.googleapis.com/auth/cloud-platform",),
+                {"force_refresh": True});
+        });
+    }
+
+    # A 2048-bit RSA private key generated specifically for these tests.
+    # Not used to sign anything that touches a real key escrow service.
+    public {
+        const TestPrivateKey =
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDNNJM8mGUmGdzh\n"
+            "Hg7Q8YukWxILdQRkS/4lXLkBKVTrsXnL3lEh7VxYjvgZbnUWh4nlIcGfvSrgMTUg\n"
+            "GnyAhwIxELLU0FoR4G4Tz3wDF7tCsezL3rIfeIqAYR2/d2Uca7G2Jm4lG9LZ97V8\n"
+            "G6dh4uEaqAcW5UvU2/H7Y3CdgTzgrjGYDsKvz76xb6tJp+oDH+lhdQa/wTH7T/Yc\n"
+            "JlF9OmHsdU+OkSt/jh3FdjE+f6vlGfQ1OlGEW1d6obPOLZv+SBcgVcpFTaIvZjFb\n"
+            "RrhRBxBSmTtvr0v6jZsq3R3idkLgkXEcKxsAUTRPHpnvCi+jXp01igZ4aHsB5N/d\n"
+            "p27cExN1AgMBAAECggEAFt8eLgU7+CHj2gRTNn1IXr4SROxBR47vPLNJ4mNwTXot\n"
+            "0qBpxbm9Yt0v+/p4q3pxX22LRsv5wkfh0Y6kfPVnUSxN+H+vCM/3PBrZcvR4Ujk5\n"
+            "0c5gtjV0WghQqGmJ6Cad8AVPkjC1KKkjxIVNxoaaWiNiuw5HxbBhrjxXyTtSWB8z\n"
+            "f87wlR5YjBBabIzKpe0VK2H+11WD6BVgsLBgwbq8nMqFcZRRdtMt4HX/4mInZxr4\n"
+            "vzn6cE5GVPmZ/3y2NA2H4N6tlT3jJ7yT9SbpZG6KRPCv9YDjyJpZ0R+J5GR5LFGc\n"
+            "h4l1+gp4XJpcj5fzKjVZHvtCgT78MTGI1Q/JTnpoAQKBgQDxLNwUOLZj0XJ65JhE\n"
+            "vS6KmlxBTH4f/T+QyiFEC4/SySf2bdmIHFhsKBXOdrkSiTfa3ai0R29lFTNlMQ7N\n"
+            "X8WL2H6OEK/eOWvgB7Hgf3IpIyyy18OQRC1y2gXfm/Gt6tKwYRXkE5kSiSbgaeMI\n"
+            "OqDXC6w+nThEY1GOpc+CGgzdoQKBgQDZyf9R8/u9G/V0nzcMyZcGBl5G0eGm1d2W\n"
+            "BeR3oF0lOu/M3vF8Q3oeSi6KIvWvfsBA9SaQyk4DRYR68Y7d9hJ/iuyEYRHqWJne\n"
+            "+r3WqgvxIvyZS3aQYK4G/sHjGztehrhgK0rdtNGdrxOg9pvk5wwbCQ7K0CGwBcc4\n"
+            "F0p/HW0r1QKBgEYK0bSp3SrLQEZmGW0Yz2nRrl+JKb7gO7d2sIaKHFwLpfWBLDcF\n"
+            "BdoJWeHzJsyJB1cVCgY/0Sw7UnTfRZyDvBhVNNm7BUsJ7tEKvg2cgK4Vcc0/m/F4\n"
+            "S5wEU5LbjjLNcLmYHN3+/Zwy/wHEdmCwbeS6t2dqYS8x2gIVePcdoQAhAoGAEsBV\n"
+            "ZeoOgsBC5lhnXFY3jR4xqjILK63u+sckTQiPCmEM2/W4U+wj7Rs9krhKuyqWfh9I\n"
+            "qSk0Zb6BgnZN+yC/4Ay+rsHFAvzMRnPpKM6smaCqcXAj1cR94aSCNvHzaWoCwJrP\n"
+            "rDg86bgPyT8vJWmuYqzm/3WClBM0bIv5wsahG4kCgYEAh9NLB2OZjN7E3Xn5DAcl\n"
+            "Apl/sPg4PWPdQHfgwSeqkAYrhCq/2YmlBhdQNuq06WfBzAxhKr8X3aXjk+8vJugO\n"
+            "lJUSiIfRcXAcuc6Wt4cAdK4dfQE9G+yLD3GIcOCt7QmDcaXJUgCgVMR8RFx27gpO\n"
+            "EJ+aHjj/4PztpiD8b4O5w7c=\n"
+            "-----END PRIVATE KEY-----\n";
+    }
+}

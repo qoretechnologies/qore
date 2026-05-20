@@ -1,0 +1,419 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GcpAuth.qm GCP service-account JWT-bearer and ADC token broker
+
+/*  GcpAuth.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) RestClient
+%requires(reexport) RestClientIo
+
+%try-module json
+%define NoJson
+%endtry
+
+module GcpAuth {
+    version = "1.0";
+    desc = "GCP service-account JWT-bearer and Application Default Credentials "
+        "token broker for Vertex AI, GCP Vision, GCP Document AI, etc.";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage GcpAuth Module
+
+    @tableofcontents
+
+    @section gcpauthintro Introduction to the GcpAuth Module
+
+    The %GcpAuth module exchanges GCP service-account credentials for
+    bearer access tokens.  Three paths are supported, matching the
+    Application Default Credentials (ADC) chain used by
+    <tt>gcloud</tt> and the official Google client libraries:
+
+    1. **Service-account JSON file** — sign an RS256 JWT with the SA private
+       key, exchange at <tt>oauth2.googleapis.com/token</tt> using
+       <tt>grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer</tt>.  See
+       @ref GcpAuth::getAccessTokenFromServiceAccountFile() "getAccessTokenFromServiceAccountFile()".
+
+    2. **Compute metadata server** — on GCE, GKE, Cloud Run, App Engine, and
+       Cloud Functions, query
+       <tt>http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token</tt>
+       with the <tt>Metadata-Flavor: Google</tt> header.  See
+       @ref GcpAuth::getAccessTokenFromMetadataServer() "getAccessTokenFromMetadataServer()".
+
+    3. **Composite ADC chain** — explicit SA file → \c GOOGLE_APPLICATION_CREDENTIALS
+       env var → \c ~/.config/gcloud/application_default_credentials.json →
+       metadata server.  See @ref GcpAuth::getAccessToken() "getAccessToken()".
+
+    All three functions cache tokens keyed by the request parameters and
+    refresh within a 5-minute safety window before expiry.
+
+    @par Dependencies
+
+    JWT signing uses the \c json binary module's
+    @ref Qore::Json::jwt_encode() "jwt_encode()" — RS256 is supported
+    natively.  The module is loaded with @c %try-module so deployments
+    without \c json get a clear error at first JWT-using call.
+
+    @par Example: token for Vertex AI
+
+    @code{.py}
+%requires GcpAuth
+
+string token = GcpAuth::getAccessTokenFromServiceAccountFile(
+    "/etc/gcp/sa.json",
+    ("https://www.googleapis.com/auth/cloud-platform",)
+);
+# pass as Authorization: Bearer <token>
+    @endcode
+
+    @section gcpauthrelnotes Release Notes
+
+    @subsection gcpauth_v1_0 GcpAuth v1.0
+    - initial release: service-account file, metadata server, ADC chain with caching
+*/
+
+#! Contains all public definitions in the GcpAuth module
+public namespace GcpAuth {
+#! Default token endpoint
+public const TokenUrl = "https://oauth2.googleapis.com/token";
+
+#! Default GCE/GKE/Cloud-Run metadata server endpoint
+public const MetadataEndpoint = "http://metadata.google.internal";
+
+#! Path on the metadata server for the default service-account token
+public const MetadataTokenPath =
+    "/computeMetadata/v1/instance/service-accounts/default/token";
+
+#! Safety window (ms) before expiry at which a cached token is considered stale
+public const TokenSafetyWindowMs = 5 * 60 * 1000;
+
+#! JWT-bearer grant type per RFC 7523
+public const JwtBearerGrantType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+
+#! Cached token entry
+hashdecl GcpTokenCacheEntry {
+    #! The bearer token value
+    string access_token;
+    #! Absolute date/time when the token expires
+    date expires_at;
+}
+
+#! Cache of issued tokens keyed by request parameters
+class TokenCache {
+    public {
+        static hash<string, hash<GcpTokenCacheEntry>> cache = {};
+        static Mutex cache_lock();
+    }
+
+    static *string getCached(string key) {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        *hash<GcpTokenCacheEntry> entry = cache{key};
+        if (!entry) {
+            return NOTHING;
+        }
+        date now = now_us();
+        date threshold = now + milliseconds(TokenSafetyWindowMs);
+        if (entry.expires_at <= threshold) {
+            return NOTHING;
+        }
+        return entry.access_token;
+    }
+
+    static put(string key, string access_token, int expires_in_seconds) {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        cache{key} = <GcpTokenCacheEntry>{
+            "access_token": access_token,
+            "expires_at": now_us() + seconds(expires_in_seconds),
+        };
+    }
+
+    static invalidate(string key) {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        remove cache{key};
+    }
+
+    static clear() {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        cache = {};
+    }
+}
+
+#! Fetches a GCP access token from a service-account JSON key file
+/** Parses the SA JSON (extracts \c private_key, \c client_email,
+    \c token_uri), builds a JWT (header \c {alg:RS256, typ:JWT, kid:...},
+    claims \c {iss:client_email, scope:..., aud:token_uri, iat:now,
+    exp:now+1h}), signs RS256 with the SA private key via the json module's
+    @ref Qore::Json::jwt_encode() "jwt_encode()", and exchanges the
+    assertion at the SA's \c token_uri (typically
+    \c https://oauth2.googleapis.com/token) using
+    \c grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer.
+
+    Tokens are cached keyed by (sa_json_path, scopes-joined); a second call
+    with the same parameters returns the cached token unless it is within
+    @ref TokenSafetyWindowMs of expiry.
+
+    @param sa_json_path filesystem path to the SA JSON key file
+    @param scopes list of OAuth2 scopes (e.g.
+        <tt>("https://www.googleapis.com/auth/cloud-platform",)</tt>)
+    @param opts optional overrides:
+        - \c lifetime_seconds (\c int): JWT lifetime (default 3600); GCP
+          allows up to 3600 for service-account JWTs
+        - \c force_refresh (\c bool): bypass the cache
+
+    @return the bearer access token (without the \c "Bearer " prefix)
+
+    @throw GCP-AUTH-ERROR SA file unreadable, JSON malformed, JWT signing or
+        token exchange failed
+    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
+*/
+public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
+        list<string> scopes, *hash<auto> opts) {
+%ifdef NoJson
+    throw "GCP-AUTH-MISSING-JSON-MODULE",
+        "GcpAuth requires the json module for JWT signing and response "
+        "parsing; install the json module to use service-account credentials";
+%else
+    string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
+    string key = sprintf("sa|%s|%s", sa_json_path, scope_str);
+    if (!opts.force_refresh) {
+        *string cached = TokenCache::getCached(key);
+        if (cached) {
+            return cached;
+        }
+    }
+    string sa_text;
+    try {
+        sa_text = File::readTextFile(sa_json_path);
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("cannot read service-account file %y: %s",
+                sa_json_path, ex.desc), ex;
+    }
+    hash<auto> sa;
+    try {
+        sa = parse_json(sa_text);
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("service-account file %y is not valid JSON: %s",
+                sa_json_path, ex.desc), ex;
+    }
+    foreach string field in (("private_key", "client_email")) {
+        if (!sa{field}.val()) {
+            throw "GCP-AUTH-ERROR",
+                sprintf("service-account file %y is missing required field %y",
+                    sa_json_path, field);
+        }
+    }
+    string token_uri = sa.token_uri ?? TokenUrl;
+    int lifetime = opts.lifetime_seconds ?? 3600;
+    date now = now_us();
+    int iat = int(now - 1970-01-01Z);
+    # JwtClaims only carries the seven registered claim names plus an
+    # "extra" hash for custom claims that should appear at the JWT payload
+    # top level; GCP requires "scope" as a top-level claim, so it goes here.
+    hash<Qore::Json::JwtClaims> claims = cast<hash<Qore::Json::JwtClaims>>({
+        "iss": sa.client_email,
+        "aud": token_uri,
+        "iat": iat,
+        "exp": iat + lifetime,
+        "extra": {"scope": scope_str},
+    });
+    hash<Qore::Json::JwtHeader> hdr = cast<hash<Qore::Json::JwtHeader>>({
+        "alg": "RS256",
+        "typ": "JWT",
+    });
+    if (sa.private_key_id.val()) {
+        hdr.kid = sa.private_key_id;
+    }
+    string assertion;
+    try {
+        assertion = jwt_encode(claims, sa.private_key, "RS256", hdr);
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("RS256 JWT signing failed for %y: %s",
+                sa.client_email, ex.desc), ex;
+    }
+    RestClientIo::RestClientIo rest({
+        "url": token_uri,
+        "data": "url",
+    });
+    hash<auto> form = {
+        "grant_type": JwtBearerGrantType,
+        "assertion": assertion,
+    };
+    hash<auto> resp;
+    try {
+        resp = rest.restPost("", form, {
+            "Content-Type": "application/x-www-form-urlencoded",
+        });
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("token exchange at %y failed: %s", token_uri, ex.desc), ex;
+    }
+    string token;
+    int expires_in;
+    (token, expires_in) = parseTokenResponse(resp.body);
+    TokenCache::put(key, token, expires_in);
+    return token;
+%endif
+}
+
+#! Fetches a GCP access token from the compute metadata server
+/** GCE, GKE, Cloud Run, App Engine, and Cloud Functions all expose this
+    endpoint; the scope is determined at instance creation time and the
+    \a scopes argument is informational (used as the cache key, not sent in
+    the request).
+
+    @param scopes the scopes the caller intends to use; informational only
+    @param opts optional overrides:
+        - \c metadata_endpoint (\c string): override
+          \c http://metadata.google.internal (useful for tests with a fake
+          IMDS server)
+        - \c force_refresh (\c bool): bypass the cache
+
+    @return the bearer access token
+
+    @throw GCP-AUTH-ERROR metadata server unreachable or returned an error
+    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
+*/
+public string sub getAccessTokenFromMetadataServer(list<string> scopes,
+        *hash<auto> opts) {
+%ifdef NoJson
+    throw "GCP-AUTH-MISSING-JSON-MODULE",
+        "GcpAuth requires the json module for response parsing; install "
+        "the json module to use the GCE/GKE/Cloud-Run metadata server";
+%else
+    string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
+    string key = sprintf("mds|%s", scope_str);
+    if (!opts.force_refresh) {
+        *string cached = TokenCache::getCached(key);
+        if (cached) {
+            return cached;
+        }
+    }
+    string endpoint = opts.metadata_endpoint ?? MetadataEndpoint;
+    RestClientIo::RestClientIo rest({"url": endpoint});
+    hash<auto> resp;
+    try {
+        resp = rest.restGet(MetadataTokenPath, {"Metadata-Flavor": "Google"});
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("GCP metadata-server token fetch failed: %s", ex.desc), ex;
+    }
+    string token;
+    int expires_in;
+    (token, expires_in) = parseTokenResponse(resp.body);
+    TokenCache::put(key, token, expires_in);
+    return token;
+%endif
+}
+
+#! Fetches a GCP access token via the standard ADC resolution chain
+/** Walks the Application Default Credentials chain so callers get the same
+    behavior as the official \c gcloud CLI and Google client libraries:
+
+    1. explicit \a sa_json_path argument, if provided
+    2. \c GOOGLE_APPLICATION_CREDENTIALS environment variable (read via
+       \c getenv() so runtime mutations are honored)
+    3. \c ~/.config/gcloud/application_default_credentials.json (user
+       \c gcloud auth application-default login)
+    4. compute metadata server (GCE, GKE, Cloud Run, Cloud Functions)
+
+    @param sa_json_path optional explicit SA JSON file path
+    @param scopes OAuth2 scopes
+    @param opts forwarded to the underlying fetcher (\c metadata_endpoint,
+        \c force_refresh, \c lifetime_seconds, etc.)
+
+    @return the bearer access token
+
+    @throw GCP-AUTH-ERROR all candidate sources failed
+    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
+*/
+public string sub getAccessToken(*string sa_json_path, list<string> scopes,
+        *hash<auto> opts) {
+    *string candidate = sa_json_path;
+    if (!candidate.val()) {
+        *string env_path = getenv("GOOGLE_APPLICATION_CREDENTIALS");
+        if (env_path.val()) {
+            candidate = env_path;
+        }
+    }
+    if (!candidate.val()) {
+        # standard gcloud ADC location
+        *string home = getenv("HOME");
+        if (home.val()) {
+            string adc = home + "/.config/gcloud/application_default_credentials.json";
+            if (is_file(adc)) {
+                candidate = adc;
+            }
+        }
+    }
+    if (candidate.val()) {
+        return getAccessTokenFromServiceAccountFile(candidate, scopes, opts);
+    }
+    # last resort: metadata server (will throw if not on GCP)
+    return getAccessTokenFromMetadataServer(scopes, opts);
+}
+
+#! Clears the entire token cache (for tests)
+public sub clearTokenCache() {
+    TokenCache::clear();
+}
+
+#! Parses a Google OAuth2 token response and returns (access_token, expires_in_seconds)
+list<auto> sub parseTokenResponse(auto body) {
+    hash<auto> data;
+    if (body.typeCode() == NT_STRING || body.typeCode() == NT_BINARY) {
+        try {
+            data = parse_json(body.toString("UTF-8"));
+        } catch (hash<ExceptionInfo> ex) {
+            throw "GCP-AUTH-ERROR",
+                sprintf("token response is not valid JSON: %s", ex.desc), ex;
+        }
+    } else if (body.typeCode() == NT_HASH) {
+        data = body;
+    } else {
+        throw "GCP-AUTH-ERROR",
+            sprintf("unexpected token response body type %s", body.type());
+    }
+    *string token = data.access_token;
+    if (!token.val()) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("token response missing 'access_token': %y", data);
+    }
+    int expires_in = data.expires_in.typeCode() == NT_INT
+        ? data.expires_in
+        : (data.expires_in.typeCode() == NT_STRING ? int(data.expires_in) : 3600);
+    if (expires_in <= 0) {
+        expires_in = 3600;
+    }
+    return (token, expires_in);
+}
+}
