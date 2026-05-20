@@ -49,17 +49,17 @@ is not blocking.
   alias-contract checks, enabled in debug builds and in release builds with
   `QORE_PLUGIN_VERIFY`; passing and failing verifier checks are traceable with
   `QORE_PLUGIN_VERIFY_TRACE`. `QORE_PLUGIN_QORD_TRACE` logs writer and loader
-  decisions for plugin import, registry, and helper-ref sections. The full
-  Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
-  `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
-  value instances and dense-buffer dispatch opcodes. Program-local activation
-  filtering, operation resolution, fallback-site recording/query/clear
-  diagnostics, `examples/plugins/sample-buffer/`, and
-  `examples/plugins/qore-plugin-lint` are implemented.
+  decisions for plugin import, registry, and helper-ref sections. Dense-buffer
+  dispatch opcodes are implemented through Qore `buffer<T>` value wrappers that
+  validate non-nullable byte-addressable numeric storage, element-storage
+  compatibility, and output/input non-aliasing before calling raw
+  `DenseBufferUnary` / `DenseBufferBinary` helpers. The full Phase 3 deliverable
+  still needs QORD serialized plugin value-instance payload support.
+  Program-local activation filtering, operation resolution,
+  fallback-site recording/query/clear diagnostics,
+  `examples/plugins/sample-buffer/`, and `examples/plugins/qore-plugin-lint`
+  are implemented.
   User-facing language/reference documentation and release notes are present.
-  Dense-buffer runtime helper execution is implemented for module helpers using
-  the raw dense-buffer ABI; IR opcodes are intentionally deferred until lowering
-  can supply real buffer data/size/stride operands.
 
 ---
 
@@ -1451,8 +1451,8 @@ New value tag (or range):
 
 ```cpp
 enum class QoreAOTValueTag : uint8_t {
-    // ...existing 0-18...
-    VT_PLUGIN_INSTANCE = 19,  //!< Module-defined value type
+    // ...existing 0-19...
+    VT_PLUGIN_INSTANCE = 20,  //!< Module-defined value type
 };
 ```
 
@@ -2572,8 +2572,8 @@ exposure — reuses Phase 1's `buffer<T>`.
 - IR-interpreter dispatch table for module-registered helpers.
 - JIT helper symbol resolver for module-registered helpers.
 - Dense-buffer runtime helper trampolines for `DenseBufferUnary` and
-  `DenseBufferBinary`; dedicated dense-buffer IR opcodes remain pending until
-  lowering can produce real raw buffer operands.
+  `DenseBufferBinary`, plus dedicated dense-buffer IR opcodes that evaluate
+  Qore `buffer<T>` operands and safely derive raw data/size/stride frames.
 - QORD `PLUGIN_IMPORTS`, `PLUGIN_TYPE_REGISTRY`, and `PLUGIN_HELPER_REFS`
   sections for plugin-dispatch IR references. Serialized plugin value-instance
   payloads still need the `VT_PLUGIN_INSTANCE` reader/writer path.

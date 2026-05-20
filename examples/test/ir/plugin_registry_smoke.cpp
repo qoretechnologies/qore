@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <qore/Qore.h>
+#include <qore/QoreBufferNode.h>
 #include <qore/QorePluginType.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QorePluginRegistry.h>
@@ -97,6 +98,20 @@ static uint64_t smokeBadReturnType(uint64_t, uint64_t, ExceptionSink*) {
     return smokeBitsFromValue(QoreValue(true));
 }
 
+static uint64_t smokeDenseUnary(void* result_buffer_data, int64_t result_size, const void* value_data,
+        int64_t value_size, int64_t value_stride, ExceptionSink* xsink) {
+    int64_t* result = static_cast<int64_t*>(result_buffer_data);
+    const int64_t* value = static_cast<const int64_t*>(value_data);
+    int64_t n = std::min(result_size, value_size);
+    for (int64_t i = 0; i < n; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "dense unary plugin smoke helper")) {
+            return smokeBitsFromValue(QoreValue());
+        }
+        result[i] = value[i * value_stride] + 1;
+    }
+    return smokeBitsFromValue(QoreValue());
+}
+
 static uint64_t smokeDenseBinary(void* result_buffer_data, int64_t result_size, const void* lhs_data,
         int64_t lhs_size, int64_t lhs_stride, const void* rhs_data, int64_t rhs_size, int64_t rhs_stride,
         ExceptionSink* xsink) {
@@ -125,7 +140,7 @@ static QorePluginValueOps smokeValueOps() {
 }
 
 static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& type,
-        std::array<QorePluginOperation, 4>& ops) {
+        std::array<QorePluginOperation, 5>& ops) {
     type = {};
     type.local_type_id = 0;
     type.type_name = "SmokeDense";
@@ -183,6 +198,17 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
     ops[3].signature.helper_abi = QorePluginHelperAbi::BinaryValue;
     ops[3].runtime_helper = reinterpret_cast<void (*)()>(smokeBadReturnType);
 
+    ops[4] = {};
+    ops[4].local_id = 4;
+    ops[4].operation_name = "dense_inc";
+    ops[4].signature.arity = 1;
+    ops[4].signature.primary_type = autoTypeInfo;
+    ops[4].signature.return_type = autoTypeInfo;
+    ops[4].signature.access = QorePluginValueAccess::ReadOnly;
+    ops[4].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
+    ops[4].signature.helper_abi = QorePluginHelperAbi::DenseBufferUnary;
+    ops[4].runtime_helper = reinterpret_cast<void (*)()>(smokeDenseUnary);
+
     QorePluginTypeRegistration reg = {};
     reg.module_name = "plugin-smoke";
     reg.plugin_abi_version = QORE_PLUGIN_ABI_VERSION_V1;
@@ -197,7 +223,7 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
 static bool checkDryRunValidation() {
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
-    std::array<QorePluginOperation, 4> ops;
+    std::array<QorePluginOperation, 5> ops;
     QorePluginTypeRegistration reg = smokeRegistration(type, ops);
     QorePluginValidationContext ctx = {};
     ctx.struct_size = sizeof(ctx);
@@ -246,7 +272,7 @@ static bool checkDryRunValidation() {
 static bool checkRegistrationAndIntrospection() {
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
-    std::array<QorePluginOperation, 4> ops;
+    std::array<QorePluginOperation, 5> ops;
     QorePluginTypeRegistration reg = smokeRegistration(type, ops);
 
     QorePluginModuleHandle handle("plugin-smoke", "/tmp/plugin-smoke.qmod", nullptr);
@@ -276,7 +302,7 @@ static bool checkRegistrationAndIntrospection() {
 
     ReferenceHolder<QoreListNode> types(qore_plugin_get_process_types("plugin-smoke", &xsink), &xsink);
     ReferenceHolder<QoreListNode> reflected_ops(qore_plugin_get_process_operations("plugin-smoke", &xsink), &xsink);
-    if (xsink || !types || !reflected_ops || types->size() != 1 || reflected_ops->size() != 4) {
+    if (xsink || !types || !reflected_ops || types->size() != 1 || reflected_ops->size() != ops.size()) {
         std::cerr << "process plugin descriptor introspection failed\n";
         return false;
     }
@@ -343,7 +369,7 @@ static bool checkRegistrationAndIntrospection() {
     ReferenceHolder<QoreHashNode> active_resolved(qore_plugin_resolve_program_operation(*active_pgm,
         bigIntTypeInfo, bigIntTypeInfo, "add", &xsink), &xsink);
     if (xsink || !active_modules || !active_types || !active_ops || !active_resolved
-            || active_modules->size() != 1 || active_types->size() != 1 || active_ops->size() != 4
+            || active_modules->size() != 1 || active_types->size() != 1 || active_ops->size() != ops.size()
             || active_resolved->getKeyValue("global_id").getAsBigInt() != static_cast<int64>(global_id)) {
         std::cerr << "active program plugin registry filtering failed\n";
         return false;
@@ -491,6 +517,91 @@ static bool checkRegistrationAndIntrospection() {
         std::cerr << "plugin runtime dense-buffer binary dispatch failed\n";
         return false;
     }
+
+    uint32_t dense_unary_global_id = 0;
+    if (qore_plugin_get_process_operation_id("plugin-smoke", 4, &dense_unary_global_id, &xsink)
+            || xsink || !dense_unary_global_id) {
+        std::cerr << "process plugin dense unary operation id lookup failed\n";
+        return false;
+    }
+    int64_t unary_input[] = {7, 8, 9};
+    int64_t unary_result[] = {0, 0, 0};
+    qore_rt_plugin_dense_buffer_unary(dense_unary_global_id, unary_result, 3, unary_input, 3, 1, &xsink);
+    if (xsink || unary_result[0] != 8 || unary_result[1] != 9 || unary_result[2] != 10) {
+        std::cerr << "plugin runtime dense-buffer unary dispatch failed\n";
+        return false;
+    }
+
+    ReferenceHolder<QoreBufferNode> lhs_buf(new QoreBufferNode(QoreBufferElementType::Int64, false, 3), &xsink);
+    ReferenceHolder<QoreBufferNode> rhs_buf(new QoreBufferNode(QoreBufferElementType::Int64, false, 3), &xsink);
+    ReferenceHolder<QoreBufferNode> result_buf(new QoreBufferNode(QoreBufferElementType::Int64, false, 3), &xsink);
+    for (size_t i = 0; i < 3; ++i) {
+        if (lhs_buf->setEntry(i, QoreValue(static_cast<int64>(i + 1)), &xsink)
+                || rhs_buf->setEntry(i, QoreValue(static_cast<int64>((i + 1) * 10)), &xsink)
+                || result_buf->setEntry(i, QoreValue(static_cast<int64>(0)), &xsink)
+                || xsink) {
+            std::cerr << "failed to initialize dense-buffer value dispatch smoke buffers\n";
+            return false;
+        }
+    }
+    qore_rt_plugin_dense_buffer_binary_values(dense_global_id, smokeBitsFromValue(QoreValue(*result_buf)),
+        smokeBitsFromValue(QoreValue(*lhs_buf)), smokeBitsFromValue(QoreValue(*rhs_buf)), &xsink);
+    if (xsink || result_buf->getReferencedEntry(0).getAsBigInt() != 11
+            || result_buf->getReferencedEntry(1).getAsBigInt() != 22
+            || result_buf->getReferencedEntry(2).getAsBigInt() != 33) {
+        std::cerr << "plugin runtime dense-buffer binary QoreValue dispatch failed\n";
+        return false;
+    }
+
+    ReferenceHolder<QoreBufferNode> unary_value_buf(new QoreBufferNode(QoreBufferElementType::Int64, false, 3),
+        &xsink);
+    ReferenceHolder<QoreBufferNode> unary_result_buf(new QoreBufferNode(QoreBufferElementType::Int64, false, 3),
+        &xsink);
+    for (size_t i = 0; i < 3; ++i) {
+        if (unary_value_buf->setEntry(i, QoreValue(static_cast<int64>(i + 7)), &xsink)
+                || unary_result_buf->setEntry(i, QoreValue(static_cast<int64>(0)), &xsink)
+                || xsink) {
+            std::cerr << "failed to initialize dense-buffer unary value dispatch smoke buffers\n";
+            return false;
+        }
+    }
+    qore_rt_plugin_dense_buffer_unary_values(dense_unary_global_id,
+        smokeBitsFromValue(QoreValue(*unary_result_buf)), smokeBitsFromValue(QoreValue(*unary_value_buf)), &xsink);
+    if (xsink || unary_result_buf->getReferencedEntry(0).getAsBigInt() != 8
+            || unary_result_buf->getReferencedEntry(1).getAsBigInt() != 9
+            || unary_result_buf->getReferencedEntry(2).getAsBigInt() != 10) {
+        std::cerr << "plugin runtime dense-buffer unary QoreValue dispatch failed\n";
+        return false;
+    }
+
+    ExceptionSink dense_alias_xsink;
+    qore_rt_plugin_dense_buffer_binary_values(dense_global_id, smokeBitsFromValue(QoreValue(*lhs_buf)),
+        smokeBitsFromValue(QoreValue(*lhs_buf)), smokeBitsFromValue(QoreValue(*rhs_buf)), &dense_alias_xsink);
+    if (!dense_alias_xsink) {
+        std::cerr << "plugin runtime dense-buffer QoreValue dispatch accepted result/input aliasing\n";
+        return false;
+    }
+    dense_alias_xsink.clear();
+
+    ReferenceHolder<QoreBufferNode> nullable_buf(new QoreBufferNode(QoreBufferElementType::Int64, true, 3), &xsink);
+    ExceptionSink nullable_xsink;
+    qore_rt_plugin_dense_buffer_binary_values(dense_global_id, smokeBitsFromValue(QoreValue(*result_buf)),
+        smokeBitsFromValue(QoreValue(*nullable_buf)), smokeBitsFromValue(QoreValue(*rhs_buf)), &nullable_xsink);
+    if (!nullable_xsink) {
+        std::cerr << "plugin runtime dense-buffer QoreValue dispatch accepted nullable input storage\n";
+        return false;
+    }
+    nullable_xsink.clear();
+
+    ReferenceHolder<QoreBufferNode> int32_buf(new QoreBufferNode(QoreBufferElementType::Int32, false, 3), &xsink);
+    ExceptionSink element_type_xsink;
+    qore_rt_plugin_dense_buffer_binary_values(dense_global_id, smokeBitsFromValue(QoreValue(*result_buf)),
+        smokeBitsFromValue(QoreValue(*lhs_buf)), smokeBitsFromValue(QoreValue(*int32_buf)), &element_type_xsink);
+    if (!element_type_xsink) {
+        std::cerr << "plugin runtime dense-buffer QoreValue dispatch accepted mismatched element storage\n";
+        return false;
+    }
+    element_type_xsink.clear();
 
     setenv("QORE_PLUGIN_VERIFY", "1", 1);
     uint32_t bad_alias_global_id = 0;

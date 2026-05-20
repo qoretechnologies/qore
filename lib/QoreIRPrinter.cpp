@@ -420,6 +420,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::PluginCall: return "plugin.call";
         case QoreIROpcode::PluginSubscript: return "plugin.subscript";
         case QoreIROpcode::PluginConstruct: return "plugin.construct";
+        case QoreIROpcode::PluginDenseBufferUnary: return "plugin.dense.buffer.unary";
+        case QoreIROpcode::PluginDenseBufferBinary: return "plugin.dense.buffer.binary";
     }
     return "unknown";
 }

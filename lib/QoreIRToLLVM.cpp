@@ -42,7 +42,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 376,
+static_assert(QORE_IR_MAX_OPCODE == 378,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -15047,7 +15047,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::PluginBinary:
         case QoreIROpcode::PluginSubscript:
         case QoreIROpcode::PluginCall:
-        case QoreIROpcode::PluginConstruct: {
+        case QoreIROpcode::PluginConstruct:
+        case QoreIROpcode::PluginDenseBufferUnary:
+        case QoreIROpcode::PluginDenseBufferBinary: {
             const auto* pinst = static_cast<const QoreIRPluginInstruction*>(inst);
             uint32_t global_id = pinst->operation.global_operation_id;
             if (!global_id) {
@@ -15104,7 +15106,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {gid, self_boxed, args_array,
                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-            } else {
+            } else if (inst->opcode == QoreIROpcode::PluginConstruct) {
                 llvm::Value* args_array = nullptr;
                 int nargs = 0;
                 if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
@@ -15115,6 +15117,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {i32_type, ptr_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {gid, args_array,
                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else if (inst->opcode == QoreIROpcode::PluginDenseBufferUnary) {
+                auto* result_buffer = getVal(inst->operands[0].id, error);
+                auto* value = getVal(inst->operands[1].id, error);
+                if (!result_buffer || !value) { return false; }
+                llvm::Value* result_boxed = boxValue(result_buffer, inst->operands[0].id);
+                llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_dense_buffer_unary_values",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, result_boxed, value_boxed, xsink_arg});
+            } else {
+                auto* result_buffer = getVal(inst->operands[0].id, error);
+                auto* lhs = getVal(inst->operands[1].id, error);
+                auto* rhs = getVal(inst->operands[2].id, error);
+                if (!result_buffer || !lhs || !rhs) { return false; }
+                llvm::Value* result_boxed = boxValue(result_buffer, inst->operands[0].id);
+                llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[1].id);
+                llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[2].id);
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_dense_buffer_binary_values",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, result_boxed, lhs_boxed, rhs_boxed, xsink_arg});
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

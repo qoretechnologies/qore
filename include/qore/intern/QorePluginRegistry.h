@@ -108,6 +108,10 @@ DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_unary(uint32_t global_operation_i
 DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_binary(uint32_t global_operation_id, void* result_buffer_data,
     int64_t result_size, const void* lhs_data, int64_t lhs_size, int64_t lhs_stride, const void* rhs_data,
     int64_t rhs_size, int64_t rhs_stride, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_unary_values(uint32_t global_operation_id,
+    uint64_t result_buffer_bits, uint64_t value_bits, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_binary_values(uint32_t global_operation_id,
+    uint64_t result_buffer_bits, uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
 }
 
 #endif

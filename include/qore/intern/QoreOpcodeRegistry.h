@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[377] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[379] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -435,12 +435,14 @@ constexpr OpcodeInfo OPCODE_REGISTRY[377] = {
     { "PluginCall"                    , false, false, false, OPCODE_MIN_OPERANDS(1), "Dispatch module-registered receiver call with value-list arguments", true , true , "PluginOperation", true , false, false, false, false }, // 374
     { "PluginSubscript"               , false, false, false,  2, "Dispatch module-registered subscript operation", true , true , "PluginOperation", true , false, false, false, false }, // 375
     { "PluginConstruct"               , false, false, false, OPCODE_MIN_OPERANDS(0), "Dispatch module-registered construct/static factory operation", true , true , "PluginOperation", true , false, false, false, false }, // 376
+    { "PluginDenseBufferUnary"         , false, false, false,  2, "Dispatch module-registered dense-buffer unary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 377
+    { "PluginDenseBufferBinary"        , false, false, false,  3, "Dispatch module-registered dense-buffer binary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 378
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 377,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 377"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 379,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 379"
 );
 
 //! ============================================================================

@@ -207,6 +207,24 @@ public:
         return nullable_elements;
     }
 
+    //! Returns a mutable pointer to the raw dense element storage.
+    /** This is an internal helper for runtime/JIT integrations that already validate element storage semantics.
+        The returned pointer uses the buffer's physical representation; buffer<bool> is bit-packed.
+        @return the raw storage pointer, or nullptr for an empty buffer
+     */
+    DLLLOCAL void* getRawData() {
+        return data_buffer.data();
+    }
+
+    //! Returns a const pointer to the raw dense element storage.
+    /** This is an internal helper for runtime/JIT integrations that already validate element storage semantics.
+        The returned pointer uses the buffer's physical representation; buffer<bool> is bit-packed.
+        @return the raw storage pointer, or nullptr for an empty buffer
+     */
+    DLLLOCAL const void* getRawData() const {
+        return data_buffer.data();
+    }
+
     //! Returns this buffer's complex Qore type.
     /** @return type info for buffer<T> or buffer<*T>
      */

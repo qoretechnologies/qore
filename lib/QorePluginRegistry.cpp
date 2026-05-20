@@ -8,6 +8,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreBufferNode.h>
 #include <qore/QorePluginType.h>
 #include <qore/QoreReflection.h>
 #include <qore/intern/QorePluginRegistry.h>
@@ -24,6 +25,7 @@
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <set>
@@ -320,6 +322,154 @@ struct ResolvedPluginOperation {
     QorePluginOperationSignature signature = {};
     void (*runtime_helper)() = nullptr;
 };
+
+bool verifyPluginResult(const ResolvedPluginOperation& op, const char* helper_name, uint64_t result_bits,
+    uint64_t lhs_bits, bool have_lhs, uint64_t rhs_bits, bool have_rhs, ExceptionSink* xsink);
+
+struct DenseBufferValueFrame {
+    QoreBufferNode* buffer = nullptr;
+    void* mutable_data = nullptr;
+    const void* const_data = nullptr;
+    int64_t size = 0;
+    int64_t stride = 1;
+};
+
+std::string denseBufferTypeName(const QoreBufferNode& buffer) {
+    std::string rv = "buffer<";
+    if (buffer.hasNullableElements()) {
+        rv += "*";
+    }
+    rv += qore_buffer_element_type_name(buffer.getElementType());
+    rv += ">";
+    return rv;
+}
+
+std::string actualValueTypeName(const QoreValue& value) {
+    if (value.getType() == NT_BUFFER) {
+        const QoreBufferNode* buffer = value.get<const QoreBufferNode>();
+        if (buffer) {
+            return denseBufferTypeName(*buffer);
+        }
+    }
+    QoreString scratch;
+    return value.getFullTypeName(true, scratch);
+}
+
+std::string pluginOperationLabel(const ResolvedPluginOperation& op) {
+    return escapeDiagnosticName(op.module_name.c_str()) + ":" + escapeDiagnosticName(op.operation_name.c_str());
+}
+
+bool raiseDenseBufferValueError(const ResolvedPluginOperation& op, const char* helper_name, const char* role,
+        const char* expected, const std::string& actual, const char* detail, const char* subreason,
+        ExceptionSink* xsink) {
+    if (xsink) {
+        xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+            "cannot dispatch %s plugin operation \"%s\": %s argument %s; got %s "
+            "(field=\"%s\", expected=\"%s\", actual=\"%s\", subreason=\"%s\", section=3.5)",
+            helper_name, pluginOperationLabel(op).c_str(), role, detail, actual.c_str(), role, expected,
+            actual.c_str(), subreason);
+    }
+    return true;
+}
+
+bool prepareDenseBufferValueFrame(const ResolvedPluginOperation& op, const char* helper_name, const char* role,
+        uint64_t value_bits, bool writable, DenseBufferValueFrame& out, ExceptionSink* xsink) {
+    QoreValue value = valueFromBits(value_bits);
+    QoreBufferNode* buffer = value.getType() == NT_BUFFER ? value.get<QoreBufferNode>() : nullptr;
+    if (!buffer) {
+        return raiseDenseBufferValueError(op, helper_name, role,
+            "non-nullable buffer<int8|int16|int32|int64|float32|float64>",
+            actualValueTypeName(value), "must be a Qore buffer<T> value", "dense_buffer_argument_type", xsink);
+    }
+    if (buffer->hasNullableElements()) {
+        return raiseDenseBufferValueError(op, helper_name, role,
+            "non-nullable buffer<int8|int16|int32|int64|float32|float64>",
+            denseBufferTypeName(*buffer), "must not have nullable elements because the DenseBuffer helper ABI "
+            "does not carry a validity bitmap", "dense_buffer_nullable_elements", xsink);
+    }
+    if (buffer->getElementType() == QoreBufferElementType::Bool) {
+        return raiseDenseBufferValueError(op, helper_name, role,
+            "buffer<int8|int16|int32|int64|float32|float64>", denseBufferTypeName(*buffer),
+            "must use byte-addressable numeric storage; buffer<bool> is bit-packed",
+            "dense_buffer_bitpacked_bool", xsink);
+    }
+    if (!qore_buffer_element_storage_size(buffer->getElementType())) {
+        return raiseDenseBufferValueError(op, helper_name, role,
+            "buffer<int8|int16|int32|int64|float32|float64>", denseBufferTypeName(*buffer),
+            "has no byte-addressable element storage", "dense_buffer_storage", xsink);
+    }
+    if (buffer->size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+        return raiseDenseBufferValueError(op, helper_name, role, "buffer length <= INT64_MAX",
+            denseBufferTypeName(*buffer), "is too large for the DenseBuffer helper ABI",
+            "dense_buffer_size_overflow", xsink);
+    }
+
+    out.buffer = buffer;
+    out.mutable_data = writable ? buffer->getRawData() : nullptr;
+    out.const_data = buffer->getRawData();
+    out.size = static_cast<int64_t>(buffer->size());
+    out.stride = 1;
+    return false;
+}
+
+bool validateDenseBufferNoAlias(const ResolvedPluginOperation& op, const char* helper_name,
+        const DenseBufferValueFrame& result, const DenseBufferValueFrame& value, const char* value_role,
+        ExceptionSink* xsink) {
+    if (result.buffer != value.buffer) {
+        return false;
+    }
+    if (xsink) {
+        xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+            "cannot dispatch %s plugin operation \"%s\": result buffer must not be the same Qore buffer as the "
+            "%s argument because the DenseBuffer helper ABI exposes separate output and input frames "
+            "(field=\"result\", expected=\"distinct buffer\", actual=\"aliased %s\", "
+            "subreason=\"dense_buffer_alias\", section=3.5)",
+            helper_name, pluginOperationLabel(op).c_str(), value_role, value_role);
+    }
+    return true;
+}
+
+bool validateDenseBufferSameElementType(const ResolvedPluginOperation& op, const char* helper_name,
+        const DenseBufferValueFrame& result, const DenseBufferValueFrame& value, const char* value_role,
+        ExceptionSink* xsink) {
+    if (result.buffer->getElementType() == value.buffer->getElementType()) {
+        return false;
+    }
+    if (xsink) {
+        std::string expected = denseBufferTypeName(*result.buffer);
+        std::string actual = denseBufferTypeName(*value.buffer);
+        xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+            "cannot dispatch %s plugin operation \"%s\": %s argument element storage must match the result buffer "
+            "because the DenseBuffer helper ABI passes raw untyped pointers (field=\"%s\", expected=\"%s\", "
+            "actual=\"%s\", subreason=\"dense_buffer_element_type_mismatch\", section=3.5)",
+            helper_name, pluginOperationLabel(op).c_str(), value_role, value_role, expected.c_str(),
+            actual.c_str());
+    }
+    return true;
+}
+
+uint64_t dispatchResolvedDenseBufferUnary(const ResolvedPluginOperation& op, void* result_buffer_data,
+        int64_t result_size, const void* value_data, int64_t value_size, int64_t value_stride,
+        ExceptionSink* xsink) {
+    traceDispatch("dense-buffer-unary id=" + std::to_string(op.global_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginDenseBufferUnaryHelper>(op.runtime_helper);
+    uint64_t rv = helper(result_buffer_data, result_size, value_data, value_size, value_stride, xsink);
+    return verifyPluginResult(op, "dense-buffer-unary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
+}
+
+uint64_t dispatchResolvedDenseBufferBinary(const ResolvedPluginOperation& op, void* result_buffer_data,
+        int64_t result_size, const void* lhs_data, int64_t lhs_size, int64_t lhs_stride, const void* rhs_data,
+        int64_t rhs_size, int64_t rhs_stride, ExceptionSink* xsink) {
+    traceDispatch("dense-buffer-binary id=" + std::to_string(op.global_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginDenseBufferBinaryHelper>(op.runtime_helper);
+    uint64_t rv = helper(result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride, rhs_data, rhs_size,
+        rhs_stride, xsink);
+    return verifyPluginResult(op, "dense-buffer-binary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
+}
 
 QoreValue makePluginArgListFromBits(const uint64_t* arg_bits, int32_t nargs, ExceptionSink* xsink) {
     if (nargs < 0 || (nargs && !arg_bits)) {
@@ -1848,12 +1998,8 @@ extern "C" uint64_t qore_rt_plugin_dense_buffer_unary(uint32_t global_operation_
     if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::DenseBufferUnary, op, xsink)) {
         return nothingBits();
     }
-    traceDispatch("dense-buffer-unary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
-    auto helper = reinterpret_cast<PluginDenseBufferUnaryHelper>(op.runtime_helper);
-    uint64_t rv = helper(result_buffer_data, result_size, value_data, value_size, value_stride, xsink);
-    return verifyPluginResult(op, "dense-buffer-unary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
+    return dispatchResolvedDenseBufferUnary(op, result_buffer_data, result_size, value_data, value_size,
+        value_stride, xsink);
 }
 
 extern "C" uint64_t qore_rt_plugin_dense_buffer_binary(uint32_t global_operation_id, void* result_buffer_data,
@@ -1867,11 +2013,54 @@ extern "C" uint64_t qore_rt_plugin_dense_buffer_binary(uint32_t global_operation
     if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::DenseBufferBinary, op, xsink)) {
         return nothingBits();
     }
-    traceDispatch("dense-buffer-binary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
-    auto helper = reinterpret_cast<PluginDenseBufferBinaryHelper>(op.runtime_helper);
-    uint64_t rv = helper(result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride, rhs_data, rhs_size,
-        rhs_stride, xsink);
-    return verifyPluginResult(op, "dense-buffer-binary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
+    return dispatchResolvedDenseBufferBinary(op, result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride,
+        rhs_data, rhs_size, rhs_stride, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_dense_buffer_unary_values(uint32_t global_operation_id,
+        uint64_t result_buffer_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::DenseBufferUnary, op, xsink)) {
+        return nothingBits();
+    }
+
+    DenseBufferValueFrame result;
+    DenseBufferValueFrame value;
+    if (prepareDenseBufferValueFrame(op, "dense-buffer-unary", "result", result_buffer_bits, true, result, xsink)
+            || prepareDenseBufferValueFrame(op, "dense-buffer-unary", "value", value_bits, false, value, xsink)
+            || validateDenseBufferNoAlias(op, "dense-buffer-unary", result, value, "value", xsink)
+            || validateDenseBufferSameElementType(op, "dense-buffer-unary", result, value, "value", xsink)
+            || validateDenseBufferFrame("dense-buffer unary plugin helper", result.mutable_data, result.size,
+                value.const_data, value.size, nullptr, 0, xsink)) {
+        return nothingBits();
+    }
+
+    return dispatchResolvedDenseBufferUnary(op, result.mutable_data, result.size, value.const_data, value.size,
+        value.stride, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_dense_buffer_binary_values(uint32_t global_operation_id,
+        uint64_t result_buffer_bits, uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::DenseBufferBinary, op, xsink)) {
+        return nothingBits();
+    }
+
+    DenseBufferValueFrame result;
+    DenseBufferValueFrame lhs;
+    DenseBufferValueFrame rhs;
+    if (prepareDenseBufferValueFrame(op, "dense-buffer-binary", "result", result_buffer_bits, true, result, xsink)
+            || prepareDenseBufferValueFrame(op, "dense-buffer-binary", "lhs", lhs_bits, false, lhs, xsink)
+            || prepareDenseBufferValueFrame(op, "dense-buffer-binary", "rhs", rhs_bits, false, rhs, xsink)
+            || validateDenseBufferNoAlias(op, "dense-buffer-binary", result, lhs, "lhs", xsink)
+            || validateDenseBufferNoAlias(op, "dense-buffer-binary", result, rhs, "rhs", xsink)
+            || validateDenseBufferSameElementType(op, "dense-buffer-binary", result, lhs, "lhs", xsink)
+            || validateDenseBufferSameElementType(op, "dense-buffer-binary", result, rhs, "rhs", xsink)
+            || validateDenseBufferFrame("dense-buffer binary plugin helper", result.mutable_data, result.size,
+                lhs.const_data, lhs.size, rhs.const_data, rhs.size, xsink)) {
+        return nothingBits();
+    }
+
+    return dispatchResolvedDenseBufferBinary(op, result.mutable_data, result.size, lhs.const_data, lhs.size,
+        lhs.stride, rhs.const_data, rhs.size, rhs.stride, xsink);
 }

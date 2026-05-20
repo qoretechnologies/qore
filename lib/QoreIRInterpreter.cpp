@@ -73,7 +73,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 376,
+static_assert(QORE_IR_MAX_OPCODE == 378,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -8293,7 +8293,9 @@ load_local_done:
             case QoreIROpcode::PluginBinary:
             case QoreIROpcode::PluginSubscript:
             case QoreIROpcode::PluginCall:
-            case QoreIROpcode::PluginConstruct: {
+            case QoreIROpcode::PluginConstruct:
+            case QoreIROpcode::PluginDenseBufferUnary:
+            case QoreIROpcode::PluginDenseBufferBinary: {
                 auto* plugin_inst = static_cast<QoreIRPluginInstruction*>(inst);
                 uint32_t global_id = resolvePluginOperationId(*plugin_inst, xsink);
                 if (!global_id || (xsink && *xsink)) {
@@ -8324,7 +8326,7 @@ load_local_done:
                         return false;
                     }
                     result_bits = qore_rt_plugin_call(global_id, toBits(self), toBits(args_value), xsink);
-                } else {
+                } else if (inst->opcode == QoreIROpcode::PluginConstruct) {
                     args_value = makePluginArgsList(inst->operands, 0, values, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -8332,6 +8334,17 @@ load_local_done:
                         return false;
                     }
                     result_bits = qore_rt_plugin_construct(global_id, toBits(args_value), xsink);
+                } else if (inst->opcode == QoreIROpcode::PluginDenseBufferUnary) {
+                    QoreValue result_buffer = getIRValue(values, inst->operands[0]);
+                    QoreValue value = getIRValue(values, inst->operands[1]);
+                    result_bits = qore_rt_plugin_dense_buffer_unary_values(global_id, toBits(result_buffer),
+                        toBits(value), xsink);
+                } else {
+                    QoreValue result_buffer = getIRValue(values, inst->operands[0]);
+                    QoreValue lhs = getIRValue(values, inst->operands[1]);
+                    QoreValue rhs = getIRValue(values, inst->operands[2]);
+                    result_bits = qore_rt_plugin_dense_buffer_binary_values(global_id, toBits(result_buffer),
+                        toBits(lhs), toBits(rhs), xsink);
                 }
 
                 args_value.discard(xsink);

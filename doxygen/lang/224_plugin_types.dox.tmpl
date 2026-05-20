@@ -18,8 +18,11 @@
     - operation dispatch goes through registered runtime helpers;
     - QORD stores plugin module imports, operation metadata, and helper refs for
       plugin-dispatch IR references;
-    - serialized plugin value-instance payloads and dedicated dense-buffer IR
-      opcodes are reserved for a later implementation pass.
+    - dense-buffer plugin dispatch accepts Qore \c buffer<T> values and passes
+      validated raw frames to \c DenseBufferUnary and \c DenseBufferBinary
+      helpers;
+    - serialized plugin value-instance payloads are reserved for a later
+      implementation pass.
 
     @section plugin_types_registration Registering A Plugin Type
 
@@ -184,6 +187,29 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     module-local tests that can inspect descriptor tables before module init
     commits them.
 
+    @section plugin_types_dense_buffers Dense-Buffer Helpers
+
+    Dense-buffer helpers are for numeric kernels that already operate on
+    homogeneous \c buffer<T> storage. A \c DenseBufferUnary helper receives an
+    output frame plus one input frame; a \c DenseBufferBinary helper receives an
+    output frame plus two input frames. The IR opcodes
+    \c PluginDenseBufferUnary and \c PluginDenseBufferBinary evaluate Qore
+    buffer operands, validate them, and then call the registered helper with
+    raw pointers, element counts, and stride 1.
+
+    Runtime validation rejects:
+    - non-buffer arguments;
+    - nullable element buffers such as \c buffer<*int64>, because the v1 helper
+      ABI does not carry a validity bitmap;
+    - \c buffer<bool>, because it is bit-packed rather than byte-addressable;
+    - mixed element storage between the result and input buffers;
+    - result/input aliasing, because the v1 helper ABI exposes distinct output
+      and input frames.
+
+    These checks fail before the module helper sees any raw pointer and include
+    the module name, operation name, field name, expected type, actual type,
+    subreason, and design-section reference in the diagnostic text.
+
     @section plugin_types_reflection Reflection
 
     Qore code can inspect committed descriptors with
@@ -284,8 +310,6 @@ QORE_PLUGIN_CROSS_TYPE_TRACE=1 qore my-script.q
     surface:
     - serialized plugin value instances (\c VT_PLUGIN_INSTANCE) are reserved
       but not yet written or read;
-    - dedicated dense-buffer plugin IR opcodes are reserved until lowering can
-      supply raw data/size/stride operands safely;
     - optional LLVM codegen extension hooks are reserved for a later ABI
       header.
 

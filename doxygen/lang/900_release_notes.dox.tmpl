@@ -1291,7 +1291,9 @@ foreach string module_name in (registry.getProcessModules()) {
     registration, dispatch, verification, QORD, and operation-resolution
     decisions. \c QORE_PLUGIN_FALLBACK_BUFFER controls the capacity of each
     Program's rolling fallback-site buffer used by
-    \c PluginRegistry::getRecentFallbackSites(). See @ref plugin_types for the
+    \c PluginRegistry::getRecentFallbackSites(). Dense-buffer helper dispatch
+    now has dedicated IR opcodes that validate \c buffer<T> operands before
+    passing raw frames to module helpers. See @ref plugin_types for the
     complete module-author overview, current limitations, the
     \c examples/plugins/sample-buffer reference module, and the advisory
     \c examples/plugins/qore-plugin-lint descriptor linter.
