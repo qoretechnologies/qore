@@ -44,6 +44,7 @@ class QoreTypeInfo;
 class QoreParameterizedClassTypeInfo;
 class QoreTypeParameterTypeInfo;
 class QoreWildcardTypeInfo;
+class QoreComplexBufferTypeInfo;
 class LValueHelper;
 class QoreHashNode;
 class QoreListNode;
@@ -57,6 +58,7 @@ DLLLOCAL void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo);
 DLLLOCAL const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* valueTypeInfo);
 DLLLOCAL const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
         const std::vector<const QoreTypeInfo*>& args, bool or_nothing = false);
+DLLLOCAL const QoreTypeInfo* qore_get_complex_buffer_value_type(const QoreTypeInfo* typeInfo);
 
 enum q_typespec_t : unsigned char {
     QTS_TYPE = 0,
@@ -74,9 +76,10 @@ enum q_typespec_t : unsigned char {
     QTS_PARAMCLASS = 12,
     QTS_TYPEPARAM = 13,
     QTS_WILDCARD = 14,
+    QTS_COMPLEXBUFFER = 15,
 };
 
-static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_WILDCARD) + 1;
+static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_COMPLEXBUFFER) + 1;
 
 typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
 
@@ -155,6 +158,10 @@ public:
         return (typespec == QTS_COMPLEXREF || typespec == QTS_COMPLEXHARDREF) ? u.ti : nullptr;
     }
 
+    DLLLOCAL const QoreTypeInfo* getComplexBuffer() const {
+        return typespec == QTS_COMPLEXBUFFER ? u.ti : nullptr;
+    }
+
     //! returns the element type, if any (nullptr if not applicable)
     DLLLOCAL const QoreTypeInfo* getElementType() const {
         switch (typespec) {
@@ -162,6 +169,8 @@ public:
             case QTS_COMPLEXLIST:
             case QTS_COMPLEXSOFTLIST:
                 return u.ti;
+            case QTS_COMPLEXBUFFER:
+                return qore_get_complex_buffer_value_type(u.ti);
             default:
                 break;
         }
@@ -175,6 +184,7 @@ public:
                 || typespec == QTS_COMPLEXSOFTLIST
                 || typespec == QTS_COMPLEXHARDREF
                 || typespec == QTS_COMPLEXREF
+                || typespec == QTS_COMPLEXBUFFER
                 || typespec == QTS_ENUM
                 || typespec == QTS_PARAMCLASS
                 || typespec == QTS_TYPEPARAM
@@ -202,6 +212,9 @@ public:
 
             case QTS_COMPLEXREF:
                 return qore_get_complex_reference_type(u.ti);
+
+            case QTS_COMPLEXBUFFER:
+                return u.ti;
 
             case QTS_CLASS:
                 return u.qc->getTypeInfo();
@@ -235,6 +248,8 @@ public:
             case QTS_COMPLEXLIST:
             case QTS_COMPLEXSOFTLIST:
                 return listTypeInfo;
+            case QTS_COMPLEXBUFFER:
+                return bufferTypeInfo;
             case QTS_CLASS:
             case QTS_PARAMCLASS:
                 return objectTypeInfo;
@@ -368,6 +383,12 @@ public:
 class QoreComplexReferenceTypeSpec : public QoreTypeSpec {
 public:
     DLLLOCAL QoreComplexReferenceTypeSpec(const QoreTypeInfo* ti) : QoreTypeSpec(ti, QTS_COMPLEXREF) {
+    }
+};
+
+class QoreComplexBufferTypeSpec : public QoreTypeSpec {
+public:
+    DLLLOCAL QoreComplexBufferTypeSpec(const QoreTypeInfo* ti) : QoreTypeSpec(ti, QTS_COMPLEXBUFFER) {
     }
 };
 

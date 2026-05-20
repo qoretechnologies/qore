@@ -9842,6 +9842,13 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     recordExprSlot(bits, inst->opcode);
                     break;
                 }
+                case QoreIROpcode::NewComplexBuffer: {
+                    auto* ncbi = static_cast<QoreIRNewComplexBufferInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncbi->expr, sizeof(bits));
+                    recordExprSlot(bits, inst->opcode);
+                    break;
+                }
                 case QoreIROpcode::VrnConstruct: {
                     auto* vrni = static_cast<QoreIRVrnConstructInstruction*>(inst.get());
                     uint64_t bits;
@@ -10266,6 +10273,15 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* ncli = static_cast<QoreIRNewComplexListInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ncli->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexBuffer: {
+                    auto* ncbi = static_cast<QoreIRNewComplexBufferInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncbi->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ++expr_count;
                     }
@@ -10761,6 +10777,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     memcpy(&bits, &ncli->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ncli->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexBuffer: {
+                    auto* ncbi = static_cast<QoreIRNewComplexBufferInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncbi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ncbi->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;
@@ -12289,6 +12315,14 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::COMPLEX_LIST_NEW;
         id.ref1 = getSlotTypePath(ncl->typeInfo);
         id.child_expr = ncl->args;
+        return id;
+    }
+
+    // NewComplexBufferNode: complex typed buffer construction (new buffer<int64>(...))
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        id.kind = AOTExprKind::COMPLEX_BUFFER_NEW;
+        id.ref1 = getSlotTypePath(ncb->typeInfo);
+        id.child_expr = ncb->args;
         return id;
     }
 

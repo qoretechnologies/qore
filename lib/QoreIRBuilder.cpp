@@ -553,6 +553,14 @@ QoreIRNewComplexListInstruction* QoreIRBuilder::createNewComplexList(const NewCo
     return inst;
 }
 
+QoreIRNewComplexBufferInstruction* QoreIRBuilder::createNewComplexBuffer(const NewComplexBufferNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewComplexBufferInstruction>(node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRVrnConstructInstruction* QoreIRBuilder::createVrnConstruct(const VarRefNewObjectNode* vrn,
         const QoreValue& expr, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRVrnConstructInstruction>(vrn, expr);

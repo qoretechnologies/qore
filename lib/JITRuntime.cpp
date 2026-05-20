@@ -266,6 +266,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_new_hash_decl_from_hash_by_path_cached) },
     { "qore_rt_new_complex_hash_aot", reinterpret_cast<void*>(&qore_rt_new_complex_hash_aot) },
     { "qore_rt_new_complex_list_aot", reinterpret_cast<void*>(&qore_rt_new_complex_list_aot) },
+    { "qore_rt_new_complex_buffer_aot", reinterpret_cast<void*>(&qore_rt_new_complex_buffer_aot) },
     { "qore_rt_lvalue_load_aot", reinterpret_cast<void*>(&qore_rt_lvalue_load_aot) },
     { "qore_rt_lvalue_store_aot", reinterpret_cast<void*>(&qore_rt_lvalue_store_aot) },
     { "qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot) },
@@ -2671,6 +2672,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_aot(QoreAOTContext* ctx, 
     return qore_rt_new_complex_list(node, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer(const NewComplexBufferNode* node, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<NewComplexBufferNode*>(node)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_aot(QoreAOTContext* ctx, int32_t idx,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    QoreValue expr = fromBits(ctx->exprs[idx]);
+    auto* node = dynamic_cast<const NewComplexBufferNode*>(expr.getInternalNode());
+    if (!node) {
+        xsink->raiseException("AOT-ERROR", "invalid expression for complex buffer construction AOT call");
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_buffer(node, xsink);
+}
+
 // --- VarRefNewObjectNode construction helper (non-object types) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct(const VarRefNewObjectNode* vrn, ExceptionSink* xsink) {
@@ -3026,6 +3048,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value_by_type_path(c
         return toBits(QoreValue());
     }
     return qore_rt_new_complex_list_from_value(typeInfo, value_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
+    if (!typeInfo) {
+        if (xsink) {
+            xsink->raiseException("BUFFER-INIT-ERROR",
+                "typed buffer initializer is missing target type metadata");
+        }
+        return toBits(QoreValue());
+    }
+
+    QoreValue value = fromBits(value_bits);
+    QoreValue init = value.hasNode() ? value.refSelf() : value;
+    QoreBufferNode* result = qore_new_complex_buffer_from_value(typeInfo, init, xsink);
+    return toBits(result ? QoreValue(result) : QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_by_type_path(const char* type_path,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(type_path, "NewComplexBuffer", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_buffer_from_value(typeInfo, value_bits, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type,
@@ -4084,6 +4132,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64
         if (index >= 0 && static_cast<size_t>(index) < b->size()) {
             return toBits(QoreValue(static_cast<int64>(
                 static_cast<const unsigned char*>(b->getPtr())[index])));
+        }
+    } else if (v.getType() == NT_BUFFER) {
+        const QoreBufferNode* b = v.get<const QoreBufferNode>();
+        if (index >= 0 && static_cast<size_t>(index) < b->size()) {
+            return toBits(b->getReferencedEntry(static_cast<size_t>(index)));
         }
     }
     // Unsupported container type or index out of bounds: return NOTHING.
@@ -12779,6 +12832,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_list
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_throwing(
+        const NewComplexBufferNode* node, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_hash_from_hash_throwing(
         const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_complex_hash_from_hash(typeInfo, hash_bits, xsink);
@@ -12809,6 +12880,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_list
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_list_from_value_by_type_path_throwing(
         const char* type_path, uint64_t value_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_complex_list_from_value_by_type_path(type_path, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_from_value_throwing(
+        const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value(typeInfo, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_from_value_by_type_path_throwing(
+        const char* type_path, uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value_by_type_path(type_path, value_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

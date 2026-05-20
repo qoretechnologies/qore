@@ -35,6 +35,8 @@
 
 #include "qore/intern/FunctionCallNode.h"
 
+class QoreBufferNode;
+
 class ParseNewComplexTypeNode : public ParseNoEvalNode {
 public:
     DLLLOCAL ParseNewComplexTypeNode(const QoreProgramLocation* loc, QoreParseTypeInfo* pti, QoreParseListNode* a)
@@ -217,5 +219,50 @@ public:
         return "new complex list operator expression";
     }
 };
+
+class NewComplexBufferNode : public ParseNode {
+protected:
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+        return 0;
+    }
+
+    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
+    }
+
+public:
+    const QoreTypeInfo* typeInfo;
+    QoreValue args{};
+
+    DLLLOCAL NewComplexBufferNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreValue a)
+            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a) {
+        assert(QoreTypeInfo::getUniqueReturnComplexBuffer(typeInfo));
+    }
+
+    DLLLOCAL virtual ~NewComplexBufferNode() {
+        args.discard(nullptr);
+    }
+
+    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+        str.sprintf("new complex buffer operator expression ('%s')", QoreTypeInfo::getName(typeInfo));
+        return 0;
+    }
+
+    DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
+        del = true;
+        QoreString* rv = new QoreString;
+        getAsString(*rv, foff, xsink);
+        return rv;
+    }
+
+    DLLLOCAL virtual const char* getTypeName() const {
+        return "new complex buffer operator expression";
+    }
+};
+
+DLLLOCAL QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, QoreValue val,
+    ExceptionSink* xsink);
 
 #endif

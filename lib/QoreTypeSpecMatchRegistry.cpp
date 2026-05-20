@@ -134,6 +134,12 @@ const QoreTypeSpecMatchHandlerInfo QORE_TYPE_SPEC_MATCH_REGISTRY[] = {
         match_QTS_WILDCARD,
         "Use-site generic wildcard type argument"
     },
+    {
+        "QTS_COMPLEXBUFFER",
+        QTS_COMPLEXBUFFER,
+        match_QTS_COMPLEXBUFFER,
+        "Complex buffer type (buffer<T>) - storage element type matching"
+    },
     { nullptr, (q_typespec_t)0, nullptr, nullptr } // sentinel
 };
 

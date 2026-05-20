@@ -100,6 +100,46 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             return err;
         }
     }
+    {
+        const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexBuffer(parse_context.typeInfo);
+        if (ti) {
+            ReferenceHolder<> holder(this, nullptr);
+            QoreValue new_args{};
+            const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
+            parse_context.typeInfo = nullptr;
+            int init_err = 0;
+            if (!qore_list_private::parseInitListInitialization(loc, parse_context, takeArgs(), new_args, init_err)) {
+                const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
+                const QoreTypeInfo* element_type = bti ? bti->getElementTypeInfo() : autoTypeInfo;
+                if (new_args.getType() == NT_PARSE_LIST) {
+                    const QoreParseListNode* pln = new_args.get<const QoreParseListNode>();
+                    if (pln->size() > 1) {
+                        parseException(*loc, "PARSE-TYPE-ERROR", "cannot initialize '%s' with %d arguments; "
+                            "buffer<T> construction takes zero arguments or exactly one list argument",
+                            QoreTypeInfo::getName(returnTypeInfo), (int)pln->size());
+                        init_err = -1;
+                    } else if (pln->size() == 1) {
+                        const QoreTypeInfo* arg_type = pln->getValueTypes()[0];
+                        if (QoreTypeInfo::parseReturns(arg_type, NT_LIST) == QTI_NOT_EQUAL) {
+                            parseException(*loc, "PARSE-TYPE-ERROR", "cannot initialize '%s' with argument type "
+                                "'%s'; expected a list argument", QoreTypeInfo::getName(returnTypeInfo),
+                                QoreTypeInfo::getName(arg_type));
+                            init_err = -1;
+                        } else if (qore_list_private::parseCheckComplexListInitialization(loc, element_type,
+                                arg_type, pln->get(0), "initialize buffer", true)) {
+                            init_err = -1;
+                        }
+                    }
+                }
+            }
+            if (init_err && !err) {
+                err = -1;
+            }
+            parse_context.typeInfo = returnTypeInfo;
+            val = new NewComplexBufferNode(loc, parse_context.typeInfo, new_args);
+            return err;
+        }
+    }
 
     if (!err) {
         parse_error(*loc, "type '%s' does not support instantiation with the new operator",
@@ -118,4 +158,55 @@ QoreValue NewComplexHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) 
 
 QoreValue NewComplexListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return qore_list_private::newComplexList(typeInfo, args, xsink);
+}
+
+QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, QoreValue val,
+        ExceptionSink* xsink) {
+    const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(typeInfo);
+    if (!bti) {
+        xsink->raiseException("BUFFER-TYPE-ERROR", "cannot construct invalid buffer type '%s'",
+            QoreTypeInfo::getName(typeInfo));
+        return nullptr;
+    }
+
+    ValueHolder holder(val, xsink);
+    if (val.isNothing()) {
+        return new QoreBufferNode(bti->getBufferElementType(), bti->hasNullableElements());
+    }
+
+    if (val.getType() != NT_LIST) {
+        xsink->raiseException("BUFFER-CONSTRUCTOR-ERROR", "buffer<T> construction expects zero arguments or exactly "
+            "one list argument; got type '%s'", val.getFullTypeName());
+        return nullptr;
+    }
+
+    const QoreListNode* args_list = val.get<const QoreListNode>();
+    if (args_list->empty()) {
+        return new QoreBufferNode(bti->getBufferElementType(), bti->hasNullableElements());
+    }
+    if (args_list->size() != 1 || args_list->retrieveEntry(0).getType() != NT_LIST) {
+        xsink->raiseException("BUFFER-CONSTRUCTOR-ERROR", "buffer<T> construction expects zero arguments or exactly "
+            "one list argument; got %d argument%s", (int)args_list->size(), args_list->size() == 1 ? "" : "s");
+        return nullptr;
+    }
+
+    return new QoreBufferNode(bti->getBufferElementType(), bti->hasNullableElements(),
+        args_list->retrieveEntry(0).get<const QoreListNode>(), xsink);
+}
+
+static QoreBufferNode* qore_new_complex_buffer(const QoreTypeInfo* typeInfo, const QoreValue args,
+        ExceptionSink* xsink) {
+    QoreValue val{};
+    if (!args.isNothing()) {
+        ValueEvalOptimizedRefHolder a(args, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        val = a.takeReferencedValue();
+    }
+    return qore_new_complex_buffer_from_value(typeInfo, val, xsink);
+}
+
+QoreValue NewComplexBufferNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return qore_new_complex_buffer(typeInfo, args, xsink);
 }

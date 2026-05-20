@@ -931,6 +931,12 @@ const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
             }
         }
     }
+    if (t == NT_BUFFER && isPointer()) {
+        const QoreBufferNode* b = reinterpret_cast<const QoreBufferNode*>(getPointerUnsafe());
+        if (b) {
+            return b->getTypeInfo();
+        }
+    }
     return getTypeInfo();
 }
 

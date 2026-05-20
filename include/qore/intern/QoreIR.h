@@ -72,6 +72,7 @@ class ParseReferenceNode;
 class NewHashDeclNode;
 class NewComplexHashNode;
 class NewComplexListNode;
+class NewComplexBufferNode;
 class VarRefNewObjectNode;
 class QoreEnumMember;
 class TypedHashDecl;
@@ -654,8 +655,9 @@ enum class QoreIROpcode : uint16_t {
     RefSelf             = 368,
     DebugBlock          = 369,
     CheckException      = 370,
+    NewComplexBuffer    = 371,  // Create new typed buffer
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (371, 372, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (372, 373, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -663,8 +665,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::CheckException);
-static_assert(QORE_IR_MAX_OPCODE == 370, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::NewComplexBuffer);
+static_assert(QORE_IR_MAX_OPCODE == 371, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1638,6 +1640,23 @@ public:
     }
 
     const NewComplexListNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Complex buffer construction instruction
+class QoreIRNewComplexBufferInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewComplexBufferInstruction(const NewComplexBufferNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewComplexBuffer), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewComplexBufferInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewComplexBufferNode* node;  //!< AST node (for eval)
     QoreValue expr;  //!< Original AST expression (for AOT)
 };
 

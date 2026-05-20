@@ -1097,6 +1097,8 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
             return &static_cast<const QoreIRNewComplexHashInstruction*>(inst)->expr;
         case QoreIROpcode::NewComplexList:
             return &static_cast<const QoreIRNewComplexListInstruction*>(inst)->expr;
+        case QoreIROpcode::NewComplexBuffer:
+            return &static_cast<const QoreIRNewComplexBufferInstruction*>(inst)->expr;
 
         // VarRefNewObjectNode construction
         case QoreIROpcode::VrnConstruct:

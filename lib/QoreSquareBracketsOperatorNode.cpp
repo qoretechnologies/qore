@@ -96,12 +96,13 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
                 // it could be int, binary, or NOTHING
             } else if (!QoreTypeInfo::parseAccepts(listTypeInfo, lti)
                      && !QoreTypeInfo::parseAccepts(stringTypeInfo, lti)
-                     && !QoreTypeInfo::parseAccepts(binaryTypeInfo, lti)) {
+                     && !QoreTypeInfo::parseAccepts(binaryTypeInfo, lti)
+                     && !QoreTypeInfo::parseAccepts(bufferTypeInfo, lti)) {
                 QoreStringNode* edesc = new QoreStringNode("left-hand side of the expression with the '[]' " \
                     "operator is ");
                 QoreTypeInfo::getThisType(lti, *edesc);
                 edesc->concat(" and so this expression will always return NOTHING; the '[]' operator only returns " \
-                    "a value within the legal bounds of lists, strings, and binary objects");
+                    "a value within the legal bounds of lists, strings, binary objects, and buffers");
                 qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
                     "INVALID-OPERATION", edesc);
                 typeInfo = nothingTypeInfo;
@@ -131,6 +132,12 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
                     // not present
                     typeInfo = get_or_nothing_type_check(ti);
                 }
+            }
+        }
+        if (!typeInfo && !rti_can_be_list && QoreTypeInfo::parseAccepts(bufferTypeInfo, lti)) {
+            const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexBufferOrNothing(lti);
+            if (ti) {
+                typeInfo = get_or_nothing_type_check(QoreTypeInfo::getComplexBufferValueType(ti));
             }
         }
     }
@@ -499,6 +506,13 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
                 return QoreValue();
             return (int64)(((unsigned char*)b->getPtr())[offset]);
         }
+
+        case NT_BUFFER: {
+            if (offset < 0) {
+                return QoreValue();
+            }
+            return l.get<const QoreBufferNode>()->getReferencedEntry(offset);
+        }
     }
 
     return QoreValue();
@@ -568,6 +582,7 @@ const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() con
         case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
         case NT_STRING: return stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
+        case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
     }
     return nothingTypeInfo;
 }
@@ -616,6 +631,7 @@ const QoreTypeInfo* QoreFunctionalSquareBracketsComplexOperator::getValueTypeImp
         case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
         case NT_STRING: return stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
+        case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
     }
     return nothingTypeInfo;
 }

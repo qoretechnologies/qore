@@ -197,6 +197,21 @@ static bool write_slot_COMPLEX_LIST_NEW(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! COMPLEX_BUFFER_NEW: ref1 = type path + optional list initializer expression
+static bool write_slot_COMPLEX_BUFFER_NEW(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    if (ctx.expr.child_expr.hasNode()) {
+        ctx.writer.writeU8(1);
+        return write_slot_inline_expr(ctx, ctx.expr.child_expr);
+    }
+    if ((ctx.expr.parse_args && ctx.expr.parse_args->size())
+            || (ctx.expr.call_args && ctx.expr.call_args->size())) {
+        return false;
+    }
+    ctx.writer.writeU8(0);
+    return true;
+}
+
 //! CONST_NOTHING: no additional data
 static bool write_slot_CONST_NOTHING(AOTExprSlotWriteCtx& ctx) {
     (void)ctx;  // Unused

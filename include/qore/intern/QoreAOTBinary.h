@@ -217,7 +217,7 @@ enum class QoreAOTValueTag : uint8_t {
     //! At load time, the value is resolved by looking up the referenced constant.
     VT_CONST_REF  = 16,
     //! Complex-type default construction expression: NewComplexListNode /
-    //! NewComplexHashNode / NewHashDeclNode. Encoded as kind(u8) + type path +
+    //! NewComplexHashNode / NewComplexBufferNode / NewHashDeclNode. Encoded as kind(u8) + type path +
     //! num_args + recursive args. Used for class member initializers declared
     //! with the constructor-call form, e.g. `list<auto> elems()`.
     VT_NEW_COMPLEX_DEFAULT = 17,
@@ -1028,6 +1028,7 @@ enum class AOTExprKind : uint8_t {
     UNARY_MINUS        = 104, //!< Unary minus operator: operand(AOTExprKind)
     LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
     LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)
+    COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: ref1=type_path
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -2375,6 +2376,7 @@ enum class QoreIRInstGroup : uint8_t {
     Background = 62,        //!< QoreIRBackgroundInstruction
     ContextRef = 63,        //!< QoreIRContextRefInstruction
     TypedBase = 64,         //!< QoreIRInstruction with element_type metadata
+    NewComplexBuffer = 65,  //!< QoreIRNewComplexBufferInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

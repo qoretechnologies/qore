@@ -248,6 +248,37 @@ static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTy
     return rv;
 }
 
+// Handler for QTS_COMPLEXBUFFER: dense buffer storage type match
+static qore_type_result_e match_QTS_COMPLEXBUFFER(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
+    switch (ctx.t.getTypeSpec()) {
+        case QTS_COMPLEXBUFFER: {
+            qore_type_result_e rv = QoreTypeInfo::equal(self.getComplexBuffer(), ctx.t.getComplexBuffer())
+                ? QTI_IDENT
+                : QTI_NOT_EQUAL;
+            ctx.max_result = rv;
+            return rv;
+        }
+        case QTS_TYPE: {
+            if (ctx.t.getType() == NT_BUFFER) {
+                ctx.may_not_match = true;
+                ctx.max_result = QTI_IDENT;
+                return QTI_AMBIGUOUS;
+            }
+            if (ctx.t.getType() == NT_ALL) {
+                ctx.may_not_match = true;
+                ctx.max_result = QTI_IDENT;
+                return QTI_AMBIGUOUS;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    qore_type_result_e rv = self.tryMatchReferenceType(ctx.t, ctx.may_not_match);
+    ctx.max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
+    return rv;
+}
+
 // Handler for QTS_COMPLEXREF: reference subtype check including empty list/hash case
 static qore_type_result_e match_QTS_COMPLEXREF(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
     switch (ctx.t.getTypeSpec()) {

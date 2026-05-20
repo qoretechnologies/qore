@@ -1382,6 +1382,7 @@ set(LIBQORE_CPP_SRC
     lib/DateTimeNode.cpp
     lib/qore_date_private.cpp
     lib/QoreHashNode.cpp
+    lib/QoreBufferNode.cpp
     lib/BinaryNode.cpp
     lib/QoreNumberNode.cpp
     lib/QoreNullNode.cpp
@@ -1719,6 +1720,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTimeNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/qore_date_private.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHashNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBufferNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/BinaryNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNumberNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNullNode.cpp\"

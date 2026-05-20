@@ -72,7 +72,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 370,
+static_assert(QORE_IR_MAX_OPCODE == 371,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2137,6 +2137,17 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::NewComplexList: {
             if (auto* node = dynamic_cast<const NewComplexListNode*>(inv->expr.getInternalNode())) {
                 return fromBits(qore_rt_new_complex_list(node, xsink));
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::NewComplexBuffer: {
+            if (auto* node = dynamic_cast<const NewComplexBufferNode*>(inv->expr.getInternalNode())) {
+                if (!inv->operands.empty()) {
+                    QoreValue init = getIRValue(values, inv->operands[0]);
+                    return fromBits(qore_rt_new_complex_buffer_from_value(node->typeInfo, toBits(init), xsink));
+                }
+                return fromBits(qore_rt_new_complex_buffer(node, xsink));
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
@@ -6254,6 +6265,41 @@ load_local_done:
                 setValueSlot(values, ncl_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(ncl_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::NewComplexBuffer: {
+                auto* ncb_inst = static_cast<QoreIRNewComplexBufferInstruction*>(inst);
+                const AbstractQoreNode* node = ncb_inst->node
+                    ? ncb_inst->node
+                    : ncb_inst->expr.getInternalNode();
+                const NewComplexBufferNode* ncb = dynamic_cast<const NewComplexBufferNode*>(node);
+                if (!ncb) {
+                    raiseMissingAOTExpr("new complex buffer", ncb_inst->expr);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue out;
+                if (!ncb_inst->operands.empty()) {
+                    QoreValue init = getIRValue(values, ncb_inst->operands[0]);
+                    out = fromBits(qore_rt_new_complex_buffer_from_value(ncb->typeInfo, toBits(init), xsink));
+                } else {
+                    bool needs_deref = true;
+                    out = const_cast<NewComplexBufferNode*>(ncb)->eval(needs_deref, xsink);
+                    if (!needs_deref && out.hasNode()) {
+                        out = out.refSelf();
+                    }
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, ncb_inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(ncb_inst->result.id);
                 }
                 ++ip;
                 break;
@@ -11427,6 +11473,9 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             if (t == NT_BINARY) {
                 return QoreValue(static_cast<int64>(value.get<const BinaryNode>()->size()));
             }
+            if (t == NT_BUFFER) {
+                return QoreValue(static_cast<int64>(value.get<const QoreBufferNode>()->size()));
+            }
             if (t == NT_OBJECT) {
                 return QoreValue(static_cast<int64>(
                     const_cast<QoreObject*>(value.get<const QoreObject>())->size(xsink)));
@@ -12788,6 +12837,13 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                         static_cast<const unsigned char*>(b->getPtr())[idx]));
                 }
                 return QoreValue();
+            }
+            if (bt == NT_BUFFER) {
+                int64 idx = right.getAsBigInt();
+                if (idx < 0) {
+                    return QoreValue();
+                }
+                return left.get<const QoreBufferNode>()->getReferencedEntry(static_cast<size_t>(idx));
             }
             if (bt == NT_HASH) {
                 // hash[key] is equivalent to hash{key}

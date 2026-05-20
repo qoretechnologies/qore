@@ -41,7 +41,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 370,
+static_assert(QORE_IR_MAX_OPCODE == 371,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -504,6 +504,7 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_new_hash_decl_aot", aot_load_local_ft);
     module.getOrInsertFunction("qore_rt_new_complex_hash_aot", aot_load_local_ft);
     module.getOrInsertFunction("qore_rt_new_complex_list_aot", aot_load_local_ft);
+    module.getOrInsertFunction("qore_rt_new_complex_buffer_aot", aot_load_local_ft);
     // lvalue_load_aot: (ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_lvalue_load_aot", aot_load_local_ft);
     // lvalue_store_aot: (ptr, i32, i64, ptr) -> i64
@@ -3565,6 +3566,7 @@ static bool canEmitAotInvokeExprFallback(const QoreIRInstruction* inst) {
         case QoreIROpcode::NewHashDecl:
         case QoreIROpcode::NewComplexHash:
         case QoreIROpcode::NewComplexList:
+        case QoreIROpcode::NewComplexBuffer:
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
         case QoreIROpcode::ExtractAny:
@@ -3650,6 +3652,8 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
         expr = &new_ch->expr;
     } else if (auto* new_cl = dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         expr = &new_cl->expr;
+    } else if (auto* new_cb = dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+        expr = &new_cb->expr;
     }
 
     if (expr) {
@@ -8534,9 +8538,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             } else if (inv->invoke_opcode == QoreIROpcode::NewHashDecl
                     || inv->invoke_opcode == QoreIROpcode::NewComplexHash
-                    || inv->invoke_opcode == QoreIROpcode::NewComplexList) {
+                    || inv->invoke_opcode == QoreIROpcode::NewComplexList
+                    || inv->invoke_opcode == QoreIROpcode::NewComplexBuffer) {
                 // Typed container construction invoke
-                if (aot_mode) {
+                if (inv->invoke_opcode == QoreIROpcode::NewComplexBuffer && !inv->operands.empty()) {
+                    auto* init_val = getVal(inv->operands[0].id, error);
+                    if (!init_val) { return false; }
+                    llvm::Value* init_boxed = boxValue(init_val, inv->operands[0].id);
+                    auto* ncb = dynamic_cast<const NewComplexBufferNode*>(inv->expr.getInternalNode());
+                    if (!ncb) {
+                        return setExpressionFallbackError(error, inst,
+                                "NewComplexBuffer invoke expression is not a NewComplexBufferNode");
+                    }
+                    const QoreTypeInfo* typeInfo = specializeType(ncb->typeInfo);
+                    if (aot_mode) {
+                        std::string type_path = qore_ir_get_type_path(typeInfo);
+                        llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                        auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value_by_type_path", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value_by_type_path_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {type_path_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                    } else {
+                        llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(typeInfo));
+                        llvm::Value* type_as_ptr = builder->CreateIntToPtr(type_ptr, ptr_type);
+                        auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {type_as_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                    }
+                } else if (aot_mode) {
                     QoreValue expr_val = inv->expr;
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
@@ -8545,12 +8584,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         ? "qore_rt_new_hash_decl_aot"
                         : (inv->invoke_opcode == QoreIROpcode::NewComplexHash
                             ? "qore_rt_new_complex_hash_aot"
-                            : "qore_rt_new_complex_list_aot");
+                            : (inv->invoke_opcode == QoreIROpcode::NewComplexList
+                                ? "qore_rt_new_complex_list_aot"
+                                : "qore_rt_new_complex_buffer_aot"));
                     const char* helper_throwing_name = inv->invoke_opcode == QoreIROpcode::NewHashDecl
                         ? "qore_rt_new_hash_decl_aot_throwing"
                         : (inv->invoke_opcode == QoreIROpcode::NewComplexHash
                             ? "qore_rt_new_complex_hash_aot_throwing"
-                            : "qore_rt_new_complex_list_aot_throwing");
+                            : (inv->invoke_opcode == QoreIROpcode::NewComplexList
+                                ? "qore_rt_new_complex_list_aot_throwing"
+                                : "qore_rt_new_complex_buffer_aot_throwing"));
                     auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(helper_name, ft);
@@ -8584,7 +8627,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto helper = module.getOrInsertFunction("qore_rt_new_complex_hash",
                                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                         result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
-                    } else {
+                    } else if (inv->invoke_opcode == QoreIROpcode::NewComplexList) {
                         auto* ncl = dynamic_cast<const NewComplexListNode*>(node);
                         if (!ncl) {
                             return setExpressionFallbackError(error, inst,
@@ -8594,6 +8637,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 reinterpret_cast<uint64_t>(ncl));
                         llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
                         auto helper = module.getOrInsertFunction("qore_rt_new_complex_list",
+                                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                    } else {
+                        auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node);
+                        if (!ncb) {
+                            return setExpressionFallbackError(error, inst,
+                                    "NewComplexBuffer invoke expression is not a NewComplexBufferNode");
+                        }
+                        llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(ncb));
+                        llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
+                        auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer",
                                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                         result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
                     }
@@ -12435,6 +12490,75 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_new_complex_list", ncl_ft);
                 auto helper_throwing = module.getOrInsertFunction(
                         "qore_rt_new_complex_list_throwing", ncl_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {node_as_ptr, xsink_arg}, module, llvm_func, inst);
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::NewComplexBuffer: {
+            const auto* ncbinst = static_cast<const QoreIRNewComplexBufferInstruction*>(inst);
+            llvm::Value* result;
+            if (!inst->operands.empty()) {
+                auto* init_val = getVal(inst->operands[0].id, error);
+                if (!init_val) { return false; }
+                llvm::Value* init_boxed = boxValue(init_val, inst->operands[0].id);
+                const NewComplexBufferNode* ncb = ncbinst->node
+                    ? ncbinst->node
+                    : dynamic_cast<const NewComplexBufferNode*>(ncbinst->expr.getInternalNode());
+                if (!ncb) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexBuffer expression is not a NewComplexBufferNode");
+                }
+                const QoreTypeInfo* typeInfo = specializeType(ncb->typeInfo);
+                if (aot_mode) {
+                    std::string type_path = qore_ir_get_type_path(typeInfo);
+                    llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                    auto ncb_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_new_complex_buffer_from_value_by_type_path", ncb_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_new_complex_buffer_from_value_by_type_path_throwing", ncb_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {type_path_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                } else {
+                    llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(typeInfo));
+                    llvm::Value* type_as_ptr = builder->CreateIntToPtr(type_ptr, ptr_type);
+                    auto ncb_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer_from_value", ncb_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_new_complex_buffer_from_value_throwing", ncb_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {type_as_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                }
+            } else if (aot_mode) {
+                QoreValue expr_val = ncbinst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto ncb_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer_aot", ncb_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_complex_buffer_aot_throwing", ncb_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
+            } else {
+                llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(ncbinst->node));
+                llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
+                auto ncb_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer", ncb_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_complex_buffer_throwing", ncb_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {node_as_ptr, xsink_arg}, module, llvm_func, inst);
             }

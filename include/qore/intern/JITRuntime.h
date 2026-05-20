@@ -562,6 +562,7 @@ uint64_t qore_rt_create_member_hash_ref_aot(const char* member_name, uint64_t ke
 class NewHashDeclNode;
 class NewComplexHashNode;
 class NewComplexListNode;
+class NewComplexBufferNode;
 
 //! Create a new hashdecl instance; returns NaN-boxed QoreValue
 uint64_t qore_rt_new_hash_decl(const NewHashDeclNode* node, ExceptionSink* xsink);
@@ -581,6 +582,12 @@ uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink*
 //! Create a new typed list via AOT context slot
 uint64_t qore_rt_new_complex_list_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Create a new typed buffer; returns NaN-boxed QoreValue
+uint64_t qore_rt_new_complex_buffer(const NewComplexBufferNode* node, ExceptionSink* xsink);
+
+//! Create a new typed buffer via AOT context slot
+uint64_t qore_rt_new_complex_buffer_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! Create a new typed hash from an already-evaluated hash initializer
 uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDecl* hd, uint64_t hash_bits, int32_t runtime_check,
     ExceptionSink* xsink);
@@ -593,6 +600,12 @@ uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(const char* type_path, 
 //! Create a new typed list from an already-evaluated constructor value
 uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_list_from_value_by_type_path(const char* type_path, uint64_t value_bits,
+    ExceptionSink* xsink);
+
+//! Create a new typed buffer from an already-evaluated constructor value
+uint64_t qore_rt_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, uint64_t value_bits,
+    ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_buffer_from_value_by_type_path(const char* type_path, uint64_t value_bits,
     ExceptionSink* xsink);
 
 class VarRefNewObjectNode;

@@ -155,6 +155,8 @@ public:
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
     QoreIRNewComplexListInstruction* createNewComplexList(const NewComplexListNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    QoreIRNewComplexBufferInstruction* createNewComplexBuffer(const NewComplexBufferNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
     // VarRefNewObjectNode construction (non-object types)
     QoreIRVrnConstructInstruction* createVrnConstruct(const VarRefNewObjectNode* vrn,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);

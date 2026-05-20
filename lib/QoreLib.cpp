@@ -3027,6 +3027,10 @@ static const char* get_full_type_name(const AbstractQoreNode* n, bool with_names
             }
             break;
         }
+        case NT_BUFFER: {
+            const QoreTypeInfo* ti = static_cast<const QoreBufferNode*>(n)->getTypeInfo();
+            return with_namespaces ? QoreTypeInfo::getPath(ti) : QoreTypeInfo::getName(ti);
+        }
         case NT_OBJECT: {
             const char* clsname = with_namespaces
                 ? QoreTypeInfo::getPath(static_cast<const QoreObject*>(n)->getClass()->getTypeInfo())

@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class BufferTest
+
+class BufferTest inherits QUnit::Test {
+    constructor() : QUnit::Test("buffer value type", "1.0", \ARGV) {
+        addTestCase("int buffer", \intBuffer());
+        addTestCase("nullable int buffer", \nullableIntBuffer());
+        addTestCase("bool buffer", \boolBuffer());
+        addTestCase("float buffer", \floatBuffer());
+        addTestCase("construction errors", \constructionErrors());
+        set_return_value(main());
+    }
+
+    intBuffer() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3));
+
+        assertEq("buffer<int64>", b.fullType());
+        assertEq(3, elements b);
+        assertEq(1, b[0]);
+        assertEq(2, b[1]);
+        assertEq(3, b[2]);
+        assertNothing(b[3]);
+        assertNothing(b[-1]);
+
+        *buffer<int64> ob;
+        assertNothing(ob);
+        ob = b;
+        assertEq("buffer<int64>", ob.fullType());
+        assertEq(3, elements ob);
+        assertEq(2, ob[1]);
+    }
+
+    nullableIntBuffer() {
+        buffer<*int64> b = new buffer<*int64>((1, NOTHING, 3));
+
+        assertEq("buffer<*int64>", b.fullType());
+        assertEq(3, elements b);
+        assertEq(1, b[0]);
+        assertNothing(b[1]);
+        assertEq(3, b[2]);
+    }
+
+    boolBuffer() {
+        buffer<bool> b = new buffer<bool>((True, False, True));
+
+        assertEq("buffer<bool>", b.fullType());
+        assertEq(3, elements b);
+        assertEq(True, b[0]);
+        assertEq(False, b[1]);
+        assertEq(True, b[2]);
+    }
+
+    floatBuffer() {
+        buffer<float32> f32 = new buffer<float32>((1.25, 2));
+        buffer<float64> f64 = new buffer<float64>((1.25, 2.5));
+
+        assertEq("buffer<float32>", f32.fullType());
+        assertEq("buffer<float64>", f64.fullType());
+        assertEq(2, elements f32);
+        assertEq(2, elements f64);
+        assertEq(1.25, f32[0]);
+        assertEq(2.0, f32[1]);
+        assertEq(1.25, f64[0]);
+        assertEq(2.5, f64[1]);
+    }
+
+    constructionErrors() {
+        assertThrows("BUFFER-RANGE-ERROR", sub () {
+            buffer<int8> b = new buffer<int8>((128,));
+        });
+        assertThrows("BUFFER-RANGE-ERROR", sub () {
+            buffer<int16> b = new buffer<int16>((32768,));
+        });
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            buffer<int64> b = new buffer<int64>((NOTHING,));
+        });
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            buffer<bool> b = new buffer<bool>((1,));
+        });
+    }
+}

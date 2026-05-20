@@ -1491,7 +1491,8 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         return;
     }
     // COMPLEX_HASH_NEW: stringref + u8 num_args + N×classifyAndWriteExpr-encoded args
-    if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW) {
+    if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW
+            || ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
         rdr.readStringRef(p);  // type path
         uint8_t na = QoreAOTBinaryReader::readU8(p);
         for (uint8_t i = 0; i < na; ++i) {
@@ -2346,6 +2347,45 @@ static QoreAOTContext* buildContextFromSlotMap(
                         ctx->exprs[i] = toBitsNB(QoreValue(ncl));
                     } else {
                         printd(0, "AOT v2: cannot resolve type '%s' for complex list: %s\n",
+                            ref1, type_error.c_str());
+                        arg_val.discard(nullptr);
+                        has_unsupported = true;
+                    }
+                } else {
+                    arg_val.discard(nullptr);
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::COMPLEX_BUFFER_NEW: {
+                // ref1 = type path, followed by one serialized list initializer
+                ref1 = reader.readStringRef(ptr);
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                QoreValue arg_val;
+                if (num_args > 0) {
+                    std::string arg_err;
+                    arg_val = readOneExpr(reader, ptr, end, arg_err, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    if (!arg_err.empty()) {
+                        printd(0, "AOT v2: error reading complex buffer arg for '%s': %s\n",
+                            ref1 ? ref1 : "", arg_err.c_str());
+                        arg_val.discard(nullptr);
+                        arg_val = QoreValue();
+                        has_unsupported = true;
+                    }
+                }
+                if (has_unsupported) {
+                    continue;
+                }
+                if (ref1 && *ref1) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    if (ti) {
+                        NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val);
+                        ctx->exprs[i] = toBitsNB(QoreValue(ncb));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve type '%s' for complex buffer: %s\n",
                             ref1, type_error.c_str());
                         arg_val.discard(nullptr);
                         has_unsupported = true;
@@ -5432,6 +5472,18 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 return nullptr;
             }
             auto* ni = new QoreIRNewComplexListInstruction(nullptr, expr);
+            ni->opcode = opcode;
+            expr.discard(nullptr);
+            inst.reset(ni);
+            break;
+        }
+
+        case QoreIRInstGroup::NewComplexBuffer: {
+            QoreValue expr = readExpr(reader, ptr, end, error);
+            if (!error.empty()) {
+                return nullptr;
+            }
+            auto* ni = new QoreIRNewComplexBufferInstruction(nullptr, expr);
             ni->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(ni);

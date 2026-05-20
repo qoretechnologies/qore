@@ -137,6 +137,7 @@
 
 #include <qore/QoreBigFloatNode.h>
 #include <qore/QoreBigIntNode.h>
+#include <qore/QoreBufferNode.h>
 #include <qore/QoreNothingNode.h>
 #include <qore/QoreObject.h>
 
@@ -1765,6 +1766,16 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
             + getAOTSerializableTypePath(list_ti) + ">";
     }
 
+    const QoreTypeInfo* buffer_ti = QoreTypeInfo::getReturnComplexBufferOrNothing(ti);
+    if (buffer_ti) {
+        const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(buffer_ti);
+        if (bti) {
+            return std::string(or_nothing ? "*" : "") + "buffer<"
+                + (bti->hasNullableElements() ? "*" : "")
+                + qore_buffer_element_type_name(bti->getBufferElementType()) + ">";
+        }
+    }
+
     return raw_path ? raw_path : "";
 }
 
@@ -2192,6 +2203,29 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
                     writeValue(nch->args->get(i));
+                }
+                return true;
+            }
+            // NewComplexBufferNode: `buffer<T> m();` default-constructed complex buffer
+            if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+                std::string type_path = getAOTSerializableTypePath(ncb->typeInfo);
+                uint32_t nargs = 0;
+                const QoreListNode* arg_list = nullptr;
+                if (!ncb->args.isNothing()) {
+                    arg_list = ncb->args.getType() == NT_LIST
+                        ? ncb->args.get<const QoreListNode>() : nullptr;
+                    if (arg_list) {
+                        nargs = static_cast<uint32_t>(arg_list->size());
+                    }
+                }
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
+                writeU8(3); // kind: 3 = complex buffer
+                uint32_t tlen = static_cast<uint32_t>(type_path.size());
+                writeU32(tlen);
+                writeStringRef(type_path.c_str(), tlen);
+                writeU32(nargs);
+                for (uint32_t i = 0; i < nargs; ++i) {
+                    writeValue(arg_list->retrieveEntry(i));
                 }
                 return true;
             }
@@ -2877,6 +2911,14 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, list_args);
                 return QoreValue(ncl);
             }
+            if (kind == 3) {
+                QoreValue buffer_args;
+                if (parse_args) {
+                    buffer_args = QoreValue(parse_args);
+                }
+                NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, buffer_args);
+                return QoreValue(ncb);
+            }
             // kind == 1: complex hash
             NewComplexHashNode* nch = new NewComplexHashNode(&loc_builtin, ti, parse_args);
             return QoreValue(nch);
@@ -3001,6 +3043,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"binary",          &binaryTypeInfo},
     {"hash",            &hashTypeInfo},
     {"list",            &listTypeInfo},
+    {"buffer",          &bufferTypeInfo},
     {"object",          &objectTypeInfo},
     {"nothing",         &nothingTypeInfo},
     {"null",            &nullTypeInfo},
@@ -3027,6 +3070,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"*binary",         &binaryOrNothingTypeInfo},
     {"*hash",           &hashOrNothingTypeInfo},
     {"*list",           &listOrNothingTypeInfo},
+    {"*buffer",         &bufferOrNothingTypeInfo},
     {"*object",         &objectOrNothingTypeInfo},
     {"*data",           &dataOrNothingTypeInfo},
     {"*code",           &codeOrNothingTypeInfo},
@@ -3734,6 +3778,25 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
         return or_nothing
             ? qore_get_complex_list_or_nothing_type(value_type)
             : qore_get_complex_list_type(value_type);
+    }
+
+    if (extract_aot_type_args(path, "buffer", or_nothing, args)) {
+        if (args.size() != 1) {
+            return nullptr;
+        }
+        bool nullable_elements = false;
+        std::string element_name = args[0];
+        if (!element_name.empty() && element_name[0] == '*') {
+            nullable_elements = true;
+            element_name.erase(0, 1);
+        }
+        QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+        if (!qore_buffer_element_type_from_name(element_name.c_str(), element_type)) {
+            return nullptr;
+        }
+        return or_nothing
+            ? qore_get_complex_buffer_or_nothing_type(element_type, nullable_elements)
+            : qore_get_complex_buffer_type(element_type, nullable_elements);
     }
 
     if (extract_aot_type_args(path, "softlist", or_nothing, args)) {
@@ -4754,6 +4817,22 @@ static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
                 }
                 const QoreListNode* args = ncl->args.getType() == NT_LIST
                     ? ncl->args.get<const QoreListNode>() : nullptr;
+                if (!args) {
+                    return false;
+                }
+                for (size_t i = 0; i < args->size(); ++i) {
+                    if (!aotValueTagPreservesMemberDefault(args->retrieveEntry(i))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (const auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+                if (ncb->args.isNothing()) {
+                    return true;
+                }
+                const QoreListNode* args = ncb->args.getType() == NT_LIST
+                    ? ncb->args.get<const QoreListNode>() : nullptr;
                 if (!args) {
                     return false;
                 }
@@ -6336,6 +6415,17 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             }
             return true;
         }
+        if (QoreTypeInfo::getComplexBufferType(vti)) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
+            writeTypePathRef(writer, vti);
+            const QoreValue& new_args = vrn->getNewArgs();
+            if (new_args.hasNode()) {
+                writer.writeU8(1);
+                return classifyAndWriteExpr(writer, new_args, parent_locals, parent_globals, const_reverse_map);
+            }
+            writer.writeU8(0);
+            return true;
+        }
         qoreAOTSetExprSerializationError("unsupported VarRefNewObjectNode constructor in "
             + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
         return false;
@@ -7040,6 +7130,20 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             } else {
                 writer.writeU8(0);
             }
+            return true;
+        }
+    }
+
+    // NewComplexBufferNode: complex typed buffer construction
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        if (ncb->typeInfo) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
+            writeTypePathRef(writer, ncb->typeInfo);
+            if (ncb->args.hasNode()) {
+                writer.writeU8(1);
+                return write_inline_expr(ncb->args);
+            }
+            writer.writeU8(0);
             return true;
         }
     }
@@ -8071,6 +8175,9 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst, std::s
     }
     if (dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         return QoreIRInstGroup::NewComplexList;
+    }
+    if (dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+        return QoreIRInstGroup::NewComplexBuffer;
     }
     if (dynamic_cast<const QoreIRVrnConstructInstruction*>(inst)) {
         return QoreIRInstGroup::VrnConstruct;
@@ -9665,6 +9772,14 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                             NewComplexListNode* ncl = new NewComplexListNode(
                                 &loc_builtin, cti, list_args);
                             pim.default_val = QoreValue(ncl);
+                        } else if (pim.pending_complex_default_kind == 3) {
+                            QoreValue buffer_args;
+                            if (parse_args) {
+                                buffer_args = QoreValue(parse_args);
+                            }
+                            NewComplexBufferNode* ncb = new NewComplexBufferNode(
+                                &loc_builtin, cti, buffer_args);
+                            pim.default_val = QoreValue(ncb);
                         } else {
                             NewComplexHashNode* nch = new NewComplexHashNode(
                                 &loc_builtin, cti, parse_args);
@@ -10262,6 +10377,13 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                             }
                             phm.default_val = QoreValue(new NewComplexListNode(
                                 &loc_builtin, cti, list_args));
+                        } else if (phm.pending_complex_default_kind == 3) {
+                            QoreValue buffer_args;
+                            if (parse_args) {
+                                buffer_args = QoreValue(parse_args);
+                            }
+                            phm.default_val = QoreValue(new NewComplexBufferNode(
+                                &loc_builtin, cti, buffer_args));
                         } else {
                             phm.default_val = QoreValue(new NewComplexHashNode(
                                 &loc_builtin, cti, parse_args));

@@ -52,6 +52,8 @@ qore_type_t QoreTypeSpec::getType() const {
         case QTS_COMPLEXLIST:
         case QTS_COMPLEXSOFTLIST:
             return NT_LIST;
+        case QTS_COMPLEXBUFFER:
+            return NT_BUFFER;
         case QTS_HARDREF:
         case QTS_COMPLEXHARDREF:
         case QTS_COMPLEXREF:

@@ -42,6 +42,7 @@
 #include "qore/intern/QoreTypeSpec.h"
 
 class UserSignature;
+class QoreComplexBufferTypeInfo;
 
 enum class QoreWildcardKind : unsigned char {
     Unbounded,
@@ -307,6 +308,17 @@ public:
             : ti->return_vec[0].spec.getComplexList();
     }
 
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* getUniqueReturnComplexBuffer(const QoreTypeInfo* ti) {
+        if (!ti || ti->return_vec.size() > 1 || !hasType(ti)) {
+            return nullptr;
+        }
+        return ti->return_vec[0].spec.getComplexBuffer();
+    }
+
+    //! Returns the complex buffer type info if this is a concrete buffer<T> type
+    DLLLOCAL static const QoreComplexBufferTypeInfo* getComplexBufferType(const QoreTypeInfo* ti);
+
     //! Returns the complex code type info if this is a typed callable type
     /** @param ti the type to check
         @return the QoreComplexCodeTypeInfo pointer if this is a typed callable, nullptr otherwise
@@ -400,6 +412,9 @@ public:
             ? autoTypeInfo
             : ti->return_vec[0].spec.getComplexList();
     }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* getReturnComplexBufferOrNothing(const QoreTypeInfo* ti);
 
     // static version of method, checking for null pointer
     DLLLOCAL static bool hasComplexType(const QoreTypeInfo* ti) {
@@ -669,6 +684,9 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getComplexListValueType(const QoreTypeInfo* ti);
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* getComplexBufferValueType(const QoreTypeInfo* ti);
 
     DLLLOCAL void getAcceptTypes(ReferenceHolder<QoreHashNode>& h, bool simple = false) const {
         for (auto& i : getAcceptSpecs()) {
@@ -1434,6 +1452,63 @@ public:
 class QoreAutoNoNarrowListOrNothingTypeInfo : public QoreComplexListOrNothingTypeInfo {
 public:
     DLLLOCAL QoreAutoNoNarrowListOrNothingTypeInfo() : QoreComplexListOrNothingTypeInfo(autoNoNarrowTypeInfo) {
+    }
+};
+
+class QoreComplexBufferTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreComplexBufferTypeInfo(QoreBufferElementType element_type, bool nullable_elements);
+
+    DLLLOCAL QoreBufferElementType getBufferElementType() const {
+        return element_type;
+    }
+
+    DLLLOCAL bool hasNullableElements() const {
+        return nullable_elements;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getElementTypeInfo() const;
+
+protected:
+    QoreString pname;
+    QoreBufferElementType element_type;
+    bool nullable_elements;
+
+    DLLLOCAL QoreComplexBufferTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
+            const QoreString& tname, QoreBufferElementType element_type, bool nullable_elements);
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const;
+
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const;
+
+    DLLLOCAL const char* getPathImpl() const {
+        assert(!pname.empty());
+        return pname.c_str();
+    }
+};
+
+class QoreComplexBufferOrNothingTypeInfo : public QoreComplexBufferTypeInfo {
+public:
+    DLLLOCAL QoreComplexBufferOrNothingTypeInfo(QoreBufferElementType element_type, bool nullable_elements,
+        const QoreTypeInfo* value_type);
+
+protected:
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const;
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return QoreValue();
     }
 };
 
@@ -2270,6 +2345,38 @@ protected:
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+};
+
+class QoreBufferTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreBufferTypeInfo() : QoreTypeInfo("buffer",
+        q_accept_vec_t {
+            {NT_BUFFER, nullptr, true},
+        },
+        q_return_vec_t {{NT_BUFFER, true}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+};
+
+class QoreBufferOrNothingTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreBufferOrNothingTypeInfo() : QoreTypeInfo("*buffer",
+        q_accept_vec_t {
+            {NT_BUFFER, nullptr},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        },
+        q_return_vec_t {{NT_BUFFER}, {NT_NOTHING}}) {
+    }
+
+protected:
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
         return false;
     }

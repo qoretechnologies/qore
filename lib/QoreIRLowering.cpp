@@ -4131,6 +4131,31 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         }
         return builder.createNewComplexList(new_cl, expr, new_cl->loc)->result;
     }
+    if (auto* new_cb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        if (!new_cb->args.isNothing()) {
+            QoreIRValue arg = lowerExpression(new_cb->args, error);
+            if (!arg.isValid()) {
+                return QoreIRValue();
+            }
+            operands.push_back(arg);
+        }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, new_cb->loc);
+            inst->invoke_opcode = QoreIROpcode::NewComplexBuffer;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        auto* inst = builder.createNewComplexBuffer(new_cb, expr, new_cb->loc);
+        inst->operands = std::move(operands);
+        return inst->result;
+    }
     // ParseNewComplexTypeNode and ParseNoEvalNode are parse-time-only nodes whose evalImpl()
     // asserts false — they cannot be delegated to AST evaluation
     if (dynamic_cast<const ParseNewComplexTypeNode*>(node) || dynamic_cast<const ParseNoEvalNode*>(node)) {

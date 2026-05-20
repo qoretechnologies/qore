@@ -2194,6 +2194,37 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexList(
 }
 
 // ============================================================================
+// Group 65: NewComplexBuffer - Complex buffer creation
+// ============================================================================
+
+static bool writeNewComplexBuffer(AOTInstWriteCtx& ctx) {
+    auto* ni = static_cast<const QoreIRNewComplexBufferInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ni->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readNewComplexBuffer(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        ctx.error = error;
+        return nullptr;
+    }
+    auto* ni = new QoreIRNewComplexBufferInstruction(nullptr, expr);
+    ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    ni->result = QoreIRValue(result_id);
+    ni->operands = operands;
+    ni->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
 // Group 37: VrnConstruct - Variant value construction
 // ============================================================================
 
@@ -3366,9 +3397,12 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     { "TypedBase", 64, true, false, writeTypedBase, readTypedBase,
       "Base instruction with element type metadata" },
 
-    // Remaining 65-255: Unsupported/undefined
-    UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
-    UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
+    // Index 65: NewComplexBuffer
+    { "NewComplexBuffer", 65, true, false, writeNewComplexBuffer, readNewComplexBuffer,
+      "Complex buffer creation" },
+
+    // Remaining 66-255: Unsupported/undefined
+    UNUSED_ENTRY(66), UNUSED_ENTRY(67), UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
     UNUSED_ENTRY(72), UNUSED_ENTRY(73), UNUSED_ENTRY(74), UNUSED_ENTRY(75),
     UNUSED_ENTRY(76), UNUSED_ENTRY(77), UNUSED_ENTRY(78), UNUSED_ENTRY(79),
     UNUSED_ENTRY(80), UNUSED_ENTRY(81), UNUSED_ENTRY(82), UNUSED_ENTRY(83),

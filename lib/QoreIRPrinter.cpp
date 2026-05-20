@@ -349,6 +349,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::NewHashDecl: return "new.hash.decl";
         case QoreIROpcode::NewComplexHash: return "new.complex.hash";
         case QoreIROpcode::NewComplexList: return "new.complex.list";
+        case QoreIROpcode::NewComplexBuffer: return "new.complex.buffer";
         case QoreIROpcode::VrnConstruct: return "vrn.construct";
         case QoreIROpcode::NewHashDeclFromHash: return "new.hash.decl.from.hash";
         case QoreIROpcode::HashSetKeyValue: return "hash.set.key.value";
@@ -556,6 +557,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 out << " <complex-hash>";
             } else if (inst->opcode == QoreIROpcode::NewComplexList) {
                 out << " <complex-list>";
+            } else if (inst->opcode == QoreIROpcode::NewComplexBuffer) {
+                out << " <complex-buffer>";
             } else if (inst->opcode == QoreIROpcode::VrnConstruct) {
                 out << " <vrn-construct>";
             } else if (inst->opcode == QoreIROpcode::NewHashDeclFromHash) {
