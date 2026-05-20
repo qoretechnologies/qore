@@ -43,7 +43,7 @@ module QoreLlmUtils {
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
-        LlmBackend::registerFactory(new CallbackLlmProviderFactory());
+        LlmProviderRegistry::registerFactory(new CallbackLlmProviderFactory());
     };
 }
 

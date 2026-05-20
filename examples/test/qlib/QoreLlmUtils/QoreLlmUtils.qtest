@@ -700,7 +700,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     }
 
     registryFactoryLookupTest() {
-        AbstractLlmProviderFactory cb = LlmBackend::getFactoryEx("callback");
+        AbstractLlmProviderFactory cb = LlmProviderRegistry::getFactoryEx("callback");
         assertEq("callback", cb.getMode());
         hash<LlmProviderInfo> info = cb.getInfo();
         assertEq("callback", info.mode);
@@ -709,24 +709,24 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
 
     registryRegisterDeregisterTest() {
         FakeLlmProviderFactory fake();
-        LlmBackend::registerFactory(fake);
-        on_exit LlmBackend::deregisterFactory("test-fake");
-        AbstractLlmProviderFactory looked_up = LlmBackend::getFactoryEx("test-fake");
+        LlmProviderRegistry::registerFactory(fake);
+        on_exit LlmProviderRegistry::deregisterFactory("test-fake");
+        AbstractLlmProviderFactory looked_up = LlmProviderRegistry::getFactoryEx("test-fake");
         assertEq("test-fake", looked_up.getMode());
-        assertTrue(inlist("test-fake", LlmBackend::knownProviderModes()));
+        assertTrue(inlist("test-fake", LlmProviderRegistry::knownProviderModes()));
     }
 
     registryDuplicateRejectedTest() {
         FakeLlmProviderFactory fake();
-        LlmBackend::registerFactory(fake);
-        on_exit LlmBackend::deregisterFactory("test-fake");
+        LlmProviderRegistry::registerFactory(fake);
+        on_exit LlmProviderRegistry::deregisterFactory("test-fake");
         assertThrows("LLM-CONFIG-ERROR", "already been registered",
-            sub () { LlmBackend::registerFactory(new FakeLlmProviderFactory()); });
+            sub () { LlmProviderRegistry::registerFactory(new FakeLlmProviderFactory()); });
     }
 
     registryUnknownModeTest() {
         assertThrows("LLM-CONFIG-ERROR", "is unknown",
-            sub () { LlmBackend::getFactoryEx("no-such-mode-xyz"); });
+            sub () { LlmProviderRegistry::getFactoryEx("no-such-mode-xyz"); });
     }
 
     promptSecretProtectRestoreTest() {
