@@ -37,6 +37,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires QoreLlmTypes
 
 module AnthropicRestClient {
     version = "1.0";
@@ -46,6 +47,7 @@ module AnthropicRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("anthropic", AnthropicRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(new AnthropicLlmProviderFactory());
     };
 }
 
@@ -672,6 +674,391 @@ public class AnthropicSseStreamIo {
             }
         }
         return rv;
+    }
+}
+
+#! LLM provider that dispatches to the Anthropic Messages API
+/** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract using
+    @ref RestClientIo::RestClientIo against \c /v1/messages.  Supports
+    tool-use-based structured extraction (when an output schema is
+    provided, the provider injects a synthetic tool whose
+    \c input_schema matches the schema and forces the model to call it),
+    grouped tool-result message handling, multimodal images, and
+    Server-Sent Events streaming.
+
+    Thread-safe: the REST client is lazy-initialized behind a mutex.
+*/
+public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    private {
+        #! Lazy-initialized REST client
+        *RestClientIo::RestClientIo rest_client;
+        #! Serializes lazy initialization
+        Mutex rest_mutex();
+    }
+
+    #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig
+    /** @param config the backend configuration; @ref QoreLlmUtils::LlmBackendConfig::url
+            is required
+
+        @throw LLM-CONFIG-ERROR \c url is missing
+        @throw LLM-DEPENDENCY-ERROR the \c json module is not available
+    */
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : QoreLlmUtils::AbstractLlmProvider(config) {
+        if (!config.url.val()) {
+            throw "LLM-CONFIG-ERROR",
+                "url is required for \"anthropic\" mode";
+        }
+%ifdef NoJson
+        throw "LLM-DEPENDENCY-ERROR",
+            "json module is required for Anthropic mode but is not available";
+%endif
+    }
+
+    string getMode() {
+        return "anthropic";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = {
+            "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
+            "max_tokens": getRequestMaxTokens(opts),
+            "system": system_prompt,
+            "messages": (
+                {"role": "user", "content": user_prompt},
+            ),
+        };
+
+        # When an output schema is provided, use tool-use extraction:
+        # define a synthetic tool whose input_schema matches the desired
+        # output and force the model to call it via tool_choice
+        if (output_schema) {
+            string tool_name = output_schema.name ?? "extract";
+            body.tools = (
+                {
+                    "name": tool_name,
+                    "description": "Extract structured data matching the schema",
+                    "input_schema": output_schema,
+                },
+            );
+            body.tool_choice = {"type": "tool", "name": tool_name};
+        }
+        body = mergeRequestBodyOptions(body, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/messages", body,
+                    buildAuthHeaders());
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR",
+                sprintf("Anthropic completion request failed: %s", ex.desc), ex;
+        }
+
+        string content = "";
+        list<auto> content_blocks = resp.body.content ?? ();
+        foreach hash<auto> block in (content_blocks) {
+            if (block.type == "text") {
+                content = block.text;
+                break;
+            } else if (block.type == "tool_use") {
+                content = make_json(block.input);
+                break;
+            }
+        }
+
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": content,
+            "usage": resp.body.usage ?? {},
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildAnthropicBody(messages, tools, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/messages", body,
+                    buildAuthHeaders());
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR",
+                sprintf("Anthropic chat request failed: %s", ex.desc), ex;
+        }
+
+        *string text_content;
+        *list<hash<QoreLlmUtils::ChatToolCall>> parsed_tool_calls;
+        list<auto> content_blocks = resp.body.content ?? ();
+        foreach hash<auto> block in (content_blocks) {
+            if (block.type == "text") {
+                text_content = block.text;
+            } else if (block.type == "tool_use") {
+                if (!parsed_tool_calls) {
+                    parsed_tool_calls = ();
+                }
+                push parsed_tool_calls, <QoreLlmUtils::ChatToolCall>{
+                    "id": block.id,
+                    "name": block.name,
+                    "arguments": block.input,
+                };
+            }
+        }
+
+        return <QoreLlmUtils::ChatResponse>{
+            "id": resp.body.id,
+            "model": resp.body.model,
+            "stop_reason": resp.body.stop_reason ?? "end_turn",
+            "content": text_content,
+            "tool_calls": parsed_tool_calls,
+            "usage": resp.body.usage ?? {},
+            "raw": resp.body,
+        };
+    }
+
+    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildAnthropicBody(messages, tools, opts);
+        body.stream = True;
+
+        hash<auto> hdr = {
+            "Accept": "text/event-stream",
+            "anthropic-version": getConfig().anthropic_version,
+        };
+        if (getConfig().api_key.val()) {
+            hdr."x-api-key" = getConfig().api_key;
+        }
+        hdr."Content-Type" = "application/json";
+
+        HttpClientIo::HttpClientConnectionManager mgr =
+            rest_client.getConnectionManager();
+        HttpClientIo::HttpClientStreamHandle stream =
+            mgr.acquireStream(getConfig().url);
+
+        string json_body = make_json(body);
+        stream.startStreaming("POST", "/v1/messages", hdr, False, json_body);
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        while (True) {
+            *hash<SseMessageInfo> evt = reader.readEvent(
+                getConfig().timeout_ms);
+            if (!evt) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+            if (evt.data == "[DONE]") {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+
+            *hash<auto> parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch () {
+                continue;
+            }
+
+            *string delta;
+            if (parsed.type == "content_block_delta"
+                    && parsed.delta.text.val()) {
+                delta = parsed.delta.text;
+            } else if (parsed.type == "message_stop") {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "done": True, "raw": parsed,
+                });
+                break;
+            }
+
+            if (delta.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+            }
+        }
+    }
+
+    #! Returns headers with anthropic-version and x-api-key set
+    private hash<auto> buildAuthHeaders() {
+        hash<auto!> hdr = {
+            "anthropic-version": getConfig().anthropic_version,
+        };
+        if (getConfig().api_key.val()) {
+            hdr."x-api-key" = getConfig().api_key;
+        }
+        return hdr;
+    }
+
+    #! Lazy-initializes the underlying REST client
+    private ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                rest_client = new RestClientIo::RestClientIo({
+                    "url": getConfig().url,
+                    "connect_timeout": getConfig().connect_timeout_ms,
+                    "timeout": getConfig().timeout_ms,
+                    "data": "json",
+                });
+            }
+        }
+    }
+
+    #! Builds an Anthropic Messages API request body
+    private hash<auto> buildAnthropicBody(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        *string system_prompt;
+        list<hash<auto>> api_messages = ();
+        list<hash<auto>> pending_tool_results = ();
+
+        foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
+            if (msg.role == "system") {
+                system_prompt = msg.content;
+                continue;
+            }
+
+            # Flush any pending tool results before a non-tool message
+            if (msg.role != "tool" && pending_tool_results) {
+                push api_messages, {
+                    "role": "user",
+                    "content": pending_tool_results,
+                };
+                pending_tool_results = ();
+            }
+
+            if (msg.role == "tool") {
+                push pending_tool_results, {
+                    "type": "tool_result",
+                    "tool_use_id": msg.tool_call_id,
+                    "content": msg.content ?? "",
+                };
+                continue;
+            }
+
+            if (msg.role == "assistant" && msg.tool_calls) {
+                list<auto> content_blocks = ();
+                if (msg.content.val()) {
+                    push content_blocks, {
+                        "type": "text", "text": msg.content,
+                    };
+                }
+                foreach hash<QoreLlmUtils::ChatToolCall> tc in (msg.tool_calls) {
+                    push content_blocks, {
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.arguments ?? {},
+                    };
+                }
+                push api_messages, {
+                    "role": "assistant",
+                    "content": content_blocks,
+                };
+                continue;
+            }
+
+            if (msg.content_parts) {
+                list<auto> parts = ();
+                foreach hash<QoreLlmUtils::ContentPart> part in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": part.mime_type ?? "image/png",
+                                "data": b64,
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push parts, {"type": "text", "text": part.text};
+                    }
+                }
+                push api_messages, {"role": msg.role, "content": parts};
+            } else {
+                push api_messages, {
+                    "role": msg.role,
+                    "content": msg.content ?? "",
+                };
+            }
+        }
+
+        if (pending_tool_results) {
+            push api_messages, {
+                "role": "user",
+                "content": pending_tool_results,
+            };
+        }
+
+        hash<auto> body = {
+            "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
+            "max_tokens": getRequestMaxTokens(opts),
+            "messages": api_messages,
+        };
+        if (system_prompt.val()) {
+            body.system = system_prompt;
+        }
+
+        if (tools) {
+            list<auto> tool_defs = ();
+            foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
+                push tool_defs, {
+                    "name": td.name,
+                    "description": td.description ?? "",
+                    "input_schema": td.parameters
+                        ?? {"type": "object", "properties": {}},
+                };
+            }
+            body.tools = tool_defs;
+        }
+        return mergeRequestBodyOptions(body, opts);
+    }
+}
+
+#! Factory for @ref AnthropicLlmProvider
+public class AnthropicLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "anthropic";
+    }
+
+    string getDisplayName() {
+        return "Anthropic Messages API";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new AnthropicLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": True,
+        };
     }
 }
 }

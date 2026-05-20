@@ -39,6 +39,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires QoreLlmTypes
 
 module OpenAiRestClient {
     version = "1.1";
@@ -48,6 +49,7 @@ module OpenAiRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("openai", OpenAiRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(new OpenAiLlmProviderFactory());
     };
 }
 
@@ -685,6 +687,372 @@ public class OpenAiResponseSseStreamIo {
             rv = base + rv;
         }
         return rv;
+    }
+}
+
+#! LLM provider that dispatches to OpenAI-compatible \c /v1/chat/completions endpoints
+/** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract for any
+    backend that speaks the OpenAI chat-completions wire format (OpenAI,
+    Azure OpenAI, vLLM, SGLang via @ref SGLangLlmProvider, any compatible
+    gateway).  Owns its own @ref RestClientIo::RestClientIo and uses the
+    standard \c Authorization: \c Bearer header for authentication.
+
+    The provider's default OpenAI-facade hooks (inherited from
+    @ref QoreLlmUtils::AbstractLlmProvider) are sufficient because this
+    provider already speaks OpenAI shape natively — no overrides needed
+    for \c tool_choice, \c response_format, stream raw shape, or tool-call
+    deltas.
+
+    Thread-safe: the REST client is lazy-initialized behind a mutex.
+*/
+public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    private {
+        #! Lazy-initialized REST client
+        *RestClientIo::RestClientIo rest_client;
+        #! Serializes lazy initialization
+        Mutex rest_mutex();
+    }
+
+    #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig
+    /** @param config the backend configuration; @ref QoreLlmUtils::LlmBackendConfig::url
+            is required
+
+        @throw LLM-CONFIG-ERROR \c url is missing
+        @throw LLM-DEPENDENCY-ERROR the \c json module is not available
+    */
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : QoreLlmUtils::AbstractLlmProvider(config) {
+        if (!config.url.val()) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("url is required for %y mode", getMode());
+        }
+%ifdef NoJson
+        throw "LLM-DEPENDENCY-ERROR",
+            "json module is required for HTTP mode but is not available";
+%endif
+    }
+
+    string getMode() {
+        return "http";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = {
+            "messages": (
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ),
+            "max_tokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
+        };
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
+        }
+        if (output_schema) {
+            body.response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": output_schema.name ?? "output",
+                    "strict": True,
+                    "schema": output_schema,
+                },
+            };
+        }
+        body = mergeRequestBodyOptions(body, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/chat/completions", body,
+                    buildAuthHeader());
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("HTTP completion request failed: %s",
+                ex.desc), ex;
+        }
+
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": resp.body.choices[0].message.content ?? "",
+            "usage": resp.body.usage ?? {},
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/chat/completions", body,
+                    buildAuthHeader());
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("chat request failed: %s",
+                ex.desc), ex;
+        }
+
+        return parseOpenAiChatResponse(resp.body);
+    }
+
+    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
+        body.stream = True;
+
+        hash<auto> hdr = {"Accept": "text/event-stream"};
+        if (getConfig().api_key.val()) {
+            hdr."Authorization" = "Bearer " + getConfig().api_key;
+        }
+        hdr."Content-Type" = "application/json";
+
+        HttpClientIo::HttpClientConnectionManager mgr =
+            rest_client.getConnectionManager();
+        HttpClientIo::HttpClientStreamHandle stream =
+            mgr.acquireStream(getConfig().url);
+
+        string json_body = make_json(body);
+        stream.startStreaming("POST", "/v1/chat/completions", hdr, False,
+            json_body);
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        while (True) {
+            *hash<SseMessageInfo> evt = reader.readEvent(
+                getConfig().timeout_ms);
+            if (!evt) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+            if (evt.data == "[DONE]") {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+
+            *hash<auto> parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch () {
+                continue;
+            }
+
+            *string delta;
+            if (parsed.choices[0].delta.content.val()) {
+                delta = parsed.choices[0].delta.content;
+            }
+            if (parsed.choices[0].finish_reason.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "done": True,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+                break;
+            }
+            if (delta.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+            }
+        }
+    }
+
+    #! Returns headers with the OpenAI \c Authorization: \c Bearer credential
+    private *hash<auto> buildAuthHeader() {
+        *hash<auto> hdr;
+        if (getConfig().api_key.val()) {
+            hdr."Authorization" = "Bearer " + getConfig().api_key;
+        }
+        return hdr;
+    }
+
+    #! Lazy-initializes the underlying REST client
+    private ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                rest_client = new RestClientIo::RestClientIo({
+                    "url": getConfig().url,
+                    "connect_timeout": getConfig().connect_timeout_ms,
+                    "timeout": getConfig().timeout_ms,
+                    "data": "json",
+                });
+            }
+        }
+    }
+
+    #! Builds an OpenAI-shaped chat-completions request body
+    private hash<auto> buildOpenAiChatBody(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        list<hash<auto>> api_messages = ();
+        foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
+            hash<auto!> api_msg();
+            api_msg.role = msg.role;
+            if (msg.content_parts) {
+                list<auto> parts = ();
+                foreach hash<QoreLlmUtils::ContentPart> part in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": sprintf("data:%s;base64,%s",
+                                    part.mime_type ?? "image/png", b64),
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push parts, {"type": "text", "text": part.text};
+                    }
+                }
+                api_msg.content = parts;
+            } else if (msg.content.val()) {
+                api_msg.content = msg.content;
+            }
+            if (msg.tool_calls) {
+                list<auto> tc_list = ();
+                foreach hash<QoreLlmUtils::ChatToolCall> tc in (msg.tool_calls) {
+                    push tc_list, {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": make_json(tc.arguments ?? {}),
+                        },
+                    };
+                }
+                api_msg.tool_calls = tc_list;
+            }
+            if (msg.tool_call_id.val()) {
+                api_msg.tool_call_id = msg.tool_call_id;
+            }
+            if (msg.name.val() && msg.role == "tool") {
+                api_msg.name = msg.name;
+            }
+            push api_messages, api_msg;
+        }
+
+        hash<auto> body = {
+            "messages": api_messages,
+            "max_tokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
+        };
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
+        }
+        if (tools) {
+            list<auto> tool_defs = ();
+            foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
+                push tool_defs, {
+                    "type": "function",
+                    "function": {
+                        "name": td.name,
+                        "description": td.description ?? "",
+                        "parameters": td.parameters
+                            ?? {"type": "object", "properties": {}},
+                    },
+                };
+            }
+            body.tools = tool_defs;
+        }
+        return mergeRequestBodyOptions(body, opts);
+    }
+
+    #! Parses an OpenAI-shaped chat-completions response into a @ref QoreLlmUtils::ChatResponse
+    private static hash<QoreLlmUtils::ChatResponse> parseOpenAiChatResponse(
+            hash<auto> response_data) {
+        hash<auto> choice = response_data.choices[0];
+        hash<auto> msg = choice.message;
+
+        string stop_reason;
+        switch (choice.finish_reason) {
+            case "stop":
+                stop_reason = "end_turn";
+                break;
+            case "tool_calls":
+                stop_reason = "tool_use";
+                break;
+            case "length":
+                stop_reason = "max_tokens";
+                break;
+            default:
+                stop_reason = choice.finish_reason ?? "end_turn";
+        }
+
+        *list<hash<QoreLlmUtils::ChatToolCall>> parsed_tool_calls;
+        if (msg.tool_calls) {
+            parsed_tool_calls = ();
+            foreach hash<auto> tc in (msg.tool_calls) {
+                *hash<auto> args;
+                if (tc.function.arguments.val()) {
+                    if (tc.function.arguments.typeCode() == NT_STRING) {
+                        args = parse_json(tc.function.arguments);
+                    } else {
+                        args = tc.function.arguments;
+                    }
+                }
+                push parsed_tool_calls, <QoreLlmUtils::ChatToolCall>{
+                    "id": tc.id,
+                    "name": tc.function.name,
+                    "arguments": args,
+                };
+            }
+        }
+
+        return <QoreLlmUtils::ChatResponse>{
+            "id": response_data.id,
+            "model": response_data.model,
+            "stop_reason": stop_reason,
+            "content": msg.content,
+            "tool_calls": parsed_tool_calls,
+            "usage": response_data.usage ?? {},
+            "raw": response_data,
+        };
+    }
+}
+
+#! Factory for @ref OpenAiLlmProvider
+public class OpenAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "http";
+    }
+
+    string getDisplayName() {
+        return "OpenAI-compatible chat completions";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new OpenAiLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": True,
+        };
     }
 }
 }
