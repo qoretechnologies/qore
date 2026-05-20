@@ -5046,7 +5046,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     private processOAuth2RefreshResult() {
         hash<auto> resp = oauth2_future.get();
         delete oauth2_future;
-        delete oauth2_operation;
+        # oauth2_operation is still in-flight in the async I/O controller (the
+        # controller dispatches its onComplete on the worker pool after the
+        # Future resolves).  `delete` would call the destructor immediately
+        # regardless of remaining refs, turning the QoreObject into a deleted
+        # zombie and triggering OBJECT-ALREADY-DELETED in workerLoop.  Just
+        # drop the local ref: the controller still holds a strong ref to the
+        # spop_obj, so the destructor only runs once the controller has
+        # finished dispatching onComplete and released its ref.
+        remove oauth2_operation;
         delete oauth2_notifier;
         delete oauth2_rcio;
 
@@ -5201,7 +5209,11 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
                 oauth2_operation.cancel();
             } catch () {
             }
-            delete oauth2_operation;
+            # See processOAuth2RefreshResult(): `delete` here would race the
+            # controller's still-pending onComplete dispatch and surface as
+            # OBJECT-ALREADY-DELETED.  Drop the local ref instead — the
+            # controller still holds the spop_obj ref until onComplete has run.
+            remove oauth2_operation;
         }
         if (pending_future) {
             delete pending_future;
