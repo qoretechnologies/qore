@@ -228,6 +228,14 @@ struct QorePluginValidationContext {
     const QoreProgram* program;
 };
 
+enum QorePluginValueCreateFlags : uint32_t {
+    //! The returned node adopts one owned plugin value reference.
+    QORE_PLUGIN_VALUE_ADOPT = 0,
+    //! The returned node first calls the registered incref callback.
+    QORE_PLUGIN_VALUE_BORROWED = 1,
+    QORE_PLUGIN_VALUE_CREATE_RESERVED_MASK = 0xFFFFFFFEu,
+};
+
 extern "C" {
 DLLEXPORT int qore_validate_plugin_types_v1(
     const QorePluginTypeRegistration* reg,
@@ -238,6 +246,36 @@ DLLEXPORT int qore_validate_plugin_types_v1(
 DLLEXPORT int qore_register_plugin_types_v1(
     const QorePluginRegistrationContextV1* ctx,
     const QorePluginTypeRegistration* reg,
+    ExceptionSink* xsink);
+
+//! Creates a Qore runtime node for a registered plugin value type.
+/** @param module_name the plugin provider module name
+    @param local_type_id the provider-local type id from QorePluginTypeDescriptor::local_type_id
+    @param value_bits opaque plugin-owned value bits
+    @param flags QorePluginValueCreateFlags ownership flags
+    @param xsink exception sink for errors
+    @return a new Qore node on success; nullptr on error
+*/
+DLLEXPORT AbstractQoreNode* qore_plugin_make_value_v1(
+    const char* module_name,
+    uint16_t local_type_id,
+    uint64_t value_bits,
+    uint32_t flags,
+    ExceptionSink* xsink);
+
+//! Extracts provider identity and opaque value bits from a plugin value node.
+/** @param node the node to inspect
+    @param module_name optional output for the provider module name; valid while node remains alive
+    @param local_type_id optional output for the provider-local type id
+    @param value_bits optional output for the opaque plugin-owned value bits
+    @param xsink exception sink for errors
+    @return 0 on success; -1 on error
+*/
+DLLEXPORT int qore_plugin_get_value_bits_v1(
+    const AbstractQoreNode* node,
+    const char** module_name,
+    uint16_t* local_type_id,
+    uint64_t* value_bits,
     ExceptionSink* xsink);
 }
 

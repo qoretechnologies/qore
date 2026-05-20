@@ -17,12 +17,10 @@
     - registrations are process-global after a module-init transaction commits;
     - operation dispatch goes through registered runtime helpers;
     - QORD stores plugin module imports, operation metadata, and helper refs for
-      plugin-dispatch IR references;
+      plugin-dispatch IR references and serialized plugin value instances;
     - dense-buffer plugin dispatch accepts Qore \c buffer<T> values and passes
       validated raw frames to \c DenseBufferUnary and \c DenseBufferBinary
-      helpers;
-    - serialized plugin value-instance payloads are reserved for a later
-      implementation pass.
+      helpers.
 
     @section plugin_types_registration Registering A Plugin Type
 
@@ -210,6 +208,50 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     the module name, operation name, field name, expected type, actual type,
     subreason, and design-section reference in the diagnostic text.
 
+    @section plugin_types_values Plugin Value Instances
+
+    Registered plugin types can wrap module-defined value bits in a first-class
+    Qore value node with \c qore_plugin_make_value_v1(). The v1 constructor
+    takes the provider module name, local type id, opaque 64-bit value bits, and
+    create flags:
+
+    @code{.cpp}
+AbstractQoreNode* node = qore_plugin_make_value_v1(
+    "sample-plugin",
+    0,
+    native_value_bits,
+    QORE_PLUGIN_VALUE_ADOPT,
+    xsink);
+    @endcode
+
+    Use \c QORE_PLUGIN_VALUE_ADOPT when the new Qore node owns one reference to
+    the native value. Use \c QORE_PLUGIN_VALUE_BORROWED when the value remains
+    owned elsewhere; libqore calls the registered \c incref callback before the
+    node is returned. When the node is released, libqore calls the registered
+    \c decref callback. Equality uses the registered \c equal callback.
+
+    Module code can recover the provider identity and opaque value bits with
+    \c qore_plugin_get_value_bits_v1():
+
+    @code{.cpp}
+const char* module_name = nullptr;
+uint16_t local_type_id = 0;
+uint64_t value_bits = 0;
+if (!qore_plugin_get_value_bits_v1(node, &module_name, &local_type_id,
+        &value_bits, xsink)) {
+    // value_bits belongs to module_name:local_type_id
+}
+    @endcode
+
+    QORD constants encode plugin value nodes with \c VT_PLUGIN_INSTANCE:
+    provider import index, local type id, serializer format version, a reserved
+    zero field, and the serializer payload. On load, the provider module must
+    already be registered; the loader validates the import metadata and calls
+    the registered deserializer. The regular \c Serializable data path uses the
+    same serializer and deserializer callbacks and records the provider module
+    as a dependency; if the plugin module is already registered in the process,
+    deserialization does not try to load it again.
+
     @section plugin_types_reflection Reflection
 
     Qore code can inspect committed descriptors with
@@ -308,8 +350,6 @@ QORE_PLUGIN_CROSS_TYPE_TRACE=1 qore my-script.q
 
     The following pieces are intentionally not part of the current shipped
     surface:
-    - serialized plugin value instances (\c VT_PLUGIN_INSTANCE) are reserved
-      but not yet written or read;
     - optional LLVM codegen extension hooks are reserved for a later ABI
       header.
 

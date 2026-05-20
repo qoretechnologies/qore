@@ -122,9 +122,9 @@
     - new experimental @ref plugin_types "plugin-type" registration ABI
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper
-      dispatch, QORD helper-reference metadata, verifier diagnostics, trace
-      controls, and @ref Qore::Reflection::PluginRegistry "PluginRegistry"
-      introspection
+      dispatch, QORD helper-reference metadata, serialized plugin value
+      instances, verifier diagnostics, trace controls, and
+      @ref Qore::Reflection::PluginRegistry "PluginRegistry" introspection
     - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>
       and QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>
     - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> dual-stack
@@ -1293,8 +1293,11 @@ foreach string module_name in (registry.getProcessModules()) {
     Program's rolling fallback-site buffer used by
     \c PluginRegistry::getRecentFallbackSites(). Dense-buffer helper dispatch
     now has dedicated IR opcodes that validate \c buffer<T> operands before
-    passing raw frames to module helpers. See @ref plugin_types for the
-    complete module-author overview, current limitations, the
+    passing raw frames to module helpers. Plugin value nodes can be wrapped with
+    \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in QORD,
+    and round-tripped through \c Serializable using the registered plugin
+    serializer callbacks. See @ref plugin_types for the complete module-author
+    overview, current limitations, the
     \c examples/plugins/sample-buffer reference module, and the advisory
     \c examples/plugins/qore-plugin-lint descriptor linter.
     @endparblock

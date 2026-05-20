@@ -231,6 +231,10 @@ enum class QoreAOTValueTag : uint8_t {
     //! Native AOT expression payload for computed member defaults.
     //! Encoded as size(u32) + one inline AOTExprKind expression.
     VT_EXPR_NATIVE = 19,
+    //! Module-defined plugin value instance.
+    //! Encoded as import_idx(u16) + local_type_id(u16) + serializer_format_version(u16)
+    //! + reserved(u16) + payload_len(u32) + payload bytes.
+    VT_PLUGIN_INSTANCE = 20,
 };
 
 //! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
@@ -439,6 +443,9 @@ public:
     //! section emission.
     bool addPluginOperationRef(const char* module_name, uint16_t op_local_id,
         uint8_t canonical_signature_version, uint64_t signature_hash);
+
+    //! Record a module-local plugin type reference for later PLUGIN_* section emission.
+    bool addPluginTypeRef(const char* module_name, uint16_t local_type_id, uint16_t* import_idx = nullptr);
 
     //! Emit PLUGIN_IMPORTS / PLUGIN_TYPE_REGISTRY / PLUGIN_HELPER_REFS.
     bool writePluginSections(std::string& error);

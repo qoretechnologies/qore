@@ -11,10 +11,29 @@
 #define _QORE_INTERN_QOREPLUGINREGISTRY_H
 
 #include <qore/QorePluginType.h>
+#include <qore/QoreValue.h>
 
 #include <cstdint>
 #include <string>
 #include <vector>
+
+struct QorePluginResolvedTypeInfo {
+    std::string module_name;
+    uint16_t local_type_id = 0;
+    std::string type_name;
+    const QoreTypeInfo* type_info = nullptr;
+    QorePluginValueOps value_ops = {};
+    QorePluginSerializeCallback serialize = nullptr;
+    QorePluginDeserializeCallback deserialize = nullptr;
+    uint16_t serializer_format_version = 0;
+};
+
+struct QorePluginSerializedValueInfo {
+    std::string module_name;
+    uint16_t local_type_id = 0;
+    uint16_t serializer_format_version = 0;
+    std::vector<uint8_t> payload;
+};
 
 struct QorePluginModuleHandle {
     static constexpr uint64_t Magic = 0x516f7265506c6731ULL; // "QorePlg1"
@@ -85,6 +104,14 @@ DLLLOCAL int qore_plugin_get_process_operation_id_checked(const char* module_nam
 DLLLOCAL uint64_t qore_plugin_compute_signature_hash_v1(const QorePluginOperationSignature& signature);
 DLLLOCAL int qore_plugin_get_aot_module_info(const char* module_name, QorePluginAOTModuleInfo& info,
     ExceptionSink* xsink);
+DLLLOCAL int qore_plugin_get_type_info(const char* module_name, uint16_t local_type_id,
+    QorePluginResolvedTypeInfo& info, ExceptionSink* xsink);
+DLLLOCAL bool qore_plugin_is_value_node(const AbstractQoreNode* node);
+DLLLOCAL const QoreTypeInfo* qore_plugin_get_value_type_info(const AbstractQoreNode* node);
+DLLLOCAL int qore_plugin_serialize_value_node(const AbstractQoreNode* node,
+    QorePluginSerializedValueInfo& info, ExceptionSink* xsink);
+DLLLOCAL QoreValue qore_plugin_deserialize_value(const char* module_name, uint16_t local_type_id,
+    uint16_t serializer_format_version, const uint8_t* payload, uint32_t payload_len, ExceptionSink* xsink);
 DLLLOCAL void qore_plugin_record_fallback_site(QoreProgram* pgm, const char* file, int line,
     const char* operation_name, const QoreTypeInfo* lhs_type, const QoreTypeInfo* rhs_type, const char* reason);
 

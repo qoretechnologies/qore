@@ -21,6 +21,7 @@
 #include <qore/QorePluginType.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include <qore/intern/QoreSerializable.h>
 
 static void smokeIncref(uint64_t) noexcept {
 }
@@ -43,12 +44,33 @@ static int64_t smokeHash(uint64_t value, ExceptionSink*) {
 static void smokeCleanup(uint64_t) noexcept {
 }
 
-static int smokeSerialize(uint64_t, QorePluginByteWriteCallback, void*, ExceptionSink*) {
-    return 0;
+static int smokeSerialize(uint64_t value_bits, QorePluginByteWriteCallback write, void* write_user_data,
+        ExceptionSink* xsink) {
+    uint8_t bytes[sizeof(uint64_t)];
+    for (size_t i = 0; i < sizeof(bytes); ++i) {
+        bytes[i] = static_cast<uint8_t>((value_bits >> (i * 8)) & 0xff);
+    }
+    return write(bytes, sizeof(bytes), write_user_data, xsink);
 }
 
-static uint64_t smokeDeserialize(QorePluginByteReadCallback, uint32_t, void*, ExceptionSink*) {
-    return 0;
+static uint64_t smokeDeserialize(QorePluginByteReadCallback read, uint32_t payload_len, void* read_user_data,
+        ExceptionSink* xsink) {
+    if (payload_len != sizeof(uint64_t)) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-SMOKE-DESERIALIZATION-ERROR",
+                "plugin smoke payload length must be 8 bytes, got %u", payload_len);
+        }
+        return 0;
+    }
+    uint8_t bytes[sizeof(uint64_t)] = {};
+    if (read(bytes, sizeof(bytes), read_user_data, xsink)) {
+        return 0;
+    }
+    uint64_t value_bits = 0;
+    for (size_t i = 0; i < sizeof(bytes); ++i) {
+        value_bits |= static_cast<uint64_t>(bytes[i]) << (i * 8);
+    }
+    return value_bits;
 }
 
 static QoreValue smokeValueFromBits(uint64_t bits) {
@@ -491,6 +513,91 @@ static bool checkRegistrationAndIntrospection() {
             || !reader.findSection(QoreAOTSectionType::PLUGIN_TYPE_REGISTRY)
             || !reader.findSection(QoreAOTSectionType::PLUGIN_HELPER_REFS)) {
         std::cerr << "plugin QORD smoke blob is missing plugin sections\n";
+        return false;
+    }
+
+    const uint64_t plugin_value_bits = 0x1122334455667788ULL;
+    ValueHolder plugin_value(qore_plugin_make_value_v1("plugin-smoke", 0, plugin_value_bits,
+        QORE_PLUGIN_VALUE_ADOPT, &xsink), &xsink);
+    if (xsink || !*plugin_value || plugin_value->getType() != NT_PLUGIN_VALUE) {
+        std::cerr << "plugin value node creation failed\n";
+        return false;
+    }
+    const char* plugin_value_module = nullptr;
+    uint16_t plugin_value_type_id = 0xffffu;
+    uint64_t extracted_value_bits = 0;
+    if (qore_plugin_get_value_bits_v1(plugin_value->getInternalNode(), &plugin_value_module, &plugin_value_type_id,
+            &extracted_value_bits, &xsink) || xsink || !plugin_value_module
+            || std::strcmp(plugin_value_module, "plugin-smoke") || plugin_value_type_id != 0
+            || extracted_value_bits != plugin_value_bits) {
+        std::cerr << "plugin value bit extraction failed\n";
+        return false;
+    }
+
+    QoreAOTBinaryWriter value_writer;
+    uint32_t value_sec = value_writer.beginSection(QoreAOTSectionType::PROGRAM_METADATA);
+    if (!value_writer.writeValue(*plugin_value)) {
+        std::cerr << "failed to write plugin value instance\n";
+        return false;
+    }
+    value_writer.endSection(value_sec);
+    std::string value_section_error;
+    if (!value_writer.writePluginSections(value_section_error)) {
+        std::cerr << "failed to write plugin value QORD sections: " << value_section_error << "\n";
+        return false;
+    }
+    QoreAOTBinaryHeader value_hdr = {};
+    value_hdr.magic = QORE_AOT_BINARY_MAGIC;
+    value_hdr.version = QORE_AOT_BINARY_VERSION;
+    value_hdr.label_offset = value_writer.strings.add("plugin-value-qord");
+    value_hdr.max_opcode_id = 0;
+    value_hdr.qore_version_major = QORE_VERSION_MAJOR;
+    value_hdr.qore_version_minor = QORE_VERSION_MINOR;
+    value_hdr.qore_version_patch = QORE_VERSION_PATCH;
+    std::vector<uint8_t> value_blob;
+    if (!value_writer.finalize(value_hdr, value_blob)) {
+        std::cerr << "failed to finalize plugin value QORD smoke blob\n";
+        return false;
+    }
+    QoreAOTBinaryReader value_reader;
+    std::string value_read_error;
+    if (!value_reader.open(value_blob.data(), static_cast<uint32_t>(value_blob.size()), value_read_error)) {
+        std::cerr << "failed to read plugin value QORD smoke blob: " << value_read_error << "\n";
+        return false;
+    }
+    const QoreAOTSectionHeader* serialized_value_sec = value_reader.findSection(QoreAOTSectionType::PROGRAM_METADATA);
+    if (!serialized_value_sec) {
+        std::cerr << "plugin value QORD smoke blob is missing value section\n";
+        return false;
+    }
+    const uint8_t* value_ptr = value_reader.getSectionData(*serialized_value_sec);
+    const uint8_t* value_end = value_ptr + serialized_value_sec->size;
+    ValueHolder decoded_plugin_value(value_reader.readValue(value_ptr, value_end, value_read_error), &xsink);
+    if (!value_read_error.empty() || value_ptr != value_end || !*decoded_plugin_value
+            || decoded_plugin_value->getType() != NT_PLUGIN_VALUE) {
+        std::cerr << "failed to read plugin value instance: " << value_read_error << "\n";
+        return false;
+    }
+    uint64_t decoded_value_bits = 0;
+    if (qore_plugin_get_value_bits_v1(decoded_plugin_value->getInternalNode(), nullptr, nullptr,
+            &decoded_value_bits, &xsink) || xsink || decoded_value_bits != plugin_value_bits) {
+        std::cerr << "plugin value QORD round trip produced the wrong value bits\n";
+        return false;
+    }
+
+    ReferenceHolder<QoreHashNode> serialized_plugin_value(QoreSerializable::serializeToData(*plugin_value, 0, &xsink),
+        &xsink);
+    if (xsink || !serialized_plugin_value) {
+        std::cerr << "plugin value Serializable serialization failed\n";
+        return false;
+    }
+    ValueHolder deserialized_plugin_value(QoreSerializable::deserialize(&xsink, **serialized_plugin_value, 0),
+        &xsink);
+    uint64_t deserialized_value_bits = 0;
+    if (xsink || !*deserialized_plugin_value || deserialized_plugin_value->getType() != NT_PLUGIN_VALUE
+            || qore_plugin_get_value_bits_v1(deserialized_plugin_value->getInternalNode(), nullptr, nullptr,
+                &deserialized_value_bits, &xsink) || xsink || deserialized_value_bits != plugin_value_bits) {
+        std::cerr << "plugin value Serializable round trip produced the wrong value bits\n";
         return false;
     }
 

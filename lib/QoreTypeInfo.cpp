@@ -45,6 +45,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/QoreIteratorBase.h"
@@ -2149,6 +2150,8 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
             return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
         case NT_BUFFER:
             return static_cast<const QoreBufferNode*>(n)->getTypeInfo();
+        case NT_PLUGIN_VALUE:
+            return qore_plugin_get_value_type_info(n);
         case NT_REFERENCE:
             return static_cast<const ReferenceNode*>(n)->getTypeInfo();
         case NT_RUNTIME_CLOSURE: {

@@ -224,6 +224,136 @@ bool hasException(ExceptionSink* xsink) {
     return xsink && *xsink;
 }
 
+class QorePluginValueNode : public SimpleValueQoreNode {
+public:
+    QorePluginValueNode(const QorePluginResolvedTypeInfo& type, uint64_t value_bits)
+            : SimpleValueQoreNode(NT_PLUGIN_VALUE), type(type), value_bits(value_bits) {
+    }
+
+    ~QorePluginValueNode() override {
+        if (type.value_ops.decref) {
+            type.value_ops.decref(value_bits);
+        }
+    }
+
+    const QorePluginResolvedTypeInfo& getPluginType() const {
+        return type;
+    }
+
+    uint64_t getValueBits() const {
+        return value_bits;
+    }
+
+    int getAsString(QoreString& str, int, ExceptionSink*) const override {
+        str.sprintf("<plugin-value %s:%s 0x%016llx>",
+            type.module_name.c_str(), type.type_name.c_str(), static_cast<unsigned long long>(value_bits));
+        return 0;
+    }
+
+    QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const override {
+        del = true;
+        QoreString* rv = new QoreString;
+        getAsString(*rv, foff, xsink);
+        return rv;
+    }
+
+    AbstractQoreNode* realCopy() const override {
+        if (type.value_ops.incref) {
+            type.value_ops.incref(value_bits);
+        }
+        return new QorePluginValueNode(type, value_bits);
+    }
+
+    bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const override {
+        return is_equal_hard(v, xsink);
+    }
+
+    bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const override {
+        if (get_node_type(v) != NT_PLUGIN_VALUE) {
+            return false;
+        }
+        const QorePluginValueNode* other = static_cast<const QorePluginValueNode*>(v);
+        if (type.module_name != other->type.module_name || type.local_type_id != other->type.local_type_id) {
+            return false;
+        }
+        return type.value_ops.equal
+            ? type.value_ops.equal(value_bits, other->value_bits, xsink)
+            : value_bits == other->value_bits;
+    }
+
+    const char* getTypeName() const override {
+        return type.type_name.c_str();
+    }
+
+private:
+    QorePluginResolvedTypeInfo type;
+    uint64_t value_bits = 0;
+};
+
+struct PluginByteVectorWriter {
+    std::vector<uint8_t> payload;
+};
+
+int pluginByteVectorWrite(const void* data, uint32_t len, void* user_data, ExceptionSink* xsink) {
+    PluginByteVectorWriter* writer = static_cast<PluginByteVectorWriter*>(user_data);
+    if (!writer || (len && !data)) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-SERIALIZATION-ERROR",
+                "plugin value serializer supplied invalid write callback arguments "
+                "(field=\"payload\", expected=\"valid data pointer\", actual=\"null\", "
+                "subreason=\"invalid_serializer_write\", section=3.9)");
+        }
+        return -1;
+    }
+    if (writer->payload.size() > std::numeric_limits<uint32_t>::max() - len) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-SERIALIZATION-ERROR",
+                "plugin value serializer payload exceeds the 32-bit QORD payload limit "
+                "(field=\"payload_length\", expected=\"<= %u\", actual=\"overflow\", "
+                "subreason=\"payload_too_large\", section=3.9)",
+                std::numeric_limits<uint32_t>::max());
+        }
+        return -1;
+    }
+    const uint8_t* p = static_cast<const uint8_t*>(data);
+    writer->payload.insert(writer->payload.end(), p, p + len);
+    return 0;
+}
+
+struct PluginByteVectorReader {
+    const uint8_t* payload = nullptr;
+    uint32_t payload_len = 0;
+    uint32_t offset = 0;
+};
+
+int pluginByteVectorRead(void* data, uint32_t len, void* user_data, ExceptionSink* xsink) {
+    PluginByteVectorReader* reader = static_cast<PluginByteVectorReader*>(user_data);
+    if (!reader || (len && !data)) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-DESERIALIZATION-ERROR",
+                "plugin value deserializer supplied invalid read callback arguments "
+                "(field=\"payload\", expected=\"valid data pointer\", actual=\"null\", "
+                "subreason=\"invalid_deserializer_read\", section=3.9)");
+        }
+        return -1;
+    }
+    if (len > reader->payload_len - reader->offset) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-DESERIALIZATION-ERROR",
+                "plugin value deserializer read beyond the serialized payload "
+                "(field=\"payload_length\", expected=\"%u remaining byte(s)\", actual=\"%u requested byte(s)\", "
+                "subreason=\"payload_underflow\", section=3.9)",
+                reader->payload_len - reader->offset, len);
+        }
+        return -1;
+    }
+    if (len) {
+        memcpy(data, reader->payload + reader->offset, len);
+        reader->offset += len;
+    }
+    return 0;
+}
+
 void appendU8(std::vector<uint8_t>& out, uint8_t v) {
     out.push_back(v);
 }
@@ -1269,6 +1399,163 @@ int qore_plugin_get_aot_module_info(const char* module_name, QorePluginAOTModule
     return 0;
 }
 
+int qore_plugin_get_type_info(const char* module_name, uint16_t local_type_id,
+        QorePluginResolvedTypeInfo& info, ExceptionSink* xsink) {
+    info = QorePluginResolvedTypeInfo();
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    auto i = plugin_modules.find(module_name ? module_name : "");
+    if (i == plugin_modules.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-MODULE-NOT-LOADED",
+                "plugin registry has no loaded module named \"%s\" "
+                "(method=\"getTypeInfo\", subreason=\"module_not_loaded\", section=3.9)",
+                escapeDiagnosticName(module_name).c_str());
+        }
+        return -1;
+    }
+
+    int n = 0;
+    for (const RegisteredPluginType& type : i->second.types) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin registry type lookup")) {
+            return -1;
+        }
+        if (type.local_type_id == local_type_id) {
+            info.module_name = i->second.module_name;
+            info.local_type_id = type.local_type_id;
+            info.type_name = type.type_name;
+            info.type_info = type.type_info;
+            info.value_ops = type.value_ops;
+            info.serialize = type.serialize;
+            info.deserialize = type.deserialize;
+            info.serializer_format_version = type.serializer_format_version;
+            return 0;
+        }
+        ++n;
+    }
+
+    if (xsink) {
+        xsink->raiseException("PLUGIN-REGISTRY-TYPE-NOT-REGISTERED",
+            "plugin registry module \"%s\" has no local type id %u "
+            "(method=\"getTypeInfo\", field=\"local_type_id\", expected=\"registered type id\", "
+            "actual=\"missing\", subreason=\"type_not_registered\", section=3.9)",
+            escapeDiagnosticName(module_name).c_str(), local_type_id);
+    }
+    return -1;
+}
+
+bool qore_plugin_is_value_node(const AbstractQoreNode* node) {
+    return get_node_type(node) == NT_PLUGIN_VALUE;
+}
+
+const QoreTypeInfo* qore_plugin_get_value_type_info(const AbstractQoreNode* node) {
+    if (!qore_plugin_is_value_node(node)) {
+        return nullptr;
+    }
+    const QorePluginValueNode* value = static_cast<const QorePluginValueNode*>(node);
+    return value->getPluginType().type_info;
+}
+
+int qore_plugin_serialize_value_node(const AbstractQoreNode* node,
+        QorePluginSerializedValueInfo& info, ExceptionSink* xsink) {
+    info = QorePluginSerializedValueInfo();
+    if (!qore_plugin_is_value_node(node)) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-SERIALIZATION-ERROR",
+                "cannot serialize non-plugin value node as a plugin value instance "
+                "(field=\"type\", expected=\"plugin value\", actual=\"%s\", "
+                "subreason=\"not_plugin_value\", section=3.9)",
+                get_type_name(node));
+        }
+        return -1;
+    }
+
+    const QorePluginValueNode* value = static_cast<const QorePluginValueNode*>(node);
+    const QorePluginResolvedTypeInfo& type = value->getPluginType();
+    if (!type.serialize) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-SERIALIZATION-ERROR",
+                "plugin value type \"%s:%s\" does not provide a serializer "
+                "(field=\"serialize\", expected=\"serializer callback\", actual=\"null\", "
+                "subreason=\"serializer_missing\", section=3.9)",
+                escapeDiagnosticName(type.module_name.c_str()).c_str(),
+                escapeDiagnosticName(type.type_name.c_str()).c_str());
+        }
+        return -1;
+    }
+
+    PluginByteVectorWriter writer;
+    if (type.serialize(value->getValueBits(), pluginByteVectorWrite, &writer, xsink) || hasException(xsink)) {
+        return -1;
+    }
+
+    info.module_name = type.module_name;
+    info.local_type_id = type.local_type_id;
+    info.serializer_format_version = type.serializer_format_version;
+    info.payload = std::move(writer.payload);
+    return 0;
+}
+
+QoreValue qore_plugin_deserialize_value(const char* module_name, uint16_t local_type_id,
+        uint16_t serializer_format_version, const uint8_t* payload, uint32_t payload_len, ExceptionSink* xsink) {
+    QorePluginResolvedTypeInfo type;
+    if (qore_plugin_get_type_info(module_name, local_type_id, type, xsink)) {
+        return QoreValue();
+    }
+    if (type.serializer_format_version != serializer_format_version) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-DESERIALIZATION-ERROR",
+                "plugin value type \"%s:%s\" serializer format version mismatch "
+                "(field=\"serializer_format_version\", expected=\"%u\", actual=\"%u\", "
+                "subreason=\"serializer_version_mismatch\", section=3.9)",
+                escapeDiagnosticName(type.module_name.c_str()).c_str(),
+                escapeDiagnosticName(type.type_name.c_str()).c_str(),
+                type.serializer_format_version, serializer_format_version);
+        }
+        return QoreValue();
+    }
+    if (!type.deserialize) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-DESERIALIZATION-ERROR",
+                "plugin value type \"%s:%s\" does not provide a deserializer "
+                "(field=\"deserialize\", expected=\"deserializer callback\", actual=\"null\", "
+                "subreason=\"deserializer_missing\", section=3.9)",
+                escapeDiagnosticName(type.module_name.c_str()).c_str(),
+                escapeDiagnosticName(type.type_name.c_str()).c_str());
+        }
+        return QoreValue();
+    }
+    if (payload_len && !payload) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-DESERIALIZATION-ERROR",
+                "plugin value payload pointer is null with non-zero payload length "
+                "(field=\"payload\", expected=\"valid data pointer\", actual=\"null\", "
+                "subreason=\"payload_null\", section=3.9)");
+        }
+        return QoreValue();
+    }
+
+    PluginByteVectorReader reader{payload, payload_len, 0};
+    uint64_t value_bits = type.deserialize(pluginByteVectorRead, payload_len, &reader, xsink);
+    if (hasException(xsink)) {
+        return QoreValue();
+    }
+    if (reader.offset != payload_len) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-DESERIALIZATION-ERROR",
+                "plugin value deserializer consumed %u of %u payload byte(s) "
+                "(field=\"payload_length\", expected=\"all bytes consumed\", actual=\"%u remaining byte(s)\", "
+                "subreason=\"payload_trailing_bytes\", section=3.9)",
+                reader.offset, payload_len, payload_len - reader.offset);
+        }
+        if (type.value_ops.decref) {
+            type.value_ops.decref(value_bits);
+        }
+        return QoreValue();
+    }
+
+    return QoreValue(new QorePluginValueNode(type, value_bits));
+}
+
 QorePluginModuleHandle::QorePluginModuleHandle(const char* name, const char* path, void* dl_handle)
         : module_name(name ? name : ""), module_path(path ? path : ""), dl_handle(dl_handle),
         generation(plugin_handle_generation.fetch_add(1, std::memory_order_relaxed)) {
@@ -1484,6 +1771,57 @@ extern "C" int qore_register_plugin_types_v1(const QorePluginRegistrationContext
     }
 
     traceRegister("staged plugin module '" + std::string(reg->module_name) + "' from " + ctx->module_path);
+    return 0;
+}
+
+extern "C" AbstractQoreNode* qore_plugin_make_value_v1(const char* module_name, uint16_t local_type_id,
+        uint64_t value_bits, uint32_t flags, ExceptionSink* xsink) {
+    if (flags & QORE_PLUGIN_VALUE_CREATE_RESERVED_MASK) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-VALUE-CREATE-ERROR",
+                "cannot create plugin value \"%s:%u\": unsupported create flags 0x%08x "
+                "(field=\"flags\", expected=\"QORE_PLUGIN_VALUE_ADOPT or QORE_PLUGIN_VALUE_BORROWED\", "
+                "actual=\"reserved bits set\", subreason=\"reserved_flags\", section=3.9)",
+                escapeDiagnosticName(module_name).c_str(), local_type_id, flags);
+        }
+        return nullptr;
+    }
+
+    QorePluginResolvedTypeInfo type;
+    if (qore_plugin_get_type_info(module_name, local_type_id, type, xsink)) {
+        return nullptr;
+    }
+    if (flags & QORE_PLUGIN_VALUE_BORROWED) {
+        if (type.value_ops.incref) {
+            type.value_ops.incref(value_bits);
+        }
+    }
+    return new QorePluginValueNode(type, value_bits);
+}
+
+extern "C" int qore_plugin_get_value_bits_v1(const AbstractQoreNode* node, const char** module_name,
+        uint16_t* local_type_id, uint64_t* value_bits, ExceptionSink* xsink) {
+    if (!qore_plugin_is_value_node(node)) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-VALUE-ACCESS-ERROR",
+                "cannot extract plugin value bits from type \"%s\" "
+                "(field=\"type\", expected=\"plugin value\", actual=\"%s\", "
+                "subreason=\"not_plugin_value\", section=3.9)",
+                get_type_name(node), get_type_name(node));
+        }
+        return -1;
+    }
+    const QorePluginValueNode* value = static_cast<const QorePluginValueNode*>(node);
+    const QorePluginResolvedTypeInfo& type = value->getPluginType();
+    if (module_name) {
+        *module_name = type.module_name.c_str();
+    }
+    if (local_type_id) {
+        *local_type_id = type.local_type_id;
+    }
+    if (value_bits) {
+        *value_bits = value->getValueBits();
+    }
     return 0;
 }
 

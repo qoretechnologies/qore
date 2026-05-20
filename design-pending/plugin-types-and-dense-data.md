@@ -53,8 +53,10 @@ is not blocking.
   dispatch opcodes are implemented through Qore `buffer<T>` value wrappers that
   validate non-nullable byte-addressable numeric storage, element-storage
   compatibility, and output/input non-aliasing before calling raw
-  `DenseBufferUnary` / `DenseBufferBinary` helpers. The full Phase 3 deliverable
-  still needs QORD serialized plugin value-instance payload support.
+  `DenseBufferUnary` / `DenseBufferBinary` helpers. Plugin value nodes,
+  `VT_PLUGIN_INSTANCE` QORD read/write support, and `Serializable`
+  round-tripping are implemented with the registered plugin serializer
+  callbacks.
   Program-local activation filtering, operation resolution,
   fallback-site recording/query/clear diagnostics,
   `examples/plugins/sample-buffer/`, and `examples/plugins/qore-plugin-lint`
@@ -2575,8 +2577,8 @@ exposure — reuses Phase 1's `buffer<T>`.
   `DenseBufferBinary`, plus dedicated dense-buffer IR opcodes that evaluate
   Qore `buffer<T>` operands and safely derive raw data/size/stride frames.
 - QORD `PLUGIN_IMPORTS`, `PLUGIN_TYPE_REGISTRY`, and `PLUGIN_HELPER_REFS`
-  sections for plugin-dispatch IR references. Serialized plugin value-instance
-  payloads still need the `VT_PLUGIN_INSTANCE` reader/writer path.
+  sections for plugin-dispatch IR references, plus `VT_PLUGIN_INSTANCE`
+  reader/writer support for serialized plugin value-instance payloads.
 - **Validation and developer experience (§3.12)**, all on the public ABI
   ship boundary:
   - `QoreModuleInitContext` extended with the runtime-owned opaque

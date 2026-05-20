@@ -100,6 +100,11 @@ const NT_OBJECT = NT_OBJECT;
  */
 const NT_BUFFER = NT_BUFFER;
 
+//! type code for plugin value instances
+/** @since %Qore 2.0
+ */
+const NT_PLUGIN_VALUE = NT_PLUGIN_VALUE;
+
 //! type code for @ref closure "closures"
 const NT_CLOSURE = NT_RUNTIME_CLOSURE;
 
@@ -127,6 +132,7 @@ const TypeCodeMap = (
     "10": "object",
     "11": "number",
     "51": "buffer",
+    "52": "plugin value",
     "29": "call reference",
     "32": "closure",
 );
@@ -146,6 +152,7 @@ const TypeNameMap = (
     "hash": NT_HASH,
     "object": NT_OBJECT,
     "buffer": NT_BUFFER,
+    "plugin value": NT_PLUGIN_VALUE,
     "call reference": NT_FUNCREF,
     "closure": NT_RUNTIME_CLOSURE,
 );
