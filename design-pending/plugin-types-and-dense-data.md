@@ -42,10 +42,14 @@ is not blocking.
   builder/printer/verifier plumbing, and smoke coverage for process operation
   lookup plus runtime binary dispatch. QORD now emits and validates
   `PLUGIN_IMPORTS`, `PLUGIN_TYPE_REGISTRY`, and `PLUGIN_HELPER_REFS` sections
-  for plugin-dispatch IR references. The full
+  for plugin-dispatch IR references. Runtime verifier hooks now cover helper
+  ABI resolution, helper result type checks, and `ReturnsLhs` / `ReturnsRhs`
+  alias-contract checks, enabled in debug builds and in release builds with
+  `QORE_PLUGIN_VERIFY`; passing and failing verifier checks are traceable with
+  `QORE_PLUGIN_VERIFY_TRACE`. The full
   Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
   `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
-  value instances, dense-buffer dispatch opcodes, runtime verifier hooks,
+  value instances, dense-buffer dispatch opcodes,
   Program-local activation/fallback diagnostics, the rest of the trace-env
   family, the reference plugin module, lint tooling, and complete user-facing
   documentation. Dense-buffer runtime helper execution is implemented for
@@ -1893,6 +1897,8 @@ renaming or removing:
 | `unsupported_canonical_version` | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` |
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` during registration/contextual validation or runtime dispatch if a committed operation has no resolved helper pointer |
 | `helper_abi_mismatch` | `PLUGIN-HELPER-ABI-MISMATCH` when an IR opcode/runtime helper is paired with a registered operation using a different helper ABI or when a runtime helper receives an invalid call-frame shape |
+| `result_type_mismatch` | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` when a runtime helper returns a value that does not match the operation's declared `return_type` |
+| `alias_contract_violation` | `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` when a runtime helper declared as `ReturnsLhs` or `ReturnsRhs` returns different value bits |
 | `operation_not_registered` | `PLUGIN-HELPER-ABI-MISMATCH`, `PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED` when a process-local or module-local operation reference does not resolve to a committed operation |
 | `program_not_available` | `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` |
 | `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (null module handle pointer; uses the `<field>_missing` convention from the preamble) |

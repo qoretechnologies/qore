@@ -67,6 +67,10 @@ static uint64_t smokeBinary(uint64_t lhs, uint64_t rhs, ExceptionSink*) {
     return smokeBitsFromValue(QoreValue(lhs_value.getAsBigInt() + rhs_value.getAsBigInt()));
 }
 
+static uint64_t smokeBadReturnType(uint64_t, uint64_t, ExceptionSink*) {
+    return smokeBitsFromValue(QoreValue(true));
+}
+
 static uint64_t smokeDenseBinary(void* result_buffer_data, int64_t result_size, const void* lhs_data,
         int64_t lhs_size, int64_t lhs_stride, const void* rhs_data, int64_t rhs_size, int64_t rhs_stride,
         ExceptionSink* xsink) {
@@ -95,7 +99,7 @@ static QorePluginValueOps smokeValueOps() {
 }
 
 static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& type,
-        std::array<QorePluginOperation, 2>& ops) {
+        std::array<QorePluginOperation, 4>& ops) {
     type = {};
     type.local_type_id = 0;
     type.type_name = "SmokeDense";
@@ -129,6 +133,30 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
     ops[1].signature.helper_abi = QorePluginHelperAbi::DenseBufferBinary;
     ops[1].runtime_helper = reinterpret_cast<void (*)()>(smokeDenseBinary);
 
+    ops[2] = {};
+    ops[2].local_id = 2;
+    ops[2].operation_name = "bad_alias";
+    ops[2].signature.arity = 2;
+    ops[2].signature.primary_type = autoTypeInfo;
+    ops[2].signature.secondary_type = autoTypeInfo;
+    ops[2].signature.return_type = autoTypeInfo;
+    ops[2].signature.access = QorePluginValueAccess::ReadOnly;
+    ops[2].signature.result_alias = QorePluginResultAlias::ReturnsLhs;
+    ops[2].signature.helper_abi = QorePluginHelperAbi::BinaryValue;
+    ops[2].runtime_helper = reinterpret_cast<void (*)()>(smokeBinary);
+
+    ops[3] = {};
+    ops[3].local_id = 3;
+    ops[3].operation_name = "bad_return_type";
+    ops[3].signature.arity = 2;
+    ops[3].signature.primary_type = autoTypeInfo;
+    ops[3].signature.secondary_type = autoTypeInfo;
+    ops[3].signature.return_type = bigIntTypeInfo;
+    ops[3].signature.access = QorePluginValueAccess::ReadOnly;
+    ops[3].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
+    ops[3].signature.helper_abi = QorePluginHelperAbi::BinaryValue;
+    ops[3].runtime_helper = reinterpret_cast<void (*)()>(smokeBadReturnType);
+
     QorePluginTypeRegistration reg = {};
     reg.module_name = "plugin-smoke";
     reg.plugin_abi_version = QORE_PLUGIN_ABI_VERSION_V1;
@@ -143,7 +171,7 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
 static bool checkDryRunValidation() {
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
-    std::array<QorePluginOperation, 2> ops;
+    std::array<QorePluginOperation, 4> ops;
     QorePluginTypeRegistration reg = smokeRegistration(type, ops);
     QorePluginValidationContext ctx = {};
     ctx.struct_size = sizeof(ctx);
@@ -168,7 +196,7 @@ static bool checkDryRunValidation() {
 static bool checkRegistrationAndIntrospection() {
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
-    std::array<QorePluginOperation, 2> ops;
+    std::array<QorePluginOperation, 4> ops;
     QorePluginTypeRegistration reg = smokeRegistration(type, ops);
 
     QorePluginModuleHandle handle("plugin-smoke", "/tmp/plugin-smoke.qmod", nullptr);
@@ -198,7 +226,7 @@ static bool checkRegistrationAndIntrospection() {
 
     ReferenceHolder<QoreListNode> types(qore_plugin_get_process_types("plugin-smoke", &xsink), &xsink);
     ReferenceHolder<QoreListNode> reflected_ops(qore_plugin_get_process_operations("plugin-smoke", &xsink), &xsink);
-    if (xsink || !types || !reflected_ops || types->size() != 1 || reflected_ops->size() != 2) {
+    if (xsink || !types || !reflected_ops || types->size() != 1 || reflected_ops->size() != 4) {
         std::cerr << "process plugin descriptor introspection failed\n";
         return false;
     }
@@ -303,6 +331,37 @@ static bool checkRegistrationAndIntrospection() {
         std::cerr << "plugin runtime dense-buffer binary dispatch failed\n";
         return false;
     }
+
+    setenv("QORE_PLUGIN_VERIFY", "1", 1);
+    uint32_t bad_alias_global_id = 0;
+    if (qore_plugin_get_process_operation_id("plugin-smoke", 2, &bad_alias_global_id, &xsink)
+            || xsink || !bad_alias_global_id) {
+        std::cerr << "process plugin bad-alias operation id lookup failed\n";
+        return false;
+    }
+    ExceptionSink alias_xsink;
+    qore_rt_plugin_binary(bad_alias_global_id, smokeBitsFromValue(QoreValue(4)),
+        smokeBitsFromValue(QoreValue(5)), &alias_xsink);
+    if (!alias_xsink) {
+        std::cerr << "plugin runtime verifier did not reject alias contract violation\n";
+        return false;
+    }
+    alias_xsink.clear();
+
+    uint32_t bad_return_global_id = 0;
+    if (qore_plugin_get_process_operation_id("plugin-smoke", 3, &bad_return_global_id, &xsink)
+            || xsink || !bad_return_global_id) {
+        std::cerr << "process plugin bad-return operation id lookup failed\n";
+        return false;
+    }
+    ExceptionSink return_xsink;
+    qore_rt_plugin_binary(bad_return_global_id, smokeBitsFromValue(QoreValue(4)),
+        smokeBitsFromValue(QoreValue(5)), &return_xsink);
+    if (!return_xsink) {
+        std::cerr << "plugin runtime verifier did not reject result type mismatch\n";
+        return false;
+    }
+    return_xsink.clear();
 
     ExceptionSink missing_xsink;
     ReferenceHolder<QoreListNode> missing(qore_plugin_get_process_types("missing-plugin", &missing_xsink),

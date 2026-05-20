@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
@@ -101,6 +102,18 @@ bool pluginDispatchTrace() {
     return std::getenv("QORE_PLUGIN_DISPATCH_TRACE") != nullptr;
 }
 
+bool pluginVerifyEnabled() {
+#ifndef NDEBUG
+    return true;
+#else
+    return std::getenv("QORE_PLUGIN_VERIFY") != nullptr;
+#endif
+}
+
+bool pluginVerifyTrace() {
+    return std::getenv("QORE_PLUGIN_VERIFY_TRACE") != nullptr;
+}
+
 void traceRegister(const std::string& msg) {
     if (pluginRegisterTrace()) {
         std::fprintf(stderr, "QORE_PLUGIN_REGISTER_TRACE: %s\n", msg.c_str());
@@ -110,6 +123,12 @@ void traceRegister(const std::string& msg) {
 void traceDispatch(const std::string& msg) {
     if (pluginDispatchTrace()) {
         std::fprintf(stderr, "QORE_PLUGIN_DISPATCH_TRACE: %s\n", msg.c_str());
+    }
+}
+
+void traceVerify(const std::string& msg) {
+    if (pluginVerifyTrace()) {
+        std::fprintf(stderr, "QORE_PLUGIN_VERIFY_TRACE: %s\n", msg.c_str());
     }
 }
 
@@ -403,6 +422,68 @@ bool resolvePluginOperation(uint32_t global_id, QorePluginHelperAbi expected_abi
     out.operation_name = op->operation_name;
     out.signature = op->signature;
     out.runtime_helper = op->runtime_helper;
+    return false;
+}
+
+std::string bitsToHex(uint64_t bits) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "0x%016llx", static_cast<unsigned long long>(bits));
+    return buf;
+}
+
+bool raisePluginVerifierError(const ResolvedPluginOperation& op, const char* helper_name, const char* code,
+        const char* field, const char* expected, const char* actual, const char* subreason,
+        const char* section, ExceptionSink* xsink) {
+    traceVerify(std::string("failed helper='") + helper_name + "' module='" + op.module_name
+        + "' operation='" + op.operation_name + "' field='" + field + "' expected='" + expected
+        + "' actual='" + actual + "' subreason='" + subreason + "'");
+    if (xsink) {
+        xsink->raiseException(code, "plugin runtime verifier failed: module=\"%s\", operation=\"%s\", "
+            "helper=\"%s\", field=\"%s\", expected=\"%s\", actual=\"%s\", subreason=\"%s\", section=%s",
+            escapeDiagnosticName(op.module_name.c_str()).c_str(),
+            escapeDiagnosticName(op.operation_name.c_str()).c_str(), helper_name, field, expected, actual,
+            subreason, section);
+    }
+    return true;
+}
+
+bool verifyPluginResult(const ResolvedPluginOperation& op, const char* helper_name, uint64_t result_bits,
+        uint64_t lhs_bits, bool has_lhs, uint64_t rhs_bits, bool has_rhs, ExceptionSink* xsink) {
+    if (!pluginVerifyEnabled() || hasException(xsink)) {
+        return false;
+    }
+
+    if (op.signature.result_alias == QorePluginResultAlias::ReturnsLhs) {
+        if (!has_lhs || result_bits != lhs_bits) {
+            std::string actual = has_lhs
+                ? "result=" + bitsToHex(result_bits) + ", lhs=" + bitsToHex(lhs_bits)
+                : "operation has no lhs operand";
+            return raisePluginVerifierError(op, helper_name, "PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED",
+                "result_alias", "returned bits equal lhs bits", actual.c_str(), "alias_contract_violation",
+                "3.3", xsink);
+        }
+    } else if (op.signature.result_alias == QorePluginResultAlias::ReturnsRhs) {
+        if (!has_rhs || result_bits != rhs_bits) {
+            std::string actual = has_rhs
+                ? "result=" + bitsToHex(result_bits) + ", rhs=" + bitsToHex(rhs_bits)
+                : "operation has no rhs operand";
+            return raisePluginVerifierError(op, helper_name, "PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED",
+                "result_alias", "returned bits equal rhs bits", actual.c_str(), "alias_contract_violation",
+                "3.3", xsink);
+        }
+    }
+
+    QoreValue result = valueFromBits(result_bits);
+    if (qore_type_is_assignable_from(op.signature.return_type, result) == QTI_NOT_EQUAL) {
+        std::string expected = qore_type_get_path(op.signature.return_type);
+        return raisePluginVerifierError(op, helper_name, "PLUGIN-HELPER-RESULT-TYPE-MISMATCH",
+            "return_type", expected.c_str(), result.getTypeName(), "result_type_mismatch", "3.4", xsink);
+    }
+
+    traceVerify(std::string("passed helper='") + helper_name + "' module='" + op.module_name
+        + "' operation='" + op.operation_name + "' return_type='"
+        + qore_type_get_path(op.signature.return_type) + "' result_alias='"
+        + resultAliasName(op.signature.result_alias) + "'");
     return false;
 }
 
@@ -1303,7 +1384,8 @@ extern "C" uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t 
         + "' operation='" + op.operation_name + "' helper="
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginUnaryHelper>(op.runtime_helper);
-    return helper(value_bits, xsink);
+    uint64_t rv = helper(value_bits, xsink);
+    return verifyPluginResult(op, "unary", rv, value_bits, true, 0, false, xsink) ? nothingBits() : rv;
 }
 
 extern "C" uint64_t qore_rt_plugin_binary(uint32_t global_operation_id, uint64_t lhs_bits,
@@ -1316,7 +1398,8 @@ extern "C" uint64_t qore_rt_plugin_binary(uint32_t global_operation_id, uint64_t
         + "' operation='" + op.operation_name + "' helper="
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
-    return helper(lhs_bits, rhs_bits, xsink);
+    uint64_t rv = helper(lhs_bits, rhs_bits, xsink);
+    return verifyPluginResult(op, "binary", rv, lhs_bits, true, rhs_bits, true, xsink) ? nothingBits() : rv;
 }
 
 extern "C" uint64_t qore_rt_plugin_call(uint32_t global_operation_id, uint64_t self_bits,
@@ -1329,7 +1412,8 @@ extern "C" uint64_t qore_rt_plugin_call(uint32_t global_operation_id, uint64_t s
         + "' operation='" + op.operation_name + "' helper="
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginCallHelper>(op.runtime_helper);
-    return helper(self_bits, args_list_bits, xsink);
+    uint64_t rv = helper(self_bits, args_list_bits, xsink);
+    return verifyPluginResult(op, "call", rv, self_bits, true, args_list_bits, true, xsink) ? nothingBits() : rv;
 }
 
 extern "C" uint64_t qore_rt_plugin_call_args(uint32_t global_operation_id, uint64_t self_bits,
@@ -1354,7 +1438,9 @@ extern "C" uint64_t qore_rt_plugin_subscript(uint32_t global_operation_id, uint6
         + "' operation='" + op.operation_name + "' helper="
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
-    return helper(container_bits, key_bits, xsink);
+    uint64_t rv = helper(container_bits, key_bits, xsink);
+    return verifyPluginResult(op, "subscript", rv, container_bits, true, key_bits, true, xsink)
+        ? nothingBits() : rv;
 }
 
 extern "C" uint64_t qore_rt_plugin_construct(uint32_t global_operation_id, uint64_t args_list_bits,
@@ -1367,7 +1453,8 @@ extern "C" uint64_t qore_rt_plugin_construct(uint32_t global_operation_id, uint6
         + "' operation='" + op.operation_name + "' helper="
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginConstructHelper>(op.runtime_helper);
-    return helper(args_list_bits, xsink);
+    uint64_t rv = helper(args_list_bits, xsink);
+    return verifyPluginResult(op, "construct", rv, 0, false, args_list_bits, true, xsink) ? nothingBits() : rv;
 }
 
 extern "C" uint64_t qore_rt_plugin_construct_args(uint32_t global_operation_id, const uint64_t* arg_bits,
@@ -1397,7 +1484,8 @@ extern "C" uint64_t qore_rt_plugin_dense_buffer_unary(uint32_t global_operation_
         + "' operation='" + op.operation_name + "' helper="
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginDenseBufferUnaryHelper>(op.runtime_helper);
-    return helper(result_buffer_data, result_size, value_data, value_size, value_stride, xsink);
+    uint64_t rv = helper(result_buffer_data, result_size, value_data, value_size, value_stride, xsink);
+    return verifyPluginResult(op, "dense-buffer-unary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
 }
 
 extern "C" uint64_t qore_rt_plugin_dense_buffer_binary(uint32_t global_operation_id, void* result_buffer_data,
@@ -1415,6 +1503,7 @@ extern "C" uint64_t qore_rt_plugin_dense_buffer_binary(uint32_t global_operation
         + "' operation='" + op.operation_name + "' helper="
         + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
     auto helper = reinterpret_cast<PluginDenseBufferBinaryHelper>(op.runtime_helper);
-    return helper(result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride, rhs_data, rhs_size, rhs_stride,
-        xsink);
+    uint64_t rv = helper(result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride, rhs_data, rhs_size,
+        rhs_stride, xsink);
+    return verifyPluginResult(op, "dense-buffer-binary", rv, 0, false, 0, false, xsink) ? nothingBits() : rv;
 }
