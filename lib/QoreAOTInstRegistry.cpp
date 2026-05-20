@@ -2233,6 +2233,11 @@ static bool writePlugin(AOTInstWriteCtx& ctx) {
     if (pi->operation.module_name.empty()) {
         return false;
     }
+    if (!ctx.writer.addPluginOperationRef(pi->operation.module_name.c_str(),
+            pi->operation.local_operation_id, pi->operation.canonical_signature_version,
+            pi->operation.signature_hash)) {
+        return false;
+    }
     // Process-global operation IDs are assigned at module registration time and
     // are not stable across runs.  Persist only the module/local reference and
     // let the loader/JIT resolve the current process ID when executing.

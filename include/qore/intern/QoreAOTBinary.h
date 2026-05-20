@@ -184,6 +184,9 @@ enum class QoreAOTSectionType : uint16_t {
     MODULE_PATH_APPEND  = 20,  //!< Per-Program %append-module-path expanded path list (count u32 + count × StringRef)
     BUILD_INFO      = 21,  //!< Producer/build metadata as key-value string pairs
     MODULE_COMMANDS = 22,  //!< `%module-cmd` directives (count u32 + count × module StringRef + command StringRef)
+    PLUGIN_TYPE_REGISTRY = 23,  //!< Plugin module/type/operation metadata for referenced plugin imports
+    PLUGIN_IMPORTS       = 24,  //!< Required plugin modules and local type/operation ids
+    PLUGIN_HELPER_REFS   = 25,  //!< AOT plugin helper slot refs to plugin imports
 };
 
 //! Value type tags for serialized constant values
@@ -339,6 +342,22 @@ public:
 //! Binary format writer for AOT metadata
 class QoreAOTBinaryWriter {
 public:
+    struct PluginImportRecord {
+        std::string module_name;
+        std::string plugin_abi_version;
+        std::string operation_set_version;
+        std::vector<uint16_t> required_type_ids;
+        std::vector<uint16_t> required_operation_ids;
+    };
+
+    struct PluginHelperRefRecord {
+        uint16_t slot_idx = 0;
+        uint16_t import_idx = 0;
+        uint16_t op_local_id = 0;
+        uint8_t canonical_signature_version = 0;
+        uint64_t signature_hash = 0;
+    };
+
     QoreAOTStringPool strings;
     //! Optional program-wide constant reverse map, used by writeValue to encode
     //! unserializable node pointers (e.g. QoreObject inside a folded hash literal)
@@ -376,6 +395,14 @@ public:
     std::vector<std::string> type_path_table;
     std::unordered_map<std::string, uint32_t> type_path_index;
 
+    //! Plugin imports collected while serializing plugin-dispatch IR.
+    //! Process-global operation ids are intentionally not serialized; QORD
+    //! stores module-local symbolic refs that resolve against the live process
+    //! registry when the artifact is loaded.
+    std::vector<PluginImportRecord> plugin_imports;
+    std::unordered_map<std::string, uint16_t> plugin_import_index;
+    std::vector<PluginHelperRefRecord> plugin_helper_refs;
+
     //! Intern a type path.  Returns a u32 index that the reader dereferences
     //! against the TYPE_TABLE section.  Empty/null path gets index 0
     //! (reserved — resolves to nullptr/no-constraint).
@@ -407,6 +434,14 @@ public:
     //! Called once after all functions/methods have been serialized so
     //! the table contains every path referenced in variant signatures.
     void writeTypeTableSection();
+
+    //! Record a module-local plugin operation reference for later PLUGIN_*
+    //! section emission.
+    bool addPluginOperationRef(const char* module_name, uint16_t op_local_id,
+        uint8_t canonical_signature_version, uint64_t signature_hash);
+
+    //! Emit PLUGIN_IMPORTS / PLUGIN_TYPE_REGISTRY / PLUGIN_HELPER_REFS.
+    bool writePluginSections(std::string& error);
 
 private:
     std::vector<uint8_t> buffer;
@@ -1674,6 +1709,7 @@ private:
     //! run after shells across all sibling sessions exist so
     //! cross-blob complex types resolve correctly.
     bool resolveTypeTable(std::string& error);
+    bool resolvePluginImports(std::string& error);
 
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);

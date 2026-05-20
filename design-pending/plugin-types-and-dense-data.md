@@ -38,14 +38,17 @@ is not blocking.
   opcodes, process-global operation IDs, `QORE_PLUGIN_DISPATCH_TRACE`,
   interpreter/JIT runtime-helper dispatch for value/list helper ABIs,
   non-persistent AOT/debug-IR serialization of module-local operation
-  references, opcode metadata, IR builder/printer/verifier plumbing, and smoke
-  coverage for process operation lookup plus runtime binary dispatch. The full
+  references, canonical operation signature hashes, opcode metadata, IR
+  builder/printer/verifier plumbing, and smoke coverage for process operation
+  lookup plus runtime binary dispatch. QORD now emits and validates
+  `PLUGIN_IMPORTS`, `PLUGIN_TYPE_REGISTRY`, and `PLUGIN_HELPER_REFS` sections
+  for plugin-dispatch IR references. The full
   Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
-  `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS`, dense-buffer dispatch opcodes
-  and helper execution, runtime verifier hooks, Program-local
-  activation/fallback diagnostics, the rest of the trace-env family, the
-  reference plugin module, lint tooling, and complete user-facing
-  documentation.
+  `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
+  value instances, dense-buffer dispatch opcodes and helper execution, runtime
+  verifier hooks, Program-local activation/fallback diagnostics, the rest of
+  the trace-env family, the reference plugin module, lint tooling, and complete
+  user-facing documentation.
 
 ---
 
@@ -1307,10 +1310,10 @@ Three new section types:
 
 ```cpp
 enum class QoreAOTSectionType : uint16_t {
-    // ...existing 1-21...
-    PLUGIN_TYPE_REGISTRY = 22,  //!< Per-module plugin-type metadata
-    PLUGIN_IMPORTS       = 23,  //!< Required modules + type/op versions
-    PLUGIN_HELPER_REFS   = 24,  //!< Slot-index → operation import reference
+    // ...existing 1-22...
+    PLUGIN_TYPE_REGISTRY = 23,  //!< Per-module plugin-type metadata
+    PLUGIN_IMPORTS       = 24,  //!< Required modules + type/op versions
+    PLUGIN_HELPER_REFS   = 25,  //!< Slot-index → operation import reference
 };
 ```
 
@@ -2550,7 +2553,9 @@ exposure — reuses Phase 1's `buffer<T>`.
 - Built-in plugin-dispatch opcodes carrying operation descriptors.
 - IR-interpreter dispatch table for module-registered helpers.
 - JIT helper symbol resolver for module-registered helpers.
-- QORD `PLUGIN_IMPORTS` and `PLUGIN_TYPE_REGISTRY` sections.
+- QORD `PLUGIN_IMPORTS`, `PLUGIN_TYPE_REGISTRY`, and `PLUGIN_HELPER_REFS`
+  sections for plugin-dispatch IR references. Serialized plugin value-instance
+  payloads still need the `VT_PLUGIN_INSTANCE` reader/writer path.
 - **Validation and developer experience (§3.12)**, all on the public ABI
   ship boundary:
   - `QoreModuleInitContext` extended with the runtime-owned opaque

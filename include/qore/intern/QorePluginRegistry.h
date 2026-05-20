@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 struct QorePluginModuleHandle {
     static constexpr uint64_t Magic = 0x516f7265506c6731ULL; // "QorePlg1"
@@ -27,6 +28,29 @@ struct QorePluginModuleHandle {
     bool committed = false;
 
     DLLLOCAL QorePluginModuleHandle(const char* name, const char* path, void* dl_handle);
+};
+
+struct QorePluginAOTTypeInfo {
+    uint16_t local_type_id = 0;
+    std::string type_name;
+    std::string type_path;
+    uint16_t serializer_format_version = 0;
+};
+
+struct QorePluginAOTOperationInfo {
+    uint16_t local_id = 0;
+    std::string operation_name;
+    QorePluginOperationSignature signature = {};
+    uint8_t canonical_signature_version = QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
+    uint64_t signature_hash = 0;
+};
+
+struct QorePluginAOTModuleInfo {
+    std::string module_name;
+    std::string plugin_abi_version;
+    std::string operation_set_version;
+    std::vector<QorePluginAOTTypeInfo> types;
+    std::vector<QorePluginAOTOperationInfo> operations;
 };
 
 class QorePluginModuleInitScope {
@@ -59,6 +83,8 @@ DLLLOCAL int qore_plugin_get_process_operation_id_checked(const char* module_nam
     ExceptionSink* xsink);
 
 DLLLOCAL uint64_t qore_plugin_compute_signature_hash_v1(const QorePluginOperationSignature& signature);
+DLLLOCAL int qore_plugin_get_aot_module_info(const char* module_name, QorePluginAOTModuleInfo& info,
+    ExceptionSink* xsink);
 
 extern "C" {
 DLLEXPORT uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t value_bits,

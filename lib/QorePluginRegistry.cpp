@@ -851,6 +851,56 @@ uint64_t qore_plugin_compute_signature_hash_v1(const QorePluginOperationSignatur
     return computeSignatureHashV1(signature);
 }
 
+int qore_plugin_get_aot_module_info(const char* module_name, QorePluginAOTModuleInfo& info, ExceptionSink* xsink) {
+    info = QorePluginAOTModuleInfo();
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    auto i = plugin_modules.find(module_name ? module_name : "");
+    if (i == plugin_modules.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-MODULE-NOT-LOADED",
+                "plugin registry has no loaded module named \"%s\" "
+                "(method=\"getAotModuleInfo\", subreason=\"module_not_loaded\", section=3.12)",
+                escapeDiagnosticName(module_name).c_str());
+        }
+        return -1;
+    }
+
+    info.module_name = i->second.module_name;
+    info.plugin_abi_version = i->second.plugin_abi_version;
+    info.operation_set_version = i->second.operation_set_version;
+    info.types.reserve(i->second.types.size());
+    int n = 0;
+    for (const RegisteredPluginType& type : i->second.types) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin AOT type metadata lookup")) {
+            return -1;
+        }
+        QorePluginAOTTypeInfo ti;
+        ti.local_type_id = type.local_type_id;
+        ti.type_name = type.type_name;
+        ti.type_path = qore_type_get_path(type.type_info);
+        ti.serializer_format_version = type.serializer_format_version;
+        info.types.push_back(std::move(ti));
+        ++n;
+    }
+
+    info.operations.reserve(i->second.operations.size());
+    n = 0;
+    for (const RegisteredPluginOperation& op : i->second.operations) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin AOT operation metadata lookup")) {
+            return -1;
+        }
+        QorePluginAOTOperationInfo oi;
+        oi.local_id = op.local_id;
+        oi.operation_name = op.operation_name;
+        oi.signature = op.signature;
+        oi.canonical_signature_version = op.canonical_signature_version;
+        oi.signature_hash = op.signature_hash;
+        info.operations.push_back(std::move(oi));
+        ++n;
+    }
+    return 0;
+}
+
 QorePluginModuleHandle::QorePluginModuleHandle(const char* name, const char* path, void* dl_handle)
         : module_name(name ? name : ""), module_path(path ? path : ""), dl_handle(dl_handle),
         generation(plugin_handle_generation.fetch_add(1, std::memory_order_relaxed)) {

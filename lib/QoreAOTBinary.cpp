@@ -134,6 +134,7 @@
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
+#include "qore/intern/QorePluginRegistry.h"
 
 #include <qore/QoreBigFloatNode.h>
 #include <qore/QoreBigIntNode.h>
@@ -8561,6 +8562,346 @@ static bool checkAOTFeatureCompatibility(const QoreAOTBinaryReader& reader, std:
     return false;
 }
 
+static bool ensurePluginSectionBytes(const uint8_t* ptr, const uint8_t* end, size_t needed,
+        const char* section, std::string& error) {
+    if (ptr > end || static_cast<size_t>(end - ptr) < needed) {
+        error = section;
+        error += " section is truncated";
+        return false;
+    }
+    return true;
+}
+
+static bool checkAOTPluginCancel(size_t i, ExceptionSink& xsink, const char* operation, std::string& error);
+
+static uint64_t readPluginHash64(const uint8_t*& ptr) {
+    uint64_t lo = QoreAOTBinaryReader::readU32(ptr);
+    uint64_t hi = QoreAOTBinaryReader::readU32(ptr);
+    return lo | (hi << 32);
+}
+
+static const QorePluginAOTOperationInfo* findPluginAOTOperation(
+        const QorePluginAOTModuleInfo& info, uint16_t local_id, ExceptionSink& xsink, std::string& error) {
+    for (size_t i = 0; i < info.operations.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin operation metadata lookup", error)) {
+            return nullptr;
+        }
+        const QorePluginAOTOperationInfo& op = info.operations[i];
+        if (op.local_id == local_id) {
+            return &op;
+        }
+    }
+    return nullptr;
+}
+
+static const QorePluginAOTTypeInfo* findPluginAOTType(
+        const QorePluginAOTModuleInfo& info, uint16_t local_id, ExceptionSink& xsink, std::string& error) {
+    for (size_t i = 0; i < info.types.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin type metadata lookup", error)) {
+            return nullptr;
+        }
+        const QorePluginAOTTypeInfo& type = info.types[i];
+        if (type.local_type_id == local_id) {
+            return &type;
+        }
+    }
+    return nullptr;
+}
+
+bool QoreAOTBinaryDeserializer::resolvePluginImports(std::string& error) {
+    std::vector<QorePluginAOTModuleInfo> plugin_imports_resolved;
+    const QoreAOTSectionHeader* import_sec = reader.findSection(QoreAOTSectionType::PLUGIN_IMPORTS);
+    const QoreAOTSectionHeader* helper_sec = reader.findSection(QoreAOTSectionType::PLUGIN_HELPER_REFS);
+    const QoreAOTSectionHeader* registry_sec = reader.findSection(QoreAOTSectionType::PLUGIN_TYPE_REGISTRY);
+    if (!import_sec) {
+        if (helper_sec || registry_sec) {
+            error = "QORD-PLUGIN-HELPER-REF-INVALID: plugin helper/type sections require PLUGIN_IMPORTS";
+            return false;
+        }
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*import_sec);
+    if (!ptr) {
+        error = "invalid PLUGIN_IMPORTS section data";
+        return false;
+    }
+    const uint8_t* end = ptr + import_sec->size;
+    if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_IMPORTS", error)) {
+        return false;
+    }
+    uint32_t import_count = QoreAOTBinaryReader::readU32(ptr);
+    plugin_imports_resolved.reserve(import_count);
+    std::vector<std::vector<uint16_t>> required_type_ids;
+    std::vector<std::vector<uint16_t>> required_operation_ids;
+    required_type_ids.reserve(import_count);
+    required_operation_ids.reserve(import_count);
+
+    ExceptionSink xsink;
+    for (uint32_t i = 0; i < import_count; ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin import resolution", error)) {
+            return false;
+        }
+        if (!ensurePluginSectionBytes(ptr, end, 12, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        const char* module_name = reader.readStringRef(ptr);
+        const char* plugin_abi_version = reader.readStringRef(ptr);
+        const char* operation_set_version = reader.readStringRef(ptr);
+        if (!module_name || !*module_name || !plugin_abi_version || !operation_set_version) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: invalid plugin import string reference";
+            return false;
+        }
+
+        QorePluginAOTModuleInfo info;
+        if (qore_plugin_get_aot_module_info(module_name, info, &xsink) || xsink) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+            error += module_name;
+            error += "' is not loaded";
+            return false;
+        }
+        if (info.plugin_abi_version != plugin_abi_version) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+            error += module_name;
+            error += "' ABI version mismatch";
+            return false;
+        }
+        if (info.operation_set_version != operation_set_version) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+            error += module_name;
+            error += "' operation-set version mismatch";
+            return false;
+        }
+
+        if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        uint32_t type_count = QoreAOTBinaryReader::readU32(ptr);
+        if (!ensurePluginSectionBytes(ptr, end, static_cast<size_t>(type_count) * 2, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        std::vector<uint16_t> types;
+        types.reserve(type_count);
+        for (uint32_t n = 0; n < type_count; ++n) {
+            if (checkAOTPluginCancel(n, xsink, "QORD plugin required type validation", error)) {
+                return false;
+            }
+            uint16_t id = QoreAOTBinaryReader::readU16(ptr);
+            if (!findPluginAOTType(info, id, xsink, error)) {
+                if (!error.empty()) {
+                    return false;
+                }
+                error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+                error += module_name;
+                error += "' does not register required local type id ";
+                error += std::to_string(id);
+                return false;
+            }
+            types.push_back(id);
+        }
+        if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        uint32_t op_count = QoreAOTBinaryReader::readU32(ptr);
+        if (!ensurePluginSectionBytes(ptr, end, static_cast<size_t>(op_count) * 2, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        std::vector<uint16_t> ops;
+        ops.reserve(op_count);
+        for (uint32_t n = 0; n < op_count; ++n) {
+            if (checkAOTPluginCancel(n, xsink, "QORD plugin required operation validation", error)) {
+                return false;
+            }
+            uint16_t id = QoreAOTBinaryReader::readU16(ptr);
+            if (!findPluginAOTOperation(info, id, xsink, error)) {
+                if (!error.empty()) {
+                    return false;
+                }
+                error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+                error += module_name;
+                error += "' does not register required local operation id ";
+                error += std::to_string(id);
+                return false;
+            }
+            ops.push_back(id);
+        }
+        required_type_ids.push_back(std::move(types));
+        required_operation_ids.push_back(std::move(ops));
+        plugin_imports_resolved.push_back(std::move(info));
+    }
+    if (ptr != end) {
+        error = "PLUGIN_IMPORTS section has trailing bytes";
+        return false;
+    }
+
+    if (registry_sec) {
+        ptr = reader.getSectionData(*registry_sec);
+        if (!ptr) {
+            error = "invalid PLUGIN_TYPE_REGISTRY section data";
+            return false;
+        }
+        end = ptr + registry_sec->size;
+        if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_TYPE_REGISTRY", error)) {
+            return false;
+        }
+        uint32_t module_count = QoreAOTBinaryReader::readU32(ptr);
+        for (uint32_t i = 0; i < module_count; ++i) {
+            if (checkAOTPluginCancel(i, xsink, "QORD plugin type registry validation", error)) {
+                return false;
+            }
+            if (!ensurePluginSectionBytes(ptr, end, 16, "PLUGIN_TYPE_REGISTRY", error)) {
+                return false;
+            }
+            const char* module_name = reader.readStringRef(ptr);
+            const char* plugin_abi_version = reader.readStringRef(ptr);
+            const char* operation_set_version = reader.readStringRef(ptr);
+            uint32_t type_count = QoreAOTBinaryReader::readU32(ptr);
+            const QorePluginAOTModuleInfo* live = nullptr;
+            for (size_t n = 0; n < plugin_imports_resolved.size(); ++n) {
+                if (checkAOTPluginCancel(n, xsink, "QORD plugin registry import matching", error)) {
+                    return false;
+                }
+                if (plugin_imports_resolved[n].module_name == (module_name ? module_name : "")) {
+                    live = &plugin_imports_resolved[n];
+                    break;
+                }
+            }
+            if (!live || live->plugin_abi_version != (plugin_abi_version ? plugin_abi_version : "")
+                    || live->operation_set_version != (operation_set_version ? operation_set_version : "")) {
+                error = "QORD-PLUGIN-IMPORT-MISSING: PLUGIN_TYPE_REGISTRY module metadata does not match imports";
+                return false;
+            }
+            for (uint32_t n = 0; n < type_count; ++n) {
+                if (checkAOTPluginCancel(n, xsink, "QORD plugin type metadata validation", error)) {
+                    return false;
+                }
+                if (!ensurePluginSectionBytes(ptr, end, 12, "PLUGIN_TYPE_REGISTRY", error)) {
+                    return false;
+                }
+                uint16_t local_id = QoreAOTBinaryReader::readU16(ptr);
+                uint16_t serializer_version = QoreAOTBinaryReader::readU16(ptr);
+                const char* type_name = reader.readStringRef(ptr);
+                const char* type_path = reader.readStringRef(ptr);
+                const QorePluginAOTTypeInfo* live_type = findPluginAOTType(*live, local_id, xsink, error);
+                if (!live_type && !error.empty()) {
+                    return false;
+                }
+                if (!live_type || live_type->serializer_format_version != serializer_version
+                        || live_type->type_name != (type_name ? type_name : "")
+                        || live_type->type_path != (type_path ? type_path : "")) {
+                    error = "QORD-PLUGIN-IMPORT-MISSING: plugin type metadata mismatch";
+                    return false;
+                }
+            }
+            if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_TYPE_REGISTRY", error)) {
+                return false;
+            }
+            uint32_t op_count = QoreAOTBinaryReader::readU32(ptr);
+            for (uint32_t n = 0; n < op_count; ++n) {
+                if (checkAOTPluginCancel(n, xsink, "QORD plugin operation metadata validation", error)) {
+                    return false;
+                }
+                if (!ensurePluginSectionBytes(ptr, end, 36, "PLUGIN_TYPE_REGISTRY", error)) {
+                    return false;
+                }
+                uint16_t local_id = QoreAOTBinaryReader::readU16(ptr);
+                uint8_t canonical_version = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t reserved = QoreAOTBinaryReader::readU8(ptr);
+                uint64_t signature_hash = readPluginHash64(ptr);
+                const char* operation_name = reader.readStringRef(ptr);
+                uint8_t arity = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t helper_abi = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t access = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t result_alias = QoreAOTBinaryReader::readU8(ptr);
+                ptr += 4; // nullability/reserved bytes; helper refs validate the hash.
+                const char* primary_type = reader.readStringRef(ptr);
+                const char* secondary_type = reader.readStringRef(ptr);
+                const char* return_type = reader.readStringRef(ptr);
+                (void)primary_type;
+                (void)secondary_type;
+                (void)return_type;
+                const QorePluginAOTOperationInfo* live_op = findPluginAOTOperation(*live, local_id, xsink, error);
+                if (!live_op && !error.empty()) {
+                    return false;
+                }
+                if (reserved || !live_op || live_op->canonical_signature_version != canonical_version
+                        || live_op->signature_hash != signature_hash
+                        || live_op->operation_name != (operation_name ? operation_name : "")
+                        || live_op->signature.arity != arity
+                        || static_cast<uint8_t>(live_op->signature.helper_abi) != helper_abi
+                        || static_cast<uint8_t>(live_op->signature.access) != access
+                        || static_cast<uint8_t>(live_op->signature.result_alias) != result_alias) {
+                    error = "QORD-PLUGIN-SIGNATURE-HASH-MISMATCH: plugin operation metadata mismatch";
+                    return false;
+                }
+            }
+        }
+        if (ptr != end) {
+            error = "PLUGIN_TYPE_REGISTRY section has trailing bytes";
+            return false;
+        }
+    }
+
+    if (!helper_sec) {
+        return true;
+    }
+    ptr = reader.getSectionData(*helper_sec);
+    if (!ptr) {
+        error = "invalid PLUGIN_HELPER_REFS section data";
+        return false;
+    }
+    end = ptr + helper_sec->size;
+    if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_HELPER_REFS", error)) {
+        return false;
+    }
+    uint32_t helper_count = QoreAOTBinaryReader::readU32(ptr);
+    for (uint32_t i = 0; i < helper_count; ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin helper-ref validation", error)) {
+            return false;
+        }
+        if (!ensurePluginSectionBytes(ptr, end, 16, "PLUGIN_HELPER_REFS", error)) {
+            return false;
+        }
+        uint16_t slot_idx = QoreAOTBinaryReader::readU16(ptr);
+        uint16_t import_idx = QoreAOTBinaryReader::readU16(ptr);
+        uint16_t op_local_id = QoreAOTBinaryReader::readU16(ptr);
+        uint8_t canonical_version = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t reserved = QoreAOTBinaryReader::readU8(ptr);
+        uint64_t signature_hash = readPluginHash64(ptr);
+        (void)slot_idx;
+        if (reserved) {
+            error = "QORD-PLUGIN-RESERVED-NONZERO: PLUGIN_HELPER_REFS reserved byte is non-zero";
+            return false;
+        }
+        if (import_idx >= plugin_imports_resolved.size()) {
+            error = "QORD-PLUGIN-HELPER-REF-INVALID: import_idx is out of range";
+            return false;
+        }
+        if (canonical_version != QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1) {
+            error = "QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED: unsupported canonical signature version";
+            return false;
+        }
+        const QorePluginAOTOperationInfo* op = findPluginAOTOperation(plugin_imports_resolved[import_idx],
+            op_local_id, xsink, error);
+        if (!op && !error.empty()) {
+            return false;
+        }
+        if (!op) {
+            error = "QORD-PLUGIN-HELPER-REF-INVALID: op_local_id is not registered";
+            return false;
+        }
+        if (op->signature_hash != signature_hash) {
+            error = "QORD-PLUGIN-SIGNATURE-HASH-MISMATCH: helper ref signature hash does not match live registry";
+            return false;
+        }
+    }
+    if (ptr != end) {
+        error = "PLUGIN_HELPER_REFS section has trailing bytes";
+        return false;
+    }
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
         const uint8_t* data, uint32_t size, std::string& error) {
     pgm = in_pgm;
@@ -8579,6 +8920,10 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
     // have the bit and fall back to inline-string type paths.
     uses_type_table = (reader.getHeader().feature_flags
         & QORE_AOT_FEAT_TYPE_TABLE) != 0;
+
+    if (!resolvePluginImports(error)) {
+        return false;
+    }
 
     // Create type resolver for this program
     type_resolver = new QoreAOTTypeResolver(pgm);
@@ -12564,6 +12909,13 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     // writeFunctions/Methods so the table contains every path the
     // variants referenced via writer.internTypePath().
     writer.writeTypeTableSection();
+    section_error.clear();
+    if (!writer.writePluginSections(section_error)) {
+        if (error) {
+            *error = "PLUGIN sections: " + section_error;
+        }
+        return false;
+    }
 
     // Drop the non-owning CRM pointer — program_crm goes out of scope next.
     writer.const_reverse_map = nullptr;
@@ -12586,6 +12938,229 @@ void QoreAOTBinaryWriter::writeTypeTableSection() {
         writeStringRef(type_path_table[i].c_str());
     }
     endSection(idx);
+}
+
+bool QoreAOTBinaryWriter::addPluginOperationRef(const char* module_name, uint16_t op_local_id,
+        uint8_t canonical_signature_version, uint64_t signature_hash) {
+    if (!module_name || !*module_name || plugin_helper_refs.size() > UINT16_MAX) {
+        return false;
+    }
+
+    uint16_t import_idx;
+    auto i = plugin_import_index.find(module_name);
+    if (i == plugin_import_index.end()) {
+        if (plugin_imports.size() > UINT16_MAX) {
+            return false;
+        }
+        import_idx = static_cast<uint16_t>(plugin_imports.size());
+        PluginImportRecord import;
+        import.module_name = module_name;
+        plugin_imports.push_back(std::move(import));
+        plugin_import_index.emplace(plugin_imports.back().module_name, import_idx);
+    } else {
+        import_idx = i->second;
+    }
+
+    std::vector<uint16_t>& ops = plugin_imports[import_idx].required_operation_ids;
+    if (std::find(ops.begin(), ops.end(), op_local_id) == ops.end()) {
+        ops.push_back(op_local_id);
+    }
+
+    PluginHelperRefRecord ref;
+    ref.slot_idx = static_cast<uint16_t>(plugin_helper_refs.size());
+    ref.import_idx = import_idx;
+    ref.op_local_id = op_local_id;
+    ref.canonical_signature_version = canonical_signature_version;
+    ref.signature_hash = signature_hash;
+    plugin_helper_refs.push_back(ref);
+    return true;
+}
+
+static bool checkAOTPluginCancel(size_t i, ExceptionSink& xsink, const char* operation, std::string& error) {
+    if (i && !(i % 100) && qore_check_cancel(&xsink, operation)) {
+        error = "operation cancelled during ";
+        error += operation;
+        return true;
+    }
+    return false;
+}
+
+static void writePluginSignatureMetadata(QoreAOTBinaryWriter& writer,
+        const QorePluginOperationSignature& sig) {
+    writer.writeU8(sig.arity);
+    writer.writeU8(static_cast<uint8_t>(sig.helper_abi));
+    writer.writeU8(static_cast<uint8_t>(sig.access));
+    writer.writeU8(static_cast<uint8_t>(sig.result_alias));
+    writer.writeU8(sig.primary_nullable ? 1 : 0);
+    writer.writeU8(sig.secondary_nullable ? 1 : 0);
+    writer.writeU8(sig.return_nullable ? 1 : 0);
+    writer.writeU8(0);
+    writer.writeStringRef(sig.primary_type ? qore_type_get_path(sig.primary_type) : "");
+    writer.writeStringRef(sig.secondary_type ? qore_type_get_path(sig.secondary_type) : "");
+    writer.writeStringRef(sig.return_type ? qore_type_get_path(sig.return_type) : "");
+}
+
+static void writePluginHash64(QoreAOTBinaryWriter& writer, uint64_t hash) {
+    writer.writeU32(static_cast<uint32_t>(hash & 0xffffffffu));
+    writer.writeU32(static_cast<uint32_t>(hash >> 32));
+}
+
+bool QoreAOTBinaryWriter::writePluginSections(std::string& error) {
+    if (plugin_imports.empty()) {
+        return true;
+    }
+
+    ExceptionSink xsink;
+    std::vector<QorePluginAOTModuleInfo> infos;
+    infos.reserve(plugin_imports.size());
+    for (size_t i = 0; i < plugin_imports.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin import metadata lookup", error)) {
+            return false;
+        }
+        QorePluginAOTModuleInfo info;
+        if (qore_plugin_get_aot_module_info(plugin_imports[i].module_name.c_str(), info, &xsink) || xsink) {
+            error = "plugin import '";
+            error += plugin_imports[i].module_name;
+            error += "' is not registered in the process plugin registry";
+            return false;
+        }
+        plugin_imports[i].plugin_abi_version = info.plugin_abi_version;
+        plugin_imports[i].operation_set_version = info.operation_set_version;
+        std::sort(plugin_imports[i].required_type_ids.begin(), plugin_imports[i].required_type_ids.end());
+        std::sort(plugin_imports[i].required_operation_ids.begin(), plugin_imports[i].required_operation_ids.end());
+        infos.push_back(std::move(info));
+    }
+
+    std::vector<std::unordered_map<uint16_t, size_t>> op_indexes(infos.size());
+    for (size_t i = 0; i < infos.size(); ++i) {
+        op_indexes[i].reserve(infos[i].operations.size());
+        for (size_t n = 0; n < infos[i].operations.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin operation metadata indexing", error)) {
+                return false;
+            }
+            op_indexes[i].emplace(infos[i].operations[n].local_id, n);
+        }
+    }
+
+    uint32_t sec_idx = beginSection(QoreAOTSectionType::PLUGIN_IMPORTS);
+    writeU32(static_cast<uint32_t>(plugin_imports.size()));
+    for (size_t i = 0; i < plugin_imports.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin import section serialization", error)) {
+            return false;
+        }
+        const PluginImportRecord& import = plugin_imports[i];
+        writeStringRef(import.module_name.c_str());
+        writeStringRef(import.plugin_abi_version.c_str());
+        writeStringRef(import.operation_set_version.c_str());
+        writeU32(static_cast<uint32_t>(import.required_type_ids.size()));
+        for (size_t n = 0; n < import.required_type_ids.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin import type id serialization", error)) {
+                return false;
+            }
+            writeU16(import.required_type_ids[n]);
+        }
+        writeU32(static_cast<uint32_t>(import.required_operation_ids.size()));
+        for (size_t n = 0; n < import.required_operation_ids.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin import operation id serialization", error)) {
+                return false;
+            }
+            writeU16(import.required_operation_ids[n]);
+        }
+    }
+    endSection(sec_idx);
+
+    sec_idx = beginSection(QoreAOTSectionType::PLUGIN_TYPE_REGISTRY);
+    writeU32(static_cast<uint32_t>(infos.size()));
+    for (size_t i = 0; i < infos.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin type registry section serialization", error)) {
+            return false;
+        }
+        const QorePluginAOTModuleInfo& info = infos[i];
+        writeStringRef(info.module_name.c_str());
+        writeStringRef(info.plugin_abi_version.c_str());
+        writeStringRef(info.operation_set_version.c_str());
+        writeU32(static_cast<uint32_t>(info.types.size()));
+        for (size_t n = 0; n < info.types.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin type metadata serialization", error)) {
+                return false;
+            }
+            const QorePluginAOTTypeInfo& type = info.types[n];
+            writeU16(type.local_type_id);
+            writeU16(type.serializer_format_version);
+            writeStringRef(type.type_name.c_str());
+            writeStringRef(type.type_path.c_str());
+        }
+        writeU32(static_cast<uint32_t>(info.operations.size()));
+        for (size_t n = 0; n < info.operations.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin operation metadata serialization", error)) {
+                return false;
+            }
+            const QorePluginAOTOperationInfo& op = info.operations[n];
+            writeU16(op.local_id);
+            writeU8(op.canonical_signature_version);
+            writeU8(0);
+            writePluginHash64(*this, op.signature_hash);
+            writeStringRef(op.operation_name.c_str());
+            writePluginSignatureMetadata(*this, op.signature);
+        }
+    }
+    endSection(sec_idx);
+
+    sec_idx = beginSection(QoreAOTSectionType::PLUGIN_HELPER_REFS);
+    writeU32(static_cast<uint32_t>(plugin_helper_refs.size()));
+    for (size_t i = 0; i < plugin_helper_refs.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin helper-ref section serialization", error)) {
+            return false;
+        }
+        PluginHelperRefRecord ref = plugin_helper_refs[i];
+        if (ref.import_idx >= infos.size()) {
+            error = "plugin helper ref has invalid import index ";
+            error += std::to_string(ref.import_idx);
+            return false;
+        }
+        auto oi = op_indexes[ref.import_idx].find(ref.op_local_id);
+        if (oi == op_indexes[ref.import_idx].end()) {
+            error = "plugin helper ref for import '";
+            error += plugin_imports[ref.import_idx].module_name;
+            error += "' references unregistered local operation id ";
+            error += std::to_string(ref.op_local_id);
+            return false;
+        }
+        const QorePluginAOTOperationInfo& op = infos[ref.import_idx].operations[oi->second];
+        if (!ref.canonical_signature_version) {
+            ref.canonical_signature_version = op.canonical_signature_version;
+        }
+        if (!ref.signature_hash) {
+            ref.signature_hash = op.signature_hash;
+        }
+        if (ref.canonical_signature_version != op.canonical_signature_version) {
+            error = "plugin helper ref for import '";
+            error += plugin_imports[ref.import_idx].module_name;
+            error += "' local operation id ";
+            error += std::to_string(ref.op_local_id);
+            error += " has canonical signature version ";
+            error += std::to_string(ref.canonical_signature_version);
+            error += " but the registered operation has ";
+            error += std::to_string(op.canonical_signature_version);
+            return false;
+        }
+        if (ref.signature_hash != op.signature_hash) {
+            error = "plugin helper ref for import '";
+            error += plugin_imports[ref.import_idx].module_name;
+            error += "' local operation id ";
+            error += std::to_string(ref.op_local_id);
+            error += " has a signature hash mismatch";
+            return false;
+        }
+        writeU16(ref.slot_idx);
+        writeU16(ref.import_idx);
+        writeU16(ref.op_local_id);
+        writeU8(ref.canonical_signature_version);
+        writeU8(0);
+        writePluginHash64(*this, ref.signature_hash);
+    }
+    endSection(sec_idx);
+    return true;
 }
 
 void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {

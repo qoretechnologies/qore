@@ -10,9 +10,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include <qore/Qore.h>
 #include <qore/QorePluginType.h>
+#include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QorePluginRegistry.h>
 
 static void smokeIncref(uint64_t) noexcept {
@@ -202,6 +205,43 @@ static bool checkRegistrationAndIntrospection() {
         return false;
     }
     mismatch_xsink.clear();
+
+    QoreAOTBinaryWriter writer;
+    if (!writer.addPluginOperationRef("plugin-smoke", 0, QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1,
+            signature_hash)) {
+        std::cerr << "failed to add plugin operation ref to AOT writer\n";
+        return false;
+    }
+    std::string section_error;
+    if (!writer.writePluginSections(section_error)) {
+        std::cerr << "failed to write plugin QORD sections: " << section_error << "\n";
+        return false;
+    }
+    QoreAOTBinaryHeader hdr = {};
+    hdr.magic = QORE_AOT_BINARY_MAGIC;
+    hdr.version = QORE_AOT_BINARY_VERSION;
+    hdr.label_offset = writer.strings.add("plugin-smoke-qord");
+    hdr.max_opcode_id = 0;
+    hdr.qore_version_major = QORE_VERSION_MAJOR;
+    hdr.qore_version_minor = QORE_VERSION_MINOR;
+    hdr.qore_version_patch = QORE_VERSION_PATCH;
+    std::vector<uint8_t> blob;
+    if (!writer.finalize(hdr, blob)) {
+        std::cerr << "failed to finalize plugin QORD smoke blob\n";
+        return false;
+    }
+    QoreAOTBinaryReader reader;
+    std::string read_error;
+    if (!reader.open(blob.data(), static_cast<uint32_t>(blob.size()), read_error)) {
+        std::cerr << "failed to read plugin QORD smoke blob: " << read_error << "\n";
+        return false;
+    }
+    if (!reader.findSection(QoreAOTSectionType::PLUGIN_IMPORTS)
+            || !reader.findSection(QoreAOTSectionType::PLUGIN_TYPE_REGISTRY)
+            || !reader.findSection(QoreAOTSectionType::PLUGIN_HELPER_REFS)) {
+        std::cerr << "plugin QORD smoke blob is missing plugin sections\n";
+        return false;
+    }
 
     uint64_t result_bits = qore_rt_plugin_binary(global_id,
         smokeBitsFromValue(QoreValue(static_cast<int64>(40))),
