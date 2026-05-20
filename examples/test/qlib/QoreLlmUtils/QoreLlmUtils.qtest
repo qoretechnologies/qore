@@ -1868,7 +1868,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     # fires a terminal done so caller accumulators never deadlock.
 
     private list<hash<auto>> driveCallbackChatStream(
-            *code
+            *code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
                 stream_cb,
             *code<hash<auto>(string, string, hash<auto>)> sync_cb) {
         list<hash<auto>> seen = ();
@@ -1891,9 +1891,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     }
 
     callbackChatStreamRealPathTest() {
-        code
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
                 stream_cb =
-            sub (string m, string p, hash<auto> body, code dcb) {
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
                 # Assert the stream-enabled body shape reaches the callback
                 assertEq(True, body.stream);
                 assertEq(True, body.stream_options.include_usage);
@@ -1927,9 +1927,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         # "assistant"}` and no content / no finish_reason.  These must be
         # suppressed — they carry no actionable signal for the agent loop
         # and would just be noise on the caller's event stream.
-        code
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
                 stream_cb =
-            sub (string m, string p, hash<auto> body, code dcb) {
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
                 dcb({"object": "chat.completion.chunk",
                     "choices": ({"index": 0,
                         "delta": {"role": "assistant"},
@@ -1989,9 +1989,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         # Upstream throws → CallbackLlmProvider wraps it as LLM-ERROR with
         # the original exception preserved in arg (matches chat()'s
         # contract so error sanitizers downstream can introspect both).
-        code
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
                 stream_cb =
-            sub (string m, string p, hash<auto> body, code dcb) {
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
                 throw "UPSTREAM-ERROR", "simulated upstream failure";
             };
         assertThrows("LLM-ERROR", "callback chat stream failed",
@@ -2009,9 +2009,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         # arguments JSON.  The provider must forward these via event.raw
         # so the agent-strategy accumulator can rebuild the complete
         # tool_call.  event.delta stays empty for tool-call-only chunks.
-        code
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
                 stream_cb =
-            sub (string m, string p, hash<auto> body, code dcb) {
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
                 dcb({"object": "chat.completion.chunk",
                     "choices": ({"index": 0,
                         "delta": {"tool_calls": ({"index": 0,
@@ -2047,9 +2047,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         # Malformed providers may close the stream without an
         # OpenAI-style finish_reason chunk.  The provider must still fire
         # a terminal done event so the caller's accumulator can finalize.
-        code
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
                 stream_cb =
-            sub (string m, string p, hash<auto> body, code dcb) {
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
                 dcb({"object": "chat.completion.chunk",
                     "choices": ({"index": 0,
                         "delta": {"content": "no-terminal-from-me"},

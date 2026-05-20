@@ -160,7 +160,7 @@ LlmBackend backend(<LlmBackendConfig>{
         # max-iterations safety net
         return tenant_gateway.dispatch(body, NOTHING);
     },
-    "api_stream_callback": sub (string m, string p, hash<auto> body, code dcb) {
+    "api_stream_callback": sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
         # Forward each upstream chunk to the caller; the gateway already
         # parses SSE and surfaces structured chunks
         tenant_gateway.dispatch(body, sub (hash<auto> chunk) { dcb(chunk); });

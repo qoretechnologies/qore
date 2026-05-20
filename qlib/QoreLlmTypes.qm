@@ -145,7 +145,7 @@ public hashdecl LlmBackendConfig {
         The signature is \c (method, path, body, delta_cb) → @ref nothing
         where each call to @c delta_cb passes one OpenAI-shaped
         \c chat.completion.chunk hash. */
-    *code api_stream_callback;
+    *code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)> api_stream_callback;
     #! Callback mode method hint passed to @ref api_callback; default "POST"
     string callback_method = "POST";
     #! Callback mode endpoint/path hint passed to @ref api_callback; default "chat/completions"
