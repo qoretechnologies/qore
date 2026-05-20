@@ -250,6 +250,9 @@ using PluginUnaryHelper = uint64_t (*)(uint64_t, ExceptionSink*);
 using PluginBinaryHelper = uint64_t (*)(uint64_t, uint64_t, ExceptionSink*);
 using PluginCallHelper = uint64_t (*)(uint64_t, uint64_t, ExceptionSink*);
 using PluginConstructHelper = uint64_t (*)(uint64_t, ExceptionSink*);
+using PluginDenseBufferUnaryHelper = uint64_t (*)(void*, int64_t, const void*, int64_t, int64_t, ExceptionSink*);
+using PluginDenseBufferBinaryHelper = uint64_t (*)(void*, int64_t, const void*, int64_t, int64_t,
+    const void*, int64_t, int64_t, ExceptionSink*);
 
 struct ResolvedPluginOperation {
     uint32_t global_id = 0;
@@ -284,6 +287,31 @@ QoreValue makePluginArgListFromBits(const uint64_t* arg_bits, int32_t nargs, Exc
         priv->pushIntern(arg);
     }
     return QoreValue(args.release());
+}
+
+bool validateDenseBufferFrame(const char* helper_name, void* result_buffer_data, int64_t result_size,
+        const void* lhs_data, int64_t lhs_size, const void* rhs_data, int64_t rhs_size, ExceptionSink* xsink) {
+    if (result_size < 0 || lhs_size < 0 || rhs_size < 0) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot dispatch %s: dense-buffer sizes must be non-negative "
+                "(field=\"size\", expected=\"non-negative\", actual=\"negative\", "
+                "subreason=\"helper_abi_mismatch\", section=3.5)",
+                helper_name);
+        }
+        return true;
+    }
+    if ((result_size && !result_buffer_data) || (lhs_size && !lhs_data) || (rhs_size && !rhs_data)) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot dispatch %s: dense-buffer data pointers must be non-null for non-empty buffers "
+                "(field=\"data\", expected=\"non-null data for non-empty buffers\", actual=\"null\", "
+                "subreason=\"helper_abi_mismatch\", section=3.5)",
+                helper_name);
+        }
+        return true;
+    }
+    return false;
 }
 
 uint64_t computeSignatureHashV1(const QorePluginOperationSignature& signature) {
@@ -1352,4 +1380,41 @@ extern "C" uint64_t qore_rt_plugin_construct_args(uint32_t global_operation_id, 
     uint64_t rv = qore_rt_plugin_construct(global_operation_id, bitsFromValue(args_value), xsink);
     args_value.discard(xsink);
     return rv;
+}
+
+extern "C" uint64_t qore_rt_plugin_dense_buffer_unary(uint32_t global_operation_id, void* result_buffer_data,
+        int64_t result_size, const void* value_data, int64_t value_size, int64_t value_stride,
+        ExceptionSink* xsink) {
+    if (validateDenseBufferFrame("dense-buffer unary plugin helper", result_buffer_data, result_size,
+            value_data, value_size, nullptr, 0, xsink)) {
+        return nothingBits();
+    }
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::DenseBufferUnary, op, xsink)) {
+        return nothingBits();
+    }
+    traceDispatch("dense-buffer-unary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginDenseBufferUnaryHelper>(op.runtime_helper);
+    return helper(result_buffer_data, result_size, value_data, value_size, value_stride, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_dense_buffer_binary(uint32_t global_operation_id, void* result_buffer_data,
+        int64_t result_size, const void* lhs_data, int64_t lhs_size, int64_t lhs_stride, const void* rhs_data,
+        int64_t rhs_size, int64_t rhs_stride, ExceptionSink* xsink) {
+    if (validateDenseBufferFrame("dense-buffer binary plugin helper", result_buffer_data, result_size,
+            lhs_data, lhs_size, rhs_data, rhs_size, xsink)) {
+        return nothingBits();
+    }
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::DenseBufferBinary, op, xsink)) {
+        return nothingBits();
+    }
+    traceDispatch("dense-buffer-binary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginDenseBufferBinaryHelper>(op.runtime_helper);
+    return helper(result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride, rhs_data, rhs_size, rhs_stride,
+        xsink);
 }

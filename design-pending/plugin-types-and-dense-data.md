@@ -45,10 +45,12 @@ is not blocking.
   for plugin-dispatch IR references. The full
   Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
   `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
-  value instances, dense-buffer dispatch opcodes and helper execution, runtime
-  verifier hooks, Program-local activation/fallback diagnostics, the rest of
-  the trace-env family, the reference plugin module, lint tooling, and complete
-  user-facing documentation.
+  value instances, dense-buffer dispatch opcodes, runtime verifier hooks,
+  Program-local activation/fallback diagnostics, the rest of the trace-env
+  family, the reference plugin module, lint tooling, and complete user-facing
+  documentation. Dense-buffer runtime helper execution is implemented for
+  module helpers using the raw dense-buffer ABI; IR opcodes are intentionally
+  deferred until lowering can supply real buffer data/size/stride operands.
 
 ---
 
@@ -2553,6 +2555,9 @@ exposure — reuses Phase 1's `buffer<T>`.
 - Built-in plugin-dispatch opcodes carrying operation descriptors.
 - IR-interpreter dispatch table for module-registered helpers.
 - JIT helper symbol resolver for module-registered helpers.
+- Dense-buffer runtime helper trampolines for `DenseBufferUnary` and
+  `DenseBufferBinary`; dedicated dense-buffer IR opcodes remain pending until
+  lowering can produce real raw buffer operands.
 - QORD `PLUGIN_IMPORTS`, `PLUGIN_TYPE_REGISTRY`, and `PLUGIN_HELPER_REFS`
   sections for plugin-dispatch IR references. Serialized plugin value-instance
   payloads still need the `VT_PLUGIN_INSTANCE` reader/writer path.
