@@ -128,12 +128,18 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \callbackDispatchOptionsTest());
         addTestCase("LlmBackend request options override model",
             \requestOptionsOverrideModelTest());
+        addTestCase("LlmStructuredRepair parses repaired JSON text",
+            \structuredRepairJsonTextTest());
+        addTestCase("LlmStructuredRepair coerces nested schema JSON strings",
+            \structuredRepairSchemaCoercionTest());
         addTestCase("LlmBackend gemini chat request and text response",
             \geminiChatRequestAndTextResponseTest());
         addTestCase("LlmBackend gemini tool call response",
             \geminiToolCallResponseTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
+        addTestCase("LlmBackend OpenAI chat facade schema-coerces tool "
+            "arguments", \geminiOpenAiToolArgumentSchemaCoercionTest());
         addTestCase("LlmBackend OpenAI chat facade maps abstract Gemini "
             "token budgets", \geminiOpenAiAbstractTokenBudgetFacadeTest());
         addTestCase("LlmBackend OpenAI provider maps reasoning-model "
@@ -375,6 +381,80 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(111, captured.reasoning_token_budget);
         assertEq(0.2, captured.temperature);
         assertEq("low", captured.reasoning_effort);
+    }
+
+    structuredRepairJsonTextTest() {
+        checkGeminiModule();
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::parseJsonObject(
+                "<think>hidden reasoning</think>```json\n"
+                "{\"ok\":true,\"items\":[1]}\n``` trailing text");
+
+        assertTrue(repaired.valid, "balanced JSON prefix is parsed");
+        assertTrue(repaired.repaired, "prefix parsing is reported as repair");
+        assertEq("json-balanced-prefix", repaired.repair_kind,
+            "repair type is exposed");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq(True, value.ok, "object fields are preserved");
+        assertEq(1, value.items[0], "array values are preserved");
+
+        hash<LlmStructuredRepairResult> invalid =
+            LlmStructuredRepair::parseJsonObject("{\"ok\":");
+        assertFalse(invalid.valid, "invalid JSON is rejected");
+        assertEq("invalid-json", invalid.error_code,
+            "parse errors have a stable code");
+        assertTrue(invalid.failure_fingerprint.find("invalid-json:") == 0,
+            "parse errors have a stable fingerprint prefix");
+    }
+
+    structuredRepairSchemaCoercionTest() {
+        checkGeminiModule();
+        hash<auto> schema = {
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "type": "object",
+                    "properties": {
+                        "ids": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {"value": {"type": "string"}},
+                            },
+                        },
+                    },
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "payload": {
+                                "type": "object",
+                                "properties": {"key": {"type": "string"}},
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        hash<auto> raw = {
+            "payload": "{\"ids\":[{\"value\":\"req-15\"}]}",
+            "steps": "[{\"operation\":\"revise_interface\","
+                "\"payload\":\"{\\\"key\\\":\\\"iface-fsm\\\"}\"}]",
+        };
+
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::coerceBySchema(raw, schema);
+        assertTrue(repaired.valid, "schema coercion succeeds");
+        assertTrue(repaired.repaired, "schema coercion reports repair");
+        assertEq("schema-json-string", repaired.repair_kind,
+            "schema repair type is exposed");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq("req-15", value.payload.ids[0].value,
+            "stringified object fields are parsed");
+        assertEq("iface-fsm", value.steps[0].payload.key,
+            "stringified arrays and nested objects are parsed");
     }
 
     geminiChatRequestAndTextResponseTest() {
@@ -653,6 +733,108 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("lookup",
             gemini_handler.requests[0].body.toolConfig.functionCallingConfig.allowedFunctionNames[0],
             "named tool choice limits the allowed function");
+    }
+
+    geminiOpenAiToolArgumentSchemaCoercionTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({
+                                "functionCall": {
+                                    "name": "select_design_action",
+                                    "args": {
+                                        "operation": "propose_plan",
+                                        "payload": make_json({
+                                            "key": "plan-req-15",
+                                            "interface": {
+                                                "satisfied_requirements": (
+                                                    "req-15",
+                                                ),
+                                            },
+                                        }),
+                                        "steps": make_json(({
+                                            "operation": "revise_interface",
+                                            "payload": {
+                                                "key": "iface-fsm-req-15",
+                                            },
+                                        },)),
+                                    },
+                                },
+                            },),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 8},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "messages": ({"role": "user", "content": "continue"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_design_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "payload": {
+                                "type": "object",
+                                "properties": {
+                                    "key": {"type": "string"},
+                                    "interface": {
+                                        "type": "object",
+                                        "properties": {
+                                            "satisfied_requirements": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            "steps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "operation": {"type": "string"},
+                                        "payload": {
+                                            "type": "object",
+                                            "properties": {
+                                                "key": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "select_design_action"},
+            },
+        });
+
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "Gemini function call is exposed as a tool call");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("plan-req-15", args.payload.key,
+            "stringified payload object is coerced to JSON");
+        assertEq("req-15", args.payload.interface.satisfied_requirements[0],
+            "nested arrays in stringified payload survive");
+        assertEq("iface-fsm-req-15", args.steps[0].payload.key,
+            "stringified steps array is coerced to JSON");
     }
 
     geminiOpenAiAbstractTokenBudgetFacadeTest() {

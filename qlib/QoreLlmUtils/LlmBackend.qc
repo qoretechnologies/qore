@@ -24,6 +24,330 @@
 #! @see LlmBackend
 public namespace QoreLlmUtils {
 
+#! Result from generic structured-output repair
+public hashdecl LlmStructuredRepairResult {
+    #! True when the value could be parsed or coerced as requested
+    bool valid;
+    #! True when the returned value differs from the supplied value
+    bool repaired = False;
+    #! Parsed or coerced value
+    *auto value;
+    #! Stable machine-readable error code
+    *string error_code;
+    #! Human-readable error detail
+    *string error_detail;
+    #! Stable machine-readable repair type
+    *string repair_kind;
+    #! Stable fingerprint for retry / rejection grouping
+    *string failure_fingerprint;
+}
+
+#! Provider-neutral helpers for parsing and repairing structured LLM output
+/** LLM providers differ in how strictly they enforce JSON schema and tool
+    argument shapes.  This class centralizes conservative, provider-neutral
+    repairs that are safe before a caller applies domain-specific validation:
+    fenced JSON extraction, hidden-reasoning tag removal, balanced JSON prefix
+    parsing, and schema-guided object/array coercion for nested values that
+    were returned as JSON strings.
+*/
+public class LlmStructuredRepair {
+    #! Parses any JSON value, optionally checking the expected JSON type
+    static hash<LlmStructuredRepairResult> parseJsonValue(auto raw,
+            *string expected_type) {
+        if (!exists raw) {
+            return makeInvalid("missing-value", "no value was supplied");
+        }
+
+        if (raw.typeCode() != NT_STRING) {
+            if (expected_type.val()
+                    && !valueMatchesJsonType(raw, expected_type)) {
+                return makeInvalid("json-type-mismatch",
+                    sprintf("expected JSON %s but received %s",
+                        expected_type, raw.type()));
+            }
+            return makeValid(raw, False, NOTHING);
+        }
+
+        string original = raw;
+        string cleaned = cleanJsonText(original);
+        if (!cleaned.val()) {
+            return makeInvalid("empty-json-text",
+                "the model returned no JSON text");
+        }
+
+        try {
+            auto parsed = parse_json(cleaned);
+            return validateParsed(parsed, expected_type,
+                cleaned != trim(original), "json-text-cleaned");
+        } catch (hash<ExceptionInfo> ex) {
+            *string prefix = extractBalancedJsonPrefix(cleaned);
+            if (prefix.val() && prefix != cleaned) {
+                try {
+                    auto parsed = parse_json(prefix);
+                    return validateParsed(parsed, expected_type, True,
+                        "json-balanced-prefix");
+                } catch (hash<ExceptionInfo> ex2) {
+                    return makeInvalid("invalid-json",
+                        sprintf("%s; balanced prefix also failed: %s",
+                            ex.desc, ex2.desc));
+                }
+            }
+            return makeInvalid("invalid-json", ex.desc);
+        }
+    }
+
+    #! Parses a JSON object from a hash or JSON string
+    static hash<LlmStructuredRepairResult> parseJsonObject(auto raw) {
+        return parseJsonValue(raw, "object");
+    }
+
+    #! Parses a JSON array from a list or JSON string
+    static hash<LlmStructuredRepairResult> parseJsonArray(auto raw) {
+        return parseJsonValue(raw, "array");
+    }
+
+    #! Coerces nested object / array values according to a JSON schema
+    /** Only safe structural coercions are performed.  A string value is
+        parsed as JSON when the matching schema position expects an object
+        or array.  Other scalar coercions are intentionally left to the
+        domain validator because they can change semantics.
+    */
+    static hash<LlmStructuredRepairResult> coerceBySchema(auto value,
+            *hash<auto> schema) {
+        if (!schema) {
+            return makeValid(value, False, NOTHING);
+        }
+        return coerceBySchemaIntern(value, schema, "$");
+    }
+
+    private static hash<LlmStructuredRepairResult> makeValid(auto value,
+            bool repaired, *string repair_kind) {
+        hash<LlmStructuredRepairResult> rv = <LlmStructuredRepairResult>{
+            "valid": True,
+            "repaired": repaired,
+            "value": value,
+        };
+        if (repair_kind.val()) {
+            rv.repair_kind = repair_kind;
+        }
+        return rv;
+    }
+
+    private static hash<LlmStructuredRepairResult> makeInvalid(string code,
+            string detail) {
+        string normalized = regex_subst(trim(detail), "\\s+", " ",
+            RE_Global);
+        if (normalized.length() > 180) {
+            normalized = normalized.substr(0, 180);
+        }
+        return <LlmStructuredRepairResult>{
+            "valid": False,
+            "error_code": code,
+            "error_detail": detail,
+            "failure_fingerprint": code + ":" + normalized,
+        };
+    }
+
+    private static string cleanJsonText(string text) {
+        string rv = trim(regex_subst(text,
+            "<think>[\\s\\S]*?</think>\\s*", "", RE_Global));
+        if (rv =~ /^```/) {
+            rv = regex_subst(rv, "^```[a-zA-Z0-9_-]*\\s*\n?", "");
+            rv = regex_subst(rv, "\n?```\\s*$", "");
+            rv = trim(rv);
+        }
+        return rv;
+    }
+
+    private static hash<LlmStructuredRepairResult> validateParsed(auto parsed,
+            *string expected_type, bool repaired, *string repair_kind) {
+        if (expected_type.val()
+                && !valueMatchesJsonType(parsed, expected_type)) {
+            return makeInvalid("json-type-mismatch",
+                sprintf("expected JSON %s but received %s",
+                    expected_type, parsed.type()));
+        }
+        return makeValid(parsed, repaired, repaired ? repair_kind
+            : NOTHING);
+    }
+
+    private static bool valueMatchesJsonType(auto value, string json_type) {
+        switch (json_type) {
+            case "object":
+                return value.typeCode() == NT_HASH;
+            case "array":
+                return value.typeCode() == NT_LIST;
+            case "string":
+                return value.typeCode() == NT_STRING;
+            case "boolean":
+                return value.typeCode() == NT_BOOLEAN;
+            case "integer":
+                return value.typeCode() == NT_INT;
+            case "number":
+                return value.typeCode() == NT_INT
+                    || value.typeCode() == NT_FLOAT
+                    || value.typeCode() == NT_NUMBER;
+            case "null":
+                return value.typeCode() == NT_NOTHING;
+            default:
+                return True;
+        }
+    }
+
+    private static *string extractBalancedJsonPrefix(string text) {
+        string trimmed = trim(text);
+        if (!trimmed.val() || (trimmed[0] != "{" && trimmed[0] != "[")) {
+            return NOTHING;
+        }
+
+        list<string> stack = ();
+        bool in_string = False;
+        bool escaped = False;
+        for (int i = 0; i < trimmed.length(); ++i) {
+            string c = trimmed[i];
+            if (in_string) {
+                if (escaped) {
+                    escaped = False;
+                } else if (c == "\\") {
+                    escaped = True;
+                } else if (c == "\"") {
+                    in_string = False;
+                }
+                continue;
+            }
+            if (c == "\"") {
+                in_string = True;
+            } else if (c == "{" || c == "[") {
+                push stack, c;
+            } else if (c == "}" || c == "]") {
+                if (!stack) {
+                    return NOTHING;
+                }
+                string opener = pop stack;
+                if ((opener == "{" && c != "}")
+                        || (opener == "[" && c != "]")) {
+                    return NOTHING;
+                }
+                if (!stack) {
+                    string prefix = trimmed.substr(0, i + 1);
+                    string suffix = trim(trimmed.substr(i + 1));
+                    return suffix.val() ? prefix : trimmed;
+                }
+            }
+        }
+        return NOTHING;
+    }
+
+    private static hash<LlmStructuredRepairResult> coerceBySchemaIntern(auto value,
+            hash<auto> schema, string path) {
+        *string schema_type = getSchemaType(schema);
+        if (schema_type == "object") {
+            bool repaired = False;
+            auto object_value = value;
+            if (object_value.typeCode() == NT_STRING) {
+                hash<LlmStructuredRepairResult> parsed =
+                    parseJsonObject(object_value);
+                if (!parsed.valid) {
+                    return makeInvalid(parsed.error_code,
+                        sprintf("%s at %s", parsed.error_detail, path));
+                }
+                object_value = parsed.value;
+                repaired = True;
+            }
+            if (object_value.typeCode() != NT_HASH) {
+                return makeInvalid("schema-type-mismatch",
+                    sprintf("expected object at %s but received %s",
+                        path, object_value.type()));
+            }
+
+            hash<auto!> out;
+            out += cast<hash<auto>>(object_value);
+            if (schema.properties.typeCode() == NT_HASH) {
+                hash<auto> properties = cast<hash<auto>>(schema.properties);
+                foreach auto p in (properties.pairIterator()) {
+                    if (!exists out{p.key}
+                            || p.value.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    hash<LlmStructuredRepairResult> child =
+                        coerceBySchemaIntern(out{p.key},
+                            cast<hash<auto>>(p.value), path + "." + p.key);
+                    if (!child.valid) {
+                        return child;
+                    }
+                    if (child.repaired) {
+                        out{p.key} = child.value;
+                        repaired = True;
+                    }
+                }
+            }
+            return makeValid(out, repaired, repaired
+                ? "schema-json-string" : NOTHING);
+        }
+
+        if (schema_type == "array") {
+            bool repaired = False;
+            auto array_value = value;
+            if (array_value.typeCode() == NT_STRING) {
+                hash<LlmStructuredRepairResult> parsed =
+                    parseJsonArray(array_value);
+                if (!parsed.valid) {
+                    return makeInvalid(parsed.error_code,
+                        sprintf("%s at %s", parsed.error_detail, path));
+                }
+                array_value = parsed.value;
+                repaired = True;
+            }
+            if (array_value.typeCode() != NT_LIST) {
+                return makeInvalid("schema-type-mismatch",
+                    sprintf("expected array at %s but received %s",
+                        path, array_value.type()));
+            }
+
+            list<auto> out = cast<list<auto>>(array_value);
+            if (schema.items.typeCode() == NT_HASH) {
+                hash<auto> item_schema = cast<hash<auto>>(schema.items);
+                for (int i = 0; i < out.size(); ++i) {
+                    hash<LlmStructuredRepairResult> child =
+                        coerceBySchemaIntern(out[i], item_schema,
+                            sprintf("%s[%d]", path, i));
+                    if (!child.valid) {
+                        return child;
+                    }
+                    if (child.repaired) {
+                        out[i] = child.value;
+                        repaired = True;
+                    }
+                }
+            }
+            return makeValid(out, repaired, repaired
+                ? "schema-json-string" : NOTHING);
+        }
+
+        return makeValid(value, False, NOTHING);
+    }
+
+    private static *string getSchemaType(hash<auto> schema) {
+        if (schema.type.typeCode() == NT_STRING) {
+            return schema.type;
+        }
+        if (schema.type.typeCode() == NT_LIST) {
+            foreach auto t in (schema.type) {
+                if (t.typeCode() == NT_STRING && t != "null") {
+                    return t;
+                }
+            }
+        }
+        if (schema.properties.typeCode() == NT_HASH) {
+            return "object";
+        }
+        if (schema.items.typeCode() == NT_HASH) {
+            return "array";
+        }
+        return NOTHING;
+    }
+}
+
 #! Pluggable LLM backend facade for chat completions
 /** Provides a provider-neutral interface for making LLM chat completion
     calls across multiple providers.  The constructor looks up the provider
@@ -208,7 +532,8 @@ llm.chatStream(
         *string forced_tool_name = getForcedOpenAiToolName(body, tools);
         hash<ChatResponse> response = chat(messages, tools, options);
         hash<auto> rv = synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
-            response, options.model ?? provider.getModel()), forced_tool_name);
+            response, options.model ?? provider.getModel(), tools),
+            forced_tool_name, tools);
         if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
                 forced_tool_name);
@@ -257,7 +582,7 @@ llm.chatStream(
         }, tools, options);
         hash<auto> rv = synthesizeOpenAiForcedToolCall(
             streamStateToOpenAiResponse(state),
-            getForcedOpenAiToolName(body, tools));
+            getForcedOpenAiToolName(body, tools), tools);
         *string forced_tool_name = getForcedOpenAiToolName(body, tools);
         if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
@@ -471,18 +796,9 @@ llm.chatStream(
     }
 
     private static *hash<auto> parseOpenAiToolArguments(auto raw) {
-        if (!exists raw) {
-            return {};
-        }
-        if (raw.typeCode() == NT_HASH) {
-            return cast<hash<auto>>(raw);
-        }
-        if (raw.typeCode() == NT_STRING && raw.val()) {
-            auto parsed = parse_json(raw);
-            return parsed.typeCode() == NT_HASH
-                ? cast<hash<auto>>(parsed) : {"value": parsed};
-        }
-        return {};
+        hash<LlmStructuredRepairResult> result =
+            LlmStructuredRepair::parseJsonObject(raw);
+        return result.valid ? cast<hash<auto>>(result.value) : {};
     }
 
     private static *hash<auto> getOpenAiResponseSchema(hash<auto> body) {
@@ -496,14 +812,14 @@ llm.chatStream(
     }
 
     private static hash<auto> chatResponseToOpenAi(hash<ChatResponse> response,
-            *string requested_model) {
+            *string requested_model, *list<hash<ToolDefinition>> tools) {
         hash<auto!> message;
         message.role = "assistant";
         message.content = response.content;
         if (response.tool_calls) {
             list<hash<auto>> tool_calls = ();
             foreach hash<ChatToolCall> tc in (response.tool_calls) {
-                push tool_calls, chatToolCallToOpenAi(tc);
+                push tool_calls, chatToolCallToOpenAi(tc, tools);
             }
             message.tool_calls = tool_calls;
         }
@@ -530,13 +846,16 @@ llm.chatStream(
         return rv;
     }
 
-    private static hash<auto> chatToolCallToOpenAi(hash<ChatToolCall> tc) {
+    private static hash<auto> chatToolCallToOpenAi(hash<ChatToolCall> tc,
+            *list<hash<ToolDefinition>> tools) {
+        hash<auto> args = coerceToolArguments(tc.name, tc.arguments ?? {},
+            tools);
         return {
             "id": tc.id,
             "type": "function",
             "function": {
                 "name": tc.name,
-                "arguments": make_json(tc.arguments ?? {}),
+                "arguments": make_json(args),
             },
         };
     }
@@ -558,7 +877,8 @@ llm.chatStream(
     }
 
     private static hash<auto> synthesizeOpenAiForcedToolCall(
-            hash<auto> response, *string forced_tool_name) {
+            hash<auto> response, *string forced_tool_name,
+            *list<hash<ToolDefinition>> tools) {
         if (!forced_tool_name.val()
                 || response.choices.typeCode() != NT_LIST
                 || !response.choices) {
@@ -580,6 +900,7 @@ llm.chatStream(
         if (!args) {
             return response;
         }
+        args = coerceToolArguments(forced_tool_name, args, tools);
 
         hash<auto!> new_message;
         new_message += message;
@@ -633,8 +954,8 @@ llm.chatStream(
         hash<ChatResponse> retry_response = chat(retry_messages, NOTHING,
             retry_options);
         return synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
-            retry_response, retry_options.model ?? provider.getModel()),
-            forced_tool_name);
+            retry_response, retry_options.model ?? provider.getModel(), tools),
+            forced_tool_name, tools);
     }
 
     private *hash<auto> retryRequiredToolNoOutput(
@@ -656,8 +977,8 @@ llm.chatStream(
         hash<ChatResponse> retry_response = chat(retry_messages, tools,
             options);
         return synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
-            retry_response, options.model ?? provider.getModel()),
-            forced_tool_name);
+            retry_response, options.model ?? provider.getModel(), tools),
+            forced_tool_name, tools);
     }
 
     private static *hash<ToolDefinition> findToolDefinition(
@@ -671,6 +992,17 @@ llm.chatStream(
             }
         }
         return NOTHING;
+    }
+
+    private static hash<auto> coerceToolArguments(string tool_name,
+            hash<auto> args, *list<hash<ToolDefinition>> tools) {
+        *hash<ToolDefinition> tool = findToolDefinition(tools, tool_name);
+        if (!tool || tool.parameters.typeCode() != NT_HASH) {
+            return args;
+        }
+        hash<LlmStructuredRepairResult> result =
+            LlmStructuredRepair::coerceBySchema(args, tool.parameters);
+        return result.valid ? cast<hash<auto>>(result.value) : args;
     }
 
     private static *hash<auto> stripForcedToolBodyOptions(
@@ -751,20 +1083,9 @@ llm.chatStream(
         if (!content.val()) {
             return NOTHING;
         }
-        string cleaned = trim(regex_subst(content,
-            "<think>[\\s\\S]*?</think>\\s*", "", RE_Global));
-        if (cleaned =~ /^```/) {
-            cleaned = regex_subst(cleaned, "^```[a-zA-Z]*\\s*\n?", "");
-            cleaned = regex_subst(cleaned, "\n?```\\s*$", "");
-            cleaned = trim(cleaned);
-        }
-        try {
-            auto parsed = parse_json(cleaned);
-            return parsed.typeCode() == NT_HASH
-                ? cast<hash<auto>>(parsed) : NOTHING;
-        } catch () {
-            return NOTHING;
-        }
+        hash<LlmStructuredRepairResult> result =
+            LlmStructuredRepair::parseJsonObject(content);
+        return result.valid ? cast<hash<auto>>(result.value) : NOTHING;
     }
 
     private static string genericStopReasonToOpenAi(*string reason) {
