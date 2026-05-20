@@ -130,6 +130,18 @@ public hashdecl LlmBackendConfig {
     #! Maximum retry attempts for transient errors (429, 5xx); default 3;
     #! set to 0 to disable retries
     int max_retries = 3;
+    #! Free-form per-provider configuration not otherwise expressible in this hashdecl
+    /** Allows provider subclasses to accept vendor-specific knobs without
+        forcing every key into this shared hashdecl.  Examples:
+        - Azure OpenAI: \c azure_deployment, \c azure_api_version,
+          \c azure_auth_mode, \c azure_tenant_id, \c azure_client_id,
+          \c azure_client_secret
+        - Vertex AI: \c gcp_project_id, \c gcp_region, \c gcp_sa_json_path,
+          \c gcp_model_publisher
+        - AWS Bedrock: \c aws_region, \c aws_service overrides,
+          \c bedrock_invoke_fallback table
+    */
+    *hash<auto> provider_options;
     #! Callback mode: a callable that performs the API call and returns
     #! the response hash in OpenAI-compatible format
     *code<hash<auto>(string, string, hash<auto>)> api_callback;
@@ -363,12 +375,13 @@ public class LlmProviderRegistry {
     public {
         #! Map of mode names to the module that supplies the matching provider
         const ProviderModuleMap = {
-            "http":       "OpenAiRestClient",
-            "anthropic":  "AnthropicRestClient",
-            "sglang":     "SGLangRestClient",
-            "gemini":     "GeminiRestClient",
-            "grok":       "GrokRestClient",
-            "perplexity": "PerplexityRestClient",
+            "http":          "OpenAiRestClient",
+            "anthropic":     "AnthropicRestClient",
+            "sglang":        "SGLangRestClient",
+            "gemini":        "GeminiRestClient",
+            "grok":          "GrokRestClient",
+            "perplexity":    "PerplexityRestClient",
+            "azure-openai":  "AzureOpenAiRestClient",
         };
     }
 
