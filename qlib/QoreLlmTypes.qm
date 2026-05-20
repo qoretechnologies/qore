@@ -1,6 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreLlmTypes.qm provider-neutral type and abstract-class layer for Qore LLM modules
 
-/*  AbstractLlmProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  QoreLlmTypes.qm Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -21,7 +22,284 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+%requires qore >= 2.0
+%modern
+
+%requires reflection
+
+module QoreLlmTypes {
+    version = "1.0.0";
+    desc = "user module providing the provider-neutral hashdecls and abstract "
+        "provider classes shared by QoreLlmUtils and LLM provider modules";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreLlmTypes Module
+
+    @tableofcontents
+
+    @section qorellmtypesintro QoreLlmTypes Module Introduction
+
+    The %QoreLlmTypes module provides the provider-neutral type and abstract
+    class layer that @ref qorellmutilsintro "QoreLlmUtils" and individual
+    LLM REST client modules (GeminiRestClient, AnthropicRestClient,
+    OpenAiRestClient, SGLangRestClient) share.  It exists as a separate
+    module so that REST client modules can depend on the abstract provider
+    contract without forming a dependency cycle with %QoreLlmUtils.
+
+    Symbols defined here live in the @ref QoreLlmUtils namespace so callers
+    that \c "%requires QoreLlmUtils" see them transparently; the split is
+    purely a packaging detail.
+
+    @section qorellmtypesmembers Public symbols
+
+    Hashdecls describing requests and responses:
+
+    - @ref QoreLlmUtils::LlmBackendConfig — backend configuration
+    - @ref QoreLlmUtils::LlmRequestOptions — per-call request overrides
+    - @ref QoreLlmUtils::LlmCompletionResult — completion result
+    - @ref QoreLlmUtils::ChatMessage — multi-turn conversation message
+    - @ref QoreLlmUtils::ChatToolCall — tool call requested by the model
+    - @ref QoreLlmUtils::ToolDefinition — tool the model may call
+    - @ref QoreLlmUtils::ContentPart — multimodal message part
+    - @ref QoreLlmUtils::ChatResponse — multi-turn chat result
+    - @ref QoreLlmUtils::ChatStreamEvent — streaming event delta
+    - @ref QoreLlmUtils::LlmProviderInfo — provider discovery metadata
+
+    Abstract classes:
+
+    - @ref QoreLlmUtils::AbstractLlmProvider — provider-neutral
+      complete / chat / chatStream contract plus shared helpers
+    - @ref QoreLlmUtils::AbstractLlmProviderFactory — registration handle
+      and capability description
+
+    @section qorellmtypesrelnotes Release Notes
+
+    @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
+    - Initial release; extracted from the QoreLlmUtils module to break a
+      future dependency cycle with LLM provider modules
+*/
+
+#! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
 public namespace QoreLlmUtils {
+
+#! Configuration for the LLM backend
+/** Specifies how to connect to the LLM — via an OpenAI-compatible HTTP
+    endpoint, the Anthropic Messages API, the Google Gemini API, or a custom
+    callback (e.g., for routing through an API gateway).
+*/
+public hashdecl LlmBackendConfig {
+    #! Mode: "http" for OpenAI-compatible, "anthropic" for Anthropic Messages API,
+    #! "sglang" for SGLang servers (OpenAI-compatible + local defaults),
+    #! "gemini" for Google Gemini generateContent,
+    #! "callback" for a custom API call function
+    string mode;
+    #! Base URL of the LLM service (required for "http", "anthropic", and "sglang" modes; optional for "gemini")
+    *string url;
+    #! Model name to pass in the request
+    *string model;
+    #! API key for authentication — this is the secret key from your LLM provider (e.g., from the OpenAI or Anthropic dashboard)
+    *string api_key;
+    #! Maximum tokens to generate; default 4096
+    int max_tokens = 4096;
+    #! Sampling temperature; default 0.0 (deterministic)
+    float temperature = 0.0;
+    #! HTTP connect timeout in milliseconds; default 10000
+    int connect_timeout_ms = 10000;
+    #! HTTP request timeout in milliseconds; default 120000
+    int timeout_ms = 120000;
+    #! Anthropic API version header; default "2023-06-01"
+    string anthropic_version = "2023-06-01";
+    #! Maximum retry attempts for transient errors (429, 5xx); default 3;
+    #! set to 0 to disable retries
+    int max_retries = 3;
+    #! Callback mode: a callable that performs the API call and returns
+    #! the response hash in OpenAI-compatible format
+    *code<hash<auto>(string, string, hash<auto>)> api_callback;
+    #! Callback mode method hint passed to @ref api_callback; default "POST"
+    string callback_method = "POST";
+    #! Callback mode endpoint/path hint passed to @ref api_callback; default "chat/completions"
+    string callback_path = "chat/completions";
+    #! Initial retry delay in milliseconds for exponential backoff; default 1000
+    int retry_delay_ms = 1000;
+}
+
+#! Per-call request overrides for LLM calls
+/** Lets callers keep a long-lived backend for one provider/connection while
+    selecting a different model for individual tasks.  This is important for
+    applications that intentionally mix model tiers (for example: a low-cost
+    summarization pass, a stronger planning pass, and a premium review pass)
+    without rebuilding the backend object.
+*/
+public hashdecl LlmRequestOptions {
+    #! Model name for this call; overrides @ref LlmBackendConfig::model
+    *string model;
+    #! Maximum tokens for this call; overrides @ref LlmBackendConfig::max_tokens
+    *int max_tokens;
+    #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
+    *float temperature;
+    #! JSON schema to request structured output when the backend supports it
+    *hash<auto> output_schema;
+    #! Provider-specific request body fields merged into the generated body
+    *hash<auto> body_options;
+}
+
+#! Result from an LLM completion call
+public hashdecl LlmCompletionResult {
+    #! The generated text content
+    string content;
+    #! Token usage information (provider-specific)
+    hash<auto> usage;
+}
+
+#! A single tool call returned by the LLM
+public hashdecl ChatToolCall {
+    #! Unique ID for this tool call (from the LLM response)
+    string id;
+    #! Function/tool name to call
+    string name;
+    #! Parsed arguments hash to pass to the tool
+    *hash<auto> arguments;
+}
+
+#! A content part in a multimodal message (text or image)
+public hashdecl ContentPart {
+    #! Part type: "text" for text content, "image" for image data
+    string type;
+    #! Text content (when type is "text")
+    *string text;
+    #! Image binary data (when type is "image")
+    *binary data;
+    #! Image MIME type (when type is "image"), e.g., "image/png", "image/jpeg"
+    *string mime_type;
+}
+
+#! A message in a multi-turn conversation
+public hashdecl ChatMessage {
+    #! Message role: "system", "user", "assistant", or "tool"
+    string role;
+    #! Text content (may be empty for assistant messages that only contain tool_calls)
+    *string content;
+    #! Multimodal content parts (images + text); when set, takes precedence
+    #! over \c content for the wire format sent to the LLM
+    *list<hash<ContentPart>> content_parts;
+    #! Tool calls requested by the assistant (present when role is "assistant")
+    *list<hash<ChatToolCall>> tool_calls;
+    #! ID of the tool call this message is responding to (when role is "tool")
+    *string tool_call_id;
+    #! Tool name (when role is "tool")
+    *string name;
+}
+
+#! Definition of a tool the LLM can call
+public hashdecl ToolDefinition {
+    #! Tool name (must match ^[a-zA-Z0-9_-]{1,64}$)
+    string name;
+    #! Human-readable description of what the tool does
+    *string description;
+    #! JSON Schema describing the tool's parameters
+    *hash<auto> parameters;
+}
+
+#! Response from a multi-turn chat call
+public hashdecl ChatResponse {
+    #! Provider response ID when available
+    *string id;
+    #! Model used by the provider when available
+    *string model;
+    #! Why the LLM stopped: "end_turn" (normal), "tool_use" (wants tool calls),
+    #! "max_tokens" (hit limit), or "stop_sequence"
+    string stop_reason;
+    #! Text content (if any)
+    *string content;
+    #! Tool calls the LLM wants executed (when stop_reason is "tool_use")
+    *list<hash<ChatToolCall>> tool_calls;
+    #! Token usage information
+    hash<auto> usage;
+    #! Raw provider response when callers need provider-specific metadata
+    *hash<auto> raw;
+}
+
+#! A streaming event from a chat completion
+public hashdecl ChatStreamEvent {
+    #! Event type from the SSE stream (e.g., "content_block_delta", "message_delta")
+    *string event;
+    #! Text delta (incremental text content in this chunk)
+    *string delta;
+    #! True when this is the final event (stream complete)
+    bool done = False;
+    #! Raw event data (the full parsed JSON from the SSE data field)
+    *hash<auto> raw;
+}
+
+#! Static metadata describing a registered LLM provider
+/** Returned by @ref AbstractLlmProviderFactory::getInfo() so tooling can
+    discover provider capabilities without instantiating a backend.
+*/
+public hashdecl LlmProviderInfo {
+    #! The mode string used to look up this provider (e.g. \c "gemini")
+    string mode;
+    #! Human-readable name for diagnostics and discovery UIs
+    string display_name;
+    #! Module that supplies this provider (e.g. \c "GeminiRestClient")
+    *string module_name;
+    #! True when the provider can stream chat completions
+    bool supports_streaming = False;
+    #! True when the provider can dispatch tool / function calls
+    bool supports_tools = False;
+    #! True when the provider supports structured output (JSON schema)
+    bool supports_structured_output = False;
+    #! True when the provider accepts multimodal content (images etc.)
+    bool supports_multimodal = False;
+}
+
+#! Abstract factory for an LLM provider
+/** Concrete factories register themselves with
+    @ref LlmBackend::registerFactory() and the backend dispatches calls
+    through them.  Factories are looked up by mode string and the heavy
+    provider object is constructed lazily on demand via @ref create().
+
+    @par Subclassing contract
+    Concrete subclasses implement @ref getMode(), @ref getDisplayName(),
+    @ref create(), and optionally @ref getInfo() to advertise capabilities.
+*/
+public class AbstractLlmProviderFactory {
+    #! Returns the mode string associated with this factory
+    /** For example, the Gemini factory returns \c "gemini"; the OpenAI-
+        compatible factory returns \c "http".  The mode is matched against
+        @ref LlmBackendConfig::mode at @ref LlmBackend construction.
+    */
+    abstract string getMode();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a provider instance from the given backend configuration
+    /** @param config the @ref LlmBackendConfig hash; the factory uses the
+            relevant fields (URL, API key, retry settings, etc.) to build
+            a fully initialized provider
+
+        @return a concrete @ref AbstractLlmProvider that can service
+            \c complete() / \c chat() / \c chatStream() calls
+    */
+    abstract AbstractLlmProvider create(hash<LlmBackendConfig> config);
+
+    #! Returns static information about the provider this factory creates
+    /** Default implementation returns the bare minimum
+        (@ref LlmProviderInfo::mode and @ref LlmProviderInfo::display_name);
+        concrete factories override to advertise streaming, tool, schema,
+        and multimodal support.
+    */
+    hash<LlmProviderInfo> getInfo() {
+        return <LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
 
 #! Abstract base class for LLM providers
 /** Concrete subclasses translate the provider-neutral

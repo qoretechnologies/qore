@@ -26,6 +26,7 @@
 %requires qore >= 2.0
 %modern
 
+%requires(reexport) QoreLlmTypes
 %requires RestClientIo
 %requires GeminiRestClient
 

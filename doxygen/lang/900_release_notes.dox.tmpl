@@ -1998,6 +1998,11 @@ cargo install tree-sitter-cli@0.26.5
       - builds host-based service principals, SPNEGO Negotiate headers, credential lifecycle
         reports, keytab rotation decisions, and deployment health checks without exposing
         token or credential material in diagnostics
+    - @ref qorellmtypesintro "QoreLlmTypes" module
+      - new module providing the provider-neutral hashdecls and abstract provider classes
+        shared by QoreLlmUtils and the LLM REST client modules
+      - separated from QoreLlmUtils so REST client modules can supply provider implementations
+        without forming a dependency cycle
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
       - supports HTTP/OpenAI-compatible, Anthropic Messages API, and custom callback modes
