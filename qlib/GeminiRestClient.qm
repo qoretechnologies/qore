@@ -1028,7 +1028,7 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 push declarations, {
                     "name": td.name,
                     "description": td.description ?? "",
-                    "parameters": sanitizeGeminiSchema(td.parameters)
+                    "parameters": sanitizeGeminiSchema(td.parameters, True)
                         ?? {"type": "object", "properties": {}},
                 };
             }
@@ -1049,28 +1049,34 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         provider boundary so callers can keep using stricter
         OpenAI/Anthropic schemas and local validators.
     */
-    private static *hash<auto> sanitizeGeminiSchema(*hash<auto> schema) {
+    private static *hash<auto> sanitizeGeminiSchema(*hash<auto> schema,
+            bool compact = False) {
         if (!schema) {
             return NOTHING;
         }
-        return cast<hash<auto>>(sanitizeGeminiSchemaValue(schema));
+        return cast<hash<auto>>(sanitizeGeminiSchemaValue(schema,
+            compact));
     }
 
-    private static auto sanitizeGeminiSchemaValue(auto value) {
+    private static auto sanitizeGeminiSchemaValue(auto value,
+            bool compact) {
         if (value.typeCode() == NT_HASH) {
             hash<auto> input = cast<hash<auto>>(value);
             hash<auto> rv;
             foreach string key in (keys input) {
                 if (isGeminiSchemaKeywordStripped(key)
+                        || (compact
+                            && isGeminiCompactSchemaKeywordStripped(key))
                         || isGeminiSchemaCompositionKeyword(key)) {
                     continue;
                 }
-                rv{key} = sanitizeGeminiSchemaValue(input{key});
+                rv{key} = sanitizeGeminiSchemaValue(input{key}, compact);
             }
             foreach string key in (("allOf", "anyOf", "oneOf")) {
                 if (input{key}.typeCode() == NT_LIST) {
                     rv = applyGeminiSchemaComposition(rv,
-                        cast<list<auto>>(input{key}), key == "allOf");
+                        cast<list<auto>>(input{key}), key == "allOf",
+                        compact);
                 }
             }
             return rv;
@@ -1078,7 +1084,7 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (value.typeCode() == NT_LIST) {
             list<auto> rv = ();
             foreach auto item in (value) {
-                push rv, sanitizeGeminiSchemaValue(item);
+                push rv, sanitizeGeminiSchemaValue(item, compact);
             }
             return rv;
         }
@@ -1098,6 +1104,9 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     private static bool isGeminiSchemaKeywordStripped(string key) {
         switch (key) {
             case "additionalProperties":
+            case "allowed_values":
+            case "default_value":
+            case "example_value":
             case "minLength":
             case "maxLength":
             case "pattern":
@@ -1111,21 +1120,36 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             case "minProperties":
             case "maxProperties":
             case "multipleOf":
+            case "position":
+            case "positional":
+            case "sensitive":
             case "uniqueItems":
                 return True;
         }
         return False;
     }
 
+    private static bool isGeminiCompactSchemaKeywordStripped(string key) {
+        switch (key) {
+            case "default":
+            case "description":
+            case "enum":
+            case "required":
+            case "title":
+                return True;
+        }
+        return False;
+    }
+
     private static hash<auto> applyGeminiSchemaComposition(hash<auto> base,
-            list<auto> raw_variants, bool all_required) {
+            list<auto> raw_variants, bool all_required, bool compact) {
         list<hash<auto>> variants = ();
         foreach auto raw in (raw_variants) {
             if (raw.typeCode() != NT_HASH) {
                 continue;
             }
             *hash<auto> sanitized =
-                sanitizeGeminiSchema(cast<hash<auto>>(raw));
+                sanitizeGeminiSchema(cast<hash<auto>>(raw), compact);
             if (sanitized) {
                 variants += sanitized;
             }
@@ -1139,13 +1163,17 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             rv = mergeGeminiSchemaObjects(rv, variant);
         }
 
-        list<string> required = mergeGeminiRequiredLists(
-            schemaStringList(base.required),
-            compositionRequiredFields(variants, all_required));
-        if (required) {
-            rv.required = required;
-        } else {
+        if (compact) {
             remove rv.required;
+        } else {
+            list<string> required = mergeGeminiRequiredLists(
+                schemaStringList(base.required),
+                compositionRequiredFields(variants, all_required));
+            if (required) {
+                rv.required = required;
+            } else {
+                remove rv.required;
+            }
         }
         return rv;
     }

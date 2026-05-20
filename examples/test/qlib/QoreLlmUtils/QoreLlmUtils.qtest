@@ -937,12 +937,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         hash<auto> item = steps.items;
         assertFalse(item.hasKey("anyOf"),
             "Gemini tool schema flattens anyOf alternatives");
-        assertEq(("operation", "payload", "rationale", "target_summary"),
-            item.required,
-            "required fields common to all alternatives are preserved");
-        assertEq(("set_business", "add_interface"),
-            item.properties.operation{"enum"},
-            "operation enum values are merged from alternatives");
+        assertFalse(item.hasKey("required"),
+            "Gemini compact tool schema strips required constraints");
+        assertFalse(item.properties.operation.hasKey("enum"),
+            "Gemini compact tool schema strips enum constraints");
         assertTrue(item.properties.payload.properties.hasKey("business"),
             "payload schema keeps set_business wrapper guidance");
         assertTrue(item.properties.payload.properties.hasKey("interface"),
