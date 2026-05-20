@@ -1197,13 +1197,23 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         int completion_tokens = usage.candidatesTokenCount ?? 0;
         int total_tokens = usage.totalTokenCount
             ?? (prompt_tokens + completion_tokens);
-        return {
+        hash<auto!> rv = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
             "input_tokens": prompt_tokens,
             "output_tokens": completion_tokens,
         };
+        int cached_tokens = usage.cachedContentTokenCount ?? 0;
+        if (cached_tokens > 0) {
+            rv.cached_content_token_count = cached_tokens;
+            rv.cache_read_input_tokens = cached_tokens;
+        }
+        int reasoning_tokens = usage.thoughtsTokenCount ?? 0;
+        if (reasoning_tokens > 0) {
+            rv.reasoning_tokens = reasoning_tokens;
+        }
+        return rv;
     }
 
     #! Maps Gemini \c finishReason values to QoreLlmUtils stop reasons

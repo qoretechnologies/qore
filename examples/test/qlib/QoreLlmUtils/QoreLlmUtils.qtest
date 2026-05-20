@@ -502,7 +502,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                     "usageMetadata": {
                         "promptTokenCount": 7,
                         "candidatesTokenCount": 3,
-                        "totalTokenCount": 10,
+                        "totalTokenCount": 15,
+                        "cachedContentTokenCount": 4,
+                        "thoughtsTokenCount": 5,
                     },
                 },
             },
@@ -540,7 +542,13 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
 
         assertEq("done", rv.content);
         assertEq("end_turn", rv.stop_reason);
-        assertEq(10, rv.usage.total_tokens);
+        assertEq(15, rv.usage.total_tokens);
+        assertEq(4, rv.usage.cache_read_input_tokens,
+            "Gemini cached input tokens are normalized for cost accounting");
+        assertEq(4, rv.usage.cached_content_token_count,
+            "Gemini native cached token count is preserved");
+        assertEq(5, rv.usage.reasoning_tokens,
+            "Gemini thinking tokens are normalized as reasoning tokens");
         assertEq(1, gemini_handler.requests.size());
         assertEq("/v1beta/models/gemini-2.5-pro:generateContent",
             gemini_handler.requests[0].path);
