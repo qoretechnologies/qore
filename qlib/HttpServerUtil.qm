@@ -1604,7 +1604,7 @@ public class AbstractStreamRequest {
 
         @since HttpServerUtil 2.3
     */
-    setBodyCancel(*code body_cancel) {
+    setBodyCancel(*code<nothing()> body_cancel) {
     }
 
     #! handles the request

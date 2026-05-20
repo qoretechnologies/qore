@@ -551,7 +551,7 @@ public namespace RestHandler {
             *int timeout_ms;
 
             #! optional callback that aborts the in-flight inbound body read; see @ref setBodyCancel()
-            *code body_cancel;
+            *code<nothing()> body_cancel;
         }
 
         #! creates the object with the given arguments
@@ -683,13 +683,13 @@ public namespace RestHandler {
 
             @since RestHandler 1.9
         */
-        setBodyCancel(*code body_cancel) {
+        setBodyCancel(*code<nothing()> body_cancel) {
             self.body_cancel = body_cancel;
         }
 
         #! returns the currently-registered inbound body cancel callback, or @ref nothing
         /** @since RestHandler 1.9 */
-        *code getBodyCancel() {
+        *code<nothing()> getBodyCancel() {
             return body_cancel;
         }
 
@@ -867,7 +867,7 @@ public namespace RestHandler {
 
             @since RestHandler 1.9
         */
-        setBodyCancel(*code body_cancel) {
+        setBodyCancel(*code<nothing()> body_cancel) {
             stream.setBodyCancel(body_cancel);
         }
     }
