@@ -684,6 +684,8 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         *GeminiRestClientIo rest_client;
         #! Serializes lazy initialization
         Mutex rest_mutex();
+        #! Depth at which compact tool schemas drop nested object detail
+        const CompactSchemaPropertyFlattenDepth = 5;
     }
 
     #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig
@@ -922,6 +924,8 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 }
                 if (getConfig().protocol.val()) {
                     opts.protocol = getConfig().protocol;
+                } else if (!getConfig().url.val()) {
+                    opts.protocol = "h2";
                 }
                 rest_client = new GeminiRestClientIo(opts);
             }
@@ -1055,11 +1059,11 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             return NOTHING;
         }
         return cast<hash<auto>>(sanitizeGeminiSchemaValue(schema,
-            compact));
+            compact, 0, NOTHING));
     }
 
     private static auto sanitizeGeminiSchemaValue(auto value,
-            bool compact) {
+            bool compact, int depth, *string field_name) {
         if (value.typeCode() == NT_HASH) {
             hash<auto> input = cast<hash<auto>>(value);
             hash<auto> rv;
@@ -1070,25 +1074,75 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         || isGeminiSchemaCompositionKeyword(key)) {
                     continue;
                 }
-                rv{key} = sanitizeGeminiSchemaValue(input{key}, compact);
+                rv{key} = sanitizeGeminiSchemaValue(input{key}, compact,
+                    depth + 1, key);
             }
             foreach string key in (("allOf", "anyOf", "oneOf")) {
                 if (input{key}.typeCode() == NT_LIST) {
                     rv = applyGeminiSchemaComposition(rv,
                         cast<list<auto>>(input{key}), key == "allOf",
-                        compact);
+                        compact, depth + 1, field_name);
                 }
+            }
+            if (compact && rv.properties.typeCode() == NT_HASH
+                    && shouldFlattenGeminiCompactSchemaProperties(
+                        field_name, depth)) {
+                rv.properties = flattenGeminiCompactSchemaProperties(
+                    cast<hash<auto>>(rv.properties));
             }
             return rv;
         }
         if (value.typeCode() == NT_LIST) {
             list<auto> rv = ();
             foreach auto item in (value) {
-                push rv, sanitizeGeminiSchemaValue(item, compact);
+                push rv, sanitizeGeminiSchemaValue(item, compact,
+                    depth + 1, field_name);
             }
             return rv;
         }
         return value;
+    }
+
+    private static bool shouldFlattenGeminiCompactSchemaProperties(
+            *string field_name, int depth) {
+        return field_name == "payload"
+            || depth >= CompactSchemaPropertyFlattenDepth;
+    }
+
+    private static hash<auto> flattenGeminiCompactSchemaProperties(
+            hash<auto> props) {
+        hash<auto> rv;
+        foreach string key in (keys props) {
+            rv{key} = flattenGeminiCompactSchemaProperty(props{key});
+        }
+        return rv;
+    }
+
+    private static auto flattenGeminiCompactSchemaProperty(auto value) {
+        if (value.typeCode() != NT_HASH) {
+            return value;
+        }
+        hash<auto> schema = cast<hash<auto>>(value);
+        if (schema.type == "object" || schema.properties.typeCode() == NT_HASH) {
+            return {"type": "object"};
+        }
+        if (schema.type == "array" || schema.items.typeCode() == NT_HASH) {
+            hash<auto!> rv = {"type": "array"};
+            if (schema.items.typeCode() == NT_HASH) {
+                rv.items = flattenGeminiCompactArrayItemSchema(
+                    cast<hash<auto>>(schema.items));
+            }
+            return rv;
+        }
+        return schema;
+    }
+
+    private static hash<auto> flattenGeminiCompactArrayItemSchema(
+            hash<auto> schema) {
+        if (schema.type == "object" || schema.properties.typeCode() == NT_HASH) {
+            return {"type": "object"};
+        }
+        return schema;
     }
 
     private static bool isGeminiSchemaCompositionKeyword(string key) {
@@ -1142,16 +1196,17 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     private static hash<auto> applyGeminiSchemaComposition(hash<auto> base,
-            list<auto> raw_variants, bool all_required, bool compact) {
+            list<auto> raw_variants, bool all_required, bool compact,
+            int depth, *string field_name) {
         list<hash<auto>> variants = ();
         foreach auto raw in (raw_variants) {
             if (raw.typeCode() != NT_HASH) {
                 continue;
             }
-            *hash<auto> sanitized =
-                sanitizeGeminiSchema(cast<hash<auto>>(raw), compact);
-            if (sanitized) {
-                variants += sanitized;
+            auto sanitized = sanitizeGeminiSchemaValue(raw, compact, depth,
+                field_name);
+            if (sanitized.typeCode() == NT_HASH) {
+                variants += cast<hash<auto>>(sanitized);
             }
         }
         if (!variants) {

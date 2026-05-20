@@ -920,7 +920,58 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                         "required": ("steps",),
                     },
                 },
-            },),
+            }, {
+                    "type": "function",
+                    "function": {
+                        "name": "qonsole_design_agent_turn",
+                        "description": "Apply one design action",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "operation": {
+                                    "type": "string",
+                                    "enum": ("add_interface",
+                                        "revise_interface"),
+                                },
+                                "payload": {
+                                    "type": "object",
+                                    "properties": {
+                                        "interface": {
+                                            "type": "object",
+                                            "properties": {
+                                                "key": {"type": "string"},
+                                                "config": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "definition": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "tables": {
+                                                                    "type": "object",
+                                                                },
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                            "required": ("key",),
+                                        },
+                                        "test": {
+                                            "type": "object",
+                                            "properties": {
+                                                "key": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                                "rationale": {"type": "string"},
+                            },
+                            "required": ("operation", "payload",
+                                "rationale"),
+                        },
+                    },
+                },
+            ),
             "tool_choice": {
                 "type": "function",
                 "function": {"name": "design_propose_plan"},
@@ -945,11 +996,28 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "payload schema keeps set_business wrapper guidance");
         assertTrue(item.properties.payload.properties.hasKey("interface"),
             "payload schema keeps add_interface wrapper guidance");
+        assertFalse(item.properties.payload.properties.business
+                .hasKey("properties"),
+            "deep plan-step business payload detail is flattened");
+        assertFalse(item.properties.payload.properties.interface
+                .hasKey("properties"),
+            "deep plan-step interface payload detail is flattened");
         assertFalse(item.properties.rationale.hasKey("minLength"),
             "Gemini tool schema strips string length constraints");
         assertFalse(item.properties.payload.properties.business
                 .hasKey("additionalProperties"),
             "nested additionalProperties are stripped after flattening");
+
+        hash<auto> turn_params = gemini_handler.requests[0].body.tools[0]
+            .functionDeclarations[1].parameters;
+        assertTrue(turn_params.properties.payload.properties
+                .hasKey("interface"),
+            "single-dispatch payload schema keeps interface wrapper guidance");
+        assertTrue(turn_params.properties.payload.properties.hasKey("test"),
+            "single-dispatch payload schema keeps test wrapper guidance");
+        assertFalse(turn_params.properties.payload.properties.interface
+                .hasKey("properties"),
+            "single-dispatch nested interface detail is flattened");
     }
 
     geminiOpenAiToolArgumentSchemaCoercionTest() {
