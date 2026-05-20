@@ -1,0 +1,260 @@
+/** @page plugin_types Plugin Types
+
+    @section plugin_types_overview Overview
+
+    Plugin types are an experimental C ABI for binary modules that need to
+    register dense, typed, operator-bearing runtime values with libqore. The
+    first shipped pieces are the stable registration and validation ABI,
+    operation metadata, plugin-dispatch IR references, QORD helper-reference
+    metadata, runtime helper dispatch, verifier diagnostics, and reflection.
+
+    The protocol is intended for module authors writing C++ modules, not for
+    ordinary Qore source modules. Qore code observes registered plugin types
+    through @ref Qore::Reflection::PluginRegistry "PluginRegistry" and through
+    operation behavior exposed by the registering module.
+
+    The current implementation is deliberately conservative:
+    - registrations are process-global after a module-init transaction commits;
+    - operation dispatch goes through registered runtime helpers;
+    - QORD stores plugin module imports, operation metadata, and helper refs for
+      plugin-dispatch IR references;
+    - serialized plugin value-instance payloads and dedicated dense-buffer IR
+      opcodes are reserved for a later implementation pass.
+
+    @section plugin_types_registration Registering A Plugin Type
+
+    A binary module registers one descriptor table from its \c qore_module_init
+    callback. The module receives a runtime-owned plugin module handle in
+    \c QoreModuleInitContext::plugin_module_handle; copy that handle into a
+    \c QorePluginRegistrationContextV1 and call
+    \c qore_register_plugin_types_v1().
+
+    @code{.cpp}
+#include <qore/Qore.h>
+#include <qore/QorePluginType.h>
+#include <cstring>
+
+static void sample_incref(uint64_t) noexcept {}
+static void sample_decref(uint64_t) noexcept {}
+static uint64_t sample_clone(uint64_t value_bits, ExceptionSink*) { return value_bits; }
+static bool sample_equal(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink*) { return lhs_bits == rhs_bits; }
+static int64_t sample_hash(uint64_t value_bits, ExceptionSink*) { return static_cast<int64_t>(value_bits); }
+static void sample_cleanup(uint64_t) noexcept {}
+
+static int sample_serialize(uint64_t value_bits, QorePluginByteWriteCallback write,
+        void* write_data, ExceptionSink* xsink) {
+    return write(&value_bits, sizeof(value_bits), write_data, xsink);
+}
+
+static uint64_t sample_deserialize(QorePluginByteReadCallback read,
+        uint32_t payload_len, void* read_data, ExceptionSink* xsink) {
+    if (payload_len != sizeof(uint64_t)) {
+        xsink->raiseException("SAMPLE-PLUGIN-ERROR", "invalid payload length");
+        return 0;
+    }
+    uint64_t value_bits = 0;
+    if (read(&value_bits, sizeof(value_bits), read_data, xsink)) {
+        return 0;
+    }
+    return value_bits;
+}
+
+static uint64_t sample_add(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink*) {
+    QoreValue lhs;
+    QoreValue rhs;
+    std::memcpy(&lhs, &lhs_bits, sizeof(lhs));
+    std::memcpy(&rhs, &rhs_bits, sizeof(rhs));
+
+    QoreValue result(lhs.getAsBigInt() + rhs.getAsBigInt());
+    uint64_t result_bits = 0;
+    std::memcpy(&result_bits, &result, sizeof(result_bits));
+    return result_bits;
+}
+
+static QorePluginValueOps sample_value_ops{
+    sample_incref, sample_decref, sample_clone, sample_equal,
+    sample_hash, sample_cleanup,
+};
+
+static QorePluginTypeDescriptor sample_types[] = {
+    {
+        0, "SampleValue", autoTypeInfo, sample_value_ops,
+        sample_serialize, sample_deserialize, 1, 0,
+    },
+};
+
+static QorePluginOperation sample_ops[] = {
+    {
+        0,
+        "add",
+        {
+            2, autoTypeInfo, autoTypeInfo, autoTypeInfo,
+            false, false, false,
+            QorePluginValueAccess::ReadOnly,
+            QorePluginResultAlias::FreshNoAliasInputs,
+            QorePluginHelperAbi::BinaryValue,
+        },
+        {},
+        reinterpret_cast<void (*)()>(sample_add),
+        nullptr,
+        nullptr,
+        0,
+        0,
+        nullptr,
+        0,
+    },
+};
+
+static QorePluginTypeRegistration sample_registration{
+    "sample-plugin",
+    QORE_PLUGIN_ABI_VERSION_V1,
+    "1.0.0",
+    sample_types,
+    1,
+    sample_ops,
+    1,
+    nullptr,
+    0,
+};
+
+extern "C" void qore_module_init(QoreModuleInitContext& module_ctx,
+        ExceptionSink& xsink) {
+    QorePluginRegistrationContextV1 plugin_ctx{
+        .struct_size   = sizeof(plugin_ctx),
+        .flags         = 0,
+        .module_path   = module_ctx.path.c_str(),
+        .module_handle = module_ctx.plugin_module_handle,
+    };
+
+    if (qore_register_plugin_types_v1(&plugin_ctx, &sample_registration, &xsink)) {
+        return;
+    }
+}
+    @endcode
+
+    The v1 registration context is an exact-size ABI contract. Set
+    \c struct_size to \c sizeof(plugin_ctx), set \c flags to 0, pass the module
+    path received by module init, and pass the live module handle from the same
+    module-init call. A null, wrong-size, stale, or cross-module handle is
+    rejected before descriptor validation.
+
+    @section plugin_types_validation Dry-Run Validation
+
+    Use \c qore_validate_plugin_types_v1() in module self-tests and tooling.
+    The validation context is size-prefixed so future optional fields can be
+    added without changing the validator symbol. Callers compiled against the
+    current header should set \c struct_size to \c sizeof(ctx) and \c flags to
+    \c QORE_PLUGIN_VALIDATE_NO_FLAGS.
+
+    @code{.cpp}
+QorePluginValidationContext ctx{};
+ctx.struct_size = sizeof(ctx);
+ctx.flags = QORE_PLUGIN_VALIDATE_NO_FLAGS;
+
+ExceptionSink xsink;
+qore_validate_plugin_types_v1(&sample_registration, &ctx, true, &xsink);
+    @endcode
+
+    In collect-all mode (\c collect_all == \c true), the validator reports all
+    descriptor-local violations it can find. Contextual checks that need a live
+    module handle, such as helper-symbol lookup, are performed only when
+    \c ctx.module_handle is the current module-init handle for this thread.
+
+    @section plugin_types_reflection Reflection
+
+    Qore code can inspect committed descriptors with
+    @ref Qore::Reflection::PluginRegistry "Qore::Reflection::PluginRegistry".
+
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+%requires reflection
+
+PluginRegistry registry = PluginRegistry::getProcessRegistry();
+foreach string module_name in (registry.getProcessModules()) {
+    printf("plugin module: %s\n", module_name);
+    foreach hash<auto> op in (registry.getOperations(module_name)) {
+        printf("  %s(%s, %s) -> %s helper=%s\n",
+            op.operation_name,
+            op.primary_type,
+            op.secondary_type,
+            op.return_type,
+            op.helper_abi);
+    }
+}
+    @endcode
+
+    \c PluginRegistry::get() returns a Program-bound view. Program-bound
+    methods raise \c PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE when called on the
+    process-global view:
+
+    @code{.py}
+PluginRegistry registry = PluginRegistry::get();
+*hash<auto> op = registry.resolveOperation(IntType, IntType, "add");
+if (exists op) {
+    printf("selected %s::%s global=%d\n",
+        op.module_name, op.operation_name, op.global_id);
+}
+    @endcode
+
+    \c resolveOperation() returns \c NOTHING when no committed operation
+    matches the operand types and operation name. The current implementation
+    resolves against committed process descriptors; future Program-local
+    activation rules can further filter the result.
+
+    @section plugin_types_qord QORD Metadata
+
+    Plugin-dispatch IR references are persisted with three QORD sections:
+    - \c PLUGIN_IMPORTS records the provider module name, plugin ABI version,
+      operation-set version, and required local ids.
+    - \c PLUGIN_TYPE_REGISTRY records type and operation metadata used to check
+      that the live process registry matches the compiled artifact.
+    - \c PLUGIN_HELPER_REFS records helper slots and canonical operation
+      signature hashes.
+
+    A QORD load fails loudly if a referenced module is not loaded, a canonical
+    signature version is unsupported, a helper reference is malformed, or a
+    recorded signature hash does not match the live descriptor. The loader does
+    not auto-load modules; load the module through the normal module loader and
+    retry the QORD load.
+
+    @section plugin_types_tracing Diagnostics And Tracing
+
+    Plugin diagnostics use stable error codes and stable \c subreason strings.
+    Error text includes the module or runtime context, field, expected value,
+    actual value, subreason, and the design section reference where applicable.
+
+    Trace environment variables:
+    - \c QORE_PLUGIN_REGISTER_TRACE logs registration validation and commit.
+    - \c QORE_PLUGIN_DISPATCH_TRACE logs runtime helper dispatch.
+    - \c QORE_PLUGIN_VERIFY=1 enables release-build runtime verifier checks.
+    - \c QORE_PLUGIN_VERIFY_TRACE logs verifier decisions.
+    - \c QORE_PLUGIN_QORD_TRACE logs QORD plugin section writer/loader
+      decisions.
+    - \c QORE_PLUGIN_CROSS_TYPE_TRACE logs
+      \c PluginRegistry::resolveOperation() resolution decisions and future
+      cross-type operator selection decisions.
+
+    @code
+QORE_PLUGIN_CROSS_TYPE_TRACE=1 qore my-script.q
+    @endcode
+
+    @section plugin_types_limitations Current Limitations
+
+    The following pieces are intentionally not part of the current shipped
+    surface:
+    - serialized plugin value instances (\c VT_PLUGIN_INSTANCE) are reserved
+      but not yet written or read;
+    - dedicated dense-buffer plugin IR opcodes are reserved until lowering can
+      supply raw data/size/stride operands safely;
+    - optional LLVM codegen extension hooks are reserved for a later ABI
+      header;
+    - Program-local fallback-site recording is reserved; use trace variables
+      and \c PluginRegistry descriptor queries for current diagnostics.
+
+    @see
+    - @ref Qore::Reflection::PluginRegistry
+    - @ref buffer
+    - @ref release_notes
+*/

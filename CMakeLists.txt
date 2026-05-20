@@ -450,6 +450,7 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/218_enums.dox.tmpl
     doxygen/lang/220_threading.dox.tmpl
     doxygen/lang/222_sandboxing.dox.tmpl
+    doxygen/lang/224_plugin_types.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl

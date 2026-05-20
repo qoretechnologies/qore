@@ -119,10 +119,12 @@
       @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" and the
       corresponding @ref Qore::SQL::DatasourcePool "DatasourcePool" methods expose typed DBI
       result values with runtime hashdecls and dense buffers where possible
-    - new experimental plugin-type registration ABI foundation for future
-      module-defined dense data types, including descriptor validation,
-      module-init registration staging, and
-      @ref Qore::Reflection::PluginRegistry "PluginRegistry" introspection
+    - new experimental @ref plugin_types "plugin-type" registration ABI
+      foundation for future module-defined dense data types, including
+      descriptor validation, module-init registration staging, runtime helper
+      dispatch, QORD helper-reference metadata, verifier diagnostics, trace
+      controls, and @ref Qore::Reflection::PluginRegistry "PluginRegistry"
+      introspection
     - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>
       and QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>
     - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> dual-stack
@@ -1244,6 +1246,51 @@ list<*string> names = result.customer_name;      # string buffers are deferred, 
     metadata that was not present in the values; for example unannotated integers become \c buffer<int64>.
     Drivers can advertise native support with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT
     "DBI_CAP_HAS_TYPED_SELECT".
+    @endparblock
+
+    @par Experimental Plugin-Type ABI
+    @parblock
+    Binary modules can now register experimental plugin-type descriptors with
+    libqore. The v1 ABI covers descriptor validation, all-or-nothing
+    module-init registration, operation metadata, runtime helper dispatch,
+    persisted QORD helper references, verifier diagnostics, trace controls, and
+    reflection through @ref Qore::Reflection::PluginRegistry "PluginRegistry".
+
+    Module authors pass the module-init plugin handle to
+    \c qore_register_plugin_types_v1():
+    @code{.cpp}
+QorePluginRegistrationContextV1 plugin_ctx{
+    .struct_size   = sizeof(plugin_ctx),
+    .flags         = 0,
+    .module_path   = module_ctx.path.c_str(),
+    .module_handle = module_ctx.plugin_module_handle,
+};
+
+if (qore_register_plugin_types_v1(&plugin_ctx, &my_plugin_registration, &xsink)) {
+    return;
+}
+    @endcode
+
+    Qore code can inspect committed registrations:
+    @code{.py}
+%modern
+%requires reflection
+
+PluginRegistry registry = PluginRegistry::getProcessRegistry();
+foreach string module_name in (registry.getProcessModules()) {
+    foreach hash<auto> op in (registry.getOperations(module_name)) {
+        printf("%s::%s -> %s\n",
+            module_name, op.operation_name, op.return_type);
+    }
+}
+    @endcode
+
+    Trace variables such as \c QORE_PLUGIN_REGISTER_TRACE,
+    \c QORE_PLUGIN_DISPATCH_TRACE, \c QORE_PLUGIN_VERIFY_TRACE,
+    \c QORE_PLUGIN_QORD_TRACE, and \c QORE_PLUGIN_CROSS_TYPE_TRACE expose
+    registration, dispatch, verification, QORD, and operation-resolution
+    decisions. See @ref plugin_types for the complete module-author overview
+    and current limitations.
     @endparblock
 
     @par RFC 7231 / RFC 2822 Date Parsing

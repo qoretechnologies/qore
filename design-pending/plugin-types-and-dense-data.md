@@ -54,8 +54,8 @@ is not blocking.
   `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
   value instances, dense-buffer dispatch opcodes,
   Program-local activation/fallback diagnostics, the reference plugin module,
-  lint tooling, and complete user-facing
-  documentation. Dense-buffer runtime helper execution is implemented for
+  and lint tooling. User-facing language/reference documentation and release
+  notes are present. Dense-buffer runtime helper execution is implemented for
   module helpers using the raw dense-buffer ABI; IR opcodes are intentionally
   deferred until lowering can supply real buffer data/size/stride operands.
 
