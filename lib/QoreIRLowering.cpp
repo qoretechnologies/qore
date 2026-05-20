@@ -9,6 +9,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRLowering.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
+#include <qore/intern/QorePluginRegistry.h>
 
 #include <qore/DateTimeNode.h>
 #include <qore/QoreObject.h>
@@ -161,6 +162,49 @@ static bool blockHasTerminator(const QoreIRBasicBlock* block) {
     }
     return isTerminator(block->instructions.back()->opcode);
 }
+
+void QoreIRLoweringContext::setError(const std::string& message) {
+    error = message;
+}
+
+void QoreIRLoweringContext::setError(const char* message) {
+    error = message ? message : "";
+}
+
+const std::string& QoreIRLoweringContext::getError() const {
+    return error;
+}
+
+void QoreIRLoweringContext::setResult(QoreIRValue value) {
+    result = value;
+}
+
+QoreIRValue QoreIRLoweringContext::getResult() const {
+    return result;
+}
+
+QoreIRLowering& QoreIRLoweringContext::getLowering() const {
+    return lowering;
+}
+
+static bool pluginLoweringClaimsNode(uint64_t claimed_node_kinds, qore_type_t node_type) {
+    return node_type >= 0 && node_type < 64 && (claimed_node_kinds & (1ULL << node_type));
+}
+
+static void setPluginLoweringError(std::string& error, const QorePluginLoweringInfo& info,
+        const char* subreason, const char* detail) {
+    error = "PLUGIN-LOWERING-CLAIM-VIOLATED: plugin lowering callback for module=\"";
+    error += info.module_name;
+    error += "\", operation=\"";
+    error += info.operation_name.empty() ? "<unknown>" : info.operation_name;
+    error += "\", local_operation_id=\"";
+    error += std::to_string(info.local_operation_id);
+    error += "\" ";
+    error += detail ? detail : "failed";
+    error += " (subreason=\"";
+    error += subreason ? subreason : "lowering_failed";
+    error += "\", section=3.7)";
+}
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/FunctionCallNode.h>
@@ -221,6 +265,72 @@ QoreIRValue QoreIRLowering::lowerConditionValue(const QoreValue& cond, std::stri
     // BrIf calls getAsBool() on its operand, so ToBool is redundant here.
     // Skip the ToBool emission to reduce instruction count.
     return lowerExpression(cond, error);
+}
+
+QoreIRValue QoreIRLowering::tryPluginLowering(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return QoreIRValue();
+    }
+
+    std::vector<QorePluginLoweringInfo> lowerers;
+    if (qore_plugin_get_lowering_infos(parse_context ? parse_context->pgm : nullptr, node->getType(), lowerers,
+            nullptr)) {
+        error = "failed to query plugin lowering callbacks";
+        return QoreIRValue();
+    }
+    if (lowerers.empty()) {
+        return QoreIRValue();
+    }
+
+    QoreIRLoweringContext ctx(*this, error);
+    size_t callback_count = 0;
+    for (const QorePluginLoweringInfo& info : lowerers) {
+        if (++callback_count % 100 == 0 && qore_check_cancel(nullptr, "plugin lowering callbacks")) {
+            error = "plugin lowering callback dispatch cancelled";
+            return QoreIRValue();
+        }
+        ctx.setResult(QoreIRValue());
+        QorePluginLoweringResult result = info.lowering(&ctx, node, parse_context, &builder);
+        if (!error.empty()) {
+            return QoreIRValue();
+        }
+
+        switch (result) {
+            case QorePluginLoweringResult::Lowered: {
+                QoreIRValue lowered = ctx.getResult();
+                if (lowered.isValid()) {
+                    return lowered;
+                }
+                QoreIRBasicBlock* block = builder.getBlock();
+                if (block && !block->instructions.empty() && block->instructions.back()->result.isValid()) {
+                    return block->instructions.back()->result;
+                }
+                setPluginLoweringError(error, info, "lowered_without_result",
+                    "returned Lowered but did not set a result or emit a result-producing instruction");
+                return QoreIRValue();
+            }
+            case QorePluginLoweringResult::NotApplicable:
+                if (pluginLoweringClaimsNode(info.claimed_node_kinds, node->getType())) {
+                    setPluginLoweringError(error, info, "claimed_not_applicable",
+                        "claimed the AST node kind but returned NotApplicable");
+                    return QoreIRValue();
+                }
+                break;
+            case QorePluginLoweringResult::Erroneous:
+                if (error.empty()) {
+                    setPluginLoweringError(error, info, "erroneous_without_diagnostic",
+                        "returned Erroneous without setting a diagnostic");
+                }
+                return QoreIRValue();
+            default:
+                setPluginLoweringError(error, info, "invalid_result",
+                    "returned an invalid QorePluginLoweringResult value");
+                return QoreIRValue();
+        }
+    }
+
+    return QoreIRValue();
 }
 
 bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
@@ -3799,6 +3909,11 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (!registry_error.empty()) {
         error = registry_error;
         return QoreIRValue();
+    }
+
+    QoreIRValue plugin_lowered = tryPluginLowering(expr, error);
+    if (plugin_lowered.isValid() || !error.empty()) {
+        return plugin_lowered;
     }
 
     // Dispatch through explicitly claimed expression handlers. Once a handler

@@ -66,6 +66,10 @@ is not blocking.
   `QorePluginLLVM.h`, valid callbacks are used by `QoreIRToLLVM` before the
   runtime-helper fallback, optional LLVM-major mismatches are ignored, and
   required mismatches fail validation.
+- Phase 4's lowering callback slice is implemented: `QoreIRLowering` snapshots
+  active plugin lowering callbacks, invokes them before built-in expression
+  handlers, returns callback-provided IR results, and reports claimed-node
+  `NotApplicable` results as `PLUGIN-LOWERING-CLAIM-VIOLATED`.
 
 ---
 
@@ -1280,23 +1284,27 @@ The recommended discipline is therefore:
 
 ### 3.7 Lowering pattern hooks
 
-Plugin types participate in parse-time AST-pattern matching to pick their
+Plugin types participate in IR lowering-time AST-pattern matching to pick their
 typed operation descriptors when both operand types are known. A module
 registers a pattern matcher via the `PluginLoweringCallback` typedef
 (§3.3), which returns a `PluginLoweringResult` enum rather than a bare
 `bool` so the no-silent-fallback invariant can be enforced mechanically.
+`QoreIRLowering` copies matching callbacks out of the registry before invoking
+them, so callbacks never run under the registry mutex.
 
 The callback inspects the AST node, queries `parse_ctx` for operand types,
 and returns one of:
 
-- **`Lowered`** — emitted a built-in plugin-dispatch opcode with a
-  registered operation descriptor.
+- **`Lowered`** — emitted IR and made the result available through
+  `QoreIRLoweringContext::setResult()` or, for simple cases, by emitting a
+  result-producing instruction as the final instruction in the active block.
 - **`NotApplicable`** — the AST node is outside the matcher's claimed
   coverage (`lowering_claimed_node_kinds` bitmap). The lowering pass
   proceeds to the next matcher or, if none match, the `.any`-fallback path.
 - **`Erroneous`** — the matcher detected a hard error (e.g., a type
-  annotation it knows it cannot represent) and reported it through the
-  context. Lowering aborts with the reported diagnostic.
+  annotation it knows it cannot represent) and reported it through
+  `QoreIRLoweringContext::setError()`. Lowering aborts with the reported
+  diagnostic.
 
 `NotApplicable` returned for an AST node kind *inside* the matcher's
 declared `lowering_claimed_node_kinds` bitmap is treated as a parse-time
@@ -2636,7 +2644,7 @@ diagnostic for an external module author.
 
 - [x] Optional `QorePluginLLVM.h` / `PluginLLVMCodegenCallback` extension ABI
   and required-extension LLVM-major rejection (§3.6).
-- [ ] `PluginLoweringCallback` wiring in the lowering pass (the typedef itself
+- [x] `PluginLoweringCallback` wiring in the lowering pass (the typedef itself
   was published in Phase 3's stable `QorePluginType.h`).
 - [x] Default fallback (no callback supplied → emit runtime-helper call).
 

@@ -61,6 +61,39 @@ class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
 class QoreIROnBlockExitInstruction;
 
+class QoreIRLowering;
+
+//! Per-callback state passed to plugin IR lowering hooks.
+/** Plugin lowering callbacks use this object to publish their lowered IR result
+ *  and, on failure, the diagnostic that should be propagated to the caller.
+ */
+class QoreIRLoweringContext {
+public:
+    //! Sets the diagnostic for a failed plugin lowering callback.
+    DLLLOCAL void setError(const std::string& message);
+    //! Sets the diagnostic for a failed plugin lowering callback.
+    DLLLOCAL void setError(const char* message);
+    //! Returns the current plugin lowering diagnostic.
+    DLLLOCAL const std::string& getError() const;
+    //! Sets the IR value produced by a successful plugin lowering callback.
+    DLLLOCAL void setResult(QoreIRValue value);
+    //! Returns the IR value produced by a successful plugin lowering callback.
+    DLLLOCAL QoreIRValue getResult() const;
+    //! Returns the active lowering pass for advanced callbacks that need it.
+    DLLLOCAL QoreIRLowering& getLowering() const;
+
+private:
+    friend class QoreIRLowering;
+
+    DLLLOCAL QoreIRLoweringContext(QoreIRLowering& lowering, std::string& error)
+            : lowering(lowering), error(error) {
+    }
+
+    QoreIRLowering& lowering;
+    std::string& error;
+    QoreIRValue result;
+};
+
 class QoreIRLowering {
 public:
     //! Handler metadata for inline compilation at block exit points
@@ -253,6 +286,7 @@ private:
     QoreIROpcode selectFoldOpcode(const QoreParseAnalysis& analysis,
         QoreIROpcode any_op, QoreIROpcode int_op, QoreIROpcode float_op) const;
     bool ensureBuilderContext(std::string& error) const;
+    QoreIRValue tryPluginLowering(const QoreValue& expr, std::string& error);
     QoreIRBasicBlock* createBlock(const std::string& prefix);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);

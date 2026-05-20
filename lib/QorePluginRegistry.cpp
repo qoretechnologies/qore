@@ -1570,6 +1570,49 @@ int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id, QorePluginLL
     return 0;
 }
 
+static bool loweringClaimMatches(uint64_t claimed_node_kinds, qore_type_t node_type) {
+    return !claimed_node_kinds || (node_type >= 0 && node_type < 64 && (claimed_node_kinds & (1ULL << node_type)));
+}
+
+int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
+        std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink) {
+    infos.clear();
+    std::set<std::string> active_modules;
+    if (pgm) {
+        active_modules = getActivePluginModuleSet(pgm, xsink);
+        if (hasException(xsink)) {
+            return -1;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    int n = 0;
+    for (const auto& module_pair : plugin_modules) {
+        const RegisteredPluginModule& module = module_pair.second;
+        if (pgm && active_modules.find(module.module_name) == active_modules.end()) {
+            continue;
+        }
+        for (const RegisteredPluginOperation& op : module.operations) {
+            if (checkPluginRegistryCancel(n, xsink, "plugin registry lowering callback snapshot")) {
+                infos.clear();
+                return -1;
+            }
+            ++n;
+            if (!op.lowering_pattern || !loweringClaimMatches(op.lowering_claimed_node_kinds, node_type)) {
+                continue;
+            }
+            QorePluginLoweringInfo info;
+            info.module_name = module.module_name;
+            info.local_operation_id = op.local_id;
+            info.operation_name = op.operation_name;
+            info.claimed_node_kinds = op.lowering_claimed_node_kinds;
+            info.lowering = op.lowering_pattern;
+            infos.push_back(std::move(info));
+        }
+    }
+    return 0;
+}
+
 bool qore_plugin_is_value_node(const AbstractQoreNode* node) {
     return get_node_type(node) == NT_PLUGIN_VALUE;
 }

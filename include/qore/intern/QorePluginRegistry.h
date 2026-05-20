@@ -49,6 +49,14 @@ struct QorePluginLLVMCodegenInfo {
     QorePluginLLVMCodegenCallback codegen = nullptr;
 };
 
+struct QorePluginLoweringInfo {
+    std::string module_name;
+    uint16_t local_operation_id = 0;
+    std::string operation_name;
+    uint64_t claimed_node_kinds = 0;
+    QorePluginLoweringCallback lowering = nullptr;
+};
+
 struct QorePluginModuleHandle {
     static constexpr uint64_t Magic = 0x516f7265506c6731ULL; // "QorePlg1"
 
@@ -122,6 +130,8 @@ DLLLOCAL int qore_plugin_get_type_info(const char* module_name, uint16_t local_t
     QorePluginResolvedTypeInfo& info, ExceptionSink* xsink);
 DLLLOCAL int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id,
     QorePluginLLVMCodegenInfo& info, ExceptionSink* xsink);
+DLLLOCAL int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
+    std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink);
 DLLLOCAL bool qore_plugin_is_value_node(const AbstractQoreNode* node);
 DLLLOCAL const QoreTypeInfo* qore_plugin_get_value_type_info(const AbstractQoreNode* node);
 DLLLOCAL int qore_plugin_serialize_value_node(const AbstractQoreNode* node,

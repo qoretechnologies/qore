@@ -21,7 +21,11 @@
 #include <qore/QorePluginLLVM.h>
 #include <qore/QorePluginType.h>
 #include <qore/intern/QoreAOTBinary.h>
+#include <qore/intern/QoreIRLowering.h>
+#include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include <qore/intern/QoreParseHashNode.h>
+#include <qore/intern/QorePlusOperatorNode.h>
 #include <qore/intern/QoreSerializable.h>
 
 static void smokeIncref(uint64_t) noexcept {
@@ -157,6 +161,25 @@ static QorePluginExtension smokeOperationExtensions[] = {
     { QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID, &smokeLLVMExtension, false },
 };
 
+static int smokeLoweringCallCount = 0;
+
+static QorePluginLoweringResult smokeOperatorLowering(QoreIRLoweringContext* ctx, const AbstractQoreNode* ast_node,
+        const QoreParseContext*, QoreIRBuilder* builder) {
+    if (!ctx || !ast_node || !builder || ast_node->getType() != NT_OPERATOR) {
+        return QorePluginLoweringResult::NotApplicable;
+    }
+
+    ++smokeLoweringCallCount;
+    QoreIRConstInstruction* lowered = builder->createConstInt(4242);
+    ctx->setResult(lowered->result);
+    return QorePluginLoweringResult::Lowered;
+}
+
+static QorePluginLoweringResult smokeClaimViolationLowering(QoreIRLoweringContext*, const AbstractQoreNode*,
+        const QoreParseContext*, QoreIRBuilder*) {
+    return QorePluginLoweringResult::NotApplicable;
+}
+
 static uint64_t smokeDenseBinary(void* result_buffer_data, int64_t result_size, const void* lhs_data,
         int64_t lhs_size, int64_t lhs_stride, const void* rhs_data, int64_t rhs_size, int64_t rhs_stride,
         ExceptionSink* xsink) {
@@ -206,6 +229,8 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
     ops[0].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
     ops[0].signature.helper_abi = QorePluginHelperAbi::BinaryValue;
     ops[0].runtime_helper = reinterpret_cast<void (*)()>(smokeBinary);
+    ops[0].lowering_pattern = smokeOperatorLowering;
+    ops[0].lowering_claimed_node_kinds = 1ULL << NT_OPERATOR;
     ops[0].extensions = smokeOperationExtensions;
     ops[0].num_extensions = 1;
 
@@ -255,6 +280,8 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
     ops[4].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
     ops[4].signature.helper_abi = QorePluginHelperAbi::DenseBufferUnary;
     ops[4].runtime_helper = reinterpret_cast<void (*)()>(smokeDenseUnary);
+    ops[4].lowering_pattern = smokeClaimViolationLowering;
+    ops[4].lowering_claimed_node_kinds = 1ULL << NT_PARSE_HASH;
 
     QorePluginTypeRegistration reg = {};
     reg.module_name = "plugin-smoke";
@@ -338,6 +365,48 @@ static bool checkDryRunValidation() {
     return true;
 }
 
+static bool checkLoweringCallbacks() {
+    int before = smokeLoweringCallCount;
+    ValueHolder expr(QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(1), QoreValue(2))), nullptr);
+    QoreIRFunction func("plugin-lowering-smoke");
+    QoreIRBuilder builder(&func);
+    QoreIRBasicBlock* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+    QoreIRLowering lowering(builder);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr, error);
+    if (!lowered.isValid() || !error.empty() || smokeLoweringCallCount != before + 1) {
+        std::cerr << "plugin lowering callback was not used: " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "plugin lowering callback produced invalid IR: " << error << "\n";
+        return false;
+    }
+    if (entry->instructions.empty() || entry->instructions.front()->opcode != QoreIROpcode::ConstInt
+            || entry->instructions.front()->result.id != lowered.id) {
+        std::cerr << "plugin lowering callback did not provide the lowered result\n";
+        return false;
+    }
+
+    ValueHolder hash_expr(QoreValue(new QoreParseHashNode(nullptr, true)), nullptr);
+    QoreIRFunction violation_func("plugin-lowering-claim-violation-smoke");
+    QoreIRBuilder violation_builder(&violation_func);
+    QoreIRBasicBlock* violation_entry = violation_func.createBlock("entry");
+    violation_builder.setBlock(violation_entry);
+    QoreIRLowering violation_lowering(violation_builder);
+    std::string violation_error;
+    QoreIRValue violation_result = violation_lowering.lowerExpression(*hash_expr, violation_error);
+    if (violation_result.isValid()
+            || violation_error.find("PLUGIN-LOWERING-CLAIM-VIOLATED") == std::string::npos) {
+        std::cerr << "plugin lowering claim violation was not reported: " << violation_error << "\n";
+        return false;
+    }
+
+    return true;
+}
+
 static bool checkRegistrationAndIntrospection() {
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
@@ -361,6 +430,10 @@ static bool checkRegistrationAndIntrospection() {
             std::cerr << "plugin registration commit failed\n";
             return false;
         }
+    }
+
+    if (!checkLoweringCallbacks()) {
+        return false;
     }
 
     ReferenceHolder<QoreListNode> modules(qore_plugin_get_process_modules(&xsink), &xsink);

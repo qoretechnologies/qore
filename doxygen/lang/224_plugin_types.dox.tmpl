@@ -208,6 +208,33 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     the module name, operation name, field name, expected type, actual type,
     subreason, and design-section reference in the diagnostic text.
 
+    @section plugin_types_lowering Lowering Pattern Hooks
+
+    Operations can register an optional \c QorePluginLoweringCallback in
+    \c QorePluginOperation::lowering_pattern. During IR lowering, libqore
+    snapshots matching callbacks from active plugin modules, releases the
+    plugin-registry lock, and calls them before the built-in expression
+    handlers. This lets a plugin recognize typed AST patterns and emit
+    \c PluginUnary, \c PluginBinary, \c PluginCall, \c PluginConstruct, or
+    dense-buffer plugin dispatch IR instead of falling back to generic
+    \c any semantics.
+
+    The callback returns:
+    - \c QorePluginLoweringResult::Lowered after it emits IR and sets the result
+      with \c QoreIRLoweringContext::setResult() or emits a result-producing
+      instruction as the final instruction in the active block;
+    - \c QorePluginLoweringResult::NotApplicable when the AST node is outside
+      its claimed coverage;
+    - \c QorePluginLoweringResult::Erroneous after reporting a hard lowering
+      diagnostic with \c QoreIRLoweringContext::setError().
+
+    \c QorePluginOperation::lowering_claimed_node_kinds is a bitmap of
+    \c NT_* AST node kinds that the callback promises to handle. Returning
+    \c NotApplicable for a claimed node kind is a protocol violation and fails
+    lowering with \c PLUGIN-LOWERING-CLAIM-VIOLATED. A zero bitmap is treated
+    as an unclaimed generic matcher: it may inspect a node and return
+    \c NotApplicable without violating the claim contract.
+
     @section plugin_types_llvm Optional LLVM Codegen Extension
 
     The stable plugin ABI always supports runtime-helper dispatch. Modules that
