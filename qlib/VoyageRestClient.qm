@@ -44,6 +44,8 @@ module VoyageRestClient {
         ConnectionSchemeCache::registerScheme("voyage", VoyageRestConnection::ConnectionScheme);
         QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
             new QoreRagUtils::VoyageEmbedderFactory());
+        QoreRagUtils::RagProviderRegistry::registerRerankerFactory(
+            new QoreRagUtils::VoyageRerankerFactory());
     };
 }
 
@@ -512,6 +514,104 @@ public class VoyageEmbedderFactory inherits AbstractEmbedderFactory {
 
     AbstractEmbedder create(hash<EmbedderConfig> config) {
         return new VoyageEmbedder(config);
+    }
+}
+
+#! Voyage AI-backed reranker — calls the Voyage \c /rerank endpoint
+/** Wraps @ref VoyageRestClient::VoyageRestClientIo "VoyageRestClientIo".
+
+    @par Configuration
+
+    - \c api_key (required): Voyage API key; passed via the \c apikey option
+    - \c url (optional): override the default Voyage URL
+    - \c model (optional): model name, default \c "rerank-2"
+*/
+public class VoyageReranker inherits AbstractReranker {
+    public {
+        const DefaultModel = "rerank-2";
+    }
+
+    private {
+        hash<RerankerConfig> config;
+        string model_name;
+        *VoyageRestClient::VoyageRestClientIo rest_client;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<RerankerConfig> config) {
+        if (!config.api_key.val()) {
+            throw "RERANKER-CONFIG-ERROR",
+                "VoyageReranker requires 'api_key' in RerankerConfig";
+        }
+        self.config = config;
+        model_name = config.model ?? DefaultModel;
+    }
+
+    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k) {
+        if (!documents) {
+            return ();
+        }
+        ensureRestClient();
+
+        hash<auto> body = {
+            "model": model_name,
+            "query": query,
+            "documents": documents,
+            "top_k": top_k,
+            "return_documents": True,
+        };
+
+        hash<auto> resp = rest_client.restPost("/rerank", body);
+
+        list<hash<auto>> data = resp.body.data ?? ();
+        list<hash<RerankResult>> result = ();
+        foreach hash<auto> item in (data) {
+            int idx = item."index";
+            string doc = item.document.typeCode() == NT_STRING
+                ? item.document
+                : (exists item.document.text ? item.document.text : documents[idx]);
+            push result, <RerankResult>{
+                "index": idx,
+                "score": item.relevance_score.toFloat(),
+                "document": doc,
+            };
+        }
+        return result;
+    }
+
+    *string getModel() {
+        return model_name;
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                hash<auto> opts = {
+                    "apikey": config.api_key,
+                };
+                if (config.url.val()) {
+                    opts.url = config.url;
+                }
+                rest_client = new VoyageRestClient::VoyageRestClientIo(opts);
+            }
+        }
+    }
+}
+
+#! Factory for @ref VoyageReranker
+public class VoyageRerankerFactory inherits AbstractRerankerFactory {
+    string getType() {
+        return "voyage";
+    }
+
+    string getDisplayName() {
+        return "Voyage AI rerank";
+    }
+
+    AbstractReranker create(hash<RerankerConfig> config) {
+        return new VoyageReranker(config);
     }
 }
 }

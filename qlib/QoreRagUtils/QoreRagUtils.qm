@@ -32,11 +32,6 @@
 %requires(reexport) RestClientIo
 %requires(reexport) QoreTokenizerUtils
 %requires(reexport) QoreRagTypes
-%requires(reexport) OpenAiRestClient
-%requires(reexport) VoyageRestClient
-%requires(reexport) SGLangRestClient
-%requires(reexport) BgeM3RestClient
-%requires(reexport) GeminiRestClient
 
 module QoreRagUtils {
     version = "1.0.1";
