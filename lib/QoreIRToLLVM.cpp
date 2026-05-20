@@ -15056,8 +15056,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 ExceptionSink lookup_xsink;
-                if (qore_plugin_get_process_operation_id(pinst->operation.module_name.c_str(),
-                        pinst->operation.local_operation_id, &global_id, &lookup_xsink)) {
+                if (qore_plugin_get_process_operation_id_checked(pinst->operation.module_name.c_str(),
+                        pinst->operation.local_operation_id,
+                        pinst->operation.canonical_signature_version,
+                        pinst->operation.signature_hash, &global_id, &lookup_xsink)) {
                     error = "cannot resolve plugin operation ";
                     error += pinst->operation.module_name;
                     error += ":";

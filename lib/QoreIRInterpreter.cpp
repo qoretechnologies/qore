@@ -781,8 +781,9 @@ static uint32_t resolvePluginOperationId(const QoreIRPluginInstruction& inst, Ex
         return 0;
     }
     uint32_t global_id = 0;
-    if (qore_plugin_get_process_operation_id(inst.operation.module_name.c_str(),
-            inst.operation.local_operation_id, &global_id, xsink)) {
+    if (qore_plugin_get_process_operation_id_checked(inst.operation.module_name.c_str(),
+            inst.operation.local_operation_id, inst.operation.canonical_signature_version,
+            inst.operation.signature_hash, &global_id, xsink)) {
         return 0;
     }
     return global_id;

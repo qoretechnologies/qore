@@ -11,6 +11,7 @@
 #include <qore/QorePluginType.h>
 #include <qore/QoreReflection.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include <qore/intern/xxhash.h>
 #include <qore/intern/qore_list_private.h>
 
 #include <algorithm>
@@ -53,6 +54,8 @@ struct RegisteredPluginOperation {
     uint16_t local_id = 0;
     std::string operation_name;
     QorePluginOperationSignature signature = {};
+    uint8_t canonical_signature_version = QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
+    uint64_t signature_hash = 0;
     QorePluginOpcodeInfoExtended info = {};
     void (*runtime_helper)() = nullptr;
     std::string runtime_helper_symbol;
@@ -160,6 +163,32 @@ bool hasException(ExceptionSink* xsink) {
     return xsink && *xsink;
 }
 
+void appendU8(std::vector<uint8_t>& out, uint8_t v) {
+    out.push_back(v);
+}
+
+void appendU32LE(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xff));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xff));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xff));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xff));
+}
+
+void appendTypeRef(std::vector<uint8_t>& out, const QoreTypeInfo* ti) {
+    if (!ti) {
+        appendU8(out, 0);
+        return;
+    }
+    appendU8(out, 1);
+    const char* path = qore_type_get_path(ti);
+    uint32_t len = path ? static_cast<uint32_t>(std::strlen(path)) : 0;
+    appendU32LE(out, len);
+    if (len) {
+        out.insert(out.end(), reinterpret_cast<const uint8_t*>(path),
+            reinterpret_cast<const uint8_t*>(path) + len);
+    }
+}
+
 bool validExtensionId(const char* id) {
     if (!id || !*id) {
         return false;
@@ -255,6 +284,23 @@ QoreValue makePluginArgListFromBits(const uint64_t* arg_bits, int32_t nargs, Exc
         priv->pushIntern(arg);
     }
     return QoreValue(args.release());
+}
+
+uint64_t computeSignatureHashV1(const QorePluginOperationSignature& signature) {
+    std::vector<uint8_t> data;
+    data.reserve(128);
+    appendU8(data, QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1);
+    appendU8(data, signature.arity);
+    appendU8(data, static_cast<uint8_t>(signature.helper_abi));
+    appendU8(data, static_cast<uint8_t>(signature.access));
+    appendU8(data, static_cast<uint8_t>(signature.result_alias));
+    appendU8(data, signature.primary_nullable ? 1 : 0);
+    appendU8(data, signature.secondary_nullable ? 1 : 0);
+    appendU8(data, signature.return_nullable ? 1 : 0);
+    appendTypeRef(data, signature.primary_type);
+    appendTypeRef(data, signature.arity == 2 ? signature.secondary_type : nullptr);
+    appendTypeRef(data, signature.return_type);
+    return XXH64(data.data(), data.size(), 0);
 }
 
 bool resolvePluginOperation(uint32_t global_id, QorePluginHelperAbi expected_abi,
@@ -647,6 +693,8 @@ bool copyRegistration(const QorePluginTypeRegistration& reg, const char* module_
         dst.local_id = src.local_id;
         dst.operation_name = src.operation_name;
         dst.signature = src.signature;
+        dst.canonical_signature_version = QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
+        dst.signature_hash = computeSignatureHashV1(src.signature);
         dst.info = src.info;
         dst.runtime_helper = src.runtime_helper;
         if (!dst.runtime_helper && src.runtime_helper_symbol && handle) {
@@ -729,6 +777,14 @@ QoreHashNode* makeOperationHash(const RegisteredPluginModule& module, const Regi
     if (hasException(xsink)) {
         return nullptr;
     }
+    h->setKeyValue("canonical_signature_version", static_cast<int64>(op.canonical_signature_version), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("signature_hash", static_cast<int64>(op.signature_hash), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
     h->setKeyValue("operation_name", new QoreStringNode(op.operation_name), xsink);
     if (hasException(xsink)) {
         return nullptr;
@@ -790,6 +846,10 @@ QoreHashNode* makeOperationHash(const RegisteredPluginModule& module, const Regi
 }
 
 } // namespace
+
+uint64_t qore_plugin_compute_signature_hash_v1(const QorePluginOperationSignature& signature) {
+    return computeSignatureHashV1(signature);
+}
 
 QorePluginModuleHandle::QorePluginModuleHandle(const char* name, const char* path, void* dl_handle)
         : module_name(name ? name : ""), module_path(path ? path : ""), dl_handle(dl_handle),
@@ -1083,8 +1143,28 @@ QoreListNode* qore_plugin_get_process_operations(const char* module_name, Except
 
 int qore_plugin_get_process_operation_id(const char* module_name, uint16_t local_operation_id,
         uint32_t* global_operation_id, ExceptionSink* xsink) {
+    return qore_plugin_get_process_operation_id_checked(module_name, local_operation_id, 0, 0,
+        global_operation_id, xsink);
+}
+
+int qore_plugin_get_process_operation_id_checked(const char* module_name, uint16_t local_operation_id,
+        uint8_t canonical_signature_version, uint64_t signature_hash, uint32_t* global_operation_id,
+        ExceptionSink* xsink) {
     if (global_operation_id) {
         *global_operation_id = 0;
+    }
+    if (canonical_signature_version
+            && canonical_signature_version != QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1) {
+        if (xsink) {
+            xsink->raiseException("QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED",
+                "plugin registry cannot resolve operation %s:%u: canonical signature version %u is unsupported "
+                "(field=\"canonical_signature_version\", expected=\"%u\", actual=\"%u\", "
+                "subreason=\"unsupported_canonical_version\", section=3.9)",
+                escapeDiagnosticName(module_name).c_str(), local_operation_id,
+                canonical_signature_version, QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1,
+                canonical_signature_version);
+        }
+        return -1;
     }
     std::lock_guard<std::mutex> lock(plugin_registry_mutex);
     auto i = plugin_modules.find(module_name ? module_name : "");
@@ -1103,6 +1183,20 @@ int qore_plugin_get_process_operation_id(const char* module_name, uint16_t local
             return -1;
         }
         if (op.local_id == local_operation_id) {
+            if (signature_hash && op.signature_hash != signature_hash) {
+                if (xsink) {
+                    xsink->raiseException("QORD-PLUGIN-SIGNATURE-HASH-MISMATCH",
+                        "plugin registry module \"%s\" operation local id %u has signature hash 0x%016llx, "
+                        "but the operation reference requires 0x%016llx "
+                        "(method=\"getProcessOperationId\", field=\"signature_hash\", "
+                        "expected=\"matching canonical signature hash\", actual=\"mismatch\", "
+                        "subreason=\"signature_hash_mismatch\", section=3.9)",
+                        escapeDiagnosticName(module_name).c_str(), local_operation_id,
+                        static_cast<unsigned long long>(op.signature_hash),
+                        static_cast<unsigned long long>(signature_hash));
+                }
+                return -1;
+            }
             if (global_operation_id) {
                 *global_operation_id = op.global_id;
             }

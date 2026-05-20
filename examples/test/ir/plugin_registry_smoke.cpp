@@ -174,6 +174,14 @@ static bool checkRegistrationAndIntrospection() {
         std::cerr << "process plugin operation id lookup failed\n";
         return false;
     }
+    uint64_t signature_hash = qore_plugin_compute_signature_hash_v1(op.signature);
+    uint32_t checked_global_id = 0;
+    if (qore_plugin_get_process_operation_id_checked("plugin-smoke", 0,
+            QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1, signature_hash, &checked_global_id, &xsink)
+            || xsink || checked_global_id != global_id) {
+        std::cerr << "checked process plugin operation id lookup failed\n";
+        return false;
+    }
 
     QoreValue op_value = ops->retrieveEntry(0);
     const QoreHashNode* op_hash = op_value.get<const QoreHashNode>();
@@ -181,6 +189,19 @@ static bool checkRegistrationAndIntrospection() {
         std::cerr << "process plugin operation introspection did not expose global_id\n";
         return false;
     }
+    if (op_hash->getKeyValue("signature_hash").getAsBigInt() != static_cast<int64>(signature_hash)) {
+        std::cerr << "process plugin operation introspection did not expose signature_hash\n";
+        return false;
+    }
+
+    ExceptionSink mismatch_xsink;
+    if (!qore_plugin_get_process_operation_id_checked("plugin-smoke", 0,
+            QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1, signature_hash ^ 1u, nullptr, &mismatch_xsink)
+            || !mismatch_xsink) {
+        std::cerr << "checked process plugin operation id lookup accepted a signature mismatch\n";
+        return false;
+    }
+    mismatch_xsink.clear();
 
     uint64_t result_bits = qore_rt_plugin_binary(global_id,
         smokeBitsFromValue(QoreValue(static_cast<int64>(40))),

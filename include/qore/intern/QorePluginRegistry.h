@@ -54,6 +54,11 @@ DLLLOCAL void qore_plugin_rollback_module_init_registration(const QorePluginModu
 
 DLLLOCAL int qore_plugin_get_process_operation_id(const char* module_name, uint16_t local_operation_id,
     uint32_t* global_operation_id, ExceptionSink* xsink);
+DLLLOCAL int qore_plugin_get_process_operation_id_checked(const char* module_name, uint16_t local_operation_id,
+    uint8_t canonical_signature_version, uint64_t signature_hash, uint32_t* global_operation_id,
+    ExceptionSink* xsink);
+
+DLLLOCAL uint64_t qore_plugin_compute_signature_hash_v1(const QorePluginOperationSignature& signature);
 
 extern "C" {
 DLLEXPORT uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t value_bits,

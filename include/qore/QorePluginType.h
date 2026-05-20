@@ -44,6 +44,7 @@ class QoreProgram;
 struct QorePluginModuleHandle;
 
 #define QORE_PLUGIN_ABI_VERSION_V1 "1.0"
+#define QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1 1
 
 enum class QorePluginHelperAbi : uint8_t {
     UnaryValue        = 0,
