@@ -9,6 +9,7 @@
 */
 
 #include "QC_DataFrame.h"
+#include "QC_DataFrameExpr.h"
 #include "QC_GroupedDataFrame.h"
 #include "df_csv.h"
 
@@ -132,6 +133,28 @@ list<auto> DataFrame::getColumn(string name) [flags=RET_VALUE_ONLY] {
 */
 hash<auto> DataFrame::getRow(int index) [flags=RET_VALUE_ONLY] {
     return df->getRow(index, xsink);
+}
+
+//! Returns a lazy column reference for building row-mask predicates
+/** @param name the column name
+    @return a ColumnRef that can be compared with scalar values to produce a RowMask
+
+    @par Example:
+    @code{.py}
+    RowMask adults = df.column("age") >= 18;
+    DataFrame adult_rows = df[adults];
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if the column does not exist when the predicate is evaluated
+*/
+ColumnRef DataFrame::column(string name) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* referenced_df = static_cast<QoreDataFrame*>(self->getReferencedPrivateData(CID_DATAFRAME, xsink));
+    if (!referenced_df) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_COLUMNREF, getProgram()), xsink);
+    obj->setPrivate(CID_COLUMNREF, new QoreDataFrameColumnRef(referenced_df, name->c_str()));
+    return obj.release();
 }
 
 //! Returns the first n rows as a new DataFrame (default 5)
@@ -355,6 +378,28 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
 */
 DataFrame DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->filter(column->c_str(), op->c_str(), value, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with rows selected by a RowMask
+/** @param mask a row mask produced by comparing a ColumnRef with a scalar value
+    @return new DataFrame object with rows selected by the mask
+
+    @par Example:
+    @code{.py}
+    RowMask current = df.column("status") == "active";
+    DataFrame active = df.filter(current);
+    @endcode
+
+    @throw DATAFRAME-FILTER-ERROR if the mask length does not match the DataFrame row count
+*/
+DataFrame DataFrame::filter(RowMask[QoreDataFrameRowMask] mask) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->filterMask(mask->getMask(), xsink);
     if (!result) {
         return QoreValue();
     }

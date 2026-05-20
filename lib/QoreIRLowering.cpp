@@ -317,6 +317,35 @@ static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, Qo
         op->loc)->result;
 }
 
+static QoreIRValue tryDescriptorPluginBinaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreBinaryOperatorNode<>* op, const char* operation_name,
+        std::string& error) {
+    QorePluginResolvedOperationInfo info;
+    int rc = qore_plugin_resolve_program_operation_info(parse_context ? parse_context->pgm : nullptr,
+        getExprTypeInfo(op->getLeft()), getExprTypeInfo(op->getRight()), operation_name,
+        QorePluginHelperAbi::BinaryValue, info, nullptr);
+    if (rc > 0) {
+        return QoreIRValue();
+    }
+    if (rc < 0) {
+        error = "failed to resolve descriptor-based plugin binary operation '";
+        error += operation_name;
+        error += "'";
+        return QoreIRValue();
+    }
+
+    QoreIRValue lhs = lowering.lowerExpression(op->getLeft(), error);
+    if (!lhs.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue rhs = lowering.lowerExpression(op->getRight(), error);
+    if (!rhs.isValid()) {
+        return QoreIRValue();
+    }
+    return builder.createPluginOp(QoreIROpcode::PluginBinary, pluginOperationRefFromInfo(info), {lhs, rhs},
+        op->loc)->result;
+}
+
 static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
         QoreParseContext* parse_context, const QoreValue& expr, const AbstractQoreNode* node,
         std::string& error) {
@@ -325,6 +354,24 @@ static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRB
     }
     if (auto* slice = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
         return tryDescriptorPluginSliceLowering(lowering, builder, parse_context, expr, slice, error);
+    }
+    if (auto* ne = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, ne, "ne", error);
+    }
+    if (auto* eq = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, eq, "eq", error);
+    }
+    if (auto* le = dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, le, "le", error);
+    }
+    if (auto* lt = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, lt, "lt", error);
+    }
+    if (auto* ge = dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, ge, "ge", error);
+    }
+    if (auto* gt = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, gt, "gt", error);
     }
     return QoreIRValue();
 }

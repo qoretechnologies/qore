@@ -65,11 +65,16 @@ public:
 
     DLLLOCAL static bool softEqual(const QoreValue& l, const QoreValue& r, ExceptionSink *xsink);
 
+    DLLLOCAL virtual const QoreTypeInfo *getTypeInfo() const {
+        return typeInfo;
+    }
+
 protected:
     // type of pointer to optimized versions depending on arguments found at parse-time
     typedef bool(QoreLogicalEqualsOperatorNode::*eval_t)(ExceptionSink *xsink) const;
     // pointer to optimized versions depending on arguments found at parse-time
     eval_t pfunc;
+    const QoreTypeInfo* typeInfo = boolTypeInfo;
 
     DLLLOCAL static QoreString logical_equals_str;
 
@@ -77,8 +82,12 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
-    DLLLOCAL virtual const QoreTypeInfo *getTypeInfo() const {
-        return boolTypeInfo;
+    DLLLOCAL virtual const char* getPluginOperationName() const {
+        return "eq";
+    }
+
+    DLLLOCAL virtual bool invertFallbackResult() const {
+        return false;
     }
 
     DLLLOCAL bool floatSoftEqual(ExceptionSink *xsink) const;

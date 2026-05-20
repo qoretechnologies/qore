@@ -802,20 +802,8 @@ QoreDataFrame* QoreDataFrame::select(const QoreListNode* col_list,
     return df;
 }
 
-QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::string& op,
+std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column, const std::string& op,
         QoreValue value, ExceptionSink* xsink) const {
-    if (qore_check_cancel(xsink, "filtering DataFrame")) {
-        return nullptr;
-    }
-    std::lock_guard<std::mutex> lk(mtx);
-
-    int col_idx = getColIdx(column, xsink);
-    if (col_idx < 0) {
-        return nullptr;
-    }
-
-    const ColumnData& cd = *columns[col_idx].data;
-
     // Validate operator
     static const std::unordered_set<std::string> valid_ops = {
         "==", "!=", "<", "<=", ">", ">=",
@@ -826,25 +814,38 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
         xsink->raiseException("DATAFRAME-FILTER-ERROR",
             "unknown filter operator '%s'; valid operators: ==, !=, <, <=, >, >=, "
             "contains, startswith, endswith, is_null, not_null", op.c_str());
-        return nullptr;
+        return {};
     }
 
-    std::vector<int64_t> matching_rows;
+    if (qore_check_cancel(xsink, "building DataFrame row mask")) {
+        return {};
+    }
+    std::lock_guard<std::mutex> lk(mtx);
+
+    int col_idx = getColIdx(column, xsink);
+    if (col_idx < 0) {
+        return {};
+    }
+
+    const ColumnData& cd = *columns[col_idx].data;
+    std::vector<uint8_t> mask(n_rows, 0);
 
     for (int64_t i = 0; i < n_rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame row mask")) {
+            return {};
+        }
+
         if (cd.isNull(i)) {
-            // null comparison: only is_null/not_null match
-            if (op == "is_null") {
-                matching_rows.push_back(i);
-            }
+            mask[i] = (op == "is_null" || (op == "==" && value.isNullOrNothing())) ? 1 : 0;
             continue;
         }
 
         if (op == "not_null") {
-            matching_rows.push_back(i);
+            mask[i] = 1;
             continue;
         }
-        if (op == "is_null") {
+        if (op == "is_null" || value.isNullOrNothing()) {
+            mask[i] = (op == "!=" && value.isNullOrNothing()) ? 1 : 0;
             continue;
         }
 
@@ -895,14 +896,61 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
             bool cmp = value.getAsBool();
             if (op == "==") { match = cell == cmp; }
             else if (op == "!=") { match = cell != cmp; }
+        } else if (cd.type == ColumnType::DATE) {
+            if (value.getType() == NT_DATE) {
+                int64_t cell = cd.date_data[i];
+                int64_t cmp = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                if (op == "==") { match = cell == cmp; }
+                else if (op == "!=") { match = cell != cmp; }
+                else if (op == "<") { match = cell < cmp; }
+                else if (op == "<=") { match = cell <= cmp; }
+                else if (op == ">") { match = cell > cmp; }
+                else if (op == ">=") { match = cell >= cmp; }
+            }
         }
 
         if (match) {
+            mask[i] = 1;
+        }
+    }
+
+    return mask;
+}
+
+QoreDataFrame* QoreDataFrame::filterMask(const std::vector<uint8_t>& mask, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "filtering DataFrame with row mask")) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (static_cast<int64_t>(mask.size()) != n_rows) {
+        xsink->raiseException("DATAFRAME-FILTER-ERROR",
+            "row mask length " QLLD " does not match DataFrame row count " QLLD,
+            static_cast<int64_t>(mask.size()), n_rows);
+        return nullptr;
+    }
+
+    std::vector<int64_t> matching_rows;
+    matching_rows.reserve(mask.size());
+    for (int64_t i = 0; i < n_rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "filtering DataFrame with row mask")) {
+            return nullptr;
+        }
+        if (mask[i]) {
             matching_rows.push_back(i);
         }
     }
 
     return selectRows(matching_rows, xsink);
+}
+
+QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::string& op,
+        QoreValue value, ExceptionSink* xsink) const {
+    std::vector<uint8_t> mask = compareColumnMask(column, op, value, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return filterMask(mask, xsink);
 }
 
 QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,

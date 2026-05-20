@@ -149,6 +149,10 @@ DLLLOCAL QoreValue qore_plugin_try_dispatch_binary(QoreProgram* pgm, const char*
     QorePluginHelperAbi helper_abi, QoreValue lhs, QoreValue rhs, bool& matched, ExceptionSink* xsink);
 DLLLOCAL QoreValue qore_plugin_try_dispatch_call(QoreProgram* pgm, const char* operation_name,
     QoreValue self, const QoreListNode* args, bool& matched, ExceptionSink* xsink);
+DLLLOCAL inline bool qore_plugin_value_may_have_operation(QoreValue value) {
+    qore_type_t type = value.getType();
+    return type == NT_OBJECT || type == NT_PLUGIN_VALUE;
+}
 DLLLOCAL bool qore_plugin_is_value_node(const AbstractQoreNode* node);
 DLLLOCAL const QoreTypeInfo* qore_plugin_get_value_type_info(const AbstractQoreNode* node);
 DLLLOCAL int qore_plugin_serialize_value_node(const AbstractQoreNode* node,

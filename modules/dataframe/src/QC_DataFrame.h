@@ -114,6 +114,13 @@ public:
     DLLLOCAL QoreDataFrame* filter(const std::string& column, const std::string& op,
         QoreValue value, ExceptionSink* xsink) const;
 
+    //! Build a row bitmap mask by comparing one column with a value
+    DLLLOCAL std::vector<uint8_t> compareColumnMask(const std::string& column, const std::string& op,
+        QoreValue value, ExceptionSink* xsink) const;
+
+    //! Filter rows using a row bitmap mask
+    DLLLOCAL QoreDataFrame* filterMask(const std::vector<uint8_t>& mask, ExceptionSink* xsink) const;
+
     //! Sort by one or more columns
     DLLLOCAL QoreDataFrame* sortBy(const QoreListNode* columns,
         const QoreListNode* ascending, ExceptionSink* xsink) const;

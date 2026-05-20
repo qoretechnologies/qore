@@ -1,0 +1,93 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DataFrameExpr.qpp
+
+    Qore DataFrame expression helper classes
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "QC_DataFrameExpr.h"
+
+using namespace QoreDataFrameNS;
+
+//! A lazy reference to one DataFrame column for building row predicates
+/** Column references are created by @ref DataFrame::column() and participate in
+    registered plugin comparison operators. Comparing a ColumnRef with a scalar
+    value returns a RowMask that can filter the same DataFrame.
+
+    @par Example:
+    @code{.py}
+    %requires dataframe
+
+    DataFrame df(({"name": "Ada", "age": 42}, {"name": "Bo", "age": 17}));
+    RowMask adults = df.column("age") >= 18;
+    DataFrame adult_rows = df[adults];
+    @endcode
+
+    @since dataframe 1.0
+*/
+qclass ColumnRef [arg=QoreDataFrameColumnRef* col; ns=Qore::DataFrame; flags=final];
+
+//! ColumnRefs cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+ColumnRef::copy() {
+    xsink->raiseException("COPY-ERROR", "DataFrame ColumnRef objects cannot be copied");
+}
+
+//! Returns the referenced column name
+/** @return the referenced column name
+*/
+string ColumnRef::name() [flags=CONSTANT] {
+    return new QoreStringNode(col->getColumnName());
+}
+
+//! Returns the referenced column values as a list
+/** @return the referenced column values as a list
+*/
+list<auto> ColumnRef::values() [flags=RET_VALUE_ONLY] {
+    return col->values(xsink);
+}
+
+//! A bitmap mask selecting DataFrame rows
+/** Row masks are normally produced by comparing @ref ColumnRef values:
+
+    @par Example:
+    @code{.py}
+    RowMask high_value = df.column("amount") > 1000;
+    DataFrame filtered = df.filter(high_value);
+    @endcode
+
+    @since dataframe 1.0
+*/
+qclass RowMask [arg=QoreDataFrameRowMask* mask; ns=Qore::DataFrame; flags=final];
+
+//! RowMasks cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+RowMask::copy() {
+    xsink->raiseException("COPY-ERROR", "DataFrame RowMask objects cannot be copied");
+}
+
+//! Returns the number of rows represented by the mask
+/** @return the mask length
+*/
+int RowMask::size() [flags=CONSTANT] {
+    return mask->size();
+}
+
+//! Returns the number of selected rows
+/** @return the number of true bits in the mask
+*/
+int RowMask::count() [flags=RET_VALUE_ONLY] {
+    return mask->count(xsink);
+}
+
+//! Converts the mask to a list of booleans
+/** @return a list where True means the corresponding row is selected
+*/
+list<bool> RowMask::toList() [flags=RET_VALUE_ONLY] {
+    return mask->toList(xsink);
+}

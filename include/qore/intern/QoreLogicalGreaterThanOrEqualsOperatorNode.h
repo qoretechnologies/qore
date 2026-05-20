@@ -47,11 +47,16 @@ public:
     DLLLOCAL static bool doGreaterThanOrEquals(const QoreValue& l, const QoreValue& r,
             ExceptionSink* xsink);
 
+    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
+    }
+
 protected:
     // type of pointer to optimized versions depending on arguments found at parse-time
     typedef bool(QoreLogicalGreaterThanOrEqualsOperatorNode::*eval_t)(ExceptionSink *xsink) const;
     // pointer to optimized versions depending on arguments found at parse-time
     eval_t pfunc = nullptr;
+    const QoreTypeInfo* typeInfo = boolTypeInfo;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink *xsink) const;
 

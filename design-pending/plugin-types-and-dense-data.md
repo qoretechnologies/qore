@@ -70,10 +70,11 @@ is not blocking.
   active plugin lowering callbacks, invokes them before built-in expression
   handlers, returns callback-provided IR results, and reports claimed-node
   `NotApplicable` results as `PLUGIN-LOWERING-CLAIM-VIOLATED`.
-- Phase 5's first DataFrame slice is implemented as a class-backed plugin
+- Phase 5's DataFrame operator slice is implemented as a class-backed plugin
   type: the existing `DataFrame` object/private-data API is preserved while
   the module registers plugin operations for column subscripts, row subscripts,
-  and inclusive row-range slices; core `[]` parsing/runtime dispatch can route
+  inclusive row-range slices, row-mask subscripts, and `ColumnRef` comparison
+  predicates; core `[]` and comparison parsing/runtime dispatch can route
   matching plugin operations in AST, IR, and JIT paths.
 
 ---
@@ -2667,8 +2668,12 @@ matching.
   surface without improving ownership.
 - [x] Register `DataFrame` via the plugin protocol.
 - [x] Subscript: `df["col"]`, `df[1..10]`.
-- [ ] Comparison and predicate operators returning bitmap masks.
-- [ ] Lazy expression DSL through registered operators.
+- [x] Comparison and predicate operators returning bitmap masks.
+- [x] Lazy expression DSL through registered operators. Implemented as explicit
+  `df.column("name")` `ColumnRef` values; comparisons with scalar values return
+  `RowMask` objects accepted by `df[mask]` and `df.filter(mask)`. Direct
+  `df["name"]` remains list-returning column access to preserve simple
+  inspection semantics.
 - [x] Surface `DataFrame` through the `reflection` module (per the Phase 1
   precedent for `buffer<T>`) so QLS, doxygen, and Qore-side
   metaprogramming see the new type through `PluginRegistry` metadata.

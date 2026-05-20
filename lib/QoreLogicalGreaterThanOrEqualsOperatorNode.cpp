@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/intern/QorePluginRegistry.h>
 
 QoreString QoreLogicalGreaterThanOrEqualsOperatorNode::op_str(">= operator expression");
 
@@ -45,6 +46,23 @@ static void set_binary_analysis_ge(QoreParseContext& parse_context,
     }
 }
 
+static int try_plugin_binary_parse_ge(QoreParseContext& parse_context, const QoreTypeInfo* lti,
+        const QoreTypeInfo* rti, const QoreParseAnalysis& left_analysis,
+        const QoreParseAnalysis& right_analysis, const QoreTypeInfo*& typeInfo) {
+    QorePluginResolvedOperationInfo plugin_op;
+    ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+    int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, "ge",
+        QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
+    if (plugin_rc) {
+        return plugin_rc;
+    }
+
+    typeInfo = plugin_op.signature.return_type;
+    parse_context.typeInfo = typeInfo;
+    set_binary_analysis_ge(parse_context, left_analysis, right_analysis);
+    return 0;
+}
+
 QoreValue QoreLogicalGreaterThanOrEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
    if (pfunc)
       return (this->*pfunc)(xsink);
@@ -55,6 +73,15 @@ QoreValue QoreLogicalGreaterThanOrEqualsOperatorNode::evalImpl(bool& needs_deref
    ValueEvalOptimizedRefHolder rh(right, xsink);
    if (*xsink)
       return QoreValue();
+
+   if (qore_plugin_value_may_have_operation(*lh) || qore_plugin_value_may_have_operation(*rh)) {
+      bool plugin_matched = false;
+      QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "ge",
+         QorePluginHelperAbi::BinaryValue, *lh, *rh, plugin_matched, xsink);
+      if (*xsink || plugin_matched) {
+         return plugin_result;
+      }
+   }
 
    return doGreaterThanOrEquals(*lh, *rh, xsink);
 }
@@ -86,6 +113,14 @@ int QoreLogicalGreaterThanOrEqualsOperatorNode::parseInitIntern(const char* name
     const QoreTypeInfo* rti = parse_context.typeInfo;
 
     parse_context.typeInfo = boolTypeInfo;
+    typeInfo = boolTypeInfo;
+
+    int plugin_rc = try_plugin_binary_parse_ge(parse_context, lti, rti, left_analysis, right_analysis, typeInfo);
+    if (plugin_rc < 0 && !err) {
+        err = -1;
+    } else if (!plugin_rc) {
+        return err;
+    }
 
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (!err && left.isValue() && right.isValue()) {

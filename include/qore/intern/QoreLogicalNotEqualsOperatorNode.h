@@ -67,20 +67,12 @@ public:
 protected:
     DLLLOCAL static QoreString logical_not_equals_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        QoreValue rv = QoreLogicalEqualsOperatorNode::evalImpl(needs_deref, xsink);
-        if (*xsink)
-            return QoreValue();
-        return !rv.getAsBool();
+    DLLLOCAL virtual const char* getPluginOperationName() const {
+        return "ne";
     }
 
-    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        int err = QoreLogicalEqualsOperatorNode::parseInitImpl(val, parse_context);
-        // make sure to reverse sense of comparison if this expression was resolved to a constant boolean value
-        if (val.isBool()) {
-            val = !val.getAsBool();
-        }
-        return err;
+    DLLLOCAL virtual bool invertFallbackResult() const {
+        return true;
     }
 };
 

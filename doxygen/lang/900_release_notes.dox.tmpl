@@ -1756,6 +1756,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - window functions: rowNumber, lag, lead, cumSum, rollingMean with partition/order support
       - native plugin-operator access: \c df["column"] returns a column list, \c df[row]
         returns a row hash, and \c df[start..stop] returns an inclusive row-range DataFrame
+      - native plugin predicate operators: \c df.column("column") returns a
+        \c ColumnRef, comparisons such as \c df.column("score") >= 90.0 return
+        a \c RowMask, and row masks can filter frames with \c df[mask] or
+        \c df.filter(mask)
       - streaming CSV reader with type inference from first 100 rows
       - Parquet I/O via Apache Arrow (\c #ifdef \c HAVE_ARROW gated, \c MISSING-FEATURE-ERROR fallback)
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)

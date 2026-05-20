@@ -11,11 +11,13 @@
 #include "df_plugin.h"
 
 #include "QC_DataFrame.h"
+#include "QC_DataFrameExpr.h"
 
 #include <qore/QorePluginType.h>
 
 #include <array>
 #include <cstring>
+#include <vector>
 
 using namespace QoreDataFrameNS;
 
@@ -23,14 +25,25 @@ extern "C" DLLEXPORT uint64_t dataframe_subscript_column(uint64_t container_bits
     ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t dataframe_subscript_row(uint64_t container_bits, uint64_t key_bits,
     ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_subscript_mask(uint64_t container_bits, uint64_t key_bits,
+    ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t dataframe_slice(uint64_t self_bits, uint64_t args_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_column_eq(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_column_ne(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_column_lt(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_column_le(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_column_gt(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_column_ge(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
 
 namespace {
 
 constexpr uint16_t DATAFRAME_TYPE_ID = 0;
+constexpr uint16_t DATAFRAME_COLUMN_REF_TYPE_ID = 1;
+constexpr uint16_t DATAFRAME_ROW_MASK_TYPE_ID = 2;
 constexpr uint16_t DATAFRAME_OP_SUBSCRIPT_COLUMN = 0;
 constexpr uint16_t DATAFRAME_OP_SUBSCRIPT_ROW = 1;
 constexpr uint16_t DATAFRAME_OP_SLICE = 2;
+constexpr uint16_t DATAFRAME_OP_SUBSCRIPT_MASK = 3;
 
 QoreValue dataframeValueFromBits(uint64_t bits) {
     QoreValue value;
@@ -105,13 +118,57 @@ QoreDataFrame* getReferencedDataFrame(QoreValue value, const char* context, Exce
     return df;
 }
 
-uint64_t dataframeObjectResult(QoreDataFrame* df, ExceptionSink* xsink) {
-    if (!df) {
+QoreDataFrameColumnRef* getReferencedColumnRef(QoreValue value, const char* context, ExceptionSink* xsink) {
+    if (value.getType() != NT_OBJECT) {
+        if (xsink) {
+            xsink->raiseException("DATAFRAME-PLUGIN-ERROR",
+                "%s requires a DataFrame ColumnRef object, got %s", context, value.getTypeName());
+        }
+        return nullptr;
+    }
+    QoreObject* obj = value.get<QoreObject>();
+    QoreDataFrameColumnRef* col = static_cast<QoreDataFrameColumnRef*>(
+        obj->getReferencedPrivateData(CID_COLUMNREF, xsink));
+    if (!col && xsink && !*xsink) {
+        xsink->raiseException("DATAFRAME-PLUGIN-ERROR",
+            "%s requires a DataFrame ColumnRef object with ColumnRef private data", context);
+    }
+    return col;
+}
+
+QoreDataFrameRowMask* getReferencedRowMask(QoreValue value, const char* context, ExceptionSink* xsink) {
+    if (value.getType() != NT_OBJECT) {
+        if (xsink) {
+            xsink->raiseException("DATAFRAME-PLUGIN-ERROR",
+                "%s requires a DataFrame RowMask object, got %s", context, value.getTypeName());
+        }
+        return nullptr;
+    }
+    QoreObject* obj = value.get<QoreObject>();
+    QoreDataFrameRowMask* mask = static_cast<QoreDataFrameRowMask*>(
+        obj->getReferencedPrivateData(CID_ROWMASK, xsink));
+    if (!mask && xsink && !*xsink) {
+        xsink->raiseException("DATAFRAME-PLUGIN-ERROR",
+            "%s requires a DataFrame RowMask object with RowMask private data", context);
+    }
+    return mask;
+}
+
+uint64_t dataframeObjectResult(QoreClass* qc, qore_classid_t cid, AbstractPrivateData* priv, ExceptionSink* xsink) {
+    if (!priv) {
         return dataframeBitsFromValue(QoreValue());
     }
-    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, nullptr), xsink);
-    obj->setPrivate(CID_DATAFRAME, df);
+    ReferenceHolder<QoreObject> obj(new QoreObject(qc, nullptr), xsink);
+    obj->setPrivate(cid, priv);
     return dataframeBitsFromValue(QoreValue(obj.release()));
+}
+
+uint64_t dataframeObjectResult(QoreDataFrame* df, ExceptionSink* xsink) {
+    return dataframeObjectResult(QC_DATAFRAME, CID_DATAFRAME, df, xsink);
+}
+
+uint64_t dataframeObjectResult(QoreDataFrameRowMask* mask, ExceptionSink* xsink) {
+    return dataframeObjectResult(QC_ROWMASK, CID_ROWMASK, mask, xsink);
 }
 
 QorePluginValueOps dataframeValueOps() {
@@ -135,70 +192,113 @@ QorePluginOpcodeInfoExtended dataframeInfo(bool pure) {
     return info;
 }
 
-QorePluginTypeRegistration dataframeRegistration(QorePluginTypeDescriptor& type,
-        std::array<QorePluginOperation, 3>& ops) {
+void initPluginType(QorePluginTypeDescriptor& type, uint16_t local_type_id, const char* type_name,
+        const QoreTypeInfo* type_info) {
     type = {};
-    type.local_type_id = DATAFRAME_TYPE_ID;
-    type.type_name = "DataFrame";
-    type.type_info = QC_DATAFRAME->getTypeInfo();
+    type.local_type_id = local_type_id;
+    type.type_name = type_name;
+    type.type_info = type_info;
     type.value_ops = dataframeValueOps();
     type.serialize = dataframeSerialize;
     type.deserialize = dataframeDeserialize;
     type.serializer_format_version = 1;
     type.baseline_qdom_domains = QDOM_DEFAULT;
+}
 
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN] = {};
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].local_id = DATAFRAME_OP_SUBSCRIPT_COLUMN;
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].operation_name = "subscript";
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].signature.arity = 2;
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].signature.primary_type = QC_DATAFRAME->getTypeInfo();
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].signature.secondary_type = stringTypeInfo;
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].signature.return_type = autoListTypeInfo;
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].signature.access = QorePluginValueAccess::ReadOnly;
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].signature.helper_abi = QorePluginHelperAbi::SubscriptValue;
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].info = dataframeInfo(true);
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].runtime_helper =
-        reinterpret_cast<void (*)()>(dataframe_subscript_column);
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].runtime_helper_symbol = "dataframe_subscript_column";
-    ops[DATAFRAME_OP_SUBSCRIPT_COLUMN].qdom_domains = QDOM_DEFAULT;
+void addBinaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id, const char* operation_name,
+        const QoreTypeInfo* primary_type, const QoreTypeInfo* secondary_type, const QoreTypeInfo* return_type,
+        QorePluginHelperAbi helper_abi, void (*runtime_helper)(), const char* runtime_helper_symbol) {
+    QorePluginOperation op = {};
+    op.local_id = local_id;
+    op.operation_name = operation_name;
+    op.signature.arity = 2;
+    op.signature.primary_type = primary_type;
+    op.signature.secondary_type = secondary_type;
+    op.signature.return_type = return_type;
+    op.signature.access = QorePluginValueAccess::ReadOnly;
+    op.signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
+    op.signature.helper_abi = helper_abi;
+    op.info = dataframeInfo(true);
+    op.runtime_helper = runtime_helper;
+    op.runtime_helper_symbol = runtime_helper_symbol;
+    op.qdom_domains = QDOM_DEFAULT;
+    ops.push_back(op);
+}
 
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW] = {};
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].local_id = DATAFRAME_OP_SUBSCRIPT_ROW;
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].operation_name = "subscript";
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].signature.arity = 2;
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].signature.primary_type = QC_DATAFRAME->getTypeInfo();
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].signature.secondary_type = bigIntTypeInfo;
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].signature.return_type = autoHashTypeInfo;
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].signature.access = QorePluginValueAccess::ReadOnly;
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].signature.helper_abi = QorePluginHelperAbi::SubscriptValue;
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].info = dataframeInfo(true);
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].runtime_helper =
-        reinterpret_cast<void (*)()>(dataframe_subscript_row);
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].runtime_helper_symbol = "dataframe_subscript_row";
-    ops[DATAFRAME_OP_SUBSCRIPT_ROW].qdom_domains = QDOM_DEFAULT;
+void addColumnComparisonOperations(std::vector<QorePluginOperation>& ops, uint16_t& local_id,
+        const char* operation_name, void (*runtime_helper)(), const char* runtime_helper_symbol) {
+    const QoreTypeInfo* scalar_types[] = {
+        bigIntTypeInfo,
+        floatTypeInfo,
+        numberTypeInfo,
+        stringTypeInfo,
+        boolTypeInfo,
+        dateTypeInfo,
+        nullTypeInfo,
+        nothingTypeInfo,
+    };
 
-    ops[DATAFRAME_OP_SLICE] = {};
-    ops[DATAFRAME_OP_SLICE].local_id = DATAFRAME_OP_SLICE;
-    ops[DATAFRAME_OP_SLICE].operation_name = "slice";
-    ops[DATAFRAME_OP_SLICE].signature.arity = 0xff;
-    ops[DATAFRAME_OP_SLICE].signature.primary_type = QC_DATAFRAME->getTypeInfo();
-    ops[DATAFRAME_OP_SLICE].signature.return_type = QC_DATAFRAME->getTypeInfo();
-    ops[DATAFRAME_OP_SLICE].signature.access = QorePluginValueAccess::ReadOnly;
-    ops[DATAFRAME_OP_SLICE].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
-    ops[DATAFRAME_OP_SLICE].signature.helper_abi = QorePluginHelperAbi::CallValueList;
-    ops[DATAFRAME_OP_SLICE].info = dataframeInfo(true);
-    ops[DATAFRAME_OP_SLICE].runtime_helper = reinterpret_cast<void (*)()>(dataframe_slice);
-    ops[DATAFRAME_OP_SLICE].runtime_helper_symbol = "dataframe_slice";
-    ops[DATAFRAME_OP_SLICE].qdom_domains = QDOM_DEFAULT;
+    for (const QoreTypeInfo* scalar_type : scalar_types) {
+        addBinaryOperation(ops, local_id++, operation_name, QC_COLUMNREF->getTypeInfo(), scalar_type,
+            QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue, runtime_helper,
+            runtime_helper_symbol);
+    }
+}
+
+QorePluginTypeRegistration dataframeRegistration(std::array<QorePluginTypeDescriptor, 3>& types,
+        std::vector<QorePluginOperation>& ops) {
+    initPluginType(types[DATAFRAME_TYPE_ID], DATAFRAME_TYPE_ID, "DataFrame", QC_DATAFRAME->getTypeInfo());
+    initPluginType(types[DATAFRAME_COLUMN_REF_TYPE_ID], DATAFRAME_COLUMN_REF_TYPE_ID, "DataFrame::ColumnRef",
+        QC_COLUMNREF->getTypeInfo());
+    initPluginType(types[DATAFRAME_ROW_MASK_TYPE_ID], DATAFRAME_ROW_MASK_TYPE_ID, "DataFrame::RowMask",
+        QC_ROWMASK->getTypeInfo());
+
+    addBinaryOperation(ops, DATAFRAME_OP_SUBSCRIPT_COLUMN, "subscript", QC_DATAFRAME->getTypeInfo(), stringTypeInfo,
+        autoListTypeInfo, QorePluginHelperAbi::SubscriptValue,
+        reinterpret_cast<void (*)()>(dataframe_subscript_column), "dataframe_subscript_column");
+    addBinaryOperation(ops, DATAFRAME_OP_SUBSCRIPT_ROW, "subscript", QC_DATAFRAME->getTypeInfo(), bigIntTypeInfo,
+        autoHashTypeInfo, QorePluginHelperAbi::SubscriptValue,
+        reinterpret_cast<void (*)()>(dataframe_subscript_row), "dataframe_subscript_row");
+
+    QorePluginOperation slice = {};
+    slice.local_id = DATAFRAME_OP_SLICE;
+    slice.operation_name = "slice";
+    slice.signature.arity = 0xff;
+    slice.signature.primary_type = QC_DATAFRAME->getTypeInfo();
+    slice.signature.return_type = QC_DATAFRAME->getTypeInfo();
+    slice.signature.access = QorePluginValueAccess::ReadOnly;
+    slice.signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
+    slice.signature.helper_abi = QorePluginHelperAbi::CallValueList;
+    slice.info = dataframeInfo(true);
+    slice.runtime_helper = reinterpret_cast<void (*)()>(dataframe_slice);
+    slice.runtime_helper_symbol = "dataframe_slice";
+    slice.qdom_domains = QDOM_DEFAULT;
+    ops.push_back(slice);
+
+    addBinaryOperation(ops, DATAFRAME_OP_SUBSCRIPT_MASK, "subscript", QC_DATAFRAME->getTypeInfo(),
+        QC_ROWMASK->getTypeInfo(), QC_DATAFRAME->getTypeInfo(), QorePluginHelperAbi::SubscriptValue,
+        reinterpret_cast<void (*)()>(dataframe_subscript_mask), "dataframe_subscript_mask");
+
+    uint16_t local_id = DATAFRAME_OP_SUBSCRIPT_MASK + 1;
+    addColumnComparisonOperations(ops, local_id, "eq", reinterpret_cast<void (*)()>(dataframe_column_eq),
+        "dataframe_column_eq");
+    addColumnComparisonOperations(ops, local_id, "ne", reinterpret_cast<void (*)()>(dataframe_column_ne),
+        "dataframe_column_ne");
+    addColumnComparisonOperations(ops, local_id, "lt", reinterpret_cast<void (*)()>(dataframe_column_lt),
+        "dataframe_column_lt");
+    addColumnComparisonOperations(ops, local_id, "le", reinterpret_cast<void (*)()>(dataframe_column_le),
+        "dataframe_column_le");
+    addColumnComparisonOperations(ops, local_id, "gt", reinterpret_cast<void (*)()>(dataframe_column_gt),
+        "dataframe_column_gt");
+    addColumnComparisonOperations(ops, local_id, "ge", reinterpret_cast<void (*)()>(dataframe_column_ge),
+        "dataframe_column_ge");
 
     QorePluginTypeRegistration reg = {};
     reg.module_name = "dataframe";
     reg.plugin_abi_version = QORE_PLUGIN_ABI_VERSION_V1;
     reg.operation_set_version = "1.0.0";
-    reg.types = &type;
-    reg.num_types = 1;
+    reg.types = types.data();
+    reg.num_types = static_cast<int>(types.size());
     reg.operations = ops.data();
     reg.num_operations = static_cast<int>(ops.size());
     return reg;
@@ -231,6 +331,20 @@ extern "C" DLLEXPORT uint64_t dataframe_subscript_row(uint64_t container_bits, u
     return dataframeBitsFromValue(*xsink ? QoreValue() : QoreValue(row));
 }
 
+extern "C" DLLEXPORT uint64_t dataframe_subscript_mask(uint64_t container_bits, uint64_t key_bits,
+        ExceptionSink* xsink) {
+    QoreValue container = dataframeValueFromBits(container_bits);
+    QoreValue key = dataframeValueFromBits(key_bits);
+    ReferenceHolder<QoreDataFrame> df(getReferencedDataFrame(container, "DataFrame row-mask subscript", xsink),
+        xsink);
+    ReferenceHolder<QoreDataFrameRowMask> mask(getReferencedRowMask(key, "DataFrame row-mask subscript", xsink),
+        xsink);
+    if (*xsink || !df || !mask) {
+        return dataframeBitsFromValue(QoreValue());
+    }
+    return dataframeObjectResult(df->filterMask(mask->getMask(), xsink), xsink);
+}
+
 extern "C" DLLEXPORT uint64_t dataframe_slice(uint64_t self_bits, uint64_t args_bits, ExceptionSink* xsink) {
     QoreValue self = dataframeValueFromBits(self_bits);
     QoreValue args_value = dataframeValueFromBits(args_bits);
@@ -249,10 +363,46 @@ extern "C" DLLEXPORT uint64_t dataframe_slice(uint64_t self_bits, uint64_t args_
     return dataframeObjectResult(df->sliceRange(start, stop, xsink), xsink);
 }
 
+static uint64_t dataframeColumnCompare(uint64_t lhs_bits, uint64_t rhs_bits, const char* op,
+        ExceptionSink* xsink) {
+    QoreValue lhs = dataframeValueFromBits(lhs_bits);
+    QoreValue rhs = dataframeValueFromBits(rhs_bits);
+    ReferenceHolder<QoreDataFrameColumnRef> col(getReferencedColumnRef(lhs, "DataFrame column comparison", xsink),
+        xsink);
+    if (*xsink || !col) {
+        return dataframeBitsFromValue(QoreValue());
+    }
+    return dataframeObjectResult(col->compare(op, rhs, xsink), xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_column_eq(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeColumnCompare(lhs_bits, rhs_bits, "==", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_column_ne(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeColumnCompare(lhs_bits, rhs_bits, "!=", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_column_lt(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeColumnCompare(lhs_bits, rhs_bits, "<", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_column_le(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeColumnCompare(lhs_bits, rhs_bits, "<=", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_column_gt(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeColumnCompare(lhs_bits, rhs_bits, ">", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_column_ge(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeColumnCompare(lhs_bits, rhs_bits, ">=", xsink);
+}
+
 void registerDataFramePluginTypes(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
-    QorePluginTypeDescriptor type;
-    std::array<QorePluginOperation, 3> ops;
-    QorePluginTypeRegistration reg = dataframeRegistration(type, ops);
+    std::array<QorePluginTypeDescriptor, 3> types;
+    std::vector<QorePluginOperation> ops;
+    QorePluginTypeRegistration reg = dataframeRegistration(types, ops);
 
     QorePluginRegistrationContextV1 plugin_ctx = {};
     plugin_ctx.struct_size = sizeof(plugin_ctx);

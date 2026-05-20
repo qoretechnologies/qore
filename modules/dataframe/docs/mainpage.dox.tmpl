@@ -13,7 +13,8 @@
     - Null/missing value support with per-column null masks
     - SQL-like operations: select, filter, sort, groupby, join, pivot, melt, window functions
     - Native plugin-operator support: \c frame["column"] for columns,
-      \c frame[row] for row hashes, and \c frame[start..stop] for row slices
+      \c frame[row] for row hashes, \c frame[start..stop] for row slices, and
+      \c frame[mask] for predicate masks
     - I/O: CSV (streaming reader), Parquet (optional Apache Arrow), database (Qore DBI)
     - ML integration: toMatrix/toVector/fromMatrix for zero-overhead ML feeding
     - Thread-safe with cooperative cancellation support
@@ -24,6 +25,8 @@
 
     Main classes:
     - @ref DataFrame::DataFrame "DataFrame" - the columnar data structure
+    - @ref DataFrame::ColumnRef "ColumnRef" - lazy column reference for predicate masks
+    - @ref DataFrame::RowMask "RowMask" - bitmap row selector returned by column comparisons
     - @ref DataFrame::GroupedDataFrame "GroupedDataFrame" - grouped DataFrame for aggregation
 
     Result hashdecls:
@@ -76,6 +79,30 @@ DataFrame::DataFrame reversed = employees[2..0];
 DataFrame::DataFrame from_second = employees[1..];
     @endcode
 
+    Predicate masks use explicit column references so direct column access stays
+    simple and predictable. Compare a @ref DataFrame::ColumnRef "ColumnRef" with
+    a scalar to get a @ref DataFrame::RowMask "RowMask"; then pass the mask to
+    \c frame[mask] or @ref DataFrame::DataFrame::filter(DataFrame::RowMask) "filter(mask)".
+    The comparison operators are registered plugin operations and work in AST,
+    IR, and JIT execution:
+
+    @code{.py}
+DataFrame::ColumnRef salary = employees.column("salary");
+DataFrame::RowMask high_salary = salary >= 90000.0;
+DataFrame::DataFrame senior = employees[high_salary];
+
+DataFrame::DataFrame sales = employees.filter(employees.column("dept") == "sales");
+DataFrame::DataFrame known_salary = employees[employees.column("salary") != NOTHING];
+
+printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
+    @endcode
+
+    Supported predicate operators are \c ==, \c !=, \c <, \c <=, \c >, and
+    \c >= against scalar \c int, \c float, \c number, \c string, \c bool,
+    \c date, \c null, and \c NOTHING values. \c NOTHING equality selects null
+    rows; \c NOTHING inequality selects non-null rows. Ordered comparisons with
+    \c NOTHING do not select rows.
+
     CSV option hashes can also be typed explicitly:
 
     @code{.py}
@@ -100,7 +127,8 @@ tsv.writeCSV("employees-copy.tsv", options);
     - initial public release with full SQL-like query operations, CSV/Parquet/database I/O,
       and ML integration
     - native plugin-operator access with column, row, and inclusive row-range
-      subscripts
+      subscripts, plus ColumnRef comparison predicates returning RowMask
+      objects accepted by \c df[mask] and \c df.filter(mask)
     - API metadata and generated Doxygen signatures identify DataFrame-returning
       operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
       @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result
