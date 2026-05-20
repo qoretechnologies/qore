@@ -274,6 +274,12 @@ static typeinfo_map_t typeinfo_map, typeinfo_or_nothing_map;
 
 static QoreThreadLock ctl; // complex type lock
 
+// True if ti is auto or auto! - both behave identically for runtime acceptance and
+// parse-time match logic; auto! is only distinct as a parse-time narrowing marker.
+static inline bool is_auto_vti(const QoreTypeInfo* ti) {
+    return ti == autoTypeInfo || ti == autoNoNarrowTypeInfo;
+}
+
 typedef std::map<const QoreTypeInfo*, QoreTypeInfo*> tmap_t;
 tmap_t ch_map,          // complex hash map
    chon_map,            // complex hash or nothing map
@@ -1444,7 +1450,7 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                     //printd(5, "QoreTypeSpec::match() t.typespec: complexlist <- %d '%s' <- '%s' rc: %d)\n",
                     //    (int)t.typespec, QoreTypeInfo::getName(u.ti), QoreTypeInfo::getName(t.u.ti),
                     //    match_type(u.ti, t.u.ti, may_not_match, may_need_filter));
-                    qore_type_result_e rv = u.ti == autoTypeInfo
+                    qore_type_result_e rv = is_auto_vti(u.ti)
                         ? QTI_NEAR
                         : match_type(u.ti, t.u.ti, may_not_match, may_need_filter);
                     if (rv > QTI_NOT_EQUAL) {
@@ -1459,14 +1465,14 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                     return QTI_NEAR;
                 }
                 case QTS_HASHDECL: {
-                    qore_type_result_e rv = u.ti == autoTypeInfo
+                    qore_type_result_e rv = is_auto_vti(u.ti)
                         ? QTI_NEAR
                         : QTI_NOT_EQUAL;
                     max_result = rv;
                     return rv;
                 }
                 case QTS_TYPE:
-                    if (t.getType() == NT_HASH && u.ti == autoTypeInfo) {
+                    if (t.getType() == NT_HASH && is_auto_vti(u.ti)) {
                         max_result = QTI_IDENT;
                         return QTI_NEAR;
                     }
@@ -1493,7 +1499,7 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 case QTS_COMPLEXSOFTLIST:
                 case QTS_COMPLEXLIST: {
                     //printd(5, "QoreTypeSpec::match() t.typespec: complexlist <- %d '%s' <- '%s' rc: %d)\n", (int)t.typespec, QoreTypeInfo::getName(u.ti), QoreTypeInfo::getName(t.u.ti), match_type(u.ti, t.u.ti, may_not_match, may_need_filter));
-                    qore_type_result_e rv = u.ti == autoTypeInfo
+                    qore_type_result_e rv = is_auto_vti(u.ti)
                         ? QTI_NEAR
                         : match_type(u.ti, t.u.ti, may_not_match, may_need_filter);
                     if (rv > QTI_NOT_EQUAL) {
@@ -1521,7 +1527,7 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                     break;
                 }
                 case QTS_TYPE: {
-                    if (t.getType() == NT_LIST && u.ti == autoTypeInfo) {
+                    if (t.getType() == NT_LIST && is_auto_vti(u.ti)) {
                         max_result = QTI_IDENT;
                         return QTI_NEAR;
                     }
@@ -1937,7 +1943,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
         }
         case QTS_COMPLEXHASH: {
             if (t == NT_HASH) {
-                if (u.ti == autoTypeInfo) {
+                if (is_auto_vti(u.ti)) {
                     ok = true;
                     break;
                 }
@@ -1949,7 +1955,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                     return true;
                 }
             } else if (t == NT_WEAKREF_HASH) {
-                if (u.ti == autoTypeInfo) {
+                if (is_auto_vti(u.ti)) {
                     ok = true;
                     break;
                 }
@@ -1966,7 +1972,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
         case QTS_COMPLEXSOFTLIST:
         case QTS_COMPLEXLIST: {
             if (n.getType() == NT_LIST) {
-                if (u.ti == autoTypeInfo) {
+                if (is_auto_vti(u.ti)) {
                     ok = true;
                     break;
                 }
@@ -2170,7 +2176,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             if (!h) {
                 return QTI_NOT_EQUAL;
             }
-            if (u.ti == autoTypeInfo) {
+            if (is_auto_vti(u.ti)) {
                 return QTI_NEAR;
             }
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
@@ -2197,7 +2203,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 ti = l->getValueTypeInfo();
             }
             if (l) {
-                if (u.ti == autoTypeInfo) {
+                if (is_auto_vti(u.ti)) {
                     return QTI_NEAR;
                 }
                 if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
@@ -3271,8 +3277,8 @@ void map_get_plain_list(QoreValue& n, ExceptionSink* xsink) {
 }
 
 const QoreTypeInfo* QoreTypeInfo::getHashPairType(const QoreTypeInfo* valueType) {
-    // For auto/any value types, return autoHashTypeInfo as the element type
-    if (!valueType || valueType == autoTypeInfo || valueType == anyTypeInfo) {
+    // For auto/auto!/any value types, return autoHashTypeInfo as the element type
+    if (!valueType || is_auto_vti(valueType) || valueType == anyTypeInfo) {
         return autoHashTypeInfo;
     }
 

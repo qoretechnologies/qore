@@ -66,6 +66,8 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("hash<auto> runtime type stripping", \hashAutoRuntimeTest());
         addTestCase("list<auto> runtime type stripping", \listAutoRuntimeTest());
         addTestCase("hashdecl type preservation", \hashdeclPreservationTest());
+        addTestCase("hash<auto!> strips hashdecl source", \hashAutoNoNarrowHashdeclStripTest());
+        addTestCase("hash<auto!> class member strips hashdecl", \hashAutoNoNarrowClassMemberHashdeclTest());
 
         set_return_value(main());
     }
@@ -1667,5 +1669,83 @@ list<auto> sub getHashDeclInListAuto() {
         list<auto> l = p.callFunction("getHashDeclInListAuto");
         assertEq(1, l.size());
         assertEq("hash", l[0].fullType().substr(0, 4), "hashdecl element type should start with hash");
+    }
+
+    # Assigning a hashdecl-typed hash to a hash<auto!> local must strip the source hashdecl;
+    # otherwise the runtime keeps enforcing hashdecl strictness and rejects unknown keys,
+    # defeating the purpose of auto!.
+    hashAutoNoNarrowHashdeclStripTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%modern
+hashdecl SI {
+    int size;
+}
+
+string sub stripFullType() {
+    hash<auto!> h = <SI>{'size': 1};
+    return h.fullType();
+}
+
+hash<auto!> sub stripAndExtend() {
+    hash<auto!> h = <SI>{'size': 1};
+    h.foo = 'bar';
+    return h;
+}
+
+string sub stripOrNothingFullType() {
+    *hash<auto!> h = <SI>{'size': 1};
+    return h.fullType();
+}
+        ", "auto_bang_strip");
+
+        assertEq("hash<auto>", p.callFunction("stripFullType"),
+            "hash<auto!> = hashdecl should strip to hash<auto>");
+        assertEq("hash<auto>", p.callFunction("stripOrNothingFullType"),
+            "*hash<auto!> = hashdecl should strip to hash<auto>");
+
+        hash<auto> h = p.callFunction("stripAndExtend");
+        assertEq(1, h.size);
+        assertEq("bar", h.foo, "unknown key must be writable after strip");
+    }
+
+    # The class-member parse path is separate from the local path: members store the raw
+    # autoNoNarrow* type info rather than the base type + flag combination, so this guards
+    # against regression of the corresponding match-logic fix in QoreTypeInfo.cpp.
+    hashAutoNoNarrowClassMemberHashdeclTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%modern
+hashdecl SI {
+    int size;
+}
+
+class FlexHolder {
+    public {
+        hash<auto!> data;
+    }
+    constructor() {
+        data = <SI>{'size': 1};
+    }
+}
+
+string sub memberFullType() {
+    FlexHolder o();
+    return o.data.fullType();
+}
+
+hash<auto!> sub memberAddKey() {
+    FlexHolder o();
+    o.data.foo = 'bar';
+    return o.data;
+}
+        ", "auto_bang_member");
+
+        assertEq("hash<auto>", p.callFunction("memberFullType"),
+            "hash<auto!> member from hashdecl should strip");
+
+        hash<auto> h = p.callFunction("memberAddKey");
+        assertEq(1, h.size);
+        assertEq("bar", h.foo);
     }
 }
