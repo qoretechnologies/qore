@@ -382,6 +382,7 @@ set(PSEUDO_QPP_SRC
     lib/Pseudo_QC_String.qpp
     lib/Pseudo_QC_Binary.qpp
     lib/Pseudo_QC_List.qpp
+    lib/Pseudo_QC_Buffer.qpp
     lib/Pseudo_QC_Bool.qpp
     lib/Pseudo_QC_Int.qpp
     lib/Pseudo_QC_Float.qpp

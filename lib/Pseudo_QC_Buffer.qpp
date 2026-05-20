@@ -1,0 +1,256 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    Pseudo_QC_Buffer.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+
+#include "qore/intern/QoreListIterator.h"
+
+//! Methods in this pseudo-class can be executed on @ref buffer "buffer values"
+/**
+ */
+qclass <buffer> [arg=const QoreBufferNode* b = v.get<const QoreBufferNode>();vparent=<value>];
+
+//! Returns Qore::NT_BUFFER
+/**
+    @return Qore::NT_BUFFER
+
+    @par Example:
+    @code{.py}
+if (measurements.typeCode() == NT_BUFFER) {
+    printf("using dense storage: %s\n", measurements.fullType());
+}
+    @endcode
+*/
+int <buffer>::typeCode() [flags=CONSTANT] {
+   return NT_BUFFER;
+}
+
+//! Returns @ref True because buffers always have an element type
+/** @return @ref True
+
+    @par Example:
+    @code{.py}
+buffer<float64> temperatures = new buffer<float64>((21.5, 22.0, 20.75));
+assert(temperatures.complexType());
+    @endcode
+
+    @see <value>::fullType()
+ */
+bool <buffer>::complexType() [flags=CONSTANT] {
+   return true;
+}
+
+//! Returns the number of elements in the buffer
+/**
+    @return the number of elements in the buffer
+
+    @par Example:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((1001, 1002, 1003));
+int len = ids.size();
+    @endcode
+*/
+int <buffer>::size() [flags=CONSTANT] {
+   return b->size();
+}
+
+//! Returns the number of elements in the buffer
+/**
+    @return the number of elements in the buffer
+
+    @par Example:
+    @code{.py}
+foreach int offset in (range(0, values.lsize() - 1)) {
+    process_value(values[offset]);
+}
+    @endcode
+*/
+int <buffer>::lsize() [flags=CONSTANT] {
+   return b->size();
+}
+
+//! Returns @ref True if the buffer is empty, @ref False otherwise
+/**
+    @return @ref True if the buffer has no elements
+
+    @par Example:
+    @code{.py}
+if (!samples.empty()) {
+    printf("average sample: %n\n", samples.mean());
+}
+    @endcode
+*/
+bool <buffer>::empty() [flags=CONSTANT] {
+   return b->empty();
+}
+
+//! Returns @ref True if the buffer has at least one element, @ref False otherwise
+/**
+    @return @ref True if the buffer has at least one element
+
+    @par Example:
+    @code{.py}
+if (samples.val()) {
+    process(samples);
+}
+    @endcode
+*/
+bool <buffer>::val() [flags=CONSTANT] {
+   return !b->empty();
+}
+
+//! Returns @ref True because buffers can return their size
+/**
+    @return @ref True
+
+    @see <buffer>::size()
+*/
+bool <buffer>::sizep() [flags=CONSTANT] {
+   return true;
+}
+
+//! Returns the number of non-null elements in the buffer
+/**
+    Nullable buffers skip element values that are @ref nothing.
+
+    @return the number of valid elements in the buffer
+
+    @par Example:
+    @code{.py}
+buffer<*int64> scores = new buffer<*int64>((10, NOTHING, 30));
+assertEq(2, scores.count());
+    @endcode
+*/
+int <buffer>::count() [flags=CONSTANT] {
+   return b->countValid();
+}
+
+//! Returns a typed list containing the buffer's elements
+/**
+    @return a new list containing each buffer element; nullable elements are returned as @ref nothing values
+
+    @par Example:
+    @code{.py}
+buffer<float64> values = new buffer<float64>((1.5, 2.5));
+list<float> boxed = values.toList();
+    @endcode
+*/
+list<auto> <buffer>::toList() [flags=RET_VALUE_ONLY] {
+   return b->toList(xsink);
+}
+
+//! Returns a deep copy of the buffer
+/**
+    @return a new buffer with the same element type, nullability, and values
+
+    @par Example:
+    @code{.py}
+buffer<int64> original = new buffer<int64>((1, 2, 3));
+auto copy = original.clone();
+    @endcode
+*/
+auto <buffer>::clone() [flags=RET_VALUE_ONLY] {
+   return b->copy();
+}
+
+//! Returns a ListIterator over a boxed copy of the buffer's values
+/**
+    @return a ListIterator object over the buffer values
+
+    @par Example:
+    @code{.py}
+map printf("sample: %n\n", $1), samples.iterator();
+    @endcode
+
+    @note The iterator boxes the dense buffer into a list snapshot.
+*/
+AbstractIterator <buffer>::iterator() [flags=RET_VALUE_ONLY] {
+   ReferenceHolder<QoreListNode> l(b->toList(xsink), xsink);
+   if (*xsink)
+      return QoreValue();
+   return qore_new_list_iterator_object(0, *l);
+}
+
+//! Returns the sum of valid buffer values
+/**
+    @return the sum of the valid elements; nullable elements that are @ref nothing are ignored
+
+    @par Example:
+    @code{.py}
+buffer<*int64> values = new buffer<*int64>((10, NOTHING, 30));
+assertEq(40, values.sum());
+    @endcode
+*/
+auto <buffer>::sum() [flags=RET_VALUE_ONLY] {
+   return b->sum(xsink);
+}
+
+//! Returns the arithmetic mean of valid buffer values
+/**
+    @return the arithmetic mean as a floating-point value, or @ref nothing if no valid values exist
+
+    @par Example:
+    @code{.py}
+buffer<float64> temperatures = new buffer<float64>((21.5, 22.5));
+assertEq(22.0, temperatures.mean());
+    @endcode
+*/
+*float <buffer>::mean() [flags=RET_VALUE_ONLY] {
+   return b->mean(xsink);
+}
+
+//! Returns the minimum valid buffer value
+/**
+    @return the minimum value, or @ref nothing if no valid values exist
+
+    @par Example:
+    @code{.py}
+buffer<int64> values = new buffer<int64>((4, 2, 8));
+assertEq(2, values.min());
+    @endcode
+*/
+auto <buffer>::min() [flags=RET_VALUE_ONLY] {
+   return b->min(xsink);
+}
+
+//! Returns the maximum valid buffer value
+/**
+    @return the maximum value, or @ref nothing if no valid values exist
+
+    @par Example:
+    @code{.py}
+buffer<int64> values = new buffer<int64>((4, 2, 8));
+assertEq(8, values.max());
+    @endcode
+*/
+auto <buffer>::max() [flags=RET_VALUE_ONLY] {
+   return b->max(xsink);
+}

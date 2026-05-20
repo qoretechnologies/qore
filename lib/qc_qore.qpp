@@ -95,6 +95,11 @@ const NT_HASH = NT_HASH;
 //! type code for @ref object "objects"
 const NT_OBJECT = NT_OBJECT;
 
+//! type code for @ref buffer "buffer values"
+/** @since %Qore 2.0
+ */
+const NT_BUFFER = NT_BUFFER;
+
 //! type code for @ref closure "closures"
 const NT_CLOSURE = NT_RUNTIME_CLOSURE;
 
@@ -121,6 +126,7 @@ const TypeCodeMap = (
     "9": "hash",
     "10": "object",
     "11": "number",
+    "51": "buffer",
     "29": "call reference",
     "32": "closure",
 );
@@ -139,6 +145,7 @@ const TypeNameMap = (
     "list": NT_LIST,
     "hash": NT_HASH,
     "object": NT_OBJECT,
+    "buffer": NT_BUFFER,
     "call reference": NT_FUNCREF,
     "closure": NT_RUNTIME_CLOSURE,
 );

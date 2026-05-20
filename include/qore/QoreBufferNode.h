@@ -246,6 +246,35 @@ public:
      */
     DLLEXPORT QoreListNode* toList(ExceptionSink* xsink) const;
 
+    //! Counts valid values in the buffer.
+    /** @return the number of non-null elements; for non-nullable buffers this is identical to size()
+     */
+    DLLEXPORT size_t countValid() const;
+
+    //! Sums valid numeric buffer values.
+    /** @param xsink exception sink for cancellation errors
+        @return an integer sum for integer and boolean buffers, a floating-point sum for floating-point buffers
+     */
+    DLLEXPORT QoreValue sum(ExceptionSink* xsink) const;
+
+    //! Calculates the arithmetic mean of valid buffer values.
+    /** @param xsink exception sink for cancellation errors
+        @return the mean as a floating-point value, or NOTHING if the buffer has no valid values
+     */
+    DLLEXPORT QoreValue mean(ExceptionSink* xsink) const;
+
+    //! Finds the minimum valid buffer value.
+    /** @param xsink exception sink for cancellation errors
+        @return the minimum value, or NOTHING if the buffer has no valid values
+     */
+    DLLEXPORT QoreValue min(ExceptionSink* xsink) const;
+
+    //! Finds the maximum valid buffer value.
+    /** @param xsink exception sink for cancellation errors
+        @return the maximum value, or NOTHING if the buffer has no valid values
+     */
+    DLLEXPORT QoreValue max(ExceptionSink* xsink) const;
+
     //! Creates a deep copy of a contiguous element range.
     /** @param offset first element to copy
         @param count number of elements to copy
@@ -254,6 +283,15 @@ public:
         @throw assert failure if the requested range is out of bounds
      */
     DLLEXPORT QoreBufferNode* slice(size_t offset, size_t count, ExceptionSink* xsink = nullptr) const;
+
+    //! Creates a deep copy of an inclusive element range, supporting reverse ranges.
+    /** @param start first element to copy
+        @param stop final element to copy
+        @param xsink exception sink for cancellation errors
+        @return a new buffer containing the requested range
+        @throw assert failure if either index is out of bounds
+     */
+    DLLEXPORT QoreBufferNode* sliceRange(size_t start, size_t stop, ExceptionSink* xsink) const;
 
 protected:
     //! @copydoc AbstractQoreNode::~AbstractQoreNode()

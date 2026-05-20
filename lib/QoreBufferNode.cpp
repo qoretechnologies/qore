@@ -592,6 +592,174 @@ QoreListNode* QoreBufferNode::toList(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+size_t QoreBufferNode::countValid() const {
+    return nullable_elements ? length - static_cast<size_t>(null_count) : length;
+}
+
+QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
+    if (qore_buffer_element_type_is_float(element_type)) {
+        double rv = 0.0;
+        for (size_t i = 0; i < length; ++i) {
+            if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer sum")) {
+                return QoreValue();
+            }
+            if (isElementNull(i)) {
+                continue;
+            }
+            rv += getReferencedEntry(i).getAsFloat();
+        }
+        return rv;
+    }
+
+    int64 rv = 0;
+    for (size_t i = 0; i < length; ++i) {
+        if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer sum")) {
+            return QoreValue();
+        }
+        if (isElementNull(i)) {
+            continue;
+        }
+        if (element_type == QoreBufferElementType::Bool) {
+            rv += getBoolBit(i) ? 1 : 0;
+        } else {
+            rv += getReferencedEntry(i).getAsBigInt();
+        }
+    }
+    return rv;
+}
+
+QoreValue QoreBufferNode::mean(ExceptionSink* xsink) const {
+    size_t count = 0;
+    double rv = 0.0;
+    for (size_t i = 0; i < length; ++i) {
+        if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer mean")) {
+            return QoreValue();
+        }
+        if (isElementNull(i)) {
+            continue;
+        }
+        ++count;
+        if (element_type == QoreBufferElementType::Bool) {
+            rv += getBoolBit(i) ? 1.0 : 0.0;
+        } else {
+            rv += getReferencedEntry(i).getAsFloat();
+        }
+    }
+    return count ? QoreValue(rv / count) : QoreValue();
+}
+
+QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
+    bool found = false;
+    int64 int_rv = 0;
+    double float_rv = 0.0;
+    bool bool_rv = true;
+    for (size_t i = 0; i < length; ++i) {
+        if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer min")) {
+            return QoreValue();
+        }
+        if (isElementNull(i)) {
+            continue;
+        }
+        switch (element_type) {
+            case QoreBufferElementType::Int8:
+            case QoreBufferElementType::Int16:
+            case QoreBufferElementType::Int32:
+            case QoreBufferElementType::Int64: {
+                int64 n = getReferencedEntry(i).getAsBigInt();
+                if (!found || n < int_rv) {
+                    int_rv = n;
+                }
+                break;
+            }
+            case QoreBufferElementType::Float32:
+            case QoreBufferElementType::Float64: {
+                double n = getReferencedEntry(i).getAsFloat();
+                if (!found || n < float_rv) {
+                    float_rv = n;
+                }
+                break;
+            }
+            case QoreBufferElementType::Bool: {
+                bool n = getBoolBit(i);
+                if (!n) {
+                    bool_rv = false;
+                }
+                break;
+            }
+            default:
+                assert(false);
+        }
+        found = true;
+    }
+
+    if (!found) {
+        return QoreValue();
+    }
+    if (qore_buffer_element_type_is_float(element_type)) {
+        return float_rv;
+    }
+    if (element_type == QoreBufferElementType::Bool) {
+        return bool_rv;
+    }
+    return int_rv;
+}
+
+QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
+    bool found = false;
+    int64 int_rv = 0;
+    double float_rv = 0.0;
+    bool bool_rv = false;
+    for (size_t i = 0; i < length; ++i) {
+        if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer max")) {
+            return QoreValue();
+        }
+        if (isElementNull(i)) {
+            continue;
+        }
+        switch (element_type) {
+            case QoreBufferElementType::Int8:
+            case QoreBufferElementType::Int16:
+            case QoreBufferElementType::Int32:
+            case QoreBufferElementType::Int64: {
+                int64 n = getReferencedEntry(i).getAsBigInt();
+                if (!found || n > int_rv) {
+                    int_rv = n;
+                }
+                break;
+            }
+            case QoreBufferElementType::Float32:
+            case QoreBufferElementType::Float64: {
+                double n = getReferencedEntry(i).getAsFloat();
+                if (!found || n > float_rv) {
+                    float_rv = n;
+                }
+                break;
+            }
+            case QoreBufferElementType::Bool: {
+                bool n = getBoolBit(i);
+                if (n) {
+                    bool_rv = true;
+                }
+                break;
+            }
+            default:
+                assert(false);
+        }
+        found = true;
+    }
+
+    if (!found) {
+        return QoreValue();
+    }
+    if (qore_buffer_element_type_is_float(element_type)) {
+        return float_rv;
+    }
+    if (element_type == QoreBufferElementType::Bool) {
+        return bool_rv;
+    }
+    return int_rv;
+}
+
 QoreBufferNode* QoreBufferNode::slice(size_t offset, size_t count, ExceptionSink* xsink) const {
     assert(offset <= length);
     assert(count <= length - offset);
@@ -615,6 +783,30 @@ QoreBufferNode* QoreBufferNode::slice(size_t offset, size_t count, ExceptionSink
                 return nullptr;
             }
             rv->setValidityBit(i, getValidityBit(offset + i));
+        }
+    }
+    return rv.release();
+}
+
+QoreBufferNode* QoreBufferNode::sliceRange(size_t start, size_t stop, ExceptionSink* xsink) const {
+    assert(start < length);
+    assert(stop < length);
+
+    if (start <= stop) {
+        return slice(start, stop - start + 1, xsink);
+    }
+
+    size_t count = start - stop + 1;
+    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(element_type, nullable_elements, count), xsink);
+    for (size_t i = 0; i < count; ++i) {
+        if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer reverse slice")) {
+            return nullptr;
+        }
+        size_t source_index = start - i;
+        if (isElementNull(source_index)) {
+            rv->setNull(i);
+        } else if (rv->setEntry(i, getReferencedEntry(source_index), xsink)) {
+            return nullptr;
         }
     }
     return rv.release();

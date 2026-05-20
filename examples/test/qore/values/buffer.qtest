@@ -15,6 +15,9 @@ class BufferTest inherits QUnit::Test {
         addTestCase("nullable int buffer", \nullableIntBuffer());
         addTestCase("bool buffer", \boolBuffer());
         addTestCase("float buffer", \floatBuffer());
+        addTestCase("pseudo methods", \pseudoMethods());
+        addTestCase("iteration and slicing", \iterationAndSlicing());
+        addTestCase("reductions", \reductions());
         addTestCase("construction errors", \constructionErrors());
         set_return_value(main());
     }
@@ -70,6 +73,102 @@ class BufferTest inherits QUnit::Test {
         assertEq(2.0, f32[1]);
         assertEq(1.25, f64[0]);
         assertEq(2.5, f64[1]);
+    }
+
+    pseudoMethods() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3));
+
+        assertEq(NT_BUFFER, b.typeCode());
+        assertEq(True, b.complexType());
+        assertEq(3, b.size());
+        assertEq(3, b.lsize());
+        assertEq(False, b.empty());
+        assertEq(True, b.val());
+        assertEq(True, b.sizep());
+        assertEq((1, 2, 3), b.toList());
+
+        auto clone = b.clone();
+        assertEq("buffer<int64>", clone.fullType());
+        assertEq((1, 2, 3), clone.toList());
+
+        AbstractIterator i = b.iterator();
+        assertEq(True, i.next());
+        assertEq(1, i.getValue());
+        assertEq(True, i.next());
+        assertEq(2, i.getValue());
+        assertEq(True, i.next());
+        assertEq(3, i.getValue());
+        assertEq(False, i.next());
+    }
+
+    iterationAndSlicing() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3, 4));
+
+        int sum = 0;
+        foreach int v in (b) {
+            sum += v;
+        }
+        assertEq(10, sum);
+
+        list<int> selected = ();
+        foreach int v in (b[1..2]) {
+            push selected, v;
+        }
+        assertEq((2, 3), selected);
+
+        buffer<int64> middle = b[1..2];
+        assertEq("buffer<int64>", middle.fullType());
+        assertEq((2, 3), middle.toList());
+
+        buffer<int64> reversed = b[3..1];
+        assertEq("buffer<int64>", reversed.fullType());
+        assertEq((4, 3, 2), reversed.toList());
+
+        buffer<int64> empty = b[5..6];
+        assertEq("buffer<int64>", empty.fullType());
+        assertEq(0, empty.size());
+
+        buffer<*int64> nullable = new buffer<*int64>((1, NOTHING, 3));
+        buffer<*int64> nullableSlice = nullable[0..2];
+        assertEq("buffer<*int64>", nullableSlice.fullType());
+        assertEq((1, NOTHING, 3), nullableSlice.toList());
+    }
+
+    reductions() {
+        buffer<int64> ints = new buffer<int64>((4, 2, 6));
+        assertEq(3, ints.count());
+        assertEq(12, ints.sum());
+        assertEq(4.0, ints.mean());
+        assertEq(2, ints.min());
+        assertEq(6, ints.max());
+
+        buffer<*int64> nullable = new buffer<*int64>((10, NOTHING, 30));
+        assertEq(2, nullable.count());
+        assertEq(40, nullable.sum());
+        assertEq(20.0, nullable.mean());
+        assertEq(10, nullable.min());
+        assertEq(30, nullable.max());
+
+        buffer<*int64> allNull = new buffer<*int64>((NOTHING, NOTHING));
+        assertEq(0, allNull.count());
+        assertEq(0, allNull.sum());
+        assertNothing(allNull.mean());
+        assertNothing(allNull.min());
+        assertNothing(allNull.max());
+
+        buffer<bool> bools = new buffer<bool>((True, False));
+        assertEq(2, bools.count());
+        assertEq(1, bools.sum());
+        assertEq(0.5, bools.mean());
+        assertEq(False, bools.min());
+        assertEq(True, bools.max());
+
+        buffer<float64> floats = new buffer<float64>((1.5, 2.5));
+        assertEq(2, floats.count());
+        assertEq(4.0, floats.sum());
+        assertEq(2.0, floats.mean());
+        assertEq(1.5, floats.min());
+        assertEq(2.5, floats.max());
     }
 
     constructionErrors() {
