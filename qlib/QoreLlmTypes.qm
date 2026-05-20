@@ -298,6 +298,20 @@ public hashdecl LlmProviderInfo {
     bool supports_multimodal = False;
     #! True when the provider maps @ref LlmRequestOptions::reasoning_token_budget
     bool supports_reasoning_token_budget = False;
+    #! True when callers should avoid sending large unused tool catalogues
+    /** Some providers use constrained decoding over the full tool/function
+        declaration set; for those providers, a large stable catalogue can be
+        rejected or can slow decoding even when only a few tools are relevant
+        to the current turn.  Callers with a naturally ordered set of
+        currently relevant tools should narrow to that set when this flag is
+        @ref True. */
+    bool prefers_narrow_tool_catalogue = False;
+    #! Soft maximum number of tool definitions to send when narrowing
+    /** \c 0 means no provider-specific soft cap is advertised.  When
+        @ref prefers_narrow_tool_catalogue is @ref True, callers should use
+        this as a target cap while preserving mandatory tools and local
+        validation. */
+    int preferred_max_tool_count = 0;
 }
 
 #! Abstract factory for an LLM provider

@@ -1726,6 +1726,18 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         hash<LlmProviderInfo> info = cb.getInfo();
         assertEq("callback", info.mode);
         assertTrue(info.supports_tools);
+        assertFalse(info.prefers_narrow_tool_catalogue,
+            "callback provider has no narrow-tool preference by default");
+        assertEq(0, info.preferred_max_tool_count,
+            "callback provider has no tool-count cap by default");
+
+        AbstractLlmProviderFactory gemini =
+            LlmProviderRegistry::getFactoryEx("gemini");
+        hash<LlmProviderInfo> gemini_info = gemini.getInfo();
+        assertTrue(gemini_info.prefers_narrow_tool_catalogue,
+            "Gemini provider advertises narrow tool-catalogue preference");
+        assertEq(8, gemini_info.preferred_max_tool_count,
+            "Gemini provider advertises a conservative tool-count cap");
     }
 
     registryRegisterDeregisterTest() {
