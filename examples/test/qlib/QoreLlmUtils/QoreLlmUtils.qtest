@@ -930,11 +930,13 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                             "properties": {
                                 "operation": {
                                     "type": "string",
+                                    "description": "operation to apply",
                                     "enum": ("add_interface",
                                         "revise_interface"),
                                 },
                                 "payload": {
                                     "type": "object",
+                                    "description": "operation payload",
                                     "properties": {
                                         "interface": {
                                             "type": "object",
@@ -964,7 +966,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                                         },
                                     },
                                 },
-                                "rationale": {"type": "string"},
+                                "rationale": {
+                                    "type": "string",
+                                    "description": "reason for the operation",
+                                },
                             },
                             "required": ("operation", "payload",
                                 "rationale"),
@@ -998,6 +1003,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "single-dispatch payload argument name is preserved");
         assertFalse(turn_params.properties.payload.hasKey("properties"),
             "single-dispatch payload detail is flattened");
+        assertEq("operation payload",
+            turn_params.properties.payload.description,
+            "Gemini compact tool schema preserves payload guidance");
+        assertEq(("operation", "payload", "rationale"),
+            turn_params.required,
+            "Gemini compact tool schema preserves required payload field");
         assertTrue(turn_params.properties.hasKey("operation"),
             "single-dispatch operation argument name is preserved");
         assertFalse(turn_params.properties.operation.hasKey("enum"),
@@ -1794,6 +1805,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "Gemini provider advertises a conservative tool-count cap");
         assertTrue(gemini_info.prefers_single_tool_dispatch,
             "Gemini provider advertises single dispatch tool preference");
+        assertTrue(gemini_info.prefers_stringified_tool_payloads,
+            "Gemini provider advertises stringified payload preference");
     }
 
     registryRegisterDeregisterTest() {

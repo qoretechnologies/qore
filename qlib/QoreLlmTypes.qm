@@ -319,6 +319,12 @@ public hashdecl LlmProviderInfo {
         single dispatch function with \c operation + payload fields when this
         flag is @ref True. */
     bool prefers_single_tool_dispatch = False;
+    #! True when generic nested tool payloads should be encoded as JSON text
+    /** Some providers can select the right tool but tend to emit empty
+        objects for generic nested payload slots.  Callers that validate and
+        decode locally should expose these free-form payload slots as JSON
+        string fields when this flag is @ref True. */
+    bool prefers_stringified_tool_payloads = False;
 }
 
 #! Abstract factory for an LLM provider

@@ -1124,10 +1124,17 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
         hash<auto> schema = cast<hash<auto>>(value);
         if (schema.type == "object" || schema.properties.typeCode() == NT_HASH) {
-            return {"type": "object"};
+            hash<auto!> rv = {"type": "object"};
+            if (schema.description.val()) {
+                rv.description = schema.description;
+            }
+            return rv;
         }
         if (schema.type == "array" || schema.items.typeCode() == NT_HASH) {
             hash<auto!> rv = {"type": "array"};
+            if (schema.description.val()) {
+                rv.description = schema.description;
+            }
             if (schema.items.typeCode() == NT_HASH) {
                 rv.items = flattenGeminiCompactArrayItemSchema(
                     cast<hash<auto>>(schema.items));
@@ -1140,7 +1147,11 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     private static hash<auto> flattenGeminiCompactArrayItemSchema(
             hash<auto> schema) {
         if (schema.type == "object" || schema.properties.typeCode() == NT_HASH) {
-            return {"type": "object"};
+            hash<auto!> rv = {"type": "object"};
+            if (schema.description.val()) {
+                rv.description = schema.description;
+            }
+            return rv;
         }
         return schema;
     }
@@ -1186,9 +1197,7 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     private static bool isGeminiCompactSchemaKeywordStripped(string key) {
         switch (key) {
             case "default":
-            case "description":
             case "enum":
-            case "required":
             case "title":
                 return True;
         }
@@ -1588,6 +1597,7 @@ public class GeminiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
             "prefers_narrow_tool_catalogue": True,
             "preferred_max_tool_count": 8,
             "prefers_single_tool_dispatch": True,
+            "prefers_stringified_tool_payloads": True,
         };
     }
 }
