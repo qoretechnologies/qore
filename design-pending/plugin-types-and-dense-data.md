@@ -52,9 +52,10 @@ is not blocking.
   decisions for plugin import, registry, and helper-ref sections. The full
   Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
   `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
-  value instances, dense-buffer dispatch opcodes, the reference plugin module,
-  and lint tooling. Program-local activation filtering, operation resolution,
-  and fallback-site recording/query/clear diagnostics are implemented.
+  value instances and dense-buffer dispatch opcodes. Program-local activation
+  filtering, operation resolution, fallback-site recording/query/clear
+  diagnostics, `examples/plugins/sample-buffer/`, and
+  `examples/plugins/qore-plugin-lint` are implemented.
   User-facing language/reference documentation and release notes are present.
   Dense-buffer runtime helper execution is implemented for module helpers using
   the raw dense-buffer ABI; IR opcodes are intentionally deferred until lowering
@@ -2093,16 +2094,18 @@ the steady-state, the traces are a record of decisions. Both are necessary.
 
 - `examples/plugins/sample-buffer/` — a minimal but complete
   registered plugin type with all five lifecycle ops, a binary `add`
-  operation, a serializer, a lowering hook, and the optional LLVM
-  extension. Plugin authors copy this and edit.
+  operation, a dense-buffer `dense_add_i64` operation, a serializer, and a
+  lowering hook. Plugin authors copy this and edit. The optional LLVM
+  extension remains reserved until the plugin LLVM ABI header exists.
 - `examples/plugins/qore-plugin-lint` — a script (Qore source) that
-  reads a built `.qmod`'s registration descriptor via the dry-run validator
-  with a validation context and `PluginRegistry`, then reports violations and
-  warnings about descriptor quality (e.g., declared `is_commutative = true`
-  with no test coverage flagged in the module's test suite, missing
-  operation-level `qdom_domains` on an operation that touches the filesystem).
-  The lint is advisory; it never blocks a build but is the recommended
-  pre-commit check for plugin modules.
+  loads a built `.qmod`, reads committed descriptors through
+  `PluginRegistry`, then reports violations and warnings about descriptor
+  quality (e.g., missing runtime-helper symbols, non-contiguous local ids, or
+  dense-buffer operations that are not marked vectorizable). The lint is
+  advisory; it never blocks a build by default but is the recommended
+  pre-commit check for plugin modules. The C dry-run validator remains the
+  correct API for module-local self-tests that can see the descriptor table
+  before module init commits it.
 
 **Error-message quality contract.** Every diagnostic raised by registration,
 validation, QORD load, parse-time lowering, the runtime verifier, or
@@ -2611,7 +2614,7 @@ exposure — reuses Phase 1's `buffer<T>`.
   - Error-message quality contract: every diagnostic includes module/context +
     type/op/source/method + field/check + expected/actual + subreason +
     section reference where applicable.
-- `examples/plugins/sample-buffer/` reference module + `qore-plugin-lint`
+- [x] `examples/plugins/sample-buffer/` reference module + `qore-plugin-lint`
   advisory linter.
 - Documentation.
 

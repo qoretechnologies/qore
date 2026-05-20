@@ -160,6 +160,30 @@ qore_validate_plugin_types_v1(&sample_registration, &ctx, true, &xsink);
     module handle, such as helper-symbol lookup, are performed only when
     \c ctx.module_handle is the current module-init handle for this thread.
 
+    @section plugin_types_authoring_tools Authoring Tools
+
+    The source tree includes a build-tree reference module and an advisory
+    linter for module authors:
+
+    @code
+cmake --build build --target sample-buffer-plugin
+QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
+    ./build/qore examples/plugins/qore-plugin-lint sample-buffer
+    @endcode
+
+    \c examples/plugins/sample-buffer registers one sample type, a scalar
+    \c add operation, and a \c DenseBufferBinary \c dense_add_i64 helper with
+    cooperative cancellation. It demonstrates descriptor construction,
+    \c QoreModuleInitContext::plugin_module_handle usage, lifecycle hooks,
+    serializer callbacks, runtime-helper symbols, operation metadata, and a
+    parse-lowering hook that currently returns \c NotApplicable.
+
+    \c examples/plugins/qore-plugin-lint loads a built module, reads committed
+    descriptors through \c PluginRegistry, and reports hard descriptor errors
+    and advisory warnings. Use the C dry-run validator shown above for
+    module-local tests that can inspect descriptor tables before module init
+    commits them.
+
     @section plugin_types_reflection Reflection
 
     Qore code can inspect committed descriptors with

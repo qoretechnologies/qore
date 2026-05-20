@@ -2353,6 +2353,8 @@ if (ADDRESS_SANITIZER)
     target_link_options(qore-ir-plugin-registry-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
+
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
 target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
