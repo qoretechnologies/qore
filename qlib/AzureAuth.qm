@@ -1,0 +1,363 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AzureAuth.qm Entra/AAD OAuth2 token broker (client credentials + managed identity)
+
+/*  AzureAuth.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) RestClient
+%requires(reexport) RestClientIo
+
+%try-module json
+%define NoJson
+%endtry
+
+module AzureAuth {
+    version = "1.0";
+    desc = "Entra (Azure AD) OAuth2 token broker: client_credentials flow and "
+        "managed-identity (IMDS-for-Azure) token retrieval with caching";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage AzureAuth Module
+
+    @tableofcontents
+
+    @section azureauthintro Introduction to the AzureAuth Module
+
+    The %AzureAuth module exchanges Entra ID (formerly Azure AD) credentials
+    for bearer access tokens.  Two flows are supported:
+
+    - **Client credentials**: register an app in Entra, provide tenant ID +
+      client ID + client secret, exchange for a token good for the requested
+      scope.  See
+      @ref AzureAuth::getEntraTokenClientCredentials() "getEntraTokenClientCredentials()".
+
+    - **Managed identity**: when running on Azure (App Service, AKS, Container
+      Apps, VM with managed-identity enabled), no secret is required — the
+      Instance Metadata Service issues tokens for the attached identity.
+      See @ref AzureAuth::getEntraTokenManagedIdentity() "getEntraTokenManagedIdentity()".
+
+    Both functions cache tokens keyed by the request parameters and refresh
+    them automatically within a 5-minute safety window before expiry, so
+    callers can call the function on every request without paying token
+    exchange cost.
+
+    @par Example: client credentials for Azure OpenAI
+
+    @code{.py}
+%requires AzureAuth
+
+string token = AzureAuth::getEntraTokenClientCredentials(
+    "11111111-2222-3333-4444-555555555555",
+    "my-app-client-id",
+    "my-app-secret",
+    "https://cognitiveservices.azure.com/.default"
+);
+# pass as Authorization: Bearer <token> on subsequent calls
+    @endcode
+
+    @section azureauthrelnotes Release Notes
+
+    @subsection azureauth_v1_0 AzureAuth v1.0
+    - initial release: client_credentials + managed_identity flows with token caching
+*/
+
+#! Contains all public definitions in the AzureAuth module
+public namespace AzureAuth {
+#! Default Microsoft Entra ID base URL
+public const EntraBaseUrl = "https://login.microsoftonline.com";
+
+#! IMDS endpoint for Azure managed-identity token issuance
+/** @note Same well-known link-local address Azure uses on App Service, AKS,
+    Container Apps, and VMs with managed-identity enabled.  The implementation
+    queries the resource-targeted token endpoint.
+*/
+public const ImdsEndpoint = "http://169.254.169.254";
+
+#! IMDS API version (2018-02-01 is supported on all current Azure compute services)
+public const ImdsApiVersion = "2018-02-01";
+
+#! Safety window (ms) before expiry at which a cached token is considered stale
+/** The cache refreshes a token if its remaining lifetime is under this
+    threshold, so callers never get a token that expires mid-request.
+*/
+public const TokenSafetyWindowMs = 5 * 60 * 1000;
+
+#! Cached token entry
+hashdecl AzureTokenCacheEntry {
+    #! The bearer token value
+    string access_token;
+    #! Absolute date/time when the token expires
+    date expires_at;
+}
+
+#! Cache of issued tokens keyed by request parameters
+/** Thread-safe; guarded by @ref token_cache_lock.
+*/
+class TokenCache {
+    public {
+        #! The token cache itself
+        static hash<string, hash<AzureTokenCacheEntry>> cache = {};
+        #! Serializes cache reads/writes
+        static Mutex cache_lock();
+    }
+
+    #! Returns a cached token for \a key if it is still within the safety window, otherwise NOTHING
+    static *string getCached(string key) {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        *hash<AzureTokenCacheEntry> entry = cache{key};
+        if (!entry) {
+            return NOTHING;
+        }
+        date now = now_us();
+        date threshold = now + milliseconds(TokenSafetyWindowMs);
+        if (entry.expires_at <= threshold) {
+            # token is within the safety window; treat as expired
+            return NOTHING;
+        }
+        return entry.access_token;
+    }
+
+    #! Stores a token in the cache
+    static put(string key, string access_token, int expires_in_seconds) {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        cache{key} = <AzureTokenCacheEntry>{
+            "access_token": access_token,
+            "expires_at": now_us() + seconds(expires_in_seconds),
+        };
+    }
+
+    #! Removes a token from the cache (for tests + explicit invalidation)
+    static invalidate(string key) {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        remove cache{key};
+    }
+
+    #! Clears the entire cache (for tests)
+    static clear() {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        cache = {};
+    }
+}
+
+#! Fetches an Entra access token via the client-credentials OAuth2 grant
+/** Caches the token keyed by (tenant, client_id, scope); a second call with
+    the same parameters returns the cached token unless the cached entry is
+    within @ref TokenSafetyWindowMs of expiry.
+
+    Posts to <tt>https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token</tt>
+    with form body
+    <tt>grant_type=client_credentials&client_id=...&client_secret=...&scope=...</tt>
+
+    @param tenant the Entra tenant ID (GUID or domain like
+        \c "contoso.onmicrosoft.com"; use \c "common" for the common tenant)
+    @param client_id the registered application's client ID (GUID)
+    @param client_secret the application's client secret
+    @param scope OAuth2 scope; for resource APIs this is typically
+        \c "https://<resource>/.default" (e.g.
+        \c "https://cognitiveservices.azure.com/.default" for Azure OpenAI)
+    @param opts optional overrides:
+        - \c base_url (\c string): override the default
+          \c https://login.microsoftonline.com endpoint (for tests, sovereign
+          clouds, or proxies)
+        - \c force_refresh (\c bool): when \c True, bypass the cache and
+          re-fetch
+
+    @return the bearer access token (without the \c "Bearer " prefix)
+
+    @throw AZURE-AUTH-ERROR token exchange failed or response was unparseable
+    @throw AZURE-AUTH-MISSING-JSON-MODULE the json module is unavailable
+*/
+public string sub getEntraTokenClientCredentials(string tenant, string client_id,
+        string client_secret, string scope, *hash<auto> opts) {
+%ifdef NoJson
+    throw "AZURE-AUTH-MISSING-JSON-MODULE",
+        "AzureAuth requires the json module for token-response parsing; "
+        "install the json module to use Entra client_credentials";
+%else
+    string key = sprintf("cc|%s|%s|%s", tenant, client_id, scope);
+    if (!opts.force_refresh) {
+        *string cached = TokenCache::getCached(key);
+        if (cached) {
+            return cached;
+        }
+    }
+    string base_url = opts.base_url ?? EntraBaseUrl;
+    string url = sprintf("%s/%s/oauth2/v2.0/token", base_url, tenant);
+    RestClientIo::RestClientIo rest({
+        "url": url,
+        "data": "url",  # form-encoded bodies
+    });
+    hash<auto> form = {
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "scope": scope,
+    };
+    hash<auto> resp;
+    try {
+        resp = rest.restPost("", form, {
+            "Content-Type": "application/x-www-form-urlencoded",
+        });
+    } catch (hash<ExceptionInfo> ex) {
+        throw "AZURE-AUTH-ERROR",
+            sprintf("client_credentials token exchange failed for tenant %y "
+                "client %y: %s", tenant, client_id, ex.desc), ex;
+    }
+    string token;
+    int expires_in;
+    (token, expires_in) = parseTokenResponse(resp.body);
+    TokenCache::put(key, token, expires_in);
+    return token;
+%endif
+}
+
+#! Fetches an Entra access token via the Azure IMDS managed-identity flow
+/** Caches the token keyed by (resource, client_id); a second call with the
+    same parameters returns the cached token unless within @ref TokenSafetyWindowMs
+    of expiry.
+
+    Issues <tt>GET http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=...</tt>
+    with the required <tt>Metadata: true</tt> header.  For user-assigned
+    identities, pass the desired \a client_id and it will be added as a
+    query parameter.
+
+    @param resource the Entra resource URI to obtain a token for (e.g.
+        \c "https://cognitiveservices.azure.com" for Azure OpenAI)
+    @param client_id optional client ID for a user-assigned managed identity;
+        omit (or pass @ref nothing) to use the system-assigned identity
+    @param opts optional overrides:
+        - \c imds_endpoint (\c string): override the default
+          \c http://169.254.169.254 (for tests, App Service, or sovereign clouds)
+        - \c api_version (\c string): override \c "2018-02-01"
+        - \c force_refresh (\c bool): bypass the cache
+
+    @return the bearer access token
+
+    @throw AZURE-AUTH-ERROR IMDS unreachable or returned an error
+    @throw AZURE-AUTH-MISSING-JSON-MODULE the json module is unavailable
+*/
+public string sub getEntraTokenManagedIdentity(string resource, *string client_id,
+        *hash<auto> opts) {
+%ifdef NoJson
+    throw "AZURE-AUTH-MISSING-JSON-MODULE",
+        "AzureAuth requires the json module for token-response parsing; "
+        "install the json module to use Azure managed-identity";
+%else
+    string key = sprintf("mi|%s|%s", resource, client_id ?? "");
+    if (!opts.force_refresh) {
+        *string cached = TokenCache::getCached(key);
+        if (cached) {
+            return cached;
+        }
+    }
+    string endpoint = opts.imds_endpoint ?? ImdsEndpoint;
+    string api_version = opts.api_version ?? ImdsApiVersion;
+    string path = sprintf("/metadata/identity/oauth2/token?api-version=%s&resource=%s",
+        api_version, encode_url(resource, True));
+    if (client_id.val()) {
+        path += "&client_id=" + encode_url(client_id, True);
+    }
+    RestClientIo::RestClientIo rest({"url": endpoint});
+    hash<auto> resp;
+    try {
+        resp = rest.restGet(path, {"Metadata": "true"});
+    } catch (hash<ExceptionInfo> ex) {
+        throw "AZURE-AUTH-ERROR",
+            sprintf("Azure IMDS managed-identity token fetch failed for "
+                "resource %y client_id %y: %s", resource, client_id, ex.desc), ex;
+    }
+    string token;
+    int expires_in;
+    (token, expires_in) = parseTokenResponse(resp.body);
+    TokenCache::put(key, token, expires_in);
+    return token;
+%endif
+}
+
+#! Removes any cached client-credentials token for the given parameters
+public sub invalidateClientCredentialsToken(string tenant, string client_id, string scope) {
+    string key = sprintf("cc|%s|%s|%s", tenant, client_id, scope);
+    TokenCache::invalidate(key);
+}
+
+#! Removes any cached managed-identity token for the given parameters
+public sub invalidateManagedIdentityToken(string resource, *string client_id) {
+    string key = sprintf("mi|%s|%s", resource, client_id ?? "");
+    TokenCache::invalidate(key);
+}
+
+#! Clears the entire token cache (for tests)
+public sub clearTokenCache() {
+    TokenCache::clear();
+}
+
+#! Parses a token-endpoint response and returns (access_token, expires_in_seconds)
+/** Both client-credentials and managed-identity flows return JSON of the
+    shape <tt>{access_token, expires_in, token_type, ...}</tt>, but the
+    IMDS variant may return \c expires_in as a string.  We coerce to int.
+*/
+list<auto> sub parseTokenResponse(auto body) {
+    hash<auto> data;
+    if (body.typeCode() == NT_STRING || body.typeCode() == NT_BINARY) {
+        try {
+            data = parse_json(body.toString("UTF-8"));
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AZURE-AUTH-ERROR",
+                sprintf("token response is not valid JSON: %s", ex.desc), ex;
+        }
+    } else if (body.typeCode() == NT_HASH) {
+        data = body;
+    } else {
+        throw "AZURE-AUTH-ERROR",
+            sprintf("unexpected token response body type %s", body.type());
+    }
+    *string token = data.access_token;
+    if (!token.val()) {
+        throw "AZURE-AUTH-ERROR",
+            sprintf("token response missing 'access_token': %y", data);
+    }
+    auto raw_expires = data.expires_in;
+    int expires_in;
+    if (raw_expires.typeCode() == NT_INT) {
+        expires_in = raw_expires;
+    } else if (raw_expires.typeCode() == NT_STRING) {
+        expires_in = int(raw_expires);
+    } else {
+        # Azure has been observed to omit expires_in in some sovereign-cloud
+        # responses; fall back to 1h, a safe default for Entra
+        expires_in = 3600;
+    }
+    if (expires_in <= 0) {
+        expires_in = 3600;
+    }
+    return (token, expires_in);
+}
+}
