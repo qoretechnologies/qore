@@ -684,8 +684,8 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         *GeminiRestClientIo rest_client;
         #! Serializes lazy initialization
         Mutex rest_mutex();
-        #! Depth at which compact tool schemas drop nested object detail
-        const CompactSchemaPropertyFlattenDepth = 5;
+        #! Root depth where compact tool schemas flatten object fields
+        const CompactSchemaPropertyFlattenDepth = 0;
     }
 
     #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig

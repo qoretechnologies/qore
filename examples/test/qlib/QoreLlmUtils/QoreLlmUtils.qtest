@@ -988,36 +988,20 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         hash<auto> item = steps.items;
         assertFalse(item.hasKey("anyOf"),
             "Gemini tool schema flattens anyOf alternatives");
-        assertFalse(item.hasKey("required"),
-            "Gemini compact tool schema strips required constraints");
-        assertFalse(item.properties.operation.hasKey("enum"),
-            "Gemini compact tool schema strips enum constraints");
-        assertTrue(item.properties.payload.properties.hasKey("business"),
-            "payload schema keeps set_business wrapper guidance");
-        assertTrue(item.properties.payload.properties.hasKey("interface"),
-            "payload schema keeps add_interface wrapper guidance");
-        assertFalse(item.properties.payload.properties.business
-                .hasKey("properties"),
-            "deep plan-step business payload detail is flattened");
-        assertFalse(item.properties.payload.properties.interface
-                .hasKey("properties"),
-            "deep plan-step interface payload detail is flattened");
-        assertFalse(item.properties.rationale.hasKey("minLength"),
-            "Gemini tool schema strips string length constraints");
-        assertFalse(item.properties.payload.properties.business
-                .hasKey("additionalProperties"),
-            "nested additionalProperties are stripped after flattening");
+        assertFalse(item.hasKey("properties"),
+            "Gemini compact tool schema flattens nested array item "
+            "object detail");
 
         hash<auto> turn_params = gemini_handler.requests[0].body.tools[0]
             .functionDeclarations[1].parameters;
-        assertTrue(turn_params.properties.payload.properties
-                .hasKey("interface"),
-            "single-dispatch payload schema keeps interface wrapper guidance");
-        assertTrue(turn_params.properties.payload.properties.hasKey("test"),
-            "single-dispatch payload schema keeps test wrapper guidance");
-        assertFalse(turn_params.properties.payload.properties.interface
-                .hasKey("properties"),
-            "single-dispatch nested interface detail is flattened");
+        assertTrue(turn_params.properties.hasKey("payload"),
+            "single-dispatch payload argument name is preserved");
+        assertFalse(turn_params.properties.payload.hasKey("properties"),
+            "single-dispatch payload detail is flattened");
+        assertTrue(turn_params.properties.hasKey("operation"),
+            "single-dispatch operation argument name is preserved");
+        assertFalse(turn_params.properties.operation.hasKey("enum"),
+            "Gemini compact tool schema strips enum constraints");
     }
 
     geminiOpenAiToolArgumentSchemaCoercionTest() {
