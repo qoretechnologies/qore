@@ -1851,8 +1851,39 @@ class ReflectionTest inherits QUnit::Test {
         {
             Type type("hash<auto>");
             assertEq("hash<auto>", type.getName());
+            assertEq("hash<auto>", type.getPathName());
             type = new Type("*hash<auto>");
             assertEq("*hash<auto>", type.getName());
+            assertEq("*hash<auto>", type.getPathName());
+        }
+        {
+            Type type("buffer<int64>");
+            assertEq("buffer<int64>", type.getName());
+            assertEq("buffer<int64>", type.getPathName());
+
+            type = new Type("buffer<*int64>");
+            assertEq("buffer<*int64>", type.getName());
+            assertEq("buffer<*int64>", type.getPathName());
+
+            type = new Type("*buffer<int64>");
+            assertEq("*buffer<int64>", type.getName());
+            assertEq("*buffer<int64>", type.getPathName());
+
+            type = new Type("hash<string, buffer<int64>>");
+            assertEq("hash<string, buffer<int64>>", type.getName());
+            assertEq("hash<string, buffer<int64>>", type.getPathName());
+        }
+        {
+            Type type("object<Qore::Thread::Mutex>");
+            assertEq("object<Mutex>", type.getName());
+            assertEq("object<::Qore::Thread::Mutex>", type.getPathName());
+            type = Serializable::deserialize(type.serialize());
+            assertEq("object<Mutex>", type.getName());
+            assertEq("object<::Qore::Thread::Mutex>", type.getPathName());
+
+            type = new Type("list<object<Qore::Thread::Mutex>>");
+            assertEq("list<object<Mutex>>", type.getName());
+            assertEq("list<object<::Qore::Thread::Mutex>>", type.getPathName());
         }
 
         assertTrue(StringType.isAssignableFrom(StringOrNothingType));
@@ -1870,6 +1901,7 @@ class ReflectionTest inherits QUnit::Test {
         {
             Type t("hash<StatInfo>");
             assertEq("hash<StatInfo>", t.getName());
+            assertEq("hash<::Qore::StatInfo>", t.getPathName());
             assertTrue(t.isTypedHash());
             assertEq("StatInfo", t.getTypedHash().getName());
             assertNothing(StringType.getElementType());
@@ -2228,6 +2260,7 @@ class ReflectionTest inherits QUnit::Test {
         Type queue_int("Queue<int>");
         assertTrue(queue_int.isParameterized());
         assertEq("object<Queue<int>>", queue_int.getName());
+        assertEq("object<::Qore::Thread::Queue<int>>", queue_int.getPathName());
         list<Type> queue_args = queue_int.getTypeArguments();
         assertEq(1, queue_args.size());
         assertTrue(IntType.isEqual(queue_args[0]));
@@ -2235,10 +2268,13 @@ class ReflectionTest inherits QUnit::Test {
         Type future_queue("Future<Queue<int>>");
         assertTrue(future_queue.isParameterized());
         assertEq("object<Future<object<Queue<int>>>>", future_queue.getName());
+        assertEq("object<::Qore::Thread::Future<object<::Qore::Thread::Queue<int>>>>",
+            future_queue.getPathName());
         list<Type> future_args = future_queue.getTypeArguments();
         assertEq(1, future_args.size());
         assertTrue(future_args[0].isParameterized());
         assertEq("object<Queue<int>>", future_args[0].getName());
+        assertEq("object<::Qore::Thread::Queue<int>>", future_args[0].getPathName());
         assertTrue(IntType.isEqual(future_args[0].getTypeArguments()[0]));
 
         Type abstract_iterator_int("AbstractIterator<int>");

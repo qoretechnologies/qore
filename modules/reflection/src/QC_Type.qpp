@@ -87,7 +87,7 @@ QoreObject* get_type_object(const QoreTypeInfo* t, QoreProgram* source_pgm) {
 static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
     (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    rv->setKeyValue("type", new QoreStringNode(qore_type_get_name(t.typeInfo)), xsink);
+    rv->setKeyValue("type", new QoreStringNode(qore_type_get_path(t.typeInfo)), xsink);
     return rv.release();
 }
 
@@ -489,6 +489,23 @@ string name = t.getName();
  */
 string Type::getName() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(qore_type_get_name(t->typeInfo));
+}
+
+//! returns the type's full namespace path name
+/** @par Example:
+    @code{.py}
+string path = t.getPathName();
+    @endcode
+
+    @return the type's full namespace path name; for complex types, nested class, hashdecl, enum, and parameterized
+    class types use their canonical namespace-qualified paths
+
+    @see getName()
+
+    @since %Qore 2.4
+ */
+string Type::getPathName() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(qore_type_get_path(t->typeInfo));
 }
 
 //! Returns @ref True if the Type object passed as an argument is equal to the current object; @ref False if not
