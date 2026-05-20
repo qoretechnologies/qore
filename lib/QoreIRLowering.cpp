@@ -3548,6 +3548,13 @@ static bool isConstIndexListSubscript(const QoreValue& expr,
             reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
         return false;
     }
+    if (vr->ref.id) {
+        const QoreTypeInfo* container_ti = reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo();
+        if (QoreTypeInfo::isType(container_ti, NT_BUFFER)
+                || QoreTypeInfo::getReturnComplexBufferOrNothing(container_ti)) {
+            return false;
+        }
+    }
 
     // Set output parameters and succeed
     container_var = vr;

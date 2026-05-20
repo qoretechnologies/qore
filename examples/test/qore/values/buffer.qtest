@@ -18,6 +18,7 @@ class BufferTest inherits QUnit::Test {
         addTestCase("pseudo methods", \pseudoMethods());
         addTestCase("iteration and slicing", \iterationAndSlicing());
         addTestCase("reductions", \reductions());
+        addTestCase("writable elements", \writableElements());
         addTestCase("construction errors", \constructionErrors());
         set_return_value(main());
     }
@@ -169,6 +170,52 @@ class BufferTest inherits QUnit::Test {
         assertEq(2.0, floats.mean());
         assertEq(1.5, floats.min());
         assertEq(2.5, floats.max());
+    }
+
+    writableElements() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3));
+        b[0] = 7;
+        assertEq((7, 2, 3), b.toList());
+
+        b[1] += 5;
+        assertEq(7, b[1]);
+        assertEq(8, ++b[1]);
+        assertEq(8, b[1]++);
+        assertEq(9, b[1]);
+        assertEq(9, b[1]--);
+        assertEq(8, b[1]);
+
+        buffer<*int64> nullable = new buffer<*int64>((1, 2));
+        nullable[1] = NOTHING;
+        assertEq((1, NOTHING), nullable.toList());
+        nullable[1] = 9;
+        assertEq((1, 9), nullable.toList());
+
+        buffer<float64> floats = new buffer<float64>((1.5, 2.5));
+        floats[0] = 3;
+        floats[1] += 0.5;
+        assertEq((3.0, 3.0), floats.toList());
+
+        buffer<bool> bools = new buffer<bool>((False, False));
+        bools[0] = True;
+        assertEq((True, False), bools.toList());
+
+        assertThrows("BUFFER-INDEX-ERROR", sub () { b[4] = 1; });
+        assertThrows("NEGATIVE-LIST-INDEX", sub () { b[-1] = 1; });
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "lvalue for assignment", \p.parse(),
+                ("sub t() { buffer<int64> b = new buffer<int64>((1,)); b[0] = \"x\"; }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "lvalue for assignment", \p.parse(),
+                ("sub t() { buffer<int64> b = new buffer<int64>((1,)); b[0] = NOTHING; }", ""));
+        }
+        assertThrows("BUFFER-RANGE-ERROR", sub () {
+            buffer<int8> small = new buffer<int8>((1,));
+            small[0] = 128;
+        });
     }
 
     constructionErrors() {

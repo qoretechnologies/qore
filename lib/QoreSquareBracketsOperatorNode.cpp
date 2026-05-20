@@ -72,15 +72,24 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         // if we are trying to convert to a list
         if (parse_context.pflag & PF_FOR_ASSIGNMENT) {
             // only throw a parse exception if parse exceptions are enabled
-            if (!QoreTypeInfo::parseAcceptsReturns(lti, NT_LIST)) {
+            bool accepts_list = QoreTypeInfo::parseAcceptsReturns(lti, NT_LIST);
+            bool accepts_buffer = QoreTypeInfo::parseAcceptsReturns(lti, NT_BUFFER);
+            if (!accepts_list && !accepts_buffer) {
                 if (getProgram()->getParseExceptionSink()) {
                     QoreStringNode* edesc = new QoreStringNode("cannot convert lvalue defined as ");
                     QoreTypeInfo::getThisType(lti, *edesc);
-                    edesc->sprintf(" to a list using the '[]' operator in an assignment expression");
+                    edesc->sprintf(" to a list or buffer using the '[]' operator in an assignment expression");
                     qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", edesc);
                 }
                 if (!err) {
                     err = -1;
+                }
+            } else if (accepts_buffer && !rti_can_be_list) {
+                const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexBufferOrNothing(lti);
+                if (ti) {
+                    typeInfo = QoreTypeInfo::getComplexBufferValueType(ti);
+                } else if (!accepts_list) {
+                    typeInfo = autoTypeInfo;
                 }
             }
         } else {

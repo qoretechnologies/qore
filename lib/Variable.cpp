@@ -433,10 +433,25 @@ LValueHelper::LValueHelper(ExceptionSink* xsink) : vl(xsink) {
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ocvec(std::move(o.ocvec)), before(o.before), rdt(o.rdt), robj(o.robj), val(o.val), typeInfo(o.typeInfo) {
+        ocvec(std::move(o.ocvec)), before(o.before), rdt(o.rdt), robj(o.robj),
+        buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
+        buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), typeInfo(o.typeInfo) {
+    o.buffer_lvalue = nullptr;
+    o.buffer_lvalue_index = 0;
+    o.buffer_lvalue_value = QoreValue();
 }
 
 LValueHelper::~LValueHelper() {
+    if (buffer_lvalue) {
+        if (!*vl.xsink) {
+            buffer_lvalue->setEntry(buffer_lvalue_index, buffer_lvalue_value, vl.xsink);
+        }
+        buffer_lvalue_value.discard(vl.xsink);
+        buffer_lvalue = nullptr;
+        qv = nullptr;
+        val = nullptr;
+    }
+
     // FIXME: technically if we have only removed robjects from the lvalue and the lvalue did not have any recursive
     // references before, then we don't need to scan this time either
     bool obj_chg = before;
@@ -548,6 +563,19 @@ static int var_type_err(const QoreTypeInfo* typeInfo, const char* type, Exceptio
     return -1;
 }
 
+static int raise_negative_list_or_buffer_index(const QoreSquareBracketsOperatorNode* op, int64 ind,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* lti = op->getLeft().getTypeInfo();
+    if (QoreTypeInfo::isType(lti, NT_BUFFER) || QoreTypeInfo::getReturnComplexBufferOrNothing(lti)) {
+        xsink->raiseException("NEGATIVE-BUFFER-INDEX", "buffer index " QLLD " is invalid (index must evaluate to a "
+            "non-negative integer)", ind);
+    } else {
+        xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
+            "non-negative integer)", ind);
+    }
+    return -1;
+}
+
 int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove) {
     // first get index
     ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
@@ -561,9 +589,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
 
     int64 ind = rh->getAsBigInt();
     if (ind < 0) {
-        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-            "non-negative integer)", ind);
-        return -1;
+        return raise_negative_list_or_buffer_index(op, ind, vl.xsink);
     }
 
     // now get left hand side
@@ -590,6 +616,13 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         // Convert the index to a string for hash member access
         QoreStringValueHelper key(*rh);
         return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_BUFFER) {
+        if (for_remove) {
+            return -1;
+        }
+        ensureUnique();
+        QoreBufferNode* b = getValue().get<QoreBufferNode>();
+        return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
         if (for_remove)
             return -1;
@@ -652,9 +685,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
 
     int64 ind = rh->getAsBigInt();
     if (ind < 0) {
-        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-            "non-negative integer)", ind);
-        return -1;
+        return raise_negative_list_or_buffer_index(op, ind, vl.xsink);
     }
 
     // now get left hand side
@@ -681,6 +712,13 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         // Convert the index to a string for hash member access
         QoreStringValueHelper key(*rh);
         return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_BUFFER) {
+        if (for_remove) {
+            return -1;
+        }
+        ensureUnique();
+        QoreBufferNode* b = getValue().get<QoreBufferNode>();
+        return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
         if (for_remove)
             return -1;
@@ -726,6 +764,22 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     ocvec.push_back(ObjCountRec(l));
 
     return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
+}
+
+int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
+    assert(b);
+    if (index >= b->size()) {
+        vl.xsink->raiseException("BUFFER-INDEX-ERROR", "buffer<%s> index " QSD " is out of range for buffer "
+            "length " QSD, qore_buffer_element_type_name(b->getElementType()), index, b->size());
+        clearPtr();
+        return -1;
+    }
+
+    buffer_lvalue = b;
+    buffer_lvalue_index = index;
+    buffer_lvalue_value = b->getReferencedEntry(index);
+    resetValue(buffer_lvalue_value, b->getElementTypeInfo());
+    return 0;
 }
 
 int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) {
@@ -1323,6 +1377,24 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
             case LVPathStepKind::ListIndex: {
+                int64_t idx = step.slot_id;
+                if (t == NT_BUFFER) {
+                    if (for_remove) {
+                        return -1;
+                    }
+                    if (idx < 0) {
+                        vl.xsink->raiseException("NEGATIVE-BUFFER-INDEX", "buffer index " QLLD " is invalid "
+                            "(index must evaluate to a non-negative integer)", idx);
+                        return -1;
+                    }
+                    ensureUnique();
+                    QoreBufferNode* b = getValue().get<QoreBufferNode>();
+                    if (setBufferElementLValue(b, static_cast<size_t>(idx))) {
+                        return -1;
+                    }
+                    break;
+                }
+
                 // For list index, we need to ensure unique and access the element
                 QoreListNode* l = nullptr;
                 if (t == NT_LIST) {
@@ -1367,7 +1439,6 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                 }
                 // step.slot_id holds the index value (set by caller from operand)
-                int64_t idx = step.slot_id;  // Temporary: index passed via slot_id
                 if (idx < 0) {
                     idx = 0;
                 }
