@@ -312,6 +312,13 @@ public hashdecl LlmProviderInfo {
         this as a target cap while preserving mandatory tools and local
         validation. */
     int preferred_max_tool_count = 0;
+    #! True when callers should prefer one generic dispatch tool
+    /** Some providers have trouble reliably producing one of many structured
+        function calls even after the catalogue is narrowed.  Callers that
+        can validate operation names and payloads locally should expose a
+        single dispatch function with \c operation + payload fields when this
+        flag is @ref True. */
+    bool prefers_single_tool_dispatch = False;
 }
 
 #! Abstract factory for an LLM provider

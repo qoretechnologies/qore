@@ -1532,6 +1532,7 @@ public class GeminiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
             "supports_reasoning_token_budget": True,
             "prefers_narrow_tool_catalogue": True,
             "preferred_max_tool_count": 8,
+            "prefers_single_tool_dispatch": True,
         };
     }
 }

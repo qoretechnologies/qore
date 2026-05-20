@@ -1730,6 +1730,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "callback provider has no narrow-tool preference by default");
         assertEq(0, info.preferred_max_tool_count,
             "callback provider has no tool-count cap by default");
+        assertFalse(info.prefers_single_tool_dispatch,
+            "callback provider has no single-dispatch preference by default");
 
         AbstractLlmProviderFactory gemini =
             LlmProviderRegistry::getFactoryEx("gemini");
@@ -1738,6 +1740,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "Gemini provider advertises narrow tool-catalogue preference");
         assertEq(8, gemini_info.preferred_max_tool_count,
             "Gemini provider advertises a conservative tool-count cap");
+        assertTrue(gemini_info.prefers_single_tool_dispatch,
+            "Gemini provider advertises single dispatch tool preference");
     }
 
     registryRegisterDeregisterTest() {
