@@ -39,6 +39,8 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires OpenAiRestClient
+%requires QoreLlmTypes
 
 module GrokRestClient {
     version = "1.0";
@@ -48,6 +50,7 @@ module GrokRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("grok", GrokRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(new GrokLlmProviderFactory());
     };
 }
 
@@ -663,6 +666,70 @@ public class GrokResponseSseStreamIo {
             rv = base + rv;
         }
         return rv;
+    }
+}
+
+#! LLM provider for xAI Grok servers
+/** xAI's Grok serves an OpenAI-compatible chat-completions endpoint at
+    \c /v1/chat/completions on \c https://api.x.ai, so this provider reuses
+    @ref OpenAiRestClient::OpenAiLlmProvider for body construction, response
+    parsing, and streaming.  Only the mode string and default URL differ.
+
+    @par Configuration
+
+    - \c url (optional): override the default \c https://api.x.ai
+    - \c api_key (required): xAI API key
+    - \c model (required): Grok model name, e.g. \c "grok-3"
+*/
+public class GrokLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
+    public {
+        #! Default xAI Grok REST API URL
+        const DefaultUrl = "https://api.x.ai";
+    }
+
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : OpenAiRestClient::OpenAiLlmProvider(GrokRestClient::applyGrokDefaults(config)) {
+    }
+
+    string getMode() {
+        return "grok";
+    }
+}
+
+#! Namespace-local helper: returns config with the default xAI URL applied
+hash<QoreLlmUtils::LlmBackendConfig> sub applyGrokDefaults(
+        hash<QoreLlmUtils::LlmBackendConfig> config) {
+    if (!config.url.val()) {
+        config.url = GrokLlmProvider::DefaultUrl;
+    }
+    return config;
+}
+
+#! Factory for @ref GrokLlmProvider
+public class GrokLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "grok";
+    }
+
+    string getDisplayName() {
+        return "xAI Grok chat completions";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new GrokLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": True,
+        };
     }
 }
 }

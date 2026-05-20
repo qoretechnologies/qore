@@ -363,10 +363,12 @@ public class LlmProviderRegistry {
     public {
         #! Map of mode names to the module that supplies the matching provider
         const ProviderModuleMap = {
-            "http":      "OpenAiRestClient",
-            "anthropic": "AnthropicRestClient",
-            "sglang":    "SGLangRestClient",
-            "gemini":    "GeminiRestClient",
+            "http":       "OpenAiRestClient",
+            "anthropic":  "AnthropicRestClient",
+            "sglang":     "SGLangRestClient",
+            "gemini":     "GeminiRestClient",
+            "grok":       "GrokRestClient",
+            "perplexity": "PerplexityRestClient",
         };
     }
 
