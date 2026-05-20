@@ -140,6 +140,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiToolCallResponseTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
+        addTestCase("LlmBackend Gemini schema sanitizer flattens "
+            "composition", \geminiSchemaCompositionSanitizerTest());
         addTestCase("LlmBackend OpenAI chat facade schema-coerces tool "
             "arguments", \geminiOpenAiToolArgumentSchemaCoercionTest());
         addTestCase("LlmBackend OpenAI chat facade maps abstract Gemini "
@@ -804,6 +806,152 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("lookup",
             gemini_handler.requests[0].body.toolConfig.functionCallingConfig.allowedFunctionNames[0],
             "named tool choice limits the allowed function");
+    }
+
+    geminiSchemaCompositionSanitizerTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({
+                                "functionCall": {
+                                    "name": "design_propose_plan",
+                                    "args": {"steps": ()},
+                                },
+                            },),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 11},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": ({"role": "user", "content": "make a plan"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "design_propose_plan",
+                    "description": "Create a plan",
+                    "parameters": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "steps": {
+                                "type": "array",
+                                "maxItems": 8,
+                                "items": {
+                                    "type": "object",
+                                    "anyOf": (
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": False,
+                                            "properties": {
+                                                "operation": {
+                                                    "type": "string",
+                                                    "enum": ("set_business",),
+                                                },
+                                                "payload": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "business": {
+                                                            "type": "object",
+                                                            "additionalProperties": False,
+                                                            "properties": {
+                                                                "business_category": {
+                                                                    "type": "string",
+                                                                    "minLength": 3,
+                                                                },
+                                                            },
+                                                            "required": ("business_category",),
+                                                        },
+                                                    },
+                                                    "required": ("business",),
+                                                },
+                                                "rationale": {
+                                                    "type": "string",
+                                                    "minLength": 12,
+                                                },
+                                                "target_summary": {"type": "string"},
+                                            },
+                                            "required": ("operation", "payload",
+                                                "rationale", "target_summary"),
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": False,
+                                            "properties": {
+                                                "operation": {
+                                                    "type": "string",
+                                                    "enum": ("add_interface",),
+                                                },
+                                                "payload": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "interface": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "key": {"type": "string"},
+                                                            },
+                                                            "required": ("key",),
+                                                        },
+                                                    },
+                                                    "required": ("interface",),
+                                                },
+                                                "rationale": {
+                                                    "type": "string",
+                                                    "minLength": 12,
+                                                },
+                                                "target_summary": {"type": "string"},
+                                            },
+                                            "required": ("operation", "payload",
+                                                "rationale", "target_summary"),
+                                        },
+                                    ),
+                                },
+                            },
+                        },
+                        "required": ("steps",),
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "design_propose_plan"},
+            },
+        });
+
+        hash<auto> params = gemini_handler.requests[0].body.tools[0]
+            .functionDeclarations[0].parameters;
+        hash<auto> steps = params.properties.steps;
+        assertFalse(params.hasKey("additionalProperties"),
+            "Gemini root tool schema strips additionalProperties");
+        assertFalse(steps.hasKey("maxItems"),
+            "Gemini tool schema strips array length constraints");
+        hash<auto> item = steps.items;
+        assertFalse(item.hasKey("anyOf"),
+            "Gemini tool schema flattens anyOf alternatives");
+        assertEq(("operation", "payload", "rationale", "target_summary"),
+            item.required,
+            "required fields common to all alternatives are preserved");
+        assertEq(("set_business", "add_interface"),
+            item.properties.operation{"enum"},
+            "operation enum values are merged from alternatives");
+        assertTrue(item.properties.payload.properties.hasKey("business"),
+            "payload schema keeps set_business wrapper guidance");
+        assertTrue(item.properties.payload.properties.hasKey("interface"),
+            "payload schema keeps add_interface wrapper guidance");
+        assertFalse(item.properties.rationale.hasKey("minLength"),
+            "Gemini tool schema strips string length constraints");
+        assertFalse(item.properties.payload.properties.business
+                .hasKey("additionalProperties"),
+            "nested additionalProperties are stripped after flattening");
     }
 
     geminiOpenAiToolArgumentSchemaCoercionTest() {

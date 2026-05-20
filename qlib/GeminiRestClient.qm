@@ -1041,9 +1041,13 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     /** Gemini's function declarations and response schemas accept only a
         subset of JSON Schema / OpenAPI.  In particular,
         \c additionalProperties causes \c generateContent to reject the
-        request with HTTP 400 even when it is a boolean.  Strip unsupported
-        schema keywords at the provider boundary so callers can keep using
-        stricter OpenAI/Anthropic schemas and local validators.
+        request with HTTP 400 even when it is a boolean.  Deep composition
+        and value/length constraints can also make Gemini's constrained
+        decoder reject a request with "too many states for serving".
+
+        Simplify unsupported or serving-expensive schema keywords at the
+        provider boundary so callers can keep using stricter
+        OpenAI/Anthropic schemas and local validators.
     */
     private static *hash<auto> sanitizeGeminiSchema(*hash<auto> schema) {
         if (!schema) {
@@ -1054,12 +1058,20 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
     private static auto sanitizeGeminiSchemaValue(auto value) {
         if (value.typeCode() == NT_HASH) {
+            hash<auto> input = cast<hash<auto>>(value);
             hash<auto> rv;
-            foreach string key in (keys value) {
-                if (key == "additionalProperties") {
+            foreach string key in (keys input) {
+                if (isGeminiSchemaKeywordStripped(key)
+                        || isGeminiSchemaCompositionKeyword(key)) {
                     continue;
                 }
-                rv{key} = sanitizeGeminiSchemaValue(value{key});
+                rv{key} = sanitizeGeminiSchemaValue(input{key});
+            }
+            foreach string key in (("allOf", "anyOf", "oneOf")) {
+                if (input{key}.typeCode() == NT_LIST) {
+                    rv = applyGeminiSchemaComposition(rv,
+                        cast<list<auto>>(input{key}), key == "allOf");
+                }
             }
             return rv;
         }
@@ -1071,6 +1083,203 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             return rv;
         }
         return value;
+    }
+
+    private static bool isGeminiSchemaCompositionKeyword(string key) {
+        switch (key) {
+            case "allOf":
+            case "anyOf":
+            case "oneOf":
+                return True;
+        }
+        return False;
+    }
+
+    private static bool isGeminiSchemaKeywordStripped(string key) {
+        switch (key) {
+            case "additionalProperties":
+            case "minLength":
+            case "maxLength":
+            case "pattern":
+            case "format":
+            case "minimum":
+            case "maximum":
+            case "exclusiveMinimum":
+            case "exclusiveMaximum":
+            case "minItems":
+            case "maxItems":
+            case "minProperties":
+            case "maxProperties":
+            case "multipleOf":
+            case "uniqueItems":
+                return True;
+        }
+        return False;
+    }
+
+    private static hash<auto> applyGeminiSchemaComposition(hash<auto> base,
+            list<auto> raw_variants, bool all_required) {
+        list<hash<auto>> variants = ();
+        foreach auto raw in (raw_variants) {
+            if (raw.typeCode() != NT_HASH) {
+                continue;
+            }
+            *hash<auto> sanitized =
+                sanitizeGeminiSchema(cast<hash<auto>>(raw));
+            if (sanitized) {
+                variants += sanitized;
+            }
+        }
+        if (!variants) {
+            return base;
+        }
+
+        hash<auto> rv = base;
+        foreach hash<auto> variant in (variants) {
+            rv = mergeGeminiSchemaObjects(rv, variant);
+        }
+
+        list<string> required = mergeGeminiRequiredLists(
+            schemaStringList(base.required),
+            compositionRequiredFields(variants, all_required));
+        if (required) {
+            rv.required = required;
+        } else {
+            remove rv.required;
+        }
+        return rv;
+    }
+
+    private static hash<auto> mergeGeminiSchemaObjects(hash<auto> left,
+            hash<auto> right) {
+        hash<auto> rv = left;
+
+        if (exists right.type) {
+            if (!exists rv.type) {
+                rv.type = right.type;
+            } else if (make_json(rv.type) != make_json(right.type)) {
+                remove rv.type;
+            }
+        }
+
+        if (right{"enum"}.typeCode() == NT_LIST) {
+            rv{"enum"} = mergeGeminiEnumLists(rv{"enum"},
+                right{"enum"});
+        }
+
+        if (right.items.typeCode() == NT_HASH) {
+            if (rv.items.typeCode() == NT_HASH) {
+                rv.items = mergeGeminiSchemaObjects(
+                    cast<hash<auto>>(rv.items),
+                    cast<hash<auto>>(right.items));
+            } else {
+                rv.items = right.items;
+            }
+        }
+
+        if (right.properties.typeCode() == NT_HASH) {
+            hash<auto> props = rv.properties.typeCode() == NT_HASH
+                ? cast<hash<auto>>(rv.properties) : {};
+            hash<auto> right_props = cast<hash<auto>>(right.properties);
+            foreach string key in (keys right_props) {
+                if (exists props{key}
+                        && props{key}.typeCode() == NT_HASH
+                        && right_props{key}.typeCode() == NT_HASH) {
+                    props{key} = mergeGeminiSchemaObjects(
+                        cast<hash<auto>>(props{key}),
+                        cast<hash<auto>>(right_props{key}));
+                } else if (!exists props{key}) {
+                    props{key} = right_props{key};
+                }
+            }
+            rv.properties = props;
+        }
+
+        return rv;
+    }
+
+    private static list<string> compositionRequiredFields(
+            list<hash<auto>> variants, bool all_required) {
+        hash<string, bool> out = {};
+        bool initialized = False;
+        foreach hash<auto> variant in (variants) {
+            list<string> required = schemaStringList(variant.required);
+            hash<string, bool> current = stringSet(required);
+            if (!initialized) {
+                out = current;
+                initialized = True;
+                continue;
+            }
+            if (all_required) {
+                foreach string key in (keys current) {
+                    out{key} = True;
+                }
+            } else {
+                foreach string key in (keys out) {
+                    if (!exists current{key}) {
+                        remove out{key};
+                    }
+                }
+            }
+        }
+        return sortedStringKeys(out);
+    }
+
+    private static list<string> mergeGeminiRequiredLists(list<string> left,
+            list<string> right) {
+        hash<string, bool> seen = stringSet(left);
+        foreach string key in (right) {
+            seen{key} = True;
+        }
+        return sortedStringKeys(seen);
+    }
+
+    private static hash<string, bool> stringSet(list<string> values) {
+        hash<string, bool> rv = {};
+        foreach string value in (values) {
+            rv{value} = True;
+        }
+        return rv;
+    }
+
+    private static list<string> sortedStringKeys(hash<string, bool> values) {
+        if (!values) {
+            return ();
+        }
+        return sort(keys values, int sub (string l, string r) {
+            return l == r ? 0 : (l < r ? -1 : 1);
+        });
+    }
+
+    private static list<string> schemaStringList(auto value) {
+        list<string> rv = ();
+        if (value.typeCode() != NT_LIST) {
+            return rv;
+        }
+        foreach auto item in (value) {
+            rv += item.toString();
+        }
+        return rv;
+    }
+
+    private static list<auto> mergeGeminiEnumLists(auto left, auto right) {
+        list<auto> rv = ();
+        hash<string, bool> seen = {};
+        foreach auto item in (schemaList(left) + schemaList(right)) {
+            string key = make_json(item);
+            if (!seen{key}) {
+                seen{key} = True;
+                rv += item;
+            }
+        }
+        return rv;
+    }
+
+    private static list<auto> schemaList(auto value) {
+        if (value.typeCode() == NT_LIST) {
+            return cast<list<auto>>(value);
+        }
+        return ();
     }
 
     #! Builds Gemini content parts from a generic @ref QoreLlmUtils::ChatMessage
