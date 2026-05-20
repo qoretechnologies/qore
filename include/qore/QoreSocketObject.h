@@ -890,6 +890,29 @@ public:
     */
     DLLLOCAL int cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
 
+    //! Aborts the read side of a pending HTTP/3 stream so that a blocked
+    //! @ref readQuicStreamDataBlock() unblocks immediately with clean EOF
+    /** Unlike @ref cancelQuicStream() (which sends RESET_STREAM /
+        STOP_SENDING and terminates the stream entirely) and
+        @ref resetQuicStream() (same), this method only flips the local
+        @c QuicStreamInfo::stream_data_shutdown flag on the matching stream
+        and wakes any pending @ref readQuicStreamDataBlock() poll operation.
+        The stream itself stays open so the handler can still send a
+        response on it (e.g. an HTTP error built by the REST framework
+        after the read loop unwinds via @c STREAM-ABORTED).
+
+        Safe to call from any thread (the flag mutation is mutex-protected
+        and the wake-up is delivered via the standard async-I/O notifier).
+        Missing sessions or streams are silently ignored.
+
+        @param session_id the QUIC session ID
+        @param stream_id the stream ID whose pending read should be aborted
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cancelQuicStreamRead(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
     //! Submits an HTTP/3 response on an active QUIC server connection
     /** @param session_id the QUIC session ID
         @param stream_id the stream ID to respond on

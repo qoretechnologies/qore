@@ -549,6 +549,9 @@ public namespace RestHandler {
 
             #! socket I/O timeout in milliseconds
             *int timeout_ms;
+
+            #! optional callback that aborts the in-flight inbound body read; see @ref setBodyCancel()
+            *code body_cancel;
         }
 
         #! creates the object with the given arguments
@@ -661,6 +664,33 @@ public namespace RestHandler {
         #! returns the timeout in milliseconds or @ref nothing if no timeout is set
         *int getTimeout() {
             return timeout_ms;
+        }
+
+        #! Registers a callback that another thread can invoke to abort an in-flight inbound body read
+        /** Called by @ref HttpServer::AbstractStreamRequest::handleRequest() before entering the
+            per-chunk read loop on HTTP/2 and HTTP/3 body-streaming requests, and again with
+            @ref nothing to clear the closure when the read loop completes.
+
+            The default implementation just stores the callback in @ref body_cancel.  Subclasses
+            that participate in a cooperative stop mechanism (e.g. a service-stop hook) should
+            override this method to register the callback with their service so the service-stop
+            path can call it to unblock the parked handler thread.
+
+            The default storage is safe to leave in place even when overridden — callers can read
+            @ref getBodyCancel() to retrieve the current callback.
+
+            @param body_cancel the cancel closure, or @ref nothing to clear a previously-registered closure
+
+            @since RestHandler 1.9
+        */
+        setBodyCancel(*code body_cancel) {
+            self.body_cancel = body_cancel;
+        }
+
+        #! returns the currently-registered inbound body cancel callback, or @ref nothing
+        /** @since RestHandler 1.9 */
+        *code getBodyCancel() {
+            return body_cancel;
         }
 
         #! returns @ref True if the server should apply content encoding to the response body
@@ -826,6 +856,19 @@ public namespace RestHandler {
         */
         private auto sendImpl() {
             return stream.send();
+        }
+
+        #! forwards the body-cancel callback to the underlying stream handler
+        /** Overrides @ref HttpServer::AbstractStreamRequest::setBodyCancel() so application code
+            implementing @ref AbstractRestStreamRequestHandler can register the callback (e.g. with
+            a service-stop hook) and be notified when the inbound body read is parked.
+
+            @param body_cancel the cancel closure, or @ref nothing to clear
+
+            @since RestHandler 1.9
+        */
+        setBodyCancel(*code body_cancel) {
+            stream.setBodyCancel(body_cancel);
         }
     }
 

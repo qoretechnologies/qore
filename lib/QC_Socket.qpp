@@ -7800,6 +7800,48 @@ nothing Socket::cancelQuicStream(int session_id, int stream_id) {
     s->cancelQuicStream(session_id, stream_id, xsink);
 }
 
+//! Aborts the read side of a pending HTTP/3 stream so a blocked @ref readQuicStreamDataBlock() unblocks immediately
+/** Unlike @ref cancelQuicStream() (which sends @c RESET_STREAM / @c STOP_SENDING and terminates the
+    stream entirely), this method only flips the local @c stream_data_shutdown flag for the matching
+    stream and wakes any pending @ref readQuicStreamDataBlock() poll operation.  The pending read
+    returns @ref nothing (clean EOF), and the stream itself stays open so the handler can still send
+    a response on it (e.g. an HTTP error response built by the framework after the body read loop
+    unwinds).
+
+    Designed for cooperative cancellation of in-flight body reads: another thread can call this
+    method to break a handler thread out of a @ref readQuicStreamDataBlock() that is waiting for a
+    chunk the client never sent (e.g. during an HTTP server stop, a service stop, or a
+    handler-specific cancel).  The caller distinguishes cancel-EOF from real-EOF via its own state.
+
+    Safe to call from any thread.  Missing sessions and streams are silently ignored so racing
+    callers (cancel arriving after the stream completed naturally) do not throw.
+
+    @par Example:
+    @code{.py}
+    sock.cancelQuicStreamRead(session_id, stream_id);
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the stream ID whose pending read should be aborted
+
+    @throw QUIC-ERROR if @c session_id is non-positive or @c stream_id is negative
+
+    @see cancelQuicStream(), readQuicStreamDataBlock()
+
+    @since %Qore 2.3
+*/
+nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    s->cancelQuicStreamRead(session_id, stream_id, xsink);
+}
+
 //! Submits an HTTP/3 response on an active QUIC server connection
 /** @par Example:
     @code{.py}

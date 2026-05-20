@@ -1532,6 +1532,22 @@ public:
     */
     DLLLOCAL void shutdownStreamReads();
 
+    //! Marks one live stream as locally shut-down for read and wakes pending @ref
+    //! readQuicStreamDataBlock() callers
+    /** Single-stream variant of @ref shutdownStreamReads().  Sets
+        @ref QuicStreamInfo::stream_data_shutdown on the matching stream (no-op if
+        the stream is not present in @c streams_) and broadcasts the stream-data
+        waiter wake-up.  Already-buffered body bytes still drain on the final
+        @c takeStreamData() call before @c complete=true is reported (clean EOF
+        semantics — the caller distinguishes cancel-EOF from real-EOF via its own
+        state, not via a different exception path).
+
+        Thread-safe: the flag mutation is under @c mtx_ and the wake-up
+        broadcast is delivered via the standard async-I/O notifier, so this can
+        be called from any thread.
+    */
+    DLLLOCAL void shutdownStreamRead(int64_t stream_id);
+
     //! Register a controller socket operation waiting for QUIC datagram notifications
     DLLLOCAL void registerDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 

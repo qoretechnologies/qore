@@ -2418,6 +2418,24 @@ void QuicSession::shutdownStreamReads() {
     notifyStreamData();
 }
 
+void QuicSession::shutdownStreamRead(int64_t stream_id) {
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        auto it = streams_.find(stream_id);
+        if (it == streams_.end()) {
+            // Stream already gone — nothing to abort; the readQuicStreamDataBlock
+            // caller (if any) is either already unwinding or never blocked.
+            return;
+        }
+        it->second->stream_data_shutdown = true;
+    }
+    // Wake every controller-backed readQuicStreamDataBlock() poll op for this
+    // session — coarser than strictly necessary (we'd only need to wake the
+    // poll-op for this stream id) but the notify is cheap and the poll-ops
+    // re-check their own stream state, so a spurious wake-up is harmless.
+    notifyStreamData();
+}
+
 void QuicSession::notifyDatagramData() {
     wakeDatagramWaiters();
 }
