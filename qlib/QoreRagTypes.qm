@@ -630,11 +630,13 @@ public class RagProviderRegistry {
         };
 
         #! Map of vector-store backend names to providing modules
-        /** Currently empty; vector store implementations live outside
-            the standard library (Qdrant, pgvector, etc.).  Modules can
-            register factories at runtime via @ref registerVectorStoreFactory().
+        /** Each entry maps a backend / type string to the Qore module that
+            supplies the matching factory.  Additional vector stores can be
+            registered at runtime via @ref registerVectorStoreFactory().
         */
-        const VectorStoreModuleMap = {};
+        const VectorStoreModuleMap = {
+            "qdrant": "QdrantDataProvider",
+        };
     }
 
     private {

@@ -1,0 +1,386 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QdrantDataProvider
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class QdrantVectorStoreTest
+
+# Fake RestClientIo that records the last request and returns canned responses.
+class FakeQdrantRestClient inherits RestClientIo::RestClientIo {
+    public {
+        # request capture
+        string last_method = "";
+        string last_path = "";
+        *auto last_body;
+
+        # canned response body for /points/query (under .body.result)
+        hash<auto> query_response_points = {
+            "points": (
+                {"id": 42,    "score": 0.95, "payload": {"text": "first"}},
+                {"id": "abc", "score": 0.80, "payload": {"text": "second"}},
+            ),
+        };
+
+        # canned response body for /collections/<name> (dim probe)
+        hash<auto> collection_info = {
+            "config": {
+                "params": {
+                    "vectors": {
+                        "size": 4,
+                        "distance": "Cosine",
+                    },
+                },
+            },
+        };
+    }
+
+    constructor() : RestClientIo({"url": "http://localhost:6333", "data": "json"}) {
+    }
+
+    hash<auto> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_body = body;
+
+        hash<auto> result_body;
+        if (method == "POST" && path =~ /\/points\/query$/) {
+            result_body = query_response_points;
+        } else if (method == "GET" && path =~ /\/collections\/[^\/]+$/) {
+            result_body = collection_info;
+        } else {
+            # generic Qdrant write ack
+            result_body = {"operation_id": 1, "status": "completed"};
+        }
+
+        return <RestClient::RestResponseInfo>{
+            "body": {"result": result_body},
+            "status_code": 200,
+        };
+    }
+
+    hash<auto> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<auto> restPut(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("PUT", path, body, hdr);
+    }
+
+    hash<auto> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    hash<auto> restPatch(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("PATCH", path, body, hdr);
+    }
+}
+
+public class QdrantVectorStoreTest inherits QUnit::Test {
+    private {
+        RestClientIo::RestClientIo rest;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+            "url":  "u,url=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    constructor() : Test("QdrantVectorStore Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("factory registration", \factoryTest());
+        addTestCase("offline upsert + id encoding", \offlineUpsertTest());
+        addTestCase("offline deleteByIds", \offlineDeleteTest());
+        addTestCase("offline search + filter pass-through", \offlineSearchTest());
+        addTestCase("offline dimension probe", \offlineDimensionProbeTest());
+        addTestCase("offline dimension mismatch is rejected", \offlineDimensionMismatchTest());
+        addTestCase("live upsert -> search -> delete", \liveRoundTripTest());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Verify the factory is registered and reachable via RagProviderRegistry
+    private factoryTest() {
+        checkModule(self);
+        list<string> known = QoreRagUtils::RagProviderRegistry::knownVectorStoreBackends();
+        assertTrue(inlist("qdrant", known),
+            sprintf("expected 'qdrant' in known vector-store backends; got %y", known));
+
+        QoreRagUtils::AbstractVectorStoreFactory factory =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx("qdrant");
+        assertEq("qdrant", factory.getType());
+        assertEq("Qdrant vector store", factory.getDisplayName());
+
+        # the factory must report its module so external tooling can lazy-load it
+        hash<QoreRagUtils::RagProviderInfo> info = factory.getInfo();
+        assertEq("qdrant", info.type);
+        assertEq("QdrantDataProvider", info.module_name);
+    }
+
+    #! upsert() must convert all-digit string ids to ints and pass payload through
+    private offlineUpsertTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "test_coll",
+                "options": {"dimension": 4},
+            }, fake);
+
+        store.upsert((
+            <QoreRagUtils::VectorRecord>{"id": "42",
+                "vector": (0.1, 0.2, 0.3, 0.4),
+                "payload": {"text": "numeric id"}},
+            <QoreRagUtils::VectorRecord>{"id": "abc-uuid",
+                "vector": (0.5, 0.6, 0.7, 0.8),
+                "payload": {"text": "string id"}},
+        ));
+
+        assertEq("PUT", fake.last_method);
+        assertEq("/collections/test_coll/points", fake.last_path);
+        assertEq(Type::List, fake.last_body.points.type());
+        assertEq(2, fake.last_body.points.size());
+
+        # numeric id must become int on the wire
+        assertEq(NT_INT, fake.last_body.points[0].id.typeCode(),
+            "all-digit ids must be converted to int for Qdrant");
+        assertEq(42, fake.last_body.points[0].id);
+        # vector survives intact
+        assertEq((0.1, 0.2, 0.3, 0.4), fake.last_body.points[0].vector);
+        # payload passed through
+        assertEq("numeric id", fake.last_body.points[0].payload.text);
+
+        # UUID-style id stays a string
+        assertEq(NT_STRING, fake.last_body.points[1].id.typeCode());
+        assertEq("abc-uuid", fake.last_body.points[1].id);
+    }
+
+    #! Empty inputs must short-circuit and not call the REST client
+    private offlineDeleteTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "delete-test",
+                "options": {"dimension": 4},
+            }, fake);
+
+        # empty list — no call
+        store.deleteByIds(());
+        assertEq("", fake.last_method);
+
+        store.deleteByIds(("1", "2", "xyz"));
+        assertEq("POST", fake.last_method);
+        assertEq("/collections/delete-test/points/delete", fake.last_path);
+        # all-digit ids -> ints, others stay strings
+        assertEq((1, 2, "xyz"), fake.last_body.points);
+    }
+
+    #! search() must use POST /points/query, pass filter through, and parse results
+    private offlineSearchTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "search-test",
+                "options": {"dimension": 4},
+            }, fake);
+
+        hash<auto> qdrant_filter = {
+            "must": ({"key": "city", "match": {"value": "London"}},),
+        };
+        list<hash<QoreRagUtils::VectorSearchResult>> hits =
+            store.search((0.1, 0.2, 0.3, 0.4), 5, qdrant_filter);
+
+        assertEq("POST", fake.last_method);
+        assertEq("/collections/search-test/points/query", fake.last_path);
+        # request body
+        assertEq((0.1, 0.2, 0.3, 0.4), fake.last_body.query);
+        assertEq(5, fake.last_body.limit);
+        assertEq(True, fake.last_body.with_payload);
+        # filter passed through verbatim
+        assertEq(qdrant_filter, fake.last_body.filter);
+
+        # parsed hits: ids normalized to string, scores + payload preserved
+        assertEq(2, hits.size());
+        assertEq("42", hits[0].id);
+        assertEq(0.95, hits[0].score);
+        assertEq("first", hits[0].payload.text);
+        assertEq("abc", hits[1].id);
+        assertEq(0.80, hits[1].score);
+    }
+
+    #! When options.dimension is omitted, getDimension() probes /collections/{name}
+    private offlineDimensionProbeTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "probe-test",
+            }, fake);
+
+        int dim = store.getDimension();
+        assertEq(4, dim);
+        assertEq("GET", fake.last_method);
+        assertEq("/collections/probe-test", fake.last_path);
+
+        # subsequent calls are cached — no new GET
+        fake.last_method = "";
+        fake.last_path = "";
+        assertEq(4, store.getDimension());
+        assertEq("", fake.last_method, "second call must not re-probe");
+    }
+
+    #! Upsert with a vector whose dim disagrees with the configured dim must throw
+    private offlineDimensionMismatchTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "mismatch-test",
+                "options": {"dimension": 4},
+            }, fake);
+
+        assertThrows("QDRANT-VECTOR-STORE-ERROR", sub () {
+            store.upsert((
+                <QoreRagUtils::VectorRecord>{"id": "1",
+                    "vector": (0.1, 0.2)},  # 2 floats — should be 4
+            ));
+        });
+    }
+
+    #! Live round-trip against a real Qdrant server (skipped when no QDRANT_URL)
+    private liveRoundTripTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no QDRANT_URL / QDRANT_CONNECTION set");
+        }
+
+        string collection = "vstest_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # create a 4-dim cosine collection
+        rest.restPut(sprintf("/collections/%s", collection), {
+            "vectors": {"size": 4, "distance": "Cosine"},
+        });
+        on_exit {
+            try {
+                rest.restDel(sprintf("/collections/%s", collection));
+            } catch () {
+                # ignore cleanup errors
+            }
+        }
+
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": collection,
+                "options": {
+                    "restclient": rest,
+                    "dimension": 4,
+                },
+            });
+
+        assertEq(collection, store.getCollection());
+        assertEq(4, store.getDimension());
+
+        # upsert three records with linearly-separable vectors
+        store.upsert((
+            <QoreRagUtils::VectorRecord>{"id": "1",
+                "vector": (1.0, 0.0, 0.0, 0.0), "payload": {"label": "x"}},
+            <QoreRagUtils::VectorRecord>{"id": "2",
+                "vector": (0.0, 1.0, 0.0, 0.0), "payload": {"label": "y"}},
+            <QoreRagUtils::VectorRecord>{"id": "3",
+                "vector": (0.0, 0.0, 1.0, 0.0), "payload": {"label": "z"}},
+        ));
+
+        # query close to x — id 1 must be the top hit
+        list<hash<QoreRagUtils::VectorSearchResult>> hits =
+            store.search((0.99, 0.01, 0.0, 0.0), 3, NOTHING);
+        assertEq(3, hits.size());
+        assertEq("1", hits[0].id);
+        assertEq("x", hits[0].payload.label);
+
+        # filter to y/z only — id 1 must be excluded
+        hits = store.search((1.0, 0.0, 0.0, 0.0), 3, {
+            "must": ({"key": "label", "match": {"any": ("y", "z")}},),
+        });
+        # depending on Qdrant version the result count varies, but all hits
+        # must satisfy the filter
+        assertTrue(hits.size() > 0);
+        foreach hash<QoreRagUtils::VectorSearchResult> h in (hits) {
+            assertTrue(inlist(h.payload.label, ("y", "z")),
+                sprintf("filtered hit must be y/z, got %y", h.payload.label));
+        }
+
+        # delete id 1 and verify it's gone
+        store.deleteByIds(("1",));
+        hits = store.search((1.0, 0.0, 0.0, 0.0), 3, NOTHING);
+        foreach hash<QoreRagUtils::VectorSearchResult> h in (hits) {
+            assertNeq("1", h.id);
+        }
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "Qdrant connection name", OptionColumn);
+        printOption("-u,--url=ARG", "URL for the Qdrant server", OptionColumn);
+    }
+
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.QDRANT_CONNECTION;
+        if (conn_name.val()) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (!(conn instanceof QdrantDataProvider::QdrantRestConnection)) {
+                throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting "
+                    "\"QdrantRestConnection\"", conn_name, conn.className());
+            }
+            rest = cast<RestClientIo::RestClientIo>(conn.getAsync());
+            return;
+        }
+
+        *string url = m_options.url ?? ENV.QDRANT_URL;
+        if (!url) {
+            return;
+        }
+        rest = new RestClientIo::RestClientIo({"url": url});
+    }
+}
