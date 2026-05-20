@@ -9,6 +9,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreBufferNode.h>
+#include <qore/QorePluginLLVM.h>
 #include <qore/QorePluginType.h>
 #include <qore/QoreReflection.h>
 #include <qore/intern/QorePluginRegistry.h>
@@ -67,6 +68,7 @@ struct RegisteredPluginOperation {
     std::string runtime_helper_symbol;
     QorePluginLoweringCallback lowering_pattern = nullptr;
     uint64_t lowering_claimed_node_kinds = 0;
+    QorePluginLLVMCodegenCallback llvm_codegen = nullptr;
     int64_t qdom_domains = 0;
     std::vector<RegisteredPluginExtension> extensions;
 };
@@ -830,6 +832,68 @@ struct PluginValidationState {
     }
 };
 
+bool isLLVMCodegenExtension(const QorePluginExtension& ext) {
+    return ext.extension_id && !std::strcmp(ext.extension_id, QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID);
+}
+
+const QorePluginLLVMExtension* getLLVMExtensionPayload(const QorePluginExtension& ext) {
+    return isLLVMCodegenExtension(ext) ? static_cast<const QorePluginLLVMExtension*>(ext.extension_data) : nullptr;
+}
+
+bool validateLLVMCodegenExtension(PluginValidationState& state, const char* module, const char* item,
+        const QorePluginExtension& ext) {
+    if (!isLLVMCodegenExtension(ext)) {
+        return false;
+    }
+
+    auto fail = [&](const char* code, const char* field, const char* expected, const char* actual,
+            const char* subreason) -> bool {
+        if (!ext.required) {
+            traceRegister(std::string("ignoring optional LLVM codegen extension for module='")
+                + nameOrUnknown(module) + "' operation='" + nameOrUnknown(item) + "': field='" + field
+                + "' expected='" + expected + "' actual='" + actual + "'");
+            return false;
+        }
+        return state.fail(code, module, item, field, expected, actual, subreason, "3.6");
+    };
+
+    if (!ext.extension_data) {
+        return fail("PLUGIN-EXTENSION-VALIDATION-FAILED", "extensions.extension_data",
+            "non-null QorePluginLLVMExtension", "null", "llvm_extension_null");
+    }
+    const QorePluginLLVMExtension* llvm_ext = getLLVMExtensionPayload(ext);
+    if (llvm_ext->struct_size < sizeof(QorePluginLLVMExtension)) {
+        return fail("PLUGIN-EXTENSION-VALIDATION-FAILED", "extensions.extension_data.struct_size",
+            "sizeof(QorePluginLLVMExtension)", std::to_string(llvm_ext->struct_size).c_str(),
+            "llvm_extension_struct_size");
+    }
+    if (llvm_ext->abi_version != QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION) {
+        return fail("PLUGIN-EXTENSION-ABI-MISMATCH", "extensions.extension_data.abi_version",
+            std::to_string(QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION).c_str(),
+            std::to_string(llvm_ext->abi_version).c_str(), "llvm_extension_abi_mismatch");
+    }
+    if (llvm_ext->llvm_major_version != QORE_PLUGIN_LLVM_CURRENT_MAJOR) {
+        return fail("PLUGIN-EXTENSION-ABI-MISMATCH", "extensions.extension_data.llvm_major_version",
+            std::to_string(QORE_PLUGIN_LLVM_CURRENT_MAJOR).c_str(),
+            std::to_string(llvm_ext->llvm_major_version).c_str(), "llvm_extension_llvm_major_mismatch");
+    }
+    if (!llvm_ext->codegen) {
+        return fail("PLUGIN-EXTENSION-VALIDATION-FAILED", "extensions.extension_data.codegen",
+            "non-null QorePluginLLVMCodegenCallback", "null", "llvm_codegen_null");
+    }
+    return false;
+}
+
+QorePluginLLVMCodegenCallback getValidLLVMCodegenCallback(const QorePluginExtension& ext) {
+    const QorePluginLLVMExtension* llvm_ext = getLLVMExtensionPayload(ext);
+    if (!llvm_ext || !ext.extension_data || llvm_ext->struct_size < sizeof(QorePluginLLVMExtension)
+            || llvm_ext->abi_version != QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION
+            || llvm_ext->llvm_major_version != QORE_PLUGIN_LLVM_CURRENT_MAJOR || !llvm_ext->codegen) {
+        return nullptr;
+    }
+    return llvm_ext->codegen;
+}
+
 bool checkCountAndArray(PluginValidationState& state, const char* module, const char* field, int count,
         const void* ptr) {
     if (count < 0) {
@@ -1048,7 +1112,11 @@ bool validateRegistrationDescriptor(const QorePluginTypeRegistration* reg, Plugi
                     return true;
                 }
             }
-            if (ext.required) {
+            bool recognized_extension = isLLVMCodegenExtension(ext);
+            if (recognized_extension && validateLLVMCodegenExtension(state, module, item, ext)) {
+                return true;
+            }
+            if (ext.required && !recognized_extension) {
                 if (state.fail("PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED", module, item,
                         "extensions.required", "optional extension or runtime-recognized required extension",
                         ext.extension_id ? ext.extension_id : "null", "extension_unrecognized_required", "3.3")) {
@@ -1145,6 +1213,9 @@ bool copyRegistration(const QorePluginTypeRegistration& reg, const char* module_
             ext.extension_id = src.extensions[e].extension_id;
             ext.extension_data = src.extensions[e].extension_data;
             ext.required = src.extensions[e].required;
+            if (QorePluginLLVMCodegenCallback codegen = getValidLLVMCodegenCallback(src.extensions[e])) {
+                dst.llvm_codegen = codegen;
+            }
             dst.extensions.push_back(ext);
         }
         module.operations.push_back(dst);
@@ -1441,6 +1512,62 @@ int qore_plugin_get_type_info(const char* module_name, uint16_t local_type_id,
             escapeDiagnosticName(module_name).c_str(), local_type_id);
     }
     return -1;
+}
+
+int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id, QorePluginLLVMCodegenInfo& info,
+        ExceptionSink* xsink) {
+    info = QorePluginLLVMCodegenInfo();
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    auto gi = global_plugin_operations.find(global_operation_id);
+    if (gi == global_plugin_operations.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED",
+                "plugin registry has no global operation id %u "
+                "(method=\"getLlvmCodegenInfo\", field=\"global_operation_id\", expected=\"registered id\", "
+                "actual=\"missing\", subreason=\"operation_not_registered\", section=3.6)",
+                global_operation_id);
+        }
+        return -1;
+    }
+    auto mi = plugin_modules.find(gi->second.module_name);
+    if (mi == plugin_modules.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-MODULE-NOT-LOADED",
+                "plugin registry has no loaded module named \"%s\" "
+                "(method=\"getLlvmCodegenInfo\", subreason=\"module_not_loaded\", section=3.6)",
+                escapeDiagnosticName(gi->second.module_name.c_str()).c_str());
+        }
+        return -1;
+    }
+    if (gi->second.operation_index >= mi->second.operations.size()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED",
+                "plugin registry module \"%s\" has no operation at index %zu "
+                "(method=\"getLlvmCodegenInfo\", field=\"operation_index\", expected=\"registered index\", "
+                "actual=\"missing\", subreason=\"operation_not_registered\", section=3.6)",
+                escapeDiagnosticName(mi->second.module_name.c_str()).c_str(), gi->second.operation_index);
+        }
+        return -1;
+    }
+    const RegisteredPluginOperation& op = mi->second.operations[gi->second.operation_index];
+    if (op.local_id != gi->second.local_operation_id) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED",
+                "plugin registry module \"%s\" operation index %zu does not match local operation id %u "
+                "(method=\"getLlvmCodegenInfo\", field=\"local_operation_id\", expected=\"registered id\", "
+                "actual=\"%u\", subreason=\"operation_not_registered\", section=3.6)",
+                escapeDiagnosticName(mi->second.module_name.c_str()).c_str(), gi->second.operation_index,
+                gi->second.local_operation_id, op.local_id);
+        }
+        return -1;
+    }
+
+    info.module_name = mi->second.module_name;
+    info.local_operation_id = op.local_id;
+    info.operation_name = op.operation_name;
+    info.signature = op.signature;
+    info.codegen = op.llvm_codegen;
+    return 0;
 }
 
 bool qore_plugin_is_value_node(const AbstractQoreNode* node) {

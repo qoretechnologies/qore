@@ -18,6 +18,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreBufferNode.h>
+#include <qore/QorePluginLLVM.h>
 #include <qore/QorePluginType.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QorePluginRegistry.h>
@@ -134,6 +135,28 @@ static uint64_t smokeDenseUnary(void* result_buffer_data, int64_t result_size, c
     return smokeBitsFromValue(QoreValue());
 }
 
+static llvm::Value* smokeLLVMCodegen(QorePluginLLVMCodegenContext* ctx) {
+    if (!ctx || ctx->struct_size < sizeof(QorePluginLLVMCodegenContext)
+            || ctx->abi_version != QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION || !ctx->qore_value_type) {
+        if (ctx && ctx->error_message) {
+            *ctx->error_message = "invalid smoke LLVM codegen context";
+        }
+        return nullptr;
+    }
+    return llvm::ConstantInt::get(ctx->qore_value_type, smokeBitsFromValue(QoreValue(static_cast<int64>(4242))));
+}
+
+static QorePluginLLVMExtension smokeLLVMExtension = {
+    sizeof(QorePluginLLVMExtension),
+    QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION,
+    QORE_PLUGIN_LLVM_CURRENT_MAJOR,
+    smokeLLVMCodegen,
+};
+
+static QorePluginExtension smokeOperationExtensions[] = {
+    { QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID, &smokeLLVMExtension, false },
+};
+
 static uint64_t smokeDenseBinary(void* result_buffer_data, int64_t result_size, const void* lhs_data,
         int64_t lhs_size, int64_t lhs_stride, const void* rhs_data, int64_t rhs_size, int64_t rhs_stride,
         ExceptionSink* xsink) {
@@ -183,6 +206,8 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
     ops[0].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
     ops[0].signature.helper_abi = QorePluginHelperAbi::BinaryValue;
     ops[0].runtime_helper = reinterpret_cast<void (*)()>(smokeBinary);
+    ops[0].extensions = smokeOperationExtensions;
+    ops[0].num_extensions = 1;
 
     ops[1] = {};
     ops[1].local_id = 1;
@@ -254,11 +279,33 @@ static bool checkDryRunValidation() {
         return false;
     }
 
+    ExceptionSink bad_xsink;
+    QorePluginLLVMExtension mismatched_llvm_extension = smokeLLVMExtension;
+    mismatched_llvm_extension.llvm_major_version = QORE_PLUGIN_LLVM_CURRENT_MAJOR + 1;
+    QorePluginExtension mismatched_extension = {
+        QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID,
+        &mismatched_llvm_extension,
+        false,
+    };
+    ops[0].extensions = &mismatched_extension;
+    ops[0].num_extensions = 1;
+    if (qore_validate_plugin_types_v1(&reg, &ctx, true, &bad_xsink) || bad_xsink) {
+        std::cerr << "optional mismatched LLVM codegen extension failed dry-run validation\n";
+        return false;
+    }
+    mismatched_extension.required = true;
+    if (!qore_validate_plugin_types_v1(&reg, &ctx, false, &bad_xsink) || !bad_xsink) {
+        std::cerr << "required mismatched LLVM codegen extension passed dry-run validation\n";
+        return false;
+    }
+    bad_xsink.clear();
+    ops[0].extensions = smokeOperationExtensions;
+    ops[0].num_extensions = 1;
+
     QorePluginTypeDescriptor bad_type = type;
     bad_type.value_ops.clone = nullptr;
     QorePluginTypeRegistration bad = reg;
     bad.types = &bad_type;
-    ExceptionSink bad_xsink;
     if (!qore_validate_plugin_types_v1(&bad, &ctx, false, &bad_xsink) || !bad_xsink) {
         std::cerr << "invalid plugin descriptor passed dry-run validation\n";
         return false;
@@ -332,6 +379,41 @@ static bool checkRegistrationAndIntrospection() {
     uint32_t global_id = 0;
     if (qore_plugin_get_process_operation_id("plugin-smoke", 0, &global_id, &xsink) || xsink || !global_id) {
         std::cerr << "process plugin operation id lookup failed\n";
+        return false;
+    }
+    QorePluginLLVMCodegenInfo codegen_info;
+    if (qore_plugin_get_llvm_codegen_info(global_id, codegen_info, &xsink) || xsink || !codegen_info.codegen
+            || codegen_info.local_operation_id != 0) {
+        std::cerr << "process plugin LLVM codegen lookup failed\n";
+        return false;
+    }
+    llvm::LLVMContext llvm_context;
+    llvm::Module llvm_module("plugin-smoke-codegen", llvm_context);
+    llvm::IRBuilder<> llvm_builder(llvm_context);
+    llvm::FunctionType* llvm_function_type = llvm::FunctionType::get(llvm_builder.getVoidTy(), false);
+    llvm::Function* llvm_function = llvm::Function::Create(llvm_function_type, llvm::Function::ExternalLinkage,
+        "smoke", llvm_module);
+    llvm::BasicBlock* llvm_block = llvm::BasicBlock::Create(llvm_context, "entry", llvm_function);
+    llvm_builder.SetInsertPoint(llvm_block);
+    const char* codegen_error = nullptr;
+    QorePluginLLVMCodegenContext codegen_ctx = {};
+    codegen_ctx.struct_size = sizeof(codegen_ctx);
+    codegen_ctx.abi_version = QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION;
+    codegen_ctx.global_operation_id = global_id;
+    codegen_ctx.helper_abi = codegen_info.signature.helper_abi;
+    codegen_ctx.signature = &codegen_info.signature;
+    codegen_ctx.llvm_context = &llvm_context;
+    codegen_ctx.builder = &llvm_builder;
+    codegen_ctx.module = &llvm_module;
+    codegen_ctx.function = llvm_function;
+    codegen_ctx.qore_value_type = llvm_builder.getInt64Ty();
+    codegen_ctx.pointer_type = llvm_builder.getPtrTy();
+    codegen_ctx.error_message = &codegen_error;
+    llvm::Value* codegen_value = codegen_info.codegen(&codegen_ctx);
+    if (!codegen_value || codegen_error || !llvm::isa<llvm::ConstantInt>(codegen_value)
+            || llvm::cast<llvm::ConstantInt>(codegen_value)->getZExtValue()
+                != smokeBitsFromValue(QoreValue(static_cast<int64>(4242)))) {
+        std::cerr << "process plugin LLVM codegen callback returned the wrong value\n";
         return false;
     }
     uint64_t signature_hash = qore_plugin_compute_signature_hash_v1(ops[0].signature);

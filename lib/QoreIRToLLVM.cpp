@@ -39,6 +39,9 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QorePluginRegistry.h"
+
+#include <qore/QorePluginLLVM.h>
+
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
@@ -15072,15 +15075,71 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* gid = llvm::ConstantInt::get(i32_type, global_id);
             llvm::Value* result = nullptr;
-            if (inst->opcode == QoreIROpcode::PluginUnary) {
+            QorePluginLLVMCodegenInfo codegen_info;
+            if (!qore_plugin_get_llvm_codegen_info(global_id, codegen_info, nullptr) && codegen_info.codegen) {
+                std::vector<llvm::Value*> boxed_operands;
+                boxed_operands.reserve(inst->operands.size());
+                for (const QoreIRValue& operand : inst->operands) {
+                    llvm::Value* value = getVal(operand.id, error);
+                    if (!value) {
+                        return false;
+                    }
+                    boxed_operands.push_back(boxValue(value, operand.id));
+                }
+
+                const char* codegen_error = nullptr;
+                QorePluginLLVMCodegenContext codegen_ctx = {};
+                codegen_ctx.struct_size = sizeof(codegen_ctx);
+                codegen_ctx.abi_version = QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION;
+                codegen_ctx.global_operation_id = global_id;
+                codegen_ctx.helper_abi = codegen_info.signature.helper_abi;
+                codegen_ctx.signature = &codegen_info.signature;
+                codegen_ctx.llvm_context = &ctx;
+                codegen_ctx.builder = builder.get();
+                codegen_ctx.module = &module;
+                codegen_ctx.function = llvm_func;
+                codegen_ctx.xsink_value = xsink_arg;
+                codegen_ctx.qore_value_type = i64_type;
+                codegen_ctx.pointer_type = ptr_type;
+                codegen_ctx.boxed_operands = boxed_operands.empty() ? nullptr : boxed_operands.data();
+                codegen_ctx.num_operands = static_cast<uint32_t>(boxed_operands.size());
+                codegen_ctx.error_message = &codegen_error;
+
+                result = codegen_info.codegen(&codegen_ctx);
+                if (!result) {
+                    error = "plugin LLVM codegen callback returned null for ";
+                    error += codegen_info.module_name;
+                    error += ":";
+                    error += codegen_info.operation_name;
+                    if (codegen_error && *codegen_error) {
+                        error += ": ";
+                        error += codegen_error;
+                    }
+                    return false;
+                }
+                if (!result->getType()->isIntegerTy(64)) {
+                    error = "plugin LLVM codegen callback for ";
+                    error += codegen_info.module_name;
+                    error += ":";
+                    error += codegen_info.operation_name;
+                    error += " returned ";
+                    std::string type_str;
+                    llvm::raw_string_ostream os(type_str);
+                    result->getType()->print(os);
+                    error += os.str();
+                    error += "; expected i64 QoreValue bits";
+                    return false;
+                }
+            }
+            if (!result && inst->opcode == QoreIROpcode::PluginUnary) {
                 auto* val = getVal(inst->operands[0].id, error);
                 if (!val) { return false; }
                 llvm::Value* boxed = boxValue(val, inst->operands[0].id);
                 auto helper = module.getOrInsertFunction("qore_rt_plugin_unary",
                         llvm::FunctionType::get(i64_type, {i32_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {gid, boxed, xsink_arg});
-            } else if (inst->opcode == QoreIROpcode::PluginBinary
-                    || inst->opcode == QoreIROpcode::PluginSubscript) {
+            } else if (!result && (inst->opcode == QoreIROpcode::PluginBinary
+                    || inst->opcode == QoreIROpcode::PluginSubscript)) {
                 auto* lhs = getVal(inst->operands[0].id, error);
                 auto* rhs = getVal(inst->operands[1].id, error);
                 if (!lhs || !rhs) { return false; }
@@ -15092,7 +15151,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(i64_type,
                             {i32_type, i64_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {gid, lhs_boxed, rhs_boxed, xsink_arg});
-            } else if (inst->opcode == QoreIROpcode::PluginCall) {
+            } else if (!result && inst->opcode == QoreIROpcode::PluginCall) {
                 auto* self = getVal(inst->operands[0].id, error);
                 if (!self) { return false; }
                 llvm::Value* self_boxed = boxValue(self, inst->operands[0].id);
@@ -15106,7 +15165,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {gid, self_boxed, args_array,
                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-            } else if (inst->opcode == QoreIROpcode::PluginConstruct) {
+            } else if (!result && inst->opcode == QoreIROpcode::PluginConstruct) {
                 llvm::Value* args_array = nullptr;
                 int nargs = 0;
                 if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
@@ -15117,7 +15176,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {i32_type, ptr_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {gid, args_array,
                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-            } else if (inst->opcode == QoreIROpcode::PluginDenseBufferUnary) {
+            } else if (!result && inst->opcode == QoreIROpcode::PluginDenseBufferUnary) {
                 auto* result_buffer = getVal(inst->operands[0].id, error);
                 auto* value = getVal(inst->operands[1].id, error);
                 if (!result_buffer || !value) { return false; }
@@ -15127,7 +15186,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(i64_type,
                             {i32_type, i64_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {gid, result_boxed, value_boxed, xsink_arg});
-            } else {
+            } else if (!result) {
                 auto* result_buffer = getVal(inst->operands[0].id, error);
                 auto* lhs = getVal(inst->operands[1].id, error);
                 auto* rhs = getVal(inst->operands[2].id, error);

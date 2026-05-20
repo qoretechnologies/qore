@@ -208,6 +208,49 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     the module name, operation name, field name, expected type, actual type,
     subreason, and design-section reference in the diagnostic text.
 
+    @section plugin_types_llvm Optional LLVM Codegen Extension
+
+    The stable plugin ABI always supports runtime-helper dispatch. Modules that
+    need inline native codegen can additionally include
+    \c <qore/QorePluginLLVM.h> and attach a
+    \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension to an operation:
+
+    @code{.cpp}
+static llvm::Value* sample_codegen(QorePluginLLVMCodegenContext* ctx) {
+    llvm::Value* lhs = ctx->boxed_operands[0];
+    llvm::Value* rhs = ctx->boxed_operands[1];
+    // Emit native IR and return i64 QoreValue bits.
+    return emit_sample_add(ctx->builder, lhs, rhs, ctx->qore_value_type);
+}
+
+static QorePluginLLVMExtension sample_llvm{
+    sizeof(QorePluginLLVMExtension),
+    QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION,
+    QORE_PLUGIN_LLVM_CURRENT_MAJOR,
+    sample_codegen,
+};
+
+static QorePluginExtension sample_extensions[]{
+    { QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID, &sample_llvm, false },
+};
+    @endcode
+
+    \c QorePluginLLVM.h intentionally includes LLVM headers and is not included
+    by \c QorePluginType.h. Modules that do not opt into LLVM codegen remain on
+    the plain-C runtime-helper ABI. At registration time libqore validates the
+    extension struct size, extension ABI version, LLVM major version, and
+    callback pointer. Optional extensions with an incompatible LLVM major are
+    ignored and the operation uses the runtime helper. Required incompatible
+    LLVM extensions are rejected with \c PLUGIN-EXTENSION-ABI-MISMATCH.
+
+    When a valid callback is registered, \c QoreIRToLLVM calls it before the
+    runtime-helper fallback. The callback receives already boxed operand values,
+    the current \c llvm::IRBuilder, \c llvm::Module, \c llvm::Function, the
+    operation signature, and the current exception-sink LLVM value. The callback
+    must return an \c i64 containing QoreValue bits; returning \c nullptr is a
+    codegen error. Codegen that may raise through the exception sink is followed
+    by the same exception check used by runtime-helper dispatch.
+
     @section plugin_types_values Plugin Value Instances
 
     Registered plugin types can wrap module-defined value bits in a first-class

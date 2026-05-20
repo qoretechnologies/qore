@@ -62,6 +62,10 @@ is not blocking.
   `examples/plugins/sample-buffer/`, and `examples/plugins/qore-plugin-lint`
   are implemented.
   User-facing language/reference documentation and release notes are present.
+- Phase 4's LLVM codegen extension slice is implemented: modules can opt into
+  `QorePluginLLVM.h`, valid callbacks are used by `QoreIRToLLVM` before the
+  runtime-helper fallback, optional LLVM-major mismatches are ignored, and
+  required mismatches fail validation.
 
 ---
 
@@ -1044,13 +1048,13 @@ Optional LLVM extension header:
 // Modules using it must be rebuilt when libqore's LLVM major version changes.
 
 typedef llvm::Value* (*PluginLLVMCodegenCallback)(
-    PluginLLVMCodegenContext* ctx,
-    const QoreIRInstruction* inst,
-    llvm::IRBuilder<>* builder);
+    QorePluginLLVMCodegenContext* ctx);
 
 struct QorePluginLLVMExtension {
-    uint32_t libqore_llvm_major;
-    PluginLLVMCodegenCallback codegen;
+    uint32_t struct_size;
+    uint32_t abi_version;
+    uint32_t llvm_major_version;
+    QorePluginLLVMCodegenCallback codegen;
 };
 ```
 
@@ -1237,10 +1241,11 @@ this, the IR-to-LLVM lowering emits a runtime-helper call by default —
 adequate for most plugin types.
 
 Modules that want native SIMD / inline codegen register the
-`"qore.plugin.llvm.codegen"` optional extension from `QorePluginLLVM.h`.
-`PluginLLVMCodegenContext` exposes the host's value table, type table,
-exception-sink pointer, current basic block, and helpers for emitting LLVM IR
-in a way consistent with the rest of `QoreIRToLLVM.cpp`.
+`"qore.plugin.llvm.codegen"` operation extension from `QorePluginLLVM.h`.
+`QorePluginLLVMCodegenContext` exposes the registered operation signature,
+boxed QoreValue operands, exception-sink pointer, active LLVM context,
+builder, module, and function in a way consistent with the rest of
+`QoreIRToLLVM.cpp`. The callback returns an `i64` `QoreValue` bit pattern.
 
 **LLVM ABI coupling — largest forever-promise in the protocol.** The
 callback signature names `llvm::Value*` and `llvm::IRBuilder<>*` directly,
@@ -1251,14 +1256,14 @@ ABI-stability commitment in the entire plugin protocol — bigger than the
 QORD format and bigger than the runtime helper ABI, both of which are
 plain-C and version-stable across compiler updates.
 
-**Mandatory runtime check.** `qore_register_plugin_types_v1` MUST reject
-the `"qore.plugin.llvm.codegen"` extension when `libqore_llvm_major !=
-QORE_LLVM_MAJOR`, with a diagnostic naming both versions and the offending
-module. The surrounding registration still succeeds — the module loads in
-runtime-helper mode without inline codegen — so a plugin that ships
-codegen for LLVM N continues to be useful when loaded into a libqore built
-against LLVM N+1, just slower. The version field is therefore
-load-bearing, not decoration.
+**Runtime compatibility check.** `qore_register_plugin_types_v1` MUST validate
+the `"qore.plugin.llvm.codegen"` extension's struct size, extension ABI version,
+LLVM major version, and callback pointer. If the extension is optional
+(`required = false`) and incompatible with the libqore build, registration
+ignores the callback and the operation loads in runtime-helper mode without
+inline codegen. If the extension is required (`required = true`), the same
+mismatch rejects registration with a diagnostic naming the offending field and
+module. The version fields are therefore load-bearing, not decoration.
 
 The recommended discipline is therefore:
 
@@ -2629,11 +2634,11 @@ diagnostic for an external module author.
 
 ### Phase 4 — optional LLVM codegen + lowering hooks (M)
 
-- Optional `QorePluginLLVM.h` / `PluginLLVMCodegenCallback` extension ABI
-  and runtime mandatory `libqore_llvm_major` rejection (§3.6).
-- `PluginLoweringCallback` wiring in the lowering pass (the typedef itself
+- [x] Optional `QorePluginLLVM.h` / `PluginLLVMCodegenCallback` extension ABI
+  and required-extension LLVM-major rejection (§3.6).
+- [ ] `PluginLoweringCallback` wiring in the lowering pass (the typedef itself
   was published in Phase 3's stable `QorePluginType.h`).
-- Default fallback (no callback supplied → emit runtime-helper call).
+- [x] Default fallback (no callback supplied → emit runtime-helper call).
 
 Plugin types can opt into native SIMD codegen and parse-time pattern
 matching.

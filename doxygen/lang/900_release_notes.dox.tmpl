@@ -123,7 +123,8 @@
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper
       dispatch, QORD helper-reference metadata, serialized plugin value
-      instances, verifier diagnostics, trace controls, and
+      instances, optional LLVM codegen extension hooks, verifier diagnostics,
+      trace controls, and
       @ref Qore::Reflection::PluginRegistry "PluginRegistry" introspection
     - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>
       and QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>
@@ -1296,7 +1297,11 @@ foreach string module_name in (registry.getProcessModules()) {
     passing raw frames to module helpers. Plugin value nodes can be wrapped with
     \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in QORD,
     and round-tripped through \c Serializable using the registered plugin
-    serializer callbacks. See @ref plugin_types for the complete module-author
+    serializer callbacks. Modules can opt into inline LLVM lowering with the
+    \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension from
+    \c <qore/QorePluginLLVM.h>; incompatible optional LLVM extensions fall back
+    to runtime-helper dispatch, while required mismatches fail registration.
+    See @ref plugin_types for the complete module-author
     overview, current limitations, the
     \c examples/plugins/sample-buffer reference module, and the advisory
     \c examples/plugins/qore-plugin-lint descriptor linter.
