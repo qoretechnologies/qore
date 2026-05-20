@@ -87,8 +87,33 @@ public class LlmStructuredRepair {
                     return validateParsed(parsed, expected_type, True,
                         "json-balanced-prefix");
                 } catch (hash<ExceptionInfo> ex2) {
+                    *string completed = completeBalancedJsonText(cleaned);
+                    if (completed.val() && completed != cleaned) {
+                        try {
+                            auto parsed = parse_json(completed);
+                            return validateParsed(parsed, expected_type, True,
+                                "json-balanced-completion");
+                        } catch (hash<ExceptionInfo> ex3) {
+                            return makeInvalid("invalid-json",
+                                sprintf("%s; balanced prefix also failed: "
+                                    "%s; balanced completion also failed: %s",
+                                    ex.desc, ex2.desc, ex3.desc));
+                        }
+                    }
                     return makeInvalid("invalid-json",
                         sprintf("%s; balanced prefix also failed: %s",
+                            ex.desc, ex2.desc));
+                }
+            }
+            *string completed = completeBalancedJsonText(cleaned);
+            if (completed.val() && completed != cleaned) {
+                try {
+                    auto parsed = parse_json(completed);
+                    return validateParsed(parsed, expected_type, True,
+                        "json-balanced-completion");
+                } catch (hash<ExceptionInfo> ex2) {
+                    return makeInvalid("invalid-json",
+                        sprintf("%s; balanced completion also failed: %s",
                             ex.desc, ex2.desc));
                 }
             }
@@ -236,6 +261,54 @@ public class LlmStructuredRepair {
             }
         }
         return NOTHING;
+    }
+
+    private static *string completeBalancedJsonText(string text) {
+        string trimmed = trim(text);
+        if (!trimmed.val() || (trimmed[0] != "{" && trimmed[0] != "[")) {
+            return NOTHING;
+        }
+
+        list<string> stack = ();
+        bool in_string = False;
+        bool escaped = False;
+        for (int i = 0; i < trimmed.length(); ++i) {
+            string c = trimmed[i];
+            if (in_string) {
+                if (escaped) {
+                    escaped = False;
+                } else if (c == "\\") {
+                    escaped = True;
+                } else if (c == "\"") {
+                    in_string = False;
+                }
+                continue;
+            }
+            if (c == "\"") {
+                in_string = True;
+            } else if (c == "{" || c == "[") {
+                push stack, c;
+            } else if (c == "}" || c == "]") {
+                if (!stack) {
+                    return NOTHING;
+                }
+                string opener = pop stack;
+                if ((opener == "{" && c != "}")
+                        || (opener == "[" && c != "]")) {
+                    return NOTHING;
+                }
+            }
+        }
+        if (in_string || escaped || !stack) {
+            return NOTHING;
+        }
+
+        string suffix;
+        while (stack) {
+            string opener = pop stack;
+            suffix += opener == "{" ? "}" : "]";
+        }
+        return trimmed + suffix;
     }
 
     private static hash<LlmStructuredRepairResult> coerceBySchemaIntern(auto value,
@@ -1048,8 +1121,7 @@ llm.chatStream(
         }
         string finish_reason = (choice.finish_reason ?? "").toString();
         if (finish_reason == "content_filter"
-                || finish_reason == "length"
-                || finish_reason.upr() == "MALFORMED_FUNCTION_CALL") {
+                || finish_reason == "length") {
             return False;
         }
         hash<auto> usage = response.usage.typeCode() == NT_HASH
@@ -1057,6 +1129,7 @@ llm.chatStream(
         int output_tokens = (usage.completion_tokens
             ?? usage.output_tokens ?? 0).toInt();
         return output_tokens == 0 || finish_reason == "stop"
+            || finish_reason.upr() == "MALFORMED_FUNCTION_CALL"
             || !finish_reason.val();
     }
 

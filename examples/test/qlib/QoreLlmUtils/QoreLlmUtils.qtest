@@ -130,6 +130,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \requestOptionsOverrideModelTest());
         addTestCase("LlmStructuredRepair parses repaired JSON text",
             \structuredRepairJsonTextTest());
+        addTestCase("LlmStructuredRepair completes truncated JSON text",
+            \structuredRepairBalancedCompletionTest());
         addTestCase("LlmStructuredRepair coerces nested schema JSON strings",
             \structuredRepairSchemaCoercionTest());
         addTestCase("LlmBackend gemini chat request and text response",
@@ -150,6 +152,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "tool calls as JSON", \geminiOpenAiMalformedForcedToolRetryTest());
         addTestCase("LlmBackend OpenAI chat facade retries required empty "
             "tool responses", \geminiOpenAiRequiredToolEmptyRetryTest());
+        addTestCase("LlmBackend OpenAI chat facade retries malformed "
+            "required tool responses", \geminiOpenAiRequiredToolMalformedRetryTest());
         addTestCase("LlmBackend OpenAI chat facade converts tool turns",
             \geminiOpenAiToolTurnsFacadeTest());
         addTestCase("LlmBackend Anthropic facade preserves cache markers "
@@ -405,6 +409,31 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "parse errors have a stable code");
         assertTrue(invalid.failure_fingerprint.find("invalid-json:") == 0,
             "parse errors have a stable fingerprint prefix");
+    }
+
+    structuredRepairBalancedCompletionTest() {
+        checkGeminiModule();
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::parseJsonObject(
+                "{\"interface\":{\"key\":\"iface-1\",\"items\":[1,2]}");
+
+        assertTrue(repaired.valid,
+            "missing trailing object close braces are repaired");
+        assertTrue(repaired.repaired,
+            "balanced completion is reported as a repair");
+        assertEq("json-balanced-completion", repaired.repair_kind,
+            "repair type identifies appended delimiters");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq("iface-1", value.interface.key,
+            "nested object survived balanced completion");
+        assertEq(2, value.interface.items[1],
+            "nested array survived balanced completion");
+
+        hash<LlmStructuredRepairResult> invalid =
+            LlmStructuredRepair::parseJsonObject(
+                "{\"interface\":{\"key\":\"unterminated}");
+        assertFalse(invalid.valid,
+            "unterminated strings are not guessed/repaired");
     }
 
     structuredRepairSchemaCoercionTest() {
@@ -1162,8 +1191,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                             },),
                             "usageMetadata": {
                                 "promptTokenCount": 120,
-                                "candidatesTokenCount": 0,
-                                "totalTokenCount": 120,
+                                "candidatesTokenCount": 3,
+                                "totalTokenCount": 123,
                             },
                         },
                     },
@@ -1254,6 +1283,109 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "retry function arguments are serialized");
         assertEq("STOP", rv.provider_diagnostics.finish_reason,
             "OpenAI facade exposes provider finish diagnostics");
+    }
+
+    geminiOpenAiRequiredToolMalformedRetryTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-required-1",
+                            "candidates": ({
+                                "finishReason": "MALFORMED_FUNCTION_CALL",
+                                "finishMessage": "Malformed function call: "
+                                    "print(default_api.select_action(...))",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 120,
+                                "candidatesTokenCount": 0,
+                                "totalTokenCount": 120,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-required-retry-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "functionCall": {
+                                            "name": "select_action",
+                                            "args": {
+                                                "operation": "revise",
+                                                "reason": "retry fixed",
+                                            },
+                                        },
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 135,
+                                "candidatesTokenCount": 4,
+                                "totalTokenCount": 139,
+                            },
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            }, {
+                "type": "function",
+                "function": {
+                    "name": "record_note",
+                    "description": "Record a note",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}},
+                        "required": ("text",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "malformed required-tool response is retried once");
+        assertEq("ANY", gemini_handler.requests[1]
+                .body.toolConfig.functionCallingConfig.mode,
+            "retry preserves required tool mode");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "retry functionCall is normalized to OpenAI tool_calls");
+        assertEq("select_action",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "retry preserves returned tool name");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("revise", args.operation,
+            "retry function arguments are serialized");
     }
 
     geminiOpenAiToolTurnsFacadeTest() {
