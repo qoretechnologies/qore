@@ -41,6 +41,9 @@ module QoreLlmUtils {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
+    init = sub () {
+        LlmBackend::registerFactory(new CallbackLlmProviderFactory());
+    };
 }
 
 /** @mainpage QoreLlmUtils Module

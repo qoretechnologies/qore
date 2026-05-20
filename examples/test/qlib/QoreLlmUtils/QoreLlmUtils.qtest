@@ -58,6 +58,41 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class FakeLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    constructor(hash<LlmBackendConfig> config) : AbstractLlmProvider(config) {
+    }
+
+    string getMode() {
+        return "test-fake";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return <QoreLlmUtils::LlmCompletionResult>{"content": "ok", "usage": {}};
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return <QoreLlmUtils::ChatResponse>{"stop_reason": "end_turn", "usage": {}};
+    }
+}
+
+class FakeLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "test-fake";
+    }
+
+    string getDisplayName() {
+        return "fake test provider";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(hash<LlmBackendConfig> config) {
+        return new FakeLlmProvider(config);
+    }
+}
+
 public class QoreLlmUtilsTest inherits QUnit::Test {
     private {
         HttpServer http;
@@ -91,6 +126,14 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiOpenAiChatCompletionsFacadeTest());
         addTestCase("LlmBackend OpenAI chat facade converts tool turns",
             \geminiOpenAiToolTurnsFacadeTest());
+        addTestCase("LlmBackend provider registry - factory lookup",
+            \registryFactoryLookupTest());
+        addTestCase("LlmBackend provider registry - register / deregister",
+            \registryRegisterDeregisterTest());
+        addTestCase("LlmBackend provider registry - duplicate registration rejected",
+            \registryDuplicateRejectedTest());
+        addTestCase("LlmBackend provider registry - unknown mode",
+            \registryUnknownModeTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
         addTestCase("PromptSecretProtector protects and restores credentials",
             \promptSecretProtectRestoreTest());
@@ -486,7 +529,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 "json_schema": {
                     "schema": {
                         "type": "object",
-                        "properties": {"ok": {"type": "boolean"}},
+                        "additionalProperties": False,
+                        "properties": {
+                            "ok": {"type": "boolean"},
+                            "meta": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {"source": {"type": "string"}},
+                            },
+                        },
                     },
                 },
             },
@@ -497,7 +548,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                     "description": "lookup data",
                     "parameters": {
                         "type": "object",
-                        "properties": {"key": {"type": "string"}},
+                        "additionalProperties": False,
+                        "properties": {
+                            "key": {"type": "string"},
+                            "meta": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {"source": {"type": "string"}},
+                            },
+                        },
                     },
                 },
             },),
@@ -548,9 +607,24 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("application/json",
             gemini_handler.requests[0].body.generationConfig.responseMimeType,
             "json_schema response format maps to Gemini JSON mode");
+        assertFalse(gemini_handler.requests[0].body.generationConfig
+                .responseSchema.hasKey("additionalProperties"),
+            "Gemini response schema strips unsupported additionalProperties");
+        assertFalse(gemini_handler.requests[0].body.generationConfig
+                .responseSchema.properties.meta.hasKey(
+                "additionalProperties"),
+            "Gemini response schema strips nested additionalProperties");
         assertEq("lookup",
             gemini_handler.requests[0].body.tools[0].functionDeclarations[0].name,
             "OpenAI function tool declaration converted");
+        assertFalse(gemini_handler.requests[0].body.tools[0]
+                .functionDeclarations[0].parameters.hasKey(
+                "additionalProperties"),
+            "Gemini tool schema strips unsupported additionalProperties");
+        assertFalse(gemini_handler.requests[0].body.tools[0]
+                .functionDeclarations[0].parameters.properties.meta.hasKey(
+                "additionalProperties"),
+            "Gemini tool schema strips nested additionalProperties");
         assertEq("ANY",
             gemini_handler.requests[0].body.toolConfig.functionCallingConfig.mode,
             "named tool choice forces function calling");
@@ -623,6 +697,36 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(10000, config.connect_timeout_ms);
         assertEq(120000, config.timeout_ms);
         assertEq("2023-06-01", config.anthropic_version);
+    }
+
+    registryFactoryLookupTest() {
+        AbstractLlmProviderFactory cb = LlmBackend::getFactoryEx("callback");
+        assertEq("callback", cb.getMode());
+        hash<LlmProviderInfo> info = cb.getInfo();
+        assertEq("callback", info.mode);
+        assertTrue(info.supports_tools);
+    }
+
+    registryRegisterDeregisterTest() {
+        FakeLlmProviderFactory fake();
+        LlmBackend::registerFactory(fake);
+        on_exit LlmBackend::deregisterFactory("test-fake");
+        AbstractLlmProviderFactory looked_up = LlmBackend::getFactoryEx("test-fake");
+        assertEq("test-fake", looked_up.getMode());
+        assertTrue(inlist("test-fake", LlmBackend::knownProviderModes()));
+    }
+
+    registryDuplicateRejectedTest() {
+        FakeLlmProviderFactory fake();
+        LlmBackend::registerFactory(fake);
+        on_exit LlmBackend::deregisterFactory("test-fake");
+        assertThrows("LLM-CONFIG-ERROR", "already been registered",
+            sub () { LlmBackend::registerFactory(new FakeLlmProviderFactory()); });
+    }
+
+    registryUnknownModeTest() {
+        assertThrows("LLM-CONFIG-ERROR", "is unknown",
+            sub () { LlmBackend::getFactoryEx("no-such-mode-xyz"); });
     }
 
     promptSecretProtectRestoreTest() {

@@ -206,6 +206,21 @@ printf("Response: %s\n", result.content);
     @endcode
 */
 public class LlmBackend {
+    public {
+        #! Map of mode names to the module that supplies the matching provider
+        /** Lazy-loaded by @ref getFactory() when a mode is requested but no
+            factory has been registered yet.  Modes whose factory ships with
+            @ref QoreLlmUtils itself (e.g. \c "callback") are absent from this
+            map and are registered when @ref QoreLlmUtils' \c init block runs.
+        */
+        const ProviderModuleMap = {
+            "http":      "OpenAiRestClient",
+            "anthropic": "AnthropicRestClient",
+            "sglang":    "SGLangRestClient",
+            "gemini":    "GeminiRestClient",
+        };
+    }
+
     private {
         #! The backend mode
         string mode;
@@ -238,6 +253,122 @@ public class LlmBackend {
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
         Mutex rest_mutex();
+    }
+
+    private {
+        #! Provider factories registered by mode string
+        static hash<string, AbstractLlmProviderFactory> factory_cache;
+        #! Tracks the module that registered each factory (by class name)
+        static hash<string, string> factory_module_map;
+        #! Serializes access to the factory cache
+        static Mutex factory_cache_lock();
+    }
+
+    #! Registers a provider factory under its mode string
+    /** Concrete factory classes call this from their owning module's \c init
+        block.  Subsequent @ref LlmBackend constructions with the matching
+        @ref LlmBackendConfig::mode dispatch through the registered factory.
+
+        @param factory the new provider factory
+
+        @throw LLM-CONFIG-ERROR a factory for the same mode is already registered
+    */
+    static registerFactory(AbstractLlmProviderFactory factory) {
+        factory_cache_lock.lock();
+        on_exit factory_cache_lock.unlock();
+
+        string mode = factory.getMode();
+        if (factory_cache{mode}) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("LLM provider factory for mode %y has already been "
+                    "registered", mode);
+        }
+        *string module_name = Class::getClass(factory).getModuleName();
+        if (exists module_name) {
+            factory_module_map{Class::getClass(factory).getName()} = module_name;
+        }
+        factory_cache{mode} = factory;
+    }
+
+    #! Removes a previously registered provider factory
+    /** Intended primarily for tests that register a fake provider; safe to
+        call when no factory is registered for the given mode (no-op).
+
+        @param mode the mode string previously registered via @ref registerFactory()
+    */
+    static deregisterFactory(string mode) {
+        factory_cache_lock.lock();
+        on_exit factory_cache_lock.unlock();
+
+        *AbstractLlmProviderFactory factory = remove factory_cache{mode};
+        if (!factory) {
+            return;
+        }
+        try {
+            remove factory_module_map{Class::getClass(factory).getName()};
+        } catch (hash<ExceptionInfo> ex) {
+            # Class metadata may be unavailable during program teardown
+            if (ex.err != "PROGRAM-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    #! Returns the factory for the given mode, lazy-loading its module if needed
+    /** When no factory is registered for \a mode, this consults
+        @ref ProviderModuleMap and attempts to load the named module.  The
+        module's \c init block is expected to call @ref registerFactory()
+        for the corresponding mode.
+
+        @param mode the @ref LlmBackendConfig::mode value to resolve
+
+        @return the registered factory, or @ref nothing if the mode is
+        unknown and no module can be loaded for it
+    */
+    static *AbstractLlmProviderFactory getFactory(string mode) {
+        if (factory_cache{mode}) {
+            return factory_cache{mode};
+        }
+        *string module_name = ProviderModuleMap{mode};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for mode %y: %s",
+                    module_name, mode, ex.desc), ex;
+        }
+        return factory_cache{mode};
+    }
+
+    #! Returns the factory for the given mode or throws an exception
+    /** @param mode the @ref LlmBackendConfig::mode value to resolve
+
+        @return the registered factory
+
+        @throw LLM-CONFIG-ERROR the mode is unknown; the message lists the
+        currently registered modes and the @ref ProviderModuleMap keys
+    */
+    static AbstractLlmProviderFactory getFactoryEx(string mode) {
+        *AbstractLlmProviderFactory factory = LlmBackend::getFactory(mode);
+        if (!factory) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("LLM provider mode %y is unknown; registered modes: "
+                    "%y; modes available via lazy module load: %y",
+                    mode, keys factory_cache, keys ProviderModuleMap);
+        }
+        return factory;
+    }
+
+    #! Returns the list of currently-registered mode strings
+    /** @return the modes whose factories are present in the cache; modes
+        that are known via @ref ProviderModuleMap but whose modules have
+        not yet been lazy-loaded are not included
+    */
+    static list<string> knownProviderModes() {
+        return keys factory_cache;
     }
 
     #! Creates an LlmBackend with the given configuration
@@ -1798,7 +1929,8 @@ llm.chatStream(
         };
         if (output_schema) {
             generation_config.responseMimeType = "application/json";
-            generation_config.responseSchema = output_schema;
+            generation_config.responseSchema = sanitizeGeminiSchema(
+                output_schema);
         }
         body.generationConfig = generation_config;
 
@@ -1808,7 +1940,7 @@ llm.chatStream(
                 push declarations, {
                     "name": td.name,
                     "description": td.description ?? "",
-                    "parameters": td.parameters
+                    "parameters": sanitizeGeminiSchema(td.parameters)
                         ?? {"type": "object", "properties": {}},
                 };
             }
@@ -1816,6 +1948,42 @@ llm.chatStream(
         }
         body = mergeGeminiRequestBodyOptions(body, opts);
         return body;
+    }
+
+    #! Returns a Gemini-compatible copy of a JSON schema.
+    /** Gemini's function declarations and response schemas accept only a
+        subset of JSON Schema / OpenAPI.  In particular,
+        @c additionalProperties causes generateContent to reject the request
+        with HTTP 400 even when it is a boolean.  Strip unsupported schema
+        keywords at the provider boundary so callers can keep using stricter
+        OpenAI/Anthropic schemas and local validators.
+    */
+    private static *hash<auto> sanitizeGeminiSchema(*hash<auto> schema) {
+        if (!schema) {
+            return NOTHING;
+        }
+        return cast<hash<auto>>(sanitizeGeminiSchemaValue(schema));
+    }
+
+    private static auto sanitizeGeminiSchemaValue(auto value) {
+        if (value.typeCode() == NT_HASH) {
+            hash<auto> rv;
+            foreach string key in (keys value) {
+                if (key == "additionalProperties") {
+                    continue;
+                }
+                rv{key} = sanitizeGeminiSchemaValue(value{key});
+            }
+            return rv;
+        }
+        if (value.typeCode() == NT_LIST) {
+            list<auto> rv = ();
+            foreach auto item in (value) {
+                push rv, sanitizeGeminiSchemaValue(item);
+            }
+            return rv;
+        }
+        return value;
     }
 
     #! Merges provider-specific request body options into a Gemini request
