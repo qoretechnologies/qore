@@ -69,9 +69,13 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ),
-            "max_tokens": getRequestMaxTokens(opts),
+            "max_tokens": getRequestMaxOutputTokens(opts),
             "temperature": getRequestTemperature(opts),
         };
+        *int reasoning_budget = getRequestReasoningTokenBudget(opts);
+        if (reasoning_budget.typeCode() != NT_NOTHING) {
+            body.reasoning_token_budget = reasoning_budget;
+        }
         *string request_model = getRequestModel(opts);
         if (request_model.val()) {
             body.model = request_model;
@@ -170,9 +174,13 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
 
         hash<auto> body = {
             "messages": api_messages,
-            "max_tokens": getRequestMaxTokens(opts),
+            "max_tokens": getRequestMaxOutputTokens(opts),
             "temperature": getRequestTemperature(opts),
         };
+        *int reasoning_budget = getRequestReasoningTokenBudget(opts);
+        if (reasoning_budget.typeCode() != NT_NOTHING) {
+            body.reasoning_token_budget = reasoning_budget;
+        }
         *string request_model = getRequestModel(opts);
         if (request_model.val()) {
             body.model = request_model;

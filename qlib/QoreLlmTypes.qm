@@ -102,14 +102,29 @@ public hashdecl LlmBackendConfig {
     *string model;
     #! API key for authentication — this is the secret key from your LLM provider (e.g., from the OpenAI or Anthropic dashboard)
     *string api_key;
-    #! Maximum tokens to generate; default 4096
+    #! Maximum provider completion/output budget; default 4096
+    /** Compatibility alias for @ref max_output_tokens.  New code should use
+        @ref max_output_tokens so callers express intent without depending on
+        any provider's wire-field name. */
     int max_tokens = 4096;
+    #! Provider-neutral maximum output/completion budget
+    /** Providers map this to their own request field, for example OpenAI
+        \c max_tokens or \c max_completion_tokens, Anthropic \c max_tokens,
+        and Gemini \c generationConfig.maxOutputTokens.  When unset,
+        @ref max_tokens is used for backward compatibility. */
+    *int max_output_tokens;
+    #! Optional hidden-reasoning / thinking token budget
+    /** Providers that support a numeric hidden-reasoning budget map this to
+        their native field.  Providers without such a control ignore it. */
+    *int reasoning_token_budget;
     #! Sampling temperature; default 0.0 (deterministic)
     float temperature = 0.0;
     #! HTTP connect timeout in milliseconds; default 10000
     int connect_timeout_ms = 10000;
     #! HTTP request timeout in milliseconds; default 120000
     int timeout_ms = 120000;
+    #! Optional protocol hint passed to HTTP-backed providers (for example "h2")
+    *string protocol;
     #! Anthropic API version header; default "2023-06-01"
     string anthropic_version = "2023-06-01";
     #! Maximum retry attempts for transient errors (429, 5xx); default 3;
@@ -136,8 +151,15 @@ public hashdecl LlmBackendConfig {
 public hashdecl LlmRequestOptions {
     #! Model name for this call; overrides @ref LlmBackendConfig::model
     *string model;
-    #! Maximum tokens for this call; overrides @ref LlmBackendConfig::max_tokens
+    #! Maximum tokens for this call; compatibility alias for @ref max_output_tokens
     *int max_tokens;
+    #! Provider-neutral maximum output/completion budget for this call
+    /** Overrides @ref LlmBackendConfig::max_output_tokens and
+        @ref LlmBackendConfig::max_tokens. */
+    *int max_output_tokens;
+    #! Optional hidden-reasoning / thinking token budget for this call
+    /** Overrides @ref LlmBackendConfig::reasoning_token_budget. */
+    *int reasoning_token_budget;
     #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
     *float temperature;
     #! JSON schema to request structured output when the backend supports it
@@ -164,16 +186,20 @@ public hashdecl ChatToolCall {
     *hash<auto> arguments;
 }
 
-#! A content part in a multimodal message (text or image)
+#! A content part in a multimodal message (text, image, or file)
 public hashdecl ContentPart {
-    #! Part type: "text" for text content, "image" for image data
+    #! Part type: "text" for text content, "image" for image data, or "file" for file data
     string type;
     #! Text content (when type is "text")
     *string text;
-    #! Image binary data (when type is "image")
+    #! Binary data (when type is "image" or "file")
     *binary data;
-    #! Image MIME type (when type is "image"), e.g., "image/png", "image/jpeg"
+    #! MIME type (when type is "image" or "file"), e.g., "image/png", "application/pdf"
     *string mime_type;
+    #! File name (when type is "file")
+    *string filename;
+    #! Provider-specific cache-control metadata for providers that support it
+    *hash<auto> cache_control;
 }
 
 #! A message in a multi-turn conversation
@@ -201,6 +227,8 @@ public hashdecl ToolDefinition {
     *string description;
     #! JSON Schema describing the tool's parameters
     *hash<auto> parameters;
+    #! Provider-specific cache-control metadata for providers that support it
+    *hash<auto> cache_control;
 }
 
 #! Response from a multi-turn chat call
@@ -220,6 +248,8 @@ public hashdecl ChatResponse {
     hash<auto> usage;
     #! Raw provider response when callers need provider-specific metadata
     *hash<auto> raw;
+    #! Provider-specific diagnostics suitable for surfacing through facade APIs
+    *hash<auto> provider_diagnostics;
 }
 
 #! A streaming event from a chat completion
@@ -253,6 +283,8 @@ public hashdecl LlmProviderInfo {
     bool supports_structured_output = False;
     #! True when the provider accepts multimodal content (images etc.)
     bool supports_multimodal = False;
+    #! True when the provider maps @ref LlmRequestOptions::reasoning_token_budget
+    bool supports_reasoning_token_budget = False;
 }
 
 #! Abstract factory for an LLM provider
@@ -458,7 +490,8 @@ public class LlmProviderRegistry {
 
     @par Provider-neutral helpers
     Subclasses inherit @ref withRetry() (retry-on-transient-errors loop),
-    @ref getRequestModel() / @ref getRequestMaxTokens() /
+    @ref getRequestModel() / @ref getRequestMaxOutputTokens() /
+    @ref getRequestReasoningTokenBudget() /
     @ref getRequestTemperature() (per-call override resolution), and
     @ref mergeRequestBodyOptions() (provider-specific body-options merge).
 
@@ -550,9 +583,23 @@ public class AbstractLlmProvider {
         return opts.model ?? config_h.model;
     }
 
+    #! Resolves the provider-neutral output/completion budget for a single call
+    int getRequestMaxOutputTokens(*hash<LlmRequestOptions> opts) {
+        return opts.max_output_tokens ?? opts.max_tokens
+            ?? config_h.max_output_tokens ?? config_h.max_tokens;
+    }
+
     #! Resolves the max-token budget for a single call
+    /** Compatibility helper for existing providers and callers.  New provider
+        code should call @ref getRequestMaxOutputTokens() for clarity. */
     int getRequestMaxTokens(*hash<LlmRequestOptions> opts) {
-        return opts.max_tokens ?? config_h.max_tokens;
+        return getRequestMaxOutputTokens(opts);
+    }
+
+    #! Resolves the provider-neutral hidden-reasoning budget for a single call
+    *int getRequestReasoningTokenBudget(*hash<LlmRequestOptions> opts) {
+        return opts.reasoning_token_budget
+            ?? config_h.reasoning_token_budget;
     }
 
     #! Resolves the sampling temperature for a single call

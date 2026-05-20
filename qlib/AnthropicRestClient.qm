@@ -726,7 +726,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         hash<auto> body = {
             "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
-            "max_tokens": getRequestMaxTokens(opts),
+            "max_tokens": getRequestMaxOutputTokens(opts),
             "system": system_prompt,
             "messages": (
                 {"role": "user", "content": user_prompt},
@@ -911,12 +911,16 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
             if (!rest_client) {
-                rest_client = new RestClientIo::RestClientIo({
+                hash<auto!> opts = {
                     "url": getConfig().url,
                     "connect_timeout": getConfig().connect_timeout_ms,
                     "timeout": getConfig().timeout_ms,
                     "data": "json",
-                });
+                };
+                if (getConfig().protocol.val()) {
+                    opts.protocol = getConfig().protocol;
+                }
+                rest_client = new RestClientIo::RestClientIo(opts);
             }
         }
     }
@@ -926,13 +930,15 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             list<hash<QoreLlmUtils::ChatMessage>> messages,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        *string system_prompt;
+        auto system_prompt = NOTHING;
         list<hash<auto>> api_messages = ();
         list<hash<auto>> pending_tool_results = ();
 
         foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
             if (msg.role == "system") {
-                system_prompt = msg.content;
+                system_prompt = msg.content_parts
+                    ? contentPartsToAnthropicSystem(msg.content_parts)
+                    : msg.content;
                 continue;
             }
 
@@ -977,23 +983,11 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }
 
             if (msg.content_parts) {
-                list<auto> parts = ();
-                foreach hash<QoreLlmUtils::ContentPart> part in (msg.content_parts) {
-                    if (part.type == "image" && part.data) {
-                        string b64 = make_base64_string(part.data);
-                        push parts, {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": part.mime_type ?? "image/png",
-                                "data": b64,
-                            },
-                        };
-                    } else if (part.type == "text" && part.text.val()) {
-                        push parts, {"type": "text", "text": part.text};
-                    }
-                }
-                push api_messages, {"role": msg.role, "content": parts};
+                push api_messages, {
+                    "role": msg.role,
+                    "content": contentPartsToAnthropicBlocks(
+                        msg.content_parts),
+                };
             } else {
                 push api_messages, {
                     "role": msg.role,
@@ -1011,26 +1005,106 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         hash<auto> body = {
             "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
-            "max_tokens": getRequestMaxTokens(opts),
+            "max_tokens": getRequestMaxOutputTokens(opts),
             "messages": api_messages,
         };
-        if (system_prompt.val()) {
+        if (system_prompt.typeCode() != NT_NOTHING) {
             body.system = system_prompt;
         }
 
         if (tools) {
             list<auto> tool_defs = ();
             foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
-                push tool_defs, {
+                hash<auto!> tool_def = {
                     "name": td.name,
                     "description": td.description ?? "",
                     "input_schema": td.parameters
                         ?? {"type": "object", "properties": {}},
                 };
+                if (td.cache_control.typeCode() == NT_HASH) {
+                    tool_def.cache_control = td.cache_control;
+                }
+                push tool_defs, tool_def;
             }
             body.tools = tool_defs;
         }
         return mergeRequestBodyOptions(body, opts);
+    }
+
+    private static auto contentPartsToAnthropicSystem(
+            list<hash<QoreLlmUtils::ContentPart>> content_parts) {
+        list<hash<auto>> blocks = ();
+        foreach hash<QoreLlmUtils::ContentPart> part in (content_parts) {
+            if (part.type != "text" || !part.text.val()) {
+                continue;
+            }
+            hash<auto!> block = {
+                "type": "text",
+                "text": part.text,
+            };
+            if (part.cache_control.typeCode() == NT_HASH) {
+                block.cache_control = part.cache_control;
+            }
+            push blocks, block;
+        }
+        return blocks ? blocks : "";
+    }
+
+    private static list<hash<auto>> contentPartsToAnthropicBlocks(
+            list<hash<QoreLlmUtils::ContentPart>> content_parts) {
+        list<hash<auto>> parts = ();
+        foreach hash<QoreLlmUtils::ContentPart> part in (content_parts) {
+            if (part.type == "image" && part.data) {
+                push parts, {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": part.mime_type ?? "image/png",
+                        "data": make_base64_string(part.data),
+                    },
+                };
+            } else if (part.type == "file" && part.data) {
+                string mime = part.mime_type ?? "application/octet-stream";
+                if (mime == "application/pdf") {
+                    push parts, {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime,
+                            "data": make_base64_string(part.data),
+                        },
+                    };
+                } else if (mime =~ /^text\//
+                        || mime == "application/json"
+                        || mime == "application/yaml"
+                        || mime == "application/x-yaml"
+                        || mime == "text/x-yaml") {
+                    push parts, {
+                        "type": "text",
+                        "text": sprintf("%s:\n%s",
+                            part.filename ?? mime,
+                            part.data.toString("UTF-8")),
+                    };
+                } else {
+                    push parts, {
+                        "type": "text",
+                        "text": sprintf("[user attached %s (%s) - content "
+                            "not inlined]",
+                            part.filename ?? "file", mime),
+                    };
+                }
+            } else if (part.type == "text" && part.text.val()) {
+                hash<auto!> block = {
+                    "type": "text",
+                    "text": part.text,
+                };
+                if (part.cache_control.typeCode() == NT_HASH) {
+                    block.cache_control = part.cache_control;
+                }
+                push parts, block;
+            }
+        }
+        return parts;
     }
 }
 

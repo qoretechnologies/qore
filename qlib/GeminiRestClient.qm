@@ -920,6 +920,9 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 if (getConfig().url.val()) {
                     opts.url = getConfig().url;
                 }
+                if (getConfig().protocol.val()) {
+                    opts.protocol = getConfig().protocol;
+                }
                 rest_client = new GeminiRestClientIo(opts);
             }
         }
@@ -1003,9 +1006,15 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
 
         hash<auto!> generation_config = {
-            "maxOutputTokens": getRequestMaxTokens(opts),
+            "maxOutputTokens": getRequestMaxOutputTokens(opts),
             "temperature": getRequestTemperature(opts),
         };
+        *int reasoning_budget = getRequestReasoningTokenBudget(opts);
+        if (reasoning_budget.typeCode() != NT_NOTHING) {
+            generation_config.thinkingConfig = {
+                "thinkingBudget": reasoning_budget,
+            };
+        }
         if (output_schema) {
             generation_config.responseMimeType = "application/json";
             generation_config.responseSchema = sanitizeGeminiSchema(
@@ -1077,6 +1086,14 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                             "data": make_base64_string(part.data),
                         },
                     };
+                } else if (part.type == "file" && part.data) {
+                    push parts, {
+                        "inlineData": {
+                            "mimeType": part.mime_type
+                                ?? "application/octet-stream",
+                            "data": make_base64_string(part.data),
+                        },
+                    };
                 } else if (part.type == "text" && part.text.val()) {
                     push parts, {"text": part.text};
                 }
@@ -1134,7 +1151,33 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "tool_calls": tool_calls,
             "usage": normalizeGeminiUsage(body.usageMetadata),
             "raw": body,
+            "provider_diagnostics": getGeminiProviderDiagnostics(body, cand),
         };
+    }
+
+    #! Extracts Gemini-specific diagnostics for provider-neutral callers
+    private static *hash<auto> getGeminiProviderDiagnostics(
+            hash<auto> body, hash<auto> cand) {
+        hash<auto!> rv;
+        if (body.responseId.val()) {
+            rv.response_id = body.responseId;
+        }
+        if (body.promptFeedback.typeCode() == NT_HASH) {
+            rv.prompt_feedback = body.promptFeedback;
+        }
+        if (body.usageMetadata.typeCode() == NT_HASH) {
+            rv.usage_metadata = body.usageMetadata;
+        }
+        if (cand.finishReason.val()) {
+            rv.finish_reason = cand.finishReason;
+        }
+        if (cand.finishMessage.val()) {
+            rv.finish_message = cand.finishMessage;
+        }
+        if (cand.safetyRatings.typeCode() == NT_LIST) {
+            rv.safety_ratings = cand.safetyRatings;
+        }
+        return rv ? rv : NOTHING;
     }
 
     #! Extracts text parts from a Gemini response/chunk
@@ -1239,6 +1282,7 @@ public class GeminiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
             "supports_tools": True,
             "supports_structured_output": True,
             "supports_multimodal": True,
+            "supports_reasoning_token_budget": True,
         };
     }
 }

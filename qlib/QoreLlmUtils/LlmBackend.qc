@@ -205,9 +205,25 @@ llm.chatStream(
             cast<*list<hash<ToolDefinition>>>(parsed.tools);
         hash<LlmRequestOptions> options =
             cast<hash<LlmRequestOptions>>(parsed.options);
+        *string forced_tool_name = getForcedOpenAiToolName(body, tools);
         hash<ChatResponse> response = chat(messages, tools, options);
-        return chatResponseToOpenAi(response,
-            options.model ?? provider.getModel());
+        hash<auto> rv = synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
+            response, options.model ?? provider.getModel()), forced_tool_name);
+        if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
+            *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
+                forced_tool_name);
+            if (retry && openAiResponseHasToolCall(retry)) {
+                return retry;
+            }
+        }
+        if (shouldRetryRequiredToolNoOutput(rv, body, tools)) {
+            *hash<auto> retry = retryRequiredToolNoOutput(messages, tools,
+                options, forced_tool_name);
+            if (retry && openAiResponseHasToolCall(retry)) {
+                return retry;
+            }
+        }
+        return rv;
     }
 
     #! Streaming OpenAI-compatible chat-completions facade
@@ -239,7 +255,25 @@ llm.chatStream(
                 delta_cb(chunk);
             }
         }, tools, options);
-        return streamStateToOpenAiResponse(state);
+        hash<auto> rv = synthesizeOpenAiForcedToolCall(
+            streamStateToOpenAiResponse(state),
+            getForcedOpenAiToolName(body, tools));
+        *string forced_tool_name = getForcedOpenAiToolName(body, tools);
+        if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
+            *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
+                forced_tool_name);
+            if (retry && openAiResponseHasToolCall(retry)) {
+                return retry;
+            }
+        }
+        if (shouldRetryRequiredToolNoOutput(rv, body, tools)) {
+            *hash<auto> retry = retryRequiredToolNoOutput(messages, tools,
+                options, forced_tool_name);
+            if (retry && openAiResponseHasToolCall(retry)) {
+                return retry;
+            }
+        }
+        return rv;
     }
 
     #! Estimates the token count for a text string
@@ -271,10 +305,15 @@ llm.chatStream(
         if (body.model.val()) {
             options_h.model = body.model;
         }
-        if (exists body.max_completion_tokens) {
-            options_h.max_tokens = body.max_completion_tokens;
+        if (exists body.max_output_tokens) {
+            options_h.max_output_tokens = body.max_output_tokens;
+        } else if (exists body.max_completion_tokens) {
+            options_h.max_output_tokens = body.max_completion_tokens;
         } else if (exists body.max_tokens) {
             options_h.max_tokens = body.max_tokens;
+        }
+        if (exists body.reasoning_token_budget) {
+            options_h.reasoning_token_budget = body.reasoning_token_budget;
         }
         if (exists body.temperature) {
             options_h.temperature = body.temperature;
@@ -326,16 +365,21 @@ llm.chatStream(
                             "type": "text",
                             "text": part.text,
                         };
+                        if (part.cache_control.typeCode() == NT_HASH) {
+                            cp.cache_control = part.cache_control;
+                        }
                         push parts, cp;
                     } else if (part.type == "image_url") {
                         *hash<ContentPart> cp =
-                            dataUrlToContentPart(part.image_url.url);
+                            dataUrlToContentPart(part.image_url.url, "image",
+                                NOTHING);
                         if (cp) {
                             push parts, cp;
                         }
                     } else if (part.type == "file") {
                         *hash<ContentPart> cp =
-                            dataUrlToContentPart(part."file".file_data);
+                            dataUrlToContentPart(part."file".file_data,
+                                "file", part."file".filename);
                         if (cp) {
                             push parts, cp;
                         }
@@ -394,13 +438,15 @@ llm.chatStream(
                     "name": tool.function.name,
                     "description": tool.function.description,
                     "parameters": tool.function.parameters,
+                    "cache_control": tool.cache_control,
                 };
             }
         }
         return tools ? tools : NOTHING;
     }
 
-    private static *hash<ContentPart> dataUrlToContentPart(*string url) {
+    private static *hash<ContentPart> dataUrlToContentPart(*string url,
+            string part_type, *string filename) {
         if (!url.val()) {
             return NOTHING;
         }
@@ -410,11 +456,15 @@ llm.chatStream(
             return NOTHING;
         }
         try {
-            return <ContentPart>{
-                "type": "image",
+            hash<ContentPart> rv = <ContentPart>{
+                "type": part_type,
                 "mime_type": m[0],
                 "data": parse_base64_string(m[1]),
             };
+            if (filename.val()) {
+                rv.filename = filename;
+            }
+            return rv;
         } catch () {
             return NOTHING;
         }
@@ -474,6 +524,9 @@ llm.chatStream(
         if (model.val()) {
             rv.model = model;
         }
+        if (response.provider_diagnostics.typeCode() == NT_HASH) {
+            rv.provider_diagnostics = response.provider_diagnostics;
+        }
         return rv;
     }
 
@@ -486,6 +539,232 @@ llm.chatStream(
                 "arguments": make_json(tc.arguments ?? {}),
             },
         };
+    }
+
+    private static *string getForcedOpenAiToolName(hash<auto> body,
+            *list<hash<ToolDefinition>> tools) {
+        if (!exists body.tool_choice) {
+            return NOTHING;
+        }
+        auto choice = body.tool_choice;
+        if (choice.typeCode() == NT_HASH && choice.function.name.val()) {
+            return choice.function.name;
+        }
+        if (choice.typeCode() == NT_STRING && choice == "required"
+                && tools && tools.size() == 1) {
+            return tools[0].name;
+        }
+        return NOTHING;
+    }
+
+    private static hash<auto> synthesizeOpenAiForcedToolCall(
+            hash<auto> response, *string forced_tool_name) {
+        if (!forced_tool_name.val()
+                || response.choices.typeCode() != NT_LIST
+                || !response.choices) {
+            return response;
+        }
+        list<auto> choices = cast<list<auto>>(response.choices);
+        if (choices[0].typeCode() != NT_HASH) {
+            return response;
+        }
+        hash<auto> choice = cast<hash<auto>>(choices[0]);
+        if (choice.message.typeCode() != NT_HASH) {
+            return response;
+        }
+        hash<auto> message = cast<hash<auto>>(choice.message);
+        if (message.tool_calls) {
+            return response;
+        }
+        *hash<auto> args = parseOpenAiForcedToolContent(message.content);
+        if (!args) {
+            return response;
+        }
+
+        hash<auto!> new_message;
+        new_message += message;
+        new_message.tool_calls = ({
+            "id": "forced_tool_call_1",
+            "type": "function",
+            "function": {
+                "name": forced_tool_name,
+                "arguments": make_json(args),
+            },
+        },);
+
+        hash<auto!> new_choice;
+        new_choice += choice;
+        new_choice.message = new_message;
+        new_choice.finish_reason = "tool_calls";
+        choices[0] = new_choice;
+
+        hash<auto!> rv;
+        rv += response;
+        rv.choices = choices;
+        return rv;
+    }
+
+    private *hash<auto> retryForcedToolAsJson(
+            list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools,
+            hash<LlmRequestOptions> options, *string forced_tool_name) {
+        if (!forced_tool_name.val()) {
+            return NOTHING;
+        }
+        *hash<ToolDefinition> forced_tool = findToolDefinition(tools,
+            forced_tool_name);
+        if (!forced_tool || forced_tool.parameters.typeCode() != NT_HASH) {
+            return NOTHING;
+        }
+
+        list<hash<ChatMessage>> retry_messages = messages;
+        push retry_messages, <ChatMessage>{
+            "role": "system",
+            "content": "The previous forced function-call response was "
+                "malformed. Return only a JSON object matching the requested "
+                "function arguments schema; do not call a tool.",
+        };
+
+        hash<LlmRequestOptions> retry_options = options;
+        retry_options.output_schema = forced_tool.parameters;
+        retry_options.body_options = stripForcedToolBodyOptions(
+            options.body_options);
+
+        hash<ChatResponse> retry_response = chat(retry_messages, NOTHING,
+            retry_options);
+        return synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
+            retry_response, retry_options.model ?? provider.getModel()),
+            forced_tool_name);
+    }
+
+    private *hash<auto> retryRequiredToolNoOutput(
+            list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools,
+            hash<LlmRequestOptions> options, *string forced_tool_name) {
+        if (!tools) {
+            return NOTHING;
+        }
+        list<hash<ChatMessage>> retry_messages = messages;
+        push retry_messages, <ChatMessage>{
+            "role": "system",
+            "content": "The previous response returned no content and no "
+                "function call even though a tool call was required. Call "
+                "exactly one available function now and provide valid JSON "
+                "arguments for that function.",
+        };
+
+        hash<ChatResponse> retry_response = chat(retry_messages, tools,
+            options);
+        return synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
+            retry_response, options.model ?? provider.getModel()),
+            forced_tool_name);
+    }
+
+    private static *hash<ToolDefinition> findToolDefinition(
+            *list<hash<ToolDefinition>> tools, string name) {
+        if (!tools) {
+            return NOTHING;
+        }
+        foreach hash<ToolDefinition> tool in (tools) {
+            if (tool.name == name) {
+                return tool;
+            }
+        }
+        return NOTHING;
+    }
+
+    private static *hash<auto> stripForcedToolBodyOptions(
+            *hash<auto> body_options) {
+        if (!body_options) {
+            return NOTHING;
+        }
+        hash<auto!> rv;
+        rv += body_options;
+        remove rv.tool_choice;
+        remove rv.toolConfig;
+        return rv ? rv : NOTHING;
+    }
+
+    private static bool shouldRetryForcedToolAsJson(hash<auto> response,
+            *string forced_tool_name) {
+        if (!forced_tool_name.val() || openAiResponseHasToolCall(response)
+                || response.choices.typeCode() != NT_LIST
+                || !response.choices) {
+            return False;
+        }
+        hash<auto> choice = cast<hash<auto>>(
+            cast<list<auto>>(response.choices)[0]);
+        string finish_reason = choice.finish_reason ?? "";
+        return finish_reason.upr() == "MALFORMED_FUNCTION_CALL";
+    }
+
+    private static bool shouldRetryRequiredToolNoOutput(hash<auto> response,
+            hash<auto> request, *list<hash<ToolDefinition>> tools) {
+        if (!isOpenAiToolChoiceRequired(request.tool_choice)
+                || !tools
+                || openAiResponseHasToolCall(response)
+                || response.choices.typeCode() != NT_LIST
+                || !response.choices) {
+            return False;
+        }
+        hash<auto> choice = cast<hash<auto>>(
+            cast<list<auto>>(response.choices)[0]);
+        hash<auto> message = choice.message.typeCode() == NT_HASH
+            ? cast<hash<auto>>(choice.message) : {};
+        if (message.content.val()) {
+            return False;
+        }
+        string finish_reason = (choice.finish_reason ?? "").toString();
+        if (finish_reason == "content_filter"
+                || finish_reason == "length"
+                || finish_reason.upr() == "MALFORMED_FUNCTION_CALL") {
+            return False;
+        }
+        hash<auto> usage = response.usage.typeCode() == NT_HASH
+            ? cast<hash<auto>>(response.usage) : {};
+        int output_tokens = (usage.completion_tokens
+            ?? usage.output_tokens ?? 0).toInt();
+        return output_tokens == 0 || finish_reason == "stop"
+            || !finish_reason.val();
+    }
+
+    private static bool isOpenAiToolChoiceRequired(auto choice) {
+        if (!exists choice) {
+            return False;
+        }
+        return choice == "required"
+            || (choice.typeCode() == NT_HASH
+                && choice.function.name.val());
+    }
+
+    private static bool openAiResponseHasToolCall(hash<auto> response) {
+        if (response.choices.typeCode() != NT_LIST || !response.choices) {
+            return False;
+        }
+        hash<auto> choice = cast<hash<auto>>(
+            cast<list<auto>>(response.choices)[0]);
+        return choice.message.tool_calls.typeCode() == NT_LIST
+            && choice.message.tool_calls.size() > 0;
+    }
+
+    private static *hash<auto> parseOpenAiForcedToolContent(*string content) {
+        if (!content.val()) {
+            return NOTHING;
+        }
+        string cleaned = trim(regex_subst(content,
+            "<think>[\\s\\S]*?</think>\\s*", "", RE_Global));
+        if (cleaned =~ /^```/) {
+            cleaned = regex_subst(cleaned, "^```[a-zA-Z]*\\s*\n?", "");
+            cleaned = regex_subst(cleaned, "\n?```\\s*$", "");
+            cleaned = trim(cleaned);
+        }
+        try {
+            auto parsed = parse_json(cleaned);
+            return parsed.typeCode() == NT_HASH
+                ? cast<hash<auto>>(parsed) : NOTHING;
+        } catch () {
+            return NOTHING;
+        }
     }
 
     private static string genericStopReasonToOpenAi(*string reason) {

@@ -13,6 +13,7 @@
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
 %requires ../../../../qlib/GeminiRestClient.qm
 %requires ../../../../qlib/QoreLlmUtils
 %requires Util
@@ -28,6 +29,7 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
     public {
         list<hash<auto>> requests = ();
         hash<string, hash<auto>> responses;
+        hash<string, int> response_index;
         Mutex m();
     }
 
@@ -50,6 +52,14 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
             return makeResponse(404,
                 "{\"error\":{\"status\":\"NOT_FOUND\",\"message\":\"Not Found\"}}",
                 {"Content-Type": MimeTypeJson});
+        }
+        if (resp.sequence.typeCode() == NT_LIST) {
+            int idx = response_index{cx.raw_path} ?? 0;
+            response_index{cx.raw_path} = idx + 1;
+            list<auto> seq = cast<list<auto>>(resp.sequence);
+            if (idx < seq.size() && seq[idx].typeCode() == NT_HASH) {
+                resp = cast<hash<auto>>(seq[idx]);
+            }
         }
         int code = resp.code ?? 200;
         string out = resp.body.typeCode() == NT_STRING
@@ -124,8 +134,20 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiToolCallResponseTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
+        addTestCase("LlmBackend OpenAI chat facade maps abstract Gemini "
+            "token budgets", \geminiOpenAiAbstractTokenBudgetFacadeTest());
+        addTestCase("LlmBackend OpenAI provider maps reasoning-model "
+            "completion budgets", \openAiReasoningModelTokenBudgetTest());
+        addTestCase("LlmBackend OpenAI chat facade normalizes forced JSON "
+            "tool text", \geminiOpenAiForcedToolJsonTextTest());
+        addTestCase("LlmBackend OpenAI chat facade retries malformed forced "
+            "tool calls as JSON", \geminiOpenAiMalformedForcedToolRetryTest());
+        addTestCase("LlmBackend OpenAI chat facade retries required empty "
+            "tool responses", \geminiOpenAiRequiredToolEmptyRetryTest());
         addTestCase("LlmBackend OpenAI chat facade converts tool turns",
             \geminiOpenAiToolTurnsFacadeTest());
+        addTestCase("LlmBackend Anthropic facade preserves cache markers "
+            "and file blocks", \anthropicOpenAiFacadeCacheAndFileTest());
         addTestCase("LlmBackend provider registry - factory lookup",
             \registryFactoryLookupTest());
         addTestCase("LlmBackend provider registry - register / deregister",
@@ -342,11 +364,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             <ChatMessage>{"role": "user", "content": "hello"},
         ), NOTHING, <LlmRequestOptions>{
             "model": "cheap-task-model",
+            "max_output_tokens": 321,
+            "reasoning_token_budget": 111,
             "temperature": 0.2,
             "body_options": {"reasoning_effort": "low"},
         });
         assertEq("ok", rv.content);
         assertEq("cheap-task-model", captured.model);
+        assertEq(321, captured.max_tokens);
+        assertEq(111, captured.reasoning_token_budget);
         assertEq(0.2, captured.temperature);
         assertEq("low", captured.reasoning_effort);
     }
@@ -398,13 +424,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             },
         ), <LlmRequestOptions>{
             "model": "gemini-2.5-pro",
-            "max_tokens": 128,
+            "max_output_tokens": 128,
+            "reasoning_token_budget": 64,
             "temperature": 0.2,
-            "body_options": {
-                "generationConfig": {
-                    "thinkingConfig": {"thinkingBudget": 64},
-                },
-            },
         });
 
         assertEq("done", rv.content);
@@ -633,6 +655,425 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "named tool choice limits the allowed function");
     }
 
+    geminiOpenAiAbstractTokenBudgetFacadeTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {"parts": ({"text": "{\"ok\":true}"},)},
+                    },),
+                    "usageMetadata": {"totalTokenCount": 12},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "messages": (
+                {"role": "user", "content": "extract"},
+            ),
+            "max_output_tokens": 16384,
+            "reasoning_token_budget": 1024,
+            "temperature": 0.0,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"ok": {"type": "boolean"}},
+                    },
+                },
+            },
+        });
+
+        assertEq("{\"ok\":true}", rv.choices[0].message.content,
+            "Gemini response content is normalized");
+        assertEq(16384,
+            gemini_handler.requests[0].body.generationConfig.maxOutputTokens,
+            "abstract max_output_tokens maps to Gemini maxOutputTokens");
+        assertEq(1024,
+            gemini_handler.requests[0].body.generationConfig
+                .thinkingConfig.thinkingBudget,
+            "abstract reasoning_token_budget maps to Gemini thinkingBudget");
+        assertEq("application/json",
+            gemini_handler.requests[0].body.generationConfig.responseMimeType,
+            "structured output still maps to Gemini JSON mode");
+    }
+
+    openAiReasoningModelTokenBudgetTest() {
+        installGeminiHandler({
+            "/v1/chat/completions": {
+                "code": 200,
+                "body": {
+                    "choices": ({
+                        "message": {"role": "assistant", "content": "ok"},
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {},
+                },
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "gpt-5.5",
+            "api_key": "openai-test-key",
+        });
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "hello"},
+        ), NOTHING, <LlmRequestOptions>{"max_output_tokens": 8192});
+
+        assertEq("ok", rv.content);
+        hash<auto> body = gemini_handler.requests[0].body;
+        assertEq(8192, body.max_completion_tokens,
+            "OpenAI reasoning models receive max_completion_tokens");
+        assertFalse(body.hasKey("max_tokens"),
+            "OpenAI reasoning models must not receive max_tokens");
+    }
+
+    geminiOpenAiForcedToolJsonTextTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "responseId": "gemini-forced-json-tool-1",
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({
+                                "text": "```json\n" + make_json({
+                                    "atomic_requirements": (
+                                        {"text": "Reconcile orders hourly"},
+                                    ),
+                                    "open_questions": (
+                                        {"question": "Which SLA applies?"},
+                                    ),
+                                    "assumptions": (),
+                                    "target_scope": {
+                                        "in": ("EMEA operations",),
+                                        "out": (),
+                                    },
+                                }) + "\n```",
+                            },),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 17},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {
+                    "role": "system",
+                    "content": "Return the structured decomposition.",
+                },
+                {
+                    "role": "user",
+                    "content": "Decompose the supply-chain prose.",
+                },
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "qonsole_design_decompose_requirement",
+                    "description": "Return a structured decomposition",
+                    "parameters": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "atomic_requirements": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "text": {"type": "string"},
+                                    },
+                                    "required": ("text",),
+                                },
+                            },
+                            "open_questions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "question": {"type": "string"},
+                                    },
+                                    "required": ("question",),
+                                },
+                            },
+                            "target_scope": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "in": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                    "out": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                },
+                            },
+                        },
+                        "required": ("atomic_requirements",),
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "qonsole_design_decompose_requirement"},
+            },
+        });
+
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "forced JSON text is normalized to tool-call finish_reason");
+        assertEq("qonsole_design_decompose_requirement",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "forced tool name is preserved");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("Reconcile orders hourly",
+            args.atomic_requirements[0].text,
+            "JSON text is exposed as tool arguments");
+        assertEq("Which SLA applies?",
+            args.open_questions[0].question,
+            "nested arrays survive the normalization");
+        assertEq("ANY",
+            gemini_handler.requests[0].body.toolConfig.functionCallingConfig.mode,
+            "the provider still receives forced function-calling config");
+        assertFalse(gemini_handler.requests[0].body.tools[0]
+                .functionDeclarations[0].parameters.hasKey(
+                "additionalProperties"),
+            "Gemini tool schema sanitization still happens in provider code");
+    }
+
+    geminiOpenAiMalformedForcedToolRetryTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-tool-1",
+                            "candidates": ({
+                                "finishReason": "MALFORMED_FUNCTION_CALL",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 100,
+                                "candidatesTokenCount": 0,
+                                "totalTokenCount": 100,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-tool-retry-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "text": make_json({
+                                            "atomic_requirements": (
+                                                {"text": "Gate payments"},
+                                            ),
+                                        }),
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {"totalTokenCount": 7},
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {
+                    "role": "system",
+                    "content": "Call the supplied tool.",
+                },
+                {
+                    "role": "user",
+                    "content": "Decompose the requirement.",
+                },
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "qonsole_design_decompose_requirement",
+                    "description": "Return a structured decomposition",
+                    "parameters": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "atomic_requirements": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "text": {"type": "string"},
+                                    },
+                                    "required": ("text",),
+                                },
+                            },
+                        },
+                        "required": ("atomic_requirements",),
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "qonsole_design_decompose_requirement"},
+            },
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "malformed forced tool call is retried once");
+        assertEq("ANY", gemini_handler.requests[0]
+                .body.toolConfig.functionCallingConfig.mode,
+            "initial request uses forced function calling");
+        assertFalse(gemini_handler.requests[1].body.hasKey("toolConfig"),
+            "retry removes function-calling config");
+        assertFalse(gemini_handler.requests[1].body.hasKey("tools"),
+            "retry uses JSON schema mode instead of tools");
+        assertEq("application/json",
+            gemini_handler.requests[1].body.generationConfig.responseMimeType,
+            "retry asks provider for structured JSON");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "retry response is normalized to OpenAI tool_calls");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("Gate payments", args.atomic_requirements[0].text,
+            "retry JSON content becomes the forced tool arguments");
+    }
+
+    geminiOpenAiRequiredToolEmptyRetryTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-empty-required-tool-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 120,
+                                "candidatesTokenCount": 0,
+                                "totalTokenCount": 120,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-empty-required-tool-retry-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "functionCall": {
+                                            "name": "select_action",
+                                            "args": {
+                                                "operation": "no_action",
+                                                "reason": "complete",
+                                            },
+                                        },
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 135,
+                                "candidatesTokenCount": 4,
+                                "totalTokenCount": 139,
+                            },
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            }, {
+                "type": "function",
+                "function": {
+                    "name": "record_note",
+                    "description": "Record a note",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}},
+                        "required": ("text",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "empty required-tool response is retried once");
+        assertEq("ANY", gemini_handler.requests[0]
+                .body.toolConfig.functionCallingConfig.mode,
+            "initial request requires some tool");
+        assertEq("ANY", gemini_handler.requests[1]
+                .body.toolConfig.functionCallingConfig.mode,
+            "retry preserves required tool mode");
+        assertEq("select_action", gemini_handler.requests[1].body.tools[0]
+                .functionDeclarations[0].name,
+            "retry keeps tool declarations available");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "retry functionCall is normalized to OpenAI tool_calls");
+        assertEq("select_action",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "retry preserves returned tool name");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("no_action", args.operation,
+            "retry function arguments are serialized");
+        assertEq("STOP", rv.provider_diagnostics.finish_reason,
+            "OpenAI facade exposes provider finish diagnostics");
+    }
+
     geminiOpenAiToolTurnsFacadeTest() {
         checkGeminiModule();
         installGeminiHandler({
@@ -688,6 +1129,84 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(True,
             gemini_handler.requests[0].body.contents[2].parts[0].functionResponse.response.ok,
             "tool result JSON parsed");
+    }
+
+    anthropicOpenAiFacadeCacheAndFileTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1/messages": {
+                "code": 200,
+                "body": {
+                    "id": "msg-cache-file-test",
+                    "model": "claude-test",
+                    "role": "assistant",
+                    "content": ({"type": "text", "text": "ok"},),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 3, "output_tokens": 1},
+                },
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": "http://localhost:" + port,
+            "model": "claude-test",
+            "api_key": "anthropic-test-key",
+        });
+        list<hash<auto>> system_content = ({
+            "type": "text",
+            "text": "cached rules",
+            "cache_control": {"type": "ephemeral"},
+        },);
+        list<hash<auto>> user_content = ({
+            "type": "text",
+            "text": "read the PDF",
+        },);
+        user_content += {
+            "type": "file",
+            "file": {
+                "filename": "invoice.pdf",
+                "file_data": "data:application/pdf;base64,"
+                    + make_base64_string(binary("%PDF-test")),
+            },
+        };
+        hash<auto> rv = llm.chatCompletions({
+            "messages": (
+                {
+                    "role": "system",
+                    "content": system_content,
+                },
+                {
+                    "role": "user",
+                    "content": user_content,
+                },
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "answer",
+                    "description": "answer",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"ok": {"type": "boolean"}},
+                    },
+                },
+                "cache_control": {"type": "ephemeral"},
+            },),
+        });
+
+        assertEq("ok", rv.choices[0].message.content,
+            "Anthropic response is normalized to OpenAI content");
+        hash<auto> body = gemini_handler.requests[0].body;
+        assertEq("ephemeral", body.system[0].cache_control.type,
+            "system cache_control marker reaches Anthropic request");
+        assertEq("ephemeral", body.tools[0].cache_control.type,
+            "tool cache_control marker reaches Anthropic request");
+        assertEq("document", body.messages[0].content[1].type,
+            "OpenAI file block is translated to Anthropic document");
+        assertEq("application/pdf",
+            body.messages[0].content[1].source.media_type,
+            "document MIME type is preserved");
     }
 
     hashdeclDefaultsTest() {
