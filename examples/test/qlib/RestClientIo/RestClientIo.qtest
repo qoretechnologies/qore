@@ -343,6 +343,30 @@ class Auth401Handler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Captures controller log messages so a test can assert the absence of
+#! specific error patterns (e.g. OBJECT-ALREADY-DELETED).
+class ControllerLogCapture inherits LoggerInterfaceBase {
+    public {
+        list<string> messages();
+        Mutex mtx();
+    }
+
+    logArgs(int level, string message, *softlist<auto> args) {
+        string formatted = args ? vsprintf(message, args) : message;
+        AutoLock al(mtx);
+        push messages, formatted;
+    }
+
+    bool isEnabledFor(int level) {
+        return True;
+    }
+
+    list<string> snapshot() {
+        AutoLock al(mtx);
+        return messages;
+    }
+}
+
 class RestClientIoTest inherits QUnit::Test {
     private {
         HttpServer server;
@@ -529,6 +553,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll negotiate auth", \testPingPollNegotiateAuth());
         addTestCase("ping poll via monitor", \testPingPollViaMonitor());
         addTestCase("ping poll oauth2 pre-refresh", \testPingPollOAuth2PreRefresh());
+        addTestCase("ping poll oauth2 no deleted-object race", \testPingPollOAuth2NoDeletedRace());
         addTestCase("ping poll 401 retry", \testPingPoll401Retry());
         addTestCase("ping poll 401 no retry", \testPingPoll401NoRetry());
         addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
@@ -2797,6 +2822,122 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Verify token refresh occurred
         assertTrue(token_handler.getRequestCount() >= 1, "token refresh should have occurred");
+%endif
+    }
+
+    #! Regression: OAuth2 pre-refresh must not delete the in-flight async op
+    /** Bug: RestClientIoPingPollOperation::processOAuth2RefreshResult() (and
+        cancelPendingWork()) used `delete oauth2_operation` to release the
+        OAuth2 RestClientIoAsyncRequestOperation as soon as oauth2_future.get()
+        returned.  The async I/O controller still held a strong ref to the
+        spop_obj and had a pending dispatchOnCompleteAsync work item queued.
+        `delete` immediately ran the destructor regardless of remaining refs,
+        and when the worker pool later picked up the onComplete dispatch
+        evalMethod() threw OBJECT-ALREADY-DELETED, logged by workerLoop as:
+            QoreCallDispatcher::workerLoop() onComplete exception:
+              OBJECT-ALREADY-DELETED: ... class=RestClientIoAsyncRequestOperation
+              owner=restclientio-async:<hash>
+
+        Fix: replace `delete oauth2_operation` with `remove oauth2_operation`
+        so the controller's strong ref keeps the object alive until after
+        onComplete has been dispatched.
+    */
+    testPingPollOAuth2NoDeletedRace() {
+%ifndef NoJson
+        ControllerLogCapture cap();
+        AsyncIoController::setLogger(cap);
+        # Cap callback workers to 1 so the controller's onComplete dispatch
+        # must wait for the single worker that just executed the OAuth2 op's
+        # continuePoll.  That waiting window is exactly what lets the test
+        # thread (woken by the OAuth2 completion notifier signaled from
+        # inside that same continuePoll) reach processOAuth2RefreshResult
+        # before onComplete fires — i.e. the production race condition.  At
+        # 0 (default) the worker pool always wins in-process and the bug is
+        # invisible.
+        AsyncIoController::setMaxCallbackWorkers(1);
+        on_exit {
+            AsyncIoController::setLogger(NOTHING);
+            AsyncIoController::setMaxCallbackWorkers(0);
+        }
+
+        # Run pings concurrently in background threads.  Combined with the
+        # 1-worker dispatcher cap above, this is what makes the production
+        # race deterministic in-process: the single dispatcher worker can be
+        # busy with one OAuth2 op's continuePoll while another thread's
+        # processOAuth2RefreshResult is running the (buggy) `delete` — and the
+        # cap then forces the queued onComplete to be dispatched against the
+        # now-zombie object.  With the default many-worker pool, onComplete
+        # consistently wins the race in-process and the bug is invisible.
+        int num_threads = 8;
+        int iterations_per_thread = 5;
+
+        Counter cnt(num_threads);
+        list<*hash<ExceptionInfo>> errors = ();
+        Mutex err_mtx();
+
+        code<nothing(int)> worker = sub (int worker_id) {
+            on_exit cnt.dec();
+            try {
+                for (int i = 0; i < iterations_per_thread; ++i) {
+                    string label = sprintf("nodel-%d-%d", worker_id, i);
+                    date near_expiry = now_us() + 5s;
+                    RestConnection rc = createPingConnection("ping-oauth2-" + label, {
+                        "oauth2_grant_type": "client_credentials",
+                        "oauth2_client_id": "test-client-id",
+                        "oauth2_client_secret": "test-client-secret",
+                        "oauth2_token_url": "/oauth/token",
+                        "token": "initial-" + label,
+                        "token_type": "Bearer",
+                        "oauth2_refresh_token": "initial-refresh-" + label,
+                        "oauth2_token_expiry": near_expiry,
+                    });
+                    AbstractPollOperation op = rc.startPollConnect();
+                    *hash<ExceptionInfo> ex = drivePingOp(op);
+                    if (exists ex || !op.goalReached()) {
+                        AutoLock al(err_mtx);
+                        push errors, ex ?? <ExceptionInfo>{
+                            "err": "GOAL-NOT-REACHED",
+                            "desc": label,
+                        };
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(err_mtx);
+                push errors, ex;
+            }
+        };
+
+        for (int t = 0; t < num_threads; ++t) {
+            background worker(t);
+        }
+        cnt.waitForZero(60s);
+
+        assertEq((), errors, "all concurrent OAuth2 pings should succeed");
+
+        # Drain any still-pending onComplete/abort dispatches so the assertion
+        # below sees a stable snapshot of controller-side error messages.
+        AsyncIoController::flushCallbacks();
+
+        # Find any workerLoop onComplete failure against
+        # RestClientIoAsyncRequestOperation — the precise signature of the bug.
+        list<string> bad = ();
+        foreach string msg in (cap.snapshot()) {
+            if (msg =~ /OBJECT-ALREADY-DELETED/
+                    && msg =~ /onComplete/
+                    && msg =~ /RestClientIoAsyncRequestOperation/) {
+                push bad, msg;
+            }
+        }
+        on_error if (bad) {
+            printf("controller logged %d unexpected message(s):\n", bad.size());
+            foreach string m in (bad) {
+                printf("  %s\n", m);
+            }
+        }
+        assertEq(0, bad.size(),
+            "controller must not log OBJECT-ALREADY-DELETED for "
+            "RestClientIoAsyncRequestOperation::onComplete — the OAuth2 op "
+            "must outlive the controller's onComplete dispatch");
 %endif
     }
 

@@ -1109,15 +1109,22 @@ static void applyNoNarrowContainerType(const QoreTypeInfo* ti, QoreValue& val, E
         }
         QoreHashNode* h = val.get<QoreHashNode>();
         qore_hash_private* hp = qore_hash_private::get(*h);
-        if (hp->getHashDecl() || hp->complexTypeInfo == autoHashTypeInfo) {
+        if (!hp->getHashDecl() && hp->complexTypeInfo == autoHashTypeInfo) {
             return;
         }
         if (!h->is_unique()) {
             QoreHashNode* copy = h->copy();
-            qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
+            qore_hash_private* cp = qore_hash_private::get(*copy);
+            if (cp->getHashDecl()) {
+                cp->setHashDecl(nullptr);
+            }
+            cp->complexTypeInfo = autoHashTypeInfo;
             AbstractQoreNode* old = val.assign(copy);
             discard(old, xsink);
         } else {
+            if (hp->getHashDecl()) {
+                hp->setHashDecl(nullptr);
+            }
             hp->complexTypeInfo = autoHashTypeInfo;
         }
     } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {

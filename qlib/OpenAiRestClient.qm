@@ -39,6 +39,8 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires QoreLlmTypes
+%requires QoreRagTypes
 
 module OpenAiRestClient {
     version = "1.1";
@@ -48,6 +50,9 @@ module OpenAiRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("openai", OpenAiRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(new OpenAiLlmProviderFactory());
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
+            new QoreRagUtils::OpenAiEmbedderFactory());
     };
 }
 
@@ -685,6 +690,681 @@ public class OpenAiResponseSseStreamIo {
             rv = base + rv;
         }
         return rv;
+    }
+}
+
+#! LLM provider that dispatches to OpenAI-compatible \c /v1/chat/completions endpoints
+/** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract for any
+    backend that speaks the OpenAI chat-completions wire format (OpenAI,
+    Azure OpenAI, vLLM, SGLang via @ref SGLangLlmProvider, any compatible
+    gateway).  Owns its own @ref RestClientIo::RestClientIo and uses the
+    standard \c Authorization: \c Bearer header for authentication.
+
+    The provider's default OpenAI-facade hooks (inherited from
+    @ref QoreLlmUtils::AbstractLlmProvider) are sufficient because this
+    provider already speaks OpenAI shape natively — no overrides needed
+    for \c tool_choice, \c response_format, stream raw shape, or tool-call
+    deltas.
+
+    Thread-safe: the REST client is lazy-initialized behind a mutex.
+*/
+public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    private {
+        #! Lazy-initialized REST client
+        *RestClientIo::RestClientIo rest_client;
+        #! Serializes lazy initialization
+        Mutex rest_mutex();
+    }
+
+    #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig
+    /** @param config the backend configuration; @ref QoreLlmUtils::LlmBackendConfig::url
+            is required
+
+        @throw LLM-CONFIG-ERROR \c url is missing
+        @throw LLM-DEPENDENCY-ERROR the \c json module is not available
+    */
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : QoreLlmUtils::AbstractLlmProvider(config) {
+        if (!config.url.val()) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("url is required for %y mode", getMode());
+        }
+%ifdef NoJson
+        throw "LLM-DEPENDENCY-ERROR",
+            "json module is required for HTTP mode but is not available";
+%endif
+    }
+
+    string getMode() {
+        return "http";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = {
+            "messages": (
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ),
+            "temperature": getRequestTemperature(opts),
+        };
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
+        }
+        body = applyOpenAiOutputTokenBudget(body, opts);
+        if (output_schema) {
+            body.response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": output_schema.name ?? "output",
+                    "strict": True,
+                    "schema": output_schema,
+                },
+            };
+        }
+        body = mergeRequestBodyOptions(body, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/chat/completions", body,
+                    buildAuthHeader());
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("HTTP completion request failed: %s",
+                ex.desc), ex;
+        }
+
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": resp.body.choices[0].message.content ?? "",
+            "usage": resp.body.usage ?? {},
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/chat/completions", body,
+                    buildAuthHeader());
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("chat request failed: %s",
+                ex.desc), ex;
+        }
+
+        return parseOpenAiChatResponse(resp.body);
+    }
+
+    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
+        body.stream = True;
+
+        hash<auto> hdr = {"Accept": "text/event-stream"};
+        if (getConfig().api_key.val()) {
+            hdr."Authorization" = "Bearer " + getConfig().api_key;
+        }
+        hdr."Content-Type" = "application/json";
+
+        HttpClientIo::HttpClientConnectionManager mgr =
+            rest_client.getConnectionManager();
+        HttpClientIo::HttpClientStreamHandle stream =
+            mgr.acquireStream(getConfig().url);
+
+        string json_body = make_json(body);
+        stream.startStreaming("POST", "/v1/chat/completions", hdr, False,
+            json_body);
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        while (True) {
+            *hash<SseMessageInfo> evt = reader.readEvent(
+                getConfig().timeout_ms);
+            if (!evt) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+            if (evt.data == "[DONE]") {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+
+            *hash<auto> parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch () {
+                continue;
+            }
+
+            *string delta;
+            if (parsed.choices[0].delta.content.val()) {
+                delta = parsed.choices[0].delta.content;
+            }
+            if (parsed.choices[0].finish_reason.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "done": True,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+                break;
+            }
+            if (delta.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+            }
+        }
+    }
+
+    #! Returns headers with the OpenAI \c Authorization: \c Bearer credential
+    private *hash<auto> buildAuthHeader() {
+        *hash<auto> hdr;
+        if (getConfig().api_key.val()) {
+            hdr."Authorization" = "Bearer " + getConfig().api_key;
+        }
+        return hdr;
+    }
+
+    #! Lazy-initializes the underlying REST client
+    private ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                hash<auto!> opts = {
+                    "url": getConfig().url,
+                    "connect_timeout": getConfig().connect_timeout_ms,
+                    "timeout": getConfig().timeout_ms,
+                    "data": "json",
+                };
+                if (getConfig().protocol.val()) {
+                    opts.protocol = getConfig().protocol;
+                }
+                rest_client = new RestClientIo::RestClientIo(opts);
+            }
+        }
+    }
+
+    #! Builds an OpenAI-shaped chat-completions request body
+    private hash<auto> buildOpenAiChatBody(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        list<hash<auto>> api_messages = ();
+        foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
+            hash<auto!> api_msg();
+            api_msg.role = msg.role;
+            if (msg.content_parts) {
+                list<auto> parts = ();
+                foreach hash<QoreLlmUtils::ContentPart> part in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": sprintf("data:%s;base64,%s",
+                                    part.mime_type ?? "image/png", b64),
+                            },
+                        };
+                    } else if (part.type == "file" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "file",
+                            "file": {
+                                "filename": part.filename ?? "attachment",
+                                "file_data": sprintf("data:%s;base64,%s",
+                                    part.mime_type ?? "application/octet-stream",
+                                    b64),
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push parts, {"type": "text", "text": part.text};
+                    }
+                }
+                api_msg.content = parts;
+            } else if (msg.content.val()) {
+                api_msg.content = msg.content;
+            }
+            if (msg.tool_calls) {
+                list<auto> tc_list = ();
+                foreach hash<QoreLlmUtils::ChatToolCall> tc in (msg.tool_calls) {
+                    push tc_list, {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": make_json(tc.arguments ?? {}),
+                        },
+                    };
+                }
+                api_msg.tool_calls = tc_list;
+            }
+            if (msg.tool_call_id.val()) {
+                api_msg.tool_call_id = msg.tool_call_id;
+            }
+            if (msg.name.val() && msg.role == "tool") {
+                api_msg.name = msg.name;
+            }
+            push api_messages, api_msg;
+        }
+
+        hash<auto> body = {
+            "messages": api_messages,
+            "temperature": getRequestTemperature(opts),
+        };
+        *string request_model = getRequestModel(opts);
+        if (request_model.val()) {
+            body.model = request_model;
+        }
+        body = applyOpenAiOutputTokenBudget(body, opts);
+        if (tools) {
+            list<auto> tool_defs = ();
+            foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
+                push tool_defs, {
+                    "type": "function",
+                    "function": {
+                        "name": td.name,
+                        "description": td.description ?? "",
+                        "parameters": td.parameters
+                            ?? {"type": "object", "properties": {}},
+                    },
+                };
+            }
+            body.tools = tool_defs;
+        }
+        return mergeRequestBodyOptions(body, opts);
+    }
+
+    #! Applies the provider-neutral output budget to OpenAI-compatible wire fields
+    private hash<auto> applyOpenAiOutputTokenBudget(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        int budget = getRequestMaxOutputTokens(opts);
+        *string model_id = body.model ?? getRequestModel(opts);
+        if (model_id.val() && openAiModelUsesMaxCompletionTokens(model_id)) {
+            body.max_completion_tokens = budget;
+        } else {
+            body.max_tokens = budget;
+        }
+        return body;
+    }
+
+    #! True for OpenAI model families that require max_completion_tokens
+    private static bool openAiModelUsesMaxCompletionTokens(string model_id) {
+        string lower = regex_subst(model_id.lwr(), "^models/", "");
+        if (lower =~ /^gpt-5/) {
+            return True;
+        }
+        if (lower =~ /^o[0-9]/) {
+            return True;
+        }
+        return False;
+    }
+
+    #! Parses an OpenAI-shaped chat-completions response into a @ref QoreLlmUtils::ChatResponse
+    private static hash<QoreLlmUtils::ChatResponse> parseOpenAiChatResponse(
+            hash<auto> response_data) {
+        hash<auto> choice = response_data.choices[0];
+        hash<auto> msg = choice.message;
+
+        string stop_reason;
+        switch (choice.finish_reason) {
+            case "stop":
+                stop_reason = "end_turn";
+                break;
+            case "tool_calls":
+                stop_reason = "tool_use";
+                break;
+            case "length":
+                stop_reason = "max_tokens";
+                break;
+            default:
+                stop_reason = choice.finish_reason ?? "end_turn";
+        }
+
+        *list<hash<QoreLlmUtils::ChatToolCall>> parsed_tool_calls;
+        if (msg.tool_calls) {
+            parsed_tool_calls = ();
+            foreach hash<auto> tc in (msg.tool_calls) {
+                *hash<auto> args;
+                if (tc.function.arguments.val()) {
+                    if (tc.function.arguments.typeCode() == NT_STRING) {
+                        args = parse_json(tc.function.arguments);
+                    } else {
+                        args = tc.function.arguments;
+                    }
+                }
+                push parsed_tool_calls, <QoreLlmUtils::ChatToolCall>{
+                    "id": tc.id,
+                    "name": tc.function.name,
+                    "arguments": args,
+                };
+            }
+        }
+
+        return <QoreLlmUtils::ChatResponse>{
+            "id": response_data.id,
+            "model": response_data.model,
+            "stop_reason": stop_reason,
+            "content": msg.content,
+            "tool_calls": parsed_tool_calls,
+            "usage": response_data.usage ?? {},
+            "raw": response_data,
+        };
+    }
+}
+
+#! Factory for @ref OpenAiLlmProvider
+public class OpenAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "http";
+    }
+
+    string getDisplayName() {
+        return "OpenAI-compatible chat completions";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new OpenAiLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": True,
+        };
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! OpenAI-backed embedder — calls the OpenAI \c /embeddings endpoint
+/** Wraps @ref OpenAiRestClient::OpenAiRestClientIo "OpenAiRestClientIo" for
+    async-capable HTTP calls.
+
+    @par Configuration
+
+    - \c api_key (required): OpenAI API key; passed via the \c token option
+    - \c url (optional): override the default OpenAI URL
+    - \c model (optional): model name, default \c "text-embedding-3-small"
+    - \c dimension (optional): forwarded as the \c dimensions request
+      parameter; when unset the dimension is auto-detected on first call
+    - \c timeout (optional): default request timeout (per-call \c opts override
+      takes precedence)
+    - \c connect_timeout (optional): default connection timeout (per-call
+      \c opts override takes precedence)
+*/
+public class OpenAiEmbedder inherits AbstractEmbedder {
+    public {
+        #! Default model name
+        const DefaultModel = "text-embedding-3-small";
+
+        #! Backend identifier reported in @c EMBEDDER-MODEL-CONFIG-ERROR
+        const Backend = "openai";
+    }
+
+    private {
+        #! Captured configuration
+        hash<EmbedderConfig> config;
+        #! Resolved model name (never empty)
+        string model_name;
+        #! Lazily-created REST client
+        *OpenAiRestClient::OpenAiRestClientIo rest_client;
+        #! Cached embedding dimension (from config or auto-detected)
+        *int cached_dimension;
+        #! Guard for lazy initialization
+        Mutex init_mutex();
+    }
+
+    #! Creates the embedder
+    /** @param config embedder configuration; \c api_key must be set
+
+        @throw EMBEDDER-CONFIG-ERROR if required fields are missing
+    */
+    constructor(hash<EmbedderConfig> config) {
+        if (!config.api_key.val()) {
+            throw "EMBEDDER-CONFIG-ERROR",
+                "OpenAiEmbedder requires 'api_key' in EmbedderConfig";
+        }
+        self.config = config;
+        model_name = config.model ?? DefaultModel;
+        if (exists config.dimension) {
+            cached_dimension = config.dimension;
+        }
+    }
+
+    #! Encodes a single piece of text into a vector
+    list<float> encode(string text, *hash<auto> opts) {
+        list<list<float>> rv = encodeBatch((text,), opts);
+        return rv[0];
+    }
+
+    #! Encodes a batch of texts into vectors
+    /** @param texts input texts
+        @param opts optional per-call overrides; recognized keys:
+        - \c timeout (\c *timeout) — request timeout
+        - \c connect_timeout (\c *timeout) — connection timeout
+
+        @throw EMBEDDER-RESPONSE-ERROR if the response is missing data, has
+        a vector count mismatch, contains an empty vector, or contains
+        non-numeric vector elements
+        @throw EMBEDDER-MODEL-CONFIG-ERROR if the backend reports a permanent
+        model/configuration failure (see @ref isPermanentEmbedderConfigError())
+        @throw REST-RESPONSE-ERROR for transient infrastructure failures
+        (5xx, rate limits, network)
+    */
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        if (!texts) {
+            return ();
+        }
+
+        hash<auto> body = {
+            "model": model_name,
+            "input": texts,
+        };
+        if (exists cached_dimension) {
+            body.dimensions = cached_dimension;
+        }
+
+        hash<auto> resp;
+        try {
+            resp = pickRestClient(opts).restPost("/embeddings", body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && isPermanentEmbedderConfigError(ex)) {
+                throwEmbedderModelConfigError(ex, Backend, model_name);
+            }
+            rethrow;
+        }
+
+        # sort by index to align with input order
+        *list<auto> data = resp.body.data;
+        if (!exists data) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response missing 'data' field", Backend),
+                {"body": resp.body};
+        }
+        if (data.size() != texts.size()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response returned %d items for %d input texts",
+                    Backend, data.size(), texts.size()),
+                {"body": resp.body};
+        }
+        list<hash<auto>> sorted_data = sort(cast<list<hash<auto>>>(data),
+            int sub(hash<auto> a, hash<auto> b) {
+                return a."index" <=> b."index";
+            });
+
+        list<list<float>> result = ();
+        foreach hash<auto> item in (sorted_data) {
+            list<float> vec = validateAndCastVector(item.embedding, resp.body);
+            if (!exists cached_dimension) {
+                cached_dimension = vec.size();
+            }
+            push result, vec;
+        }
+        return result;
+    }
+
+    #! Returns the embedding dimension produced by this backend
+    /** If the dimension was not provided in the config, performs a one-shot
+        probe call and caches the result.
+    */
+    int getDimension() {
+        if (exists cached_dimension) {
+            return cached_dimension;
+        }
+        encode(" ");
+        return cached_dimension ?? -1;
+    }
+
+    #! Returns the configured model name
+    *string getModel() {
+        return model_name;
+    }
+
+    #! Classifies an OpenAI \c REST-RESPONSE-ERROR as a permanent model/config failure
+    /** Recognizes:
+        - HTTP 400 / 404 with response body containing OpenAI's
+          \c error.code or \c error.type indicating a model issue
+          (\c model_not_found, \c invalid_request_error referencing the model)
+        - HTTP 400 / 404 with response body containing keywords
+          \c "model" + (\c "not found" | \c "does not exist" | \c "invalid" |
+          \c "is not an embedding" | \c "does not support embeddings")
+    */
+    private bool isPermanentEmbedderConfigError(hash<ExceptionInfo> ex) {
+        *int status_code = ex.arg.status_code;
+        if (status_code != 400 && status_code != 404) {
+            return False;
+        }
+        auto body = ex.arg.body;
+        *string code = body.error.code;
+        if (code == "model_not_found" || code == "invalid_model") {
+            return True;
+        }
+        *string error_type = body.error.type;
+        *string message = body.error.message ?? body.message ?? body.detail;
+        if (!exists message && body.typeCode() == NT_STRING) {
+            message = body;
+        }
+        if (!exists message) {
+            return False;
+        }
+        string lower = message.lwr();
+        if (lower.find("model") == -1) {
+            return False;
+        }
+        return lower.find("not found") != -1
+            || lower.find("does not exist") != -1
+            || lower.find("invalid model") != -1
+            || lower.find("unsupported model") != -1
+            || lower.find("is not an embedding") != -1
+            || lower.find("does not appear to be an embedding") != -1
+            || lower.find("does not support embeddings") != -1
+            || error_type == "invalid_request_error";
+    }
+
+    #! Validates an embedding vector value and casts to \c list<float>
+    private list<float> validateAndCastVector(auto raw, auto body) {
+        if (!exists raw) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response item missing 'embedding' field", Backend),
+                {"body": body};
+        }
+        if (raw.typeCode() != NT_LIST || !raw.lsize()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response returned an empty or non-list vector", Backend),
+                {"body": body};
+        }
+        try {
+            return cast<list<float>>(raw);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response vector contains non-numeric elements: %s",
+                    Backend, ex.desc),
+                {"body": body};
+        }
+    }
+
+    #! Returns a REST client suitable for this call
+    /** When \c opts provides per-call \c timeout or \c connect_timeout, a
+        transient REST client is built so the override does not leak into
+        other concurrent calls.  Otherwise the cached client is returned.
+    */
+    private OpenAiRestClient::OpenAiRestClientIo pickRestClient(*hash<auto> opts) {
+        if (exists opts.timeout || exists opts.connect_timeout) {
+            return new OpenAiRestClient::OpenAiRestClientIo(
+                buildRestOptions(opts.timeout, opts.connect_timeout));
+        }
+        ensureRestClient();
+        return rest_client;
+    }
+
+    #! Builds the constructor option hash for the underlying REST client
+    private hash<auto> buildRestOptions(*timeout req_timeout, *timeout conn_timeout) {
+        hash<auto!> opts = {
+            "token": config.api_key,
+        };
+        if (config.url.val()) {
+            opts.url = config.url;
+        }
+        *timeout effective_timeout = req_timeout ?? config.timeout;
+        if (exists effective_timeout) {
+            opts.timeout = effective_timeout;
+        }
+        *timeout effective_connect = conn_timeout ?? config.connect_timeout;
+        if (exists effective_connect) {
+            opts.connect_timeout = effective_connect;
+        }
+        return opts;
+    }
+
+    #! Ensures the cached REST client is initialized with config defaults
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                rest_client = new OpenAiRestClient::OpenAiRestClientIo(buildRestOptions());
+            }
+        }
+    }
+}
+
+#! Factory for @ref OpenAiEmbedder
+public class OpenAiEmbedderFactory inherits AbstractEmbedderFactory {
+    string getType() {
+        return "openai";
+    }
+
+    string getDisplayName() {
+        return "OpenAI embeddings";
+    }
+
+    AbstractEmbedder create(hash<EmbedderConfig> config) {
+        return new OpenAiEmbedder(config);
     }
 }
 }

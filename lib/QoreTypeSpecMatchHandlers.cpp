@@ -41,6 +41,10 @@
 // Both are public methods, no friend access needed
 
 // Handler for QTS_CLASS: class type with object/ref fallback
+static inline bool qore_match_is_auto_vti(const QoreTypeInfo* ti) {
+    return ti == autoTypeInfo || ti == autoNoNarrowTypeInfo;
+}
+
 static qore_type_result_e match_QTS_CLASS(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
     switch (ctx.t.getTypeSpec()) {
         case QTS_CLASS: {
@@ -141,7 +145,7 @@ static qore_type_result_e match_QTS_HASHDECL(const QoreTypeSpec& self, QoreTypeS
 static qore_type_result_e match_QTS_COMPLEXHASH(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
     switch (ctx.t.getTypeSpec()) {
         case QTS_COMPLEXHASH: {
-            qore_type_result_e rv = self.getComplexHash() == autoTypeInfo
+            qore_type_result_e rv = qore_match_is_auto_vti(self.getComplexHash())
                 ? QTI_NEAR
                 : match_type(self.getComplexHash(), ctx.t.getComplexHash(), ctx.may_not_match, ctx.may_need_filter);
             if (rv > QTI_NOT_EQUAL) {
@@ -156,14 +160,14 @@ static qore_type_result_e match_QTS_COMPLEXHASH(const QoreTypeSpec& self, QoreTy
             return QTI_NEAR;
         }
         case QTS_HASHDECL: {
-            qore_type_result_e rv = self.getComplexHash() == autoTypeInfo
+            qore_type_result_e rv = qore_match_is_auto_vti(self.getComplexHash())
                 ? QTI_NEAR
                 : QTI_NOT_EQUAL;
             ctx.max_result = rv;
             return rv;
         }
         case QTS_TYPE:
-            if (ctx.t.getType() == NT_HASH && self.getComplexHash() == autoTypeInfo) {
+            if (ctx.t.getType() == NT_HASH && qore_match_is_auto_vti(self.getComplexHash())) {
                 ctx.max_result = QTI_IDENT;
                 return QTI_NEAR;
             }
@@ -188,7 +192,7 @@ static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTy
     switch (ctx.t.getTypeSpec()) {
         case QTS_COMPLEXSOFTLIST:
         case QTS_COMPLEXLIST: {
-            qore_type_result_e rv = self.getComplexList() == autoTypeInfo
+            qore_type_result_e rv = qore_match_is_auto_vti(self.getComplexList())
                 ? QTI_NEAR
                 : match_type(self.getComplexList(), ctx.t.getComplexList(), ctx.may_not_match, ctx.may_need_filter);
             if (rv > QTI_NOT_EQUAL) {
@@ -217,7 +221,7 @@ static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTy
         }
         case QTS_TYPE: {
             if (ctx.t.getType() == NT_LIST) {
-                if (self.getComplexList() == autoTypeInfo) {
+                if (qore_match_is_auto_vti(self.getComplexList())) {
                     ctx.max_result = QTI_IDENT;
                     return QTI_NEAR;
                 }

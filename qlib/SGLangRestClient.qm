@@ -32,6 +32,9 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires OpenAiRestClient
+%requires QoreLlmTypes
+%requires QoreRagTypes
 
 module SGLangRestClient {
     version = "1.0";
@@ -41,6 +44,9 @@ module SGLangRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("sglang", SGLangRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(new SGLangLlmProviderFactory());
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
+            new QoreRagUtils::SGLangEmbedderFactory());
     };
 }
 
@@ -376,6 +382,351 @@ public class SGLangRestClientIo inherits RestClientIo::RestClientIo, SGLangRestC
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(SGLangRestClientBase::getOptions(opts), shared_mgr) {
         initModel(opts);
+    }
+}
+
+#! LLM provider for SGLang servers
+/** SGLang exposes an OpenAI-compatible chat-completions endpoint, so this
+    provider reuses @ref OpenAiRestClient::OpenAiLlmProvider for body
+    construction, response parsing, and streaming.  Only the mode string
+    differs so the @ref QoreLlmUtils::LlmProviderRegistry can route
+    \c mode=sglang requests through this class.
+*/
+public class SGLangLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : OpenAiRestClient::OpenAiLlmProvider(config) {
+    }
+
+    string getMode() {
+        return "sglang";
+    }
+}
+
+#! Factory for @ref SGLangLlmProvider
+public class SGLangLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "sglang";
+    }
+
+    string getDisplayName() {
+        return "SGLang OpenAI-compatible chat completions";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new SGLangLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": True,
+        };
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! SGLang-backed embedder — calls the SGLang OpenAI-compatible \c /v1/embeddings endpoint
+/** Wraps @ref SGLangRestClient::SGLangRestClientIo "SGLangRestClientIo"
+    which captures the \c model at construction time (SGLang serves exactly
+    one model per instance).
+
+    The configured URL may also point at a dedicated bge-m3 sidecar that
+    serves the native \c /embed endpoint instead of \c /v1/embeddings; the
+    embedder auto-detects which style the server speaks on the first
+    \ref encodeBatch() call (a 404 from \c /v1/embeddings switches to
+    \c /embed) and pins the result for the lifetime of the embedder.
+
+    @par Permanent vs transient errors
+
+    A 404 from \c /v1/embeddings is treated as "wrong endpoint, try the native
+    fallback" and is not a permanent model error.  A 400 from
+    \c /v1/embeddings — typical when a chat model is loaded without embedding
+    support — is classified by @ref isPermanentEmbedderConfigError() and
+    rethrown as @c EMBEDDER-MODEL-CONFIG-ERROR; the embedder does not fall
+    back to \c /embed in that case.
+
+    @par Configuration
+
+    - \c model (required): the model name served by the target SGLang instance
+    - \c url (optional): SGLang server URL, default \c "http://localhost:30000"
+    - \c api_key (optional): bearer token for SGLang deployments with
+      authentication enabled
+    - \c dimension (optional): cached dimension; when unset the dimension is
+      auto-detected on first call
+    - \c timeout (optional): default request timeout (per-call \c opts override
+      takes precedence)
+    - \c connect_timeout (optional): default connection timeout (per-call
+      \c opts override takes precedence)
+*/
+public class SGLangEmbedder inherits AbstractEmbedder {
+    public {
+        const DefaultUrl = "http://localhost:30000";
+        const StyleOpenAi = "openai";
+        const StyleNative = "native";
+        const Backend = "sglang";
+    }
+
+    private {
+        hash<EmbedderConfig> config;
+        string model_name;
+        *SGLangRestClient::SGLangRestClientIo rest_client;
+        *int cached_dimension;
+        *string endpoint_style;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<EmbedderConfig> config) {
+        if (!config.model.val()) {
+            throw "EMBEDDER-CONFIG-ERROR",
+                "SGLangEmbedder requires 'model' in EmbedderConfig "
+                "(SGLang serves exactly one model per instance)";
+        }
+        self.config = config;
+        model_name = config.model;
+        if (exists config.dimension) {
+            cached_dimension = config.dimension;
+        }
+    }
+
+    list<float> encode(string text, *hash<auto> opts) {
+        list<list<float>> rv = encodeBatch((text,), opts);
+        return rv[0];
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        if (!texts) {
+            return ();
+        }
+        SGLangRestClient::SGLangRestClientIo client = pickRestClient(opts);
+
+        switch (endpoint_style) {
+            case StyleOpenAi:
+                return encodeBatchOpenAi(client, texts);
+            case StyleNative:
+                return encodeBatchNative(client, texts);
+        }
+
+        try {
+            list<list<float>> rv = encodeBatchOpenAi(client, texts);
+            pinEndpointStyle(StyleOpenAi);
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 404) {
+                # try the native endpoint
+            } else if (ex.err == "REST-RESPONSE-ERROR"
+                    && isPermanentEmbedderConfigError(ex)) {
+                throwEmbedderModelConfigError(ex, Backend, model_name);
+            } else {
+                rethrow;
+            }
+        }
+        list<list<float>> rv = encodeBatchNative(client, texts);
+        pinEndpointStyle(StyleNative);
+        return rv;
+    }
+
+    *string getEndpointStyle() {
+        return endpoint_style;
+    }
+
+    private list<list<float>> encodeBatchOpenAi(
+            SGLangRestClient::SGLangRestClientIo client, list<string> texts) {
+        hash<auto> body = {
+            "model": model_name,
+            "input": texts,
+        };
+        hash<auto> resp = client.restPost("/v1/embeddings", body);
+
+        *list<auto> data = resp.body.data;
+        if (!exists data) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: /v1/embeddings response missing 'data' field", Backend),
+                {"body": resp.body};
+        }
+        if (data.size() != texts.size()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: /v1/embeddings returned %d items for %d input texts",
+                    Backend, data.size(), texts.size()),
+                {"body": resp.body};
+        }
+        list<hash<auto>> sorted_data = sort(cast<list<hash<auto>>>(data),
+            int sub(hash<auto> a, hash<auto> b) {
+                return a."index" <=> b."index";
+            });
+
+        list<list<float>> result = ();
+        foreach hash<auto> item in (sorted_data) {
+            list<float> vec = validateAndCastVector(item.embedding, resp.body);
+            if (!exists cached_dimension) {
+                cached_dimension = vec.size();
+            }
+            push result, vec;
+        }
+        return result;
+    }
+
+    private list<list<float>> encodeBatchNative(
+            SGLangRestClient::SGLangRestClientIo client, list<string> texts) {
+        hash<auto> body = {"texts": texts};
+        hash<auto> resp = client.restPost("/embed", body);
+
+        *list<auto> vectors = resp.body.dense ?? resp.body.embeddings;
+        if (!exists vectors) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: /embed response missing 'dense'/'embeddings' vector data",
+                    Backend),
+                {"body": resp.body};
+        }
+        if (vectors.size() != texts.size()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: /embed returned %d vectors for %d input texts",
+                    Backend, vectors.size(), texts.size()),
+                {"body": resp.body};
+        }
+
+        list<list<float>> result = ();
+        foreach auto vec in (vectors) {
+            list<float> typed = validateAndCastVector(vec, resp.body);
+            if (!exists cached_dimension) {
+                cached_dimension = typed.size();
+            }
+            push result, typed;
+        }
+        return result;
+    }
+
+    private pinEndpointStyle(string style) {
+        init_mutex.lock();
+        on_exit init_mutex.unlock();
+        if (!endpoint_style) {
+            endpoint_style = style;
+        }
+    }
+
+    int getDimension() {
+        if (exists cached_dimension) {
+            return cached_dimension;
+        }
+        encode(" ");
+        return cached_dimension ?? -1;
+    }
+
+    *string getModel() {
+        ensureRestClient();
+        return rest_client.getModel();
+    }
+
+    private bool isPermanentEmbedderConfigError(hash<ExceptionInfo> ex) {
+        *int status_code = ex.arg.status_code;
+        if (status_code != 400 && status_code != 404) {
+            return False;
+        }
+        auto body = ex.arg.body;
+        *string error_type = body.object;
+        if (error_type == "error") {
+            # SGLang OpenAI-compat error envelope: treat as permanent only
+            # if the message is model-related (checked below)
+        }
+        *string message = body.message ?? body.error.message ?? body.detail ?? body.error;
+        if (!exists message && body.typeCode() == NT_STRING) {
+            message = body;
+        }
+        if (!exists message) {
+            return False;
+        }
+        string lower = message.lwr();
+        return lower.find("is not an embedding") != -1
+            || lower.find("does not appear to be an embedding") != -1
+            || lower.find("does not support embeddings") != -1
+            || lower.find("not an embedding model") != -1
+            || lower.find("unsupported model") != -1
+            || lower.find("invalid model") != -1
+            || lower.find("model not found") != -1;
+    }
+
+    private list<float> validateAndCastVector(auto raw, auto body) {
+        if (!exists raw) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response item missing embedding vector", Backend),
+                {"body": body};
+        }
+        if (raw.typeCode() != NT_LIST || !raw.lsize()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response returned an empty or non-list vector", Backend),
+                {"body": body};
+        }
+        try {
+            return cast<list<float>>(raw);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response vector contains non-numeric elements: %s",
+                    Backend, ex.desc),
+                {"body": body};
+        }
+    }
+
+    private SGLangRestClient::SGLangRestClientIo pickRestClient(*hash<auto> opts) {
+        if (exists opts.timeout || exists opts.connect_timeout) {
+            SGLangRestClient::SGLangRestClientIo per_call =
+                new SGLangRestClient::SGLangRestClientIo(
+                    buildRestOptions(opts.timeout, opts.connect_timeout));
+            per_call.clearConnectionPath();
+            return per_call;
+        }
+        ensureRestClient();
+        return rest_client;
+    }
+
+    private hash<auto> buildRestOptions(*timeout req_timeout, *timeout conn_timeout) {
+        hash<auto!> opts = {
+            "url": config.url ?? DefaultUrl,
+            "model": model_name,
+        };
+        if (config.api_key.val()) {
+            opts.apikey = config.api_key;
+        }
+        *timeout effective_timeout = req_timeout ?? config.timeout;
+        if (exists effective_timeout) {
+            opts.timeout = effective_timeout;
+        }
+        *timeout effective_connect = conn_timeout ?? config.connect_timeout;
+        if (exists effective_connect) {
+            opts.connect_timeout = effective_connect;
+        }
+        return opts;
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                rest_client = new SGLangRestClient::SGLangRestClientIo(buildRestOptions());
+                rest_client.clearConnectionPath();
+            }
+        }
+    }
+}
+
+#! Factory for @ref SGLangEmbedder
+public class SGLangEmbedderFactory inherits AbstractEmbedderFactory {
+    string getType() {
+        return "sglang";
+    }
+
+    string getDisplayName() {
+        return "SGLang embeddings";
+    }
+
+    AbstractEmbedder create(hash<EmbedderConfig> config) {
+        return new SGLangEmbedder(config);
     }
 }
 }

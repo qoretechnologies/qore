@@ -14,6 +14,90 @@
 
 %exec-class QoreAgentStrategiesTest
 
+#! Mock LLM that supports chat(), complete(), AND chatStream() — for testing
+#! @ref AbstractAgentStrategy::callChatStream() and
+#! @ref SimpleAgentStrategy::executeStream().
+/** \c stream_scripts is a list of per-call chunk sequences; each entry is a
+    list of OpenAI-shape \c chat.completion.chunk hashes that \c chatStream()
+    replays via the caller's event callback in order.  The non-streaming
+    \c chat() / \c complete() paths still draw from \c responses so
+    max-iterations fallback in @ref executeStream() can be exercised.
+*/
+class MockStreamingLlm inherits QoreLlmUtils::LlmBackend {
+    private {
+        list<list<hash<auto>>> stream_scripts;
+        int stream_idx = 0;
+        list<auto> responses;
+        int chat_idx = 0;
+    }
+
+    constructor(list<list<hash<auto>>> scripts, *list<auto> sync_responses)
+            : LlmBackend(<LlmBackendConfig>{
+                "mode": "callback",
+                "api_callback": hash<auto> sub (string m, string p, hash<auto> b) {
+                    hash<auto> rv = {};
+                    return rv;
+                },
+            }) {
+        stream_scripts = scripts;
+        responses = sync_responses ?? ();
+    }
+
+    chatStream(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback,
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        list<hash<auto>> chunks = stream_idx < stream_scripts.size()
+            ? stream_scripts[stream_idx]
+            : stream_scripts[stream_scripts.size() - 1];
+        ++stream_idx;
+        bool saw_terminal = False;
+        foreach hash<auto> chunk in (chunks) {
+            *string content_delta = chunk.choices[0].delta.content;
+            bool done = chunk.choices[0].finish_reason.val() ? True : False;
+            bool has_tc = chunk.choices[0].delta.tool_calls
+                && chunk.choices[0].delta.tool_calls.typeCode() == NT_LIST
+                && chunk.choices[0].delta.tool_calls.size() > 0;
+            if (!content_delta.val() && !done && !has_tc) {
+                continue;
+            }
+            if (done) {
+                saw_terminal = True;
+            }
+            callback(<ChatStreamEvent>{
+                "delta": content_delta,
+                "raw": chunk,
+                "done": done,
+            });
+        }
+        if (!saw_terminal) {
+            callback(<ChatStreamEvent>{"done": True});
+        }
+    }
+
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+        auto resp;
+        if (chat_idx < responses.size()) {
+            resp = responses[chat_idx];
+        } else {
+            resp = "max-iter-fallback-response";
+        }
+        ++chat_idx;
+        if (resp.typeCode() == NT_HASH) {
+            return cast<hash<ChatResponse>>(resp);
+        }
+        return <ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": resp.toString(),
+            "usage": {"total_tokens": 40},
+        };
+    }
+
+    int streamCalls() {
+        return stream_idx;
+    }
+}
+
 #! Mock LLM that supports both complete() and chat() with pre-configured responses
 class MockChatLlm inherits QoreLlmUtils::LlmBackend {
     private {
@@ -108,6 +192,18 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         # Hashdecl tests
         addTestCase("AgentContext defaults", \contextDefaultsTest());
         addTestCase("AgentEvent construction", \eventConstructionTest());
+
+        # qorus#231 streaming tests
+        addTestCase("SimpleAgent - executeStream forwards content deltas + single terminal done",
+            \streamNoToolsTest());
+        addTestCase("SimpleAgent - executeStream dispatches tool then continues (no intermediate done)",
+            \streamWithToolTest());
+        addTestCase("SimpleAgent - executeStream max iterations falls back to synthesized final delta",
+            \streamMaxIterationsTest());
+        addTestCase("AbstractAgentStrategy - callChatStream rebuilds tool_calls from multi-chunk deltas",
+            \callChatStreamToolCallAccumulationTest());
+        addTestCase("AbstractAgentStrategy - callChatStream maps OpenAI finish_reason to stop_reason",
+            \callChatStreamFinishReasonMappingTest());
 
         set_return_value(main());
     }
@@ -617,5 +713,217 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         assertEq("strategy_started", ev.event_type);
         assertEq("simple", ev.strategy);
         assertTrue(exists ev.timestamp);
+    }
+
+    # ===================== qorus#231 streaming tests =====================
+
+    streamNoToolsTest() {
+        # One iteration: content deltas + stop.  Strategy must forward
+        # both content deltas and emit exactly one terminal `done` event
+        # (the OpenAI-emitted terminal chunk).
+        MockStreamingLlm mock((
+            (
+                {"choices": ({"index": 0,
+                    "delta": {"content": "Hello "},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {"content": "world"},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"},),
+                    "usage": {"total_tokens": 7}},
+            ),
+        ));
+        SimpleAgentStrategy strat(mock, {"max_iterations": 3});
+        list<hash<auto>> seen = ();
+        hash<AgentResult> res = strat.executeStream(<AgentContext>{
+            "message": "say hello",
+        }, sub (hash<ChatStreamEvent> e) {
+            push seen, {"delta": e.delta, "done": e.done,
+                "raw_finish": e.raw.choices[0].finish_reason};
+        });
+        assertEq(3, seen.size(), "two content deltas + one terminal");
+        assertEq("Hello ", seen[0].delta);
+        assertEq("world", seen[1].delta);
+        assertEq(True, seen[2].done);
+        assertEq("stop", seen[2].raw_finish);
+        assertEq("Hello world", res.response);
+        assertEq(0, res.tool_calls.size());
+        assertEq(True, res.metadata.streamed);
+        assertEq(1, mock.streamCalls());
+    }
+
+    streamWithToolTest() {
+        # Iteration 1 emits tool_call deltas + finish_reason=tool_calls;
+        # iteration 2 emits content + finish_reason=stop.  The
+        # intermediate `done` from iteration 1 MUST be suppressed so the
+        # caller's wire stream sees a continuous conversation across
+        # tool dispatch.
+        MockStreamingLlm mock((
+            # Iteration 1: tool call (split across two chunks) + terminal
+            (
+                {"choices": ({"index": 0,
+                    "delta": {"tool_calls": ({"index": 0, "id": "call_1",
+                        "function": {"name": "get_weather"}},)},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {"tool_calls": ({"index": 0,
+                        "function": {"arguments": "{\"city\":\"prg\"}"}},)},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {},
+                    "finish_reason": "tool_calls"},)},
+            ),
+            # Iteration 2: content + terminal
+            (
+                {"choices": ({"index": 0,
+                    "delta": {"content": "Sunny in prg."},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"},)},
+            ),
+        ));
+        SimpleAgentStrategy strat(mock, {"max_iterations": 3});
+        list<hash<auto>> seen = ();
+        list<hash<auto>> dispatches = ();
+        hash<AgentResult> res = strat.executeStream(<AgentContext>{
+            "message": "weather in prg",
+            "tool_dispatch": auto sub (string name, hash<auto> args) {
+                push dispatches, {"name": name, "args": args};
+                return {"temp": 22, "condition": "sunny"};
+            },
+        }, sub (hash<ChatStreamEvent> e) {
+            push seen, {"delta": e.delta, "done": e.done,
+                "raw_finish": e.raw.choices[0].finish_reason};
+        });
+        # Filter `done` events to count them
+        int done_events = 0;
+        foreach hash<auto> ev in (seen) {
+            if (ev.done) {
+                ++done_events;
+            }
+        }
+        assertEq(1, done_events,
+            "exactly one terminal done event across both iterations");
+        # The last event must be the terminal `done` with finish_reason=stop
+        # (NOT tool_calls — that intermediate terminal was suppressed).
+        assertEq(True, seen[seen.size() - 1].done);
+        assertEq("stop", seen[seen.size() - 1].raw_finish);
+        assertEq(1, dispatches.size(), "tool dispatched exactly once");
+        assertEq("get_weather", dispatches[0].name);
+        assertEq("prg", dispatches[0].args.city);
+        assertEq("Sunny in prg.", res.response);
+        assertEq(1, res.tool_calls.size());
+        assertEq(2, mock.streamCalls());
+    }
+
+    streamMaxIterationsTest() {
+        # Every iteration returns tool_calls — strategy should hit
+        # max_iterations and fall back to a non-streaming chat() for the
+        # final text, synthesized as one delta + terminal done so the
+        # caller's accumulator still terminates.
+        MockStreamingLlm mock((
+            # Repeat the same tool-call iteration; mock loops to the
+            # last entry when out of scripts.
+            (
+                {"choices": ({"index": 0,
+                    "delta": {"tool_calls": ({"index": 0, "id": "c",
+                        "function": {"name": "noop",
+                            "arguments": "{}"}},)},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {},
+                    "finish_reason": "tool_calls"},)},
+            ),
+        ), ("final-fallback-text",));
+        SimpleAgentStrategy strat(mock, {"max_iterations": 2});
+        list<hash<auto>> seen = ();
+        hash<AgentResult> res = strat.executeStream(<AgentContext>{
+            "message": "loop forever",
+            "tool_dispatch": auto sub (string n, hash<auto> a) {
+                return "ok";
+            },
+        }, sub (hash<ChatStreamEvent> e) {
+            push seen, {"delta": e.delta, "done": e.done};
+        });
+        assertEq("final-fallback-text", res.response);
+        assertEq(True, res.metadata.max_iterations_reached);
+        # The caller's event stream must end with a single terminal done.
+        assertEq(True, seen[seen.size() - 1].done);
+        # And must include the synthesized content delta from the
+        # max-iter fallback.
+        bool found = False;
+        foreach hash<auto> ev in (seen) {
+            if (ev.delta == "final-fallback-text") {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, "synthesized fallback delta surfaced to caller");
+    }
+
+    callChatStreamToolCallAccumulationTest() {
+        # Verify the AbstractAgentStrategy.callChatStream accumulator
+        # rebuilds a complete ChatToolCall from multiple delta chunks
+        # (OpenAI splits function name and arguments JSON across chunks).
+        MockStreamingLlm mock((
+            (
+                {"choices": ({"index": 0,
+                    "delta": {"tool_calls": ({"index": 0, "id": "call_xyz",
+                        "function": {"name": "do"}},)},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {"tool_calls": ({"index": 0,
+                        "function": {"name": "_thing",
+                            "arguments": "{\"a\":1"}},)},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {"tool_calls": ({"index": 0,
+                        "function": {"arguments": ",\"b\":\"two\"}"}},)},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {},
+                    "finish_reason": "tool_calls"},)},
+            ),
+        ));
+        SimpleAgentStrategy strat(mock, {"max_iterations": 1});
+        # callChatStream is public on AbstractAgentStrategy; drive it
+        # directly to assert the rebuilt ChatToolCall.
+        hash<ChatResponse> resp = strat.callChatStream(
+            (<ChatMessage>{"role": "user", "content": "x"},),
+            NOTHING);
+        assertEq("tool_use", resp.stop_reason);
+        assertEq(1, resp.tool_calls.size());
+        hash<ChatToolCall> tc = resp.tool_calls[0];
+        assertEq("call_xyz", tc.id);
+        # Function name reassembled from two fragments
+        assertEq("do_thing", tc.name);
+        # Arguments reassembled and JSON-parsed
+        assertEq(1, tc.arguments.a);
+        assertEq("two", tc.arguments.b);
+    }
+
+    callChatStreamFinishReasonMappingTest() {
+        # OpenAI finish_reason values map to ChatResponse.stop_reason
+        # using QoreLlmUtils convention.
+        MockStreamingLlm mock((
+            (
+                {"choices": ({"index": 0,
+                    "delta": {"content": "hi"},
+                    "finish_reason": NOTHING},)},
+                {"choices": ({"index": 0,
+                    "delta": {},
+                    "finish_reason": "length"},)},
+            ),
+        ));
+        SimpleAgentStrategy strat(mock, {"max_iterations": 1});
+        hash<ChatResponse> resp = strat.callChatStream(
+            (<ChatMessage>{"role": "user", "content": "x"},),
+            NOTHING);
+        assertEq("max_tokens", resp.stop_reason,
+            "finish_reason=length → stop_reason=max_tokens");
+        assertEq("hi", resp.content);
     }
 }

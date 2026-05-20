@@ -6284,6 +6284,22 @@ int QoreSocketObject::cancelQuicStreamAsync(int64_t session_id, int64_t stream_i
         "cancelQuicStream", xsink));
 }
 
+void QoreSocketObject::cancelQuicStreamRead(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
+    // Resolve the session under the socket lock; missing session is a no-op
+    // (idempotency for racing callers — e.g. service stop arriving after the
+    // stream completed naturally).
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+    if (!session) {
+        return;
+    }
+    // shutdownStreamRead() is cross-thread safe: the per-stream flag write is
+    // mutex-protected and the wake-up broadcast is delivered through the
+    // standard async-I/O notifier path that any qore_on_async_io_thread()
+    // poll-op observes.  No need to route through the async controller cmdq.
+    session->shutdownStreamRead(stream_id);
+    (void)xsink;
+}
+
 int QoreSocketObject::submitQuicResponse(int64_t session_id, int64_t stream_id, int status_code,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink) {
     return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,

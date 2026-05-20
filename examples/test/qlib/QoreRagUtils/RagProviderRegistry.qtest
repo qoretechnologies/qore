@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RagProviderRegistry.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreRagUtils
+%requires Util
+%requires QUnit
+
+%exec-class RagProviderRegistryTest
+
+class FakeEmbedder inherits QoreRagUtils::AbstractEmbedder {
+    list<float> encode(string text, *hash<auto> opts) {
+        return (1.0,);
+    }
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        return cast<list<list<float>>>(map (1.0,), texts);
+    }
+    int getDimension() {
+        return 1;
+    }
+}
+
+class FakeEmbedderFactory inherits QoreRagUtils::AbstractEmbedderFactory {
+    string getType() {
+        return "test-fake-embedder";
+    }
+    string getDisplayName() {
+        return "fake test embedder";
+    }
+    QoreRagUtils::AbstractEmbedder create(hash<QoreRagUtils::EmbedderConfig> config) {
+        return new FakeEmbedder();
+    }
+}
+
+class FakeReranker inherits QoreRagUtils::AbstractReranker {
+    list<hash<QoreRagUtils::RerankResult>> rerank(string query,
+            list<string> documents, int top_k) {
+        return ();
+    }
+}
+
+class FakeRerankerFactory inherits QoreRagUtils::AbstractRerankerFactory {
+    string getType() {
+        return "test-fake-reranker";
+    }
+    string getDisplayName() {
+        return "fake test reranker";
+    }
+    QoreRagUtils::AbstractReranker create(hash<QoreRagUtils::RerankerConfig> config) {
+        return new FakeReranker();
+    }
+}
+
+class FakeVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    upsert(list<hash<QoreRagUtils::VectorRecord>> records) {
+    }
+    deleteByIds(list<string> ids) {
+    }
+    list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector,
+            int k, *hash<auto> filter) {
+        return ();
+    }
+    string getCollection() {
+        return "fake";
+    }
+    int getDimension() {
+        return 1;
+    }
+}
+
+class FakeVectorStoreFactory inherits QoreRagUtils::AbstractVectorStoreFactory {
+    string getType() {
+        return "test-fake-vs";
+    }
+    string getDisplayName() {
+        return "fake test vector store";
+    }
+    QoreRagUtils::AbstractVectorStore create(
+            hash<QoreRagUtils::VectorStoreConfig> config) {
+        return new FakeVectorStore();
+    }
+}
+
+public class RagProviderRegistryTest inherits QUnit::Test {
+    constructor() : Test("RagProviderRegistryTest", "1.0") {
+        addTestCase("Embedder - in-module factory present", \embedderInModuleTest());
+        addTestCase("Embedder - register / deregister", \embedderRegisterDeregisterTest());
+        addTestCase("Embedder - duplicate registration rejected",
+            \embedderDuplicateRejectedTest());
+        addTestCase("Embedder - unknown backend", \embedderUnknownBackendTest());
+        addTestCase("Embedder - createEmbedder dispatches via backend",
+            \embedderCreateEmbedderTest());
+        addTestCase("Embedder - createEmbedder requires backend field",
+            \embedderCreateEmbedderRequiresBackendTest());
+
+        addTestCase("Reranker - in-module factories present", \rerankerInModuleTest());
+        addTestCase("Reranker - register / deregister", \rerankerRegisterDeregisterTest());
+        addTestCase("Reranker - unknown backend", \rerankerUnknownBackendTest());
+
+        addTestCase("VectorStore - register / deregister",
+            \vectorStoreRegisterDeregisterTest());
+        addTestCase("VectorStore - unknown backend", \vectorStoreUnknownBackendTest());
+
+        addTestCase("ProviderModuleMap - declared lazy-load entries",
+            \providerModuleMapTest());
+        set_return_value(main());
+    }
+
+    embedderInModuleTest() {
+        QoreRagUtils::AbstractEmbedderFactory f =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("local-onnx");
+        assertEq("local-onnx", f.getType());
+        hash<QoreRagUtils::RagProviderInfo> info = f.getInfo();
+        assertEq("local-onnx", info.type);
+        assertEq("QoreRagUtils", info.module_name);
+    }
+
+    embedderRegisterDeregisterTest() {
+        FakeEmbedderFactory fake();
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(fake);
+        on_exit QoreRagUtils::RagProviderRegistry::deregisterEmbedderFactory(
+            "test-fake-embedder");
+        QoreRagUtils::AbstractEmbedderFactory looked_up =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx(
+                "test-fake-embedder");
+        assertEq("test-fake-embedder", looked_up.getType());
+        assertTrue(inlist("test-fake-embedder",
+            QoreRagUtils::RagProviderRegistry::knownEmbedderBackends()));
+    }
+
+    embedderDuplicateRejectedTest() {
+        FakeEmbedderFactory fake();
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(fake);
+        on_exit QoreRagUtils::RagProviderRegistry::deregisterEmbedderFactory(
+            "test-fake-embedder");
+        assertThrows("RAG-CONFIG-ERROR", "already been registered",
+            sub () {
+                QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
+                    new FakeEmbedderFactory());
+            });
+    }
+
+    embedderUnknownBackendTest() {
+        assertThrows("RAG-CONFIG-ERROR", "is unknown",
+            sub () {
+                QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx(
+                    "no-such-backend-xyz");
+            });
+    }
+
+    embedderCreateEmbedderTest() {
+        FakeEmbedderFactory fake();
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(fake);
+        on_exit QoreRagUtils::RagProviderRegistry::deregisterEmbedderFactory(
+            "test-fake-embedder");
+        QoreRagUtils::AbstractEmbedder e =
+            QoreRagUtils::RagProviderRegistry::createEmbedder(
+                <QoreRagUtils::EmbedderConfig>{"backend": "test-fake-embedder"});
+        assertEq(1, e.getDimension());
+    }
+
+    embedderCreateEmbedderRequiresBackendTest() {
+        assertThrows("RAG-CONFIG-ERROR", "backend is required",
+            sub () {
+                QoreRagUtils::RagProviderRegistry::createEmbedder(
+                    <QoreRagUtils::EmbedderConfig>{});
+            });
+    }
+
+    rerankerInModuleTest() {
+        QoreRagUtils::AbstractRerankerFactory local =
+            QoreRagUtils::RagProviderRegistry::getRerankerFactoryEx("local-onnx");
+        assertEq("local-onnx", local.getType());
+        QoreRagUtils::AbstractRerankerFactory gw =
+            QoreRagUtils::RagProviderRegistry::getRerankerFactoryEx("http-gateway");
+        assertEq("http-gateway", gw.getType());
+    }
+
+    rerankerRegisterDeregisterTest() {
+        FakeRerankerFactory fake();
+        QoreRagUtils::RagProviderRegistry::registerRerankerFactory(fake);
+        on_exit QoreRagUtils::RagProviderRegistry::deregisterRerankerFactory(
+            "test-fake-reranker");
+        QoreRagUtils::AbstractRerankerFactory looked_up =
+            QoreRagUtils::RagProviderRegistry::getRerankerFactoryEx(
+                "test-fake-reranker");
+        assertEq("test-fake-reranker", looked_up.getType());
+    }
+
+    rerankerUnknownBackendTest() {
+        assertThrows("RAG-CONFIG-ERROR", "is unknown",
+            sub () {
+                QoreRagUtils::RagProviderRegistry::getRerankerFactoryEx(
+                    "no-such-reranker");
+            });
+    }
+
+    vectorStoreRegisterDeregisterTest() {
+        FakeVectorStoreFactory fake();
+        QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(fake);
+        on_exit QoreRagUtils::RagProviderRegistry::deregisterVectorStoreFactory(
+            "test-fake-vs");
+        QoreRagUtils::AbstractVectorStoreFactory looked_up =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx(
+                "test-fake-vs");
+        assertEq("test-fake-vs", looked_up.getType());
+        QoreRagUtils::AbstractVectorStore vs =
+            QoreRagUtils::RagProviderRegistry::createVectorStore(
+                <QoreRagUtils::VectorStoreConfig>{"backend": "test-fake-vs"});
+        assertEq("fake", vs.getCollection());
+    }
+
+    vectorStoreUnknownBackendTest() {
+        assertThrows("RAG-CONFIG-ERROR", "is unknown",
+            sub () {
+                QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx(
+                    "no-such-vs");
+            });
+    }
+
+    providerModuleMapTest() {
+        # Ensure the documented lazy-load wiring is correct
+        assertEq("OpenAiRestClient",
+            QoreRagUtils::RagProviderRegistry::EmbedderModuleMap.openai);
+        assertEq("GeminiRestClient",
+            QoreRagUtils::RagProviderRegistry::EmbedderModuleMap.gemini);
+        assertEq("VoyageRestClient",
+            QoreRagUtils::RagProviderRegistry::EmbedderModuleMap.voyage);
+        assertEq("SGLangRestClient",
+            QoreRagUtils::RagProviderRegistry::EmbedderModuleMap.sglang);
+        assertEq("BgeM3RestClient",
+            QoreRagUtils::RagProviderRegistry::EmbedderModuleMap."bge-m3");
+        assertEq("QoreRagUtils",
+            QoreRagUtils::RagProviderRegistry::EmbedderModuleMap."local-onnx");
+        assertEq("VoyageRestClient",
+            QoreRagUtils::RagProviderRegistry::RerankerModuleMap.voyage);
+    }
+}

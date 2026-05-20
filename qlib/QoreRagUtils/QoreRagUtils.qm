@@ -31,11 +31,7 @@
 %requires(reexport) RestClient
 %requires(reexport) RestClientIo
 %requires(reexport) QoreTokenizerUtils
-%requires(reexport) OpenAiRestClient
-%requires(reexport) VoyageRestClient
-%requires(reexport) SGLangRestClient
-%requires(reexport) BgeM3RestClient
-%requires(reexport) GeminiRestClient
+%requires(reexport) QoreRagTypes
 
 module QoreRagUtils {
     version = "1.0.1";
@@ -43,6 +39,14 @@ module QoreRagUtils {
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    init = sub () {
+        RagProviderRegistry::registerEmbedderFactory(
+            new LocalOnnxEmbedderFactory());
+        RagProviderRegistry::registerRerankerFactory(
+            new LocalOnnxRerankerFactory());
+        RagProviderRegistry::registerRerankerFactory(
+            new HttpGatewayRerankerFactory());
+    };
 }
 
 /** @mainpage QoreRagUtils Module
@@ -148,183 +152,6 @@ foreach hash<RetrievalHit> hit in (hits) {
 
 #! Public namespace for QoreRagUtils
 public namespace QoreRagUtils {
-#! Configuration for an embedder backend
-public hashdecl EmbedderConfig {
-    #! Backend identifier — implementation-specific (e.g. "local-onnx", "openai", "voyage", "gemini", "sglang")
-    *string backend;
-    #! Path to a local model file (used by ONNX embedder)
-    *string model_path;
-    #! REST URL for HTTP-based embedders
-    *string url;
-    #! Model name to send in API requests
-    *string model;
-    #! API key for HTTP-based embedders
-    *string api_key;
-    #! Output embedding dimension (where the backend supports it)
-    *int dimension;
-    #! Batch size for bulk encoding
-    int batch_size = 32;
-    #! Default request timeout for HTTP-based embedders (per-call \c opts override takes precedence)
-    /** Forwarded to the underlying REST client at construction; ignored by
-        non-HTTP backends.  Use Qore's \c timeout type literals (e.g. \c 10s,
-        \c 5000ms).  See @ref AbstractEmbedder::encodeBatch() "encodeBatch()"
-        for per-call override semantics.
-    */
-    *timeout timeout;
-    #! Default connection timeout for HTTP-based embedders (per-call \c opts override takes precedence)
-    /** Forwarded to the underlying REST client at construction; ignored by
-        non-HTTP backends.  Note: @ref RestClientIo only applies a connection
-        timeout to NEW connections, so a per-call \c connect_timeout in
-        @ref AbstractEmbedder::encodeBatch() "encodeBatch()" causes the
-        embedder to use a transient REST client for that call.
-    */
-    *timeout connect_timeout;
-    #! Free-form backend-specific options
-    *hash<auto> options;
-}
-
-#! Configuration for a vector-store backend
-public hashdecl VectorStoreConfig {
-    #! Backend identifier (e.g. "qdrant", "pgvector")
-    *string backend;
-    #! Collection or table name
-    *string collection;
-    #! Connection URL or DSN
-    *string url;
-    #! Free-form backend-specific options (filters, payload schema, etc.)
-    *hash<auto> options;
-}
-
-#! Configuration for a reranker backend
-public hashdecl RerankerConfig {
-    #! Backend identifier (e.g. "local-onnx", "voyage", "http-gateway")
-    *string backend;
-    #! Path to a local model file (ONNX reranker)
-    *string model_path;
-    #! REST URL for HTTP rerankers
-    *string url;
-    #! Model name to send
-    *string model;
-    #! API key
-    *string api_key;
-    #! Free-form backend-specific options
-    *hash<auto> options;
-}
-
-#! Configuration for a chunker backend
-public hashdecl ChunkerConfig {
-    #! Strategy name: "structured" (default), "semantic", "fixed"
-    string strategy = "structured";
-    #! Target token count per chunk
-    int target_tokens = 512;
-    #! Overlap tokens between consecutive chunks (for "fixed" strategy)
-    int overlap_tokens = 50;
-    #! Similarity threshold (used by "semantic" chunker)
-    float similarity_threshold = 0.7;
-    #! Free-form backend-specific options
-    *hash<auto> options;
-}
-
-#! Top-level RAG pipeline configuration
-public hashdecl RagConfig {
-    #! Embedder configuration
-    hash<EmbedderConfig> embedder;
-    #! Vector store configuration
-    hash<VectorStoreConfig> vector_store;
-    #! Reranker configuration (optional — when omitted, retrieval returns vector-search ordering)
-    *hash<RerankerConfig> reranker;
-    #! Chunker configuration (used by ingest)
-    hash<ChunkerConfig> chunker;
-    #! Default top-K for retrieval (final returned count)
-    int top_k = 10;
-    #! Initial vector-search top-K before reranking (only when reranker is configured)
-    int initial_retrieval_k = 50;
-}
-
-#! Optional hooks passed to @ref RagPipeline::constructor()
-/** Every field is optional and strictly additive — omitting the options hash
-    preserves the behavior of earlier module versions.
-*/
-public hashdecl RagPipelineOptions {
-    #! Optional query transformer (e.g. HyDE-style hypothetical-answer generation)
-    /** When set, the raw query is passed through this callable and the result
-        is used for embedding.  The reranker still sees the **original** query
-        so that scoring semantics stay stable.
-    */
-    *code<string(string)> query_transformer;
-
-    #! Optional cache for query embeddings
-    /** When set, @ref RagPipeline::retrieve() "retrieve()" consults this cache
-        before calling @ref AbstractEmbedder::encode() "encode()" and populates
-        it on cache misses.  Cache keys are the exact string that would
-        otherwise be passed to \c encode() — the transformer output when a
-        \c query_transformer is configured, otherwise the raw query.
-    */
-    *AbstractEmbeddingCache embedding_cache;
-
-    #! Explicit vector-search K before reranking
-    /** When set **and** a reranker is configured, overrides the pipeline's
-        \c initial_retrieval_k for the vector-store call.  The reranker still
-        emits \c top_k results.  Use this to implement an over-retrieval
-        multiplier (e.g. 5x top_k) without changing the pipeline default.
-    */
-    *int pre_rerank_top_k;
-}
-
-#! A single chunk produced by a chunker
-public hashdecl ChunkInfo {
-    #! Sequential index of this chunk in the source document
-    int index;
-    #! The chunk text content
-    string content;
-    #! Approximate token count
-    int token_count;
-    #! Free-form metadata inherited from the source (page, heading, slide, etc.)
-    *hash<auto> metadata;
-}
-
-#! A vector record stored in a vector store
-public hashdecl VectorRecord {
-    #! Unique record id
-    string id;
-    #! The dense vector
-    list<float> vector;
-    #! Free-form payload (stored alongside the vector for retrieval-time access)
-    *hash<auto> payload;
-}
-
-#! A search hit returned by a vector store
-public hashdecl VectorSearchResult {
-    #! Record id
-    string id;
-    #! Similarity score (backend-defined; typically cosine in [0,1])
-    float score;
-    #! Stored payload
-    *hash<auto> payload;
-}
-
-#! A reranker result
-public hashdecl RerankResult {
-    #! Original index in the input documents list
-    int index;
-    #! Relevance score (higher = more relevant)
-    float score;
-    #! The document text (echoed back for caller convenience)
-    string document;
-}
-
-#! A retrieval hit returned by RagPipeline::retrieve()
-public hashdecl RetrievalHit {
-    #! Stored chunk id
-    string id;
-    #! Final relevance score (post-reranking when a reranker is configured)
-    float score;
-    #! Chunk content
-    string content;
-    #! Free-form payload (typically the chunk's metadata)
-    *hash<auto> payload;
-}
-
 #! Composes an embedder, vector store, optional reranker, and chunker into an end-to-end RAG flow
 /** Construct a pipeline from already-built component objects, then call
     @ref ingest() to add documents and @ref retrieve() to query.

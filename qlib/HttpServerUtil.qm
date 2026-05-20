@@ -1585,6 +1585,28 @@ public class AbstractStreamRequest {
         return False;
     }
 
+    #! Notifies the request handler of a callback that can abort the in-flight inbound body read
+    /** Called from @ref handleRequest() just before entering the per-chunk read loop on HTTP/2
+        and HTTP/3 body-streaming requests; the closure unblocks the chunk-wait (e.g. by calling
+        @ref Qore::Thread::Queue::setError() on the body queue or
+        @ref Qore::Socket::cancelQuicStreamRead() on the QUIC stream) so a stop()/cancel decision
+        taken on another thread can interrupt a handler parked waiting for a chunk the client never
+        sends.
+
+        The default implementation is a no-op.  Subclasses that wrap a user-overridable stream
+        handler (e.g. @ref RestHandler::RestStreamRequest "RestStreamRequest") should override to
+        forward the callback to the stream handler so application code can register it (e.g. with
+        a service-stop hook).
+
+        The closure is cleared via @c setBodyCancel(NOTHING) when the read loop completes.
+
+        @param body_cancel the cancel closure, or @ref nothing to clear a previously-registered closure
+
+        @since HttpServerUtil 2.3
+    */
+    setBodyCancel(*code<nothing()> body_cancel) {
+    }
+
     #! handles the request
     hash<HttpHandlerResponseInfo> handleRequest() {
         bool chunked_recv_aborted = False;
@@ -1615,6 +1637,25 @@ public class AbstractStreamRequest {
             int sid = cx."header-info".stream_id;
             if (cx."header-info".http3) {
                 int session_id = cx."header-info".session_id;
+                # Locally-captured abort flag flipped by the body_cancel closure
+                # below; checked after each readQuicStreamDataBlock() returns so
+                # we can distinguish a clean EOF (body really ended) from a
+                # cancel-triggered EOF (Socket::cancelQuicStreamRead() was
+                # called from another thread).  Without this we'd silently
+                # accept an empty body and dispatch the handler on a truncated
+                # request, instead of throwing STREAM-ABORTED.
+                bool h3_body_aborted = False;
+                setBodyCancel(sub () {
+                    h3_body_aborted = True;
+                    # cancelQuicStreamRead flips QuicStreamInfo::stream_data_shutdown
+                    # for this single stream and wakes the pending read; subsequent
+                    # readQuicStreamDataBlock() returns clean EOF.  Best-effort: the
+                    # socket may already be closed in a race with handler unwind.
+                    try {
+                        s.cancelQuicStreamRead(session_id, sid);
+                    } catch () {}
+                });
+                on_exit setBodyCancel(NOTHING);
                 try {
                     while (True) {
                         *binary chunk;
@@ -1631,6 +1672,11 @@ public class AbstractStreamRequest {
                             rethrow;
                         }
                         if (!chunk) {
+                            if (h3_body_aborted) {
+                                throw "STREAM-ABORTED",
+                                    sprintf("inbound HTTP/3 body read cancelled on "
+                                        "stream %d", sid);
+                            }
                             break;
                         }
                         recv({"data": chunk});
@@ -1664,6 +1710,18 @@ public class AbstractStreamRequest {
                 }
                 Queue body_queue(-1);
                 register_body_queue(body_queue);
+                # Allow another thread to abort this body read by calling the
+                # registered cancel closure (e.g. a service stop deciding to
+                # interrupt an in-flight request).  Queue::setError() is
+                # thread-safe: the next body_queue.get() raises an exception
+                # with the supplied error name and any further pushes from the
+                # I/O thread silently no-op (see qore_queue_private), so the
+                # cancellation is race-free against the I/O thread.
+                setBodyCancel(sub () {
+                    body_queue.setError("STREAM-ABORTED",
+                        sprintf("inbound HTTP/2 body read cancelled on stream %d", sid));
+                });
+                on_exit setBodyCancel(NOTHING);
                 while (True) {
                     auto chunk;
                     try {

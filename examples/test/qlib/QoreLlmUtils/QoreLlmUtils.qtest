@@ -14,6 +14,7 @@
 %requires HttpServer
 %requires RestClient
 %requires RestClientIo
+%requires QoreLlmTypes
 %requires GeminiRestClient
 %requires QoreLlmUtils
 %requires Util
@@ -29,6 +30,7 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
     public {
         list<hash<auto>> requests = ();
         hash<string, hash<auto>> responses;
+        hash<string, int> response_index;
         Mutex m();
     }
 
@@ -52,10 +54,53 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
                 "{\"error\":{\"status\":\"NOT_FOUND\",\"message\":\"Not Found\"}}",
                 {"Content-Type": MimeTypeJson});
         }
+        if (resp.sequence.typeCode() == NT_LIST) {
+            int idx = response_index{cx.raw_path} ?? 0;
+            response_index{cx.raw_path} = idx + 1;
+            list<auto> seq = cast<list<auto>>(resp.sequence);
+            if (idx < seq.size() && seq[idx].typeCode() == NT_HASH) {
+                resp = cast<hash<auto>>(seq[idx]);
+            }
+        }
         int code = resp.code ?? 200;
         string out = resp.body.typeCode() == NT_STRING
             ? resp.body : make_json(resp.body);
         return makeResponse(code, out, {"Content-Type": MimeTypeJson});
+    }
+}
+
+class FakeLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    constructor(hash<LlmBackendConfig> config) : AbstractLlmProvider(config) {
+    }
+
+    string getMode() {
+        return "test-fake";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return <QoreLlmUtils::LlmCompletionResult>{"content": "ok", "usage": {}};
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return <QoreLlmUtils::ChatResponse>{"stop_reason": "end_turn", "usage": {}};
+    }
+}
+
+class FakeLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "test-fake";
+    }
+
+    string getDisplayName() {
+        return "fake test provider";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(hash<LlmBackendConfig> config) {
+        return new FakeLlmProvider(config);
     }
 }
 
@@ -84,14 +129,44 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \callbackDispatchOptionsTest());
         addTestCase("LlmBackend request options override model",
             \requestOptionsOverrideModelTest());
+        addTestCase("LlmStructuredRepair parses repaired JSON text",
+            \structuredRepairJsonTextTest());
+        addTestCase("LlmStructuredRepair completes truncated JSON text",
+            \structuredRepairBalancedCompletionTest());
+        addTestCase("LlmStructuredRepair coerces nested schema JSON strings",
+            \structuredRepairSchemaCoercionTest());
         addTestCase("LlmBackend gemini chat request and text response",
             \geminiChatRequestAndTextResponseTest());
         addTestCase("LlmBackend gemini tool call response",
             \geminiToolCallResponseTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
+        addTestCase("LlmBackend OpenAI chat facade schema-coerces tool "
+            "arguments", \geminiOpenAiToolArgumentSchemaCoercionTest());
+        addTestCase("LlmBackend OpenAI chat facade maps abstract Gemini "
+            "token budgets", \geminiOpenAiAbstractTokenBudgetFacadeTest());
+        addTestCase("LlmBackend OpenAI provider maps reasoning-model "
+            "completion budgets", \openAiReasoningModelTokenBudgetTest());
+        addTestCase("LlmBackend OpenAI chat facade normalizes forced JSON "
+            "tool text", \geminiOpenAiForcedToolJsonTextTest());
+        addTestCase("LlmBackend OpenAI chat facade retries malformed forced "
+            "tool calls as JSON", \geminiOpenAiMalformedForcedToolRetryTest());
+        addTestCase("LlmBackend OpenAI chat facade retries required empty "
+            "tool responses", \geminiOpenAiRequiredToolEmptyRetryTest());
+        addTestCase("LlmBackend OpenAI chat facade retries malformed "
+            "required tool responses", \geminiOpenAiRequiredToolMalformedRetryTest());
         addTestCase("LlmBackend OpenAI chat facade converts tool turns",
             \geminiOpenAiToolTurnsFacadeTest());
+        addTestCase("LlmBackend Anthropic facade preserves cache markers "
+            "and file blocks", \anthropicOpenAiFacadeCacheAndFileTest());
+        addTestCase("LlmBackend provider registry - factory lookup",
+            \registryFactoryLookupTest());
+        addTestCase("LlmBackend provider registry - register / deregister",
+            \registryRegisterDeregisterTest());
+        addTestCase("LlmBackend provider registry - duplicate registration rejected",
+            \registryDuplicateRejectedTest());
+        addTestCase("LlmBackend provider registry - unknown mode",
+            \registryUnknownModeTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
         addTestCase("PromptSecretProtector protects and restores credentials",
             \promptSecretProtectRestoreTest());
@@ -101,6 +176,40 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \promptSecretRedactProtectedValuesTest());
         addTestCase("PromptSecretProtector redacts sensitive keys and text",
             \promptSecretRedactSensitiveValueTest());
+        addTestCase("qoreTypeNameToJsonSchema maps scalars and nullables",
+            \qoreTypeNameToJsonSchemaScalarTest());
+        addTestCase("qoreTypeNameToJsonSchema maps parameterised lists",
+            \qoreTypeNameToJsonSchemaListTest());
+        addTestCase("qoreTypeNameToJsonSchema strips soft prefix",
+            \qoreTypeNameToJsonSchemaSoftTest());
+        addTestCase("qoreParamDescriptorToJsonSchemaProperty translates enum/default/description",
+            \qoreParamDescriptorTest());
+        addTestCase("qoreParamsToJsonSchema produces object schema with required list",
+            \qoreParamsToJsonSchemaObjectTest());
+        addTestCase("qoreParamsToJsonSchema drops Qore-CLI metadata fields",
+            \qoreParamsToJsonSchemaDropsExtraFieldsTest());
+        addTestCase("sanitizeLlmToolName preserves valid names unchanged",
+            \sanitizeLlmToolNamePassthroughTest());
+        addTestCase("sanitizeLlmToolName replaces invalid chars and appends hash suffix",
+            \sanitizeLlmToolNameInvalidCharsTest());
+        addTestCase("sanitizeLlmToolName disambiguates colliding raw names",
+            \sanitizeLlmToolNameCollisionTest());
+        addTestCase("sanitizeLlmToolName fixes invalid leading character",
+            \sanitizeLlmToolNameLeadingCharTest());
+        addTestCase("sanitizeLlmToolName respects 64-char ceiling",
+            \sanitizeLlmToolNameLengthCapTest());
+        addTestCase("CallbackLlmProvider chatStream forwards content deltas + terminal",
+            \callbackChatStreamRealPathTest());
+        addTestCase("CallbackLlmProvider chatStream suppresses empty intermediate chunks",
+            \callbackChatStreamSuppressesEmptyChunksTest());
+        addTestCase("CallbackLlmProvider chatStream falls back to chat() when api_stream_callback unset",
+            \callbackChatStreamFallbackTest());
+        addTestCase("CallbackLlmProvider chatStream wraps upstream throws as LLM-ERROR",
+            \callbackChatStreamErrorWrappingTest());
+        addTestCase("CallbackLlmProvider chatStream forwards tool_call deltas via event.raw",
+            \callbackChatStreamToolCallDeltasTest());
+        addTestCase("CallbackLlmProvider chatStream safety-net done for malformed providers",
+            \callbackChatStreamSafetyNetDoneTest());
         set_return_value(main());
     }
 
@@ -146,7 +255,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     # ===================== Config Validation Tests =====================
 
     configInvalidModeTest() {
-        assertThrows("LLM-CONFIG-ERROR", "invalid mode",
+        assertThrows("LLM-CONFIG-ERROR", "is unknown",
             sub () {
                 LlmBackend llm(<LlmBackendConfig>{"mode": "invalid"});
             }
@@ -300,13 +409,116 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             <ChatMessage>{"role": "user", "content": "hello"},
         ), NOTHING, <LlmRequestOptions>{
             "model": "cheap-task-model",
+            "max_output_tokens": 321,
+            "reasoning_token_budget": 111,
             "temperature": 0.2,
             "body_options": {"reasoning_effort": "low"},
         });
         assertEq("ok", rv.content);
         assertEq("cheap-task-model", captured.model);
+        assertEq(321, captured.max_tokens);
+        assertEq(111, captured.reasoning_token_budget);
         assertEq(0.2, captured.temperature);
         assertEq("low", captured.reasoning_effort);
+    }
+
+    structuredRepairJsonTextTest() {
+        checkGeminiModule();
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::parseJsonObject(
+                "<think>hidden reasoning</think>```json\n"
+                "{\"ok\":true,\"items\":[1]}\n``` trailing text");
+
+        assertTrue(repaired.valid, "balanced JSON prefix is parsed");
+        assertTrue(repaired.repaired, "prefix parsing is reported as repair");
+        assertEq("json-balanced-prefix", repaired.repair_kind,
+            "repair type is exposed");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq(True, value.ok, "object fields are preserved");
+        assertEq(1, value.items[0], "array values are preserved");
+
+        hash<LlmStructuredRepairResult> invalid =
+            LlmStructuredRepair::parseJsonObject("{\"ok\":");
+        assertFalse(invalid.valid, "invalid JSON is rejected");
+        assertEq("invalid-json", invalid.error_code,
+            "parse errors have a stable code");
+        assertTrue(invalid.failure_fingerprint.find("invalid-json:") == 0,
+            "parse errors have a stable fingerprint prefix");
+    }
+
+    structuredRepairBalancedCompletionTest() {
+        checkGeminiModule();
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::parseJsonObject(
+                "{\"interface\":{\"key\":\"iface-1\",\"items\":[1,2]}");
+
+        assertTrue(repaired.valid,
+            "missing trailing object close braces are repaired");
+        assertTrue(repaired.repaired,
+            "balanced completion is reported as a repair");
+        assertEq("json-balanced-completion", repaired.repair_kind,
+            "repair type identifies appended delimiters");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq("iface-1", value.interface.key,
+            "nested object survived balanced completion");
+        assertEq(2, value.interface.items[1],
+            "nested array survived balanced completion");
+
+        hash<LlmStructuredRepairResult> invalid =
+            LlmStructuredRepair::parseJsonObject(
+                "{\"interface\":{\"key\":\"unterminated}");
+        assertFalse(invalid.valid,
+            "unterminated strings are not guessed/repaired");
+    }
+
+    structuredRepairSchemaCoercionTest() {
+        checkGeminiModule();
+        hash<auto> schema = {
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "type": "object",
+                    "properties": {
+                        "ids": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {"value": {"type": "string"}},
+                            },
+                        },
+                    },
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "payload": {
+                                "type": "object",
+                                "properties": {"key": {"type": "string"}},
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        hash<auto> raw = {
+            "payload": "{\"ids\":[{\"value\":\"req-15\"}]}",
+            "steps": "[{\"operation\":\"revise_interface\","
+                "\"payload\":\"{\\\"key\\\":\\\"iface-fsm\\\"}\"}]",
+        };
+
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::coerceBySchema(raw, schema);
+        assertTrue(repaired.valid, "schema coercion succeeds");
+        assertTrue(repaired.repaired, "schema coercion reports repair");
+        assertEq("schema-json-string", repaired.repair_kind,
+            "schema repair type is exposed");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq("req-15", value.payload.ids[0].value,
+            "stringified object fields are parsed");
+        assertEq("iface-fsm", value.steps[0].payload.key,
+            "stringified arrays and nested objects are parsed");
     }
 
     geminiChatRequestAndTextResponseTest() {
@@ -325,7 +537,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                     "usageMetadata": {
                         "promptTokenCount": 7,
                         "candidatesTokenCount": 3,
-                        "totalTokenCount": 10,
+                        "totalTokenCount": 15,
+                        "cachedContentTokenCount": 4,
+                        "thoughtsTokenCount": 5,
                     },
                 },
             },
@@ -356,18 +570,20 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             },
         ), <LlmRequestOptions>{
             "model": "gemini-2.5-pro",
-            "max_tokens": 128,
+            "max_output_tokens": 128,
+            "reasoning_token_budget": 64,
             "temperature": 0.2,
-            "body_options": {
-                "generationConfig": {
-                    "thinkingConfig": {"thinkingBudget": 64},
-                },
-            },
         });
 
         assertEq("done", rv.content);
         assertEq("end_turn", rv.stop_reason);
-        assertEq(10, rv.usage.total_tokens);
+        assertEq(15, rv.usage.total_tokens);
+        assertEq(4, rv.usage.cache_read_input_tokens,
+            "Gemini cached input tokens are normalized for cost accounting");
+        assertEq(4, rv.usage.cached_content_token_count,
+            "Gemini native cached token count is preserved");
+        assertEq(5, rv.usage.reasoning_tokens,
+            "Gemini thinking tokens are normalized as reasoning tokens");
         assertEq(1, gemini_handler.requests.size());
         assertEq("/v1beta/models/gemini-2.5-pro:generateContent",
             gemini_handler.requests[0].path);
@@ -487,7 +703,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 "json_schema": {
                     "schema": {
                         "type": "object",
-                        "properties": {"ok": {"type": "boolean"}},
+                        "additionalProperties": False,
+                        "properties": {
+                            "ok": {"type": "boolean"},
+                            "meta": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {"source": {"type": "string"}},
+                            },
+                        },
                     },
                 },
             },
@@ -498,7 +722,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                     "description": "lookup data",
                     "parameters": {
                         "type": "object",
-                        "properties": {"key": {"type": "string"}},
+                        "additionalProperties": False,
+                        "properties": {
+                            "key": {"type": "string"},
+                            "meta": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {"source": {"type": "string"}},
+                            },
+                        },
                     },
                 },
             },),
@@ -549,15 +781,654 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("application/json",
             gemini_handler.requests[0].body.generationConfig.responseMimeType,
             "json_schema response format maps to Gemini JSON mode");
+        assertFalse(gemini_handler.requests[0].body.generationConfig
+                .responseSchema.hasKey("additionalProperties"),
+            "Gemini response schema strips unsupported additionalProperties");
+        assertFalse(gemini_handler.requests[0].body.generationConfig
+                .responseSchema.properties.meta.hasKey(
+                "additionalProperties"),
+            "Gemini response schema strips nested additionalProperties");
         assertEq("lookup",
             gemini_handler.requests[0].body.tools[0].functionDeclarations[0].name,
             "OpenAI function tool declaration converted");
+        assertFalse(gemini_handler.requests[0].body.tools[0]
+                .functionDeclarations[0].parameters.hasKey(
+                "additionalProperties"),
+            "Gemini tool schema strips unsupported additionalProperties");
+        assertFalse(gemini_handler.requests[0].body.tools[0]
+                .functionDeclarations[0].parameters.properties.meta.hasKey(
+                "additionalProperties"),
+            "Gemini tool schema strips nested additionalProperties");
         assertEq("ANY",
             gemini_handler.requests[0].body.toolConfig.functionCallingConfig.mode,
             "named tool choice forces function calling");
         assertEq("lookup",
             gemini_handler.requests[0].body.toolConfig.functionCallingConfig.allowedFunctionNames[0],
             "named tool choice limits the allowed function");
+    }
+
+    geminiOpenAiToolArgumentSchemaCoercionTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({
+                                "functionCall": {
+                                    "name": "select_design_action",
+                                    "args": {
+                                        "operation": "propose_plan",
+                                        "payload": make_json({
+                                            "key": "plan-req-15",
+                                            "interface": {
+                                                "satisfied_requirements": (
+                                                    "req-15",
+                                                ),
+                                            },
+                                        }),
+                                        "steps": make_json(({
+                                            "operation": "revise_interface",
+                                            "payload": {
+                                                "key": "iface-fsm-req-15",
+                                            },
+                                        },)),
+                                    },
+                                },
+                            },),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 8},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "messages": ({"role": "user", "content": "continue"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_design_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "payload": {
+                                "type": "object",
+                                "properties": {
+                                    "key": {"type": "string"},
+                                    "interface": {
+                                        "type": "object",
+                                        "properties": {
+                                            "satisfied_requirements": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            "steps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "operation": {"type": "string"},
+                                        "payload": {
+                                            "type": "object",
+                                            "properties": {
+                                                "key": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "select_design_action"},
+            },
+        });
+
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "Gemini function call is exposed as a tool call");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("plan-req-15", args.payload.key,
+            "stringified payload object is coerced to JSON");
+        assertEq("req-15", args.payload.interface.satisfied_requirements[0],
+            "nested arrays in stringified payload survive");
+        assertEq("iface-fsm-req-15", args.steps[0].payload.key,
+            "stringified steps array is coerced to JSON");
+    }
+
+    geminiOpenAiAbstractTokenBudgetFacadeTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {"parts": ({"text": "{\"ok\":true}"},)},
+                    },),
+                    "usageMetadata": {"totalTokenCount": 12},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "messages": (
+                {"role": "user", "content": "extract"},
+            ),
+            "max_output_tokens": 16384,
+            "reasoning_token_budget": 1024,
+            "temperature": 0.0,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"ok": {"type": "boolean"}},
+                    },
+                },
+            },
+        });
+
+        assertEq("{\"ok\":true}", rv.choices[0].message.content,
+            "Gemini response content is normalized");
+        assertEq(16384,
+            gemini_handler.requests[0].body.generationConfig.maxOutputTokens,
+            "abstract max_output_tokens maps to Gemini maxOutputTokens");
+        assertEq(1024,
+            gemini_handler.requests[0].body.generationConfig
+                .thinkingConfig.thinkingBudget,
+            "abstract reasoning_token_budget maps to Gemini thinkingBudget");
+        assertEq("application/json",
+            gemini_handler.requests[0].body.generationConfig.responseMimeType,
+            "structured output still maps to Gemini JSON mode");
+    }
+
+    openAiReasoningModelTokenBudgetTest() {
+        installGeminiHandler({
+            "/v1/chat/completions": {
+                "code": 200,
+                "body": {
+                    "choices": ({
+                        "message": {"role": "assistant", "content": "ok"},
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {},
+                },
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "gpt-5.5",
+            "api_key": "openai-test-key",
+        });
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "hello"},
+        ), NOTHING, <LlmRequestOptions>{"max_output_tokens": 8192});
+
+        assertEq("ok", rv.content);
+        hash<auto> body = gemini_handler.requests[0].body;
+        assertEq(8192, body.max_completion_tokens,
+            "OpenAI reasoning models receive max_completion_tokens");
+        assertFalse(body.hasKey("max_tokens"),
+            "OpenAI reasoning models must not receive max_tokens");
+    }
+
+    geminiOpenAiForcedToolJsonTextTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "responseId": "gemini-forced-json-tool-1",
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({
+                                "text": "```json\n" + make_json({
+                                    "atomic_requirements": (
+                                        {"text": "Reconcile orders hourly"},
+                                    ),
+                                    "open_questions": (
+                                        {"question": "Which SLA applies?"},
+                                    ),
+                                    "assumptions": (),
+                                    "target_scope": {
+                                        "in": ("EMEA operations",),
+                                        "out": (),
+                                    },
+                                }) + "\n```",
+                            },),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 17},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {
+                    "role": "system",
+                    "content": "Return the structured decomposition.",
+                },
+                {
+                    "role": "user",
+                    "content": "Decompose the supply-chain prose.",
+                },
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "qonsole_design_decompose_requirement",
+                    "description": "Return a structured decomposition",
+                    "parameters": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "atomic_requirements": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "text": {"type": "string"},
+                                    },
+                                    "required": ("text",),
+                                },
+                            },
+                            "open_questions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "question": {"type": "string"},
+                                    },
+                                    "required": ("question",),
+                                },
+                            },
+                            "target_scope": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "in": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                    "out": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                },
+                            },
+                        },
+                        "required": ("atomic_requirements",),
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "qonsole_design_decompose_requirement"},
+            },
+        });
+
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "forced JSON text is normalized to tool-call finish_reason");
+        assertEq("qonsole_design_decompose_requirement",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "forced tool name is preserved");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("Reconcile orders hourly",
+            args.atomic_requirements[0].text,
+            "JSON text is exposed as tool arguments");
+        assertEq("Which SLA applies?",
+            args.open_questions[0].question,
+            "nested arrays survive the normalization");
+        assertEq("ANY",
+            gemini_handler.requests[0].body.toolConfig.functionCallingConfig.mode,
+            "the provider still receives forced function-calling config");
+        assertFalse(gemini_handler.requests[0].body.tools[0]
+                .functionDeclarations[0].parameters.hasKey(
+                "additionalProperties"),
+            "Gemini tool schema sanitization still happens in provider code");
+    }
+
+    geminiOpenAiMalformedForcedToolRetryTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-tool-1",
+                            "candidates": ({
+                                "finishReason": "MALFORMED_FUNCTION_CALL",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 100,
+                                "candidatesTokenCount": 0,
+                                "totalTokenCount": 100,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-tool-retry-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "text": make_json({
+                                            "atomic_requirements": (
+                                                {"text": "Gate payments"},
+                                            ),
+                                        }),
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {"totalTokenCount": 7},
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {
+                    "role": "system",
+                    "content": "Call the supplied tool.",
+                },
+                {
+                    "role": "user",
+                    "content": "Decompose the requirement.",
+                },
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "qonsole_design_decompose_requirement",
+                    "description": "Return a structured decomposition",
+                    "parameters": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "atomic_requirements": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "text": {"type": "string"},
+                                    },
+                                    "required": ("text",),
+                                },
+                            },
+                        },
+                        "required": ("atomic_requirements",),
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "qonsole_design_decompose_requirement"},
+            },
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "malformed forced tool call is retried once");
+        assertEq("ANY", gemini_handler.requests[0]
+                .body.toolConfig.functionCallingConfig.mode,
+            "initial request uses forced function calling");
+        assertFalse(gemini_handler.requests[1].body.hasKey("toolConfig"),
+            "retry removes function-calling config");
+        assertFalse(gemini_handler.requests[1].body.hasKey("tools"),
+            "retry uses JSON schema mode instead of tools");
+        assertEq("application/json",
+            gemini_handler.requests[1].body.generationConfig.responseMimeType,
+            "retry asks provider for structured JSON");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "retry response is normalized to OpenAI tool_calls");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("Gate payments", args.atomic_requirements[0].text,
+            "retry JSON content becomes the forced tool arguments");
+    }
+
+    geminiOpenAiRequiredToolEmptyRetryTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-empty-required-tool-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 120,
+                                "candidatesTokenCount": 3,
+                                "totalTokenCount": 123,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-empty-required-tool-retry-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "functionCall": {
+                                            "name": "select_action",
+                                            "args": {
+                                                "operation": "no_action",
+                                                "reason": "complete",
+                                            },
+                                        },
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 135,
+                                "candidatesTokenCount": 4,
+                                "totalTokenCount": 139,
+                            },
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            }, {
+                "type": "function",
+                "function": {
+                    "name": "record_note",
+                    "description": "Record a note",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}},
+                        "required": ("text",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "empty required-tool response is retried once");
+        assertEq("ANY", gemini_handler.requests[0]
+                .body.toolConfig.functionCallingConfig.mode,
+            "initial request requires some tool");
+        assertEq("ANY", gemini_handler.requests[1]
+                .body.toolConfig.functionCallingConfig.mode,
+            "retry preserves required tool mode");
+        assertEq("select_action", gemini_handler.requests[1].body.tools[0]
+                .functionDeclarations[0].name,
+            "retry keeps tool declarations available");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "retry functionCall is normalized to OpenAI tool_calls");
+        assertEq("select_action",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "retry preserves returned tool name");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("no_action", args.operation,
+            "retry function arguments are serialized");
+        assertEq("STOP", rv.provider_diagnostics.finish_reason,
+            "OpenAI facade exposes provider finish diagnostics");
+    }
+
+    geminiOpenAiRequiredToolMalformedRetryTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-required-1",
+                            "candidates": ({
+                                "finishReason": "MALFORMED_FUNCTION_CALL",
+                                "finishMessage": "Malformed function call: "
+                                    "print(default_api.select_action(...))",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 120,
+                                "candidatesTokenCount": 0,
+                                "totalTokenCount": 120,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-required-retry-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "functionCall": {
+                                            "name": "select_action",
+                                            "args": {
+                                                "operation": "revise",
+                                                "reason": "retry fixed",
+                                            },
+                                        },
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 135,
+                                "candidatesTokenCount": 4,
+                                "totalTokenCount": 139,
+                            },
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            }, {
+                "type": "function",
+                "function": {
+                    "name": "record_note",
+                    "description": "Record a note",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}},
+                        "required": ("text",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "malformed required-tool response is retried once");
+        assertEq("ANY", gemini_handler.requests[1]
+                .body.toolConfig.functionCallingConfig.mode,
+            "retry preserves required tool mode");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "retry functionCall is normalized to OpenAI tool_calls");
+        assertEq("select_action",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "retry preserves returned tool name");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("revise", args.operation,
+            "retry function arguments are serialized");
     }
 
     geminiOpenAiToolTurnsFacadeTest() {
@@ -617,6 +1488,84 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "tool result JSON parsed");
     }
 
+    anthropicOpenAiFacadeCacheAndFileTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1/messages": {
+                "code": 200,
+                "body": {
+                    "id": "msg-cache-file-test",
+                    "model": "claude-test",
+                    "role": "assistant",
+                    "content": ({"type": "text", "text": "ok"},),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 3, "output_tokens": 1},
+                },
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": "http://localhost:" + port,
+            "model": "claude-test",
+            "api_key": "anthropic-test-key",
+        });
+        list<hash<auto>> system_content = ({
+            "type": "text",
+            "text": "cached rules",
+            "cache_control": {"type": "ephemeral"},
+        },);
+        list<hash<auto>> user_content = ({
+            "type": "text",
+            "text": "read the PDF",
+        },);
+        user_content += {
+            "type": "file",
+            "file": {
+                "filename": "invoice.pdf",
+                "file_data": "data:application/pdf;base64,"
+                    + make_base64_string(binary("%PDF-test")),
+            },
+        };
+        hash<auto> rv = llm.chatCompletions({
+            "messages": (
+                {
+                    "role": "system",
+                    "content": system_content,
+                },
+                {
+                    "role": "user",
+                    "content": user_content,
+                },
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "answer",
+                    "description": "answer",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"ok": {"type": "boolean"}},
+                    },
+                },
+                "cache_control": {"type": "ephemeral"},
+            },),
+        });
+
+        assertEq("ok", rv.choices[0].message.content,
+            "Anthropic response is normalized to OpenAI content");
+        hash<auto> body = gemini_handler.requests[0].body;
+        assertEq("ephemeral", body.system[0].cache_control.type,
+            "system cache_control marker reaches Anthropic request");
+        assertEq("ephemeral", body.tools[0].cache_control.type,
+            "tool cache_control marker reaches Anthropic request");
+        assertEq("document", body.messages[0].content[1].type,
+            "OpenAI file block is translated to Anthropic document");
+        assertEq("application/pdf",
+            body.messages[0].content[1].source.media_type,
+            "document MIME type is preserved");
+    }
+
     hashdeclDefaultsTest() {
         hash<LlmBackendConfig> config(<LlmBackendConfig>{"mode": "http", "url": "http://x"});
         assertEq(4096, config.max_tokens);
@@ -624,6 +1573,36 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(10000, config.connect_timeout_ms);
         assertEq(120000, config.timeout_ms);
         assertEq("2023-06-01", config.anthropic_version);
+    }
+
+    registryFactoryLookupTest() {
+        AbstractLlmProviderFactory cb = LlmProviderRegistry::getFactoryEx("callback");
+        assertEq("callback", cb.getMode());
+        hash<LlmProviderInfo> info = cb.getInfo();
+        assertEq("callback", info.mode);
+        assertTrue(info.supports_tools);
+    }
+
+    registryRegisterDeregisterTest() {
+        FakeLlmProviderFactory fake();
+        LlmProviderRegistry::registerFactory(fake);
+        on_exit LlmProviderRegistry::deregisterFactory("test-fake");
+        AbstractLlmProviderFactory looked_up = LlmProviderRegistry::getFactoryEx("test-fake");
+        assertEq("test-fake", looked_up.getMode());
+        assertTrue(inlist("test-fake", LlmProviderRegistry::knownProviderModes()));
+    }
+
+    registryDuplicateRejectedTest() {
+        FakeLlmProviderFactory fake();
+        LlmProviderRegistry::registerFactory(fake);
+        on_exit LlmProviderRegistry::deregisterFactory("test-fake");
+        assertThrows("LLM-CONFIG-ERROR", "already been registered",
+            sub () { LlmProviderRegistry::registerFactory(new FakeLlmProviderFactory()); });
+    }
+
+    registryUnknownModeTest() {
+        assertThrows("LLM-CONFIG-ERROR", "is unknown",
+            sub () { LlmProviderRegistry::getFactoryEx("no-such-mode-xyz"); });
     }
 
     promptSecretProtectRestoreTest() {
@@ -698,5 +1677,392 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("https://example.com", redacted.nested.url);
         assertEq("https://user:<redacted>@example.com/path",
             redacted.nested.url_with_auth);
+    }
+
+    # --- qorus#230 helpers: qoreParamsToJsonSchema / sanitizeLlmToolName ---
+    # The four helpers in JsonSchema.qc are the abstraction-layer fix for
+    # qorus#230 (tool-enabled chats failing with provider HTTP 400 because
+    # Qore param descriptors were shipped raw as JSON Schema and tool names
+    # contained provider-invalid characters).  Tests cover the load-bearing
+    # behaviours so future regressions are caught at the helper boundary
+    # rather than as opaque 502s at chat time.
+
+    qoreTypeNameToJsonSchemaScalarTest() {
+        assertEq({"type": "string"}, QoreLlmUtils::qoreTypeNameToJsonSchema("string"));
+        assertEq({"type": "integer"}, QoreLlmUtils::qoreTypeNameToJsonSchema("int"));
+        assertEq({"type": "number"}, QoreLlmUtils::qoreTypeNameToJsonSchema("float"));
+        assertEq({"type": "boolean"}, QoreLlmUtils::qoreTypeNameToJsonSchema("bool"));
+        assertEq({"type": "string", "format": "date-time"},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("date"));
+        assertEq({"type": "object"}, QoreLlmUtils::qoreTypeNameToJsonSchema("hash"));
+        # Nullable: leading `*` → `nullable: True`, base type otherwise unchanged
+        assertEq({"type": "string", "nullable": True},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("*string"));
+        assertEq({"type": "integer", "nullable": True},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("*int"));
+        # No type info → permissive default
+        assertEq({"type": "string"}, QoreLlmUtils::qoreTypeNameToJsonSchema(NOTHING));
+    }
+
+    qoreTypeNameToJsonSchemaListTest() {
+        assertEq({"type": "array", "items": {"type": "string"}},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("list<string>"));
+        assertEq({"type": "array", "items": {"type": "integer"}},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("list<int>"));
+        assertEq({"type": "array", "items": {"type": "string"}, "nullable": True},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("*list<string>"));
+        # Bare list: items must still be set (Gemini rejects arrays
+        # without items).  qoreTypeNameToJsonSchema defaults to string.
+        assertEq({"type": "array", "items": {"type": "string"}},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("list"));
+    }
+
+    qoreTypeNameToJsonSchemaSoftTest() {
+        assertEq({"type": "string"}, QoreLlmUtils::qoreTypeNameToJsonSchema("softstring"));
+        assertEq({"type": "integer"}, QoreLlmUtils::qoreTypeNameToJsonSchema("softint"));
+        assertEq({"type": "boolean", "nullable": True},
+            QoreLlmUtils::qoreTypeNameToJsonSchema("*softbool"));
+    }
+
+    qoreParamDescriptorTest() {
+        hash<auto> prop = QoreLlmUtils::qoreParamDescriptorToJsonSchemaProperty({
+            "type": "*string",
+            "description": "City name",
+            "allowed_values": ("metric", "imperial"),
+            "default_value": "metric",
+        });
+        assertEq("string", prop.type);
+        assertEq(True, prop.nullable);
+        assertEq("City name", prop.description);
+        assertEq(("metric", "imperial"), prop{"enum"});
+        assertEq("metric", prop{"default"});
+        # `desc` and `short_desc` are accepted as description fallbacks
+        hash<auto> p2 = QoreLlmUtils::qoreParamDescriptorToJsonSchemaProperty({
+            "type": "int",
+            "desc": "fallback description",
+        });
+        assertEq("fallback description", p2.description);
+        hash<auto> p3 = QoreLlmUtils::qoreParamDescriptorToJsonSchemaProperty({
+            "type": "int",
+            "short_desc": "short fallback",
+        });
+        assertEq("short fallback", p3.description);
+    }
+
+    qoreParamsToJsonSchemaObjectTest() {
+        hash<auto> schema = QoreLlmUtils::qoreParamsToJsonSchema({
+            "city": {
+                "type": "string",
+                "required": True,
+                "description": "City",
+            },
+            "units": {
+                "type": "*string",
+                "allowed_values": ("metric", "imperial"),
+                "default_value": "metric",
+            },
+        });
+        assertEq("object", schema.type);
+        assertEq("string", schema.properties.city.type);
+        assertEq("City", schema.properties.city.description);
+        # `required: true` on a descriptor lifts the property name into
+        # the parent-level `required` array — per-property required is
+        # NOT a JSON Schema field and is dropped.
+        assertEq(("city",), schema.required);
+        assertEq("string", schema.properties.units.type);
+        assertEq(True, schema.properties.units.nullable);
+        assertEq(("metric", "imperial"), schema.properties.units{"enum"});
+        # Empty params → minimal object schema with no `required` key
+        hash<auto> empty = QoreLlmUtils::qoreParamsToJsonSchema(NOTHING);
+        assertEq("object", empty.type);
+        assertEq({}, empty.properties);
+        assertFalse(empty.hasKey("required"));
+    }
+
+    qoreParamsToJsonSchemaDropsExtraFieldsTest() {
+        # Qonsole descriptors carry `positional`, `position`, and other
+        # Qore-CLI metadata that are not part of JSON Schema and would
+        # cause provider HTTP 400 if they reached the wire.  The helper
+        # must drop them silently.
+        hash<auto> schema = QoreLlmUtils::qoreParamsToJsonSchema({
+            "path": {
+                "type": "string",
+                "required": True,
+                "positional": True,
+                "position": 0,
+            },
+        });
+        hash<auto> prop = schema.properties.path;
+        assertFalse(prop.hasKey("positional"));
+        assertFalse(prop.hasKey("position"));
+        assertFalse(prop.hasKey("required"));
+        assertEq(("path",), schema.required);
+    }
+
+    sanitizeLlmToolNamePassthroughTest() {
+        # Already-valid names round-trip unchanged so callers' lookup
+        # tables keyed by the raw name keep working.
+        assertEq("status", QoreLlmUtils::sanitizeLlmToolName("status"));
+        assertEq("system_status",
+            QoreLlmUtils::sanitizeLlmToolName("status", "system_"));
+        assertEq("AppName-action",
+            QoreLlmUtils::sanitizeLlmToolName("AppName-action"));
+        assertEq("a_b_c", QoreLlmUtils::sanitizeLlmToolName("a_b_c"));
+    }
+
+    sanitizeLlmToolNameInvalidCharsTest() {
+        # Invalid characters are replaced with underscore; any
+        # transformation appends a deterministic 8-hex MD5 suffix.
+        string r1 = QoreLlmUtils::sanitizeLlmToolName("GET /api/v9/foo", "rest_");
+        assertRegex("^rest_GET__api_v9_foo_[0-9a-f]{8}$", r1);
+        # Deterministic: same input produces same output
+        assertEq(r1, QoreLlmUtils::sanitizeLlmToolName("GET /api/v9/foo", "rest_"));
+        # Dots become underscores too
+        string r2 = QoreLlmUtils::sanitizeLlmToolName("foo.bar.baz");
+        assertRegex("^foo_bar_baz_[0-9a-f]{8}$", r2);
+    }
+
+    sanitizeLlmToolNameCollisionTest() {
+        # Two distinct raw names that share a long prefix past the 55-char
+        # boundary must NOT collapse to the same sanitized output — the
+        # MD5 hash suffix disambiguates them.
+        string a = QoreLlmUtils::sanitizeLlmToolName(
+            "get-workflows-{id_or_name}-stepinfo-{id_or_name}-config-{name}-value",
+            "rest_");
+        string b = QoreLlmUtils::sanitizeLlmToolName(
+            "get-workflows-{id_or_name}-stepinfo-{id_or_name}-config-{name}-default",
+            "rest_");
+        assertNeq(a, b);
+        # Both fit within the 64-char OpenAI ceiling
+        assertTrue(a.size() <= 64);
+        assertTrue(b.size() <= 64);
+    }
+
+    sanitizeLlmToolNameLeadingCharTest() {
+        # First char must be a letter or underscore — digits and
+        # leading hyphens get an underscore prepended.
+        string r1 = QoreLlmUtils::sanitizeLlmToolName("123tool");
+        assertRegex("^_123tool", r1);
+        # And the result is suffix-hashed because the input was
+        # transformed (prepend != input)
+        assertRegex("^_123tool_[0-9a-f]{8}$", r1);
+    }
+
+    sanitizeLlmToolNameLengthCapTest() {
+        # 200-character input must be truncated to fit 64 chars total,
+        # including the 9-char `_xxxxxxxx` suffix.
+        string raw = strmul("a", 200);
+        string out = QoreLlmUtils::sanitizeLlmToolName(raw);
+        assertEq(64, out.size());
+        # And ends in the deterministic hash suffix
+        assertRegex("_[0-9a-f]{8}$", out);
+    }
+
+    # --- qorus#231: CallbackLlmProvider.chatStream ---
+    # CallbackLlmProvider gained streaming support so the agent strategy's
+    # streaming loop has a callback-mode provider it can drive end-to-end
+    # (matters for Qorus, whose AI gateway uses callback mode).  These
+    # tests pin: real streaming forwards deltas + terminal, empty/role-only
+    # chunks are suppressed, the fallback path emits one delta + done from
+    # a sync chat(), upstream throws wrap as LLM-ERROR, tool-call deltas
+    # are surfaced via event.raw, and the malformed-provider safety net
+    # fires a terminal done so caller accumulators never deadlock.
+
+    private list<hash<auto>> driveCallbackChatStream(
+            *code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
+                stream_cb,
+            *code<hash<auto>(string, string, hash<auto>)> sync_cb) {
+        list<hash<auto>> seen = ();
+        QoreLlmUtils::LlmBackend b(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "api_callback": sync_cb,
+            "api_stream_callback": stream_cb,
+        });
+        b.chatStream(
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "x"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+                push seen, {
+                    "delta": e.delta,
+                    "done": e.done,
+                    "raw_finish": e.raw.choices[0].finish_reason,
+                    "raw_tool_calls": e.raw.choices[0].delta.tool_calls,
+                };
+            });
+        return seen;
+    }
+
+    callbackChatStreamRealPathTest() {
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
+                stream_cb =
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
+                # Assert the stream-enabled body shape reaches the callback
+                assertEq(True, body.stream);
+                assertEq(True, body.stream_options.include_usage);
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {"content": "hel"},
+                        "finish_reason": NOTHING},)});
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {"content": "lo"},
+                        "finish_reason": NOTHING},)});
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {},
+                        "finish_reason": "stop"},),
+                    "usage": {"total_tokens": 12}});
+            };
+        list<hash<auto>> seen = driveCallbackChatStream(stream_cb,
+            hash<auto> sub (string m, string p, hash<auto> body) { return {}; });
+        assertEq(3, seen.size(), "three events: two content + terminal");
+        assertEq("hel", seen[0].delta);
+        assertFalse(seen[0].done);
+        assertEq("lo", seen[1].delta);
+        assertFalse(seen[1].done);
+        assertEq(True, seen[2].done, "terminal event");
+        assertEq("stop", seen[2].raw_finish);
+    }
+
+    callbackChatStreamSuppressesEmptyChunksTest() {
+        # OpenAI commonly emits a leading chunk with `delta: {"role":
+        # "assistant"}` and no content / no finish_reason.  These must be
+        # suppressed — they carry no actionable signal for the agent loop
+        # and would just be noise on the caller's event stream.
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
+                stream_cb =
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {"role": "assistant"},
+                        "finish_reason": NOTHING},)});
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {"content": "real"},
+                        "finish_reason": NOTHING},)});
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {},
+                        "finish_reason": "stop"},)});
+            };
+        list<hash<auto>> seen = driveCallbackChatStream(stream_cb,
+            hash<auto> sub (string m, string p, hash<auto> body) { return {}; });
+        # Two events: the "real" content chunk + the terminal.  The
+        # leading role-only chunk MUST be suppressed.
+        assertEq(2, seen.size(),
+            "leading role-only chunk must be suppressed: " + sprintf("%y", seen));
+        assertEq("real", seen[0].delta);
+        assertEq(True, seen[1].done);
+    }
+
+    callbackChatStreamFallbackTest() {
+        # No api_stream_callback set — provider falls back to chat() and
+        # synthesizes one content delta + a terminal done so the caller's
+        # accumulator terminates the same way it would for a streaming
+        # provider.
+        list<hash<auto>> seen = ();
+        QoreLlmUtils::LlmBackend b(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> body) {
+                return {
+                    "choices": ({"message": {"role": "assistant",
+                            "content": "fallback-content"},
+                        "finish_reason": "stop"},),
+                    "usage": {"total_tokens": 8},
+                };
+            },
+        });
+        b.chatStream(
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "hi"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+                push seen, {"delta": e.delta, "done": e.done,
+                    "raw_finish": e.raw.choices[0].finish_reason,
+                    "raw_usage": e.raw.usage};
+            });
+        assertEq(2, seen.size());
+        assertEq("fallback-content", seen[0].delta);
+        assertFalse(seen[0].done);
+        assertEq(True, seen[1].done);
+        assertEq("stop", seen[1].raw_finish);
+        assertEq(8, seen[1].raw_usage.total_tokens);
+    }
+
+    callbackChatStreamErrorWrappingTest() {
+        # Upstream throws → CallbackLlmProvider wraps it as LLM-ERROR with
+        # the original exception preserved in arg (matches chat()'s
+        # contract so error sanitizers downstream can introspect both).
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
+                stream_cb =
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
+                throw "UPSTREAM-ERROR", "simulated upstream failure";
+            };
+        assertThrows("LLM-ERROR", "callback chat stream failed",
+            sub () {
+                driveCallbackChatStream(stream_cb,
+                    hash<auto> sub (string m, string p, hash<auto> body) {
+                        return {};
+                    });
+            });
+    }
+
+    callbackChatStreamToolCallDeltasTest() {
+        # Tool-call deltas (OpenAI streaming convention) come as multiple
+        # chunks, each carrying a partial function name or partial
+        # arguments JSON.  The provider must forward these via event.raw
+        # so the agent-strategy accumulator can rebuild the complete
+        # tool_call.  event.delta stays empty for tool-call-only chunks.
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
+                stream_cb =
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {"tool_calls": ({"index": 0,
+                            "id": "call_abc",
+                            "function": {"name": "get_weather"}},)},
+                        "finish_reason": NOTHING},)});
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {"tool_calls": ({"index": 0,
+                            "function": {"arguments": "{\"city\""}},)},
+                        "finish_reason": NOTHING},)});
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {},
+                        "finish_reason": "tool_calls"},)});
+            };
+        list<hash<auto>> seen = driveCallbackChatStream(stream_cb,
+            hash<auto> sub (string m, string p, hash<auto> body) { return {}; });
+        assertEq(3, seen.size(), "two tool-call delta chunks + terminal");
+        # First two events have no content delta but do carry tool_calls
+        # on event.raw
+        assertFalse(seen[0].delta.val(),
+            "tool-call-only chunk does not surface as content delta");
+        assertEq(NT_LIST, seen[0].raw_tool_calls.typeCode(),
+            "tool_calls survive on event.raw");
+        assertEq("call_abc", seen[0].raw_tool_calls[0].id);
+        # Terminal carries the tool_calls finish_reason
+        assertEq(True, seen[2].done);
+        assertEq("tool_calls", seen[2].raw_finish);
+    }
+
+    callbackChatStreamSafetyNetDoneTest() {
+        # Malformed providers may close the stream without an
+        # OpenAI-style finish_reason chunk.  The provider must still fire
+        # a terminal done event so the caller's accumulator can finalize.
+        code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)>
+                stream_cb =
+            sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> dcb) {
+                dcb({"object": "chat.completion.chunk",
+                    "choices": ({"index": 0,
+                        "delta": {"content": "no-terminal-from-me"},
+                        "finish_reason": NOTHING},)});
+                # provider returns without ever emitting a terminal chunk
+            };
+        list<hash<auto>> seen = driveCallbackChatStream(stream_cb,
+            hash<auto> sub (string m, string p, hash<auto> body) { return {}; });
+        assertEq(2, seen.size(),
+            "content delta + safety-net terminal done");
+        assertEq("no-terminal-from-me", seen[0].delta);
+        assertEq(True, seen[1].done,
+            "provider must synthesize a terminal done event");
     }
 }

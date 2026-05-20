@@ -152,6 +152,176 @@ public class AbstractAgentStrategy {
         return result;
     }
 
+    #! Makes a streaming multi-turn chat call, accumulating into a ChatResponse
+    /** Bridge from streaming-aware strategies (e.g.
+        @ref SimpleAgentStrategy::executeStream()) to
+        @ref QoreLlmUtils::LlmBackend::chatStream().  Accumulates the per-chunk
+        events into a final @ref ChatResponse so the strategy loop sees the
+        same shape as @ref callChat() — the only difference is that each
+        chunk is also forwarded to @a on_event for live consumption (e.g.,
+        SSE forwarding to a chat client).
+
+        Tool-call deltas (the OpenAI streaming convention of splitting
+        each tool call across multiple chunks: partial function name in
+        one, partial arguments JSON in subsequent chunks) are accumulated
+        in-method.  The returned @ref ChatResponse carries the rebuilt
+        @ref ChatToolCall list when @c finish_reason is \c tool_calls.
+
+        @param messages list of @ref ChatMessage hashes for this turn
+        @param on_event called once per @ref ChatStreamEvent; callers
+            decide what to do with each event (content delta forwarding,
+            tool-call delta surfacing, etc.).  May be @ref nothing to
+            silence the live channel and use this purely as a buffering
+            adapter
+        @param tools optional list of @ref ToolDefinition hashes
+
+        @return a @ref ChatResponse with @c content (accumulated text),
+            @c tool_calls (rebuilt from streamed deltas, present when
+            @c finish_reason is \c tool_calls), @c stop_reason, @c usage,
+            and @c raw fields populated from the terminal chunk
+
+        @throw AGENT-BUDGET-EXCEEDED if the budget would be exceeded
+
+        @par Example: stream content deltas to a live UI while still
+        accumulating the full @ref ChatResponse for the strategy loop
+
+        @code{.py}
+hash<ChatResponse> resp = callChatStream(messages,
+    sub (hash<ChatStreamEvent> ev) {
+        if (ev.delta.val()) {
+            sse_queue.push(sprintf("data: %s\n\n",
+                make_json({"delta": ev.delta})));
+        }
+    }, ctx.tools);
+if (resp.stop_reason == "tool_use") {
+    # Dispatch the rebuilt tool calls; the accumulator already merged
+    # the multi-chunk OpenAI delta convention into resp.tool_calls
+    dispatchTools(ctx, resp.tool_calls);
+}
+        @endcode
+    */
+    hash<QoreLlmUtils::ChatResponse> callChatStream(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *code on_event,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools) {
+        checkBudget();
+
+        # Accumulator state.  `tool_call_buf` is a hash keyed by
+        # OpenAI's per-chunk `index` field (used to associate fragments
+        # across delta chunks).  Each entry holds id, function name (may
+        # arrive split across chunks), and the partial-arguments string
+        # we concatenate as fragments arrive.
+        string content_buf = "";
+        hash<auto> tool_call_buf = {};
+        list<int> tool_call_indices = ();
+        *string finish_reason;
+        *hash<auto> usage_acc;
+        *string response_id;
+        *string response_model;
+        *hash<auto> last_raw;
+
+        llm.chatStream(messages,
+            sub (hash<QoreLlmUtils::ChatStreamEvent> event) {
+                if (event.delta.val()) {
+                    content_buf += event.delta;
+                }
+                *hash<auto> choice = event.raw.choices[0];
+                if (choice.delta.tool_calls.typeCode() == NT_LIST) {
+                    foreach hash<auto> tcd in (choice.delta.tool_calls) {
+                        int idx = tcd.index ?? 0;
+                        if (!exists tool_call_buf{idx}) {
+                            tool_call_buf{idx} = {"args_buf": ""};
+                            push tool_call_indices, idx;
+                        }
+                        if (tcd.id.val()) {
+                            tool_call_buf{idx}.id = tcd.id;
+                        }
+                        if (tcd."function".name.val()) {
+                            tool_call_buf{idx}.name =
+                                (tool_call_buf{idx}.name ?? "")
+                                + tcd."function".name;
+                        }
+                        if (tcd."function".arguments.val()) {
+                            tool_call_buf{idx}.args_buf +=
+                                tcd."function".arguments;
+                        }
+                    }
+                }
+                if (event.raw.id.val()) {
+                    response_id = event.raw.id;
+                }
+                if (event.raw.model.val()) {
+                    response_model = event.raw.model;
+                }
+                if (event.raw.usage.typeCode() == NT_HASH) {
+                    usage_acc = event.raw.usage;
+                }
+                if (event.done) {
+                    last_raw = event.raw;
+                    if (choice.finish_reason.val()) {
+                        finish_reason = choice.finish_reason;
+                    }
+                }
+                if (on_event) {
+                    on_event(event);
+                }
+            }, tools);
+
+        # Map OpenAI finish_reason → QoreLlmUtils ChatResponse stop_reason
+        string stop_reason;
+        switch (finish_reason) {
+            case "stop":
+                stop_reason = "end_turn";
+                break;
+            case "tool_calls":
+                stop_reason = "tool_use";
+                break;
+            case "length":
+                stop_reason = "max_tokens";
+                break;
+            default:
+                stop_reason = finish_reason ?? "end_turn";
+        }
+
+        *list<hash<QoreLlmUtils::ChatToolCall>> parsed_tool_calls;
+        if (tool_call_buf) {
+            parsed_tool_calls = ();
+            foreach int idx in (tool_call_indices) {
+                hash<auto> raw = tool_call_buf{idx};
+                *hash<auto> args;
+                if (raw.args_buf.val()) {
+                    try {
+                        args = parse_json(raw.args_buf);
+                    } catch () {
+                        # Tolerate malformed JSON: surface raw text via
+                        # a `_raw` field so callers can debug provider
+                        # output without the strategy crashing.
+                        args = {"_raw": raw.args_buf};
+                    }
+                }
+                push parsed_tool_calls, <QoreLlmUtils::ChatToolCall>{
+                    "id": raw.id ?? sprintf("tc_%d", idx),
+                    "name": raw.name ?? "",
+                    "arguments": args,
+                };
+            }
+        }
+
+        hash<QoreLlmUtils::ChatResponse> result = <QoreLlmUtils::ChatResponse>{
+            "id": response_id,
+            "model": response_model,
+            "stop_reason": stop_reason,
+            "content": content_buf,
+            "tool_calls": parsed_tool_calls,
+            "usage": usage_acc ?? {},
+            "raw": last_raw,
+        };
+
+        int used = result.usage.total_tokens ?? 0;
+        tokens_consumed += used;
+        return result;
+    }
+
     #! Makes a simple LLM completion call and tracks token usage
     /** @param system_prompt the system prompt
         @param user_prompt the user message

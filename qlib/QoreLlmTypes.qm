@@ -1,0 +1,773 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreLlmTypes.qm provider-neutral type and abstract-class layer for Qore LLM modules
+
+/*  QoreLlmTypes.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires reflection
+
+module QoreLlmTypes {
+    version = "1.0.0";
+    desc = "user module providing the provider-neutral hashdecls and abstract "
+        "provider classes shared by QoreLlmUtils and LLM provider modules";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreLlmTypes Module
+
+    @tableofcontents
+
+    @section qorellmtypesintro QoreLlmTypes Module Introduction
+
+    The %QoreLlmTypes module provides the provider-neutral type and abstract
+    class layer that @ref qorellmutilsintro "QoreLlmUtils" and individual
+    LLM REST client modules (GeminiRestClient, AnthropicRestClient,
+    OpenAiRestClient, SGLangRestClient) share.  It exists as a separate
+    module so that REST client modules can depend on the abstract provider
+    contract without forming a dependency cycle with %QoreLlmUtils.
+
+    Symbols defined here live in the @ref QoreLlmUtils namespace so callers
+    that \c "%requires QoreLlmUtils" see them transparently; the split is
+    purely a packaging detail.
+
+    @section qorellmtypesmembers Public symbols
+
+    Hashdecls describing requests and responses:
+
+    - @ref QoreLlmUtils::LlmBackendConfig — backend configuration
+    - @ref QoreLlmUtils::LlmRequestOptions — per-call request overrides
+    - @ref QoreLlmUtils::LlmCompletionResult — completion result
+    - @ref QoreLlmUtils::ChatMessage — multi-turn conversation message
+    - @ref QoreLlmUtils::ChatToolCall — tool call requested by the model
+    - @ref QoreLlmUtils::ToolDefinition — tool the model may call
+    - @ref QoreLlmUtils::ContentPart — multimodal message part
+    - @ref QoreLlmUtils::ChatResponse — multi-turn chat result
+    - @ref QoreLlmUtils::ChatStreamEvent — streaming event delta
+    - @ref QoreLlmUtils::LlmProviderInfo — provider discovery metadata
+
+    Abstract classes:
+
+    - @ref QoreLlmUtils::AbstractLlmProvider — provider-neutral
+      complete / chat / chatStream contract plus shared helpers
+    - @ref QoreLlmUtils::AbstractLlmProviderFactory — registration handle
+      and capability description
+
+    @section qorellmtypesrelnotes Release Notes
+
+    @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
+    - Initial release; extracted from the QoreLlmUtils module to break a
+      future dependency cycle with LLM provider modules
+*/
+
+#! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
+public namespace QoreLlmUtils {
+
+#! Configuration for the LLM backend
+/** Specifies how to connect to the LLM — via an OpenAI-compatible HTTP
+    endpoint, the Anthropic Messages API, the Google Gemini API, or a custom
+    callback (e.g., for routing through an API gateway).
+*/
+public hashdecl LlmBackendConfig {
+    #! Mode: "http" for OpenAI-compatible, "anthropic" for Anthropic Messages API,
+    #! "sglang" for SGLang servers (OpenAI-compatible + local defaults),
+    #! "gemini" for Google Gemini generateContent,
+    #! "callback" for a custom API call function
+    string mode;
+    #! Base URL of the LLM service (required for "http", "anthropic", and "sglang" modes; optional for "gemini")
+    *string url;
+    #! Model name to pass in the request
+    *string model;
+    #! API key for authentication — this is the secret key from your LLM provider (e.g., from the OpenAI or Anthropic dashboard)
+    *string api_key;
+    #! Maximum provider completion/output budget; default 4096
+    /** Compatibility alias for @ref max_output_tokens.  New code should use
+        @ref max_output_tokens so callers express intent without depending on
+        any provider's wire-field name. */
+    int max_tokens = 4096;
+    #! Provider-neutral maximum output/completion budget
+    /** Providers map this to their own request field, for example OpenAI
+        \c max_tokens or \c max_completion_tokens, Anthropic \c max_tokens,
+        and Gemini \c generationConfig.maxOutputTokens.  When unset,
+        @ref max_tokens is used for backward compatibility. */
+    *int max_output_tokens;
+    #! Optional hidden-reasoning / thinking token budget
+    /** Providers that support a numeric hidden-reasoning budget map this to
+        their native field.  Providers without such a control ignore it. */
+    *int reasoning_token_budget;
+    #! Sampling temperature; default 0.0 (deterministic)
+    float temperature = 0.0;
+    #! HTTP connect timeout in milliseconds; default 10000
+    int connect_timeout_ms = 10000;
+    #! HTTP request timeout in milliseconds; default 120000
+    int timeout_ms = 120000;
+    #! Optional protocol hint passed to HTTP-backed providers (for example "h2")
+    *string protocol;
+    #! Anthropic API version header; default "2023-06-01"
+    string anthropic_version = "2023-06-01";
+    #! Maximum retry attempts for transient errors (429, 5xx); default 3;
+    #! set to 0 to disable retries
+    int max_retries = 3;
+    #! Callback mode: a callable that performs the API call and returns
+    #! the response hash in OpenAI-compatible format
+    *code<hash<auto>(string, string, hash<auto>)> api_callback;
+    #! Callback mode streaming dispatcher (counterpart to @ref api_callback)
+    /** Caller-supplied function that performs the API call AND fires
+        @a delta_cb once per upstream stream chunk (OpenAI-compatible
+        shape).  Required for @ref CallbackLlmProvider::chatStream(); when
+        unset, the provider falls back to invoking @ref api_callback once
+        (single non-streamed call surfaced as a synthetic single-delta
+        event followed by a terminal @c done event) so callers that depend
+        on streaming get a coherent event sequence either way.
+
+        The signature is \c (method, path, body, delta_cb) → @ref nothing
+        where each call to @c delta_cb passes one OpenAI-shaped
+        \c chat.completion.chunk hash. */
+    *code<nothing(string, string, hash<auto>, code<nothing(hash<auto>)>)> api_stream_callback;
+    #! Callback mode method hint passed to @ref api_callback; default "POST"
+    string callback_method = "POST";
+    #! Callback mode endpoint/path hint passed to @ref api_callback; default "chat/completions"
+    string callback_path = "chat/completions";
+    #! Initial retry delay in milliseconds for exponential backoff; default 1000
+    int retry_delay_ms = 1000;
+}
+
+#! Per-call request overrides for LLM calls
+/** Lets callers keep a long-lived backend for one provider/connection while
+    selecting a different model for individual tasks.  This is important for
+    applications that intentionally mix model tiers (for example: a low-cost
+    summarization pass, a stronger planning pass, and a premium review pass)
+    without rebuilding the backend object.
+*/
+public hashdecl LlmRequestOptions {
+    #! Model name for this call; overrides @ref LlmBackendConfig::model
+    *string model;
+    #! Maximum tokens for this call; compatibility alias for @ref max_output_tokens
+    *int max_tokens;
+    #! Provider-neutral maximum output/completion budget for this call
+    /** Overrides @ref LlmBackendConfig::max_output_tokens and
+        @ref LlmBackendConfig::max_tokens. */
+    *int max_output_tokens;
+    #! Optional hidden-reasoning / thinking token budget for this call
+    /** Overrides @ref LlmBackendConfig::reasoning_token_budget. */
+    *int reasoning_token_budget;
+    #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
+    *float temperature;
+    #! JSON schema to request structured output when the backend supports it
+    *hash<auto> output_schema;
+    #! Provider-specific request body fields merged into the generated body
+    *hash<auto> body_options;
+}
+
+#! Result from an LLM completion call
+public hashdecl LlmCompletionResult {
+    #! The generated text content
+    string content;
+    #! Token usage information (provider-specific)
+    hash<auto> usage;
+}
+
+#! A single tool call returned by the LLM
+public hashdecl ChatToolCall {
+    #! Unique ID for this tool call (from the LLM response)
+    string id;
+    #! Function/tool name to call
+    string name;
+    #! Parsed arguments hash to pass to the tool
+    *hash<auto> arguments;
+}
+
+#! A content part in a multimodal message (text, image, or file)
+public hashdecl ContentPart {
+    #! Part type: "text" for text content, "image" for image data, or "file" for file data
+    string type;
+    #! Text content (when type is "text")
+    *string text;
+    #! Binary data (when type is "image" or "file")
+    *binary data;
+    #! MIME type (when type is "image" or "file"), e.g., "image/png", "application/pdf"
+    *string mime_type;
+    #! File name (when type is "file")
+    *string filename;
+    #! Provider-specific cache-control metadata for providers that support it
+    *hash<auto> cache_control;
+}
+
+#! A message in a multi-turn conversation
+public hashdecl ChatMessage {
+    #! Message role: "system", "user", "assistant", or "tool"
+    string role;
+    #! Text content (may be empty for assistant messages that only contain tool_calls)
+    *string content;
+    #! Multimodal content parts (images + text); when set, takes precedence
+    #! over \c content for the wire format sent to the LLM
+    *list<hash<ContentPart>> content_parts;
+    #! Tool calls requested by the assistant (present when role is "assistant")
+    *list<hash<ChatToolCall>> tool_calls;
+    #! ID of the tool call this message is responding to (when role is "tool")
+    *string tool_call_id;
+    #! Tool name (when role is "tool")
+    *string name;
+}
+
+#! Definition of a tool the LLM can call
+public hashdecl ToolDefinition {
+    #! Tool name (must match ^[a-zA-Z0-9_-]{1,64}$)
+    string name;
+    #! Human-readable description of what the tool does
+    *string description;
+    #! JSON Schema describing the tool's parameters
+    *hash<auto> parameters;
+    #! Provider-specific cache-control metadata for providers that support it
+    *hash<auto> cache_control;
+}
+
+#! Response from a multi-turn chat call
+public hashdecl ChatResponse {
+    #! Provider response ID when available
+    *string id;
+    #! Model used by the provider when available
+    *string model;
+    #! Why the LLM stopped: "end_turn" (normal), "tool_use" (wants tool calls),
+    #! "max_tokens" (hit limit), or "stop_sequence"
+    string stop_reason;
+    #! Text content (if any)
+    *string content;
+    #! Tool calls the LLM wants executed (when stop_reason is "tool_use")
+    *list<hash<ChatToolCall>> tool_calls;
+    #! Token usage information
+    hash<auto> usage;
+    #! Raw provider response when callers need provider-specific metadata
+    *hash<auto> raw;
+    #! Provider-specific diagnostics suitable for surfacing through facade APIs
+    *hash<auto> provider_diagnostics;
+}
+
+#! A streaming event from a chat completion
+public hashdecl ChatStreamEvent {
+    #! Event type from the SSE stream (e.g., "content_block_delta", "message_delta")
+    *string event;
+    #! Text delta (incremental text content in this chunk)
+    *string delta;
+    #! True when this is the final event (stream complete)
+    bool done = False;
+    #! Raw event data (the full parsed JSON from the SSE data field)
+    *hash<auto> raw;
+}
+
+#! Static metadata describing a registered LLM provider
+/** Returned by @ref AbstractLlmProviderFactory::getInfo() so tooling can
+    discover provider capabilities without instantiating a backend.
+*/
+public hashdecl LlmProviderInfo {
+    #! The mode string used to look up this provider (e.g. \c "gemini")
+    string mode;
+    #! Human-readable name for diagnostics and discovery UIs
+    string display_name;
+    #! Module that supplies this provider (e.g. \c "GeminiRestClient")
+    *string module_name;
+    #! True when the provider can stream chat completions
+    bool supports_streaming = False;
+    #! True when the provider can dispatch tool / function calls
+    bool supports_tools = False;
+    #! True when the provider supports structured output (JSON schema)
+    bool supports_structured_output = False;
+    #! True when the provider accepts multimodal content (images etc.)
+    bool supports_multimodal = False;
+    #! True when the provider maps @ref LlmRequestOptions::reasoning_token_budget
+    bool supports_reasoning_token_budget = False;
+}
+
+#! Abstract factory for an LLM provider
+/** Concrete factories register themselves with
+    @ref LlmBackend::registerFactory() and the backend dispatches calls
+    through them.  Factories are looked up by mode string and the heavy
+    provider object is constructed lazily on demand via @ref create().
+
+    @par Subclassing contract
+    Concrete subclasses implement @ref getMode(), @ref getDisplayName(),
+    @ref create(), and optionally @ref getInfo() to advertise capabilities.
+*/
+public class AbstractLlmProviderFactory {
+    #! Returns the mode string associated with this factory
+    /** For example, the Gemini factory returns \c "gemini"; the OpenAI-
+        compatible factory returns \c "http".  The mode is matched against
+        @ref LlmBackendConfig::mode at @ref LlmBackend construction.
+    */
+    abstract string getMode();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a provider instance from the given backend configuration
+    /** @param config the @ref LlmBackendConfig hash; the factory uses the
+            relevant fields (URL, API key, retry settings, etc.) to build
+            a fully initialized provider
+
+        @return a concrete @ref AbstractLlmProvider that can service
+            \c complete() / \c chat() / \c chatStream() calls
+    */
+    abstract AbstractLlmProvider create(hash<LlmBackendConfig> config);
+
+    #! Returns static information about the provider this factory creates
+    /** Default implementation returns the bare minimum
+        (@ref LlmProviderInfo::mode and @ref LlmProviderInfo::display_name);
+        concrete factories override to advertise streaming, tool, schema,
+        and multimodal support.
+    */
+    hash<LlmProviderInfo> getInfo() {
+        return <LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Registry of LLM provider factories keyed by mode string
+/** Mirrors the FactoryMap pattern from
+    @ref DataProvider::DataProvider::registerFactory().  Modes whose
+    factory ships with a separate REST client module (e.g. \c "gemini" with
+    @ref GeminiRestClient) are listed in @ref ProviderModuleMap so the
+    registry can lazy-load the providing module on demand.  Modes whose
+    factory ships with @ref QoreLlmUtils itself (e.g. \c "callback") are
+    registered when @ref QoreLlmUtils' \c init block runs.
+
+    The registry is intentionally a separate class in @ref QoreLlmTypes so
+    LLM provider modules can register their factories without depending on
+    @ref QoreLlmUtils — which would form a module dependency cycle.
+*/
+public class LlmProviderRegistry {
+    public {
+        #! Map of mode names to the module that supplies the matching provider
+        const ProviderModuleMap = {
+            "http":      "OpenAiRestClient",
+            "anthropic": "AnthropicRestClient",
+            "sglang":    "SGLangRestClient",
+            "gemini":    "GeminiRestClient",
+        };
+    }
+
+    private {
+        #! Provider factories registered by mode string
+        static hash<string, AbstractLlmProviderFactory> factory_cache;
+        #! Tracks the module that registered each factory (by class name)
+        static hash<string, string> factory_module_map;
+        #! Serializes access to the factory cache
+        static Mutex factory_cache_lock();
+    }
+
+    #! Registers a provider factory under its mode string
+    /** Concrete factory classes call this from their owning module's \c init
+        block.  Subsequent @ref LlmBackend constructions with the matching
+        @ref LlmBackendConfig::mode dispatch through the registered factory.
+
+        @param factory the new provider factory
+
+        @throw LLM-CONFIG-ERROR a factory for the same mode is already registered
+    */
+    static registerFactory(AbstractLlmProviderFactory factory) {
+        factory_cache_lock.lock();
+        on_exit factory_cache_lock.unlock();
+
+        string mode = factory.getMode();
+        if (factory_cache{mode}) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("LLM provider factory for mode %y has already been "
+                    "registered", mode);
+        }
+        *string module_name = Class::getClass(factory).getModuleName();
+        if (exists module_name) {
+            factory_module_map{Class::getClass(factory).getName()} = module_name;
+        }
+        factory_cache{mode} = factory;
+    }
+
+    #! Removes a previously registered provider factory
+    /** Intended primarily for tests that register a fake provider; safe to
+        call when no factory is registered for the given mode (no-op).
+
+        @param mode the mode string previously registered via @ref registerFactory()
+    */
+    static deregisterFactory(string mode) {
+        factory_cache_lock.lock();
+        on_exit factory_cache_lock.unlock();
+
+        *AbstractLlmProviderFactory factory = remove factory_cache{mode};
+        if (!factory) {
+            return;
+        }
+        try {
+            remove factory_module_map{Class::getClass(factory).getName()};
+        } catch (hash<ExceptionInfo> ex) {
+            # Class metadata may be unavailable during program teardown
+            if (ex.err != "PROGRAM-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    #! Returns the factory for the given mode, lazy-loading its module if needed
+    /** When no factory is registered for \a mode, this consults
+        @ref ProviderModuleMap and attempts to load the named module.  The
+        module's \c init block is expected to call @ref registerFactory()
+        for the corresponding mode.
+
+        @param mode the @ref LlmBackendConfig::mode value to resolve
+
+        @return the registered factory, or @ref nothing if the mode is
+        unknown and no module can be loaded for it
+    */
+    static *AbstractLlmProviderFactory getFactory(string mode) {
+        if (factory_cache{mode}) {
+            return factory_cache{mode};
+        }
+        *string module_name = ProviderModuleMap{mode};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for mode %y: %s",
+                    module_name, mode, ex.desc), ex;
+        }
+        return factory_cache{mode};
+    }
+
+    #! Returns the factory for the given mode or throws an exception
+    /** @param mode the @ref LlmBackendConfig::mode value to resolve
+
+        @return the registered factory
+
+        @throw LLM-CONFIG-ERROR the mode is unknown; the message lists the
+        currently registered modes and the @ref ProviderModuleMap keys
+    */
+    static AbstractLlmProviderFactory getFactoryEx(string mode) {
+        *AbstractLlmProviderFactory factory = LlmProviderRegistry::getFactory(mode);
+        if (!factory) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("LLM provider mode %y is unknown; registered modes: "
+                    "%y; modes available via lazy module load: %y",
+                    mode, keys factory_cache, keys ProviderModuleMap);
+        }
+        return factory;
+    }
+
+    #! Returns the list of currently-registered mode strings
+    /** @return the modes whose factories are present in the cache; modes
+        that are known via @ref ProviderModuleMap but whose modules have
+        not yet been lazy-loaded are not included
+    */
+    static list<string> knownProviderModes() {
+        return keys factory_cache;
+    }
+}
+
+#! Abstract base class for LLM providers
+/** Concrete subclasses translate the provider-neutral
+    @ref LlmBackend interface (\c complete, \c chat, \c chatStream) into a
+    specific wire protocol (OpenAI chat completions, Anthropic Messages,
+    Google Gemini generateContent, etc.).
+
+    @par Provider responsibilities
+    - Build provider-native request bodies from @ref ChatMessage and
+      @ref ToolDefinition lists
+    - Dispatch the request over the appropriate transport
+    - Translate provider-native responses back into @ref ChatResponse /
+      @ref LlmCompletionResult / @ref ChatStreamEvent shapes
+    - Manage any provider-specific connection or REST client lifecycle
+
+    @par Provider-neutral helpers
+    Subclasses inherit @ref withRetry() (retry-on-transient-errors loop),
+    @ref getRequestModel() / @ref getRequestMaxOutputTokens() /
+    @ref getRequestReasoningTokenBudget() /
+    @ref getRequestTemperature() (per-call override resolution), and
+    @ref mergeRequestBodyOptions() (provider-specific body-options merge).
+
+    @par OpenAI-compatible facade hooks
+    @ref LlmBackend::chatCompletions() and
+    @ref LlmBackend::chatCompletionsStream() expose an OpenAI-shaped wire
+    contract regardless of the underlying provider.  Providers that need to
+    adapt OpenAI-shaped inputs (tool choice, response format) or interpret
+    provider-native stream chunks override the \c applyOpenAi*() and
+    \c updateOpenAiStreamStateFromRaw() / \c getOpenAiToolCallDeltas() hooks.
+    Default implementations target the OpenAI wire shape directly.
+
+    Thread-safe: implementations must allow concurrent calls.
+*/
+public class AbstractLlmProvider {
+    private {
+        #! The backend configuration passed at construction
+        hash<LlmBackendConfig> config_h;
+    }
+
+    #! Stores the backend configuration for use by helpers
+    /** Concrete subclasses call this from their own constructor (typically
+        via \c : AbstractLlmProvider(config)) and then perform any
+        provider-specific validation or REST client setup.
+    */
+    constructor(hash<LlmBackendConfig> config) {
+        config_h = config;
+    }
+
+    #! Returns the mode string this provider services (e.g. \c "gemini")
+    abstract string getMode();
+
+    #! Returns the configured model name, or @ref nothing if none was set
+    *string getModel() {
+        return config_h.model;
+    }
+
+    #! Returns the underlying configuration hash
+    hash<LlmBackendConfig> getConfig() {
+        return config_h;
+    }
+
+    #! Makes a single-turn completion call
+    /** @param system_prompt the system prompt
+        @param user_prompt the user prompt
+        @param output_schema optional JSON schema for structured output
+        @param opts per-call request overrides
+
+        @return a @ref LlmCompletionResult with the generated content and usage
+    */
+    abstract hash<LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<LlmRequestOptions> opts);
+
+    #! Makes a multi-turn chat call with optional tool calling
+    /** @param messages conversation history including system, user,
+            assistant and tool messages
+        @param tools optional tool definitions the LLM may call
+        @param opts per-call request overrides
+
+        @return a @ref ChatResponse describing the model's response
+    */
+    abstract hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts);
+
+    #! Streams a chat completion via Server-Sent Events
+    /** Default implementation throws \c LLM-ERROR; concrete providers
+        override this when the underlying API supports streaming.
+
+        @param messages conversation history
+        @param callback receives each @ref ChatStreamEvent as it arrives
+        @param tools optional tool definitions
+        @param opts per-call overrides
+
+        @throw LLM-ERROR streaming is not supported by this provider
+    */
+    chatStream(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback,
+            *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts) {
+        throw "LLM-ERROR",
+            sprintf("streaming is not supported by the %y provider; use "
+                "chat() instead", getMode());
+    }
+
+    #! Resolves the model name for a single call (per-call override > config default)
+    *string getRequestModel(*hash<LlmRequestOptions> opts) {
+        return opts.model ?? config_h.model;
+    }
+
+    #! Resolves the provider-neutral output/completion budget for a single call
+    int getRequestMaxOutputTokens(*hash<LlmRequestOptions> opts) {
+        return opts.max_output_tokens ?? opts.max_tokens
+            ?? config_h.max_output_tokens ?? config_h.max_tokens;
+    }
+
+    #! Resolves the max-token budget for a single call
+    /** Compatibility helper for existing providers and callers.  New provider
+        code should call @ref getRequestMaxOutputTokens() for clarity. */
+    int getRequestMaxTokens(*hash<LlmRequestOptions> opts) {
+        return getRequestMaxOutputTokens(opts);
+    }
+
+    #! Resolves the provider-neutral hidden-reasoning budget for a single call
+    *int getRequestReasoningTokenBudget(*hash<LlmRequestOptions> opts) {
+        return opts.reasoning_token_budget
+            ?? config_h.reasoning_token_budget;
+    }
+
+    #! Resolves the sampling temperature for a single call
+    float getRequestTemperature(*hash<LlmRequestOptions> opts) {
+        return opts.temperature ?? config_h.temperature;
+    }
+
+    #! Merges provider-specific body options after generic fields
+    /** Default semantics: keys in \a opts.body_options overwrite top-level
+        keys in \a body verbatim.  Providers that need recursive / nested
+        merge semantics (e.g. Gemini \c generationConfig) override this.
+    */
+    hash<auto> mergeRequestBodyOptions(hash<auto> body,
+            *hash<LlmRequestOptions> opts) {
+        if (!opts.body_options) {
+            return body;
+        }
+        hash<auto!> rv;
+        rv += body;
+        foreach string key in (keys opts.body_options) {
+            rv{key} = opts.body_options{key};
+        }
+        return rv;
+    }
+
+    #! Retries the given call with exponential backoff on transient errors
+    /** Retries on HTTP 429 (rate limit) and 5xx (server error) responses up
+        to @ref LlmBackendConfig::max_retries times.  Initial delay is
+        @ref LlmBackendConfig::retry_delay_ms and doubles on each attempt;
+        respects \c Retry-After when present on 429 responses.
+
+        @param call a callable that performs the request and returns the response
+
+        @return the response from the successful call
+
+        @throw any non-retryable exception is rethrown; a retryable exception
+        is rethrown after retries are exhausted
+    */
+    auto withRetry(code call) {
+        int attempt = 0;
+        while (True) {
+            try {
+                return call();
+            } catch (hash<ExceptionInfo> ex) {
+                bool retryable = False;
+                if (ex.arg.typeCode() == NT_HASH) {
+                    int status = ex.arg.status_code ?? 0;
+                    if (status == 429 || status >= 500) {
+                        retryable = True;
+                    }
+                }
+
+                if (!retryable || attempt >= config_h.max_retries) {
+                    rethrow;
+                }
+
+                ++attempt;
+                int delay = config_h.retry_delay_ms * (1 << (attempt - 1));
+
+                if (ex.arg.typeCode() == NT_HASH
+                        && ex.arg.headers."retry-after".val()) {
+                    int retry_after = ex.arg.headers."retry-after".toInt();
+                    if (retry_after > 0) {
+                        delay = retry_after * 1000;
+                    }
+                }
+
+                usleep(delay * 1000);
+            }
+        }
+    }
+
+    #! OpenAI-facade hook: adapts an OpenAI tool_choice to provider-native form
+    /** Called by @ref LlmBackend::chatCompletions() when translating an
+        OpenAI-shaped request body for dispatch through this provider.
+        The default writes the choice unchanged into
+        \c body_options.tool_choice; providers with a different native
+        encoding (e.g. Gemini \c toolConfig) override.
+
+        @param body_options the hash being accumulated for
+            @ref LlmRequestOptions::body_options
+        @param choice the OpenAI \c tool_choice value (string or hash)
+    */
+    applyOpenAiToolChoice(reference<hash<auto!>> body_options, auto choice) {
+        if (exists choice) {
+            body_options.tool_choice = choice;
+        }
+    }
+
+    #! OpenAI-facade hook: routes an OpenAI response_format to provider-native form
+    /** Called when an OpenAI-shaped request specifies
+        \c response_format=\c json_schema.  The default copies
+        \c response_format into \c body_options so the OpenAI-compatible
+        provider sees it verbatim; providers that prefer a structured-output
+        side channel (e.g. Gemini \c responseSchema in
+        @ref LlmRequestOptions::output_schema) override.
+
+        @param body_options the body-options hash being built
+        @param options the @ref LlmRequestOptions hash being built
+        @param output_schema the parsed JSON schema (already validated by caller)
+        @param response_format the raw OpenAI \c response_format hash from the request
+    */
+    applyOpenAiResponseFormat(reference<hash<auto!>> body_options,
+            reference<hash<LlmRequestOptions>> options,
+            hash<auto> output_schema, *hash<auto> response_format) {
+        if (response_format) {
+            body_options.response_format = response_format;
+        }
+    }
+
+    #! OpenAI-facade hook: updates OpenAI stream state from a provider-native raw event
+    /** Called once per streaming event from @ref chatStream() to populate
+        the OpenAI-compatible stream-state hash with id, model, usage and
+        finish-reason fields.  Default reads OpenAI shape (\c id, \c model,
+        \c usage, \c choices[0].finish_reason); providers with native event
+        shapes (e.g. Gemini \c responseId, \c usageMetadata,
+        \c candidates[0].finishReason) override.
+
+        @param state the OpenAI-compatible stream-state hash being accumulated
+        @param raw the parsed provider-native event hash, or @ref nothing
+    */
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        if (raw.id.val()) {
+            state.id = raw.id;
+        }
+        if (raw.model.val()) {
+            state.model = raw.model;
+        }
+        if (raw.usage.typeCode() == NT_HASH) {
+            state.usage = raw.usage;
+        }
+        if (raw.choices[0].finish_reason.val()) {
+            state.finish_reason = raw.choices[0].finish_reason;
+        }
+    }
+
+    #! OpenAI-facade hook: extracts OpenAI tool-call deltas from a provider-native raw event
+    /** Returns the list of OpenAI-shaped \c tool_calls deltas (index, id,
+        type, function) that should be emitted to the caller for this event.
+        Default returns an empty list (OpenAI streams emit tool calls
+        progressively in \c choices[0].delta.tool_calls which the existing
+        delta accumulator handles directly); Gemini overrides to harvest
+        \c candidates[0].content.parts[].functionCall entries.
+
+        @param state the OpenAI-compatible stream-state hash being accumulated
+        @param raw the parsed provider-native event hash, or @ref nothing
+    */
+    list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        return ();
+    }
+}
+
+} # namespace QoreLlmUtils
