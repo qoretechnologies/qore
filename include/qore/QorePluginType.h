@@ -247,4 +247,49 @@ DLLEXPORT QoreListNode* qore_plugin_get_process_operations(const char* module_na
 DLLEXPORT QoreHashNode* qore_plugin_resolve_process_operation(const QoreTypeInfo* lhs_type,
     const QoreTypeInfo* rhs_type, const char* operation_name, ExceptionSink* xsink);
 
+//! Returns process-loaded plugin modules active in a Program
+/** @param pgm the Program to inspect; nullptr returns an empty list
+    @param xsink the exception sink
+    @return a list of active plugin module names
+ */
+DLLEXPORT QoreListNode* qore_plugin_get_program_modules(QoreProgram* pgm, ExceptionSink* xsink);
+//! Returns plugin type descriptors for a Program-active module
+/** @param pgm the Program to inspect; nullptr returns an empty list for loaded modules
+    @param module_name the plugin module name
+    @param xsink the exception sink
+    @return a list of plugin type descriptor hashes
+    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process
+ */
+DLLEXPORT QoreListNode* qore_plugin_get_program_types(QoreProgram* pgm, const char* module_name,
+    ExceptionSink* xsink);
+//! Returns plugin operation descriptors for a Program-active module
+/** @param pgm the Program to inspect; nullptr returns an empty list for loaded modules
+    @param module_name the plugin module name
+    @param xsink the exception sink
+    @return a list of plugin operation descriptor hashes
+    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process
+ */
+DLLEXPORT QoreListNode* qore_plugin_get_program_operations(QoreProgram* pgm, const char* module_name,
+    ExceptionSink* xsink);
+//! Resolves a plugin operation visible in a Program
+/** @param pgm the Program to inspect; nullptr behaves like a Program with no active plugin modules
+    @param lhs_type the left-hand operand type
+    @param rhs_type the optional right-hand operand type
+    @param operation_name the registered operation name
+    @param xsink the exception sink
+    @return the selected plugin operation descriptor hash or nullptr when no visible operation matches
+ */
+DLLEXPORT QoreHashNode* qore_plugin_resolve_program_operation(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+    const QoreTypeInfo* rhs_type, const char* operation_name, ExceptionSink* xsink);
+//! Returns recently recorded plugin fallback sites for a Program
+/** @param pgm the Program to inspect; nullptr returns an empty list
+    @param xsink the exception sink
+    @return a list of fallback-site descriptor hashes
+ */
+DLLEXPORT QoreListNode* qore_plugin_get_recent_fallback_sites(QoreProgram* pgm, ExceptionSink* xsink);
+//! Clears recorded plugin fallback sites for a Program
+/** @param pgm the Program to update; nullptr is ignored
+ */
+DLLEXPORT void qore_plugin_clear_fallback_sites(QoreProgram* pgm);
+
 #endif

@@ -62,6 +62,31 @@ static uint64_t smokeBitsFromValue(const QoreValue& v) {
     return bits;
 }
 
+class ScopedEnvVar {
+public:
+    ScopedEnvVar(const char* name, const char* value) : name(name) {
+        const char* old = std::getenv(name);
+        if (old) {
+            old_value = old;
+            old_set = true;
+        }
+        setenv(name, value, 1);
+    }
+
+    ~ScopedEnvVar() {
+        if (old_set) {
+            setenv(name.c_str(), old_value.c_str(), 1);
+        } else {
+            unsetenv(name.c_str());
+        }
+    }
+
+private:
+    std::string name;
+    std::string old_value;
+    bool old_set = false;
+};
+
 static uint64_t smokeBinary(uint64_t lhs, uint64_t rhs, ExceptionSink*) {
     QoreValue lhs_value = smokeValueFromBits(lhs);
     QoreValue rhs_value = smokeValueFromBits(rhs);
@@ -292,6 +317,103 @@ static bool checkRegistrationAndIntrospection() {
     if (xsink || missing_resolved) {
         std::cerr << "missing process plugin operation resolution did not return NOTHING\n";
         return false;
+    }
+
+    ReferenceHolder<QoreProgram> inactive_pgm(new QoreProgram, &xsink);
+    ReferenceHolder<QoreListNode> inactive_modules(qore_plugin_get_program_modules(*inactive_pgm, &xsink), &xsink);
+    ReferenceHolder<QoreListNode> inactive_types(qore_plugin_get_program_types(*inactive_pgm, "plugin-smoke",
+        &xsink), &xsink);
+    ReferenceHolder<QoreListNode> inactive_ops(qore_plugin_get_program_operations(*inactive_pgm, "plugin-smoke",
+        &xsink), &xsink);
+    ReferenceHolder<QoreHashNode> inactive_resolved(qore_plugin_resolve_program_operation(*inactive_pgm,
+        bigIntTypeInfo, bigIntTypeInfo, "add", &xsink), &xsink);
+    if (xsink || !inactive_modules || !inactive_types || !inactive_ops || inactive_modules->size()
+            || inactive_types->size() || inactive_ops->size() || inactive_resolved) {
+        std::cerr << "inactive program plugin registry filtering failed\n";
+        return false;
+    }
+
+    ReferenceHolder<QoreProgram> active_pgm(new QoreProgram, &xsink);
+    active_pgm->addFeature("plugin-smoke");
+    ReferenceHolder<QoreListNode> active_modules(qore_plugin_get_program_modules(*active_pgm, &xsink), &xsink);
+    ReferenceHolder<QoreListNode> active_types(qore_plugin_get_program_types(*active_pgm, "plugin-smoke", &xsink),
+        &xsink);
+    ReferenceHolder<QoreListNode> active_ops(qore_plugin_get_program_operations(*active_pgm, "plugin-smoke",
+        &xsink), &xsink);
+    ReferenceHolder<QoreHashNode> active_resolved(qore_plugin_resolve_program_operation(*active_pgm,
+        bigIntTypeInfo, bigIntTypeInfo, "add", &xsink), &xsink);
+    if (xsink || !active_modules || !active_types || !active_ops || !active_resolved
+            || active_modules->size() != 1 || active_types->size() != 1 || active_ops->size() != 4
+            || active_resolved->getKeyValue("global_id").getAsBigInt() != static_cast<int64>(global_id)) {
+        std::cerr << "active program plugin registry filtering failed\n";
+        return false;
+    }
+
+    {
+        ScopedEnvVar fallback_capacity("QORE_PLUGIN_FALLBACK_BUFFER", "1024");
+        qore_plugin_record_fallback_site(*active_pgm, "plugin-smoke.q", 17, "add", bigIntTypeInfo, bigIntTypeInfo,
+            "smoke fallback");
+        ReferenceHolder<QoreListNode> fallback_sites(qore_plugin_get_recent_fallback_sites(*active_pgm, &xsink),
+            &xsink);
+        if (xsink || !fallback_sites || fallback_sites->size() != 1) {
+            std::cerr << "plugin fallback-site recording failed\n";
+            return false;
+        }
+        const QoreHashNode* fallback_hash = fallback_sites->retrieveEntry(0).get<const QoreHashNode>();
+        const QoreStringNode* fallback_operation = fallback_hash
+            ? fallback_hash->getKeyValue("operation_name").get<const QoreStringNode>()
+            : nullptr;
+        const QoreStringNode* fallback_reason = fallback_hash
+            ? fallback_hash->getKeyValue("reason").get<const QoreStringNode>()
+            : nullptr;
+        if (!fallback_hash || !fallback_operation || !fallback_reason
+                || fallback_hash->getKeyValue("line").getAsBigInt() != 17
+                || std::strcmp(fallback_operation->c_str(), "add")
+                || std::strcmp(fallback_reason->c_str(), "smoke fallback")) {
+            std::cerr << "plugin fallback-site introspection fields are wrong\n";
+            return false;
+        }
+        qore_plugin_clear_fallback_sites(*active_pgm);
+        ReferenceHolder<QoreListNode> cleared_fallback_sites(qore_plugin_get_recent_fallback_sites(*active_pgm,
+            &xsink), &xsink);
+        if (xsink || !cleared_fallback_sites || cleared_fallback_sites->size()) {
+            std::cerr << "plugin fallback-site clearing failed\n";
+            return false;
+        }
+    }
+
+    {
+        ScopedEnvVar disabled_fallback("QORE_PLUGIN_FALLBACK_BUFFER", "0");
+        qore_plugin_record_fallback_site(*active_pgm, "plugin-smoke.q", 18, "add", bigIntTypeInfo, bigIntTypeInfo,
+            "disabled fallback");
+        ReferenceHolder<QoreListNode> disabled_sites(qore_plugin_get_recent_fallback_sites(*active_pgm, &xsink),
+            &xsink);
+        if (xsink || !disabled_sites || disabled_sites->size()) {
+            std::cerr << "plugin fallback-site disabled buffer failed\n";
+            return false;
+        }
+    }
+
+    {
+        ScopedEnvVar one_fallback("QORE_PLUGIN_FALLBACK_BUFFER", "1");
+        qore_plugin_record_fallback_site(*active_pgm, "plugin-smoke.q", 19, "add", bigIntTypeInfo, bigIntTypeInfo,
+            "first fallback");
+        qore_plugin_record_fallback_site(*active_pgm, "plugin-smoke.q", 20, "add", bigIntTypeInfo, bigIntTypeInfo,
+            "second fallback");
+        ReferenceHolder<QoreListNode> one_sites(qore_plugin_get_recent_fallback_sites(*active_pgm, &xsink),
+            &xsink);
+        const QoreHashNode* one_hash = one_sites && one_sites->size() == 1
+            ? one_sites->retrieveEntry(0).get<const QoreHashNode>()
+            : nullptr;
+        const QoreStringNode* one_reason = one_hash
+            ? one_hash->getKeyValue("reason").get<const QoreStringNode>()
+            : nullptr;
+        if (xsink || !one_hash || !one_reason || one_hash->getKeyValue("line").getAsBigInt() != 20
+                || std::strcmp(one_reason->c_str(), "second fallback")) {
+            std::cerr << "plugin fallback-site rolling buffer failed\n";
+            return false;
+        }
+        qore_plugin_clear_fallback_sites(*active_pgm);
     }
 
     ExceptionSink mismatch_xsink;

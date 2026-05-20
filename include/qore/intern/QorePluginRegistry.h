@@ -85,6 +85,8 @@ DLLLOCAL int qore_plugin_get_process_operation_id_checked(const char* module_nam
 DLLLOCAL uint64_t qore_plugin_compute_signature_hash_v1(const QorePluginOperationSignature& signature);
 DLLLOCAL int qore_plugin_get_aot_module_info(const char* module_name, QorePluginAOTModuleInfo& info,
     ExceptionSink* xsink);
+DLLLOCAL void qore_plugin_record_fallback_site(QoreProgram* pgm, const char* file, int line,
+    const char* operation_name, const QoreTypeInfo* lhs_type, const QoreTypeInfo* rhs_type, const char* reason);
 
 extern "C" {
 DLLEXPORT uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t value_bits,

@@ -185,23 +185,33 @@ foreach string module_name in (registry.getProcessModules()) {
 }
     @endcode
 
-    \c PluginRegistry::get() returns a Program-bound view. Program-bound
-    methods raise \c PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE when called on the
-    process-global view:
+    \c PluginRegistry::get() returns a Program-bound view for the current
+    Program, and \c PluginRegistry::get(pgm) returns a Program-bound view for
+    an explicit Program. Program-bound methods raise
+    \c PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE when called on the process-global
+    view:
 
     @code{.py}
 PluginRegistry registry = PluginRegistry::get();
 *hash<auto> op = registry.resolveOperation(IntType, IntType, "add");
-if (exists op) {
-    printf("selected %s::%s global=%d\n",
-        op.module_name, op.operation_name, op.global_id);
+    if (exists op) {
+        printf("selected %s::%s global=%d\n",
+            op.module_name, op.operation_name, op.global_id);
+    }
+
+foreach hash<auto> site in (registry.getRecentFallbackSites()) {
+    printf("%s:%d %s fallback: %s\n",
+        site.file, site.line, site.operation_name, site.reason);
 }
+registry.clearFallbackSites();
     @endcode
 
     \c resolveOperation() returns \c NOTHING when no committed operation
-    matches the operand types and operation name. The current implementation
-    resolves against committed process descriptors; future Program-local
-    activation rules can further filter the result.
+    matches the operand types, operation name, and Program-local active module
+    set. \c getTypes() and \c getOperations() return descriptors for process
+    modules on the process-global view and filter to active modules on
+    Program-bound views. Fallback-site recording uses a per-Program rolling
+    buffer sized by \c QORE_PLUGIN_FALLBACK_BUFFER.
 
     @section plugin_types_qord QORD Metadata
 
@@ -235,6 +245,10 @@ if (exists op) {
     - \c QORE_PLUGIN_CROSS_TYPE_TRACE logs
       \c PluginRegistry::resolveOperation() resolution decisions and future
       cross-type operator selection decisions.
+    - \c QORE_PLUGIN_FALLBACK_BUFFER sets each Program's rolling
+      fallback-site buffer capacity; unset defaults to 1024, 0 disables
+      recording, invalid values fall back to 1024, and values above 65536 are
+      capped.
 
     @code
 QORE_PLUGIN_CROSS_TYPE_TRACE=1 qore my-script.q
@@ -249,9 +263,7 @@ QORE_PLUGIN_CROSS_TYPE_TRACE=1 qore my-script.q
     - dedicated dense-buffer plugin IR opcodes are reserved until lowering can
       supply raw data/size/stride operands safely;
     - optional LLVM codegen extension hooks are reserved for a later ABI
-      header;
-    - Program-local fallback-site recording is reserved; use trace variables
-      and \c PluginRegistry descriptor queries for current diagnostics.
+      header.
 
     @see
     - @ref Qore::Reflection::PluginRegistry

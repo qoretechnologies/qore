@@ -52,12 +52,13 @@ is not blocking.
   decisions for plugin import, registry, and helper-ref sections. The full
   Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
   `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
-  value instances, dense-buffer dispatch opcodes,
-  Program-local activation/fallback diagnostics, the reference plugin module,
-  and lint tooling. User-facing language/reference documentation and release
-  notes are present. Dense-buffer runtime helper execution is implemented for
-  module helpers using the raw dense-buffer ABI; IR opcodes are intentionally
-  deferred until lowering can supply real buffer data/size/stride operands.
+  value instances, dense-buffer dispatch opcodes, the reference plugin module,
+  and lint tooling. Program-local activation filtering, operation resolution,
+  and fallback-site recording/query/clear diagnostics are implemented.
+  User-facing language/reference documentation and release notes are present.
+  Dense-buffer runtime helper execution is implemented for module helpers using
+  the raw dense-buffer ABI; IR opcodes are intentionally deferred until lowering
+  can supply real buffer data/size/stride operands.
 
 ---
 

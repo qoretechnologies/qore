@@ -11,12 +11,14 @@
 #include <qore/QorePluginType.h>
 #include <qore/QoreReflection.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include <qore/intern/qore_program_private.h>
 #include <qore/intern/xxhash.h>
 #include <qore/intern/qore_list_private.h>
 
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cerrno>
 #include <cstddef>
 #include <cstdlib>
 #include <cstdio>
@@ -141,6 +143,33 @@ void traceCrossType(const std::string& msg) {
     if (pluginCrossTypeTrace()) {
         std::fprintf(stderr, "QORE_PLUGIN_CROSS_TYPE_TRACE: %s\n", msg.c_str());
     }
+}
+
+size_t pluginFallbackBufferLimit() {
+    const char* env = std::getenv("QORE_PLUGIN_FALLBACK_BUFFER");
+    if (!env || !*env) {
+        return 1024;
+    }
+    if (*env == '-') {
+        traceRegister(std::string("invalid QORE_PLUGIN_FALLBACK_BUFFER='") + env
+            + "', using default capacity 1024");
+        return 1024;
+    }
+
+    errno = 0;
+    char* end = nullptr;
+    unsigned long value = std::strtoul(env, &end, 10);
+    if (errno || end == env || (end && *end)) {
+        traceRegister(std::string("invalid QORE_PLUGIN_FALLBACK_BUFFER='") + env
+            + "', using default capacity 1024");
+        return 1024;
+    }
+    if (value > 65536) {
+        traceRegister(std::string("QORE_PLUGIN_FALLBACK_BUFFER='") + env
+            + "' exceeds maximum capacity 65536, capping");
+        return 65536;
+    }
+    return static_cast<size_t>(value);
 }
 
 uint64_t nothingBits() {
@@ -965,6 +994,75 @@ QoreHashNode* makeOperationHash(const RegisteredPluginModule& module, const Regi
     return hasException(xsink) ? nullptr : h.release();
 }
 
+bool pluginProgramHasModule(QoreProgram* pgm, const std::string& module_name) {
+    return pgm && qore_program_private::get(*pgm)->hasFeature(module_name.c_str());
+}
+
+std::vector<std::string> getProcessPluginModuleNames(ExceptionSink* xsink) {
+    std::vector<std::string> names;
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    names.reserve(plugin_modules.size());
+    int n = 0;
+    for (const auto& i : plugin_modules) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin registry module-name snapshot")) {
+            names.clear();
+            return names;
+        }
+        names.push_back(i.first);
+        ++n;
+    }
+    return names;
+}
+
+std::set<std::string> getActivePluginModuleSet(QoreProgram* pgm, ExceptionSink* xsink) {
+    std::set<std::string> active;
+    std::vector<std::string> names = getProcessPluginModuleNames(xsink);
+    if (hasException(xsink)) {
+        return active;
+    }
+
+    int n = 0;
+    for (const std::string& name : names) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin registry active-module filtering")) {
+            active.clear();
+            return active;
+        }
+        if (pluginProgramHasModule(pgm, name)) {
+            active.insert(name);
+        }
+        ++n;
+    }
+    return active;
+}
+
+QoreHashNode* makeFallbackSiteHash(const qore_program_private_base::PluginFallbackSiteInfo& site,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("file", site.file.empty() ? QoreValue() : QoreValue(new QoreStringNode(site.file)), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("line", static_cast<int64>(site.line), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("operation_name", new QoreStringNode(site.operation_name), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("lhs_type", new QoreStringNode(site.lhs_type), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("rhs_type", site.rhs_type.empty() ? QoreValue() : QoreValue(new QoreStringNode(site.rhs_type)),
+        xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("reason", new QoreStringNode(site.reason), xsink);
+    return hasException(xsink) ? nullptr : h.release();
+}
+
 } // namespace
 
 uint64_t qore_plugin_compute_signature_hash_v1(const QorePluginOperationSignature& signature) {
@@ -1256,6 +1354,29 @@ QoreListNode* qore_plugin_get_process_modules(ExceptionSink* xsink) {
     return rv.release();
 }
 
+QoreListNode* qore_plugin_get_program_modules(QoreProgram* pgm, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    std::vector<std::string> names = getProcessPluginModuleNames(xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+
+    int n = 0;
+    for (const std::string& name : names) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin registry active-module introspection")) {
+            return nullptr;
+        }
+        if (pluginProgramHasModule(pgm, name)) {
+            rv->push(new QoreStringNode(name), xsink);
+            if (hasException(xsink)) {
+                return nullptr;
+            }
+        }
+        ++n;
+    }
+    return rv.release();
+}
+
 QoreListNode* qore_plugin_get_process_types(const char* module_name, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
     std::lock_guard<std::mutex> lock(plugin_registry_mutex);
@@ -1286,6 +1407,41 @@ QoreListNode* qore_plugin_get_process_types(const char* module_name, ExceptionSi
     return rv.release();
 }
 
+QoreListNode* qore_plugin_get_program_types(QoreProgram* pgm, const char* module_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    const bool active = pluginProgramHasModule(pgm, module_name ? module_name : "");
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    auto i = plugin_modules.find(module_name ? module_name : "");
+    if (i == plugin_modules.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-MODULE-NOT-LOADED", "plugin registry has no loaded module named "
+                "\"%s\" (method=\"getTypes\", subreason=\"module_not_loaded\", section=3.12)",
+                escapeDiagnosticName(module_name).c_str());
+        }
+        return nullptr;
+    }
+    if (!active) {
+        return rv.release();
+    }
+
+    int n = 0;
+    for (const RegisteredPluginType& type : i->second.types) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin registry active type introspection")) {
+            return nullptr;
+        }
+        QoreHashNode* h = makeTypeHash(i->second, type, xsink);
+        if (hasException(xsink)) {
+            return nullptr;
+        }
+        rv->push(h, xsink);
+        if (hasException(xsink)) {
+            return nullptr;
+        }
+        ++n;
+    }
+    return rv.release();
+}
+
 QoreListNode* qore_plugin_get_process_operations(const char* module_name, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
     std::lock_guard<std::mutex> lock(plugin_registry_mutex);
@@ -1301,6 +1457,41 @@ QoreListNode* qore_plugin_get_process_operations(const char* module_name, Except
     int n = 0;
     for (const RegisteredPluginOperation& op : i->second.operations) {
         if (checkPluginRegistryCancel(n, xsink, "plugin registry operation introspection")) {
+            return nullptr;
+        }
+        QoreHashNode* h = makeOperationHash(i->second, op, xsink);
+        if (hasException(xsink)) {
+            return nullptr;
+        }
+        rv->push(h, xsink);
+        if (hasException(xsink)) {
+            return nullptr;
+        }
+        ++n;
+    }
+    return rv.release();
+}
+
+QoreListNode* qore_plugin_get_program_operations(QoreProgram* pgm, const char* module_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    const bool active = pluginProgramHasModule(pgm, module_name ? module_name : "");
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    auto i = plugin_modules.find(module_name ? module_name : "");
+    if (i == plugin_modules.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-MODULE-NOT-LOADED", "plugin registry has no loaded module named "
+                "\"%s\" (method=\"getOperations\", subreason=\"module_not_loaded\", section=3.12)",
+                escapeDiagnosticName(module_name).c_str());
+        }
+        return nullptr;
+    }
+    if (!active) {
+        return rv.release();
+    }
+
+    int n = 0;
+    for (const RegisteredPluginOperation& op : i->second.operations) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin registry active operation introspection")) {
             return nullptr;
         }
         QoreHashNode* h = makeOperationHash(i->second, op, xsink);
@@ -1366,6 +1557,115 @@ QoreHashNode* qore_plugin_resolve_process_operation(const QoreTypeInfo* lhs_type
 
     traceCrossType("resolve: no matching operation");
     return nullptr;
+}
+
+QoreHashNode* qore_plugin_resolve_program_operation(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+        const QoreTypeInfo* rhs_type, const char* operation_name, ExceptionSink* xsink) {
+    if (!lhs_type || !operation_name || !*operation_name) {
+        traceCrossType("program resolve: missing lhs type or operation name");
+        return nullptr;
+    }
+
+    std::set<std::string> active_modules = getActivePluginModuleSet(pgm, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+
+    const char* lhs_path = qore_type_get_path(lhs_type);
+    const char* rhs_path = rhs_type ? qore_type_get_path(rhs_type) : "<none>";
+    traceCrossType("program resolve: operation='" + std::string(operation_name) + "' lhs='" + lhs_path + "' rhs='"
+        + rhs_path + "' active_modules=" + std::to_string(active_modules.size()));
+
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    int n = 0;
+    for (const auto& module_pair : plugin_modules) {
+        const RegisteredPluginModule& module = module_pair.second;
+        if (active_modules.find(module.module_name) == active_modules.end()) {
+            traceCrossType("program resolve: skipped inactive module '" + module.module_name + "'");
+            continue;
+        }
+        for (const RegisteredPluginOperation& op : module.operations) {
+            if (checkPluginRegistryCancel(n, xsink, "plugin registry program operation resolution")) {
+                return nullptr;
+            }
+            ++n;
+            if (op.operation_name != operation_name) {
+                continue;
+            }
+
+            bool arity_ok = rhs_type ? op.signature.arity == 2 : op.signature.arity == 1;
+            if (!arity_ok) {
+                traceCrossType("program resolve: skipped '" + module.module_name + "::" + op.operation_name
+                    + "' due to arity");
+                continue;
+            }
+            if (!qore_type_is_assignable_from(op.signature.primary_type, lhs_type)) {
+                traceCrossType("program resolve: skipped '" + module.module_name + "::" + op.operation_name
+                    + "' due to primary type");
+                continue;
+            }
+            if (rhs_type && !qore_type_is_assignable_from(op.signature.secondary_type, rhs_type)) {
+                traceCrossType("program resolve: skipped '" + module.module_name + "::" + op.operation_name
+                    + "' due to secondary type");
+                continue;
+            }
+
+            traceCrossType("program resolve: selected '" + module.module_name + "::" + op.operation_name
+                + "' local_id=" + std::to_string(op.local_id));
+            return makeOperationHash(module, op, xsink);
+        }
+    }
+
+    traceCrossType("program resolve: no matching active operation");
+    return nullptr;
+}
+
+void qore_plugin_record_fallback_site(QoreProgram* pgm, const char* file, int line, const char* operation_name,
+        const QoreTypeInfo* lhs_type, const QoreTypeInfo* rhs_type, const char* reason) {
+    if (!pgm) {
+        return;
+    }
+
+    qore_program_private_base::PluginFallbackSiteInfo info;
+    info.file = file ? file : "";
+    info.line = line;
+    info.operation_name = operation_name ? operation_name : "";
+    info.lhs_type = lhs_type ? qore_type_get_path(lhs_type) : "<unknown>";
+    info.rhs_type = rhs_type ? qore_type_get_path(rhs_type) : "";
+    info.reason = reason ? reason : "";
+    qore_program_private::get(*pgm)->recordPluginFallbackSite(std::move(info), pluginFallbackBufferLimit());
+}
+
+QoreListNode* qore_plugin_get_recent_fallback_sites(QoreProgram* pgm, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    if (!pgm) {
+        return rv.release();
+    }
+
+    std::vector<qore_program_private_base::PluginFallbackSiteInfo> sites =
+        qore_program_private::get(*pgm)->getPluginFallbackSites();
+    int n = 0;
+    for (const qore_program_private_base::PluginFallbackSiteInfo& site : sites) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin fallback-site introspection")) {
+            return nullptr;
+        }
+        QoreHashNode* h = makeFallbackSiteHash(site, xsink);
+        if (hasException(xsink)) {
+            return nullptr;
+        }
+        rv->push(h, xsink);
+        if (hasException(xsink)) {
+            return nullptr;
+        }
+        ++n;
+    }
+    return rv.release();
+}
+
+void qore_plugin_clear_fallback_sites(QoreProgram* pgm) {
+    if (pgm) {
+        qore_program_private::get(*pgm)->clearPluginFallbackSites();
+    }
 }
 
 int qore_plugin_get_process_operation_id(const char* module_name, uint16_t local_operation_id,
