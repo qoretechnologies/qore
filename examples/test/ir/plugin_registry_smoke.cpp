@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cstddef>
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -187,6 +188,30 @@ static bool checkDryRunValidation() {
     ExceptionSink bad_xsink;
     if (!qore_validate_plugin_types_v1(&bad, &ctx, false, &bad_xsink) || !bad_xsink) {
         std::cerr << "invalid plugin descriptor passed dry-run validation\n";
+        return false;
+    }
+    bad_xsink.clear();
+
+    QorePluginValidationContext old_ctx = {};
+    old_ctx.struct_size = offsetof(QorePluginValidationContext, module_handle);
+    if (qore_validate_plugin_types_v1(&reg, &old_ctx, true, &bad_xsink) || bad_xsink) {
+        std::cerr << "old-size plugin validation context failed dry-run validation\n";
+        return false;
+    }
+
+    QorePluginValidationContext small_ctx = {};
+    small_ctx.struct_size = offsetof(QorePluginValidationContext, module_handle) - 1;
+    if (!qore_validate_plugin_types_v1(&reg, &small_ctx, false, &bad_xsink) || !bad_xsink) {
+        std::cerr << "too-small plugin validation context passed dry-run validation\n";
+        return false;
+    }
+    bad_xsink.clear();
+
+    QorePluginValidationContext flag_ctx = {};
+    flag_ctx.struct_size = sizeof(flag_ctx);
+    flag_ctx.flags = QORE_PLUGIN_VALIDATE_RESERVED_MASK;
+    if (!qore_validate_plugin_types_v1(&reg, &flag_ctx, false, &bad_xsink) || !bad_xsink) {
+        std::cerr << "unknown plugin validation context flag passed dry-run validation\n";
         return false;
     }
     bad_xsink.clear();

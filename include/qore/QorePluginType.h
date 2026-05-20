@@ -218,6 +218,7 @@ struct QorePluginTypeRegistration {
 
 enum QorePluginValidationContextFlags : uint32_t {
     QORE_PLUGIN_VALIDATE_NO_FLAGS = 0,
+    QORE_PLUGIN_VALIDATE_RESERVED_MASK = 0xFFFFFFFFu,
 };
 
 struct QorePluginValidationContext {

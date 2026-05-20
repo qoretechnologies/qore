@@ -1891,11 +1891,14 @@ renaming or removing:
 | `unknown_value_access` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `unknown_result_alias` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `invalid_extension_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `extension_unrecognized_required` | `PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED` |
 | `invalid_dependency` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `duplicate_signature` | `PLUGIN-REGISTRATION-SIGNATURE-CONFLICT` |
 | `reserved_field_nonzero` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR`, `QORD-PLUGIN-RESERVED-NONZERO` |
 | `over_read` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `under_consumed` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `unsupported_canonical_version` | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` |
+| `signature_hash_mismatch` | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` |
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` during registration/contextual validation or runtime dispatch if a committed operation has no resolved helper pointer |
 | `helper_abi_mismatch` | `PLUGIN-HELPER-ABI-MISMATCH` when an IR opcode/runtime helper is paired with a registered operation using a different helper ABI or when a runtime helper receives an invalid call-frame shape |
 | `result_type_mismatch` | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` when a runtime helper returns a value that does not match the operation's declared `return_type` |

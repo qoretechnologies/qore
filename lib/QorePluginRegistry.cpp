@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cstddef>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -1118,20 +1119,25 @@ extern "C" int qore_validate_plugin_types_v1(const QorePluginTypeRegistration* r
     const QorePluginModuleHandle* handle = nullptr;
 
     if (ctx) {
-        if (ctx->struct_size < offsetof(QorePluginValidationContext, program) + sizeof(ctx->program)) {
+        constexpr uint32_t flag_field_end = static_cast<uint32_t>(offsetof(QorePluginValidationContext,
+            module_handle));
+        constexpr uint32_t module_handle_field_end = static_cast<uint32_t>(
+            offsetof(QorePluginValidationContext, module_handle) + sizeof(ctx->module_handle));
+
+        if (ctx->struct_size < flag_field_end) {
             state.fail("PLUGIN-REGISTRATION-INVALID-DESCRIPTOR", reg ? reg->module_name : nullptr, nullptr,
-                "validation_context.struct_size", "at least sizeof(QorePluginValidationContext)",
-                std::to_string(ctx->struct_size).c_str(), "registration_context_too_small", "3.12");
+                "validation_context.struct_size", "at least offsetof(QorePluginValidationContext, module_handle)",
+                std::to_string(ctx->struct_size).c_str(), "validation_context_too_small", "3.12");
             return -1;
         }
         if (ctx->flags) {
             if (state.fail("PLUGIN-REGISTRATION-INVALID-DESCRIPTOR", reg ? reg->module_name : nullptr, nullptr,
                     "validation_context.flags", "0", std::to_string(ctx->flags).c_str(),
-                    "reserved_field_nonzero", "3.12")) {
+                    "unknown_validation_context_flag", "3.12")) {
                 return -1;
             }
         }
-        if (ctx->module_handle) {
+        if (ctx->struct_size >= module_handle_field_end && ctx->module_handle) {
             if (!qore_plugin_is_current_module_handle(ctx->module_handle)) {
                 if (state.fail("PLUGIN-REGISTRATION-INVALID-DESCRIPTOR", reg ? reg->module_name : nullptr, nullptr,
                         "validation_context.module_handle", "current thread's live module-init handle",
