@@ -2003,6 +2003,12 @@ cargo install tree-sitter-cli@0.26.5
         shared by QoreLlmUtils and the LLM REST client modules
       - separated from QoreLlmUtils so REST client modules can supply provider implementations
         without forming a dependency cycle
+    - @ref qoreragtypesintro "QoreRagTypes" module
+      - new module providing the provider-neutral hashdecls and abstract embedder /
+        reranker / vector-store classes shared by QoreRagUtils and individual RAG
+        REST client modules
+      - separated from QoreRagUtils so REST client modules can supply embedder
+        and reranker implementations without forming a dependency cycle
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
       - supports HTTP/OpenAI-compatible, Anthropic Messages API, and custom callback modes
