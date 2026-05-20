@@ -8179,6 +8179,9 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst, std::s
     if (dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
         return QoreIRInstGroup::NewComplexBuffer;
     }
+    if (dynamic_cast<const QoreIRPluginInstruction*>(inst)) {
+        return QoreIRInstGroup::Plugin;
+    }
     if (dynamic_cast<const QoreIRVrnConstructInstruction*>(inst)) {
         return QoreIRInstGroup::VrnConstruct;
     }

@@ -38,10 +38,11 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QorePluginRegistry.h"
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 371,
+static_assert(QORE_IR_MAX_OPCODE == 376,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -15038,6 +15039,84 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             // Find evaluates its sub-expressions through the AST path and can
             // update thread-local locals via context references.
+            reloadAllLocalsFromRuntime(module, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::PluginUnary:
+        case QoreIROpcode::PluginBinary:
+        case QoreIROpcode::PluginSubscript:
+        case QoreIROpcode::PluginCall:
+        case QoreIROpcode::PluginConstruct: {
+            const auto* pinst = static_cast<const QoreIRPluginInstruction*>(inst);
+            uint32_t global_id = pinst->operation.global_operation_id;
+            if (!global_id) {
+                if (pinst->operation.module_name.empty()) {
+                    error = "plugin dispatch instruction has no global operation id or module-local reference";
+                    return false;
+                }
+                ExceptionSink lookup_xsink;
+                if (qore_plugin_get_process_operation_id(pinst->operation.module_name.c_str(),
+                        pinst->operation.local_operation_id, &global_id, &lookup_xsink)) {
+                    error = "cannot resolve plugin operation ";
+                    error += pinst->operation.module_name;
+                    error += ":";
+                    error += std::to_string(pinst->operation.local_operation_id);
+                    return false;
+                }
+            }
+
+            llvm::Value* gid = llvm::ConstantInt::get(i32_type, global_id);
+            llvm::Value* result = nullptr;
+            if (inst->opcode == QoreIROpcode::PluginUnary) {
+                auto* val = getVal(inst->operands[0].id, error);
+                if (!val) { return false; }
+                llvm::Value* boxed = boxValue(val, inst->operands[0].id);
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_unary",
+                        llvm::FunctionType::get(i64_type, {i32_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, boxed, xsink_arg});
+            } else if (inst->opcode == QoreIROpcode::PluginBinary
+                    || inst->opcode == QoreIROpcode::PluginSubscript) {
+                auto* lhs = getVal(inst->operands[0].id, error);
+                auto* rhs = getVal(inst->operands[1].id, error);
+                if (!lhs || !rhs) { return false; }
+                llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+                llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+                const char* helper_name = inst->opcode == QoreIROpcode::PluginSubscript
+                    ? "qore_rt_plugin_subscript" : "qore_rt_plugin_binary";
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, lhs_boxed, rhs_boxed, xsink_arg});
+            } else if (inst->opcode == QoreIROpcode::PluginCall) {
+                auto* self = getVal(inst->operands[0].id, error);
+                if (!self) { return false; }
+                llvm::Value* self_boxed = boxValue(self, inst->operands[0].id);
+                llvm::Value* args_array = nullptr;
+                int nargs = 0;
+                if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                    return false;
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_call_args",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, self_boxed, args_array,
+                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else {
+                llvm::Value* args_array = nullptr;
+                int nargs = 0;
+                if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+                    return false;
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_construct_args",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, args_array,
+                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             reloadAllLocalsFromRuntime(module, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;

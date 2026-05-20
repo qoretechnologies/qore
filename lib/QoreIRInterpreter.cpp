@@ -68,11 +68,12 @@
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QorePluginRegistry.h>
 #include <qore/intern/QoreAOTBinary.h>
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 371,
+static_assert(QORE_IR_MAX_OPCODE == 376,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -764,6 +765,46 @@ static inline QoreValue getIRValue(const IRValueSlots& values, QoreIRValue id) {
     // IR value IDs are guaranteed in-bounds.  Skip bounds check on the hot path.
     assert(id.isValid() && id.id < values.size());
     return values[id.id];
+}
+
+static uint32_t resolvePluginOperationId(const QoreIRPluginInstruction& inst, ExceptionSink* xsink) {
+    if (inst.operation.global_operation_id) {
+        return inst.operation.global_operation_id;
+    }
+    if (inst.operation.module_name.empty()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot dispatch plugin operation: instruction has no global id or module name "
+                "(field=\"operation\", expected=\"global operation id or module/local operation reference\", "
+                "actual=\"missing\", subreason=\"operation_not_registered\", section=3.5)");
+        }
+        return 0;
+    }
+    uint32_t global_id = 0;
+    if (qore_plugin_get_process_operation_id(inst.operation.module_name.c_str(),
+            inst.operation.local_operation_id, &global_id, xsink)) {
+        return 0;
+    }
+    return global_id;
+}
+
+static QoreValue makePluginArgsList(const std::vector<QoreIRValue>& operands,
+        size_t start, const IRValueSlots& values, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    qore_list_private* priv = qore_list_private::get(**args);
+    priv->reserve(operands.size() > start ? operands.size() - start : 0);
+    for (size_t i = start; i < operands.size(); ++i) {
+        if (i != start && !((i - start) % 100)
+                && qore_check_cancel(xsink, "plugin runtime argument list construction")) {
+            return QoreValue();
+        }
+        QoreValue arg = getIRValue(values, operands[i]);
+        if (arg.hasNode()) {
+            arg.refSelf();
+        }
+        priv->pushIntern(arg);
+    }
+    return QoreValue(args.release());
 }
 
 // Build a QoreListNode from a range of IR operands, ref'ing each node-typed value
@@ -8240,6 +8281,65 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::PluginUnary:
+            case QoreIROpcode::PluginBinary:
+            case QoreIROpcode::PluginSubscript:
+            case QoreIROpcode::PluginCall:
+            case QoreIROpcode::PluginConstruct: {
+                auto* plugin_inst = static_cast<QoreIRPluginInstruction*>(inst);
+                uint32_t global_id = resolvePluginOperationId(*plugin_inst, xsink);
+                if (!global_id || (xsink && *xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+
+                uint64_t result_bits = toBits(QoreValue());
+                QoreValue args_value;
+                if (inst->opcode == QoreIROpcode::PluginUnary) {
+                    QoreValue value = getIRValue(values, inst->operands[0]);
+                    result_bits = qore_rt_plugin_unary(global_id, toBits(value), xsink);
+                } else if (inst->opcode == QoreIROpcode::PluginBinary) {
+                    QoreValue lhs = getIRValue(values, inst->operands[0]);
+                    QoreValue rhs = getIRValue(values, inst->operands[1]);
+                    result_bits = qore_rt_plugin_binary(global_id, toBits(lhs), toBits(rhs), xsink);
+                } else if (inst->opcode == QoreIROpcode::PluginSubscript) {
+                    QoreValue container = getIRValue(values, inst->operands[0]);
+                    QoreValue key = getIRValue(values, inst->operands[1]);
+                    result_bits = qore_rt_plugin_subscript(global_id, toBits(container), toBits(key), xsink);
+                } else if (inst->opcode == QoreIROpcode::PluginCall) {
+                    QoreValue self = getIRValue(values, inst->operands[0]);
+                    args_value = makePluginArgsList(inst->operands, 1, values, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    result_bits = qore_rt_plugin_call(global_id, toBits(self), toBits(args_value), xsink);
+                } else {
+                    args_value = makePluginArgsList(inst->operands, 0, values, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    result_bits = qore_rt_plugin_construct(global_id, toBits(args_value), xsink);
+                }
+
+                args_value.discard(xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue res = fromBits(result_bits);
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(inst->result.id);

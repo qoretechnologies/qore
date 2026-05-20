@@ -69,6 +69,7 @@
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/QoreAOT.h>
+#include <qore/intern/QorePluginRegistry.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/Variable.h>
 #include <qore/intern/AbstractStatement.h>
@@ -165,6 +166,13 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_unary_op", reinterpret_cast<void*>(&qore_rt_unary_op) },
+    { "qore_rt_plugin_unary", reinterpret_cast<void*>(&qore_rt_plugin_unary) },
+    { "qore_rt_plugin_binary", reinterpret_cast<void*>(&qore_rt_plugin_binary) },
+    { "qore_rt_plugin_call", reinterpret_cast<void*>(&qore_rt_plugin_call) },
+    { "qore_rt_plugin_call_args", reinterpret_cast<void*>(&qore_rt_plugin_call_args) },
+    { "qore_rt_plugin_subscript", reinterpret_cast<void*>(&qore_rt_plugin_subscript) },
+    { "qore_rt_plugin_construct", reinterpret_cast<void*>(&qore_rt_plugin_construct) },
+    { "qore_rt_plugin_construct_args", reinterpret_cast<void*>(&qore_rt_plugin_construct_args) },
     { "qore_rt_expr_op", reinterpret_cast<void*>(&qore_rt_expr_op) },
     { "qore_rt_comparison_op", reinterpret_cast<void*>(&qore_rt_comparison_op) },
     { "qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op) },

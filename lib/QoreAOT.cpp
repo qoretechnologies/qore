@@ -554,6 +554,12 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::ContextDestroy:     return QORE_AOT_FEAT_CONTEXT_IR;
         case QoreIROpcode::Backquote:          return QORE_AOT_FEAT_BACKQUOTE;
         case QoreIROpcode::Find:               return QORE_AOT_FEAT_FIND;
+        case QoreIROpcode::PluginUnary:
+        case QoreIROpcode::PluginBinary:
+        case QoreIROpcode::PluginCall:
+        case QoreIROpcode::PluginSubscript:
+        case QoreIROpcode::PluginConstruct:
+            return QORE_AOT_FEAT_PLUGIN_DISPATCH;
         default:                               return 0;
     }
 }

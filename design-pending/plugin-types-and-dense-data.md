@@ -33,11 +33,18 @@ is not blocking.
   module-init `plugin_module_handle`, descriptor validation and all-or-nothing
   staging/commit/rollback, `QORE_PLUGIN_REGISTER_TRACE`, process-global
   registry introspection helpers, a C++ smoke target, and the initial
-  `Qore::Reflection::PluginRegistry` Qore-side surface. The full Phase 3
-  deliverable still needs plugin-dispatch opcodes, interpreter/JIT helper
-  dispatch, QORD `PLUGIN_IMPORTS` / `PLUGIN_TYPE_REGISTRY`, runtime verifier
-  hooks, Program-local activation/fallback diagnostics, the complete trace-env
-  family, the reference plugin module, lint tooling, and complete user-facing
+  `Qore::Reflection::PluginRegistry` Qore-side surface.
+- Phase 3's first dispatch slice is implemented: built-in plugin-dispatch IR
+  opcodes, process-global operation IDs, `QORE_PLUGIN_DISPATCH_TRACE`,
+  interpreter/JIT runtime-helper dispatch for value/list helper ABIs,
+  non-persistent AOT/debug-IR serialization of module-local operation
+  references, opcode metadata, IR builder/printer/verifier plumbing, and smoke
+  coverage for process operation lookup plus runtime binary dispatch. The full
+  Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
+  `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS`, dense-buffer dispatch opcodes
+  and helper execution, runtime verifier hooks, Program-local
+  activation/fallback diagnostics, the rest of the trace-env family, the
+  reference plugin module, lint tooling, and complete user-facing
   documentation.
 
 ---
@@ -1682,7 +1689,7 @@ truncated messages.
 | `PLUGIN-LOWERING-CLAIM-VIOLATED` | parse-time lowering | §3.7 |
 | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | runtime verifier | §3.4 |
 | `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` | runtime verifier | §3.3 (`ReturnsLhs`/`ReturnsRhs`) |
-| `PLUGIN-HELPER-ABI-MISMATCH` | runtime verifier | §3.5 |
+| `PLUGIN-HELPER-ABI-MISMATCH` | runtime verifier and runtime dispatch; subreason `helper_abi_mismatch` when the opcode/helper ABI or helper call frame shape is wrong, `operation_not_registered` when the referenced operation ID is absent, and `module_not_loaded` when a process-local operation ID resolves to a module that is no longer loaded | §3.5 |
 | `QORD-PLUGIN-IMPORT-MISSING` | QORD loader; subreason `module_not_loaded` when no module by that name is loaded in the process, when its load already failed, or when its module-init transaction rolled back; `module_pending` when the named import matches a still-pending module-init transaction. Both cases are positive subreasons so harnesses match on the subreason rather than its absence | §3.9 |
 | `QORD-PLUGIN-HELPER-REF-INVALID` | QORD loader (`slot_idx`, `import_idx`, or `op_local_id` invalid) | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` | QORD loader | §3.9 |
@@ -1690,8 +1697,9 @@ truncated messages.
 | `QORD-PLUGIN-SERIALIZER-VERSION-UNSUPPORTED` | QORD loader | §3.9 |
 | `QORD-PLUGIN-RESERVED-NONZERO` | QORD loader | §3.9 |
 | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` | QORD loader (deserializer consumption out of bounds; subreason is `over_read` for callback boundary failure or `under_consumed` for fewer-than-payload-len bytes consumed) | §3.3 / §3.9 |
-| `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` | `Qore::Reflection::PluginRegistry` (Program-bound method called on the process-global view) | §3.12 |
-| `PLUGIN-REGISTRY-MODULE-NOT-LOADED` | `Qore::Reflection::PluginRegistry` `getTypes` / `getOperations` called with a module name that is not loaded in the process | §3.12 |
+| `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` | `Qore::Reflection::PluginRegistry` (Program-bound method called on the process-global view); subreason `program_not_available` | §3.12 |
+| `PLUGIN-REGISTRY-MODULE-NOT-LOADED` | `Qore::Reflection::PluginRegistry` `getTypes` / `getOperations` / operation-id lookup called with a module name that is not loaded in the process; subreason `module_not_loaded` | §3.12 |
+| `PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED` | operation-id lookup called with a module-local operation id that is not registered in the loaded module; subreason `operation_not_registered` | §3.12 |
 
 **Dry-run validation entry point.** Authors testing a descriptor before
 wiring it into module init use:
@@ -1852,28 +1860,44 @@ renaming or removing:
 | `registration_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_context_size_mismatch` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `module_path_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (covers both null pointer and empty string; intentionally broader than the `null_<field>` family so a single subreason matches both invalid forms of `module_path`) |
+| `negative_count` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `count_out_of_range` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `non_contiguous_local_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `duplicate_local_id` | `PLUGIN-REGISTRATION-DUPLICATE-LOCAL-ID` |
 | `invalid_count` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_array` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_registration_descriptor` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (`reg == nullptr`; distinct from `null_registration_context` which is `ctx == nullptr`) |
+| `null_module_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_plugin_abi_version` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `unsupported_plugin_abi_version` | `PLUGIN-REGISTRATION-OPERATION-SET-VERSION-INCOMPATIBLE` |
+| `null_operation_set_version` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_type_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_operation_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_type_info` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_lifecycle_callback` | `PLUGIN-REGISTRATION-NULL-LIFECYCLE` |
+| `null_codec` | `PLUGIN-REGISTRATION-NULL-CODEC` |
 | `invalid_signature_shape` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `unknown_helper_abi` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `unknown_value_access` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `unknown_result_alias` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `invalid_extension_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `invalid_dependency` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `reserved_field_nonzero` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR`, `QORD-PLUGIN-RESERVED-NONZERO` |
 | `over_read` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `under_consumed` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `unsupported_canonical_version` | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` |
-| `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
+| `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` during registration/contextual validation or runtime dispatch if a committed operation has no resolved helper pointer |
+| `helper_abi_mismatch` | `PLUGIN-HELPER-ABI-MISMATCH` when an IR opcode/runtime helper is paired with a registered operation using a different helper ABI or when a runtime helper receives an invalid call-frame shape |
+| `operation_not_registered` | `PLUGIN-HELPER-ABI-MISMATCH`, `PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED` when a process-local or module-local operation reference does not resolve to a committed operation |
+| `program_not_available` | `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` |
 | `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (null module handle pointer; uses the `<field>_missing` convention from the preamble) |
 | `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_already_pending` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (second `qore_register_plugin_types_v1` call within one module-init transaction) |
 | `wait_cycle` | `PLUGIN-REGISTRATION-WAIT-CYCLE`; `related_module_name` is the byte-exact module name of the other transaction completing the wait-for cycle |
 | `pending_conflict` | `PLUGIN-CROSS-TYPE-CONFLICT` from `qore_validate_plugin_types_v1` when a conflict is detected against a still-pending registration; `related_module_name` is the byte-exact name of the pending module |
+| `duplicate_committed_module` | `PLUGIN-CROSS-TYPE-CONFLICT` when a module-init transaction tries to commit a plugin registration whose module name is already committed |
 | `module_pending` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a still-pending module-init transaction; `related_module_name` is the byte-exact name of the pending module |
-| `module_not_loaded` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a module name that is not loaded in the process and is not pending, or whose previous load failed or rolled back; `related_module_name` is the byte-exact name of the missing module |
+| `module_not_loaded` | `QORD-PLUGIN-IMPORT-MISSING`, `PLUGIN-HELPER-ABI-MISMATCH`, `PLUGIN-REGISTRY-MODULE-NOT-LOADED` when a plugin import, runtime dispatch, or registry lookup references a module name that is not loaded in the process and is not pending, or whose previous load failed or rolled back; `related_module_name` is the byte-exact name of the missing module when available |
 | `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id` and therefore cannot itself contain `:`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
 
 Implementations MUST NOT emit subreason strings outside this table for
@@ -1905,10 +1929,12 @@ any thread, including ones that would form wait cycles. When a conflict is
 detected against a pending registration, the validator reports
 `PLUGIN-CROSS-TYPE-CONFLICT` with subreason
 `pending_conflict` and the pending module in `related_module_name`; against a
-committed registration the subreason is omitted and `related_module_name` names
-the committed module. Plugin authors thus see during the dry run whether a
-conflicting pending registration may still resolve in their favour (the other
-module's init might fail) or has already committed and locked them out.
+committed registration the subreason is `duplicate_committed_module` and
+`related_module_name` names the committed module when the reporting path can
+carry structured related names. Plugin authors thus see during the dry run
+whether a conflicting pending registration may still resolve in their favour
+(the other module's init might fail) or has already committed and locked them
+out.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
 collects — registration is a single module-init transaction, not a diagnostic

@@ -8,6 +8,7 @@
 */
 
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 
 #include <qore/Qore.h>
@@ -43,8 +44,22 @@ static uint64_t smokeDeserialize(QorePluginByteReadCallback, uint32_t, void*, Ex
     return 0;
 }
 
+static QoreValue smokeValueFromBits(uint64_t bits) {
+    QoreValue v;
+    std::memcpy(&v, &bits, sizeof(v));
+    return v;
+}
+
+static uint64_t smokeBitsFromValue(const QoreValue& v) {
+    uint64_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    return bits;
+}
+
 static uint64_t smokeBinary(uint64_t lhs, uint64_t rhs, ExceptionSink*) {
-    return lhs ? lhs : rhs;
+    QoreValue lhs_value = smokeValueFromBits(lhs);
+    QoreValue rhs_value = smokeValueFromBits(rhs);
+    return smokeBitsFromValue(QoreValue(lhs_value.getAsBigInt() + rhs_value.getAsBigInt()));
 }
 
 static QorePluginValueOps smokeValueOps() {
@@ -151,6 +166,28 @@ static bool checkRegistrationAndIntrospection() {
     ReferenceHolder<QoreListNode> ops(qore_plugin_get_process_operations("plugin-smoke", &xsink), &xsink);
     if (xsink || !types || !ops || types->size() != 1 || ops->size() != 1) {
         std::cerr << "process plugin descriptor introspection failed\n";
+        return false;
+    }
+
+    uint32_t global_id = 0;
+    if (qore_plugin_get_process_operation_id("plugin-smoke", 0, &global_id, &xsink) || xsink || !global_id) {
+        std::cerr << "process plugin operation id lookup failed\n";
+        return false;
+    }
+
+    QoreValue op_value = ops->retrieveEntry(0);
+    const QoreHashNode* op_hash = op_value.get<const QoreHashNode>();
+    if (!op_hash || op_hash->getKeyValue("global_id").getAsBigInt() != static_cast<int64>(global_id)) {
+        std::cerr << "process plugin operation introspection did not expose global_id\n";
+        return false;
+    }
+
+    uint64_t result_bits = qore_rt_plugin_binary(global_id,
+        smokeBitsFromValue(QoreValue(static_cast<int64>(40))),
+        smokeBitsFromValue(QoreValue(static_cast<int64>(2))), &xsink);
+    QoreValue result = smokeValueFromBits(result_bits);
+    if (xsink || result.getAsBigInt() != 42) {
+        std::cerr << "plugin runtime binary dispatch failed\n";
         return false;
     }
 

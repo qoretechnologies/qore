@@ -657,7 +657,17 @@ enum class QoreIROpcode : uint16_t {
     CheckException      = 370,
     NewComplexBuffer    = 371,  // Create new typed buffer
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (372, 373, ...)
+    //! Plugin operation dispatch opcodes.  These keep the core opcode-id space
+    //! fixed while allowing module-registered operations to carry a descriptor
+    //! (module/local operation id and resolved process-global operation id)
+    //! in the instruction payload.
+    PluginUnary         = 372,
+    PluginBinary        = 373,
+    PluginCall          = 374,
+    PluginSubscript     = 375,
+    PluginConstruct     = 376,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (377, 378, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -665,8 +675,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::NewComplexBuffer);
-static_assert(QORE_IR_MAX_OPCODE == 371, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::PluginConstruct);
+static_assert(QORE_IR_MAX_OPCODE == 376, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -732,6 +742,19 @@ inline bool isRangeSliceOpcode(QoreIROpcode op) {
     return getOpcodeIsRangeSlice(static_cast<int>(op));
 }
 
+inline bool isPluginDispatchOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::PluginUnary:
+        case QoreIROpcode::PluginBinary:
+        case QoreIROpcode::PluginCall:
+        case QoreIROpcode::PluginSubscript:
+        case QoreIROpcode::PluginConstruct:
+            return true;
+        default:
+            return false;
+    }
+}
+
 struct QoreIRValue {
     uint32_t id = 0;
 
@@ -792,6 +815,30 @@ public:
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
     const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
+};
+
+struct QoreIRPluginOperationRef {
+    //! Process-global operation id assigned when the registering module commits.
+    //! 0 means unresolved; module_name/local_operation_id are then used for a
+    //! late lookup by the runtime helper or AOT loader.
+    uint32_t global_operation_id = 0;
+    std::string module_name;
+    uint16_t local_operation_id = 0;
+    uint8_t canonical_signature_version = 1;
+    uint64_t signature_hash = 0;
+
+    bool isValid() const {
+        return global_operation_id != 0 || !module_name.empty();
+    }
+};
+
+class QoreIRPluginInstruction : public QoreIRInstruction {
+public:
+    QoreIRPluginInstruction(QoreIROpcode op, QoreIRPluginOperationRef n_operation = {})
+            : QoreIRInstruction(op), operation(std::move(n_operation)) {
+    }
+
+    QoreIRPluginOperationRef operation;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {

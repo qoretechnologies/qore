@@ -52,4 +52,24 @@ DLLLOCAL void* qore_plugin_resolve_module_symbol(const QorePluginModuleHandle* h
 DLLLOCAL int qore_plugin_commit_module_init_registration(const QorePluginModuleHandle& handle, ExceptionSink* xsink);
 DLLLOCAL void qore_plugin_rollback_module_init_registration(const QorePluginModuleHandle& handle);
 
+DLLLOCAL int qore_plugin_get_process_operation_id(const char* module_name, uint16_t local_operation_id,
+    uint32_t* global_operation_id, ExceptionSink* xsink);
+
+extern "C" {
+DLLEXPORT uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t value_bits,
+    ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_binary(uint32_t global_operation_id, uint64_t lhs_bits,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_call(uint32_t global_operation_id, uint64_t self_bits,
+    uint64_t args_list_bits, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_call_args(uint32_t global_operation_id, uint64_t self_bits,
+    const uint64_t* arg_bits, int32_t nargs, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_subscript(uint32_t global_operation_id, uint64_t container_bits,
+    uint64_t key_bits, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_construct(uint32_t global_operation_id, uint64_t args_list_bits,
+    ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_plugin_construct_args(uint32_t global_operation_id, const uint64_t* arg_bits,
+    int32_t nargs, ExceptionSink* xsink);
+}
+
 #endif

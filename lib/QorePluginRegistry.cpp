@@ -11,6 +11,7 @@
 #include <qore/QorePluginType.h>
 #include <qore/QoreReflection.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include <qore/intern/qore_list_private.h>
 
 #include <algorithm>
 #include <atomic>
@@ -48,6 +49,7 @@ struct RegisteredPluginType {
 };
 
 struct RegisteredPluginOperation {
+    uint32_t global_id = 0;
     uint16_t local_id = 0;
     std::string operation_name;
     QorePluginOperationSignature signature = {};
@@ -80,15 +82,51 @@ struct RegisteredPluginModule {
 std::mutex plugin_registry_mutex;
 std::map<std::string, RegisteredPluginModule> plugin_modules;
 std::map<const QorePluginModuleHandle*, RegisteredPluginModule> pending_plugin_modules;
+struct GlobalPluginOperationRef {
+    std::string module_name;
+    uint16_t local_operation_id = 0;
+    size_t operation_index = 0;
+};
+std::map<uint32_t, GlobalPluginOperationRef> global_plugin_operations;
+uint32_t next_global_plugin_operation_id = 1;
 
 bool pluginRegisterTrace() {
     return std::getenv("QORE_PLUGIN_REGISTER_TRACE") != nullptr;
+}
+
+bool pluginDispatchTrace() {
+    return std::getenv("QORE_PLUGIN_DISPATCH_TRACE") != nullptr;
 }
 
 void traceRegister(const std::string& msg) {
     if (pluginRegisterTrace()) {
         std::fprintf(stderr, "QORE_PLUGIN_REGISTER_TRACE: %s\n", msg.c_str());
     }
+}
+
+void traceDispatch(const std::string& msg) {
+    if (pluginDispatchTrace()) {
+        std::fprintf(stderr, "QORE_PLUGIN_DISPATCH_TRACE: %s\n", msg.c_str());
+    }
+}
+
+uint64_t nothingBits() {
+    QoreValue v;
+    uint64_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    return bits;
+}
+
+QoreValue valueFromBits(uint64_t bits) {
+    QoreValue v;
+    std::memcpy(&v, &bits, sizeof(v));
+    return v;
+}
+
+uint64_t bitsFromValue(const QoreValue& v) {
+    uint64_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    return bits;
 }
 
 std::string nameOrUnknown(const char* name) {
@@ -177,6 +215,121 @@ const char* resultAliasName(QorePluginResultAlias alias) {
         case QorePluginResultAlias::ReturnsRhs: return "ReturnsRhs";
     }
     return "<unknown>";
+}
+
+using PluginUnaryHelper = uint64_t (*)(uint64_t, ExceptionSink*);
+using PluginBinaryHelper = uint64_t (*)(uint64_t, uint64_t, ExceptionSink*);
+using PluginCallHelper = uint64_t (*)(uint64_t, uint64_t, ExceptionSink*);
+using PluginConstructHelper = uint64_t (*)(uint64_t, ExceptionSink*);
+
+struct ResolvedPluginOperation {
+    uint32_t global_id = 0;
+    std::string module_name;
+    std::string operation_name;
+    QorePluginOperationSignature signature = {};
+    void (*runtime_helper)() = nullptr;
+};
+
+QoreValue makePluginArgListFromBits(const uint64_t* arg_bits, int32_t nargs, ExceptionSink* xsink) {
+    if (nargs < 0 || (nargs && !arg_bits)) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot build plugin argument list: field=\"args\", expected=\"%s\", actual=\"%s\", "
+                "subreason=\"helper_abi_mismatch\", section=3.5",
+                nargs < 0 ? "non-negative argument count" : "non-null argument array",
+                nargs < 0 ? "negative argument count" : "null argument array");
+        }
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    qore_list_private* priv = qore_list_private::get(**args);
+    priv->reserve(nargs > 0 ? static_cast<size_t>(nargs) : 0);
+    for (int32_t i = 0; i < nargs; ++i) {
+        if (checkPluginRegistryCancel(i, xsink, "plugin runtime argument list construction")) {
+            return QoreValue();
+        }
+        QoreValue arg = valueFromBits(arg_bits[i]);
+        if (arg.hasNode()) {
+            arg.refSelf();
+        }
+        priv->pushIntern(arg);
+    }
+    return QoreValue(args.release());
+}
+
+bool resolvePluginOperation(uint32_t global_id, QorePluginHelperAbi expected_abi,
+        ResolvedPluginOperation& out, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    auto gi = global_plugin_operations.find(global_id);
+    if (gi == global_plugin_operations.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot dispatch plugin operation: global_operation_id=%u is not registered "
+                "(field=\"global_operation_id\", expected=\"registered operation id\", actual=\"missing\", "
+                "subreason=\"operation_not_registered\", section=3.5)",
+                global_id);
+        }
+        return true;
+    }
+
+    auto mi = plugin_modules.find(gi->second.module_name);
+    if (mi == plugin_modules.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot dispatch plugin operation: module=\"%s\" for global_operation_id=%u is not loaded "
+                "(field=\"module_name\", expected=\"loaded plugin module\", actual=\"missing\", "
+                "subreason=\"module_not_loaded\", section=3.5)",
+                escapeDiagnosticName(gi->second.module_name.c_str()).c_str(), global_id);
+        }
+        return true;
+    }
+
+    const RegisteredPluginOperation* op = nullptr;
+    if (gi->second.operation_index < mi->second.operations.size()) {
+        const RegisteredPluginOperation& candidate = mi->second.operations[gi->second.operation_index];
+        if (candidate.local_id == gi->second.local_operation_id) {
+            op = &candidate;
+        }
+    }
+    if (!op) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot dispatch plugin operation: module=\"%s\", local_id=%u is not registered "
+                "(field=\"local_operation_id\", expected=\"registered operation id\", actual=\"missing\", "
+                "subreason=\"operation_not_registered\", section=3.5)",
+                escapeDiagnosticName(mi->second.module_name.c_str()).c_str(), gi->second.local_operation_id);
+        }
+        return true;
+    }
+    if (op->signature.helper_abi != expected_abi) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
+                "cannot dispatch plugin operation: module=\"%s\", operation=\"%s\", field=\"helper_abi\", "
+                "expected=\"%s\", actual=\"%s\", subreason=\"helper_abi_mismatch\", section=3.5",
+                escapeDiagnosticName(mi->second.module_name.c_str()).c_str(),
+                escapeDiagnosticName(op->operation_name.c_str()).c_str(),
+                helperAbiName(expected_abi), helperAbiName(op->signature.helper_abi));
+        }
+        return true;
+    }
+    if (!op->runtime_helper) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING",
+                "cannot dispatch plugin operation: module=\"%s\", operation=\"%s\", field=\"runtime_helper\", "
+                "expected=\"resolved helper pointer\", actual=\"null\", subreason=\"helper_symbol_not_found\", "
+                "section=3.5",
+                escapeDiagnosticName(mi->second.module_name.c_str()).c_str(),
+                escapeDiagnosticName(op->operation_name.c_str()).c_str());
+        }
+        return true;
+    }
+
+    out.global_id = global_id;
+    out.module_name = mi->second.module_name;
+    out.operation_name = op->operation_name;
+    out.signature = op->signature;
+    out.runtime_helper = op->runtime_helper;
+    return false;
 }
 
 struct PluginValidationState {
@@ -572,6 +725,10 @@ QoreHashNode* makeOperationHash(const RegisteredPluginModule& module, const Regi
     if (hasException(xsink)) {
         return nullptr;
     }
+    h->setKeyValue("global_id", static_cast<int64>(op.global_id), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
     h->setKeyValue("operation_name", new QoreStringNode(op.operation_name), xsink);
     if (hasException(xsink)) {
         return nullptr;
@@ -701,6 +858,28 @@ int qore_plugin_commit_module_init_registration(const QorePluginModuleHandle& ha
     traceRegister("committed plugin module '" + module.module_name + "' with "
         + std::to_string(module.types.size()) + " type(s) and "
         + std::to_string(module.operations.size()) + " operation(s)");
+
+    size_t n = 0;
+    std::vector<uint32_t> assigned_global_ids;
+    assigned_global_ids.reserve(module.operations.size());
+    for (RegisteredPluginOperation& op : module.operations) {
+        if (checkPluginRegistryCancel(static_cast<int>(n), xsink, "plugin operation id assignment")) {
+            for (uint32_t id : assigned_global_ids) {
+                global_plugin_operations.erase(id);
+            }
+            if (!assigned_global_ids.empty()) {
+                next_global_plugin_operation_id = assigned_global_ids.front();
+            }
+            return -1;
+        }
+        op.global_id = next_global_plugin_operation_id++;
+        global_plugin_operations.emplace(op.global_id,
+            GlobalPluginOperationRef{module.module_name, op.local_id, n});
+        assigned_global_ids.push_back(op.global_id);
+        traceRegister("assigned plugin operation id " + std::to_string(op.global_id)
+            + " to '" + module.module_name + "::" + op.operation_name + "'");
+        ++n;
+    }
     plugin_modules.emplace(module.module_name, std::move(module));
     return 0;
 }
@@ -900,4 +1079,133 @@ QoreListNode* qore_plugin_get_process_operations(const char* module_name, Except
         ++n;
     }
     return rv.release();
+}
+
+int qore_plugin_get_process_operation_id(const char* module_name, uint16_t local_operation_id,
+        uint32_t* global_operation_id, ExceptionSink* xsink) {
+    if (global_operation_id) {
+        *global_operation_id = 0;
+    }
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    auto i = plugin_modules.find(module_name ? module_name : "");
+    if (i == plugin_modules.end()) {
+        if (xsink) {
+            xsink->raiseException("PLUGIN-REGISTRY-MODULE-NOT-LOADED",
+                "plugin registry has no loaded module named \"%s\" "
+                "(method=\"getProcessOperationId\", subreason=\"module_not_loaded\", section=3.12)",
+                escapeDiagnosticName(module_name).c_str());
+        }
+        return -1;
+    }
+    int n = 0;
+    for (const RegisteredPluginOperation& op : i->second.operations) {
+        if (checkPluginRegistryCancel(n, xsink, "plugin registry operation id lookup")) {
+            return -1;
+        }
+        if (op.local_id == local_operation_id) {
+            if (global_operation_id) {
+                *global_operation_id = op.global_id;
+            }
+            return 0;
+        }
+        ++n;
+    }
+    if (xsink) {
+        xsink->raiseException("PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED",
+            "plugin registry module \"%s\" has no operation with local id %u "
+            "(method=\"getProcessOperationId\", field=\"local_operation_id\", "
+            "expected=\"registered operation id\", actual=\"missing\", subreason=\"operation_not_registered\", "
+            "section=3.12)",
+            escapeDiagnosticName(module_name).c_str(), local_operation_id);
+    }
+    return -1;
+}
+
+extern "C" uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t value_bits,
+        ExceptionSink* xsink) {
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::UnaryValue, op, xsink)) {
+        return nothingBits();
+    }
+    traceDispatch("unary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginUnaryHelper>(op.runtime_helper);
+    return helper(value_bits, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_binary(uint32_t global_operation_id, uint64_t lhs_bits,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::BinaryValue, op, xsink)) {
+        return nothingBits();
+    }
+    traceDispatch("binary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
+    return helper(lhs_bits, rhs_bits, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_call(uint32_t global_operation_id, uint64_t self_bits,
+        uint64_t args_list_bits, ExceptionSink* xsink) {
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::CallValueList, op, xsink)) {
+        return nothingBits();
+    }
+    traceDispatch("call id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginCallHelper>(op.runtime_helper);
+    return helper(self_bits, args_list_bits, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_call_args(uint32_t global_operation_id, uint64_t self_bits,
+        const uint64_t* arg_bits, int32_t nargs, ExceptionSink* xsink) {
+    QoreValue args_value = makePluginArgListFromBits(arg_bits, nargs, xsink);
+    if (xsink && *xsink) {
+        args_value.discard(xsink);
+        return nothingBits();
+    }
+    uint64_t rv = qore_rt_plugin_call(global_operation_id, self_bits, bitsFromValue(args_value), xsink);
+    args_value.discard(xsink);
+    return rv;
+}
+
+extern "C" uint64_t qore_rt_plugin_subscript(uint32_t global_operation_id, uint64_t container_bits,
+        uint64_t key_bits, ExceptionSink* xsink) {
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::SubscriptValue, op, xsink)) {
+        return nothingBits();
+    }
+    traceDispatch("subscript id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
+    return helper(container_bits, key_bits, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_construct(uint32_t global_operation_id, uint64_t args_list_bits,
+        ExceptionSink* xsink) {
+    ResolvedPluginOperation op;
+    if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::Construct, op, xsink)) {
+        return nothingBits();
+    }
+    traceDispatch("construct id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+        + "' operation='" + op.operation_name + "' helper="
+        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    auto helper = reinterpret_cast<PluginConstructHelper>(op.runtime_helper);
+    return helper(args_list_bits, xsink);
+}
+
+extern "C" uint64_t qore_rt_plugin_construct_args(uint32_t global_operation_id, const uint64_t* arg_bits,
+        int32_t nargs, ExceptionSink* xsink) {
+    QoreValue args_value = makePluginArgListFromBits(arg_bits, nargs, xsink);
+    if (xsink && *xsink) {
+        args_value.discard(xsink);
+        return nothingBits();
+    }
+    uint64_t rv = qore_rt_plugin_construct(global_operation_id, bitsFromValue(args_value), xsink);
+    args_value.discard(xsink);
+    return rv;
 }

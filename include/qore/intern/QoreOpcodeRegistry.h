@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[372] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[377] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -430,12 +430,17 @@ constexpr OpcodeInfo OPCODE_REGISTRY[372] = {
     { "DebugBlock"                    , false, false, false,  0, "Debug-only StatementBlock entry marker", false, false, "ParseNode", false, false, false, false, false }, // 369
     { "CheckException"                , false, false, false,  0, "Route pending cleanup exception to the active handler", false, true , "ParseNode", false, false, false, false, false }, // 370
     { "NewComplexBuffer"              , false, false, false, OPCODE_MIN_OPERANDS(0), "NewComplexBuffer", false, true , "ParseNode", true , false, false, false, false }, // 371
+    { "PluginUnary"                   , false, false, false,  1, "Dispatch module-registered unary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 372
+    { "PluginBinary"                  , false, false, false,  2, "Dispatch module-registered binary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 373
+    { "PluginCall"                    , false, false, false, OPCODE_MIN_OPERANDS(1), "Dispatch module-registered receiver call with value-list arguments", true , true , "PluginOperation", true , false, false, false, false }, // 374
+    { "PluginSubscript"               , false, false, false,  2, "Dispatch module-registered subscript operation", true , true , "PluginOperation", true , false, false, false, false }, // 375
+    { "PluginConstruct"               , false, false, false, OPCODE_MIN_OPERANDS(0), "Dispatch module-registered construct/static factory operation", true , true , "PluginOperation", true , false, false, false, false }, // 376
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 372,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 372"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 377,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 377"
 );
 
 //! ============================================================================

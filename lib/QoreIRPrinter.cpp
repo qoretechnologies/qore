@@ -415,6 +415,11 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::Sprintf: return "sprintf";
         case QoreIROpcode::DebugBlock: return "debug.block";
         case QoreIROpcode::CheckException: return "check.exception";
+        case QoreIROpcode::PluginUnary: return "plugin.unary";
+        case QoreIROpcode::PluginBinary: return "plugin.binary";
+        case QoreIROpcode::PluginCall: return "plugin.call";
+        case QoreIROpcode::PluginSubscript: return "plugin.subscript";
+        case QoreIROpcode::PluginConstruct: return "plugin.construct";
     }
     return "unknown";
 }
@@ -559,6 +564,16 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 out << " <complex-list>";
             } else if (inst->opcode == QoreIROpcode::NewComplexBuffer) {
                 out << " <complex-buffer>";
+            } else if (auto* plugin_inst = dynamic_cast<const QoreIRPluginInstruction*>(inst.get())) {
+                out << " <plugin";
+                if (plugin_inst->operation.global_operation_id) {
+                    out << " global:" << plugin_inst->operation.global_operation_id;
+                }
+                if (!plugin_inst->operation.module_name.empty()) {
+                    out << " module:" << plugin_inst->operation.module_name
+                        << " local:" << plugin_inst->operation.local_operation_id;
+                }
+                out << ">";
             } else if (inst->opcode == QoreIROpcode::VrnConstruct) {
                 out << " <vrn-construct>";
             } else if (inst->opcode == QoreIROpcode::NewHashDeclFromHash) {

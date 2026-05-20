@@ -2225,6 +2225,51 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexBuffer(
 }
 
 // ============================================================================
+// Group 66: Plugin - Module-registered plugin operation dispatch
+// ============================================================================
+
+static bool writePlugin(AOTInstWriteCtx& ctx) {
+    auto* pi = static_cast<const QoreIRPluginInstruction*>(ctx.inst);
+    if (pi->operation.module_name.empty()) {
+        return false;
+    }
+    // Process-global operation IDs are assigned at module registration time and
+    // are not stable across runs.  Persist only the module/local reference and
+    // let the loader/JIT resolve the current process ID when executing.
+    ctx.writer.writeU32(0);
+    ctx.writer.writeStringRef(pi->operation.module_name.c_str());
+    ctx.writer.writeU16(pi->operation.local_operation_id);
+    ctx.writer.writeU8(pi->operation.canonical_signature_version);
+    ctx.writer.writeU32(static_cast<uint32_t>(pi->operation.signature_hash & 0xffffffffu));
+    ctx.writer.writeU32(static_cast<uint32_t>(pi->operation.signature_hash >> 32));
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readPlugin(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    QoreIRPluginOperationRef ref;
+    ref.global_operation_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    const char* module_name = ctx.reader.readStringRef(ctx.ptr);
+    ref.module_name = module_name ? module_name : "";
+    ref.local_operation_id = QoreAOTBinaryReader::readU16(ctx.ptr);
+    ref.canonical_signature_version = QoreAOTBinaryReader::readU8(ctx.ptr);
+    uint64_t sig_lo = QoreAOTBinaryReader::readU32(ctx.ptr);
+    uint64_t sig_hi = QoreAOTBinaryReader::readU32(ctx.ptr);
+    ref.signature_hash = sig_lo | (sig_hi << 32);
+    if (!ref.module_name.empty()) {
+        ref.global_operation_id = 0;
+    }
+
+    auto* pi = new QoreIRPluginInstruction(static_cast<QoreIROpcode>(opcode_raw), std::move(ref));
+    pi->result = QoreIRValue(result_id);
+    pi->operands = operands;
+    pi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(pi);
+}
+
+// ============================================================================
 // Group 37: VrnConstruct - Variant value construction
 // ============================================================================
 
@@ -3401,8 +3446,12 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     { "NewComplexBuffer", 65, true, false, writeNewComplexBuffer, readNewComplexBuffer,
       "Complex buffer creation" },
 
-    // Remaining 66-255: Unsupported/undefined
-    UNUSED_ENTRY(66), UNUSED_ENTRY(67), UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
+    // Index 66: Plugin
+    { "Plugin", 66, true, false, writePlugin, readPlugin,
+      "Plugin operation dispatch" },
+
+    // Remaining 67-255: Unsupported/undefined
+    UNUSED_ENTRY(67), UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
     UNUSED_ENTRY(72), UNUSED_ENTRY(73), UNUSED_ENTRY(74), UNUSED_ENTRY(75),
     UNUSED_ENTRY(76), UNUSED_ENTRY(77), UNUSED_ENTRY(78), UNUSED_ENTRY(79),
     UNUSED_ENTRY(80), UNUSED_ENTRY(81), UNUSED_ENTRY(82), UNUSED_ENTRY(83),
