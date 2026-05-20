@@ -2259,6 +2259,53 @@ target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
+if (SINGLE_COMPILATION_UNIT)
+    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC})
+else (SINGLE_COMPILATION_UNIT)
+    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC})
+endif (SINGLE_COMPILATION_UNIT)
+
+add_executable(qore-ir-phase0-smoke EXCLUDE_FROM_ALL
+    examples/test/ir/phase0_metadata_smoke.cpp
+    ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
+add_dependencies(qore-ir-phase0-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
+target_compile_definitions(qore-ir-phase0-smoke PRIVATE
+    _QORE_LIB_INTERN
+    HAVE_UNIX_CONFIG_H
+    MODULE_DIR="${MODULE_DIR}"
+    MODULE_VER_DIR="${MODULE_VER_DIR}"
+    USER_MODULE_DIR="${USER_MODULE_DIR}"
+    USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}"
+    QORE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}")
+if (APPLE)
+    target_compile_definitions(qore-ir-phase0-smoke PRIVATE __APPLE_USE_RFC_3542)
+endif()
+target_include_directories(qore-ir-phase0-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${BZIP2_INCLUDE_DIR}
+    ${ICONV_INCLUDE_DIR}
+    ${MPFR_INCLUDE_DIRS}
+    ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+    ${PCRE2_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
+    ${LLVM_INCLUDE_DIRS})
+target_link_libraries(qore-ir-phase0-smoke PRIVATE ${QORE_LIBS})
+if(LLVM_LIBS)
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE ${LLVM_LIBS})
+elseif(TARGET LLVM::LLVM)
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE LLVM::LLVM)
+endif()
+if (WIN32 OR MINGW OR MSYS)
+    target_compile_definitions(qore-ir-phase0-smoke PRIVATE BUILDING_DLL)
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE ${WINSOCKET_LIBRARIES})
+endif (WIN32 OR MINGW OR MSYS)
+if (ADDRESS_SANITIZER)
+    target_compile_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
 target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})

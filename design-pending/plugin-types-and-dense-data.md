@@ -13,11 +13,15 @@ credible in-process enterprise data/analytics platform.
 and [`design/qore-ir-spec.md`](../design/qore-ir-spec.md) for the substrate this
 proposal builds on.
 
-**Companion designs:**
-[`generic-class-types.md`](generic-class-types.md) (parametric class types) is
-related but no longer load-bearing for `buffer<T>` because this design makes
-`buffer<T>` a special built-in complex type first. [`named-arguments.md`](named-arguments.md)
-is helpful but not blocking.
+**Implemented prerequisites and companion designs:**
+[`design/generic-class-types.md`](../design/generic-class-types.md)
+(parametric class types, generic hashdecls, method-level generics, wildcards,
+and generic API metadata) is implemented on this branch and is an available
+substrate for reflection, metadata, and future plugin-facing APIs. It is still
+not load-bearing for `buffer<T>` itself because this design intentionally makes
+`buffer<T>` a special built-in complex type first. [`design/named-arguments.md`](../design/named-arguments.md)
+is implemented and useful for wide DataFrame / plugin registration APIs, but
+is not blocking.
 
 ---
 
@@ -2073,13 +2077,13 @@ end-to-end before exposure to external modules.
 **Type-system carrier: special built-in complex type.** `buffer<T>` ships as
 a special built-in complex type (alongside `list<T>` / `hash<string, T>`)
 with explicit `QoreTypeInfo` interning, equality, reflection, and QORD
-serialization rules. The companion `generic-class-types.md` design is *not*
-on the critical path for `buffer<T>` — committing to the special-built-in
-representation removes the fork that would otherwise duplicate the
-implementation surface and lets Phase 1 proceed independently. If parametric
-class types ship later, `buffer<T>` becomes a candidate for migration as a
-cleanup task; the user-visible syntax (`buffer<int64>`, `foreach int v in
-(b)`) is the same in both representations.
+serialization rules. Generic class support is already implemented, but
+`buffer<T>` deliberately does not depend on representing dense primitive
+storage as a parameterized class: the special-built-in representation avoids
+boxing, keeps storage element widths explicit, and lets Phase 1 validate the
+low-level type/IR/AOT path directly. Future plugin-facing APIs can still reuse
+the implemented generic metadata and reflection substrate where useful; the
+user-visible syntax (`buffer<int64>`, `foreach int v in (b)`) remains the same.
 
 ### 4.1 Element type set
 
@@ -2426,17 +2430,17 @@ calendar time depends on what other branch work is in flight.
 
 ### Phase 0 — implementation-gap cleanup (S)
 
-- Centralize builtin opcode property consumers behind `OpcodeInfo` where
+- [x] Centralize builtin opcode property consumers behind `OpcodeInfo` where
   practical, or document every remaining switch that intentionally stays local.
-- Add conservative declarative-property fields to `OpcodeInfo` and populate
-  them for the existing 364 opcodes.
-- Add tests for metadata-driven verifier decisions before adding optimizer
+- [x] Add conservative declarative-property fields to `OpcodeInfo` and populate
+  them for the existing builtin opcodes.
+- [x] Add tests for metadata-driven verifier decisions before adding optimizer
   rewrites.
-- Refactor or explicitly fence `QoreValue` tag classification so plugin
+- [x] Refactor or explicitly fence `QoreValue` tag classification so plugin
   immediate tags cannot collide with float/int/pointer/special predicates.
-- Add extensible `TypeProfile` keys for non-builtin types: replace the
-  current 6-enum `dominantType()` return with an interned-key encoding
-  carrying `(kind, payload)` where `kind ∈ {builtin_int, builtin_float,
+- [x] Add extensible `TypeProfile` keys for non-builtin types alongside the
+  legacy builtin-only `dominantType()` result, carrying `(kind, payload)`
+  where `kind ∈ {builtin_int, builtin_float,
   builtin_string, builtin_bool, builtin_nothing, builtin_other,
   qore_class, plugin_type}` and `payload` is the interned `QoreTypeInfo*`
   for the user-class / plugin-type cases. Builtin keys keep the existing
@@ -2444,6 +2448,11 @@ calendar time depends on what other branch work is in flight.
   a per-guard concurrent hash map (using libqore's existing
   reader/writer-locked hash pattern, not a new TBB-style primitive)
   allocated lazily on first non-builtin observation.
+- [x] Before Phase 1 starts, explicitly confirm that `int8`, `int16`, `int32`,
+  `int64`, `float32`, and `float64` are storage element type names for
+  `buffer<T>`, not general scalar local-variable types. Reading a narrow
+  integer element widens to Qore `int`; reading a narrow floating element
+  widens to Qore `float`.
 
 Ships independently useful cleanup even before plugin types exist. Optimizer
 passes that rely on new algebraic metadata should wait until the metadata has
@@ -2822,10 +2831,11 @@ feature wishlist.
   (Eigen3-backed `float64`)
 
 **Companion designs:**
-- [`generic-class-types.md`](generic-class-types.md) — parametric class
-  types (related future cleanup path for generic built-ins and plugin types)
-- [`named-arguments.md`](named-arguments.md) — call-site keyword
-  arguments (helpful for wide DataFrame APIs)
+- [`design/generic-class-types.md`](../design/generic-class-types.md) —
+  implemented parametric class types, generic hashdecls, wildcards, and
+  generic API metadata used by adjacent reflection/tooling surfaces
+- [`design/named-arguments.md`](../design/named-arguments.md) — implemented
+  call-site keyword arguments (helpful for wide DataFrame APIs)
 - [`streaming-operators.md`](streaming-operators.md) — `first`/`any`/`all`
   / take / drop / count operators (composes with buffer reductions)
 

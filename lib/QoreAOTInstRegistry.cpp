@@ -224,12 +224,6 @@ static const AbstractQoreFunctionVariant* instRegistryFindMethodVariantByRef(
     return variant;
 }
 
-static bool instRegistryIsRangeSliceOpcode(QoreIROpcode opcode) {
-    return opcode == QoreIROpcode::RangeSliceAny
-        || opcode == QoreIROpcode::RangeSliceInt
-        || opcode == QoreIROpcode::RangeSliceFloat;
-}
-
 static std::string instRegistryGetFunctionCallName(const FunctionCallNode* call) {
     const FunctionEntry* fe = call->getFunctionEntry();
     if (!fe || !fe->getNamespace()) {
@@ -908,7 +902,7 @@ static bool writeExpr(AOTInstWriteCtx& ctx) {
     const QoreValue& expr = ((isUnaryInvokeOpcode(ei->opcode) && !ei->operands.empty())
             || (isBinaryInvokeOpcode(ei->opcode) && ei->operands.size() >= 2)
             || (ei->opcode == QoreIROpcode::ListAssignAny && ei->operands.size() >= 2)
-            || (instRegistryIsRangeSliceOpcode(ei->opcode) && ei->operands.size() >= 3))
+            || (isRangeSliceOpcode(ei->opcode) && ei->operands.size() >= 3))
         ? QoreValue()
         : ei->expr;
     if (!expr_written && !ctx.writeExpr(ctx.writer, expr)) {
@@ -1464,7 +1458,7 @@ static bool writeInvoke(AOTInstWriteCtx& ctx) {
     } else if (ii->invoke_opcode == QoreIROpcode::CallClosureDirect
             || (isUnaryInvokeOpcode(ii->invoke_opcode) && !ii->operands.empty())
             || (isBinaryInvokeOpcode(ii->invoke_opcode) && ii->operands.size() >= 2)
-            || (instRegistryIsRangeSliceOpcode(ii->invoke_opcode) && ii->operands.size() >= 3)
+            || (isRangeSliceOpcode(ii->invoke_opcode) && ii->operands.size() >= 3)
             || (ii->invoke_opcode == QoreIROpcode::ListAssignAny && ii->operands.size() >= 2)) {
         if (!ctx.writeExpr(ctx.writer, QoreValue())) {
             return false;

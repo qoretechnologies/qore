@@ -4523,17 +4523,7 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     if (!block || block->instructions.empty()) {
         return false;
     }
-    auto op = block->instructions.back()->opcode;
-    switch (op) {
-        case QoreIROpcode::Return:
-        case QoreIROpcode::ReturnNothing:
-        case QoreIROpcode::Br:
-        case QoreIROpcode::BrIf:
-        case QoreIROpcode::Rethrow:
-            return true;
-        default:
-            return false;
-    }
+    return isTerminator(block->instructions.back()->opcode);
 }
 
 QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,

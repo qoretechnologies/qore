@@ -155,29 +155,11 @@
 // Forward declaration from Function.cpp - collects all locals from a statement tree
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
-static bool isTerminatorOpcode(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::Br:
-        case QoreIROpcode::BrIf:
-        case QoreIROpcode::BranchIfLtLocalInt:
-        case QoreIROpcode::Invoke:
-        case QoreIROpcode::IteratorNext:
-        case QoreIROpcode::Return:
-        case QoreIROpcode::ReturnNothing:
-        case QoreIROpcode::Throw:
-        case QoreIROpcode::Rethrow:
-        case QoreIROpcode::ThreadExit:
-            return true;
-        default:
-            return false;
-    }
-}
-
 static bool blockHasTerminator(const QoreIRBasicBlock* block) {
     if (!block || block->instructions.empty()) {
         return false;
     }
-    return isTerminatorOpcode(block->instructions.back()->opcode);
+    return isTerminator(block->instructions.back()->opcode);
 }
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
@@ -2949,7 +2931,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // If handler doesn't end with a terminator, add return nothing
         QoreIRBasicBlock* final_block = handler_builder.getBlock();
         if (!final_block || final_block->instructions.empty() ||
-                !isTerminatorOpcode(final_block->instructions.back()->opcode)) {
+                !isTerminator(final_block->instructions.back()->opcode)) {
             handler_builder.createReturnNothing();
         }
 
@@ -3065,7 +3047,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // If handler doesn't end with a terminator, add return nothing
         QoreIRBasicBlock* final_block = handler_builder.getBlock();
         if (!final_block || final_block->instructions.empty() ||
-                !isTerminatorOpcode(final_block->instructions.back()->opcode)) {
+                !isTerminator(final_block->instructions.back()->opcode)) {
             handler_builder.createReturnNothing();
         }
 

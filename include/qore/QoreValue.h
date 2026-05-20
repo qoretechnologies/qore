@@ -247,9 +247,12 @@ namespace detail {
  * TAG ALLOCATION (bits 63-48):
  *   < 0xFFC0:      Encoded doubles (raw bits + 2^48)
  *   0xFFC0-0xFFC6: Short strings (length in bits 51-48)
+ *   0xFFC7-0xFFCF: Reserved by the short-string decoder family
  *   0xFFF9:        48-bit signed integers
  *   0xFFFA:        Pointers to AbstractQoreNode
  *   0xFFFB:        Special values (nothing=0, null=1, false=2, true=3)
+ *   0xFFFD:        Enum member pointers
+ *   0xFFFE-0xFFFF: Reserved for future plugin immediate tags
  *
  * INTEGER RANGE: +/-140,737,488,355,328 (+/-2^47)
  *   - Covers virtually all practical integer usage
@@ -299,14 +302,35 @@ private:
     //! Boundary for double detection: encoded doubles are always below this value.
     static constexpr uint64_t DOUBLE_BOUNDARY   = 0xFFF9000000000000ULL;
 
-    // Tag values (high 16 bits) - all must be >= DOUBLE_BOUNDARY
-    static constexpr uint64_t TAG_INT48         = 0xFFF9000000000000ULL;
-    static constexpr uint64_t TAG_POINTER       = 0xFFFA000000000000ULL;
-    static constexpr uint64_t TAG_SPECIAL       = 0xFFFB000000000000ULL;
+    // Non-double tag values and tag families.
+    static constexpr uint16_t TAG16_INT48       = 0xFFF9;
+    static constexpr uint16_t TAG16_POINTER     = 0xFFFA;
+    static constexpr uint16_t TAG16_SPECIAL     = 0xFFFB;
+    static constexpr uint16_t TAG16_ENUM        = 0xFFFD;
+    static constexpr uint16_t TAG12_SHORTSTR    = 0xFFC;
+    static constexpr uint16_t TAG16_SHORTSTR_FIRST = 0xFFC0;
+    static constexpr uint16_t TAG16_SHORTSTR_LAST  = 0xFFCF;
+    static constexpr uint16_t TAG16_PLUGIN_IMMEDIATE_FIRST = 0xFFFE;
+    static constexpr uint16_t TAG16_PLUGIN_IMMEDIATE_LAST  = 0xFFFF;
+
+    static constexpr uint64_t TAG_INT48         = static_cast<uint64_t>(TAG16_INT48) << 48;
+    static constexpr uint64_t TAG_POINTER       = static_cast<uint64_t>(TAG16_POINTER) << 48;
+    static constexpr uint64_t TAG_SPECIAL       = static_cast<uint64_t>(TAG16_SPECIAL) << 48;
     //! Short strings: 0xFFC + (length in bits 48-50), so 0xFFC0-0xFFC6
-    static constexpr uint64_t TAG_SHORTSTR_BASE = 0xFFFC000000000000ULL;
+    static constexpr uint64_t TAG_SHORTSTR_BASE = static_cast<uint64_t>(TAG12_SHORTSTR) << 52;
     //! Enum values: stores pointer to QoreEnumMember, zero allocation, zero ref-counting
-    static constexpr uint64_t TAG_ENUM          = 0xFFFD000000000000ULL;
+    static constexpr uint64_t TAG_ENUM          = static_cast<uint64_t>(TAG16_ENUM) << 48;
+
+    static_assert(TAG16_SHORTSTR_LAST < TAG16_INT48,
+        "short-string tag family must remain below the non-double value tag boundary");
+    static_assert(TAG16_INT48 < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "inline integer tag must not collide with plugin immediate tags");
+    static_assert(TAG16_POINTER < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "pointer tag must not collide with plugin immediate tags");
+    static_assert(TAG16_SPECIAL < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "special-value tag must not collide with plugin immediate tags");
+    static_assert(TAG16_ENUM < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "enum tag must not collide with plugin immediate tags");
 
     // Masks
     static constexpr uint64_t TAG_MASK          = 0xFFFF000000000000ULL;
@@ -457,6 +481,30 @@ public:
     //! Returns true if the value is a special value (nothing, null, true, false)
     DLLLOCAL bool isSpecial() const {
         return bits == 0 || tag() == TAG_SPECIAL;
+    }
+
+    //! First reserved high-16-bit tag for future plugin immediates.
+    DLLLOCAL static constexpr uint16_t firstPluginImmediateTag() noexcept {
+        return TAG16_PLUGIN_IMMEDIATE_FIRST;
+    }
+
+    //! Last reserved high-16-bit tag for future plugin immediates.
+    DLLLOCAL static constexpr uint16_t lastPluginImmediateTag() noexcept {
+        return TAG16_PLUGIN_IMMEDIATE_LAST;
+    }
+
+    //! Returns true if a high-16-bit tag is reserved for future plugin immediates.
+    DLLLOCAL static constexpr bool isReservedPluginImmediateTag(uint16_t tag) noexcept {
+        return tag >= TAG16_PLUGIN_IMMEDIATE_FIRST && tag <= TAG16_PLUGIN_IMMEDIATE_LAST;
+    }
+
+    //! Returns true if a high-16-bit tag is owned by the built-in QoreValue encoding.
+    DLLLOCAL static constexpr bool isBuiltinNanboxTag(uint16_t tag) noexcept {
+        return tag == TAG16_INT48
+            || tag == TAG16_POINTER
+            || tag == TAG16_SPECIAL
+            || (tag >= TAG16_SHORTSTR_FIRST && tag <= TAG16_SHORTSTR_LAST)
+            || tag == TAG16_ENUM;
     }
 
     // ========================================================================

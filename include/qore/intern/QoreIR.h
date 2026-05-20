@@ -36,6 +36,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -680,17 +681,18 @@ static_assert(QORE_IR_MAX_OPCODE == 370, "QORE_IR_MAX_OPCODE changed — update 
 //!   3. Add entry to OPCODE_REGISTRY in QoreOpcodeRegistry.h
 //!   4. Compilation will fail if registry is incomplete (static_assert guards)
 //!
-//! The registry eliminates the need to maintain separate switch statements across
-//! multiple files. Query functions delegate to the registry instead.
+//! The registry eliminates duplicated property switches across files. Query
+//! functions delegate to the registry instead.
 //!
-//! Legacy files still have property functions for backward compatibility:
-//!   - lib/QoreIRLowering.cpp: opcodeCanReturnNothing(), opcodeNeverReturnsNothing()
-//!   - lib/QoreIRPrinter.cpp: opcodeName()
-//!
-//! Functions in lib/QoreIRInterpreter.cpp, lib/QoreIRToLLVM.cpp, and
-//! lib/QoreAOTInstRegistry.cpp still carry operation-family switches for actual
-//! execution/lowering dispatch; registry metadata is validated separately so
-//! adding opcodes cannot silently omit basic properties.
+//! Remaining opcode switches are intentional local dispatch tables:
+//!   - lib/QoreIRInterpreter.cpp and lib/QoreIRToLLVM.cpp execute/lower each
+//!     operation family and must branch to different code bodies.
+//!   - lib/QoreAOTInstRegistry.cpp maps opcodes to binary instruction builders.
+//!   - lib/QoreAOT.cpp maps opcodes to persisted AOT feature flags.
+//!   - lib/QoreIRVerifier.cpp has verifier-only stack/local-safety
+//!     classifications that are not general opcode semantics.
+//!   - lib/QoreIRPrinter.cpp keeps stable lowercase/debug spellings that do not
+//!     exactly match registry names.
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
 //! Delegates to OpcodeInfo::is_unary_invoke in the registry.
@@ -705,51 +707,27 @@ inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
 }
 
 //! Returns true if the opcode is a call-type op (used by Invoke dispatch)
+//! Delegates to OpcodeInfo::property_flags in the registry.
 inline bool isCallInvokeOpcode(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::Call:
-        case QoreIROpcode::CallDirect:
-        case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
-        case QoreIROpcode::CallMethodDirect:
-        case QoreIROpcode::CallStatic:
-        case QoreIROpcode::CallStaticDirect:
-        case QoreIROpcode::CallClosureDirect:
-            return true;
-        default:
-            return false;
-    }
+    return getOpcodeIsCallInvoke(static_cast<int>(op));
 }
 
 //! Returns true if the opcode is a non-subst regex op (used by Invoke dispatch)
+//! Delegates to OpcodeInfo::property_flags in the registry.
 inline bool isRegexInvokeOpcode(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::RegexMatchAny:
-        case QoreIROpcode::RegexMatchBool:
-        case QoreIROpcode::RegexNMatchBool:
-        case QoreIROpcode::RegexExtractAny:
-        case QoreIROpcode::RegexExtractList:
-            return true;
-        default:
-            return false;
-    }
+    return getOpcodeIsRegexInvoke(static_cast<int>(op));
 }
 
 //! Returns true if the opcode is a DotEval-type op (method call on expression result)
+//! Delegates to OpcodeInfo::property_flags in the registry.
 inline bool isDotEvalInvokeOpcode(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::DotEvalAny:
-        case QoreIROpcode::DotEvalInt:
-        case QoreIROpcode::DotEvalFloat:
-        case QoreIROpcode::DotEvalString:
-        case QoreIROpcode::DotEvalDate:
-        case QoreIROpcode::DotEvalList:
-        case QoreIROpcode::DotEvalHash:
-        case QoreIROpcode::DotEvalObject:
-            return true;
-        default:
-            return false;
-    }
+    return getOpcodeIsDotEvalInvoke(static_cast<int>(op));
+}
+
+//! Returns true if the opcode is a range-slice expression op.
+//! Delegates to OpcodeInfo::property_flags in the registry.
+inline bool isRangeSliceOpcode(QoreIROpcode op) {
+    return getOpcodeIsRangeSlice(static_cast<int>(op));
 }
 
 struct QoreIRValue {
@@ -887,6 +865,73 @@ public:
     std::vector<QoreIRPhiIncoming> incoming;
 };
 
+enum class QoreIRTypeProfileKind : uint8_t {
+    None,
+    BuiltinInt,
+    BuiltinFloat,
+    BuiltinString,
+    BuiltinBool,
+    BuiltinNothing,
+    BuiltinOther,
+    QoreClass,
+    PluginType,
+};
+
+struct QoreIRTypeProfileKey {
+    QoreIRTypeProfileKind kind = QoreIRTypeProfileKind::None;
+    const QoreTypeInfo* type_info = nullptr;
+
+    bool isValid() const {
+        return kind != QoreIRTypeProfileKind::None;
+    }
+
+    bool isBuiltin(qore_type_t type) const {
+        switch (kind) {
+            case QoreIRTypeProfileKind::BuiltinInt:
+                return type == NT_INT;
+            case QoreIRTypeProfileKind::BuiltinFloat:
+                return type == NT_FLOAT;
+            case QoreIRTypeProfileKind::BuiltinString:
+                return type == NT_STRING;
+            case QoreIRTypeProfileKind::BuiltinBool:
+                return type == NT_BOOLEAN;
+            case QoreIRTypeProfileKind::BuiltinNothing:
+                return type == NT_NOTHING;
+            default:
+                return false;
+        }
+    }
+
+    qore_type_t legacyBuiltinType() const {
+        switch (kind) {
+            case QoreIRTypeProfileKind::BuiltinInt:
+                return NT_INT;
+            case QoreIRTypeProfileKind::BuiltinFloat:
+                return NT_FLOAT;
+            case QoreIRTypeProfileKind::BuiltinString:
+                return NT_STRING;
+            case QoreIRTypeProfileKind::BuiltinBool:
+                return NT_BOOLEAN;
+            case QoreIRTypeProfileKind::BuiltinNothing:
+                return NT_NOTHING;
+            default:
+                return NT_ALL;
+        }
+    }
+
+    static QoreIRTypeProfileKey builtin(QoreIRTypeProfileKind kind) {
+        return { kind, nullptr };
+    }
+
+    static QoreIRTypeProfileKey qoreClass(const QoreTypeInfo* type_info) {
+        return { QoreIRTypeProfileKind::QoreClass, type_info };
+    }
+
+    static QoreIRTypeProfileKey pluginType(const QoreTypeInfo* type_info) {
+        return { QoreIRTypeProfileKind::PluginType, type_info };
+    }
+};
+
 //! Type profile for a single guard point: tracks observed runtime types
 struct TypeProfile {
     std::atomic<uint32_t> int_count{0};
@@ -895,6 +940,8 @@ struct TypeProfile {
     std::atomic<uint32_t> bool_count{0};
     std::atomic<uint32_t> nothing_count{0};
     std::atomic<uint32_t> other_count{0};
+    mutable std::mutex extended_mutex;
+    std::unique_ptr<std::unordered_map<const QoreTypeInfo*, uint32_t>> extended_type_counts;
 
     uint32_t total() const {
         return int_count.load(std::memory_order_relaxed)
@@ -905,30 +952,86 @@ struct TypeProfile {
             + other_count.load(std::memory_order_relaxed);
     }
 
-    //! Returns the dominant type if one type accounts for >= threshold of observations,
-    //! or NT_ALL if no single type dominates
-    qore_type_t dominantType(float threshold = 0.95f) const {
+    void recordTypeInfo(const QoreTypeInfo* type_info) {
+        if (!type_info) {
+            other_count.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (!extended_type_counts) {
+                extended_type_counts = std::make_unique<std::unordered_map<const QoreTypeInfo*, uint32_t>>();
+            }
+            ++(*extended_type_counts)[type_info];
+        }
+        other_count.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    uint32_t getTypeInfoCount(const QoreTypeInfo* type_info) const {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (!extended_type_counts) {
+            return 0;
+        }
+        auto i = extended_type_counts->find(type_info);
+        return i == extended_type_counts->end() ? 0 : i->second;
+    }
+
+    QoreIRTypeProfileKey dominantKey(float threshold = 0.95f) const {
         uint32_t t = total();
         if (t == 0) {
-            return NT_ALL;
+            return {};
         }
         float ft = (float)t;
         if ((float)int_count.load(std::memory_order_relaxed) / ft >= threshold) {
-            return NT_INT;
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinInt);
         }
         if ((float)float_count.load(std::memory_order_relaxed) / ft >= threshold) {
-            return NT_FLOAT;
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinFloat);
         }
         if ((float)string_count.load(std::memory_order_relaxed) / ft >= threshold) {
-            return NT_STRING;
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinString);
         }
         if ((float)bool_count.load(std::memory_order_relaxed) / ft >= threshold) {
-            return NT_BOOLEAN;
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinBool);
         }
         if ((float)nothing_count.load(std::memory_order_relaxed) / ft >= threshold) {
-            return NT_NOTHING;
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinNothing);
         }
-        return NT_ALL;
+
+        const QoreTypeInfo* dominant_type_info = nullptr;
+        uint32_t dominant_count = 0;
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (extended_type_counts) {
+                for (const auto& i : *extended_type_counts) {
+                    if (i.second > dominant_count) {
+                        dominant_type_info = i.first;
+                        dominant_count = i.second;
+                    }
+                }
+            }
+        }
+        if (dominant_type_info && (float)dominant_count / ft >= threshold) {
+            if (QoreTypeInfo::getUniqueReturnClass(dominant_type_info)) {
+                return QoreIRTypeProfileKey::qoreClass(dominant_type_info);
+            }
+        }
+
+        if ((float)other_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinOther);
+        }
+        return {};
+    }
+
+    bool dominantBuiltin(qore_type_t type, float threshold = 0.95f) const {
+        return dominantKey(threshold).isBuiltin(type);
+    }
+
+    //! Returns the dominant type if one type accounts for >= threshold of observations,
+    //! or NT_ALL if no single type dominates
+    qore_type_t dominantType(float threshold = 0.95f) const {
+        return dominantKey(threshold).legacyBuiltinType();
     }
 
     void record(const QoreValue& v) {
@@ -949,7 +1052,7 @@ struct TypeProfile {
                 nothing_count.fetch_add(1, std::memory_order_relaxed);
                 break;
             default:
-                other_count.fetch_add(1, std::memory_order_relaxed);
+                recordTypeInfo(v.getFullTypeInfo());
                 break;
         }
     }
