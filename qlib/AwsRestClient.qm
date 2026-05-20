@@ -130,6 +130,25 @@ public class AwsRestClientBase {
             "aws_service": True,
             "aws_s3": True,
             "aws_token": True,
+            # credential-provider extensions (env vars / IMDS / STS AssumeRole)
+            "aws_role_arn": True,
+            "aws_role_session_name": True,
+            "aws_external_id": True,
+            "aws_imds_disabled": True,
+            "aws_imds_url": True,
+        };
+
+        #! Standard AWS environment-variable names recognized by the credential chain
+        /** Mirrors the AWS CLI / SDK convention so existing user environments
+            and CI runners work without code changes.  Used by
+            @ref applyEnvCredentials() before the existing
+            @ref RequiredOptions check fires.
+        */
+        const AwsEnvVarMap = {
+            "aws_keyid":  "AWS_ACCESS_KEY_ID",
+            "aws_secret": "AWS_SECRET_ACCESS_KEY",
+            "aws_token":  "AWS_SESSION_TOKEN",
+            "aws_region": "AWS_REGION",
         };
 
         #! Qore digest algorithm to use for HMAC calculations; must match AwsSignatureAlgorithm
@@ -148,6 +167,40 @@ public class AwsRestClientBase {
         # collapse multiple spaces to a single space
         str =~ s/ +/ /g;
         return str;
+    }
+
+    #! Fills in AWS credential/region keys from environment variables where unset
+    /** Reads \c AWS_ACCESS_KEY_ID, \c AWS_SECRET_ACCESS_KEY,
+        \c AWS_SESSION_TOKEN, \c AWS_REGION, and \c AWS_DEFAULT_REGION
+        (fallback for \c aws_region) — the standard AWS SDK / CLI convention.
+        Values explicitly passed in \a opts always win over the environment.
+
+        @return \a opts with any missing AWS credential keys filled in from
+        the environment
+    */
+    static hash<auto> applyEnvCredentials(hash<auto> opts) {
+        # Read via getenv() rather than the ENV hash: ENV is a snapshot
+        # captured at module load, while getenv() always queries the live
+        # process environment so callers that bridge env state at runtime
+        # (tests, frameworks) see their updates here.
+        foreach hash<auto> i in (AwsEnvVarMap.pairIterator()) {
+            string opt_key = i.key;
+            string env_key = i.value;
+            if (!opts{opt_key}) {
+                *string v = getenv(env_key);
+                if (v.val()) {
+                    opts{opt_key} = v;
+                }
+            }
+        }
+        # AWS_DEFAULT_REGION is the older variant, kept for compatibility
+        if (!opts.aws_region) {
+            *string v = getenv("AWS_DEFAULT_REGION");
+            if (v.val()) {
+                opts.aws_region = v;
+            }
+        }
+        return opts;
     }
 }
 
@@ -262,6 +315,9 @@ AwsRestClient rest({
         if (!opts.aws_region && url_components) {
             opts.aws_region = url_components[1];
         }
+
+        # fill missing credential/region keys from standard AWS environment variables
+        opts = AwsRestClientBase::applyEnvCredentials(opts);
 
         # check required options
         foreach string key in (RequiredOptions) {
@@ -701,6 +757,9 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         if (!opts.aws_region && url_components) {
             opts.aws_region = url_components[1];
         }
+
+        # fill missing credential/region keys from standard AWS environment variables
+        opts = AwsRestClientBase::applyEnvCredentials(opts);
 
         # check required options
         foreach string key in (AwsRestClientBase::RequiredOptions) {
