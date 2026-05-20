@@ -27,14 +27,11 @@
 %modern
 
 %requires(reexport) QoreLlmTypes
-%requires RestClientIo
-%requires GeminiRestClient
+%requires reflection
 
 %try-module json
 %define NoJson
 %endtry
-
-%requires HttpClientStreamingIo
 module QoreLlmUtils {
     version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "

@@ -188,7 +188,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     # ===================== Config Validation Tests =====================
 
     configInvalidModeTest() {
-        assertThrows("LLM-CONFIG-ERROR", "invalid mode",
+        assertThrows("LLM-CONFIG-ERROR", "is unknown",
             sub () {
                 LlmBackend llm(<LlmBackendConfig>{"mode": "invalid"});
             }
