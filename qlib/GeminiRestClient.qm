@@ -33,6 +33,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires QoreLlmTypes
 
 module GeminiRestClient {
     version = "1.0";
@@ -42,6 +43,7 @@ module GeminiRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("gemini", GeminiRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(new GeminiLlmProviderFactory());
     };
 }
 
@@ -657,6 +659,584 @@ public class GeminiRestConnection inherits RestClient::RestConnection {
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! LLM provider that dispatches requests to the Google Gemini \c generateContent API
+/** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract using
+    @ref GeminiRestClientIo for transport.  The provider handles
+    Gemini-native body construction, response parsing, schema sanitization
+    (Gemini's JSON Schema subset is stricter than OpenAI's — see
+    @ref sanitizeGeminiSchema()), tool-call extraction, finish-reason mapping,
+    and OpenAI-compatible facade adapter hooks (\c toolConfig in place of
+    \c tool_choice, \c responseSchema in place of \c response_format,
+    \c usageMetadata + \c candidates[].finishReason on stream events).
+
+    Thread-safe: the underlying @ref GeminiRestClientIo is lazy-initialized
+    behind a mutex.
+*/
+public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    private {
+        #! Lazy-initialized REST client
+        *GeminiRestClientIo rest_client;
+        #! Serializes lazy initialization
+        Mutex rest_mutex();
+    }
+
+    #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig
+    /** @param config the backend configuration; @ref QoreLlmUtils::LlmBackendConfig::api_key
+            is required
+
+        @throw LLM-CONFIG-ERROR \c api_key is missing
+        @throw LLM-DEPENDENCY-ERROR the \c json module is not available
+    */
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : QoreLlmUtils::AbstractLlmProvider(config) {
+        if (!config.api_key.val()) {
+            throw "LLM-CONFIG-ERROR",
+                "api_key is required for \"gemini\" mode";
+        }
+%ifdef NoJson
+        throw "LLM-DEPENDENCY-ERROR",
+            "json module is required for Gemini mode but is not available";
+%endif
+    }
+
+    string getMode() {
+        return "gemini";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildGeminiBody((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": system_prompt},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": user_prompt},
+        ), NOTHING, output_schema, opts);
+
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost(getGeminiGeneratePath(opts), body);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Gemini completion request failed: %s",
+                ex.desc), ex;
+        }
+
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": extractGeminiText(resp.body),
+            "usage": normalizeGeminiUsage(resp.body.usageMetadata),
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildGeminiBody(messages, tools,
+            opts.output_schema, opts);
+        hash<auto> resp;
+        try {
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost(getGeminiGeneratePath(opts), body);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Gemini chat request failed: %s",
+                ex.desc), ex;
+        }
+
+        hash<QoreLlmUtils::ChatResponse> rv = parseGeminiChatResponse(resp.body);
+        rv.model = getGeminiModelName(opts);
+        return rv;
+    }
+
+    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = buildGeminiBody(messages, tools,
+            opts.output_schema, opts);
+        GeminiResponseSseStreamIo stream =
+            rest_client.openStreamingConnection(
+                getGeminiBareModelName(getGeminiModelName(opts)), body,
+                NOTHING, getConfig().timeout_ms);
+        on_exit stream.close();
+
+        while (True) {
+            *hash<SseMessageInfo> evt = stream.readEvent(getConfig().timeout_ms);
+            if (!evt) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+            if (!evt.data.val() || evt.data == "[DONE]") {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                break;
+            }
+
+            *hash<auto> parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch () {
+                continue;
+            }
+
+            string delta = extractGeminiText(parsed);
+            *string finish_reason = parsed.candidates[0].finishReason;
+            if (delta.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+            }
+            if (finish_reason.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "done": True, "raw": parsed,
+                });
+                break;
+            }
+        }
+    }
+
+    #! Merges \c body_options with Gemini-specific nested \c generationConfig semantics
+    hash<auto> mergeRequestBodyOptions(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        if (!opts.body_options) {
+            return body;
+        }
+        hash<auto!> rv;
+        rv += body;
+        foreach string key in (keys opts.body_options) {
+            if (key == "generationConfig"
+                    && rv.generationConfig.typeCode() == NT_HASH
+                    && opts.body_options{key}.typeCode() == NT_HASH) {
+                hash<auto!> gc;
+                gc += rv.generationConfig;
+                gc += opts.body_options{key};
+                rv.generationConfig = gc;
+            } else {
+                rv{key} = opts.body_options{key};
+            }
+        }
+        return rv;
+    }
+
+    #! Translates an OpenAI \c tool_choice into Gemini's \c toolConfig form
+    applyOpenAiToolChoice(reference<hash<auto!>> body_options, auto choice) {
+        *hash<auto> tool_cfg = openAiToolChoiceToGeminiConfig(choice);
+        if (tool_cfg) {
+            body_options.toolConfig = tool_cfg;
+        }
+    }
+
+    #! Routes an OpenAI \c response_format=json_schema to Gemini's
+    #! @ref QoreLlmUtils::LlmRequestOptions::output_schema
+    applyOpenAiResponseFormat(reference<hash<auto!>> body_options,
+            reference<hash<QoreLlmUtils::LlmRequestOptions>> options,
+            hash<auto> output_schema, *hash<auto> response_format) {
+        options.output_schema = output_schema;
+    }
+
+    #! Updates OpenAI stream state from a Gemini-native event
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        if (raw.responseId.val()) {
+            state.id = raw.responseId;
+        } else if (raw.id.val()) {
+            state.id = raw.id;
+        }
+        if (raw.model.val()) {
+            state.model = raw.model;
+        }
+        if (raw.usageMetadata.typeCode() == NT_HASH) {
+            state.usage = normalizeGeminiUsage(raw.usageMetadata);
+        } else if (raw.usage.typeCode() == NT_HASH) {
+            state.usage = raw.usage;
+        }
+        *string finish_reason = raw.candidates[0].finishReason;
+        if (finish_reason.val()) {
+            state.finish_reason = state.tool_calls
+                ? "tool_calls" : geminiFinishReasonToOpenAi(finish_reason);
+        } else if (raw.choices[0].finish_reason.val()) {
+            state.finish_reason = raw.choices[0].finish_reason;
+        }
+    }
+
+    #! Harvests OpenAI-shaped \c tool_calls deltas from Gemini \c functionCall parts
+    list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return ();
+        }
+        list<hash<auto>> streamed = ();
+        foreach hash<auto> part in (raw.candidates[0].content.parts ?? ()) {
+            if (!part.functionCall) {
+                continue;
+            }
+            int idx = state.tool_calls.size();
+            hash<auto> tc = {
+                "id": part.functionCall.id ?? sprintf("tool-%d", idx + 1),
+                "type": "function",
+                "function": {
+                    "name": part.functionCall.name,
+                    "arguments": make_json(part.functionCall.args ?? {}),
+                },
+            };
+            state.tool_calls += tc;
+            streamed += {
+                "index": idx,
+                "id": tc.id,
+                "type": "function",
+                "function": tc.function,
+            };
+        }
+        return streamed;
+    }
+
+    #! Lazy-initializes the GeminiRestClientIo
+    private ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                hash<auto!> opts = {
+                    "apikey": getConfig().api_key,
+                    "connect_timeout": getConfig().connect_timeout_ms,
+                    "timeout": getConfig().timeout_ms,
+                };
+                if (getConfig().url.val()) {
+                    opts.url = getConfig().url;
+                }
+                rest_client = new GeminiRestClientIo(opts);
+            }
+        }
+    }
+
+    #! Resolves the Gemini model, defaulting to the stable Flash model
+    private string getGeminiModelName(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return getRequestModel(opts) ?? "gemini-2.5-flash";
+    }
+
+    #! Returns the Gemini \c generateContent REST path
+    private string getGeminiGeneratePath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return getGeminiModelResource(getGeminiModelName(opts))
+            + ":generateContent";
+    }
+
+    #! Returns the Gemini model resource for REST calls
+    private static string getGeminiModelResource(string model) {
+        return model =~ /^models\// ? model : "models/" + model;
+    }
+
+    #! Returns the bare Gemini model name required by streaming helper APIs
+    private static string getGeminiBareModelName(string model) {
+        return regex_subst(model, "^models/", "");
+    }
+
+    #! Builds a Gemini \c generateContent request body
+    private hash<auto> buildGeminiBody(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        list<hash<auto>> contents = ();
+        list<hash<auto>> system_parts = ();
+
+        foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
+            if (msg.role == "system") {
+                list<hash<auto>> parts = buildGeminiContentParts(msg);
+                if (parts) {
+                    system_parts += parts;
+                }
+                continue;
+            }
+
+            list<hash<auto>> parts;
+            if (msg.role == "tool") {
+                parts = ({
+                    "functionResponse": {
+                        "name": msg.name ?? msg.tool_call_id ?? "tool_result",
+                        "response": parseGeminiToolResponse(msg.content),
+                    },
+                },);
+                push contents, {"role": "user", "parts": parts};
+                continue;
+            }
+
+            parts = buildGeminiContentParts(msg);
+            if (msg.role == "assistant" && msg.tool_calls) {
+                foreach hash<QoreLlmUtils::ChatToolCall> tc in (msg.tool_calls) {
+                    push parts, {
+                        "functionCall": {
+                            "name": tc.name,
+                            "args": tc.arguments ?? {},
+                        },
+                    };
+                }
+            }
+            if (!parts) {
+                parts = ({"text": msg.content ?? ""},);
+            }
+            push contents, {
+                "role": msg.role == "assistant" ? "model" : "user",
+                "parts": parts,
+            };
+        }
+
+        hash<auto!> body;
+        body.contents = contents;
+        if (system_parts) {
+            body.systemInstruction = {"parts": system_parts};
+        }
+
+        hash<auto!> generation_config = {
+            "maxOutputTokens": getRequestMaxTokens(opts),
+            "temperature": getRequestTemperature(opts),
+        };
+        if (output_schema) {
+            generation_config.responseMimeType = "application/json";
+            generation_config.responseSchema = sanitizeGeminiSchema(
+                output_schema);
+        }
+        body.generationConfig = generation_config;
+
+        if (tools && tools.size()) {
+            list<hash<auto>> declarations = ();
+            foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
+                push declarations, {
+                    "name": td.name,
+                    "description": td.description ?? "",
+                    "parameters": sanitizeGeminiSchema(td.parameters)
+                        ?? {"type": "object", "properties": {}},
+                };
+            }
+            body.tools = ({"functionDeclarations": declarations},);
+        }
+        return mergeRequestBodyOptions(body, opts);
+    }
+
+    #! Returns a Gemini-compatible copy of a JSON schema
+    /** Gemini's function declarations and response schemas accept only a
+        subset of JSON Schema / OpenAPI.  In particular,
+        \c additionalProperties causes \c generateContent to reject the
+        request with HTTP 400 even when it is a boolean.  Strip unsupported
+        schema keywords at the provider boundary so callers can keep using
+        stricter OpenAI/Anthropic schemas and local validators.
+    */
+    private static *hash<auto> sanitizeGeminiSchema(*hash<auto> schema) {
+        if (!schema) {
+            return NOTHING;
+        }
+        return cast<hash<auto>>(sanitizeGeminiSchemaValue(schema));
+    }
+
+    private static auto sanitizeGeminiSchemaValue(auto value) {
+        if (value.typeCode() == NT_HASH) {
+            hash<auto> rv;
+            foreach string key in (keys value) {
+                if (key == "additionalProperties") {
+                    continue;
+                }
+                rv{key} = sanitizeGeminiSchemaValue(value{key});
+            }
+            return rv;
+        }
+        if (value.typeCode() == NT_LIST) {
+            list<auto> rv = ();
+            foreach auto item in (value) {
+                push rv, sanitizeGeminiSchemaValue(item);
+            }
+            return rv;
+        }
+        return value;
+    }
+
+    #! Builds Gemini content parts from a generic @ref QoreLlmUtils::ChatMessage
+    private static list<hash<auto>> buildGeminiContentParts(
+            hash<QoreLlmUtils::ChatMessage> msg) {
+        list<hash<auto>> parts = ();
+        if (msg.content_parts) {
+            foreach hash<QoreLlmUtils::ContentPart> part in (msg.content_parts) {
+                if (part.type == "image" && part.data) {
+                    push parts, {
+                        "inlineData": {
+                            "mimeType": part.mime_type ?? "image/png",
+                            "data": make_base64_string(part.data),
+                        },
+                    };
+                } else if (part.type == "text" && part.text.val()) {
+                    push parts, {"text": part.text};
+                }
+            }
+        } else if (msg.content.val()) {
+            push parts, {"text": msg.content};
+        }
+        return parts;
+    }
+
+    #! Parses an OpenAI-style tool-result string into Gemini \c functionResponse.response
+    private static hash<auto> parseGeminiToolResponse(*string content) {
+        if (!content.val()) {
+            return {};
+        }
+        try {
+            auto parsed = parse_json(content);
+            return parsed.typeCode() == NT_HASH
+                ? cast<hash<auto>>(parsed)
+                : {"result": parsed};
+        } catch () {
+            return {"result": content};
+        }
+    }
+
+    #! Parses a Gemini response into a generic @ref QoreLlmUtils::ChatResponse
+    private static hash<QoreLlmUtils::ChatResponse> parseGeminiChatResponse(
+            hash<auto> body) {
+        hash<auto> cand = body.candidates[0] ?? {};
+        list<string> text_parts = ();
+        *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls;
+        int tc_index;
+        foreach hash<auto> part in (cand.content.parts ?? ()) {
+            if (part.text.val()) {
+                push text_parts, part.text;
+            } else if (part.functionCall) {
+                if (!tool_calls) {
+                    tool_calls = ();
+                }
+                push tool_calls, <QoreLlmUtils::ChatToolCall>{
+                    "id": part.functionCall.id ?? sprintf("gemini-tool-%d",
+                        ++tc_index),
+                    "name": part.functionCall.name,
+                    "arguments": part.functionCall.args ?? {},
+                };
+            }
+        }
+
+        return <QoreLlmUtils::ChatResponse>{
+            "id": body.responseId ?? body.id,
+            "model": body.model,
+            "stop_reason": tool_calls ? "tool_use"
+                : mapGeminiFinishReason(cand.finishReason),
+            "content": text_parts ? text_parts.join("") : NOTHING,
+            "tool_calls": tool_calls,
+            "usage": normalizeGeminiUsage(body.usageMetadata),
+            "raw": body,
+        };
+    }
+
+    #! Extracts text parts from a Gemini response/chunk
+    private static string extractGeminiText(hash<auto> body) {
+        list<string> parts = ();
+        foreach hash<auto> part in (body.candidates[0].content.parts ?? ()) {
+            if (part.text.val()) {
+                push parts, part.text;
+            }
+        }
+        return parts.join("");
+    }
+
+    #! Maps Gemini usage metadata to the OpenAI-style counters
+    private static hash<auto> normalizeGeminiUsage(auto usage) {
+        int prompt_tokens = usage.promptTokenCount ?? 0;
+        int completion_tokens = usage.candidatesTokenCount ?? 0;
+        int total_tokens = usage.totalTokenCount
+            ?? (prompt_tokens + completion_tokens);
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "input_tokens": prompt_tokens,
+            "output_tokens": completion_tokens,
+        };
+    }
+
+    #! Maps Gemini \c finishReason values to QoreLlmUtils stop reasons
+    private static string mapGeminiFinishReason(*string reason) {
+        switch (reason) {
+            case "STOP":
+                return "end_turn";
+            case "MAX_TOKENS":
+                return "max_tokens";
+            case "SAFETY":
+            case "RECITATION":
+                return "stop_sequence";
+            default:
+                return reason ?? "end_turn";
+        }
+    }
+
+    #! Maps Gemini \c finishReason values to OpenAI \c finish_reason values
+    private static string geminiFinishReasonToOpenAi(*string reason) {
+        switch (reason) {
+            case "STOP":
+                return "stop";
+            case "MAX_TOKENS":
+                return "length";
+            case "SAFETY":
+            case "RECITATION":
+                return "content_filter";
+            default:
+                return reason ?? "stop";
+        }
+    }
+
+    #! Translates an OpenAI \c tool_choice value to a Gemini \c toolConfig
+    private static *hash<auto> openAiToolChoiceToGeminiConfig(auto choice) {
+        if (!exists choice) {
+            return NOTHING;
+        }
+        hash<auto!> cfg;
+        if (choice == "none") {
+            cfg.functionCallingConfig = {"mode": "NONE"};
+        } else if (choice == "required") {
+            cfg.functionCallingConfig = {"mode": "ANY"};
+        } else if (choice == "auto") {
+            cfg.functionCallingConfig = {"mode": "AUTO"};
+        } else if (choice.typeCode() == NT_HASH && choice.function.name.val()) {
+            cfg.functionCallingConfig = {
+                "mode": "ANY",
+                "allowedFunctionNames": (choice.function.name,),
+            };
+        }
+        return cfg ? cfg : NOTHING;
+    }
+}
+
+#! Factory for @ref GeminiLlmProvider
+public class GeminiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "gemini";
+    }
+
+    string getDisplayName() {
+        return "Google Gemini generateContent";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new GeminiLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": True,
+        };
     }
 }
 }
