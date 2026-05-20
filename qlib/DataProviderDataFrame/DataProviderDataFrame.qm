@@ -65,6 +65,41 @@ while (iter.next()) {
 }
     @endcode
 
+    @par Bulk and Pipeline Shape Example
+    @code{.py}
+%requires DataProviderDataFrame
+
+DataFrame::DataFrame frame(
+    ({"name": "Alice", "status": "active", "score": 95.5},
+     {"name": "Bob", "status": "inactive", "score": 88.0},
+     {"name": "Carol", "status": "active", "score": 92.0}));
+
+DataProviderDataFrame::DataFrameDataProvider provider(frame);
+AbstractDataProviderBulkRecordInterface bulk = provider.searchRecordsBulk(2);
+hash<auto> first_block = bulk.getValue();
+# first_block is {"name": ("Alice", "Bob"), "status": ("active", "inactive"), "score": (95.5, 88.0)}
+
+hash<DataProviderExpression> active_expr = <DataProviderExpression>{
+    "exp": "==",
+    "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+};
+
+list<hash<auto>> active_rows;
+DataProviderPipeline pipeline(<PipelineOptionInfo>{
+    "name": "active-dataframe-rows",
+    "output_callback": sub (auto row) {
+        push active_rows, row;
+    },
+});
+pipeline.append(new QoreFilterRecordsProcessor({"where_cond": active_expr}));
+pipeline.submit(frame);
+pipeline.waitDone();
+    @endcode
+
+    When a pipeline receives a \c DataFrame, it is detected as
+    @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".  Processors that support that shape can
+    keep the DataFrame representation; processors that only support bulk records receive a hash-of-lists conversion.
+
     @section dataproviderdataframe_relnotes DataProviderDataFrame Release Notes
 
     @subsection dataproviderdataframe_v1_0 DataProviderDataFrame v1.0
@@ -72,4 +107,9 @@ while (iter.next()) {
     - DataFrame record iterators declare
       <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> because row
       shape is determined by the DataFrame schema at runtime
+    - DataFrame bulk reads use DataFrame column blocks and return hash-of-lists blocks without first materializing
+      every row
+    - DataFrames submitted to a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" can remain in
+      \c DataFrameBlock shape through DataFrame-aware processors such as
+      @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
 */

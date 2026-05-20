@@ -584,6 +584,93 @@ class PipelineQueue {
         }
     }
 
+    #! Chooses the input shape to use for a processor and input value
+    private DataProviderShape chooseProcessorShape(AbstractDataProcessor processor, DataProviderShape current_shape) {
+        list<DataProviderShape> supported = processor.getSupportedInputShapes();
+        if (supported.contains(current_shape)) {
+            return cast<enum<DataProviderShape>>(current_shape);
+        }
+
+        foreach DataProviderShape preferred in ((DataProviderShape::DataFrameBlock,
+                DataProviderShape::BufferColumns, DataProviderShape::HashOfLists, DataProviderShape::RowRecords)) {
+            if (supported.contains(preferred)) {
+                return cast<enum<DataProviderShape>>(preferred);
+            }
+        }
+
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s does not advertise any supported input shape",
+            processor.className());
+    }
+
+    #! Appends a shaped processor result to the queue's internal work list
+    private appendShapedResult(reference<softlist<auto>> results, auto result) {
+        if (AbstractDataProcessor::detectShape(result) == DataProviderShape::RowRecords
+                && result.typeCode() == NT_LIST) {
+            results += result;
+        } else {
+            push results, result;
+        }
+    }
+
+    #! Processes one shaped input value through a processor
+    private softlist<auto> processShapedData(AbstractDataProcessor processor, auto data) {
+        softlist<auto> results;
+        DataProviderShape current_shape = AbstractDataProcessor::detectShape(data);
+        DataProviderShape processor_shape = chooseProcessorShape(processor, current_shape);
+        list<auto> inputs = AbstractDataProcessor::convertShape(data, current_shape, processor_shape);
+
+        foreach auto input in (inputs) {
+            if (processor_shape == DataProviderShape::RowRecords) {
+                *list<auto> row_results = processor.submitAndCollect(input);
+                if (row_results) {
+                    results += row_results;
+                }
+            } else {
+                *auto result = processor.processRecordsShape(input, processor_shape);
+                if (exists result) {
+                    appendShapedResult(\results, result);
+                }
+            }
+        }
+        return results;
+    }
+
+    #! Counts logical records in a list of shaped values
+    private int countShapedRecords(softlist<auto> values) {
+        int count = 0;
+        foreach auto value in (values) {
+            count += AbstractDataProcessor::shapeRecordCount(value);
+        }
+        return count;
+    }
+
+    #! Emits terminal output callback records from any supported pipeline shape
+    private emitOutputValue(auto value) {
+        DataProviderShape shape = AbstractDataProcessor::detectShape(value);
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+            case DataProviderShape::BufferColumns: {
+                HashListIterator hli(value);
+                map output_callback($1), hli;
+                return;
+            }
+            case DataProviderShape::DataFrameBlock:
+                map output_callback($1), value.toRecords();
+                return;
+            case DataProviderShape::RowRecords:
+                output_callback(value);
+                return;
+        }
+        output_callback(value);
+    }
+
+    #! Emits terminal output callback records from a list of shaped values
+    private emitOutputRecords(softlist<auto> values) {
+        foreach auto value in (values) {
+            emitOutputValue(value);
+        }
+    }
+
     /** @note Called in the pipeline lock
     */
     private runIntern() {
@@ -671,6 +758,7 @@ class PipelineQueue {
                 foreach auto elem in (elems) {
                     softlist<auto> new_recs;
                     if (elem instanceof AbstractDataProcessor) {
+                        AbstractDataProcessor processor = cast<AbstractDataProcessor>(elem);
                         # Measure per-element processing time
                         *date elem_start;
                         if (has_metrics) {
@@ -678,10 +766,8 @@ class PipelineQueue {
                         }
 
                         foreach auto data_elem in (data_recs) {
-                            *list<auto> new_elem_recs = elem.submitAndCollect(data_elem);
-                            if (new_elem_recs) {
-                                new_recs += new_elem_recs;
-                            }
+                            softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
+                            new_recs += new_elem_recs;
                             parent.logDebug("queue %d data processor %y output: %y", id,
                                 elem.className(), new_elem_recs);
                         }
@@ -692,53 +778,24 @@ class PipelineQueue {
                             acc_processing_us[elem_index] +=
                                 (now_us() - elem_start).durationMicroseconds();
 
-                            if (do_bulk) {
-                                # Bulk: data is always hash with list values
-                                int elem_in_count = 0;
-                                map elem_in_count += $1.firstValue().lsize(), data_recs;
-                                int elem_out_count = 0;
-                                map elem_out_count += $1.firstValue().lsize(), new_recs;
-                                acc_in[elem_index] += elem_in_count;
-                                acc_out[elem_index] += elem_out_count;
-                                if (elem_index == elem_count - 1) {
-                                    acc_completed[elem_index] += elem_out_count;
-                                }
-                            } else {
-                                # Non-bulk: list sizes are record counts
-                                int in_size = data_recs.lsize();
-                                int out_size = new_recs.lsize();
-                                acc_in[elem_index] += in_size;
-                                acc_out[elem_index] += out_size;
-                                if (elem_index == elem_count - 1) {
-                                    acc_completed[elem_index] += out_size;
-                                }
+                            int elem_in_count = countShapedRecords(data_recs);
+                            int elem_out_count = countShapedRecords(new_recs);
+                            acc_in[elem_index] += elem_in_count;
+                            acc_out[elem_index] += elem_out_count;
+                            if (elem_index == elem_count - 1) {
+                                acc_completed[elem_index] += elem_out_count;
                             }
                         }
 
                         # Invoke output callback for terminal processor output records
                         if (output_callback && elem_index == elem_count - 1) {
-                            if (do_bulk) {
-                                # Bulk mode: unpack hash-of-lists into individual records
-                                foreach auto out_rec in (new_recs) {
-                                    HashListIterator hli(out_rec);
-                                    map output_callback($1), hli;
-                                }
-                            } else {
-                                map output_callback($1), new_recs;
-                            }
+                            emitOutputRecords(new_recs);
                         }
                     } else {
                         # Fan-out to child queues
                         # Queue 0 tracks acc_in so flushMetricsBatch can compute submitted
                         if (has_metrics && !id) {
-                            int fanout_count;
-                            if (do_bulk) {
-                                fanout_count = 0;
-                                map fanout_count += $1.firstValue().lsize(), data_recs;
-                            } else {
-                                fanout_count = data_recs.lsize();
-                            }
-                            acc_in[elem_index] += fanout_count;
+                            acc_in[elem_index] += countShapedRecords(data_recs);
                         }
                         foreach auto data_elem in (data_recs) {
                             map $1.submit(data_elem), elem;
@@ -861,12 +918,7 @@ class PipelineQueue {
                     # Record flush metrics for the element that produced records
                     if (mc) {
                         string element_id = elem_ids[elem_index];
-                        int records_out = 0;
-                        if (do_bulk) {
-                            map records_out += $1.firstValue().lsize(), flush_results;
-                        } else {
-                            records_out = flush_results.lsize();
-                        }
+                        int records_out = countShapedRecords(flush_results);
                         # Flush produces records without input, so records_in = 0.
                         int completed = 0;
                         if (elem_index == elem_count - 1) {
@@ -892,37 +944,22 @@ class PipelineQueue {
                                 if (mc) {
                                     start_time = now_us();
                                 }
-                                *list<auto> new_elem_recs = elem2.submitAndCollect(data_elem);
+                                softlist<auto> new_elem_recs = processShapedData(elem2, data_elem);
                                 processing_us = 0;
                                 if (mc) {
                                     end_time = now_us();
                                     processing_us = (end_time - start_time).durationMicroseconds();
                                 }
 
-                                if (new_elem_recs) {
-                                    # here we need to use += to concatenate lists
-                                    new_recs += new_elem_recs;
-                                }
+                                new_recs += new_elem_recs;
                                 parent.logDebug("queue %d data processor %y processing flushed output: %y", id,
                                     elem2.className(), new_elem_recs);
 
                                 # Record metrics for processing flushed data
                                 if (mc) {
                                     string element_id = elem_ids[i];
-                                    int records_in = 1;
-                                    if (data_elem.typeCode() == NT_HASH
-                                            && data_elem.firstValue().typeCode() == NT_LIST) {
-                                        records_in = data_elem.firstValue().lsize();
-                                    }
-                                    int records_out = 0;
-                                    foreach auto out_rec in (new_elem_recs) {
-                                        if (out_rec.typeCode() == NT_HASH
-                                                && out_rec.firstValue().typeCode() == NT_LIST) {
-                                            records_out += out_rec.firstValue().lsize();
-                                        } else {
-                                            ++records_out;
-                                        }
-                                    }
+                                    int records_in = AbstractDataProcessor::shapeRecordCount(data_elem);
+                                    int records_out = countShapedRecords(new_elem_recs);
                                     int completed = 0;
                                     if (i == elem_size - 1) {
                                         completed = records_out;
@@ -940,14 +977,7 @@ class PipelineQueue {
 
                     # Invoke output callback for terminal flushed output records
                     if (output_callback && data_recs) {
-                        if (do_bulk) {
-                            foreach auto out_rec in (data_recs) {
-                                HashListIterator hli(out_rec);
-                                map output_callback($1), hli;
-                            }
-                        } else {
-                            map output_callback($1), data_recs;
-                        }
+                        emitOutputRecords(data_recs);
                     }
                 } else {
                     # must be the last entry in the list - propagate flush to child queues
@@ -2314,7 +2344,14 @@ public class DataProviderPipeline {
     /** Must be called with the lock held
     */
     private:internal submitIntern(auto _data) {
-        if (do_bulk && _data.typeCode() == NT_HASH && ((int rec_cnt = _data.firstValue().lsize()) > 1)) {
+        DataProviderShape shape = AbstractDataProcessor::detectShape(_data);
+        if (shape == DataProviderShape::DataFrameBlock) {
+            int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
+            logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
+            record_count += rec_cnt;
+            pmap."0".submit(_data);
+        } else if (do_bulk && shape == DataProviderShape::HashOfLists
+                && ((int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape)) > 1)) {
             logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
             record_count += rec_cnt;
             pmap."0".submit(_data);

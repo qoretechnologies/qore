@@ -2501,6 +2501,21 @@ converts through row records internally, so it needs a separate vectorized path.
 be listed as a dense-pipeline participant until it is rewritten for grouped
 column blocks.
 
+Implementation status:
+- `DataProviderShape` is implemented in `DataProvider` with `RowRecords`,
+  `HashOfLists`, reserved `BufferColumns`, and `DataFrameBlock`.
+- `DataProviderPipeline` detects shaped values, preserves row-record
+  `submitImpl()` output boundaries, keeps DataFrame blocks when a processor
+  supports them, and converts DataFrame blocks to hash-of-lists or row records
+  at unsupported boundaries.
+- `QoreFilterRecordsProcessor` supports `DataFrameBlock` directly for simple
+  comparison predicates and `&&` conjunctions. Unsupported expressions fall
+  back to row evaluation and rebuild a DataFrame.
+- `DataProviderDataFrame` provides DataFrame-backed bulk reads by slicing
+  DataFrame blocks and returning hash-of-lists blocks.
+- `BufferColumns` currently uses the hash-of-lists carrier as an API placeholder
+  until dense buffer columns are implemented in Phase 7.
+
 ---
 
 ## 7. Phased rollout plan
@@ -2683,13 +2698,13 @@ Polars / pandas-style ergonomics for DataFrame.
 
 ### Phase 6 — pipeline `DataFrame` propagation (M)
 
-- `DataProviderShape` negotiation for row records, hash-of-lists,
+- [x] `DataProviderShape` negotiation for row records, hash-of-lists,
   buffer-columns, and DataFrame blocks.
-- `DataProviderPipeline` auto-routing with conversion costs.
-- Sticky-typed-form bias.
-- Stock processors updated where worthwhile. Start with
-  `QoreFilterRecordsProcessor`; add vectorized analytics paths separately;
-  treat `QoreGroupByProcessor` as a rewrite candidate because it is not bulk
+- [x] `DataProviderPipeline` auto-routing with conversion costs.
+- [x] Sticky-typed-form bias for current-stage compatibility.
+- [x] Stock processors updated where worthwhile. Started with
+  `QoreFilterRecordsProcessor`; vectorized analytics paths remain separate;
+  `QoreGroupByProcessor` remains a rewrite candidate because it is not bulk
   aware today.
 
 End-to-end zero-conversion typed pipelines for analytics workloads.

@@ -26,7 +26,7 @@
 public namespace DataProviderDataFrame {
 
 #! Data provider wrapping a DataFrame for record-oriented access
-/** Wraps a @ref DataFrame::DataFrame "DataFrame" object as a DataProvider,
+/** Wraps a \c DataFrame object as a DataProvider,
     enabling DataFrames to be used in Qorus data pipelines and integrated
     with other DataProvider-based systems.
 
@@ -121,28 +121,25 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
         return new DataFrameRecordIterator(dataframe, where_cond);
     }
 
+    #! Returns a bulk interface over records matching the optional where condition
+    private AbstractDataProviderBulkRecordInterface searchRecordsBulkImpl(int block_size = 1000,
+            *hash<auto> where_cond, *hash<auto> search_options) {
+        return new DataFrameBulkRecordInterface(block_size, DataFrameDataProvider::applyWhere(dataframe, where_cond),
+            search_options, getRecordTypeImpl(search_options));
+    }
+
     #! Returns the underlying DataFrame
     DataFrame::DataFrame getDataFrame() {
         return dataframe;
     }
-}
 
-#! Iterator over DataFrame records with optional filtering
-public class DataFrameRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
-    private {
-        #! The records as a list
-        list<hash<auto>> records;
-
-        #! Current position (-1 = before first)
-        int pos = -1;
-    }
-
-    #! Creates the iterator from a DataFrame with optional where conditions
+    #! Applies simple DataProvider where conditions to a DataFrame
     /** Where conditions use hash format: \c {"column": value} for equality or
         \c {"column": {"op": value}} for comparison operators.
+
+        @since DataProviderDataFrame 1.0
     */
-    constructor(DataFrame::DataFrame df, *hash<auto> where_cond) {
-        # Apply simple where conditions if provided
+    static DataFrame::DataFrame applyWhere(DataFrame::DataFrame df, *hash<auto> where_cond) {
         DataFrame::DataFrame filtered = df;
         if (where_cond) {
             HashIterator hi(where_cond);
@@ -161,6 +158,26 @@ public class DataFrameRecordIterator inherits DataProvider::AbstractDataProvider
                 }
             }
         }
+        return filtered;
+    }
+}
+
+#! Iterator over DataFrame records with optional filtering
+public class DataFrameRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
+    private {
+        #! The records as a list
+        list<hash<auto>> records;
+
+        #! Current position (-1 = before first)
+        int pos = -1;
+    }
+
+    #! Creates the iterator from a DataFrame with optional where conditions
+    /** Where conditions use hash format: \c {"column": value} for equality or
+        \c {"column": {"op": value}} for comparison operators.
+    */
+    constructor(DataFrame::DataFrame df, *hash<auto> where_cond) {
+        DataFrame::DataFrame filtered = DataFrameDataProvider::applyWhere(df, where_cond);
         records = filtered.toRecords();
     }
 
@@ -177,6 +194,50 @@ public class DataFrameRecordIterator inherits DataProvider::AbstractDataProvider
     #! Returns the current record value
     hash<auto> getValue() {
         return records[pos];
+    }
+}
+
+#! Bulk iterator over DataFrame records using DataFrame column blocks
+public class DataFrameBulkRecordInterface inherits DataProvider::AbstractDataProviderBulkRecordInterface {
+    private {
+        #! DataFrame being iterated
+        DataFrame::DataFrame dataframe;
+
+        #! Current row offset
+        int pos = 0;
+
+        #! Record type metadata
+        *hash<string, AbstractDataField> record_type;
+    }
+
+    #! Creates the bulk iterator
+    constructor(int block_size, DataFrame::DataFrame df, *hash<auto> search_options,
+            *hash<string, AbstractDataField> record_type)
+            : AbstractDataProviderBulkRecordInterface(block_size, search_options.requires_result,
+                search_options.max_records, search_options.limit) {
+        dataframe = df;
+        self.record_type = record_type;
+    }
+
+    #! Returns the record description, if available
+    *hash<string, AbstractDataField> getRecordType() {
+        return record_type;
+    }
+
+    #! Returns the next DataFrame block as hash-of-lists
+    private *hash<auto> getValueImpl() {
+        int total = dataframe.numRows();
+        if (pos >= total) {
+            return;
+        }
+
+        int end = pos + getBlockSize();
+        if (end > total) {
+            end = total;
+        }
+        DataFrame::DataFrame block = dataframe.slice(pos, end);
+        pos = end;
+        return block.toColumnHash();
     }
 }
 

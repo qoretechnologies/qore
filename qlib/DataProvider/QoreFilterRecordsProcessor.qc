@@ -143,6 +143,30 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         return AbstractDataProvider::evalGenericExpression(record, where_expr) ? record : NOTHING;
     }
 
+    #! Processes data in an explicitly negotiated shape
+    /** @param records the input data
+        @param shape the input shape
+
+        @return filtered data in the same shape when possible
+
+        @since DataProvider 3.5
+    */
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        if (!where_expr) {
+            return records;
+        }
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                return filterDataFrame(records);
+            case DataProviderShape::HashOfLists:
+            case DataProviderShape::BufferColumns:
+                return filterBulk(records);
+            case DataProviderShape::RowRecords:
+                return AbstractDataProvider::evalGenericExpression(records, where_expr) ? records : NOTHING;
+        }
+        return processRecordImpl(records);
+    }
+
     #! Filters bulk data (hash-of-lists) by evaluating the expression on each record
     /** @param records the bulk data to filter
         @return filtered hash-of-lists with only matching records, or @ref nothing if no records match
@@ -180,11 +204,140 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         return result;
     }
 
+    #! Filters a DataFrame block
+    /** @param df the DataFrame block
+
+        @return a filtered DataFrame block
+
+        @since DataProvider 3.5
+    */
+    private auto filterDataFrame(auto df) {
+        return filterDataFrameExpression(df, where_expr);
+    }
+
+    #! Filters a DataFrame block by one expression
+    private auto filterDataFrameExpression(auto df, hash<DataProviderExpression> expr) {
+        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
+        if (op == DP_OP_AND || expr.exp == "AND") {
+            auto filtered = df;
+            foreach auto arg in (expr.args) {
+                if (!(arg instanceof hash<DataProviderExpression>)) {
+                    return filterDataFrameViaRows(df);
+                }
+                filtered = filterDataFrameExpression(filtered, arg);
+            }
+            return filtered;
+        }
+
+        *hash<auto> comparison = getDataFrameComparison(expr, op);
+        if (!comparison) {
+            return filterDataFrameViaRows(df);
+        }
+        return applyDataFrameComparison(df, comparison.field, comparison.op, comparison.value);
+    }
+
+    #! Returns vectorizable DataFrame comparison information, if supported
+    private *hash<auto> getDataFrameComparison(hash<DataProviderExpression> expr, string op) {
+        if (expr.args.size() != 2) {
+            return;
+        }
+
+        auto lhs = expr.args[0];
+        auto rhs = expr.args[1];
+        if (lhs instanceof hash<DataProviderFieldReference> && isScalarComparisonArg(rhs)) {
+            return {"field": lhs.field, "op": op, "value": unwrapComparisonValue(rhs)};
+        }
+        if (rhs instanceof hash<DataProviderFieldReference> && isScalarComparisonArg(lhs)) {
+            *string inverted_op = invertComparisonOperator(op);
+            if (!inverted_op) {
+                return;
+            }
+            return {"field": rhs.field, "op": inverted_op, "value": unwrapComparisonValue(lhs)};
+        }
+        return;
+    }
+
+    #! Returns True if the argument can be used as a scalar comparison value
+    private bool isScalarComparisonArg(auto arg) {
+        return !(arg instanceof hash<DataProviderExpression>)
+            && !(arg instanceof hash<DataProviderFieldReference>);
+    }
+
+    #! Unwraps serialized literal expression arguments
+    private auto unwrapComparisonValue(auto arg) {
+        if (arg.typeCode() == NT_HASH && arg.hasKey("value") && !arg.hasKey("field") && !arg.hasKey("exp")) {
+            return arg.value;
+        }
+        return arg;
+    }
+
+    #! Inverts a comparison operator when the field reference is on the right side
+    private *string invertComparisonOperator(string op) {
+        switch (op) {
+            case DP_SEARCH_OP_EQ:
+                return DP_SEARCH_OP_EQ;
+            case DP_SEARCH_OP_NE:
+                return DP_SEARCH_OP_NE;
+            case DP_SEARCH_OP_GT:
+                return DP_SEARCH_OP_LT;
+            case DP_SEARCH_OP_GE:
+                return DP_SEARCH_OP_LE;
+            case DP_SEARCH_OP_LT:
+                return DP_SEARCH_OP_GT;
+            case DP_SEARCH_OP_LE:
+                return DP_SEARCH_OP_GE;
+        }
+        return;
+    }
+
+    #! Applies a vectorized comparison to a DataFrame block
+    private auto applyDataFrameComparison(auto df, string field, string op, auto value) {
+        switch (op) {
+            case DP_SEARCH_OP_EQ:
+            case DP_SEARCH_OP_NE:
+            case DP_SEARCH_OP_GT:
+            case DP_SEARCH_OP_GE:
+            case DP_SEARCH_OP_LT:
+            case DP_SEARCH_OP_LE:
+                return df.filter(field, op, value);
+            case DP_OP_CONTAINS:
+                return df.filter(field, "contains", value);
+            case DP_OP_STARTS_WITH:
+                return df.filter(field, "startswith", value);
+            case DP_OP_ENDS_WITH:
+                return df.filter(field, "endswith", value);
+        }
+        return filterDataFrameViaRows(df);
+    }
+
+    #! Fallback path for expressions that are not vectorized yet
+    private auto filterDataFrameViaRows(auto df) {
+        *list<auto> filtered = processRecords(df.toRecords());
+        if (!filtered) {
+            return df.head(0);
+        }
+        return Class::forName("DataFrame").newObject(filtered);
+    }
+
     #! Returns @ref True — this processor supports bulk (hash-of-lists) data
     /** @since DataProvider 3.3
     */
     private bool supportsBulkApiImpl() {
         return True;
+    }
+
+    #! Returns supported input shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
     }
 
     #! Returns the input type as the output type (filter does not change record structure)

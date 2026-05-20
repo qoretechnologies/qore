@@ -577,6 +577,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("filtered hash map type hint test", \filteredHashMapTypeHintTest());
         addTestCase("optional typed hash field test", \optionalTypedHashFieldTest());
         addTestCase("generic record iterator test", \genericRecordIteratorTest());
+        addTestCase("processor shape API test", \processorShapeApiTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
@@ -600,6 +601,27 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, row.id);
         assertEq("alpha", row.name);
         assertFalse(i.next());
+    }
+
+    processorShapeApiTest() {
+        assertEq(DataProviderShape::RowRecords, AbstractDataProcessor::detectShape({"a": 1}));
+        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape({"a": (1, 2)}));
+        assertEq(2, AbstractDataProcessor::shapeRecordCount({"a": (1, 2)}, DataProviderShape::HashOfLists));
+
+        list<auto> rows = AbstractDataProcessor::convertShape({"a": (1, 2), "b": ("x", "y")},
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+        assertEq(2, rows.size());
+        assertEq({"a": 1, "b": "x"}, rows[0]);
+        assertEq({"a": 2, "b": "y"}, rows[1]);
+
+        hash<auto> columns = AbstractDataProcessor::convertShape({"a": 1, "b": "x"},
+            DataProviderShape::RowRecords, DataProviderShape::HashOfLists)[0];
+        assertEq({"a": (1,), "b": ("x",)}, columns);
+
+        ReturnBasedProcessor proc();
+        assertTrue(proc.supportsInputShape(DataProviderShape::HashOfLists));
+        assertTrue(proc.supportsInputShape(DataProviderShape::RowRecords));
+        assertFalse(proc.supportsInputShape(DataProviderShape::DataFrameBlock));
     }
 
     filteredHashMapTypeHintTest() {

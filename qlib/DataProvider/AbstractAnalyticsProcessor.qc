@@ -461,6 +461,24 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         return AbstractDataProcessor::recordsToHashList(results);
     }
 
+    #! Processes data in an explicitly negotiated shape
+    /** Analytics processors need record-wise bulk handling so window state and emitted
+        event records are derived from logical rows instead of the hash-of-lists block itself.
+
+        @since DataProvider 3.5
+    */
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+            case DataProviderShape::BufferColumns:
+                return processRecordsBulkImpl(records);
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
     #! Returns True — analytics processors support bulk API
     private bool supportsBulkApiImpl() {
         return True;

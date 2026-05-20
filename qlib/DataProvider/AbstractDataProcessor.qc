@@ -64,6 +64,20 @@ public const ProcessorCapabilityNameMap = {
     DPC_ANALYTICS: "ANALYTICS",
 };
 
+#! Data shapes that can be negotiated between pipeline processor stages
+/** @since %DataProvider 3.5
+*/
+public enum DataProviderShape {
+    #! One record hash or value at a time
+    RowRecords = 1,
+    #! A hash whose values are lists, one list entry per row
+    HashOfLists = 2,
+    #! A hash whose values are typed buffers; reserved for dense typed-column support
+    BufferColumns = 3,
+    #! A DataFrame block object
+    DataFrameBlock = 4
+}
+
 #! Defines an abstract class for accepting data and outputting optionally transformed or filtered data
 public class AbstractDataProcessor inherits Qore::Serializable {
     private {
@@ -111,6 +125,46 @@ public class AbstractDataProcessor inherits Qore::Serializable {
     */
     bool supportsBulkApi() {
         return supportsBulkApiImpl();
+    }
+
+    #! Returns the input data shapes supported by this processor
+    /** @return a list of supported input shapes ordered from most-preferred to least-preferred
+
+        @note Calls supportedInputShapesImpl() to provide the return value
+
+        @since %DataProvider 3.5
+    */
+    list<DataProviderShape> getSupportedInputShapes() {
+        return supportedInputShapesImpl();
+    }
+
+    #! Returns the output data shapes supported by this processor
+    /** @return a list of supported output shapes ordered from most-preferred to least-preferred
+
+        @note Calls supportedOutputShapesImpl() to provide the return value
+
+        @since %DataProvider 3.5
+    */
+    list<DataProviderShape> getSupportedOutputShapes() {
+        return supportedOutputShapesImpl();
+    }
+
+    #! Returns True if the processor supports the given input shape
+    /** @param shape the shape to test
+
+        @since %DataProvider 3.5
+    */
+    bool supportsInputShape(DataProviderShape shape) {
+        return getSupportedInputShapes().contains(shape);
+    }
+
+    #! Returns True if the processor supports the given output shape
+    /** @param shape the shape to test
+
+        @since %DataProvider 3.5
+    */
+    bool supportsOutputShape(DataProviderShape shape) {
+        return getSupportedOutputShapes().contains(shape);
     }
 
     #! Submits the data for processing
@@ -268,6 +322,31 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return processRecordsBulkImpl(records);
     }
 
+    #! Processes data in an explicitly negotiated shape
+    /** @param records the input data in the shape described by \a shape
+        @param shape the input data shape
+
+        @return the processed data, or @ref nothing if no output was generated
+
+        Sets thread-local data before running and clears on exit if any is set.
+
+        @note Calls processRecordsShapeImpl() to do the actual processing
+
+        @since %DataProvider 3.5
+    */
+    *auto processRecordsShape(auto records, DataProviderShape shape) {
+        *hash<auto> tld;
+        if (thread_local_data) {
+            tld = get_all_thread_data();
+            save_thread_data(thread_local_data);
+        }
+        on_exit if (thread_local_data) {
+            delete_thread_data(thread_local_data_keys);
+            save_thread_data(tld);
+        }
+        return processRecordsShapeImpl(records, shape);
+    }
+
     #! Flushes any pending data and returns the results
     /** @return a list of pending records, or @ref nothing if no pending data
 
@@ -333,6 +412,125 @@ public class AbstractDataProcessor inherits Qore::Serializable {
             }
         }
         return result;
+    }
+
+    #! Returns True if the value is a hash-of-lists block
+    /** @param data the value to test
+
+        @since %DataProvider 3.5
+    */
+    static bool isHashOfLists(auto data) {
+        return data.typeCode() == NT_HASH && data && data.firstValue().typeCode() == NT_LIST;
+    }
+
+    #! Returns True if the value is a DataFrame block
+    /** @param data the value to test
+
+        @since %DataProvider 3.5
+    */
+    static bool isDataFrameBlock(auto data) {
+        return data.typeCode() == NT_OBJECT && data.fullType() == "object<DataFrame>";
+    }
+
+    #! Detects the pipeline shape for a runtime value
+    /** @param data the value to inspect
+
+        @return the detected shape
+
+        @since %DataProvider 3.5
+    */
+    static DataProviderShape detectShape(auto data) {
+        if (AbstractDataProcessor::isDataFrameBlock(data)) {
+            return DataProviderShape::DataFrameBlock;
+        }
+        if (AbstractDataProcessor::isHashOfLists(data)) {
+            return DataProviderShape::HashOfLists;
+        }
+        return DataProviderShape::RowRecords;
+    }
+
+    #! Returns a human-readable name for a data provider shape
+    /** @param shape the shape
+
+        @since %DataProvider 3.5
+    */
+    static string shapeName(DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return "RowRecords";
+            case DataProviderShape::HashOfLists:
+                return "HashOfLists";
+            case DataProviderShape::BufferColumns:
+                return "BufferColumns";
+            case DataProviderShape::DataFrameBlock:
+                return "DataFrameBlock";
+        }
+        return sprintf("unknown(%y)", shape);
+    }
+
+    #! Returns the number of logical records in the given shaped value
+    /** @param data the shaped value
+        @param shape optional shape; if omitted, the shape is detected from \a data
+
+        @since %DataProvider 3.5
+    */
+    static int shapeRecordCount(auto data, *DataProviderShape shape) {
+        DataProviderShape s = shape ?? AbstractDataProcessor::detectShape(data);
+        switch (s) {
+            case DataProviderShape::DataFrameBlock:
+                return data.numRows();
+            case DataProviderShape::HashOfLists:
+            case DataProviderShape::BufferColumns:
+                return data ? data.firstValue().lsize() : 0;
+            case DataProviderShape::RowRecords:
+                return 1;
+        }
+        return 1;
+    }
+
+    #! Converts a shaped value into one or more values in another shape
+    /** @param data the input value
+        @param from_shape the input shape
+        @param to_shape the requested output shape
+
+        @return a list of converted values; row-record output may contain multiple records
+
+        @throw PROCESSOR-SHAPE-ERROR the conversion is not supported
+
+        @since %DataProvider 3.5
+    */
+    static list<auto> convertShape(auto data, DataProviderShape from_shape, DataProviderShape to_shape) {
+        if (from_shape == to_shape) {
+            return (data,);
+        }
+
+        if (from_shape == DataProviderShape::DataFrameBlock && to_shape == DataProviderShape::HashOfLists) {
+            return (data.toColumnHash(),);
+        }
+        if (from_shape == DataProviderShape::DataFrameBlock && to_shape == DataProviderShape::RowRecords) {
+            return data.toRecords();
+        }
+        if (from_shape == DataProviderShape::HashOfLists && to_shape == DataProviderShape::RowRecords) {
+            return AbstractDataProcessor::hashListToRecords(data);
+        }
+        if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::HashOfLists) {
+            return (AbstractDataProcessor::recordsToHashList((data,)),);
+        }
+        if (from_shape == DataProviderShape::HashOfLists && to_shape == DataProviderShape::DataFrameBlock) {
+            return (Class::forName("DataFrame").newObject(data),);
+        }
+        if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::DataFrameBlock) {
+            return (Class::forName("DataFrame").newObject((data,)),);
+        }
+        if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::HashOfLists) {
+            return (data,);
+        }
+        if (from_shape == DataProviderShape::HashOfLists && to_shape == DataProviderShape::BufferColumns) {
+            return (data,);
+        }
+
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("cannot convert DataProvider pipeline data from %s to %s",
+            AbstractDataProcessor::shapeName(from_shape), AbstractDataProcessor::shapeName(to_shape));
     }
 
     #! Returns the expected type of data to be submitted, if available
@@ -417,6 +615,59 @@ public class AbstractDataProcessor inherits Qore::Serializable {
     */
     private bool supportsBulkApiImpl() {
         return True;
+    }
+
+    #! Returns the input shapes supported by this processor
+    /** The default implementation preserves existing row and bulk behavior.
+
+        @since %DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return supportsBulkApiImpl()
+            ? (DataProviderShape::HashOfLists, DataProviderShape::RowRecords)
+            : (DataProviderShape::RowRecords,);
+    }
+
+    #! Returns the output shapes supported by this processor
+    /** The default implementation preserves existing row and bulk behavior.
+
+        @since %DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
+    }
+
+    #! Processes data in an explicitly negotiated shape
+    /** The default implementation bridges shape-aware calls to the existing
+        row-record and hash-of-lists APIs.
+
+        @since %DataProvider 3.5
+    */
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+            case DataProviderShape::HashOfLists:
+            case DataProviderShape::BufferColumns: {
+                *list<auto> results = submitAndCollect(records);
+                if (!results) {
+                    return;
+                }
+                if (results.size() == 1) {
+                    return results[0];
+                }
+                return results;
+            }
+            case DataProviderShape::DataFrameBlock: {
+                *hash<auto> bulk = processRecordsBulkImpl(records.toColumnHash());
+                if (!bulk) {
+                    return;
+                }
+                return Class::forName("DataFrame").newObject(bulk);
+            }
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
     }
 
     #! Processes a single record and returns the result

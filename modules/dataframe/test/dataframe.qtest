@@ -45,6 +45,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("mlIntegrationTest", \mlIntegrationTest());
         addTestCase("parquetTest", \parquetTest());
         addTestCase("dataProviderTest", \dataProviderTest());
+        addTestCase("dataProviderPipelineShapeTest", \dataProviderPipelineShapeTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
@@ -778,6 +779,78 @@ sub invalid_dataframe_api() {
         # Get DataFrame back from provider
         DataFrame::DataFrame df2 = prov.getDataFrame();
         assertEq(3, df2.numRows(), "getDataFrame preserves rows");
+    }
+
+    dataProviderPipelineShapeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "status": "active", "amount": 90},
+             {"name": "Bob", "status": "inactive", "amount": 220},
+             {"name": "Carol", "status": "active", "amount": 180},
+             {"name": "Dave", "status": "active", "amount": 125}));
+
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(df),
+            "DataFrame values are detected as DataFrameBlock shape");
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(df, DataProviderShape::DataFrameBlock),
+            "DataFrameBlock record count uses DataFrame rows");
+
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+                },
+                <DataProviderExpression>{
+                    "exp": ">",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 100),
+                },
+            ),
+        };
+
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+        assertTrue(proc.supportsInputShape(DataProviderShape::DataFrameBlock),
+            "filter processor supports DataFrameBlock input");
+
+        DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(2, filtered.numRows(), "DataFrameBlock filter keeps matching rows");
+        assertEq(("Carol", "Dave"), filtered.getColumn("name"), "DataFrameBlock filter preserves row order");
+
+        list<auto> callback_rows;
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "dataframe-shape-pipeline-test",
+            "output_callback": sub (auto row) {
+                push callback_rows, row;
+            },
+        });
+        pipe.append(proc);
+        pipe.submit(df);
+        pipe.waitDone();
+
+        assertEq(2, callback_rows.size(), "pipeline callback emits DataFrame rows");
+        assertEq("Carol", callback_rows[0].name, "pipeline preserves first matching DataFrame row");
+        assertEq("Dave", callback_rows[1].name, "pipeline preserves second matching DataFrame row");
+        assertEq(4, pipe.getInfo().record_count, "pipeline counts DataFrame input rows");
+        assertTrue(pipe.getInfo().bulk, "DataFrame input keeps pipeline in bulk mode");
+
+        DataProviderDataFrame::DataFrameDataProvider prov(df);
+        AbstractDataProviderBulkRecordInterface bulk = prov.searchRecordsBulk(2);
+        assertEq({"name": ("Alice", "Bob"), "status": ("active", "inactive"), "amount": (90, 220)},
+            bulk.getValue(), "DataFrame provider returns first bulk block");
+        assertEq({"name": ("Carol", "Dave"), "status": ("active", "active"), "amount": (180, 125)},
+            bulk.getValue(), "DataFrame provider returns second bulk block");
+        assertNothing(bulk.getValue(), "DataFrame provider bulk iterator ends after all rows");
+        assertEq(4, bulk.getRecordCount(), "DataFrame provider bulk iterator counts rows");
+
+        AbstractDataProviderBulkRecordInterface active_bulk = prov.searchRecordsBulk(10, {"status": "active"});
+        assertEq({"name": ("Alice", "Carol", "Dave"), "status": ("active", "active", "active"),
+            "amount": (90, 180, 125)}, active_bulk.getValue(), "DataFrame provider filters bulk blocks");
+        assertNothing(active_bulk.getValue(), "filtered DataFrame bulk iterator ends after matching rows");
     }
 
     parquetTest() {

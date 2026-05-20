@@ -50,7 +50,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.4.0";
+    version = "3.5.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -727,6 +727,74 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     iterated, and each record will be passed separately to the processor with a significant performance penalty when
     processing large volumes of data.
 
+    @subsection dataprovider_pipeline_shapes Data Provider Pipeline Shape Negotiation
+
+    Pipelines can also negotiate explicit data shapes between processor stages with
+    @ref DataProvider::DataProviderShape "DataProviderShape".  This extends the older
+    \c supportsBulkApi() boolean with enough information to keep columnar data in its
+    most useful representation for as long as possible.
+
+    Supported shapes are:
+    - @ref DataProvider::DataProviderShape::RowRecords "RowRecords": one logical row at a time
+    - @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists": bulk record blocks in hash-of-lists form
+    - @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns": reserved for future dense typed-column
+      blocks
+    - @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock": a \c DataFrame object block from the
+      \c dataframe module
+
+    Processor classes advertise shapes with
+    @ref DataProvider::AbstractDataProcessor::getSupportedInputShapes()
+    "AbstractDataProcessor::getSupportedInputShapes()" and
+    @ref DataProvider::AbstractDataProcessor::getSupportedOutputShapes()
+    "AbstractDataProcessor::getSupportedOutputShapes()".  Pipelines keep the current shape when the next processor
+    supports it; otherwise they convert with
+    @ref DataProvider::AbstractDataProcessor::convertShape() "AbstractDataProcessor::convertShape()".
+    \c DataFrameBlock values convert to \c HashOfLists with \c df.toColumnHash() and to row records with
+    \c df.toRecords().  \c BufferColumns currently uses the same carrier as \c HashOfLists until dense buffers are
+    implemented.
+
+    @par DataFrame Pipeline Example
+    @code{.py}
+%requires DataProviderDataFrame
+
+DataFrame::DataFrame orders(
+    ({"customer": "Acme", "status": "open", "amount": 150.0},
+     {"customer": "Beta", "status": "closed", "amount": 80.0},
+     {"customer": "Core", "status": "open", "amount": 220.0}));
+
+hash<DataProviderExpression> filter_expr = <DataProviderExpression>{
+    "exp": "&&",
+    "args": (
+        <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "status"}, "open"),
+        },
+        <DataProviderExpression>{
+            "exp": ">",
+            "args": (<DataProviderFieldReference>{"field": "amount"}, 100.0),
+        },
+    ),
+};
+
+list<hash<auto>> rows;
+DataProviderPipeline pipeline(<PipelineOptionInfo>{
+    "name": "open-large-orders",
+    "output_callback": sub (auto row) {
+        push rows, row;
+    },
+});
+
+pipeline.append(new QoreFilterRecordsProcessor({"where_cond": filter_expr}));
+pipeline.submit(orders);
+pipeline.waitDone();
+# rows now contains the matching DataFrame rows as record hashes.
+    @endcode
+
+    @note
+    The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
+    \c DataFrameBlock directly and evaluates simple comparison and conjunction filters through DataFrame filtering.
+    More complex expressions fall back to row-record evaluation while preserving the resulting DataFrame shape.
+
     @section dataprovider_debugging Debugging Data Providers
 
     Data providers support an opt-in debug info collection mechanism that allows capturing technical details about
@@ -1034,6 +1102,15 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_5 DataProvider v3.5
+    - added @ref DataProvider::DataProviderShape "DataProviderShape" and shape-aware pipeline APIs on
+      @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" for row records, hash-of-lists bulk blocks,
+      reserved buffer-column blocks, and DataFrame blocks
+    - added automatic DataProvider pipeline shape routing and conversion with row-record boundary preservation for
+      legacy \c submitImpl() processors
+    - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
+      \c DataFrameBlock input directly for simple comparison and conjunction predicates
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and

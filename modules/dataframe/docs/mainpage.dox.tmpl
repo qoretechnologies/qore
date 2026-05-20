@@ -103,6 +103,36 @@ printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
     rows; \c NOTHING inequality selects non-null rows. Ordered comparisons with
     \c NOTHING do not select rows.
 
+    @section dataframe_dataprovider_pipelines DataProvider Pipeline Integration
+
+    The companion \c DataProviderDataFrame user module wraps a DataFrame as a
+    DataProvider and lets DataFrames flow through
+    @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in
+    @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock" shape.
+    DataFrame-aware processors can keep the typed column representation; other
+    bulk-aware processors receive a hash-of-lists conversion.
+
+    @code{.py}
+%requires DataProviderDataFrame
+
+hash<DataProviderExpression> expr = <DataProviderExpression>{
+    "exp": ">=",
+    "args": (<DataProviderFieldReference>{"field": "salary"}, 90000.0),
+};
+
+list<hash<auto>> selected;
+DataProviderPipeline pipeline(<PipelineOptionInfo>{
+    "name": "senior-compensation",
+    "output_callback": sub (auto row) {
+        push selected, row;
+    },
+});
+
+pipeline.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+pipeline.submit(employees);
+pipeline.waitDone();
+    @endcode
+
     CSV option hashes can also be typed explicitly:
 
     @code{.py}
@@ -129,6 +159,8 @@ tsv.writeCSV("employees-copy.tsv", options);
     - native plugin-operator access with column, row, and inclusive row-range
       subscripts, plus ColumnRef comparison predicates returning RowMask
       objects accepted by \c df[mask] and \c df.filter(mask)
+    - integration with DataProvider pipelines through the \c DataProviderDataFrame
+      module, including DataFrame bulk reads and DataFrameBlock propagation
     - API metadata and generated Doxygen signatures identify DataFrame-returning
       operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
       @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result
