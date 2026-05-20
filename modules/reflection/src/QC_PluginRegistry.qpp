@@ -1,0 +1,117 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_PluginRegistry.cpp plugin registry reflection class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+*/
+
+#include "qore_reflection.h"
+#include "QC_PluginRegistry.h"
+
+#include <qore/QorePluginType.h>
+
+//! Plugin type registry introspection
+/**
+    This class exposes the process-global plugin type descriptor registry.
+
+    @since %Qore 2.4
+ */
+qclass PluginRegistry [ns=Qore::Reflection; arg=QoreReflectionPluginRegistry* r; dom=REFLECTION];
+
+//! Returns a Program-bound registry view for the current Program
+/** @par Example:
+    @code{.py}
+PluginRegistry registry = PluginRegistry::get();
+    @endcode
+
+    @return a Program-bound plugin registry view
+ */
+static PluginRegistry PluginRegistry::get() [flags=RET_VALUE_ONLY] {
+    return new QoreObject(QC_PLUGINREGISTRY, getProgram(), new QoreReflectionPluginRegistry(false, getProgram()));
+}
+
+//! Returns the process-global plugin descriptor registry
+/** @par Example:
+    @code{.py}
+PluginRegistry registry = PluginRegistry::getProcessRegistry();
+list<string> modules = registry.getProcessModules();
+    @endcode
+
+    @return the process-global plugin descriptor registry
+ */
+static PluginRegistry PluginRegistry::getProcessRegistry() [flags=RET_VALUE_ONLY] {
+    return new QoreObject(QC_PLUGINREGISTRY, getProgram(), new QoreReflectionPluginRegistry(true));
+}
+
+//! Returns every process-loaded plugin module name
+/** @par Example:
+    @code{.py}
+list<string> modules = PluginRegistry::getProcessRegistry().getProcessModules();
+    @endcode
+
+    @return every module whose plugin descriptors have been committed process-wide
+ */
+list<string> PluginRegistry::getProcessModules() [flags=RET_VALUE_ONLY] {
+    return qore_plugin_get_process_modules(xsink);
+}
+
+//! Returns every plugin module active in this registry view
+/** @par Example:
+    @code{.py}
+list<string> modules = PluginRegistry::get().getActiveModules();
+    @endcode
+
+    @return every active plugin module in this Program-bound view
+
+    @throw PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE this method was called on the process-global view
+ */
+list<string> PluginRegistry::getActiveModules() [flags=RET_VALUE_ONLY] {
+    if (r->process_global) {
+        xsink->raiseException("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", "PluginRegistry::getActiveModules() "
+            "requires a Program-bound registry view; use PluginRegistry::get() instead "
+            "(method=\"getActiveModules\", subreason=\"program_not_available\", section=3.12)");
+        return QoreValue();
+    }
+    return qore_plugin_get_process_modules(xsink);
+}
+
+//! Returns plugin type descriptors for a loaded module
+/** @par Example:
+    @code{.py}
+list<hash<auto>> types = PluginRegistry::getProcessRegistry().getTypes("dataframe");
+    @endcode
+
+    @param module_name the plugin module name
+
+    @return plugin type descriptor hashes
+
+    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process
+ */
+list<hash<auto>> PluginRegistry::getTypes(string module_name) [flags=RET_VALUE_ONLY] {
+    TempEncodingHelper name(module_name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_plugin_get_process_types(name->c_str(), xsink);
+}
+
+//! Returns plugin operation descriptors for a loaded module
+/** @par Example:
+    @code{.py}
+list<hash<auto>> ops = PluginRegistry::getProcessRegistry().getOperations("dataframe");
+    @endcode
+
+    @param module_name the plugin module name
+
+    @return plugin operation descriptor hashes
+
+    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process
+ */
+list<hash<auto>> PluginRegistry::getOperations(string module_name) [flags=RET_VALUE_ONLY] {
+    TempEncodingHelper name(module_name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_plugin_get_process_operations(name->c_str(), xsink);
+}

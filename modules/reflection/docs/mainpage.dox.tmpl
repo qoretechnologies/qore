@@ -43,6 +43,7 @@
     - @ref Qore::Reflection::NormalMember "NormalMember"
     - @ref Qore::Reflection::NormalMethod "NormalMethod"
     - @ref Qore::Reflection::NormalMethodVariant "NormalMethodVariant"
+    - @ref Qore::Reflection::PluginRegistry "PluginRegistry"
     - @ref Qore::Reflection::PseudoClass "PseudoClass"
     - @ref Qore::Reflection::PseudoMethod "PseudoMethod"
     - @ref Qore::Reflection::PseudoMethodVariant "PseudoMethodVariant"
@@ -89,6 +90,23 @@ AbstractMethodVariant v = c.getVariant("wait", Class::forName("AbstractSmartLock
 printf("%s\n", v.toString());
 # produces the following output:
 # public int Condition::wait(object<AbstractSmartLock> lock, timeout timeout_ms = 0)
+    @endcode
+
+    @par Plugin Type Registry Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires reflection
+
+PluginRegistry registry = PluginRegistry::getProcessRegistry();
+foreach string mod_name in (registry.getProcessModules()) {
+    printf("%s: %N\n", mod_name, registry.getTypes(mod_name));
+}
     @endcode
 
     @section reflectionreleasenotes reflection Module Release Notes

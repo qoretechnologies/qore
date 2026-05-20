@@ -126,6 +126,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("issue 3035", \issue3035Test());
         addTestCase("reflection tests", \reflectionTests());
         addTestCase("named-call reflection tests", \namedCallReflectionTests());
+        addTestCase("plugin registry reflection tests", \pluginRegistryReflectionTests());
         addTestCase("sandbox tests", \sandboxTests());
         addTestCase("pseudo-class tests", \pseudoClassTests());
         addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
@@ -136,6 +137,34 @@ class ReflectionTest inherits QUnit::Test {
 
     nsPathTest() {
         assertEq("Qore::Reflection::AbstractVariant", Class::forName("AbstractVariant").getPathName());
+    }
+
+    pluginRegistryReflectionTests() {
+        PluginRegistry process_registry = PluginRegistry::getProcessRegistry();
+        list<string> process_modules = process_registry.getProcessModules();
+
+        PluginRegistry program_registry = PluginRegistry::get();
+        list<string> active_modules = program_registry.getActiveModules();
+        foreach string mod_name in (active_modules) {
+            bool found = False;
+            foreach string process_mod_name in (process_modules) {
+                if (process_mod_name == mod_name) {
+                    found = True;
+                    break;
+                }
+            }
+            assertTrue(found);
+        }
+
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.getActiveModules();
+        });
+        assertThrows("PLUGIN-REGISTRY-MODULE-NOT-LOADED", sub() {
+            process_registry.getTypes("missing-plugin-registry-test-module");
+        });
+        assertThrows("PLUGIN-REGISTRY-MODULE-NOT-LOADED", sub() {
+            process_registry.getOperations("missing-plugin-registry-test-module");
+        });
     }
 
     assertNamedCallableVariantCount(string name, auto params, int expected_count = 1) {

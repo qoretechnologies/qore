@@ -38,6 +38,7 @@
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QorePluginRegistry.h"
 
 // dlopen() flags
 #define QORE_DLOPEN_FLAGS RTLD_LAZY|RTLD_GLOBAL
@@ -2263,7 +2264,14 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             name, mod_info.init);
         QoreModuleInitContext ctx;
         ctx.path = path;
+        QorePluginModuleHandle plugin_handle(name, path, dlh ? dlh->ptr : nullptr);
+        QorePluginModuleInitScope plugin_scope(plugin_handle);
+        ctx.plugin_module_handle = plugin_scope.getHandle();
         mod_info.init(ctx, xsink);
+        if (xsink) {
+            return nullptr;
+        }
+        plugin_scope.commit(&xsink);
         if (xsink) {
             return nullptr;
         }

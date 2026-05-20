@@ -50,6 +50,7 @@ set(REFLECTION_QPP_SRC
     src/QC_AbstractConstant.qpp
     src/QC_ClassConstant.qpp
     src/QC_Type.qpp
+    src/QC_PluginRegistry.qpp
     src/QC_Namespace.qpp
     src/QC_Constant.qpp
     src/QC_GlobalVar.qpp
@@ -102,6 +103,7 @@ set(REFLECTION_H_SRC
     src/QC_TypedHash.h
     src/QC_TypedHashMember.h
     src/QC_Type.h
+    src/QC_PluginRegistry.h
     src/QC_Enum.h
     src/QC_EnumMember.h
 )

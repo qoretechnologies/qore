@@ -23,6 +23,23 @@ not load-bearing for `buffer<T>` itself because this design intentionally makes
 is implemented and useful for wide DataFrame / plugin registration APIs, but
 is not blocking.
 
+**Implementation status on this branch (2026-05-20):**
+
+- Phase 1's built-in `buffer<T>` substrate is implemented in libqore.
+- Phase 2's typed DBI result API is implemented in libqore and the PostgreSQL,
+  MySQL, ODBC, and Oracle drivers have branch-local support for the typed
+  select methods.
+- Phase 3's registration foundation is implemented: `QorePluginType.h`, the
+  module-init `plugin_module_handle`, descriptor validation and all-or-nothing
+  staging/commit/rollback, `QORE_PLUGIN_REGISTER_TRACE`, process-global
+  registry introspection helpers, a C++ smoke target, and the initial
+  `Qore::Reflection::PluginRegistry` Qore-side surface. The full Phase 3
+  deliverable still needs plugin-dispatch opcodes, interpreter/JIT helper
+  dispatch, QORD `PLUGIN_IMPORTS` / `PLUGIN_TYPE_REGISTRY`, runtime verifier
+  hooks, Program-local activation/fallback diagnostics, the complete trace-env
+  family, the reference plugin module, lint tooling, and complete user-facing
+  documentation.
+
 ---
 
 ## Summary

@@ -1421,6 +1421,7 @@ set(LIBQORE_CPP_SRC
     lib/support.cpp
     lib/QoreType.cpp
     lib/ModuleManager.cpp
+    lib/QorePluginRegistry.cpp
     lib/QoreException.cpp
     lib/ExceptionSink.cpp
     lib/QoreStandardException.cpp
@@ -1766,6 +1767,7 @@ if (SINGLE_COMPILATION_UNIT)
 #endif
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreType.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ModuleManager.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePluginRegistry.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreException.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ExceptionSink.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreStandardException.cpp\"
@@ -2307,6 +2309,47 @@ endif (WIN32 OR MINGW OR MSYS)
 if (ADDRESS_SANITIZER)
     target_compile_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
     target_link_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
+add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
+    examples/test/ir/plugin_registry_smoke.cpp
+    ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
+add_dependencies(qore-ir-plugin-registry-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
+target_compile_definitions(qore-ir-plugin-registry-smoke PRIVATE
+    _QORE_LIB_INTERN
+    HAVE_UNIX_CONFIG_H
+    MODULE_DIR="${MODULE_DIR}"
+    MODULE_VER_DIR="${MODULE_VER_DIR}"
+    USER_MODULE_DIR="${USER_MODULE_DIR}"
+    USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}"
+    QORE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}")
+if (APPLE)
+    target_compile_definitions(qore-ir-plugin-registry-smoke PRIVATE __APPLE_USE_RFC_3542)
+endif()
+target_include_directories(qore-ir-plugin-registry-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${BZIP2_INCLUDE_DIR}
+    ${ICONV_INCLUDE_DIR}
+    ${MPFR_INCLUDE_DIRS}
+    ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+    ${PCRE2_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
+    ${LLVM_INCLUDE_DIRS})
+target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${QORE_LIBS})
+if(LLVM_LIBS)
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${LLVM_LIBS})
+elseif(TARGET LLVM::LLVM)
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE LLVM::LLVM)
+endif()
+if (WIN32 OR MINGW OR MSYS)
+    target_compile_definitions(qore-ir-plugin-registry-smoke PRIVATE BUILDING_DLL)
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${WINSOCKET_LIBRARIES})
+endif (WIN32 OR MINGW OR MSYS)
+if (ADDRESS_SANITIZER)
+    target_compile_options(qore-ir-plugin-registry-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(qore-ir-plugin-registry-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
 # qcc - Qore Code Compiler (AOT)
