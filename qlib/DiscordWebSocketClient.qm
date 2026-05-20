@@ -84,6 +84,18 @@ module DiscordWebSocketClient {
       acknowledging heartbeats, with no close frame) went undetected forever, silently stopping
       all event delivery with no error and no reconnect; heartbeat ACKs are now tracked and a
       missing ACK forces a reconnect (with session resume), as required by the gateway protocol
+    - added a RESUME watchdog: when \c sendResume() is sent but the gateway answers with neither a
+      \c RESUMED dispatch nor \c DOP_INVALID_SESSION within \c ResumeWatchdogTimeoutMs, the resume
+      has silently failed; the watchdog clears the resumable session state and triggers a reconnect
+      that falls back to a fresh \c IDENTIFY, recovering event delivery
+    - fixed a bug where receiving \c DOP_INVALID_SESSION did not clear the session state, so the
+      next reconnect tried \c sendResume() with the already-invalidated session in a permanent loop;
+      session state is now cleared so the next reconnect uses \c sendIdentify()
+    - fixed a Discord gateway protocol violation on every session-resume reconnect: the previous code
+      sent \c RESUME pre-emptively from \c doReconnect() and then \c IDENTIFY from \c handleHello()
+      unconditionally, so both messages went out per reconnect, which the gateway treats as
+      ambiguous and can silently drop the session; the IDENTIFY/RESUME decision now happens only
+      after \c HELLO arrives, so exactly one of them is sent per connection
 
     @subsection discordwebsocketclientv1_1 DiscordWebSocketClient v1.1
     - added \c disconnect() override to stop the heartbeat thread before disconnecting, preventing
@@ -276,6 +288,21 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         #! Consecutive missed-HELLO reconnect cycles after which the watchdog escalates logging
         const HelloWatchdogEscalateAfter = 5;
 
+        #! Milliseconds to wait for RESUMED / INVALID_SESSION after sendResume() before falling back to IDENTIFY
+        /** After @ref sendResume() the gateway must respond with either a RESUMED
+            dispatch event (success, possibly preceded by replayed missed events)
+            or @ref DOP_INVALID_SESSION (must re-IDENTIFY).  If neither arrives
+            within this window the resume has silently failed: heartbeats keep
+            flowing but no message events are delivered.  Without this watchdog
+            the bot stays "connected" forever with no events; this matches the
+            real-world Discord pattern where a RESUME is dropped without an op-9.
+            See resumeWatchdogFired().
+        */
+        const ResumeWatchdogTimeoutMs = 30000;
+
+        #! Consecutive silent-resume cycles after which the watchdog escalates logging
+        const ResumeWatchdogEscalateAfter = 3;
+
         #! Receive: An event was dispatched
         const DOP_DISPATCH = 0;
 
@@ -381,6 +408,21 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         #! HELLO watchdog: consecutive (re)connects with no HELLO (escalation/observability)
         int hello_miss_count = 0;
 
+        #! RESUME watchdog: lock protecting the watchdog timer/state below
+        Mutex resume_watchdog_lock();
+
+        #! RESUME watchdog: active async I/O controller timer id (0 = none)
+        int resume_watchdog_timer = 0;
+
+        #! RESUME watchdog: set once a DOP_DISPATCH or DOP_INVALID_SESSION arrives after sendResume()
+        /** Also set on teardown so a racing timer fire becomes a no-op.  Protected
+            by @ref resume_watchdog_lock.
+        */
+        bool resume_completed = True;
+
+        #! RESUME watchdog: consecutive silent resumes (escalation/observability)
+        int resume_miss_count = 0;
+
         #! API version
         int api = DefaultApi;
     }
@@ -404,9 +446,10 @@ DiscordWebSocketClient ws();
 
     #! Deletes the object
     destructor() {
-        # cancel the HELLO watchdog before teardown so a pending timer cannot
+        # cancel watchdogs before teardown so a pending timer cannot
         # fire on an already-deleted object
         cancelHelloWatchdog();
+        cancelResumeWatchdog();
         stopHeartbeatThread();
     }
 
@@ -419,8 +462,9 @@ DiscordWebSocketClient ws();
         @since DiscordWebSocketClient 1.1
     */
     disconnect(int cmd = WSCC_GoingAway) {
-        # explicit disconnect: never let the HELLO watchdog resurrect the connection
+        # explicit disconnect: never let a watchdog resurrect the connection
         cancelHelloWatchdog();
+        cancelResumeWatchdog();
         stopHeartbeatThread();
         WebSocketClientWithSerialization::disconnect(cmd);
     }
@@ -463,10 +507,11 @@ hash<auto> h = ws.getInfo();
         @since DiscordWebSocketClient 1.2
     */
     private closingConnection() {
-        # the connection is closing: cancel the HELLO watchdog so a pending
-        # timer cannot fire a spurious reconnect during teardown (the normal
-        # reconnect path handles a close-before-HELLO and will re-arm)
+        # the connection is closing: cancel watchdogs so a pending timer cannot
+        # fire a spurious reconnect during teardown (the normal reconnect path
+        # handles a close-before-HELLO/RESUMED and will re-arm as needed)
         cancelHelloWatchdog();
+        cancelResumeWatchdog();
         stopHeartbeatThread();
     }
 
@@ -491,6 +536,10 @@ hash<auto> h = ws.getInfo();
                 break;
 
             case DOP_DISPATCH:
+                # any DISPATCH event (RESUMED, READY, or a real data event) is proof
+                # the gateway accepted the previous RESUME / IDENTIFY and is talking
+                # to us — disarm the RESUME watchdog
+                cancelResumeWatchdog();
                 if (msgdata.t == "READY") {
                     handleReadyMessage(msgdata.d);
                 } else {
@@ -516,6 +565,11 @@ hash<auto> h = ws.getInfo();
 
             case DOP_INVALID_SESSION:
                 logError("Session has been invalidated (%y); starting reconnect", OpMap{op});
+                # the gateway has rejected the session; clear session state so the
+                # next reconnect path uses sendIdentify() rather than retrying
+                # sendResume() forever with an invalidated session
+                cancelResumeWatchdog();
+                clearSessionState();
                 rc = WSEDC_BREAK;
                 break;
 
@@ -667,6 +721,91 @@ hash<auto> h = ws.getInfo();
         }
     }
 
+    #! Arms (or re-arms) the RESUME watchdog after sendResume()
+    /** The gateway must respond with RESUMED (DOP_DISPATCH) or DOP_INVALID_SESSION
+        within @ref ResumeWatchdogTimeoutMs; either signal disarms the watchdog
+        via @ref cancelResumeWatchdog().  Without this, a silently-dropped RESUME
+        leaves the connection "healthy" (heartbeats flow) but with no event
+        delivery — see resumeWatchdogFired() for the recovery path.
+    */
+    private armResumeWatchdog() {
+        AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+        AutoLock al(resume_watchdog_lock);
+        resume_completed = False;
+        if (resume_watchdog_timer) {
+            try {
+                controller.cancelTimer(resume_watchdog_timer);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            resume_watchdog_timer = 0;
+        }
+        resume_watchdog_timer = controller.addTimer(now_us() + milliseconds(ResumeWatchdogTimeoutMs),
+            \resumeWatchdogFired());
+    }
+
+    #! Cancels the RESUME watchdog (RESUMED/DISPATCH or INVALID_SESSION received, or teardown)
+    /** Idempotent; safe to call when no timer is armed.  Marks @ref resume_completed
+        so any timer already in flight becomes a no-op, and resets the consecutive
+        miss counter (a confirmed RESUMED/DISPATCH or a clean INVALID_SESSION both
+        prove the gateway is responding).
+    */
+    private cancelResumeWatchdog() {
+        AutoLock al(resume_watchdog_lock);
+        resume_completed = True;
+        resume_miss_count = 0;
+        if (resume_watchdog_timer) {
+            AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+            try {
+                controller.cancelTimer(resume_watchdog_timer);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            resume_watchdog_timer = 0;
+        }
+    }
+
+    #! RESUME watchdog timer callback: forces a fresh IDENTIFY when a resume silently fails
+    /** Discord normally answers a RESUME with either a RESUMED dispatch or
+        DOP_INVALID_SESSION; in the wild we have seen a third case where neither
+        arrives, leaving the bot heartbeating into the void with no events.  When
+        this fires we clear @ref session_id and @ref last_sequence so the next
+        @ref doReconnect() goes through @ref sendIdentify(), and trigger the
+        reconnect from a worker thread (see triggerZombieReconnect()).
+
+        Dispatched on an async I/O controller worker thread (never the I/O
+        thread), so it is safe to drive a reconnect here.
+    */
+    private resumeWatchdogFired() {
+        int miss;
+        {
+            AutoLock al(resume_watchdog_lock);
+            # disarmed in the race window (RESUMED/INVALID_SESSION arrived, or teardown)
+            if (resume_completed || !resume_watchdog_timer) {
+                return;
+            }
+            resume_watchdog_timer = 0;
+            miss = ++resume_miss_count;
+        }
+        try {
+            if (miss >= ResumeWatchdogEscalateAfter) {
+                logError("no Discord gateway RESUMED / INVALID_SESSION within %d ms for %d consecutive "
+                    "resumes; falling back to a fresh IDENTIFY", ResumeWatchdogTimeoutMs, miss);
+            } else {
+                logWarn("no Discord gateway RESUMED / INVALID_SESSION within %d ms after sendResume() "
+                    "(miss %d); falling back to a fresh IDENTIFY", ResumeWatchdogTimeoutMs, miss);
+            }
+            # force the next reconnect through sendIdentify(): without clearing
+            # session state, doReconnect() would call sendResume() again with the
+            # same (apparently dead) session
+            clearSessionState();
+            triggerZombieReconnect();
+        } catch (hash<ExceptionInfo> ex) {
+            # the client/service may have been torn down while the timer was pending
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+    }
+
     #! Sends a heartbeat message to the gateway with the last sequence number received
     private sendHeartbeat() {
         sendData({
@@ -694,13 +833,26 @@ hash<auto> h = ws.getInfo();
     }
 
     #! Connects to the server when reconnecting
+    /** The Discord gateway protocol requires the client to wait for HELLO before
+        sending IDENTIFY or RESUME.  We establish the WebSocket connection here
+        and let @ref handleHello() drive the IDENTIFY/RESUME decision when HELLO
+        arrives; sending RESUME (or IDENTIFY) pre-emptively from this method
+        races the gateway and previously caused both messages to be sent on a
+        session-resume reconnect (handleHello always also called sendIdentify),
+        which the gateway treats as ambiguous and can silently drop.
+    */
     private doReconnect(reference<hash<auto>> info) {
         connectIntern(NOTHING, \info, True);
-        if (session_id && last_sequence) {
-            sendResume();
-        } else {
-            sendIdentify();
-        }
+    }
+
+    #! Clears the resumable-session state so the next reconnect goes through sendIdentify()
+    /** session_id is declared as a non-nullable string so we assign "" rather
+        than NOTHING; the existing reconnect guard checks truthiness, so an empty
+        string correctly routes to sendIdentify()
+    */
+    private clearSessionState() {
+        session_id = "";
+        last_sequence = 0;
     }
 
     #! Handle a message by raising a data event
@@ -712,6 +864,12 @@ hash<auto> h = ws.getInfo();
     }
 
     #! Handle a HELLO message
+    /** Per the Discord gateway protocol HELLO is the signal that the client may
+        now send IDENTIFY (new session) or RESUME (continuing session).  This
+        method is the single choke point for that decision: it covers initial
+        connect (constructor / connect()) and every reconnect (doReconnect()),
+        so sendIdentify() / sendResume() is sent exactly once per connection.
+    */
     private handleHello(hash<auto> d) {
         # the gateway responded with HELLO: the async receive path is alive for
         # this connection — disarm the HELLO watchdog (see helloWatchdogFired())
@@ -734,7 +892,17 @@ hash<auto> h = ws.getInfo();
                 heartbeat_cond.signal();
             }
         }
-        sendIdentify();
+        if (session_id && last_sequence) {
+            sendResume();
+            # the gateway must respond with RESUMED (DOP_DISPATCH) or
+            # DOP_INVALID_SESSION; either signal disarms the watchdog.  A silent
+            # drop (which Discord does in the wild without an op-9) is caught by
+            # the timer and falls back to a fresh IDENTIFY (see
+            # resumeWatchdogFired())
+            armResumeWatchdog();
+        } else {
+            sendIdentify();
+        }
     }
 
     #! Send an Identify message
