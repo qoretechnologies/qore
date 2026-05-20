@@ -2,8 +2,9 @@
 
     @tableofcontents
 
-    %Qore supports three types of container types (see also @ref basic_data_types and @ref code_data_types):
+    %Qore supports four types of container types (see also @ref basic_data_types and @ref code_data_types):
     - @ref list "lists"
+    - @ref buffer "buffers" (dense primitive arrays)
     - @ref hash "hashes" (associative arrays)
     - @ref object "objects" (see @ref qore_classes for more information)
 
@@ -152,6 +153,75 @@ printf("%y\n", l1.fullType());
     - List elements are dereferenced using square brackets: \c "[" and \c "]". The first element in a list has index zero.
     - Dereferencing an invalid element (past the end of the list or with a negative number) will return @ref nothing
     - Use <list>::iterator() as an easy way to get a list iterator object for the current list
+
+    <hr>
+    @section buffer Buffer
+
+    @par Description:
+    Buffers are dense, homogeneous arrays of primitive values.  A \c buffer<T> stores values without the per-element
+    boxing used by @ref list "lists", making it suitable for typed database columns, numeric vectors, and other
+    high-volume tabular data.  Reading an element widens storage-specific values to normal Qore scalar types:
+    \c int8, \c int16, \c int32, and \c int64 read as Qore \c int values; \c float32 and \c float64 read as Qore
+    \c float values.
+
+    Supported storage element types are:
+    - \c int8
+    - \c int16
+    - \c int32
+    - \c int64
+    - \c float32
+    - \c float64
+    - \c bool
+
+    Nullable buffers use \c buffer<*T>.  A nullable buffer carries a per-element validity bitmap; reading a null
+    element returns @ref nothing "NOTHING".  Both @ref null "NULL" and @ref nothing "NOTHING" initialize nullable
+    buffer elements as null values.
+
+    @par Examples:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30));
+assert ids[0] == 10;
+ids[1] = 25;
+
+buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
+assert scores[1] === NOTHING;
+
+foreach float score in (scores) {
+    if (exists score) {
+        printf("score=%f\n", score);
+    }
+}
+
+list<*float> boxed = scores.toList();
+    @endcode
+
+    @par Slicing and Conversion:
+    Buffers support list-style inclusive range slicing and explicit conversion to and from lists:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30, 40));
+buffer<int64> middle = ids[1..2];       # buffer<int64>((20, 30))
+buffer<int64> reversed = ids[3..1];     # buffer<int64>((40, 30, 20))
+list<int> boxed = ids.toList();
+buffer<int64> again = new buffer<int64>(boxed);
+    @endcode
+
+    @par Reductions:
+    Numeric and boolean buffers provide dense reductions:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30));
+assert ids.count() == 3;
+assert ids.sum() == 60;
+assert ids.mean() == 20.0;
+assert ids.min() == 10;
+assert ids.max() == 30;
+    @endcode
+
+    @note \c int8, \c int16, \c int32, \c float32, and \c float64 are storage element names for \c buffer<T>; they
+    are not general scalar local-variable types.
+
+    @see
+    - @ref Qore::SQL::Datasource::selectTyped()
+    - @ref Qore::SQL::DatasourcePool::selectTyped()
 
     <hr>
     @section hash Hash

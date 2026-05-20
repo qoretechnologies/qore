@@ -128,6 +128,26 @@ if (query.firstValue())
  */
 abstract auto AbstractDatasource::select(string sql, ...);
 
+//! Executes an %SQL select statement and returns a typed column-oriented result
+/** Implementations return hashdecl-backed column hashes with typed column containers when the statement returns a
+    normal result set. See Datasource::selectTyped() and DatasourcePool::selectTyped() for concrete behavior.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a typed column result hash, or another driver-specific value for non-result-set statements
+
+    @par Example:
+    @code{.py}
+hash<auto> result = db.selectTyped("select id, name from customer where status = %v", "active");
+buffer<int64> ids = result.id;
+    @endcode
+
+    @since %Qore 2.3
+ */
+abstract auto AbstractDatasource::selectTyped(string sql, ...);
+
 //! Executes an %SQL select statement on the server and returns the first row as a hash (the column values)
 /** If more than one row is returned, then it is treated as an error and a \c DBI-SELECT-ROW-ERROR is returned (however the DBI driver should raise its own exception here to avoid retrieving more than one row from the server). For a similar method taking a list for all bind arguments, see AbstractDatasource::vselectRow().
 
@@ -175,6 +195,26 @@ abstract auto AbstractDatasource::selectRow(string sql, ...);
  */
 abstract auto AbstractDatasource::selectRows(string sql, ...);
 
+//! Executes an %SQL select statement and returns typed row hashes
+/** Implementations return a list whose entries are hashdecl-backed row hashes when the statement returns a normal row
+    result. See Datasource::selectRowsTyped() and DatasourcePool::selectRowsTyped() for concrete behavior.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a list of typed row hashes, or another driver-specific value for non-result-set statements
+
+    @par Example:
+    @code{.py}
+list<auto> rows = db.selectRowsTyped("select id, name from customer where status = %v", "active");
+printf("%d\n", rows[0].id);
+    @endcode
+
+    @since %Qore 2.3
+ */
+abstract auto AbstractDatasource::selectRowsTyped(string sql, ...);
+
 //! Executes a select statement on the server and returns the results in a hash (column names) of lists (column values per row), taking a list for all bind arguments
 /** The usual return format of this method is suitable for use with @ref context "context statements", for easy iteration and processing of query results.
     Alternatively, the HashListIterator class can be used to iterate the return value of this method.
@@ -201,6 +241,22 @@ if (query.firstValue())
     @note This method returns all the data available immediately; to process query data piecewise, use the SQLStatement class
  */
 abstract auto AbstractDatasource::vselect(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS];
+
+//! Executes a select statement and returns a typed column-oriented result, taking a list for all bind arguments
+/** This method is the same as AbstractDatasource::selectTyped(), except this method takes a single argument after the
+    %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a typed column result hash, or another driver-specific value for non-result-set statements
+
+    @see AbstractDatasource::selectTyped()
+
+    @since %Qore 2.3
+ */
+abstract auto AbstractDatasource::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS];
 
 //! Executes a select statement on the server and returns the first row as a hash (column names and values), taking a list for all bind arguments
 /** This method is the same as the AbstractDatasource::selectRow() method, except this method takes a single argument after the %SQL command giving the list of bind value parameters
@@ -251,6 +307,22 @@ abstract auto AbstractDatasource::vselectRow(string sql, *softlist<auto> argumen
     @note This method returns all the data available immediately; to process query data piecewise, use the SQLStatement class
  */
 abstract auto AbstractDatasource::vselectRows(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS];
+
+//! Executes a select statement and returns typed row hashes, taking a list for all bind arguments
+/** This method is the same as AbstractDatasource::selectRowsTyped(), except this method takes a single argument after
+    the %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute
+    @param arguments Include any values to be bound (using <tt>%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a list of typed row hashes, or another driver-specific value for non-result-set statements
+
+    @see AbstractDatasource::selectRowsTyped()
+
+    @since %Qore 2.3
+ */
+abstract auto AbstractDatasource::vselectRowsTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS];
 
 //! Manually signals the start of transaction management on the AbstractDatasource
 /** This method should be called when the AbstractDatasource object will be shared between more than 1 thread, and a transaction will be started with a AbstractDatasource::select() method or the like.

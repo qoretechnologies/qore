@@ -29,6 +29,8 @@
       (@ref <list>::map() "<list>::map()", @ref <list>::select() "<list>::select()",
       @ref <list>::foldl() "<list>::foldl()", and the hash/object analogues) bypasses
       per-element virtual calls for built-in iterators
+    - new dense \c buffer<T> values store primitive arrays without per-element boxing and
+      new typed DBI select APIs can return numeric and boolean result columns as buffers
     - copy-on-write @ref string_views "string view" layer makes
       @ref <string>::substr() "<string>::substr()" and
       @ref string_slicing "[] slice operations" allocation-free for read-only consumers
@@ -113,6 +115,10 @@
       process-wide mode controls (@ref Qore::HTTPClient::setHttp2Mode() "setHttp2Mode()",
       @ref Qore::HTTPClient::setHttp3Mode() "setHttp3Mode()",
       @ref Qore::set_global_http2_mode() "set_global_http2_mode()")
+    - @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" /
+      @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" and the
+      corresponding @ref Qore::SQL::DatasourcePool "DatasourcePool" methods expose typed DBI
+      result values with runtime hashdecls and dense buffers where possible
     - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>
       and QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>
     - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> dual-stack
@@ -1197,6 +1203,43 @@ cargo install tree-sitter-cli@0.26.5
     No API change — existing code benefits automatically.  Iterator subclasses written in Qore,
     SQL-statement iterators, and channel iterators retain the original dispatch path because their
     element semantics are not statically known.
+    @endparblock
+
+    @par Dense Buffers and Typed DBI Results
+    @parblock
+    %Qore now has a dense \c buffer<T> value type for primitive column data and typed DBI result APIs that can
+    expose query results with runtime hashdecl metadata.
+
+    The new \c buffer<T> type stores \c int8, \c int16, \c int32, \c int64, \c float32, \c float64, and
+    \c bool values without per-element boxing.  Nullable buffers use \c buffer<*T> and preserve SQL NULL /
+    Qore NOTHING as null elements:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30));
+buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
+
+printf("rows=%d total=%d\n", ids.size(), ids.sum());
+list<*float> boxed = scores.toList();
+    @endcode
+
+    The new @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" and
+    @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" methods, plus the corresponding
+    @ref Qore::SQL::DatasourcePool "DatasourcePool" methods, opt into typed query results without changing existing
+    \c select() / \c selectRows() behavior:
+    @code{.py}
+hash<auto> result = db.selectTyped(
+    "select customer_id, balance, customer_name from customer where status = %v",
+    "active");
+
+buffer<int64> customer_ids = result.customer_id;
+buffer<*float64> balances = result.balance;      # driver metadata can preserve SQL width/nullability
+list<*string> names = result.customer_name;      # string buffers are deferred, so strings use typed lists
+    @endcode
+
+    When a driver does not yet provide native typed select support, libqore falls back to the ordinary driver result
+    and infers useful runtime types from the returned values.  That fallback preserves behavior but cannot recover
+    metadata that was not present in the values; for example unannotated integers become \c buffer<int64>.
+    Drivers can advertise native support with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT
+    "DBI_CAP_HAS_TYPED_SELECT".
     @endparblock
 
     @par RFC 7231 / RFC 2822 Date Parsing

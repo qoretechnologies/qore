@@ -497,6 +497,39 @@ auto DatasourcePool::select(string sql, ...) {
    return ds->select(sql, *vargs, xsink);
 }
 
+//! Executes an %SQL select statement on the server and returns a typed column-oriented result
+/** This method has the same execution semantics as DatasourcePool::select(), but normal column-oriented results are
+    returned as hashdecl-backed hashes whose values are typed column containers such as \c buffer<int64>,
+    \c buffer<*float64>, \c list<*string>, or \c list<date>.
+
+    Drivers with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT can build the typed result directly from native column
+    metadata. Other drivers use libqore's compatibility fallback, which preserves the existing query behavior and
+    infers result types from the values returned by DatasourcePool::select().
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a typed column result hash. If the driver returns a non-column result for the statement,
+    that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+hash<auto> result = db.selectTyped("select id, name from customer where status = %v", "active");
+buffer<int64> ids = result.id;
+    @endcode
+
+    @see
+    - DatasourcePool::vselectTyped()
+    - Datasource::selectTyped()
+
+    @since %Qore 2.3
+ */
+auto DatasourcePool::selectTyped(string sql, ...) {
+   ReferenceHolder<QoreListNode> vargs(args->size() > 1 ? args->copyListFrom(1) : 0, xsink);
+   return ds->selectTyped(sql, *vargs, xsink);
+}
+
 //! Executes an %SQL select statement on the server and returns the first row as a hash (the column values)
 /** If more than one row is returned, then it is treated as an error and a \c DBI-SELECT-ROW-ERROR is returned (however the DBI driver should raise its own exception here to avoid retrieving more than one row from the server). For a similar method taking a list for all bind arguments, see DatasourcePool::vselectRow().
 
@@ -551,6 +584,34 @@ auto DatasourcePool::selectRows(string sql, ...) {
    return ds->selectRows(sql, *vargs, xsink);
 }
 
+//! Executes an %SQL select statement on the server and returns typed row hashes
+/** This method has the same execution semantics as DatasourcePool::selectRows(), but normal row results are returned as
+    a list whose entries are hashdecl-backed row hashes.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a list of typed row hashes. If the driver returns a non-row-list value for the statement,
+    that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+list<auto> rows = db.selectRowsTyped("select id, name from customer where status = %v", "active");
+printf("%d\n", rows[0].id);
+    @endcode
+
+    @see
+    - DatasourcePool::vselectRowsTyped()
+    - Datasource::selectRowsTyped()
+
+    @since %Qore 2.3
+ */
+auto DatasourcePool::selectRowsTyped(string sql, ...) {
+   ReferenceHolder<QoreListNode> vargs(args->size() > 1 ? args->copyListFrom(1) : 0, xsink);
+   return ds->selectRowsTyped(sql, *vargs, xsink);
+}
+
 //! Executes a select statement on the server and returns the results in a hash (column names) of lists (column values per row), taking a list for all bind arguments
 /** The return format of this method is suitable for use with @ref context "context statements", for easy iteration and processing of query results.
     Alternatively, the HashListIterator class can be used to iterate the return value of this method.
@@ -582,6 +643,31 @@ if (query.firstValue())
  */
 auto DatasourcePool::vselect(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
    return ds->select(sql, arguments, xsink);
+}
+
+//! Executes a select statement on the server and returns a typed column-oriented result, taking a list for all bind arguments
+/** This method is the same as DatasourcePool::selectTyped(), except this method takes a single list argument after the
+    %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a typed column result hash. If the driver returns a non-column result for the statement,
+    that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+hash<auto> result = db.vselectTyped("select id, name from customer where status = %v", ("active",));
+buffer<int64> ids = result.id;
+    @endcode
+
+    @see DatasourcePool::selectTyped()
+
+    @since %Qore 2.3
+ */
+auto DatasourcePool::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+   return ds->selectTyped(sql, arguments, xsink);
 }
 
 //! Executes a select statement on the server and returns the first row as a hash (column names and values), taking a list for all bind arguments
@@ -636,6 +722,31 @@ auto DatasourcePool::vselectRow(string sql, *softlist<auto> arguments) [flags=NA
  */
 auto DatasourcePool::vselectRows(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
    return ds->selectRows(sql, arguments, xsink);
+}
+
+//! Executes a select statement on the server and returns typed row hashes, taking a list for all bind arguments
+/** This method is the same as DatasourcePool::selectRowsTyped(), except this method takes a single list argument after
+    the %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a list of typed row hashes. If the driver returns a non-row-list value for the statement,
+    that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+list<auto> rows = db.vselectRowsTyped("select id, name from customer where status = %v", ("active",));
+printf("%d\n", rows[0].id);
+    @endcode
+
+    @see DatasourcePool::selectRowsTyped()
+
+    @since %Qore 2.3
+ */
+auto DatasourcePool::vselectRowsTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+   return ds->selectRowsTyped(sql, arguments, xsink);
 }
 
 //! Manually allocates a persistent connection from the pool to the calling thread

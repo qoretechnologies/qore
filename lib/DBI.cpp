@@ -75,6 +75,7 @@ struct dbi_cap_hash dbi_cap_list[] =
   { DBI_CAP_HAS_DESCRIBE,           "HasDescribe" },
   { DBI_CAP_HAS_ARRAY_BIND,         "HasArrayBind" },
   { DBI_CAP_HAS_RESULTSET_OUTPUT,   "HasResultsetOutput" },
+  { DBI_CAP_HAS_TYPED_SELECT,       "HasTypedSelect" },
 };
 
 #define NUM_DBI_CAPS (sizeof(dbi_cap_list) / sizeof(dbi_cap_hash))
@@ -118,9 +119,10 @@ void qore_dbi_method_list::add(int code, q_dbi_close_t method) {
     priv->l[code] = (void*)method;
 }
 
-// covers select, select_rows, and exec
+// covers select, select_rows, typed select, typed select_rows, and exec
 void qore_dbi_method_list::add(int code, q_dbi_select_t method) {
-    assert(code == QDBI_METHOD_SELECT || code == QDBI_METHOD_SELECT_ROWS || code == QDBI_METHOD_EXEC || code == QDBI_METHOD_DESCRIBE);
+    assert(code == QDBI_METHOD_SELECT || code == QDBI_METHOD_SELECT_ROWS || code == QDBI_METHOD_SELECT_TYPED
+        || code == QDBI_METHOD_SELECT_ROWS_TYPED || code == QDBI_METHOD_EXEC || code == QDBI_METHOD_DESCRIBE);
     assert(priv->l.find(code) == priv->l.end());
     priv->l[code] = (void*)method;
 }
@@ -298,6 +300,16 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
             case QDBI_METHOD_SELECT_ROWS:
                 assert(!f.selectRows);
                 f.selectRows = (q_dbi_select_rows_t)(*i).second;
+                break;
+            case QDBI_METHOD_SELECT_TYPED:
+                assert(!f.selectTyped);
+                f.selectTyped = (q_dbi_select_typed_t)(*i).second;
+                cps |= DBI_CAP_HAS_TYPED_SELECT;
+                break;
+            case QDBI_METHOD_SELECT_ROWS_TYPED:
+                assert(!f.selectRowsTyped);
+                f.selectRowsTyped = (q_dbi_select_rows_typed_t)(*i).second;
+                cps |= DBI_CAP_HAS_TYPED_SELECT;
                 break;
             case QDBI_METHOD_SELECT_ROW:
                 assert(!f.selectRow);

@@ -24,6 +24,7 @@ public class DatasourceTest inherits QUnit::Test {
         addTestCase("Datasource string test", \datasourceStringTest());
         addTestCase("oracle test", \oracleTest());
         addTestCase("serialization test", \serializationTest());
+        addTestCase("typed select test", \typedSelectTest());
 
         set_return_value(main());
     }
@@ -118,6 +119,34 @@ public class DatasourceTest inherits QUnit::Test {
         h1 = h;
         h1._index."0"._class_data."Qore::Serializable" = {};
         assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), h1);
+    }
+
+    typedSelectTest() {
+        Datasource ds = getAnyDatasource();
+        string sql = getTypedSelectSql(ds.getDriverName());
+
+        hash<auto> cols = ds.selectTyped(sql);
+        assertEq(True, cols.complexType());
+        assertEq("buffer<int64>", cols.id.fullType());
+        assertEq((1, 2), cols.id.toList());
+        assertEq("list<*string>", cols.name.fullType());
+        assertEq(("alice", NOTHING), cols.name);
+
+        list<auto> rows = ds.selectRowsTyped(sql);
+        assertEq(2, elements rows);
+        assertEq(True, rows[0].complexType());
+        assertEq(1, rows[0].id);
+        assertEq("alice", rows[0].name);
+        assertEq(2, rows[1].id);
+        assertNothing(rows[1].name);
+    }
+
+    string getTypedSelectSql(string driver) {
+        if (driver == "oracle") {
+            return "select 1 as id, 'alice' as name from dual union all select 2 as id, null as name from dual order by id";
+        }
+
+        return "select 1 as id, 'alice' as name union all select 2 as id, null as name order by id";
     }
 
     Datasource getOracleDatasource() {

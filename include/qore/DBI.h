@@ -57,6 +57,7 @@
 #define DBI_CAP_HAS_ARRAY_BIND           (1 << 16) //!< supports binding arrays by value for bulk DML operations
 #define DBI_CAP_HAS_RESULTSET_OUTPUT     (1 << 17) //!< supports the "resultset" placeholder buffer specification
 #define DBI_CAP_OPTION_PASSTHRU          (1 << 18) //!< supports all options; all options are passed through to the driver
+#define DBI_CAP_HAS_TYPED_SELECT         (1 << 19) //!< provides native typed select APIs (set automatically by the Qore library)
 
 #define BN_PLACEHOLDER  0
 #define BN_VALUE        1
@@ -98,8 +99,10 @@
 #define QDBI_METHOD_STMT_FREE                32
 #define QDBI_METHOD_STMT_EXEC_DESCRIBE       33
 #define QDBI_METHOD_GET_DRIVER_REAL_NAME     34
+#define QDBI_METHOD_SELECT_TYPED             35
+#define QDBI_METHOD_SELECT_ROWS_TYPED        36
 
-#define QDBI_VALID_CODES 34
+#define QDBI_VALID_CODES 36
 
 /* DBI EVENT Types
    all DBI events must have the following keys:
@@ -155,6 +158,32 @@ typedef QoreValue (*q_dbi_select_t)(Datasource* ds, const QoreString* str, const
     @return the data returned by executing the SQL or 0
 */
 typedef QoreValue (*q_dbi_select_rows_t)(Datasource* ds, const QoreString* str, const QoreListNode* args, ExceptionSink* xsink);
+
+//! signature for the optional DBI "selectTyped" method
+/**
+    @param ds the Datasource for the connection
+    @param str the SQL string to execute, may not be in the encoding of the Datasource
+    @param args arguments for placeholders or DBI formatting codes in the SQL string
+    @param xsink if any errors occur, error information should be added to this object
+    @return a typed column-oriented result hash or another driver-specific value
+
+    @since %Qore 2.3
+*/
+typedef QoreValue (*q_dbi_select_typed_t)(Datasource* ds, const QoreString* str, const QoreListNode* args,
+    ExceptionSink* xsink);
+
+//! signature for the optional DBI "selectRowsTyped" method
+/**
+    @param ds the Datasource for the connection
+    @param str the SQL string to execute, may not be in the encoding of the Datasource
+    @param args arguments for placeholders or DBI formatting codes in the SQL string
+    @param xsink if any errors occur, error information should be added to this object
+    @return a typed row-oriented result list or another driver-specific value
+
+    @since %Qore 2.3
+*/
+typedef QoreValue (*q_dbi_select_rows_typed_t)(Datasource* ds, const QoreString* str, const QoreListNode* args,
+    ExceptionSink* xsink);
 
 //! signature for the DBI "selectRow" method - must be defined in each DBI driver
 /** if the SQL causes more than 1 row to be returned, then the driver must raise an exception
@@ -288,6 +317,30 @@ typedef QoreValue (*q_dbi_option_get_t)(const Datasource* ds, const char* opt);
     @return the data returned by executing the SQL or 0
 */
 typedef QoreHashNode* (*q_dbi_describe_t)(Datasource* ds, const QoreString* str, const QoreListNode* args, ExceptionSink* xsink);
+
+//! Creates a typed column-oriented DBI result from a hash of column lists and optional describe metadata.
+/** @param ds the Datasource owning the result shape cache
+    @param columns a hash where keys are column names and values are column lists
+    @param desc optional describe metadata in SQLStatement::describe() format
+    @param xsink if any errors occur, error information should be added to this object
+    @return a typed hashdecl-backed column result; caller owns the reference
+
+    @since %Qore 2.3
+*/
+DLLEXPORT QoreHashNode* qore_dbi_make_typed_select_result(Datasource* ds, const QoreHashNode* columns,
+    const QoreHashNode* desc, ExceptionSink* xsink);
+
+//! Creates a typed row-oriented DBI result from a list of row hashes and optional describe metadata.
+/** @param ds the Datasource owning the result shape cache
+    @param rows a list where each value is a row hash
+    @param desc optional describe metadata in SQLStatement::describe() format
+    @param xsink if any errors occur, error information should be added to this object
+    @return a list of typed hashdecl-backed rows; caller owns the reference
+
+    @since %Qore 2.3
+*/
+DLLEXPORT QoreListNode* qore_dbi_make_typed_select_rows_result(Datasource* ds, const QoreListNode* rows,
+    const QoreHashNode* desc, ExceptionSink* xsink);
 
 //! numeric/decimal/number values converted to optimal Qore type (either int or number)
 #define DBI_OPT_NUMBER_OPT "optimal-numbers"

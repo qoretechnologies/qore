@@ -566,9 +566,9 @@ int QoreBufferNode::setEntry(size_t index, QoreValue value, ExceptionSink* xsink
             qore_buffer_element_type_name(element_type), (int)index, length);
         return -1;
     }
-    if (value.isNothing()) {
+    if (value.isNothing() || value.getType() == NT_NULL) {
         if (!nullable_elements) {
-            xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign NOTHING to non-nullable buffer<%s> "
+            xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign NOTHING or NULL to non-nullable buffer<%s> "
                 "element %d", qore_buffer_element_type_name(element_type), (int)index);
             return -1;
         }

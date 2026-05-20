@@ -50,6 +50,12 @@ class BufferTest inherits QUnit::Test {
         assertEq(1, b[0]);
         assertNothing(b[1]);
         assertEq(3, b[2]);
+
+        buffer<*int64> n = new buffer<*int64>((1, NULL, 3));
+        assertEq("buffer<*int64>", n.fullType());
+        assertEq((1, NOTHING, 3), n.toList());
+
+        assertThrows("BUFFER-TYPE-ERROR", sub () { buffer<int64> invalid = new buffer<int64>((1, NULL)); });
     }
 
     boolBuffer() {

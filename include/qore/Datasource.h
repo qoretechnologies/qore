@@ -289,6 +289,16 @@ public:
     */
     DLLEXPORT QoreValue select(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
 
+    //! executes SQL through the typed select function and returns a typed result, makes an implicit connection if necessary
+    /** this function is not "const" to allow for implicit connections (and reconnections)
+        @param query_str the query to execute
+        @param args query arguments for %s, %n, %d placeholders
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreValue selectTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
+
     //! executes SQL throught the "selectRows" function of the DBI driver and returns the result, makes an implicit connection if necessary
     /** this function is not "const" to allow for implicit connections (and reconnections)
         @param query_str the query to execute
@@ -296,6 +306,16 @@ public:
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT QoreValue selectRows(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
+
+    //! executes SQL through the typed selectRows function and returns a typed result, makes an implicit connection if necessary
+    /** this function is not "const" to allow for implicit connections (and reconnections)
+        @param query_str the query to execute
+        @param args query arguments for %s, %n, %d placeholders
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreValue selectRowsTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
 
     //! executes SQL throught the "selectRow" function of the DBI driver and returns the result, makes an implicit connection if necessary
     /** This function is not "const" to allow for implicit connections (and reconnections).
