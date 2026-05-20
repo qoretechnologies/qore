@@ -159,6 +159,10 @@ class ReflectionTest inherits QUnit::Test {
         assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
             process_registry.getActiveModules();
         });
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.resolveOperation(IntType, IntType, "add");
+        });
+        assertEq(NOTHING, program_registry.resolveOperation(IntType, IntType, "missing-plugin-registry-test-op"));
         assertThrows("PLUGIN-REGISTRY-MODULE-NOT-LOADED", sub() {
             process_registry.getTypes("missing-plugin-registry-test-module");
         });

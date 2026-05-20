@@ -8,6 +8,7 @@
 
 #include "qore_reflection.h"
 #include "QC_PluginRegistry.h"
+#include "QC_Type.h"
 
 #include <qore/QorePluginType.h>
 
@@ -114,4 +115,35 @@ list<hash<auto>> PluginRegistry::getOperations(string module_name) [flags=RET_VA
         return QoreValue();
     }
     return qore_plugin_get_process_operations(name->c_str(), xsink);
+}
+
+//! Resolves the plugin operation that would handle the given binary operation types
+/** @par Example:
+    @code{.py}
+*hash<auto> op = PluginRegistry::get().resolveOperation(IntType, IntType, "add");
+    @endcode
+
+    @param lhs the left-hand operand type
+    @param rhs the right-hand operand type
+    @param operation_name the registered plugin operation name
+
+    @return the selected plugin operation descriptor hash or NOTHING when no registered operation matches
+
+    @throw PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE this method was called on the process-global view
+
+    @since %Qore 2.4
+ */
+*hash<auto> PluginRegistry::resolveOperation(Type[QoreType] lhs, Type[QoreType] rhs, string operation_name)
+        [flags=RET_VALUE_ONLY] {
+    if (r->process_global) {
+        xsink->raiseException("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", "PluginRegistry::resolveOperation() "
+            "requires a Program-bound registry view; use PluginRegistry::get() instead "
+            "(method=\"resolveOperation\", subreason=\"program_not_available\", section=3.12)");
+        return QoreValue();
+    }
+    TempEncodingHelper name(operation_name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_plugin_resolve_process_operation(lhs->typeInfo, rhs->typeInfo, name->c_str(), xsink);
 }

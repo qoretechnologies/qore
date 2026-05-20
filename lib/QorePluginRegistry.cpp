@@ -115,6 +115,10 @@ bool pluginVerifyTrace() {
     return std::getenv("QORE_PLUGIN_VERIFY_TRACE") != nullptr;
 }
 
+bool pluginCrossTypeTrace() {
+    return std::getenv("QORE_PLUGIN_CROSS_TYPE_TRACE") != nullptr;
+}
+
 void traceRegister(const std::string& msg) {
     if (pluginRegisterTrace()) {
         std::fprintf(stderr, "QORE_PLUGIN_REGISTER_TRACE: %s\n", msg.c_str());
@@ -130,6 +134,12 @@ void traceDispatch(const std::string& msg) {
 void traceVerify(const std::string& msg) {
     if (pluginVerifyTrace()) {
         std::fprintf(stderr, "QORE_PLUGIN_VERIFY_TRACE: %s\n", msg.c_str());
+    }
+}
+
+void traceCrossType(const std::string& msg) {
+    if (pluginCrossTypeTrace()) {
+        std::fprintf(stderr, "QORE_PLUGIN_CROSS_TYPE_TRACE: %s\n", msg.c_str());
     }
 }
 
@@ -1304,6 +1314,58 @@ QoreListNode* qore_plugin_get_process_operations(const char* module_name, Except
         ++n;
     }
     return rv.release();
+}
+
+QoreHashNode* qore_plugin_resolve_process_operation(const QoreTypeInfo* lhs_type, const QoreTypeInfo* rhs_type,
+        const char* operation_name, ExceptionSink* xsink) {
+    if (!lhs_type || !operation_name || !*operation_name) {
+        traceCrossType("resolve: missing lhs type or operation name");
+        return nullptr;
+    }
+
+    const char* lhs_path = qore_type_get_path(lhs_type);
+    const char* rhs_path = rhs_type ? qore_type_get_path(rhs_type) : "<none>";
+    traceCrossType("resolve: operation='" + std::string(operation_name) + "' lhs='" + lhs_path + "' rhs='"
+        + rhs_path + "'");
+
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    int n = 0;
+    for (const auto& module_pair : plugin_modules) {
+        const RegisteredPluginModule& module = module_pair.second;
+        for (const RegisteredPluginOperation& op : module.operations) {
+            if (checkPluginRegistryCancel(n, xsink, "plugin registry operation resolution")) {
+                return nullptr;
+            }
+            ++n;
+            if (op.operation_name != operation_name) {
+                continue;
+            }
+
+            bool arity_ok = rhs_type ? op.signature.arity == 2 : op.signature.arity == 1;
+            if (!arity_ok) {
+                traceCrossType("resolve: skipped '" + module.module_name + "::" + op.operation_name
+                    + "' due to arity");
+                continue;
+            }
+            if (!qore_type_is_assignable_from(op.signature.primary_type, lhs_type)) {
+                traceCrossType("resolve: skipped '" + module.module_name + "::" + op.operation_name
+                    + "' due to primary type");
+                continue;
+            }
+            if (rhs_type && !qore_type_is_assignable_from(op.signature.secondary_type, rhs_type)) {
+                traceCrossType("resolve: skipped '" + module.module_name + "::" + op.operation_name
+                    + "' due to secondary type");
+                continue;
+            }
+
+            traceCrossType("resolve: selected '" + module.module_name + "::" + op.operation_name
+                + "' local_id=" + std::to_string(op.local_id));
+            return makeOperationHash(module, op, xsink);
+        }
+    }
+
+    traceCrossType("resolve: no matching operation");
+    return nullptr;
 }
 
 int qore_plugin_get_process_operation_id(const char* module_name, uint16_t local_operation_id,

@@ -244,5 +244,7 @@ DLLEXPORT int qore_register_plugin_types_v1(
 DLLEXPORT QoreListNode* qore_plugin_get_process_modules(ExceptionSink* xsink);
 DLLEXPORT QoreListNode* qore_plugin_get_process_types(const char* module_name, ExceptionSink* xsink);
 DLLEXPORT QoreListNode* qore_plugin_get_process_operations(const char* module_name, ExceptionSink* xsink);
+DLLEXPORT QoreHashNode* qore_plugin_resolve_process_operation(const QoreTypeInfo* lhs_type,
+    const QoreTypeInfo* rhs_type, const char* operation_name, ExceptionSink* xsink);
 
 #endif

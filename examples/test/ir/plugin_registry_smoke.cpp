@@ -281,6 +281,19 @@ static bool checkRegistrationAndIntrospection() {
         return false;
     }
 
+    ReferenceHolder<QoreHashNode> resolved(qore_plugin_resolve_process_operation(bigIntTypeInfo, bigIntTypeInfo,
+        "add", &xsink), &xsink);
+    if (xsink || !resolved || resolved->getKeyValue("global_id").getAsBigInt() != static_cast<int64>(global_id)) {
+        std::cerr << "process plugin operation resolution failed\n";
+        return false;
+    }
+    ReferenceHolder<QoreHashNode> missing_resolved(qore_plugin_resolve_process_operation(bigIntTypeInfo,
+        bigIntTypeInfo, "missing_operation", &xsink), &xsink);
+    if (xsink || missing_resolved) {
+        std::cerr << "missing process plugin operation resolution did not return NOTHING\n";
+        return false;
+    }
+
     ExceptionSink mismatch_xsink;
     if (!qore_plugin_get_process_operation_id_checked("plugin-smoke", 0,
             QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1, signature_hash ^ 1u, nullptr, &mismatch_xsink)
