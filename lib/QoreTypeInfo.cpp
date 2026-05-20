@@ -846,6 +846,15 @@ static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str) {
         return new QoreParseTypeInfo(strdup(str.c_str()), or_nothing);
     }
 
+    // Check if this is a callable signature like "ReturnType(Params...)" where Params
+    // may themselves contain '<' (e.g. "nothing(hash<auto>)"). If '(' occurs before the
+    // first '<', the whole string is a callable signature, not a complex type — keep it
+    // as a single opaque name so the outer code<> handler can re-parse it.
+    size_t paren_pos = str.find('(');
+    if (paren_pos != std::string::npos && paren_pos < angle_pos) {
+        return new QoreParseTypeInfo(strdup(str.c_str()), or_nothing);
+    }
+
     // Complex type - find matching '>'
     int depth = 1;
     size_t close_pos = angle_pos + 1;
