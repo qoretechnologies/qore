@@ -46,12 +46,13 @@ is not blocking.
   ABI resolution, helper result type checks, and `ReturnsLhs` / `ReturnsRhs`
   alias-contract checks, enabled in debug builds and in release builds with
   `QORE_PLUGIN_VERIFY`; passing and failing verifier checks are traceable with
-  `QORE_PLUGIN_VERIFY_TRACE`. The full
+  `QORE_PLUGIN_VERIFY_TRACE`. `QORE_PLUGIN_QORD_TRACE` logs writer and loader
+  decisions for plugin import, registry, and helper-ref sections. The full
   Phase 3 deliverable still needs QORD `PLUGIN_IMPORTS` /
   `PLUGIN_TYPE_REGISTRY` / `PLUGIN_HELPER_REFS` coverage for serialized plugin
   value instances, dense-buffer dispatch opcodes,
-  Program-local activation/fallback diagnostics, the rest of the trace-env
-  family, the reference plugin module, lint tooling, and complete user-facing
+  Program-local activation/fallback diagnostics, `QORE_PLUGIN_CROSS_TYPE_TRACE`,
+  the reference plugin module, lint tooling, and complete user-facing
   documentation. Dense-buffer runtime helper execution is implemented for
   module helpers using the raw dense-buffer ABI; IR opcodes are intentionally
   deferred until lowering can supply real buffer data/size/stride operands.
