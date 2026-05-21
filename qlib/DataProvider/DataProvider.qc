@@ -237,6 +237,7 @@ public class DataProvider {
             "mistral": "MistralDataProvider",
             "chroma": "ChromaDataProvider",
             "pinecone": "PineconeDataProvider",
+            "weaviate": "WeaviateDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

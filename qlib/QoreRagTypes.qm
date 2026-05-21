@@ -665,6 +665,7 @@ public class RagProviderRegistry {
             "chroma":      "ChromaRestClient",
             "mongo-atlas": "MongoDbDataProvider",
             "pinecone":    "PineconeRestClient",
+            "weaviate":    "WeaviateRestClient",
         };
     }
 

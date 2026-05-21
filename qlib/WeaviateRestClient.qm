@@ -1,0 +1,345 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file WeaviateRestClient.qm Qore user module for calling Weaviate vector DB REST services
+
+/*  WeaviateRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreRagTypes
+
+module WeaviateRestClient {
+    version = "1.0";
+    desc = "user module for calling Weaviate vector DB REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("weaviate",
+            WeaviateRestConnection::ConnectionScheme);
+        QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
+            new WeaviateVectorStoreFactory());
+    };
+}
+
+/** @mainpage WeaviateRestClient Module
+
+    @tableofcontents
+
+    @section weaviaterestclientintro WeaviateRestClient Introduction
+
+    The %WeaviateRestClient module provides a REST client for
+    [Weaviate](https://weaviate.io) — an open-source vector database —
+    and registers `weaviate` as a vector-store backend in
+    @ref qorerragutilsintro "QoreRagUtils".
+
+    @par REST vs GraphQL
+
+    Weaviate has both a REST API and a GraphQL API.  Insert / delete
+    operations use REST (`/v1/objects`, `/v1/batch/objects`); near-vector
+    search uses GraphQL (`/v1/graphql`) since the REST API doesn't
+    expose vector search directly.  This module embeds a small inline
+    GraphQL string for the `search()` method — no GraphQL transport or
+    builder library is added.
+
+    @section WeaviateRestClientRelnotes Release Notes
+
+    @subsection WeaviateRestClientv1_0 WeaviateRestClient v1.0
+    - the initial version of the %WeaviateRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace WeaviateRestClient {
+public class WeaviateRestClientBase {
+    public {
+        const DefaultUrl = "http://localhost:8080";
+        const DefaultApiVersion = "v1";
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "api": DefaultApiVersion,
+            "default_path": "/" + DefaultApiVersion,
+        };
+    }
+
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (opts.api) {
+            rv.default_path = "/" + opts.api;
+        }
+        if (rv.apikey) {
+            rv.token = rv.apikey;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for Weaviate (sync)
+public class WeaviateRestClient inherits RestClient::RestClient, WeaviateRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(WeaviateRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! REST client for Weaviate using multiplexed HTTP connections (async)
+public class WeaviateRestClientIo inherits RestClientIo::RestClientIo, WeaviateRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(WeaviateRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Weaviate REST connections
+public class WeaviateRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "weaviate://localhost:8080";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Weaviate Vector DB Connection",
+            "short_desc": "A connection to a Weaviate vector database",
+            "desc": "A connection to [Weaviate](https://weaviate.io) — an open-source "
+                "vector database supporting hybrid search (vector + keyword), "
+                "multi-tenancy, and a wide range of vectorizer modules.\n\n"
+                "Authentication: optional Bearer token (Weaviate Cloud Services / WCD) "
+                "or anonymous (local deployments).",
+            "cls": Class::forName("WeaviateRestConnection"),
+            "auto_url": True,
+            "schemes": {"weaviate": True},
+            "base_scheme_map": {"http": "weaviate", "https": "weaviate"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Optional Bearer token (WCD / proxied)",
+                    "type": "string",
+                    "desc": "Optional Bearer token.  Local Weaviate servers don't require "
+                        "authentication.",
+                    "sensitive": True,
+                },
+            },
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "weaviate";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("WeaviateDataProvider");
+        return create_object("WeaviateDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private WeaviateRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new WeaviateRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new WeaviateRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return WeaviateRestClientBase::getOptions(rv);
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! Weaviate-backed vector store (REST + inline GraphQL nearVector)
+/** @par Configuration
+
+    @ref VectorStoreConfig fields:
+
+    - \c collection (required): the Weaviate class name
+    - \c url (optional): Weaviate server URL (default \c http://localhost:8080)
+    - \c options.api_key (optional): Weaviate API key (Bearer)
+    - \c options.tenant (optional): Weaviate tenant for multi-tenant classes
+    - \c options.dimension (optional): vector dimension (no auto-probe)
+*/
+public class WeaviateVectorStore inherits AbstractVectorStore {
+    public {
+        const Backend = "weaviate";
+    }
+
+    private {
+        hash<VectorStoreConfig> config;
+        string class_name;
+        *string tenant;
+        *WeaviateRestClient::WeaviateRestClientIo rest_client;
+        *int cached_dimension;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<VectorStoreConfig> config) {
+        self.config = config;
+        if (!config.collection.val()) {
+            throw "VECTOR-STORE-CONFIG-ERROR",
+                "WeaviateVectorStore requires 'collection' (Weaviate class name)";
+        }
+        class_name = config.collection;
+        if (config.options.tenant.val()) {
+            tenant = config.options.tenant;
+        }
+        if (exists config.options.dimension) {
+            cached_dimension = config.options.dimension;
+        }
+    }
+
+    upsert(list<hash<VectorRecord>> records) {
+        if (!records) {
+            return;
+        }
+        ensureRestClient();
+        # use batch endpoint
+        hash<auto!> batch;
+        batch.objects = map (
+            "class": class_name,
+            "id": $1.id,
+            "properties": $1.payload ?? {},
+            "vector": $1.vector,
+        ) + (tenant ? ("tenant": tenant) : {}), records;
+        rest_client.restPost("/batch/objects", batch);
+        if (!exists cached_dimension && records[0].vector) {
+            cached_dimension = records[0].vector.size();
+        }
+    }
+
+    deleteByIds(list<string> ids) {
+        if (!ids) {
+            return;
+        }
+        ensureRestClient();
+        # Weaviate REST: DELETE one object at a time
+        foreach string id in (ids) {
+            string path = sprintf("/objects/%s/%s", class_name, id);
+            if (tenant) {
+                path += "?tenant=" + tenant;
+            }
+            rest_client.restDel(path, NOTHING);
+        }
+    }
+
+    list<hash<VectorSearchResult>> search(list<float> query_vector, int k,
+            *hash<auto> filter) {
+        ensureRestClient();
+        # GraphQL query — the one place Weaviate v1 needs GraphQL
+        string vec_str = formatVectorLiteral(query_vector);
+        string near_vec = sprintf("nearVector: {vector: %s}", vec_str);
+        *string tenant_arg;
+        if (tenant) {
+            tenant_arg = sprintf(", tenant: \"%s\"", tenant);
+        }
+        string query = sprintf(
+            "{ Get { %s(limit: %d, %s%s) { _additional { id distance } } } }",
+            class_name, k, near_vec, tenant_arg ?? "");
+        hash<auto> resp = rest_client.restPost("/graphql", {"query": query});
+
+        *list<auto> items = resp.body."data"."Get"{class_name};
+        list<hash<VectorSearchResult>> result = ();
+        foreach hash<auto> item in (items ?? ()) {
+            hash<auto> add = item._additional ?? {};
+            push result, <VectorSearchResult>{
+                "id": (add.id ?? "").toString(),
+                # Weaviate returns distance (lower = closer); surface 1 - distance
+                "score": 1.0 - (add.distance ?? 0.0).toFloat(),
+                "payload": item - "_additional",
+            };
+        }
+        return result;
+    }
+
+    string getCollection() {
+        return class_name;
+    }
+
+    int getDimension() {
+        return cached_dimension ?? -1;
+    }
+
+    private string formatVectorLiteral(list<float> vec) {
+        list<string> parts = ();
+        foreach float v in (vec) {
+            push parts, sprintf("%g", v);
+        }
+        return "[" + (foldl $1 + "," + $2, parts) + "]";
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                hash<auto!> opts = {
+                    "url": config.url
+                        ?? WeaviateRestClient::WeaviateRestClientBase::DefaultUrl,
+                };
+                if (config.options.api_key.val()) {
+                    opts.apikey = config.options.api_key;
+                }
+                rest_client = new WeaviateRestClient::WeaviateRestClientIo(opts);
+            }
+        }
+    }
+}
+
+#! Factory for @ref WeaviateVectorStore
+public class WeaviateVectorStoreFactory inherits AbstractVectorStoreFactory {
+    string getType() {
+        return "weaviate";
+    }
+
+    string getDisplayName() {
+        return "Weaviate vector database";
+    }
+
+    AbstractVectorStore create(hash<VectorStoreConfig> config) {
+        return new WeaviateVectorStore(config);
+    }
+}
+}
