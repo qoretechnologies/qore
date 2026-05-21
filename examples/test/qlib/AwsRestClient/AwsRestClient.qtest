@@ -82,6 +82,9 @@ class AwsTest inherits QUnit::Test {
         addTestCase("env-var credential fallback", \envVarCredentialTest());
         addTestCase("STS XML response parse", \stsParseTest());
         addTestCase("STS AssumeRole end-to-end", \stsAssumeRoleE2ETest());
+        addTestCase("IMDS credentials body parse", \imdsParseTest());
+        addTestCase("IMDSv2 end-to-end against fake server", \imdsE2ETest());
+        addTestCase("aws_imds_disabled skips IMDS", \imdsDisabledTest());
         set_return_value(main());
     }
 
@@ -325,6 +328,111 @@ class AwsTest inherits QUnit::Test {
         });
         assertEq(True, role_client instanceof AwsRestClient);
     }
+
+    #! parseImdsCredentialsBody handles hash and rejects unsupported types
+    imdsParseTest() {
+        hash<auto> hash_body = {
+            "Code": "Success",
+            "AccessKeyId": "ASIA-IMDS-KEY",
+            "SecretAccessKey": "imds-secret",
+            "Token": "imds-token",
+            "Expiration": "2099-12-31T23:59:59Z",
+        };
+        hash<auto> creds = AwsRestClientBase::parseImdsCredentialsBody(hash_body);
+        assertEq("ASIA-IMDS-KEY", creds.aws_keyid);
+        assertEq("imds-secret",   creds.aws_secret);
+        assertEq("imds-token",    creds.aws_token);
+        assertEq(2099-12-31T23:59:59Z, creds.expires);
+
+        # missing required field
+        assertThrows("AWSRESTCLIENT-IMDS-ERROR", sub () {
+            AwsRestClientBase::parseImdsCredentialsBody({"Code": "Success"});
+        });
+
+        # unsupported body type
+        assertThrows("AWSRESTCLIENT-IMDS-ERROR", sub () {
+            AwsRestClientBase::parseImdsCredentialsBody(42);
+        });
+    }
+
+    #! End-to-end IMDSv2 flow against a fake IMDS server
+    imdsE2ETest() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer imds_http(<HttpServerOptionInfo>{"logger": logger});
+        FakeImdsHandler imds_handler();
+        imds_http.setDefaultHandler("imds", imds_handler);
+        int imds_port = imds_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit delete imds_http;
+
+        # snapshot existing AWS env vars so the test sees a clean slate
+        *string saved_keyid = getenv("AWS_ACCESS_KEY_ID");
+        *string saved_ecs_rel = getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+        *string saved_ecs_full = getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        unsetenv("AWS_ACCESS_KEY_ID");
+        unsetenv("AWS_SECRET_ACCESS_KEY");
+        unsetenv("AWS_SESSION_TOKEN");
+        unsetenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+        unsetenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        on_exit {
+            saved_keyid.val()
+                ? setenv("AWS_ACCESS_KEY_ID", saved_keyid)
+                : unsetenv("AWS_ACCESS_KEY_ID");
+            saved_ecs_rel.val()
+                ? setenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", saved_ecs_rel)
+                : unsetenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+            saved_ecs_full.val()
+                ? setenv("AWS_CONTAINER_CREDENTIALS_FULL_URI", saved_ecs_full)
+                : unsetenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        }
+
+        # direct invocation of the IMDS helper
+        hash<auto> creds = AwsRestClientBase::getImdsCredentials({
+            "aws_imds_url": "http://localhost:" + imds_port,
+        });
+        assertEq("ASIA-IMDS-E2E", creds.aws_keyid);
+        assertEq("imds-e2e-secret", creds.aws_secret);
+        assertEq("imds-e2e-token", creds.aws_token);
+
+        # verify the IMDS handler enforced the IMDSv2 token requirement —
+        # both subsequent GETs must have carried the token header
+        assertTrue(imds_handler.put_call_count >= 1,
+            "IMDSv2 PUT /latest/api/token was not called");
+        assertEq("21600", imds_handler.last_ttl_seconds);
+        assertEq(imds_handler.issued_token, imds_handler.last_role_list_token);
+        assertEq(imds_handler.issued_token, imds_handler.last_creds_token);
+
+        # constructor pulls IMDS automatically when no static creds are set
+        AwsRestClient instance_client({
+            "url": "http://localhost:" + port,
+            "aws_region": "us-east-1",
+            "aws_service": "iam",
+            "aws_imds_url": "http://localhost:" + imds_port,
+        });
+        assertEq(True, instance_client instanceof AwsRestClient);
+    }
+
+    #! aws_imds_disabled must short-circuit instance-credential pickup
+    imdsDisabledTest() {
+        *string saved_keyid = getenv("AWS_ACCESS_KEY_ID");
+        unsetenv("AWS_ACCESS_KEY_ID");
+        unsetenv("AWS_SECRET_ACCESS_KEY");
+        on_exit {
+            saved_keyid.val()
+                ? setenv("AWS_ACCESS_KEY_ID", saved_keyid)
+                : unsetenv("AWS_ACCESS_KEY_ID");
+        }
+        # with IMDS disabled, missing credentials must produce the canonical
+        # RequiredOptions error rather than attempting a metadata fetch that
+        # would otherwise time out
+        assertThrows("AWSRESTCLIENT-ERROR", sub () {
+            new AwsRestClient({
+                "url": "http://localhost:" + port,
+                "aws_region": "us-east-1",
+                "aws_service": "iam",
+                "aws_imds_disabled": True,
+            });
+        });
+    }
 }
 
 #! Fake STS endpoint that records the form-encoded query and returns canned creds
@@ -368,5 +476,45 @@ class AwsRestTestClient inherits AwsRestClient {
     string getSignatureTest(string meth, string path, hash<auto> hdr, *data body, date gmdate, string scope) {
         string signed_headers;
         return getSignature(meth, path, \hdr, body, gmdate, scope, \signed_headers);
+    }
+}
+
+#! Fake IMDSv2 endpoint that mints session tokens and returns canned credentials
+class FakeImdsHandler inherits AbstractHttpRequestHandler {
+    public {
+        string issued_token = "fake-imds-session-token";
+        int put_call_count = 0;
+        string last_ttl_seconds = "";
+        string last_role_list_token = "";
+        string last_creds_token = "";
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        string path = cx.raw_path;
+        string method = hdr.method;
+        # IMDSv2: PUT /latest/api/token issues the session token
+        if (method == "PUT" && path =~ /^\/latest\/api\/token$/) {
+            ++put_call_count;
+            last_ttl_seconds = hdr."x-aws-ec2-metadata-token-ttl-seconds" ?? "";
+            return makeResponse({"Content-Type": "text/plain"}, 200,
+                issued_token);
+        }
+        # List of roles attached to the instance
+        if (method == "GET" && path =~ /^\/latest\/meta-data\/iam\/security-credentials\/?$/) {
+            last_role_list_token = hdr."x-aws-ec2-metadata-token" ?? "";
+            return makeResponse({"Content-Type": "text/plain"}, 200,
+                "qore-test-role");
+        }
+        # Credentials for the role
+        if (method == "GET" && path =~ /^\/latest\/meta-data\/iam\/security-credentials\/qore-test-role$/) {
+            last_creds_token = hdr."x-aws-ec2-metadata-token" ?? "";
+            return makeResponse({"Content-Type": "application/json"}, 200,
+                "{\"Code\":\"Success\","
+                "\"AccessKeyId\":\"ASIA-IMDS-E2E\","
+                "\"SecretAccessKey\":\"imds-e2e-secret\","
+                "\"Token\":\"imds-e2e-token\","
+                "\"Expiration\":\"2099-12-31T23:59:59Z\"}");
+        }
+        return makeResponse(404, "unknown IMDS path: " + path);
     }
 }

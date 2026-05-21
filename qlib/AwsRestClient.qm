@@ -246,18 +246,18 @@ public class AwsRestClientBase {
         string session_name = opts.aws_role_session_name ?? "qore-sdk-session";
         int duration = opts.aws_duration_seconds ?? 3600;
 
-        # Build the form-encoded body for the Query API
-        list<string> params = (
-            "Action=AssumeRole",
-            "Version=2011-06-15",
-            "RoleArn=" + encode_url(opts.aws_role_arn, True),
-            "RoleSessionName=" + encode_url(session_name, True),
-            "DurationSeconds=" + duration,
-        );
+        # Build the STS Query API parameters as a hash so RestClient's
+        # built-in "url" data mode form-encodes them on the wire.
+        hash<auto> form = {
+            "Action": "AssumeRole",
+            "Version": "2011-06-15",
+            "RoleArn": opts.aws_role_arn,
+            "RoleSessionName": session_name,
+            "DurationSeconds": duration,
+        };
         if (opts.aws_external_id.val()) {
-            push params, "ExternalId=" + encode_url(opts.aws_external_id, True);
+            form.ExternalId = opts.aws_external_id;
         }
-        string body = params.join("&");
 
         # Use a one-shot AwsRestClient bound to the STS service; explicitly
         # drop aws_role_arn so we don't recurse into another AssumeRole call.
@@ -274,15 +274,13 @@ public class AwsRestClientBase {
         AwsRestClient sts(sts_opts, True);
         hash<auto> resp;
         try {
-            # switch serialization to "text" so RestClient sends our
-            # already-form-encoded body verbatim instead of JSON-wrapping it
-            # (AwsRestClient hardcodes data="json" on its parent at
-            # construction; we restore it after the call)
+            # switch serialization to "url" so RestClient form-encodes the
+            # hash body for the STS Query API (AwsRestClient hardcodes
+            # data="json" on its parent at construction; we restore on exit)
             string saved_ds = sts.getSerialization();
             on_exit sts.setSerialization(saved_ds);
-            sts.setSerialization("text");
-            resp = sts.post("/", body, NOTHING,
-                {"Content-Type": "application/x-www-form-urlencoded"});
+            sts.setSerialization("url");
+            resp = sts.post("/", form);
         } catch (hash<ExceptionInfo> ex) {
             throw "AWSRESTCLIENT-STS-ERROR",
                 sprintf("AssumeRole call to %y failed: %s", url, ex.desc), ex;
@@ -366,6 +364,246 @@ public class AwsRestClientBase {
         # the option hash for diagnostic purposes; AwsOptions strips them
         # from any subset forwarded to the RestClient base
         return opts;
+    }
+
+    #! Default IMDS v2 endpoint (EC2 link-local)
+    const ImdsV2Endpoint = "http://169.254.169.254";
+
+    #! ECS task-role credentials endpoint (used when AWS_CONTAINER_CREDENTIALS_RELATIVE_URI is set)
+    const EcsCredentialsEndpoint = "http://169.254.170.2";
+
+    #! IMDS v2 session-token TTL in seconds (6 hours, the documented maximum)
+    const ImdsTokenTtlSeconds = 21600;
+
+    #! Returns credentials from the EC2/EKS Instance Metadata Service v2
+    /** Implements the IMDSv2 token-protected flow:
+        - PUT \c /latest/api/token (with \c X-aws-ec2-metadata-token-ttl-seconds)
+          → returns a session token in the response body
+        - GET \c /latest/meta-data/iam/security-credentials/ with the session
+          token header → returns the role name
+        - GET \c /latest/meta-data/iam/security-credentials/{role} with the
+          session token header → returns the JSON-shaped credentials hash
+
+        @param opts optional overrides:
+        - \c aws_imds_url (\c string): override the default
+          @ref ImdsV2Endpoint (useful for tests with a fake IMDS server)
+        - \c aws_imds_token_ttl_seconds (\c int): override
+          @ref ImdsTokenTtlSeconds
+
+        @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
+
+        @throw AWSRESTCLIENT-IMDS-ERROR IMDS unreachable or returned an error
+    */
+    static hash<auto> getImdsCredentials(*hash<auto> opts) {
+        string endpoint = opts.aws_imds_url ?? ImdsV2Endpoint;
+        int ttl = opts.aws_imds_token_ttl_seconds ?? ImdsTokenTtlSeconds;
+
+        # IMDS speaks plain HTTP with no special framing; a plain
+        # RestClientIo with data="text" is sufficient
+        RestClientIo::RestClientIo imds({"url": endpoint, "data": "text"});
+
+        # Step 1: obtain a session token via IMDSv2 PUT
+        hash<auto> token_resp;
+        try {
+            token_resp = imds.restDoRequest("PUT", "/latest/api/token", "",
+                {"X-aws-ec2-metadata-token-ttl-seconds": ttl.toString()});
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("IMDSv2 token request to %y failed: %s",
+                    endpoint, ex.desc), ex;
+        }
+        string token = AwsRestClientBase::extractTextBody(token_resp.body,
+            "IMDSv2 token response");
+        if (!token.val()) {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("IMDSv2 token response from %y was empty", endpoint);
+        }
+
+        # Step 2: list available roles (returns one role per line as text)
+        hash<auto> roles_resp;
+        try {
+            roles_resp = imds.restGet("/latest/meta-data/iam/security-credentials/",
+                {"X-aws-ec2-metadata-token": token});
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("IMDS role-list request failed: %s", ex.desc), ex;
+        }
+        string roles_body = AwsRestClientBase::extractTextBody(roles_resp.body,
+            "IMDS role-list response");
+        list<string> role_lines = roles_body.split("\n");
+        # filter empty lines
+        list<string> roles = ();
+        foreach string r in (role_lines) {
+            trim r;
+            if (r.val()) {
+                push roles, r;
+            }
+        }
+        if (!roles) {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("IMDS reports no instance roles at %y; instance has "
+                    "no attached IAM role", endpoint);
+        }
+        string role = roles[0];
+
+        # Step 3: fetch the credentials JSON for the role
+        hash<auto> creds_resp;
+        try {
+            creds_resp = imds.restGet(
+                "/latest/meta-data/iam/security-credentials/"
+                    + encode_url(role, True),
+                {"X-aws-ec2-metadata-token": token});
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("IMDS credentials request for role %y failed: %s",
+                    role, ex.desc), ex;
+        }
+        return AwsRestClientBase::parseImdsCredentialsBody(creds_resp.body);
+    }
+
+    #! Returns credentials from the ECS task-role endpoint
+    /** ECS/EKS-on-Fargate exposes task-role credentials via a different
+        link-local address (no token required, the relative URI itself is
+        the credential).  Triggered when the
+        \c AWS_CONTAINER_CREDENTIALS_RELATIVE_URI env var is set.
+
+        @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
+        @throw AWSRESTCLIENT-IMDS-ERROR endpoint unreachable or response unparseable
+    */
+    static hash<auto> getEcsCredentials() {
+        *string rel = getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+        *string full = getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        string url;
+        if (full.val()) {
+            url = full;
+        } else if (rel.val()) {
+            url = EcsCredentialsEndpoint + (rel =~ /^\// ? rel : "/" + rel);
+        } else {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                "neither AWS_CONTAINER_CREDENTIALS_RELATIVE_URI nor "
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI is set; ECS task-role "
+                "credentials are unavailable in this environment";
+        }
+        hash<UrlInfo> url_info = parse_url(url);
+        string base = sprintf("%s://%s", url_info.protocol ?? "http",
+            url_info.host + (url_info.port ? ":" + url_info.port : ""));
+        string path = url_info.path ?? "/";
+        RestClientIo::RestClientIo client({"url": base, "data": "text"});
+        hash<auto> resp;
+        try {
+            resp = client.restGet(path);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("ECS credentials request to %y failed: %s",
+                    url, ex.desc), ex;
+        }
+        return AwsRestClientBase::parseImdsCredentialsBody(resp.body);
+    }
+
+    #! Parses the JSON credentials body returned by IMDSv2 or the ECS endpoint
+    /** RestClient may auto-deserialize the response into a hash when the
+        Content-Type is \c application/json; otherwise the caller passes a
+        binary or string and we parse it.
+
+        @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
+    */
+    static hash<auto> parseImdsCredentialsBody(auto raw) {
+        hash<auto> data;
+        if (raw.typeCode() == NT_HASH) {
+            data = raw;
+        } else {
+            # RestClient auto-deserializes application/json responses to a
+            # hash; if we get here the IMDS endpoint sent us back something
+            # else, which is a real protocol error
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("IMDS credentials body has unexpected type %s; "
+                    "expected RestClient-deserialized hash (Content-Type "
+                    "application/json)", raw.type());
+        }
+        *string key = data.AccessKeyId;
+        *string secret = data.SecretAccessKey;
+        *string token = data.Token;
+        if (!key.val() || !secret.val()) {
+            throw "AWSRESTCLIENT-IMDS-ERROR",
+                sprintf("IMDS credentials response missing required fields: %y",
+                    data);
+        }
+        date expires = data.Expiration.val()
+            ? date(data.Expiration)
+            : now_us() + 1h;
+        hash<auto> rv = {
+            "aws_keyid": key,
+            "aws_secret": secret,
+            "expires": expires,
+        };
+        if (token.val()) {
+            rv.aws_token = token;
+        }
+        return rv;
+    }
+
+    #! If \a opts has no static credentials, tries ECS then IMDS to fill them in
+    /** Triggered after @ref applyEnvCredentials() but before the
+        RequiredOptions check.  Honored only when:
+        - \c aws_keyid is still missing, AND
+        - \c aws_imds_disabled is not @ref True
+
+        Tries the ECS task-role endpoint first (when the
+        \c AWS_CONTAINER_CREDENTIALS_RELATIVE_URI / \c _FULL_URI env var is
+        set), then falls through to IMDSv2.  Failures are non-fatal: when
+        both providers fail the function returns \a opts unchanged so the
+        existing RequiredOptions check produces the canonical error.
+    */
+    static hash<auto> applyInstanceCredentials(hash<auto> opts) {
+        if (opts.aws_keyid.val()) {
+            return opts;
+        }
+        if (opts.aws_imds_disabled) {
+            return opts;
+        }
+        # ECS first: it only takes one HTTP round trip and is the common path
+        # in Fargate / EKS-on-Fargate / App Runner.
+        if (getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI").val()
+                || getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI").val()) {
+            try {
+                hash<auto> creds = AwsRestClientBase::getEcsCredentials();
+                opts.aws_keyid = creds.aws_keyid;
+                opts.aws_secret = creds.aws_secret;
+                if (creds.aws_token.val()) {
+                    opts.aws_token = creds.aws_token;
+                }
+                return opts;
+            } catch () {
+                # fall through to IMDS
+            }
+        }
+        try {
+            hash<auto> creds = AwsRestClientBase::getImdsCredentials(opts);
+            opts.aws_keyid = creds.aws_keyid;
+            opts.aws_secret = creds.aws_secret;
+            if (creds.aws_token.val()) {
+                opts.aws_token = creds.aws_token;
+            }
+        } catch () {
+            # IMDS unreachable — common off-AWS; leave opts unchanged so
+            # the canonical "missing required option" error fires
+        }
+        return opts;
+    }
+
+    #! Extracts a text body from a RestClient response (hash, binary, or string)
+    private:internal static string extractTextBody(auto raw, string ctx) {
+        if (raw.typeCode() == NT_STRING) {
+            return raw;
+        }
+        if (raw.typeCode() == NT_BINARY) {
+            return raw.toString("UTF-8");
+        }
+        if (raw.typeCode() == NT_NOTHING) {
+            return "";
+        }
+        throw "AWSRESTCLIENT-IMDS-ERROR",
+            sprintf("%s has unexpected type %s", ctx, raw.type());
     }
 }
 
@@ -483,6 +721,9 @@ AwsRestClient rest({
 
         # fill missing credential/region keys from standard AWS environment variables
         opts = AwsRestClientBase::applyEnvCredentials(opts);
+        # if no static credentials are available, try ECS task-role and
+        # IMDSv2 in that order (no-op when aws_imds_disabled is True)
+        opts = AwsRestClientBase::applyInstanceCredentials(opts);
         # if aws_role_arn is set, perform a one-shot STS AssumeRole and
         # overlay the temporary credentials onto opts
         opts = AwsRestClientBase::applyAssumeRole(opts);
@@ -928,6 +1169,9 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
 
         # fill missing credential/region keys from standard AWS environment variables
         opts = AwsRestClientBase::applyEnvCredentials(opts);
+        # if no static credentials are available, try ECS task-role and
+        # IMDSv2 in that order (no-op when aws_imds_disabled is True)
+        opts = AwsRestClientBase::applyInstanceCredentials(opts);
         # if aws_role_arn is set, perform a one-shot STS AssumeRole and
         # overlay the temporary credentials onto opts
         opts = AwsRestClientBase::applyAssumeRole(opts);
