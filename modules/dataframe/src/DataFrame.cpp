@@ -17,6 +17,68 @@
 
 namespace QoreDataFrameNS {
 
+namespace {
+
+struct RecordColumnInference {
+    bool has_int = false;
+    bool has_float = false;
+    bool has_string = false;
+    bool has_bool = false;
+    bool has_date = false;
+};
+
+static void mergeRecordColumnType(RecordColumnInference& inf, QoreValue value) {
+    if (value.isNullOrNothing()) {
+        return;
+    }
+
+    switch (value.getType()) {
+        case NT_INT:
+            inf.has_int = true;
+            break;
+        case NT_FLOAT:
+        case NT_NUMBER:
+            inf.has_float = true;
+            break;
+        case NT_STRING:
+            inf.has_string = true;
+            break;
+        case NT_BOOLEAN:
+            inf.has_bool = true;
+            break;
+        case NT_DATE:
+            inf.has_date = true;
+            break;
+        default:
+            inf.has_string = true;
+            break;
+    }
+}
+
+static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
+    if (inf.has_string) {
+        return ColumnType::STRING;
+    }
+    if (inf.has_float) {
+        return ColumnType::FLOAT64;
+    }
+    if (inf.has_int && !inf.has_bool && !inf.has_date) {
+        return ColumnType::INT64;
+    }
+    if (inf.has_bool && !inf.has_int && !inf.has_float && !inf.has_date) {
+        return ColumnType::BOOL;
+    }
+    if (inf.has_date && !inf.has_int && !inf.has_float && !inf.has_bool) {
+        return ColumnType::DATE;
+    }
+    if (inf.has_int || inf.has_float || inf.has_bool || inf.has_date) {
+        return ColumnType::STRING;
+    }
+    return ColumnType::FLOAT64;
+}
+
+}
+
 QoreDataFrame::QoreDataFrame() {
 }
 
@@ -43,48 +105,101 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         col_names.push_back(hi.getKey());
     }
 
-    // Build per-column value lists
     int64_t n = (int64_t)records->size();
     size_t num_cols = col_names.size();
-    std::vector<QoreListNode*> col_values(num_cols);
-    for (size_t c = 0; c < num_cols; ++c) {
-        col_values[c] = new QoreListNode(autoTypeInfo);
-    }
-
+    std::vector<RecordColumnInference> inferred(num_cols);
     for (int64_t i = 0; i < n; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "inferring DataFrame record columns")) {
+            return nullptr;
+        }
         const QoreHashNode* row = records->retrieveEntry(i).get<const QoreHashNode>();
         if (!row) {
-            for (size_t c = 0; c < num_cols; ++c) {
-                col_values[c]->deref(xsink);
-            }
             xsink->raiseException("DATAFRAME-ERROR",
                 "expected hash at index " QLLD ", got non-hash", i);
             return nullptr;
         }
         for (size_t c = 0; c < num_cols; ++c) {
-            QoreValue v = row->getKeyValue(col_names[c].c_str());
-            col_values[c]->push(v.refSelf(), xsink);
+            mergeRecordColumnType(inferred[c], row->getKeyValue(col_names[c].c_str()));
         }
     }
 
-    // Build DataFrame
     auto* df = new QoreDataFrame();
     df->n_rows = n;
     for (size_t c = 0; c < num_cols; ++c) {
+        auto data = std::make_shared<ColumnData>();
+        data->type = finishRecordColumnType(inferred[c]);
+        data->n_rows = n;
+        data->null_mask.resize(n, 0);
+        switch (data->type) {
+            case ColumnType::FLOAT64:
+                data->float_data.resize(n);
+                break;
+            case ColumnType::INT64:
+                data->int_data.resize(n);
+                break;
+            case ColumnType::STRING:
+                data->str_data.resize(n);
+                break;
+            case ColumnType::BOOL:
+                data->bool_data.resize(n);
+                break;
+            case ColumnType::DATE:
+                data->date_data.resize(n);
+                break;
+            default:
+                break;
+        }
+
         Column col;
         col.name = col_names[c];
-        col.data = buildColumnDataAuto(col_values[c], xsink);
-        col_values[c]->deref(xsink);
-        if (*xsink) {
-            // Clean up remaining lists
-            for (size_t j = c + 1; j < num_cols; ++j) {
-                col_values[j]->deref(xsink);
-            }
+        col.data = std::move(data);
+        df->col_index[col.name] = df->columns.size();
+        df->columns.push_back(std::move(col));
+    }
+
+    for (int64_t i = 0; i < n; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame from records")) {
             delete df;
             return nullptr;
         }
-        df->col_index[col.name] = df->columns.size();
-        df->columns.push_back(std::move(col));
+        const QoreHashNode* row = records->retrieveEntry(i).get<const QoreHashNode>();
+        for (size_t c = 0; c < num_cols; ++c) {
+            ColumnData& data = *df->columns[c].data;
+            QoreValue value = row->getKeyValue(col_names[c].c_str());
+            if (value.isNullOrNothing()) {
+                data.null_mask[i] = 1;
+                if (data.type == ColumnType::FLOAT64) {
+                    data.float_data(i) = std::numeric_limits<double>::quiet_NaN();
+                }
+                continue;
+            }
+
+            switch (data.type) {
+                case ColumnType::FLOAT64:
+                    data.float_data(i) = value.getAsFloat();
+                    break;
+                case ColumnType::INT64:
+                    data.int_data[i] = value.getAsBigInt();
+                    break;
+                case ColumnType::STRING: {
+                    QoreStringValueHelper str(value);
+                    data.str_data[i] = str->c_str();
+                    break;
+                }
+                case ColumnType::BOOL:
+                    data.bool_data[i] = value.getAsBool() ? 1 : 0;
+                    break;
+                case ColumnType::DATE:
+                    if (value.getType() == NT_DATE) {
+                        data.date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                    } else {
+                        data.null_mask[i] = 1;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 
     return df;
@@ -836,22 +951,65 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
     const ColumnData& cd = *columns[col_idx].data;
     std::vector<uint8_t> mask(n_rows, 0);
 
+    const bool op_eq = op == "==";
+    const bool op_ne = op == "!=";
+    const bool op_lt = op == "<";
+    const bool op_le = op == "<=";
+    const bool op_gt = op == ">";
+    const bool op_ge = op == ">=";
+    const bool op_contains = op == "contains";
+    const bool op_startswith = op == "startswith";
+    const bool op_endswith = op == "endswith";
+    const bool op_is_null = op == "is_null";
+    const bool op_not_null = op == "not_null";
+    const bool cmp_is_null = value.isNullOrNothing();
+    double cmp_float = 0.0;
+    int64_t cmp_int = 0;
+    bool cmp_bool = false;
+    int64_t cmp_date = 0;
+    std::string cmp_string;
+    if (!cmp_is_null) {
+        switch (cd.type) {
+            case ColumnType::FLOAT64:
+                cmp_float = value.getAsFloat();
+                break;
+            case ColumnType::INT64:
+                cmp_int = value.getAsBigInt();
+                break;
+            case ColumnType::STRING: {
+                QoreStringValueHelper sh(value);
+                cmp_string = sh->c_str();
+                break;
+            }
+            case ColumnType::BOOL:
+                cmp_bool = value.getAsBool();
+                break;
+            case ColumnType::DATE:
+                if (value.getType() == NT_DATE) {
+                    cmp_date = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
     for (int64_t i = 0; i < n_rows; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame row mask")) {
             return {};
         }
 
         if (cd.isNull(i)) {
-            mask[i] = (op == "is_null" || (op == "==" && value.isNullOrNothing())) ? 1 : 0;
+            mask[i] = (op_is_null || (op_eq && cmp_is_null)) ? 1 : 0;
             continue;
         }
 
-        if (op == "not_null") {
+        if (op_not_null) {
             mask[i] = 1;
             continue;
         }
-        if (op == "is_null" || value.isNullOrNothing()) {
-            mask[i] = (op == "!=" && value.isNullOrNothing()) ? 1 : 0;
+        if (op_is_null || cmp_is_null) {
+            mask[i] = (op_ne && cmp_is_null) ? 1 : 0;
             continue;
         }
 
@@ -859,60 +1017,46 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
 
         if (cd.type == ColumnType::FLOAT64) {
             double cell = cd.float_data(i);
-            double cmp = value.getAsFloat();
-            if (op == "==") { match = cell == cmp; }
-            else if (op == "!=") { match = cell != cmp; }
-            else if (op == "<") { match = cell < cmp; }
-            else if (op == "<=") { match = cell <= cmp; }
-            else if (op == ">") { match = cell > cmp; }
-            else if (op == ">=") { match = cell >= cmp; }
+            if (op_eq) { match = cell == cmp_float; }
+            else if (op_ne) { match = cell != cmp_float; }
+            else if (op_lt) { match = cell < cmp_float; }
+            else if (op_le) { match = cell <= cmp_float; }
+            else if (op_gt) { match = cell > cmp_float; }
+            else if (op_ge) { match = cell >= cmp_float; }
         } else if (cd.type == ColumnType::INT64) {
             int64_t cell = cd.int_data[i];
-            int64_t cmp = value.getAsBigInt();
-            if (op == "==") { match = cell == cmp; }
-            else if (op == "!=") { match = cell != cmp; }
-            else if (op == "<") { match = cell < cmp; }
-            else if (op == "<=") { match = cell <= cmp; }
-            else if (op == ">") { match = cell > cmp; }
-            else if (op == ">=") { match = cell >= cmp; }
+            if (op_eq) { match = cell == cmp_int; }
+            else if (op_ne) { match = cell != cmp_int; }
+            else if (op_lt) { match = cell < cmp_int; }
+            else if (op_le) { match = cell <= cmp_int; }
+            else if (op_gt) { match = cell > cmp_int; }
+            else if (op_ge) { match = cell >= cmp_int; }
         } else if (cd.type == ColumnType::STRING) {
             const std::string& cell = cd.str_data[i];
-            std::string cmp;
-            if (value.getType() == NT_STRING) {
-                QoreStringValueHelper sh(value);
-                cmp = sh->c_str();
-            } else {
-                QoreStringValueHelper sh(value);
-                cmp = sh->c_str();
-            }
-            if (op == "==") { match = cell == cmp; }
-            else if (op == "!=") { match = cell != cmp; }
-            else if (op == "<") { match = cell < cmp; }
-            else if (op == "<=") { match = cell <= cmp; }
-            else if (op == ">") { match = cell > cmp; }
-            else if (op == ">=") { match = cell >= cmp; }
-            else if (op == "contains") { match = cell.find(cmp) != std::string::npos; }
-            else if (op == "startswith") { match = cell.compare(0, cmp.size(), cmp) == 0; }
-            else if (op == "endswith") {
-                match = cell.size() >= cmp.size()
-                    && cell.compare(cell.size() - cmp.size(), cmp.size(), cmp) == 0;
+            if (op_eq) { match = cell == cmp_string; }
+            else if (op_ne) { match = cell != cmp_string; }
+            else if (op_lt) { match = cell < cmp_string; }
+            else if (op_le) { match = cell <= cmp_string; }
+            else if (op_gt) { match = cell > cmp_string; }
+            else if (op_ge) { match = cell >= cmp_string; }
+            else if (op_contains) { match = cell.find(cmp_string) != std::string::npos; }
+            else if (op_startswith) { match = cell.compare(0, cmp_string.size(), cmp_string) == 0; }
+            else if (op_endswith) {
+                match = cell.size() >= cmp_string.size()
+                    && cell.compare(cell.size() - cmp_string.size(), cmp_string.size(), cmp_string) == 0;
             }
         } else if (cd.type == ColumnType::BOOL) {
             bool cell = cd.bool_data[i];
-            bool cmp = value.getAsBool();
-            if (op == "==") { match = cell == cmp; }
-            else if (op == "!=") { match = cell != cmp; }
-        } else if (cd.type == ColumnType::DATE) {
-            if (value.getType() == NT_DATE) {
+            if (op_eq) { match = cell == cmp_bool; }
+            else if (op_ne) { match = cell != cmp_bool; }
+        } else if (cd.type == ColumnType::DATE && value.getType() == NT_DATE) {
                 int64_t cell = cd.date_data[i];
-                int64_t cmp = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
-                if (op == "==") { match = cell == cmp; }
-                else if (op == "!=") { match = cell != cmp; }
-                else if (op == "<") { match = cell < cmp; }
-                else if (op == "<=") { match = cell <= cmp; }
-                else if (op == ">") { match = cell > cmp; }
-                else if (op == ">=") { match = cell >= cmp; }
-            }
+                if (op_eq) { match = cell == cmp_date; }
+                else if (op_ne) { match = cell != cmp_date; }
+                else if (op_lt) { match = cell < cmp_date; }
+                else if (op_le) { match = cell <= cmp_date; }
+                else if (op_gt) { match = cell > cmp_date; }
+                else if (op_ge) { match = cell >= cmp_date; }
         }
 
         if (match) {

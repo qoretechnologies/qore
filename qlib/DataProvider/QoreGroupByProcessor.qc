@@ -137,6 +137,9 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         #! Runtime DataFrame class captured from DataFrameBlock input for shape-preserving flushes
         *Class pending_dataframe_class;
 
+        #! Native DataFrame aggregate result for simple single-block DataFrameBlock inputs
+        *auto pending_dataframe_native_result;
+
         #! Flag indicating if the processor has been configured
         bool configured = False;
     }
@@ -325,10 +328,17 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
         pending_output_shape_set = False;
         remove pending_dataframe_class;
+        remove pending_dataframe_native_result;
     }
 
     #! Emits one record per group with computed aggregates for direct row-record callers
     private *list<auto> flushRecordsImpl() {
+        if (exists pending_dataframe_native_result) {
+            auto result = pending_dataframe_native_result;
+            clearAccumulatedState();
+            return result.toRecords();
+        }
+
         *list<auto> results = buildFlushRows();
         if (!results) {
             return;
@@ -339,6 +349,27 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
     #! Emits accumulated results in the negotiated pipeline shape when possible
     private flushImpl(code enqueue) {
+        if (exists pending_dataframe_native_result) {
+            auto result = pending_dataframe_native_result;
+            DataProviderShape output_shape = pending_output_shape;
+            clearAccumulatedState();
+
+            switch (output_shape) {
+                case DataProviderShape::DataFrameBlock:
+                    enqueue(result);
+                    return;
+                case DataProviderShape::HashOfLists:
+                case DataProviderShape::BufferColumns:
+                    enqueue(result.toColumnHash());
+                    return;
+                case DataProviderShape::RowRecords:
+                    map enqueue($1), result.toRecords();
+                    return;
+            }
+            map enqueue($1), result.toRecords();
+            return;
+        }
+
         *list<auto> results = buildFlushRows();
         if (!results) {
             return;
@@ -382,6 +413,13 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             case DataProviderShape::DataFrameBlock:
                 updatePendingOutputShape(DataProviderShape::DataFrameBlock);
                 pending_dataframe_class = Class::getClass(records);
+                if (!groups.size() && !exists pending_dataframe_native_result) {
+                    *auto native_result = tryNativeDataFrameAggregate(records);
+                    if (exists native_result) {
+                        pending_dataframe_native_result = native_result;
+                        return;
+                    }
+                }
                 accumulateHashOfLists(records.toColumnHash());
                 return;
             case DataProviderShape::HashOfLists:
@@ -417,6 +455,88 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
     */
     private list<DataProviderShape> supportedOutputShapesImpl() {
         return (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns True when a field name can be evaluated directly by DataFrame native methods
+    private bool isNativeDataFrameField(string field) {
+        return field.find(".") < 0;
+    }
+
+    #! Returns True if the aggregate set can use the native DataFrame aggregation path
+    private bool canUseNativeDataFrameAggregate() {
+        foreach string field in (group_by_fields) {
+            if (!isNativeDataFrameField(field)) {
+                return False;
+            }
+        }
+
+        hash<auto> output_names;
+        foreach string field in (group_by_fields) {
+            output_names{field} = True;
+        }
+        foreach hash<GroupByAggSpec> spec in (agg_specs) {
+            if (output_names{spec.output_name}) {
+                return False;
+            }
+            output_names{spec.output_name} = True;
+
+            switch (spec.op) {
+                case "count":
+                    break;
+                case "sum":
+                case "min":
+                case "max":
+                    if (!spec.field || !isNativeDataFrameField(spec.field)) {
+                        return False;
+                    }
+                    break;
+                default:
+                    return False;
+            }
+        }
+        return True;
+    }
+
+    #! Adds or renames one native DataFrame aggregate output column
+    private auto addNativeAggregateOutput(*auto result, auto grouped, hash<GroupByAggSpec> spec) {
+        if (spec.op == "count") {
+            auto counts = grouped.count();
+            if (!exists result) {
+                result = counts;
+                if (spec.output_name != "count") {
+                    result.renameColumn("count", spec.output_name);
+                }
+            } else {
+                result.addColumn(spec.output_name, counts.getColumn("count"));
+            }
+            return result;
+        }
+
+        hash<auto> agg_spec = {spec.field: spec.op};
+        auto one = grouped.agg(agg_spec);
+        if (spec.output_name != spec.field) {
+            one.renameColumn(spec.field, spec.output_name);
+        }
+
+        if (!exists result) {
+            return one;
+        }
+        result.addColumn(spec.output_name, one.getColumn(spec.output_name));
+        return result;
+    }
+
+    #! Attempts a native DataFrame group-by aggregate for simple aggregate specs
+    private *auto tryNativeDataFrameAggregate(auto records) {
+        if (!canUseNativeDataFrameAggregate()) {
+            return;
+        }
+
+        auto grouped = records.groupBy(group_by_fields);
+        *auto result;
+        foreach hash<GroupByAggSpec> spec in (agg_specs) {
+            result = addNativeAggregateOutput(result, grouped, spec);
+        }
+        return result;
     }
 
     #! Returns the processor capability bitfield
