@@ -285,6 +285,17 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
             return df.column(null_field).compare(op == DP_OP_IS_NULL ? "==" : "!=", NOTHING);
         }
 
+        *hash<auto> between = getBetweenComparison(expr, op);
+        if (between) {
+            return buildDataFrameBetweenMask(df, between{"field"}, between{"low"}, between{"high"});
+        }
+
+        *hash<auto> in_comparison = getInComparison(expr, op);
+        if (in_comparison) {
+            return buildDataFrameInMask(df, in_comparison{"field"}, in_comparison{"values"},
+                in_comparison{"negated"});
+        }
+
         *hash<auto> comparison = getDataFrameComparison(expr, op);
         if (!comparison) {
             return;
@@ -304,6 +315,23 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
                 return df.column(field).compare(op, value);
         }
         return;
+    }
+
+    #! Builds a DataFrame row mask for one between expression, if supported
+    private *auto buildDataFrameBetweenMask(auto df, string field, auto low, auto high) {
+        auto lower = df.column(field).compare(DP_SEARCH_OP_GE, low);
+        auto upper = df.column(field).compare(DP_SEARCH_OP_LE, high);
+        return lower.intersect(upper);
+    }
+
+    #! Builds a DataFrame row mask for one in/not-in expression, if supported
+    private *auto buildDataFrameInMask(auto df, string field, list<auto> values, bool negated) {
+        *auto combined;
+        foreach auto value in (values) {
+            auto mask = df.column(field).compare(DP_SEARCH_OP_EQ, value);
+            combined = !exists combined ? mask : combined.unionWith(mask);
+        }
+        return exists combined ? (negated ? combined.invert() : combined) : NOTHING;
     }
 
     #! Filters a ColumnarResult block with a compiled buffer mask when possible
@@ -351,6 +379,17 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
             return records.nullMask(null_field, op == DP_OP_IS_NOT_NULL);
         }
 
+        *hash<auto> between = getBetweenComparison(expr, op);
+        if (between) {
+            return buildBufferBetweenMask(records, between{"field"}, between{"low"}, between{"high"});
+        }
+
+        *hash<auto> in_comparison = getInComparison(expr, op);
+        if (in_comparison) {
+            return buildBufferInMask(records, in_comparison{"field"}, in_comparison{"values"},
+                in_comparison{"negated"});
+        }
+
         *hash<auto> comparison = getDataFrameComparison(expr, op);
         if (!comparison || !exists comparison.value || comparison.value.typeCode() == NT_NULL) {
             return;
@@ -382,6 +421,33 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         return;
     }
 
+    #! Builds a boolean buffer mask for one dense between expression
+    private *auto buildBufferBetweenMask(auto records, string field, auto low, auto high) {
+        auto column = records.getColumn(field);
+        if (column.typeCode() != NT_BUFFER) {
+            return;
+        }
+        return records.combineMasks(column >= low, column <= high, DP_OP_AND);
+    }
+
+    #! Builds a boolean buffer mask for one dense in/not-in expression
+    private *auto buildBufferInMask(auto records, string field, list<auto> values, bool negated) {
+        auto column = records.getColumn(field);
+        if (column.typeCode() != NT_BUFFER) {
+            return;
+        }
+
+        *auto combined;
+        foreach auto value in (values) {
+            auto mask = column == value;
+            combined = !exists combined ? mask : records.combineMasks(combined, mask, DP_OP_OR);
+        }
+        if (!exists combined) {
+            return;
+        }
+        return negated ? records.invertMask(combined) : combined;
+    }
+
     #! Returns the field name for a unary null-check expression, if supported
     private *string getNullCheckField(hash<DataProviderExpression> expr, string op) {
         if (op != DP_OP_IS_NULL && op != DP_OP_IS_NOT_NULL) {
@@ -392,6 +458,58 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         }
         string field = expr.args[0].field;
         return field.find(".") < 0 ? field : NOTHING;
+    }
+
+    #! Returns vectorizable between-expression information, if supported
+    private *hash<auto> getBetweenComparison(hash<DataProviderExpression> expr, string op) {
+        if (op != DP_SEARCH_OP_BETWEEN || expr.args.size() != 3
+                || !(expr.args[0] instanceof hash<DataProviderFieldReference>)
+                || !isScalarComparisonArg(expr.args[1]) || !isScalarComparisonArg(expr.args[2])) {
+            return;
+        }
+        return {
+            "field": expr.args[0].field,
+            "low": unwrapComparisonValue(expr.args[1]),
+            "high": unwrapComparisonValue(expr.args[2]),
+        };
+    }
+
+    #! Returns vectorizable in/not-in expression information, if supported
+    private *hash<auto> getInComparison(hash<DataProviderExpression> expr, string op) {
+        if ((op != DP_SEARCH_OP_IN && op != DP_OP_NOT_IN) || expr.args.size() < 2
+                || !(expr.args[0] instanceof hash<DataProviderFieldReference>)) {
+            return;
+        }
+
+        list<auto> values();
+        if (expr.args.size() == 2) {
+            auto arg = unwrapComparisonValue(expr.args[1]);
+            if (arg.typeCode() == NT_LIST) {
+                foreach auto value in (arg) {
+                    if (!isScalarComparisonArg(value)) {
+                        return;
+                    }
+                    push values, unwrapComparisonValue(value);
+                }
+            } else {
+                if (!isScalarComparisonArg(expr.args[1])) {
+                    return;
+                }
+                push values, arg;
+            }
+        } else {
+            for (int i = 1; i < expr.args.size(); ++i) {
+                if (!isScalarComparisonArg(expr.args[i])) {
+                    return;
+                }
+                push values, unwrapComparisonValue(expr.args[i]);
+            }
+        }
+        return {
+            "field": expr.args[0].field,
+            "values": values,
+            "negated": op == DP_OP_NOT_IN,
+        };
     }
 
     #! Returns vectorizable DataFrame comparison information, if supported

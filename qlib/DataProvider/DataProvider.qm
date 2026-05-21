@@ -794,8 +794,9 @@ pipeline.waitDone();
 
     @note
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
-    \c DataFrameBlock and \c BufferColumns directly.  Supported comparisons, null checks, and boolean
-    combinations compile to DataFrame row masks or dense ColumnarResult \c buffer<bool> masks.  More complex
+    \c DataFrameBlock and \c BufferColumns directly.  Supported scalar comparisons, \c between,
+    \c in, \c notIn, null checks, and boolean combinations compile to DataFrame row masks or dense
+    ColumnarResult \c buffer<bool> masks.  More complex
     expressions fall back to row-record evaluation while preserving the negotiated shape when possible.
     @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
     @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and

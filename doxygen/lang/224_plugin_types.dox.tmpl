@@ -297,9 +297,10 @@ ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
 
     DataProvider filter processors compile supported DPQL/DataProvider
     expressions over ColumnarResult blocks to dense boolean masks. Supported
-    compiled predicates include \c &&, \c ||, \c !, and scalar comparison
-    operators over dense buffer columns, plus \c isNull and \c isNotNull checks;
-    unsupported expressions fall back to the normal row semantics:
+    compiled predicates include \c &&, \c ||, \c !, scalar comparison
+    operators, \c between, \c in, and \c notIn over dense buffer columns, plus
+    \c isNull and \c isNotNull checks; unsupported expressions fall back to the
+    normal row semantics:
 
     @code{.py}
 %requires DataProviderDataFrame

@@ -842,7 +842,7 @@ struct PluginValidationState {
                 expected ? expected : "<unspecified>",
                 actual ? actual : "<unspecified>",
                 subreason ? subreason : "<unspecified>",
-                section ? section : "design-pending/plugin-types-and-dense-data.md#3.3");
+                section ? section : "design/plugin-types-and-dense-data.md#plugin-type-abi");
         }
         return !collect_all;
     }

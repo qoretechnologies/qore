@@ -1014,6 +1014,45 @@ sub invalid_dataframe_api() {
         assertEq(2, filtered.numRows(), "DataFrameBlock filter keeps matching rows");
         assertEq(("Carol", "Dave"), filtered.getColumn("name"), "DataFrameBlock filter preserves row order");
 
+        hash<DataProviderExpression> between_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_BETWEEN,
+            "args": (<DataProviderFieldReference>{"field": "amount"}, 100, 200),
+        };
+        QoreFilterRecordsProcessor between_proc({"where_cond": between_expr});
+        DataFrame::DataFrame between_filtered = between_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), between_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports between masks");
+
+        hash<DataProviderExpression> in_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+        };
+        QoreFilterRecordsProcessor in_proc({"where_cond": in_expr});
+        DataFrame::DataFrame in_filtered = in_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol", "Dave"), in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports in masks");
+
+        hash<DataProviderExpression> list_in_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, ("active", "pending")),
+        };
+        QoreFilterRecordsProcessor list_in_proc({"where_cond": list_in_expr});
+        DataFrame::DataFrame list_in_filtered = list_in_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol", "Dave"), list_in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports list-valued in masks");
+
+        hash<DataProviderExpression> not_in_expr = <DataProviderExpression>{
+            "exp": DP_OP_NOT_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, "inactive"),
+        };
+        QoreFilterRecordsProcessor not_in_proc({"where_cond": not_in_expr});
+        DataFrame::DataFrame not_in_filtered = not_in_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol", "Dave"), not_in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports not-in masks");
+
         hash<DataProviderExpression> fallback_expr = <DataProviderExpression>{
             "exp": "||",
             "args": (
@@ -1339,6 +1378,42 @@ sub invalid_dataframe_api() {
         QoreFilterRecordsProcessor not_proc({"where_cond": not_expr});
         assertEq((2, 3, 4), not_proc.processRecordsShape(columns, DataProviderShape::BufferColumns).getColumn("id").toList(),
             "BufferColumns vectorized filter supports NOT masks");
+
+        hash<DataProviderExpression> between_columns_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_BETWEEN,
+            "args": (<DataProviderFieldReference>{"field": "amount"}, 120.0, 200.0),
+        };
+        QoreFilterRecordsProcessor between_columns_proc({"where_cond": between_columns_expr});
+        assertEq((3, 4), between_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports between masks");
+
+        hash<DataProviderExpression> in_columns_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, 1, 4),
+        };
+        QoreFilterRecordsProcessor in_columns_proc({"where_cond": in_columns_expr});
+        assertEq((1, 4), in_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports in masks");
+
+        hash<DataProviderExpression> list_in_columns_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, (1, 4)),
+        };
+        QoreFilterRecordsProcessor list_in_columns_proc({"where_cond": list_in_columns_expr});
+        assertEq((1, 4), list_in_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports list-valued in masks");
+
+        hash<DataProviderExpression> not_in_columns_expr = <DataProviderExpression>{
+            "exp": DP_OP_NOT_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, 1, 4),
+        };
+        QoreFilterRecordsProcessor not_in_columns_proc({"where_cond": not_in_columns_expr});
+        assertEq((2, 3), not_in_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports not-in masks");
 
         DataFrame::DataFrame filtered_df = AbstractDataProcessor::convertShape(
             filtered, DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0];
