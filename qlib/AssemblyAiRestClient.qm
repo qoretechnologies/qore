@@ -30,6 +30,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires QoreAsyncJobUtils
+%requires QoreSpeechUtils
 
 module AssemblyAiRestClient {
     version = "1.0";
@@ -40,6 +41,8 @@ module AssemblyAiRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("assemblyai",
             AssemblyAiRestConnection::ConnectionScheme);
+        QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
+            new AssemblyAiTranscriberFactory());
     };
 }
 
@@ -373,6 +376,68 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
                 doUpdateOptions(self, update);
             }
         }
+    }
+}
+
+#! @ref QoreSpeechUtils::AbstractTranscriber "AbstractTranscriber" backed by
+#! AssemblyAI's `/v2/transcript` endpoint
+public class AssemblyAiTranscriber inherits QoreSpeechUtils::AbstractTranscriber {
+    private {
+        AssemblyAiRestClientIo rest;
+        *string model;
+    }
+
+    constructor(hash<QoreSpeechUtils::TranscriberConfig> config) {
+        if (!config.api_key.val()) {
+            throw "SPEECH-CONFIG-ERROR",
+                "TranscriberConfig.api_key is required for the AssemblyAI backend";
+        }
+        rest = new AssemblyAiRestClientIo({
+            "apikey": config.api_key,
+            "url": config.url ?? AssemblyAiRestClientBase::DefaultUrl,
+        });
+        model = config.model;
+    }
+
+    string getMode() { return "assemblyai"; }
+    *string getModel() { return model; }
+
+    hash<QoreSpeechUtils::TranscriptionResult> transcribe(string audio_url,
+            *hash<auto> opts) {
+        hash<auto!> submit_opts;
+        if (model) {
+            submit_opts.speech_model = model;
+        }
+        if (opts) {
+            foreach hash<auto> p in (opts.pairIterator()) {
+                submit_opts{p.key} = p.value;
+            }
+        }
+        hash<auto> resp = rest.transcribe(audio_url, submit_opts);
+        return <QoreSpeechUtils::TranscriptionResult>{
+            "text": resp.text ?? "",
+            "language": resp.language_code,
+            "confidence": resp.confidence,
+            "audio_duration": resp.audio_duration,
+            "words": resp.words,
+            "utterances": resp.utterances,
+            "summary": resp.summary,
+            "raw": resp,
+        };
+    }
+}
+
+#! Factory for @ref AssemblyAiTranscriber
+public class AssemblyAiTranscriberFactory inherits QoreSpeechUtils::AbstractTranscriberFactory {
+    string getMode() {
+        return "assemblyai";
+    }
+    string getDisplayName() {
+        return "AssemblyAI ASR (Universal / Slam / Nano model families)";
+    }
+    QoreSpeechUtils::AbstractTranscriber create(
+            hash<QoreSpeechUtils::TranscriberConfig> config) {
+        return new AssemblyAiTranscriber(config);
     }
 }
 }

@@ -2458,6 +2458,20 @@ cargo install tree-sitter-cli@0.26.5
       - uses @ref qorecodecompletionintro "QoreCodeCompletion" module for context-aware code completion
       - @ref linenoiseintro "linenoise" is now a mandatory dependency (no longer optional)
 
+    - @ref qorespeechutilsintro "QoreSpeechUtils" module
+      - new module providing a provider-neutral abstraction layer for speech AI
+      - @ref QoreSpeechUtils::AbstractTranscriber "AbstractTranscriber" — common
+        ASR contract for cloud + self-hosted speech recognition backends
+      - @ref QoreSpeechUtils::AbstractSpeechSynthesizer "AbstractSpeechSynthesizer"
+        — common TTS contract for cloud + self-hosted voice synthesis backends
+      - @ref QoreSpeechUtils::SpeechProviderRegistry "SpeechProviderRegistry"
+        with lazy-loaded `TranscriberModuleMap` + `SynthesizerModuleMap` — callers
+        select backends by name (\c "deepgram", \c "assemblyai", ...) without
+        having to `%requires` every provider module up front
+      - @ref deepgramrestclientintro "DeepgramRestClient" registers transcriber
+        + synthesizer backends; @ref assemblyairestclientintro "AssemblyAiRestClient"
+        registers a transcriber backend
+
     - @ref qorestructuredextractionintro "QoreStructuredExtraction" module
       - new module providing LLM-based structured information extraction from unstructured text
       - built-in templates: NER, invoice, contact, and sentiment analysis schemas
