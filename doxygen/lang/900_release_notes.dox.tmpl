@@ -1857,28 +1857,6 @@ cargo install tree-sitter-cli@0.26.5
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
     @subsection qore_2_3_0_new_user_modules New User Modules
-    - \c LemlistDataProvider module
-      - new module providing a data provider API for <a href="https://www.lemlist.com/">Lemlist</a> sales outreach and email campaign services
-      - campaign management (create, pause, start campaigns)
-      - lead management (add, update, remove leads from campaigns)
-      - activity tracking (emails sent, opened, clicked, replied, bounced)
-      - task management (create and update manual tasks)
-      - contact management (list and retrieve contacts)
-      - webhook-based event triggers for 7 email and engagement event types
-      - action catalog integration with 13 actions and 7 triggers
-      - connection support with \c lemlist:// URL scheme
-
-    - \c TableauDataProvider module
-      - new module providing a data provider API for <a href="https://www.tableau.com/">Tableau</a> analytics
-      - datasource management (search, get, update, delete, download, add/remove tags)
-      - project management (search, create, update, delete)
-      - user management (search, get, create, update, delete)
-      - extract refresh task management (list, get, delete)
-      - webhook-based event triggers for datasource lifecycle events (created, deleted, updated, refresh started/succeeded/failed)
-      - polling-based event triggers for new datasources and new projects
-      - action catalog integration with 20 actions and 8 triggers
-      - connection support with \c tableaures:// URL scheme
-
     - @ref aftershipdataproviderintro "AftershipDataProvider" module
       - new module providing a data provider API for <a href="https://www.aftership.com/">Aftership</a> tracking and returns services
 
@@ -2045,6 +2023,17 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.chargebee.com/">Chargebee</a>'s subscription billing API
       - supports HTTP Basic Authentication with API Key as username
       - provides ChargebeeRestConnection for connection management with \c chargebee:// URL scheme
+
+    - @ref chromadataproviderintro "ChromaDataProvider" module
+      - new module providing a data provider API for <a href="https://www.trychroma.com">Chroma</a> vector-database servers
+      - exposes one action: `vector-search` (POST to a collection's `/query` endpoint)
+      - action catalog integration with 1 action under the \c chroma scheme
+
+    - @ref chromarestclientintro "ChromaRestClient" module
+      - new module providing a REST client for <a href="https://www.trychroma.com">Chroma</a> vector-database servers
+      - supports API key (Bearer token) authentication and tenant/database routing
+      - registers a `chroma` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" via `ChromaVectorStore` — supports upsert, deleteByIds, and cosine/L2/IP nearest-neighbor search
+      - provides ChromaRestConnection for connection management with \c chroma:// URL scheme
 
     - @ref cin7coredataproviderintro "Cin7CoreDataProvider" module
       - new module providing a data provider API for <a href="https://www.cin7.com/">Cin7Core</a> inventory management and ERP
@@ -2533,6 +2522,17 @@ cargo install tree-sitter-cli@0.26.5
         reports, keytab rotation decisions, and deployment health checks without exposing
         token or credential material in diagnostics
 
+    - \c LemlistDataProvider module
+      - new module providing a data provider API for <a href="https://www.lemlist.com/">Lemlist</a> sales outreach and email campaign services
+      - campaign management (create, pause, start campaigns)
+      - lead management (add, update, remove leads from campaigns)
+      - activity tracking (emails sent, opened, clicked, replied, bounced)
+      - task management (create and update manual tasks)
+      - contact management (list and retrieve contacts)
+      - webhook-based event triggers for 7 email and engagement event types
+      - action catalog integration with 13 actions and 7 triggers
+      - connection support with \c lemlist:// URL scheme
+
     - @ref lemlistrestclientintro "LemlistRestClient" module
       - new module providing a REST client for <a href="https://www.lemlist.com/">Lemlist</a>'s sales outreach API
       - supports HTTP Basic Authentication with API key (empty username, API key as password)
@@ -2587,6 +2587,17 @@ cargo install tree-sitter-cli@0.26.5
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
 
+    - @ref milvusdataproviderintro "MilvusDataProvider" module
+      - new module providing a data provider API for <a href="https://milvus.io">Milvus</a> / Zilliz Cloud vector-database servers
+      - exposes one action: `vector-search` (POST to `/v2/vectordb/entities/search`)
+      - action catalog integration with 1 action under the \c milvus scheme
+
+    - @ref milvusrestclientintro "MilvusRestClient" module
+      - new module providing a REST client for <a href="https://milvus.io">Milvus</a> / Zilliz Cloud vector-database servers
+      - supports API key (Bearer token) authentication; works against both self-hosted Milvus and Zilliz Cloud (same module, different URL)
+      - registers a `milvus` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" via `MilvusVectorStore` — supports upsert, deleteByIds, and configurable `metric_type` (cosine, L2, IP) with pass-through filter expressions
+      - provides MilvusRestConnection for connection management with \c milvus:// URL scheme
+
     - @ref mistraldataproviderintro "MistralDataProvider" module
       - new module providing a data provider API for <a href="https://mistral.ai">Mistral AI</a> chat, embeddings, and document OCR
       - exposes three actions: `chat-completion` (OpenAI-compatible `/v1/chat/completions`), `create-embeddings` (`/v1/embeddings`), and `ocr` (`/v1/ocr` — extracts structured markdown from PDFs/images)
@@ -2610,16 +2621,8 @@ cargo install tree-sitter-cli@0.26.5
       - record iterators and internal cursors use
         <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> and
         <tt>MongoCursor&lt;hash&lt;auto&gt;&gt;</tt>
+      - <b>Atlas Vector Search support</b>: new `MongoDbVectorSearchDataProvider` exposes a `vector-search` DPAT_API action that wraps the `$vectorSearch` aggregation stage, plus a `mongo-atlas` vector-store backend registered with @ref qoreragutilsintro "QoreRagUtils" via `MongoAtlasVectorStore`
       - connection support with \c mongodb:// URL scheme
-
-    - @ref onedrivedataproviderintro "OneDriveDataProvider" module
-      - new module providing a data provider API for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> cloud file storage
-      - supports file/folder CRUD, search, sharing links, upload sessions, and delta query change tracking
-
-    - @ref onedriverestclientintro "OneDriveRestClient" module
-      - new module providing a REST client for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> via Microsoft Graph API
-      - provides OneDriveRestConnection for connection management with \c onedrive:// URL scheme
-      - supports OAuth2 with tenant-aware authentication and RestClientIo async pattern
 
     - @ref ollamadataproviderintro "OllamaDataProvider" module
       - new module providing a data provider API for <a href="https://ollama.com">Ollama</a> local-first LLM runtimes
@@ -2632,6 +2635,15 @@ cargo install tree-sitter-cli@0.26.5
       - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat (uses Ollama's OpenAI-compat surface); registers an `ollama` embedder backend that uses Ollama's native `/api/embed` for richer response detail
       - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c ollama
       - provides OllamaRestConnection for connection management with \c ollama:// URL scheme
+
+    - @ref onedrivedataproviderintro "OneDriveDataProvider" module
+      - new module providing a data provider API for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> cloud file storage
+      - supports file/folder CRUD, search, sharing links, upload sessions, and delta query change tracking
+
+    - @ref onedriverestclientintro "OneDriveRestClient" module
+      - new module providing a REST client for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> via Microsoft Graph API
+      - provides OneDriveRestConnection for connection management with \c onedrive:// URL scheme
+      - supports OAuth2 with tenant-aware authentication and RestClientIo async pattern
 
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
@@ -2667,6 +2679,18 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://pdf.co/">PDF.co</a>'s document processing API
       - supports API key authentication via \c x-api-key header
       - provides PdfCoRestConnection for connection management with \c pdfco:// URL scheme
+
+    - @ref pineconedataproviderintro "PineconeDataProvider" module
+      - new module providing a data provider API for <a href="https://www.pinecone.io">Pinecone</a> serverless vector-database control-plane
+      - exposes one action: `list-indexes` (`GET /indexes`)
+      - action catalog integration with 1 action under the \c pinecone scheme
+
+    - @ref pineconerestclientintro "PineconeRestClient" module
+      - new module providing a REST client for <a href="https://www.pinecone.io">Pinecone</a> serverless vector-database servers
+      - supports API key authentication via the `Api-Key` header
+      - two-plane architecture with lazy control-plane host resolution: a single `PineconeRestClientIo` instance routes control-plane calls (`/indexes`, `/collections`) to `https://api.pinecone.io` and data-plane calls (upsert, query) to the per-index host returned by the control plane
+      - registers a `pinecone` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" via `PineconeVectorStore` — supports upsert, deleteByIds, and metadata filter pass-through
+      - provides PineconeRestConnection for connection management with \c pinecone:// URL scheme
 
     - @ref qdrantdataproviderintro "QdrantDataProvider" module
       - new module providing a data provider API for <a href="https://qdrant.tech/">Qdrant</a> vector database instances
@@ -2976,6 +3000,17 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key authentication via X-API-Key header
       - provides SystemeIoRestConnection for connection management with \c systemeio:// URL scheme
 
+    - \c TableauDataProvider module
+      - new module providing a data provider API for <a href="https://www.tableau.com/">Tableau</a> analytics
+      - datasource management (search, get, update, delete, download, add/remove tags)
+      - project management (search, create, update, delete)
+      - user management (search, get, create, update, delete)
+      - extract refresh task management (list, get, delete)
+      - webhook-based event triggers for datasource lifecycle events (created, deleted, updated, refresh started/succeeded/failed)
+      - polling-based event triggers for new datasources and new projects
+      - action catalog integration with 20 actions and 8 triggers
+      - connection support with \c tableaures:// URL scheme
+
     - @ref tableaurestclientintro "TableauRestClient" module
       - new module providing a REST client for <a href="https://www.tableau.com/">Tableau</a>'s analytics and BI REST API
       - supports Personal Access Token (PAT) session-token authentication
@@ -3022,19 +3057,6 @@ cargo install tree-sitter-cli@0.26.5
       - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c together
       - provides TogetherRestConnection for connection management with \c together:// URL scheme
 
-    - @ref unstructureddataproviderintro "UnstructuredDataProvider" module
-      - new module providing a data provider API for <a href="https://unstructured.io">Unstructured.io</a> document partitioning
-      - exposes one action: `partition-text` (synthesizes a `text/plain` multipart upload from a string and returns the typed element tree)
-      - action catalog integration with 1 action under the \c unstructured scheme
-
-    - @ref unstructuredrestclientintro "UnstructuredRestClient" module
-      - new module providing a REST client for <a href="https://unstructured.io">Unstructured.io</a>'s document-partitioning API
-      - supports API key authentication via the \c unstructured-api-key header
-      - works against the Serverless API and self-hosted Unstructured deployments (same module, different URL)
-      - provides `partition()` (multipart-aware), `partitionFile()` (reads a local file), and `partitionText()` (synthesizes a `text/plain` multipart upload) methods
-      - registers an `unstructured` chunker strategy in @ref qoreragutilsintro "QoreRagUtils" via `UnstructuredChunker` — collapses Unstructured's typed element tree (Title / NarrativeText / ListItem / Table / ...) into flat `ChunkInfo` records by grouping under the most recent Title with target-token soft caps
-      - provides UnstructuredRestConnection for connection management with \c unstructured:// URL scheme
-
     - @ref unbouncedataproviderintro "UnbounceDataProvider" module
       - new module providing a data provider API for <a href="https://unbounce.com/">Unbounce</a> landing page services
       - account and sub-account management (list, get)
@@ -3064,6 +3086,19 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.unleashedsoftware.com/">Unleashed</a> Software API
       - supports HMAC-SHA256 signature-based authentication
       - provides UnleashedRestConnection for connection management with \c unleashed:// URL scheme
+
+    - @ref unstructureddataproviderintro "UnstructuredDataProvider" module
+      - new module providing a data provider API for <a href="https://unstructured.io">Unstructured.io</a> document partitioning
+      - exposes one action: `partition-text` (synthesizes a `text/plain` multipart upload from a string and returns the typed element tree)
+      - action catalog integration with 1 action under the \c unstructured scheme
+
+    - @ref unstructuredrestclientintro "UnstructuredRestClient" module
+      - new module providing a REST client for <a href="https://unstructured.io">Unstructured.io</a>'s document-partitioning API
+      - supports API key authentication via the \c unstructured-api-key header
+      - works against the Serverless API and self-hosted Unstructured deployments (same module, different URL)
+      - provides `partition()` (multipart-aware), `partitionFile()` (reads a local file), and `partitionText()` (synthesizes a `text/plain` multipart upload) methods
+      - registers an `unstructured` chunker strategy in @ref qoreragutilsintro "QoreRagUtils" via `UnstructuredChunker` — collapses Unstructured's typed element tree (Title / NarrativeText / ListItem / Table / ...) into flat `ChunkInfo` records by grouping under the most recent Title with target-token soft caps
+      - provides UnstructuredRestConnection for connection management with \c unstructured:// URL scheme
 
     - @ref vertexaidataproviderintro "VertexAiDataProvider" module
       - new module providing a data provider API for Google Vertex AI
@@ -3099,6 +3134,17 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.waveapps.com/">Wave</a>'s GraphQL API
       - supports OAuth2 authentication with Bearer tokens
       - provides WaveRestConnection for connection management with \c wave:// URL scheme
+
+    - @ref weaviatedataproviderintro "WeaviateDataProvider" module
+      - new module providing a data provider API for <a href="https://weaviate.io">Weaviate</a> vector-database servers
+      - exposes one action: `list-classes` (`GET /v1/schema`)
+      - action catalog integration with 1 action under the \c weaviate scheme
+
+    - @ref weaviaterestclientintro "WeaviateRestClient" module
+      - new module providing a REST client for <a href="https://weaviate.io">Weaviate</a> vector-database servers
+      - supports API key (Bearer token) authentication
+      - registers a `weaviate` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" via `WeaviateVectorStore` — supports upsert, deleteByIds, and `nearVector` search with `where`-filter pass-through
+      - provides WeaviateRestConnection for connection management with \c weaviate:// URL scheme
 
     - @ref woocommercedataproviderintro "WooCommerceDataProvider" module
       - new module providing a data provider API for <a href="https://woocommerce.com/">WooCommerce</a> e-commerce services

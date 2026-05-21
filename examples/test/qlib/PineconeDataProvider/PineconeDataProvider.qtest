@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/PineconeDataProvider
+
+%exec-class PineconeDataProviderTest
+
+class FakePineconeRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+    constructor() : RestClientIo({"url": "https://api.pinecone.io"}) {}
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        last_method = "GET";
+        last_path = path;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    string getSafeUrl() { return "https://api.pinecone.io"; }
+}
+
+public class PineconeDataProviderTest inherits QUnit::Test {
+    constructor() : Test("PineconeDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("list-indexes hits the right control-plane endpoint",
+            \listIndexesTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("pinecone");
+        assertEq("pinecone", f.getInfo().name);
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Pinecone");
+        assertEq("Pinecone", app.name);
+        assertEq("pinecone", app.scheme);
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Pinecone");
+        assertEq(1, actions.size());
+        assertEq("list-indexes", actions[0].action);
+    }
+
+    private listIndexesTest() {
+        FakePineconeRestClientIo fake();
+        fake.response_body = {
+            "indexes": (
+                {"name": "demo-1", "dimension": 1024, "metric": "cosine",
+                 "host": "demo-1-abc.svc.us-east-1.pinecone.io"},
+                {"name": "demo-2", "dimension": 768, "metric": "dotproduct",
+                 "host": "demo-2-xyz.svc.us-east-1.pinecone.io"},
+            ),
+        };
+        PineconeDataProvider::PineconeListIndexesDataProvider prov(fake);
+        auto resp = prov.doRequest(NOTHING);
+        assertEq("GET", fake.last_method);
+        assertEq("/indexes", fake.last_path);
+        assertEq(2, resp.indexes.size());
+        assertEq("demo-1", resp.indexes[0].name);
+        assertEq(1024, resp.indexes[0].dimension);
+    }
+}

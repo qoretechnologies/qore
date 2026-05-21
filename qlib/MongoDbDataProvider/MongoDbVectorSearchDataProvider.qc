@@ -213,7 +213,8 @@ public class MongoDbVectorSearchRequestDataType inherits HashDataType {
         };
     }
 
-    constructor() : HashDataType("MongoDbVectorSearchRequest", Fields) {
+    constructor() : HashDataType("MongoDbVectorSearchRequest") {
+        addQoreFields(Fields);
     }
 }
 
@@ -237,7 +238,8 @@ public class MongoDbVectorSearchResponseDataType inherits HashDataType {
         };
     }
 
-    constructor() : HashDataType("MongoDbVectorSearchResponse", Fields) {
+    constructor() : HashDataType("MongoDbVectorSearchResponse") {
+        addQoreFields(Fields);
     }
 }
 }
