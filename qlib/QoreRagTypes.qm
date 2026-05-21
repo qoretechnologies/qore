@@ -638,6 +638,7 @@ public class RagProviderRegistry {
             "bedrock":    "BedrockRestClient",
             "vertex-ai":  "VertexAiRestClient",
             "together":   "TogetherRestClient",
+            "fireworks":  "FireworksRestClient",
         };
 
         #! Map of reranker backend names to providing modules

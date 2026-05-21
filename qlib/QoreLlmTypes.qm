@@ -414,6 +414,7 @@ public class LlmProviderRegistry {
             "deepseek":      "DeepSeekRestClient",
             "groq":          "GroqRestClient",
             "together":      "TogetherRestClient",
+            "fireworks":     "FireworksRestClient",
         };
     }
 

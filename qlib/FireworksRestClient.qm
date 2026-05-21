@@ -1,0 +1,481 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file FireworksRestClient.qm Qore user module for calling Fireworks AI REST services
+
+/*  FireworksRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires OpenAiRestClient
+%requires QoreLlmTypes
+%requires QoreRagTypes
+
+module FireworksRestClient {
+    version = "1.0";
+    desc = "user module for calling Fireworks AI REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("fireworks",
+            FireworksRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(
+            new FireworksLlmProviderFactory());
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
+            new FireworksEmbedderFactory());
+    };
+}
+
+/** @mainpage FireworksRestClient Module
+
+    @tableofcontents
+
+    @section fireworksrestclientintro FireworksRestClient Introduction
+
+    The %FireworksRestClient module provides an API for calling
+    [Fireworks AI](https://fireworks.ai) REST API services.
+
+    Fireworks AI hosts open-weight LLMs (Llama 3.1/3.3, Qwen, DeepSeek,
+    Mixtral) at high throughput via an OpenAI-compatible API and provides
+    a managed embeddings endpoint as well.
+
+    The main classes are:
+    - @ref FireworksRestClient::FireworksRestClient "FireworksRestClient":
+      REST client API (sync)
+    - @ref FireworksRestClient::FireworksRestClientIo "FireworksRestClientIo":
+      REST client using multiplexed HTTP connections (async)
+    - @ref FireworksRestClient::FireworksRestConnection "FireworksRestConnection":
+      a REST connection object to Fireworks AI
+    - @ref FireworksRestClient::FireworksLlmProvider "FireworksLlmProvider":
+      @ref qorellmutilsintro "QoreLlmUtils" provider for mode \c fireworks
+    - @ref QoreRagUtils::FireworksEmbedder "FireworksEmbedder":
+      @ref qorerragutilsintro "QoreRagUtils" embedder for backend \c fireworks
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+%modern
+%requires FireworksRestClient
+
+FireworksRestClient rest({"apikey": api_key});
+hash<auto> ans = rest.post("/v1/chat/completions", {
+    "model": "accounts/fireworks/models/llama-v3p1-405b-instruct",
+    "messages": ({"role": "user", "content": "Hello!"},),
+});
+printf("%Y\n", ans.body);
+    @endcode
+
+    @note Model identifiers on Fireworks use the
+    `accounts/<owner>/models/<name>` format.  See the
+    [Fireworks model catalog](https://fireworks.ai/models).
+
+    @section FireworksRestClientRelnotes Release Notes
+
+    @subsection FireworksRestClientv1_0 FireworksRestClient v1.0
+    - the initial version of the %FireworksRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace FireworksRestClient {
+public class FireworksRestClientBase {
+    public {
+        #! Default Fireworks AI REST API URL
+        const DefaultUrl = "https://api.fireworks.ai/inference";
+
+        #! Default Fireworks API version
+        const DefaultApiVersion = "v1";
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "api": DefaultApiVersion,
+            "default_path": "/" + DefaultApiVersion,
+        };
+    }
+
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (opts.api) {
+            rv.default_path = "/" + opts.api;
+        }
+        if (rv.apikey) {
+            rv.token = rv.apikey;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for Fireworks AI REST API (sync)
+public class FireworksRestClient inherits RestClient::RestClient, FireworksRestClientBase {
+    private {
+        string api;
+    }
+
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(FireworksRestClientBase::getOptions(opts), True) {
+        if (validator instanceof NullRestSchemaValidator) {
+            setConnectionPath(getString(opts, "api") ?? DefaultApiVersion);
+        }
+    }
+}
+
+#! REST client for Fireworks AI REST API using multiplexed HTTP connections
+public class FireworksRestClientIo inherits RestClientIo::RestClientIo, FireworksRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(FireworksRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Fireworks AI REST connections
+public class FireworksRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "fireworks://api.fireworks.ai/inference";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Fireworks AI REST Connection",
+            "short_desc": "A connection to the Fireworks AI REST API",
+            "desc": "A connection to the [Fireworks AI](https://fireworks.ai) REST API.\n\n"
+                "Fireworks serves OSS chat models (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) "
+                "and embedding models via an OpenAI-compatible API.\n\n"
+                "Requires an API key for Bearer authentication.  Get your API key from the "
+                "[Fireworks Dashboard](https://fireworks.ai/account/api-keys).",
+            "cls": Class::forName("FireworksRestConnection"),
+            "auto_url": True,
+            "schemes": {"fireworks": True},
+            "base_scheme_map": {"https": "fireworks"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Fireworks AI API key for authentication",
+                    "type": "string",
+                    "desc": "The Fireworks AI API key used for Bearer authentication.\n\n"
+                        "Get your API key from the "
+                        "[Fireworks Dashboard](https://fireworks.ai/account/api-keys).",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "api": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "The API version to use",
+                    "desc": "The API version to use.",
+                    "type": "string",
+                    "default_value": FireworksRestClientBase::DefaultApiVersion,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": DefaultPingPath,
+                },
+            },
+            "required_options": "apikey",
+        };
+
+        const DefaultPingMethod = "GET";
+        const DefaultPingHeaders = {"Accept": MimeTypeJson};
+        const DefaultPingPath = "models";
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "fireworks";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("FireworksDataProvider");
+        return create_object("FireworksDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private FireworksRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new FireworksRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new FireworksRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return FireworksRestClientBase::getOptions(rv);
+    }
+
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != FireworksRestClientBase::DefaultUrl && url != DefaultUrl) {
+                update.url = DefaultUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+}
+
+#! LLM provider for Fireworks AI
+public class FireworksLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
+    public {
+        const DefaultUrl = "https://api.fireworks.ai/inference";
+    }
+
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : OpenAiRestClient::OpenAiLlmProvider(
+                FireworksRestClient::applyFireworksDefaults(config)) {
+    }
+
+    string getMode() {
+        return "fireworks";
+    }
+}
+
+#! Namespace-local helper: returns config with the default Fireworks URL applied
+hash<QoreLlmUtils::LlmBackendConfig> sub applyFireworksDefaults(
+        hash<QoreLlmUtils::LlmBackendConfig> config) {
+    if (!config.url.val()) {
+        config.url = FireworksLlmProvider::DefaultUrl;
+    }
+    return config;
+}
+
+#! Factory for @ref FireworksLlmProvider
+public class FireworksLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "fireworks";
+    }
+
+    string getDisplayName() {
+        return "Fireworks AI chat completions";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new FireworksLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": True,
+        };
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! Fireworks AI-backed embedder — calls the Fireworks `/embeddings` endpoint
+public class FireworksEmbedder inherits AbstractEmbedder {
+    public {
+        const DefaultModel = "nomic-ai/nomic-embed-text-v1.5";
+        const Backend = "fireworks";
+    }
+
+    private {
+        hash<EmbedderConfig> config;
+        string model_name;
+        *FireworksRestClient::FireworksRestClientIo rest_client;
+        *int cached_dimension;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<EmbedderConfig> config) {
+        if (!config.api_key.val()) {
+            throw "EMBEDDER-CONFIG-ERROR",
+                "FireworksEmbedder requires 'api_key' in EmbedderConfig";
+        }
+        self.config = config;
+        model_name = config.model ?? DefaultModel;
+        if (exists config.dimension) {
+            cached_dimension = config.dimension;
+        }
+    }
+
+    list<float> encode(string text, *hash<auto> opts) {
+        list<list<float>> rv = encodeBatch((text,), opts);
+        return rv[0];
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        if (!texts) {
+            return ();
+        }
+
+        hash<auto> body = {
+            "model": model_name,
+            "input": texts,
+        };
+
+        hash<auto> resp = pickRestClient(opts).restPost("/embeddings", body);
+
+        *list<auto> data = resp.body.data;
+        if (!exists data) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response missing 'data' field", Backend),
+                {"body": resp.body};
+        }
+        if (data.size() != texts.size()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response returned %d items for %d input texts",
+                    Backend, data.size(), texts.size()),
+                {"body": resp.body};
+        }
+        list<hash<auto>> sorted_data = sort(cast<list<hash<auto>>>(data),
+            int sub(hash<auto> a, hash<auto> b) {
+                return a."index" <=> b."index";
+            });
+
+        list<list<float>> result = ();
+        foreach hash<auto> item in (sorted_data) {
+            list<float> vec = validateAndCastVector(item.embedding, resp.body);
+            if (!exists cached_dimension) {
+                cached_dimension = vec.size();
+            }
+            push result, vec;
+        }
+        return result;
+    }
+
+    int getDimension() {
+        if (exists cached_dimension) {
+            return cached_dimension;
+        }
+        encode(" ");
+        return cached_dimension ?? -1;
+    }
+
+    *string getModel() {
+        return model_name;
+    }
+
+    private list<float> validateAndCastVector(auto raw, auto body) {
+        if (!exists raw) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response item missing 'embedding' field", Backend),
+                {"body": body};
+        }
+        if (raw.typeCode() != NT_LIST || !raw.lsize()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response returned an empty or non-list vector", Backend),
+                {"body": body};
+        }
+        try {
+            return cast<list<float>>(raw);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response vector contains non-numeric elements: %s",
+                    Backend, ex.desc),
+                {"body": body};
+        }
+    }
+
+    private FireworksRestClient::FireworksRestClientIo pickRestClient(*hash<auto> opts) {
+        if (exists opts.timeout || exists opts.connect_timeout) {
+            return new FireworksRestClient::FireworksRestClientIo(
+                buildRestOptions(opts.timeout, opts.connect_timeout));
+        }
+        ensureRestClient();
+        return rest_client;
+    }
+
+    private hash<auto> buildRestOptions(*timeout req_timeout, *timeout conn_timeout) {
+        hash<auto!> opts = {
+            "apikey": config.api_key,
+        };
+        if (config.url.val()) {
+            opts.url = config.url;
+        }
+        *timeout effective_timeout = req_timeout ?? config.timeout;
+        if (exists effective_timeout) {
+            opts.timeout = effective_timeout;
+        }
+        *timeout effective_connect = conn_timeout ?? config.connect_timeout;
+        if (exists effective_connect) {
+            opts.connect_timeout = effective_connect;
+        }
+        return opts;
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                rest_client = new FireworksRestClient::FireworksRestClientIo(
+                    buildRestOptions());
+            }
+        }
+    }
+}
+
+#! Factory for @ref FireworksEmbedder
+public class FireworksEmbedderFactory inherits AbstractEmbedderFactory {
+    string getType() {
+        return "fireworks";
+    }
+
+    string getDisplayName() {
+        return "Fireworks AI embeddings";
+    }
+
+    AbstractEmbedder create(hash<EmbedderConfig> config) {
+        return new FireworksEmbedder(config);
+    }
+}
+}

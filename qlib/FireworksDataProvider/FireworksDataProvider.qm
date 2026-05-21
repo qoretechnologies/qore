@@ -1,0 +1,136 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore FireworksDataProvider module definition
+
+/*  FireworksDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) FireworksRestClient
+%requires RestClientIo
+
+module FireworksDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Fireworks AI services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new FireworksDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": FireworksDataProvider::AppName,
+            "display_name": "Fireworks AI",
+            "short_desc": "Fireworks AI hosted open-weight LLMs and embeddings",
+            "desc": "Provides access to [Fireworks AI](https://fireworks.ai) — a managed "
+                "inference platform for open-weight LLMs (Llama 3.1/3.3, Qwen, DeepSeek, "
+                "Mixtral) and embedding models via an OpenAI-compatible API.\n\n"
+                "**Common use cases**:\n"
+                "- **High-throughput OSS chat** without owning GPU infrastructure\n"
+                "- **RAG embeddings** using `nomic-ai/nomic-embed-text-v1.5` and similar models\n"
+                "- **Tool-calling agents** with structured-output JSON schema support",
+            "scheme": "fireworks",
+            "logo": FireworksLogo,
+            "logo_file_name": "fireworks-ai-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FireworksDataProvider::AppName,
+            "path": "/chat-completion",
+            "action": "chat-completion",
+            "display_name": "Chat Completion",
+            "short_desc": "Generate a chat completion from a Fireworks-hosted model",
+            "desc": "Sends a list of chat messages to a Fireworks-hosted model via the "
+                "OpenAI-compatible `/v1/chat/completions` endpoint.",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FireworksChatCompletionRequestDataType::Fields{"messages", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FireworksChatCompletionRequestDataType::Fields{
+                    "temperature", "max_tokens",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FireworksChatCompletionRequestDataType::Fields - (
+                    "messages", "model", "temperature", "max_tokens",
+                )
+            ),
+            "output_type": FireworksChatCompletionDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FireworksDataProvider::AppName,
+            "path": "/create-embeddings",
+            "action": "create-embeddings",
+            "display_name": "Create Embeddings",
+            "short_desc": "Generate embedding vectors from a Fireworks-hosted model",
+            "desc": "Converts text inputs into embedding vectors using a Fireworks-hosted "
+                "embedding model via the OpenAI-compatible `/v1/embeddings` endpoint.",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FireworksEmbeddingRequestDataType::Fields{"input", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FireworksEmbeddingRequestDataType::Fields - ("input", "model")
+            ),
+            "output_type": FireworksEmbeddingDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage FireworksDataProvider Module
+
+    @tableofcontents
+
+    @section fireworksdataproviderintro FireworksDataProvider Introduction
+
+    The %FireworksDataProvider module provides a data provider API for
+    [Fireworks AI](https://fireworks.ai) hosted model inference.
+
+    The following data providers are exposed:
+    - @ref FireworksDataProvider::FireworksDataProvider "FireworksDataProvider" — root
+    - @ref FireworksDataProvider::FireworksChatCompletionDataProvider "FireworksChatCompletionDataProvider" — chat
+    - @ref FireworksDataProvider::FireworksEmbeddingDataProvider "FireworksEmbeddingDataProvider" — embeddings
+
+    @section FireworksDataProviderRelnotes Release Notes
+
+    @subsection FireworksDataProviderv1_0 FireworksDataProvider v1.0
+    - the initial version of the %FireworksDataProvider module
+*/
+
+#! contains all public definitions in the FireworksDataProvider module
+public namespace FireworksDataProvider {
+#! Fireworks AI application name (used as the App key in the action catalog)
+public const AppName = "FireworksAi";
+}
+
+#! App logo loaded from file
+public const FireworksLogo = File::readTextFile(get_script_dir() + "/fireworks-ai-logo.svg");

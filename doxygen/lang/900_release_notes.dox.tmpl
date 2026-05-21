@@ -1844,6 +1844,18 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key authentication via Bearer token
       - provides FirecrawlRestConnection for connection management with \c firecrawlrest:// URL scheme
 
+    - @ref fireworksdataproviderintro "FireworksDataProvider" module
+      - new module providing a data provider API for <a href="https://fireworks.ai">Fireworks AI</a> hosted open-weight inference
+      - exposes two actions: `chat-completion` (OpenAI-compatible `/v1/chat/completions`) and `create-embeddings` (`/v1/embeddings`)
+      - action catalog integration with 2 actions under the \c fireworks scheme
+
+    - @ref fireworksrestclientintro "FireworksRestClient" module
+      - new module providing a REST client for <a href="https://fireworks.ai">Fireworks AI</a>'s OpenAI-compatible inference API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat; registers a `fireworks` embedder backend with @ref qorerragutilsintro "QoreRagUtils"
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c fireworks
+      - provides FireworksRestConnection for connection management with \c fireworks:// URL scheme
+
     - @ref freshbooksdataproviderintro "FreshBooksDataProvider" module
       - new module providing a data provider API for <a href="https://www.freshbooks.com/">FreshBooks</a> accounting and invoicing services
       - connection support with \c freshbooks:// URL scheme
