@@ -80,6 +80,22 @@ public class LlmStructuredRepair {
             return validateParsed(parsed, expected_type,
                 cleaned != trim(original), "json-text-cleaned");
         } catch (hash<ExceptionInfo> ex) {
+            *string json_literal_repair =
+                normalizePythonStyleJsonLiterals(cleaned);
+            if (json_literal_repair.val()
+                    && json_literal_repair != cleaned) {
+                try {
+                    auto parsed = parse_json(json_literal_repair);
+                    return validateParsed(parsed, expected_type, True,
+                        "json-python-literals");
+                } catch (hash<ExceptionInfo> ex_lit) {
+                    # Keep the original parse path below so balanced-prefix /
+                    # balanced-completion repair still gets a chance.  The
+                    # Python-literal error is included if all repair paths fail.
+                    ex.desc = sprintf("%s; Python-style literal repair "
+                        "also failed: %s", ex.desc, ex_lit.desc);
+                }
+            }
             *string prefix = extractBalancedJsonPrefix(cleaned);
             if (prefix.val() && prefix != cleaned) {
                 try {
@@ -156,6 +172,79 @@ public class LlmStructuredRepair {
             rv.repair_kind = repair_kind;
         }
         return rv;
+    }
+
+    private static *string normalizePythonStyleJsonLiterals(string text) {
+        string out;
+        bool changed = False;
+        bool in_string = False;
+        bool escaped = False;
+        int len = text.length();
+        int segment_start = 0;
+        for (int i = 0; i < len; ++i) {
+            string c = text[i];
+            if (in_string) {
+                if (escaped) {
+                    escaped = False;
+                } else if (c == "\\") {
+                    escaped = True;
+                } else if (c == "\"") {
+                    in_string = False;
+                }
+                continue;
+            }
+            if (c == "\"") {
+                in_string = True;
+                continue;
+            }
+
+            *string replacement;
+            int consumed = 0;
+            if (i + 4 <= len && text.substr(i, 4) == "True"
+                    && isJsonLiteralBoundary(text, i, 4)) {
+                replacement = "true";
+                consumed = 4;
+            } else if (i + 5 <= len && text.substr(i, 5) == "False"
+                    && isJsonLiteralBoundary(text, i, 5)) {
+                replacement = "false";
+                consumed = 5;
+            } else if (i + 4 <= len && text.substr(i, 4) == "None"
+                    && isJsonLiteralBoundary(text, i, 4)) {
+                replacement = "null";
+                consumed = 4;
+            }
+
+            if (replacement.val()) {
+                if (i > segment_start) {
+                    out += text.substr(segment_start, i - segment_start);
+                }
+                out += replacement;
+                i += consumed - 1;
+                segment_start = i + 1;
+                changed = True;
+            }
+        }
+        if (!changed) {
+            return NOTHING;
+        }
+        if (segment_start < len) {
+            out += text.substr(segment_start);
+        }
+        return out;
+    }
+
+    private static bool isJsonLiteralBoundary(string text, int offset,
+            int literal_len) {
+        if (offset > 0 && isJsonIdentifierChar(text[offset - 1])) {
+            return False;
+        }
+        int next = offset + literal_len;
+        return next >= text.length() || !isJsonIdentifierChar(text[next]);
+    }
+
+    private static bool isJsonIdentifierChar(string c) {
+        return (c >= "A" && c <= "Z") || (c >= "a" && c <= "z")
+            || (c >= "0" && c <= "9") || c == "_";
     }
 
     private static hash<LlmStructuredRepairResult> makeInvalid(string code,

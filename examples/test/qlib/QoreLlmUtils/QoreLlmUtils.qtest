@@ -130,6 +130,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \requestOptionsOverrideModelTest());
         addTestCase("LlmStructuredRepair parses repaired JSON text",
             \structuredRepairJsonTextTest());
+        addTestCase("LlmStructuredRepair normalizes Python JSON literals",
+            \structuredRepairPythonLiteralJsonTest());
         addTestCase("LlmStructuredRepair completes truncated JSON text",
             \structuredRepairBalancedCompletionTest());
         addTestCase("LlmStructuredRepair coerces nested schema JSON strings",
@@ -445,6 +447,27 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "parse errors have a stable code");
         assertTrue(invalid.failure_fingerprint.find("invalid-json:") == 0,
             "parse errors have a stable fingerprint prefix");
+    }
+
+    structuredRepairPythonLiteralJsonTest() {
+        checkGeminiModule();
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::parseJsonObject(
+                "{\"ok\": True, \"skip\": False, \"value\": None, "
+                "\"text\": \"True False None\"}");
+
+        assertTrue(repaired.valid,
+            "Python-style JSON literals are normalized outside strings");
+        assertTrue(repaired.repaired,
+            "literal normalization is reported as a repair");
+        assertEq("json-python-literals", repaired.repair_kind,
+            "repair kind identifies Python literal normalization");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq(True, value.ok, "True became JSON true");
+        assertEq(False, value.skip, "False became JSON false");
+        assertEq(NOTHING, value.value, "None became JSON null");
+        assertEq("True False None", value.text,
+            "string contents are not rewritten");
     }
 
     structuredRepairBalancedCompletionTest() {
