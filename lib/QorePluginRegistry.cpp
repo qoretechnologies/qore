@@ -1822,6 +1822,24 @@ static int resolveProgramOperationInfoForValues(QoreProgram* pgm, QoreValue lhs,
     return 1;
 }
 
+QoreValue qore_plugin_try_dispatch_unary(QoreProgram* pgm, const char* operation_name,
+        QorePluginHelperAbi helper_abi, QoreValue value, bool& matched, ExceptionSink* xsink) {
+    matched = false;
+    if (helper_abi != QorePluginHelperAbi::UnaryValue) {
+        return QoreValue();
+    }
+
+    QorePluginResolvedOperationInfo info;
+    int rc = resolveProgramOperationInfoForValues(pgm, value, nullptr, operation_name, helper_abi, info, xsink);
+    if (rc) {
+        return QoreValue();
+    }
+
+    matched = true;
+    uint64_t rv = qore_rt_plugin_unary(info.global_operation_id, bitsFromValue(value), xsink);
+    return valueFromBits(rv);
+}
+
 QoreValue qore_plugin_try_dispatch_binary(QoreProgram* pgm, const char* operation_name,
         QorePluginHelperAbi helper_abi, QoreValue lhs, QoreValue rhs, bool& matched, ExceptionSink* xsink) {
     matched = false;

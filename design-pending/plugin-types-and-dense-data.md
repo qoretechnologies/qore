@@ -2722,8 +2722,15 @@ End-to-end zero-conversion typed pipelines for analytics workloads.
 ### Phase 7 — declarative-metadata-driven optimizations (ongoing)
 
 - Profile-guided specialization for plugin types.
-- Lazy expression fusion (when at least two participating ops declare
-  purity + commutativity / associativity).
+- [x] Row-mask predicate composition as the first lazy-expression fusion
+  surface. Descriptor-registered `bit_and`, `bit_or`, `bit_xor`, and
+  `bit_not` operations are now routed through Qore's `&`, `|`, `^`, and `~`
+  operators when the active module supplies matching plugin operations. The
+  dataframe module registers these for `RowMask`, with pure/commutative/
+  associative metadata on the binary mask combinators, and exposes named
+  `intersect()`, `unionWith()`, `symmetricDifference()`, and `invert()` aliases
+  for readability. This lets callers compose predicates without materializing
+  rows and apply one `df[mask]` / `df.filter(mask)` operation.
 - Cross-stage fusion in pipelines.
 - [x] **Fast-math flag for floating-point plugin operations.** Adds a
   per-operation declarative bit (working name `fp_reassociation_allowed`)

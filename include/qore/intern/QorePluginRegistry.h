@@ -155,6 +155,8 @@ DLLLOCAL int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_t
 DLLLOCAL int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
     const QoreTypeInfo* rhs_type, const char* operation_name, QorePluginHelperAbi helper_abi,
     QorePluginResolvedOperationInfo& info, ExceptionSink* xsink);
+DLLLOCAL QoreValue qore_plugin_try_dispatch_unary(QoreProgram* pgm, const char* operation_name,
+    QorePluginHelperAbi helper_abi, QoreValue value, bool& matched, ExceptionSink* xsink);
 DLLLOCAL QoreValue qore_plugin_try_dispatch_binary(QoreProgram* pgm, const char* operation_name,
     QorePluginHelperAbi helper_abi, QoreValue lhs, QoreValue rhs, bool& matched, ExceptionSink* xsink);
 DLLLOCAL QoreValue qore_plugin_try_dispatch_call(QoreProgram* pgm, const char* operation_name,

@@ -1782,7 +1782,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - native plugin predicate operators: \c df.column("column") returns a
         \c ColumnRef, comparisons such as \c df.column("score") >= 90.0 return
         a \c RowMask, and row masks can filter frames with \c df[mask] or
-        \c df.filter(mask)
+        \c df.filter(mask); row masks can be composed with \c &, \c |, \c ^,
+        and \c ~ or with the named \c intersect(), \c unionWith(),
+        \c symmetricDifference(), and \c invert() methods before filtering
       - streaming CSV reader with type inference from first 100 rows
       - Parquet I/O via Apache Arrow (\c #ifdef \c HAVE_ARROW gated, \c MISSING-FEATURE-ERROR fallback)
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)

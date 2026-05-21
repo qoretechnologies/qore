@@ -22,6 +22,36 @@
       validated raw frames to \c DenseBufferUnary and \c DenseBufferBinary
       helpers.
 
+    @section plugin_types_operator_dispatch Operator Dispatch
+
+    Qore source syntax dispatches to descriptor-registered plugin operations
+    only for the operators that the runtime explicitly recognizes. In the
+    current implementation this includes comparison operations (\c ==, \c !=,
+    \c <, \c <=, \c >, \c >=), subscript and range subscript (\c [], \c [..]),
+    and the bitwise operator family (\c &, \c |, \c ^, \c ~). Modules register
+    these with the canonical operation names \c eq, \c ne, \c lt, \c le, \c gt,
+    \c ge, \c subscript, \c slice, \c bit_and, \c bit_or, \c bit_xor, and
+    \c bit_not.
+
+    @code{.py}
+%requires dataframe
+
+DataFrame df((
+    {"name": "Alice", "status": "active", "score": 95.5},
+    {"name": "Bob", "status": "inactive", "score": 88.0},
+    {"name": "Carol", "status": "active", "score": 92.0},
+));
+
+RowMask active = df.column("status") == "active";
+RowMask high_score = df.column("score") >= 90.0;
+DataFrame selected = df.filter(active & high_score);
+    @endcode
+
+    The operation name only selects the dispatch family and signature shape.
+    Optimizer properties such as purity, commutativity, associativity, and
+    floating-point reassociation remain per-operation metadata in
+    \c QorePluginOpcodeInfoExtended.
+
     @section plugin_types_registration Registering A Plugin Type
 
     A binary module registers one descriptor table from its \c qore_module_init

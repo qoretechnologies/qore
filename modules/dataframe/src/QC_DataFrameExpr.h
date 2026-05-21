@@ -40,6 +40,11 @@ public:
     DLLLOCAL int64_t size() const;
     DLLLOCAL int64_t count(ExceptionSink* xsink) const;
     DLLLOCAL QoreListNode* toList(ExceptionSink* xsink) const;
+    DLLLOCAL QoreDataFrameRowMask* intersect(const QoreDataFrameRowMask& other, ExceptionSink* xsink) const;
+    DLLLOCAL QoreDataFrameRowMask* unionWith(const QoreDataFrameRowMask& other, ExceptionSink* xsink) const;
+    DLLLOCAL QoreDataFrameRowMask* symmetricDifference(const QoreDataFrameRowMask& other,
+        ExceptionSink* xsink) const;
+    DLLLOCAL QoreDataFrameRowMask* invert(ExceptionSink* xsink) const;
 
 private:
     std::vector<uint8_t> mask;

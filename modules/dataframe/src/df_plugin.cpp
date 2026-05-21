@@ -34,6 +34,10 @@ extern "C" DLLEXPORT uint64_t dataframe_column_lt(uint64_t lhs_bits, uint64_t rh
 extern "C" DLLEXPORT uint64_t dataframe_column_le(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t dataframe_column_gt(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t dataframe_column_ge(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_and(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_or(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_xor(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_not(uint64_t value_bits, ExceptionSink* xsink);
 
 namespace {
 
@@ -44,6 +48,10 @@ constexpr uint16_t DATAFRAME_OP_SUBSCRIPT_COLUMN = 0;
 constexpr uint16_t DATAFRAME_OP_SUBSCRIPT_ROW = 1;
 constexpr uint16_t DATAFRAME_OP_SLICE = 2;
 constexpr uint16_t DATAFRAME_OP_SUBSCRIPT_MASK = 3;
+constexpr uint16_t DATAFRAME_OP_ROW_MASK_AND = 4;
+constexpr uint16_t DATAFRAME_OP_ROW_MASK_OR = 5;
+constexpr uint16_t DATAFRAME_OP_ROW_MASK_XOR = 6;
+constexpr uint16_t DATAFRAME_OP_ROW_MASK_NOT = 7;
 
 QoreValue dataframeValueFromBits(uint64_t bits) {
     QoreValue value;
@@ -192,6 +200,14 @@ QorePluginOpcodeInfoExtended dataframeInfo(bool pure) {
     return info;
 }
 
+QorePluginOpcodeInfoExtended dataframeMaskInfo(bool associative, bool idempotent) {
+    QorePluginOpcodeInfoExtended info = dataframeInfo(true);
+    info.is_commutative = true;
+    info.is_associative = associative;
+    info.is_idempotent = idempotent;
+    return info;
+}
+
 void initPluginType(QorePluginTypeDescriptor& type, uint16_t local_type_id, const char* type_name,
         const QoreTypeInfo* type_info) {
     type = {};
@@ -207,7 +223,8 @@ void initPluginType(QorePluginTypeDescriptor& type, uint16_t local_type_id, cons
 
 void addBinaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id, const char* operation_name,
         const QoreTypeInfo* primary_type, const QoreTypeInfo* secondary_type, const QoreTypeInfo* return_type,
-        QorePluginHelperAbi helper_abi, void (*runtime_helper)(), const char* runtime_helper_symbol) {
+        QorePluginHelperAbi helper_abi, void (*runtime_helper)(), const char* runtime_helper_symbol,
+        const QorePluginOpcodeInfoExtended* info = nullptr) {
     QorePluginOperation op = {};
     op.local_id = local_id;
     op.operation_name = operation_name;
@@ -218,7 +235,26 @@ void addBinaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id
     op.signature.access = QorePluginValueAccess::ReadOnly;
     op.signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
     op.signature.helper_abi = helper_abi;
-    op.info = dataframeInfo(true);
+    op.info = info ? *info : dataframeInfo(true);
+    op.runtime_helper = runtime_helper;
+    op.runtime_helper_symbol = runtime_helper_symbol;
+    op.qdom_domains = QDOM_DEFAULT;
+    ops.push_back(op);
+}
+
+void addUnaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id, const char* operation_name,
+        const QoreTypeInfo* primary_type, const QoreTypeInfo* return_type, void (*runtime_helper)(),
+        const char* runtime_helper_symbol, const QorePluginOpcodeInfoExtended* info = nullptr) {
+    QorePluginOperation op = {};
+    op.local_id = local_id;
+    op.operation_name = operation_name;
+    op.signature.arity = 1;
+    op.signature.primary_type = primary_type;
+    op.signature.return_type = return_type;
+    op.signature.access = QorePluginValueAccess::ReadOnly;
+    op.signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
+    op.signature.helper_abi = QorePluginHelperAbi::UnaryValue;
+    op.info = info ? *info : dataframeInfo(true);
     op.runtime_helper = runtime_helper;
     op.runtime_helper_symbol = runtime_helper_symbol;
     op.qdom_domains = QDOM_DEFAULT;
@@ -279,7 +315,22 @@ QorePluginTypeRegistration dataframeRegistration(std::array<QorePluginTypeDescri
         QC_ROWMASK->getTypeInfo(), QC_DATAFRAME->getTypeInfo(), QorePluginHelperAbi::SubscriptValue,
         reinterpret_cast<void (*)()>(dataframe_subscript_mask), "dataframe_subscript_mask");
 
-    uint16_t local_id = DATAFRAME_OP_SUBSCRIPT_MASK + 1;
+    QorePluginOpcodeInfoExtended associative_mask = dataframeMaskInfo(true, true);
+    QorePluginOpcodeInfoExtended xor_mask = dataframeMaskInfo(true, false);
+    addBinaryOperation(ops, DATAFRAME_OP_ROW_MASK_AND, "bit_and", QC_ROWMASK->getTypeInfo(),
+        QC_ROWMASK->getTypeInfo(), QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue,
+        reinterpret_cast<void (*)()>(dataframe_row_mask_and), "dataframe_row_mask_and", &associative_mask);
+    addBinaryOperation(ops, DATAFRAME_OP_ROW_MASK_OR, "bit_or", QC_ROWMASK->getTypeInfo(),
+        QC_ROWMASK->getTypeInfo(), QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue,
+        reinterpret_cast<void (*)()>(dataframe_row_mask_or), "dataframe_row_mask_or", &associative_mask);
+    addBinaryOperation(ops, DATAFRAME_OP_ROW_MASK_XOR, "bit_xor", QC_ROWMASK->getTypeInfo(),
+        QC_ROWMASK->getTypeInfo(), QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue,
+        reinterpret_cast<void (*)()>(dataframe_row_mask_xor), "dataframe_row_mask_xor", &xor_mask);
+    addUnaryOperation(ops, DATAFRAME_OP_ROW_MASK_NOT, "bit_not", QC_ROWMASK->getTypeInfo(),
+        QC_ROWMASK->getTypeInfo(), reinterpret_cast<void (*)()>(dataframe_row_mask_not),
+        "dataframe_row_mask_not");
+
+    uint16_t local_id = DATAFRAME_OP_ROW_MASK_NOT + 1;
     addColumnComparisonOperations(ops, local_id, "eq", reinterpret_cast<void (*)()>(dataframe_column_eq),
         "dataframe_column_eq");
     addColumnComparisonOperations(ops, local_id, "ne", reinterpret_cast<void (*)()>(dataframe_column_ne),
@@ -373,6 +424,46 @@ static uint64_t dataframeColumnCompare(uint64_t lhs_bits, uint64_t rhs_bits, con
         return dataframeBitsFromValue(QoreValue());
     }
     return dataframeObjectResult(col->compare(op, rhs, xsink), xsink);
+}
+
+static uint64_t dataframeRowMaskBinary(uint64_t lhs_bits, uint64_t rhs_bits,
+        QoreDataFrameRowMask* (QoreDataFrameRowMask::*op)(const QoreDataFrameRowMask&, ExceptionSink*) const,
+        const char* context, ExceptionSink* xsink) {
+    QoreValue lhs = dataframeValueFromBits(lhs_bits);
+    QoreValue rhs = dataframeValueFromBits(rhs_bits);
+    ReferenceHolder<QoreDataFrameRowMask> lhs_mask(getReferencedRowMask(lhs, context, xsink), xsink);
+    ReferenceHolder<QoreDataFrameRowMask> rhs_mask(getReferencedRowMask(rhs, context, xsink), xsink);
+    if (*xsink || !lhs_mask || !rhs_mask) {
+        return dataframeBitsFromValue(QoreValue());
+    }
+    QoreDataFrameRowMask* lhs_ptr = *lhs_mask;
+    QoreDataFrameRowMask* rhs_ptr = *rhs_mask;
+    return dataframeObjectResult((lhs_ptr->*op)(*rhs_ptr, xsink), xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_and(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeRowMaskBinary(lhs_bits, rhs_bits, &QoreDataFrameRowMask::intersect,
+        "DataFrame RowMask intersection", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_or(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeRowMaskBinary(lhs_bits, rhs_bits, &QoreDataFrameRowMask::unionWith,
+        "DataFrame RowMask union", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_xor(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
+    return dataframeRowMaskBinary(lhs_bits, rhs_bits, &QoreDataFrameRowMask::symmetricDifference,
+        "DataFrame RowMask symmetric difference", xsink);
+}
+
+extern "C" DLLEXPORT uint64_t dataframe_row_mask_not(uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue value = dataframeValueFromBits(value_bits);
+    ReferenceHolder<QoreDataFrameRowMask> mask(getReferencedRowMask(value, "DataFrame RowMask inversion", xsink),
+        xsink);
+    if (*xsink || !mask) {
+        return dataframeBitsFromValue(QoreValue());
+    }
+    return dataframeObjectResult(mask->invert(xsink), xsink);
 }
 
 extern "C" DLLEXPORT uint64_t dataframe_column_eq(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink) {
