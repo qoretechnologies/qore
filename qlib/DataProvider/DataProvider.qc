@@ -239,6 +239,7 @@ public class DataProvider {
             "pinecone": "PineconeDataProvider",
             "weaviate": "WeaviateDataProvider",
             "milvus": "MilvusDataProvider",
+            "tavily": "TavilyDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

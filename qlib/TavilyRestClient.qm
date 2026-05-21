@@ -1,0 +1,322 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TavilyRestClient.qm Qore user module for calling Tavily web-search REST services
+
+/*  TavilyRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreLlmTypes
+
+module TavilyRestClient {
+    version = "1.0";
+    desc = "user module for calling Tavily web-search REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("tavily",
+            TavilyRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage TavilyRestClient Module
+
+    @tableofcontents
+
+    @section tavilyrestclientintro TavilyRestClient Introduction
+
+    The %TavilyRestClient module provides a REST client for
+    [Tavily](https://www.tavily.com) — the de-facto agentic-search API
+    used by AI agents to retrieve real-time web information.
+
+    Tavily exposes four endpoints:
+    - `POST /search` — web search with optional AI-summarized answer
+    - `POST /extract` — extract main content from a list of URLs
+    - `POST /crawl` — multi-page site crawl
+    - `POST /map` — site URL mapping
+
+    @par Agent integration
+
+    The @ref TavilyAgentTools namespace exports helpers for wiring
+    Tavily into a @ref QoreAgentStrategies::SimpleAgentStrategy
+    "SimpleAgentStrategy":
+
+    @code{.py}
+%requires TavilyRestClient
+%requires QoreAgentStrategies
+%requires QoreLlmUtils
+
+TavilyRestClient::TavilyRestClientIo client({"apikey": tavily_key});
+hash<ToolDefinition> search_tool = TavilyAgentTools::makeSearchTool();
+code dispatcher = TavilyAgentTools::makeDispatcher(client);
+
+QoreAgentStrategies::SimpleAgentStrategy agent(llm_backend);
+hash<AgentResult> result = agent.execute(<AgentContext>{
+    "message": "What's the latest on Qore 2.3?",
+    "tools": (search_tool,),
+    "tool_dispatch": dispatcher,
+});
+    @endcode
+
+    @section TavilyRestClientRelnotes Release Notes
+
+    @subsection TavilyRestClientv1_0 TavilyRestClient v1.0
+    - the initial version of the %TavilyRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace TavilyRestClient {
+public class TavilyRestClientBase {
+    public {
+        const DefaultUrl = "https://api.tavily.com";
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+        };
+    }
+
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (rv.apikey) {
+            rv.token = rv.apikey;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for Tavily (sync)
+public class TavilyRestClient inherits RestClient::RestClient, TavilyRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(TavilyRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! REST client for Tavily using multiplexed HTTP connections (async)
+public class TavilyRestClientIo inherits RestClientIo::RestClientIo, TavilyRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(TavilyRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Tavily REST connections
+public class TavilyRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "tavily://api.tavily.com";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Tavily Web Search Connection",
+            "short_desc": "A connection to the Tavily web-search REST API",
+            "desc": "A connection to [Tavily](https://www.tavily.com) — the agentic "
+                "web-search API used by AI agents for real-time information retrieval.\n\n"
+                "Requires an API key for Bearer authentication.  Get your API key from "
+                "the [Tavily dashboard](https://app.tavily.com/).",
+            "cls": Class::forName("TavilyRestConnection"),
+            "auto_url": True,
+            "schemes": {"tavily": True},
+            "base_scheme_map": {"https": "tavily"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Tavily API key for authentication",
+                    "type": "string",
+                    "desc": "The Tavily API key used for Bearer authentication.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "tavily";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("TavilyDataProvider");
+        return create_object("TavilyDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private TavilyRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new TavilyRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new TavilyRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return TavilyRestClientBase::getOptions(rv);
+    }
+}
+
+#! Agent-tool helpers — produces @ref QoreLlmUtils::ToolDefinition factories
+#! and a dispatch callable for plugging Tavily into agent strategies
+/** No central tool registry exists in QoreLlmUtils / QoreAgentStrategies;
+    these helpers produce the data structures needed to populate
+    @ref QoreAgentStrategies::AgentContext.tools and
+    @ref QoreAgentStrategies::AgentContext.tool_dispatch directly.
+*/
+public namespace TavilyAgentTools {
+    #! Returns a @ref QoreLlmUtils::ToolDefinition describing the
+    #! `tavily_search` tool that agents can choose to invoke
+    public hash<QoreLlmUtils::ToolDefinition> sub makeSearchTool() {
+        return <QoreLlmUtils::ToolDefinition>{
+            "name": "tavily_search",
+            "description": "Search the web for current information using Tavily's "
+                "agentic search API. Returns a list of result hashes with title, url, "
+                "content, and score. Use this when the user asks about anything that "
+                "requires real-time data (news, current events, recent product launches, "
+                "latest documentation, etc.).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The web search query, in natural language.",
+                    },
+                    "search_depth": {
+                        "type": "string",
+                        "enum": ("basic", "advanced"),
+                        "description": "Search depth — 'basic' (faster) or 'advanced' "
+                            "(higher recall, slower).  Default: basic.",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of search results to return "
+                            "(1-20). Default: 5.",
+                    },
+                    "include_answer": {
+                        "type": "boolean",
+                        "description": "When True, Tavily generates an AI-summarized "
+                            "answer over the top results and includes it in the response.",
+                    },
+                    "include_domains": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of domains to restrict the search to "
+                            "(e.g. 'docs.qore.org').",
+                    },
+                    "exclude_domains": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of domains to exclude from results.",
+                    },
+                },
+                "required": ("query",),
+            },
+        };
+    }
+
+    #! Returns a @ref QoreLlmUtils::ToolDefinition describing the
+    #! `tavily_extract` tool that agents can invoke to scrape URLs
+    public hash<QoreLlmUtils::ToolDefinition> sub makeExtractTool() {
+        return <QoreLlmUtils::ToolDefinition>{
+            "name": "tavily_extract",
+            "description": "Extract the main readable content from one or more URLs. "
+                "Use this when the agent has identified specific pages to read in full "
+                "(e.g., from a prior `tavily_search` result).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "urls": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of absolute URLs to extract content from.",
+                    },
+                    "extract_depth": {
+                        "type": "string",
+                        "enum": ("basic", "advanced"),
+                        "description": "Extraction depth.  Default: basic.",
+                    },
+                },
+                "required": ("urls",),
+            },
+        };
+    }
+
+    #! Builds a tool-dispatcher callable wired to the given Tavily REST client
+    /** The returned callable matches the signature expected by
+        @ref QoreAgentStrategies::AgentContext.tool_dispatch:
+        `auto sub (string tool_name, hash<auto> args)`.
+
+        Recognised tool names: `tavily_search`, `tavily_extract`.  Other
+        tool names cause the dispatcher to throw \c AGENT-TOOL-ERROR.
+
+        @param client the @ref TavilyRestClient::TavilyRestClientIo to use
+            for the underlying HTTP calls
+
+        @return a callable that invokes the relevant Tavily endpoint and
+            returns the response body
+    */
+    public code sub makeDispatcher(TavilyRestClient::TavilyRestClientIo client) {
+        return auto sub (string tool_name, hash<auto> args) {
+            switch (tool_name) {
+                case "tavily_search": {
+                    hash<auto> body = args + {};
+                    return client.restPost("/search", body).body;
+                }
+                case "tavily_extract": {
+                    hash<auto> body = args + {};
+                    return client.restPost("/extract", body).body;
+                }
+                default:
+                    throw "AGENT-TOOL-ERROR",
+                        sprintf("Tavily dispatcher does not handle tool %y; "
+                            "expected one of: tavily_search, tavily_extract",
+                            tool_name);
+            }
+        };
+    }
+}
+}

@@ -1,0 +1,197 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore TavilyDataProvider module definition
+
+/*  TavilyDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) TavilyRestClient
+%requires RestClientIo
+
+module TavilyDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Tavily web-search services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new TavilyDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": TavilyDataProvider::AppName,
+            "display_name": "Tavily",
+            "short_desc": "Tavily real-time web search for AI agents",
+            "desc": "Provides access to [Tavily](https://www.tavily.com) — the "
+                "agentic web-search API used by AI agents to retrieve real-time "
+                "information.\n\n"
+                "**Common use cases**:\n"
+                "- **Agent tools**: register `tavily_search` / `tavily_extract` as "
+                "tools an LLM can invoke (see @ref tavilyrestclientintro "
+                "\"TavilyRestClient\" docs)\n"
+                "- **RAG ingestion**: fetch fresh sources before embedding\n"
+                "- **Background research** in workflows: get current information "
+                "about products, competitors, news, regulations",
+            "scheme": "tavily",
+            "logo": TavilyLogo,
+            "logo_file_name": "tavily-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TavilyDataProvider::AppName,
+            "path": "/search",
+            "action": "search",
+            "display_name": "Web Search",
+            "short_desc": "Search the web via Tavily",
+            "desc": "Performs a real-time web search via Tavily's `/search` endpoint "
+                "and returns ranked results with title, url, content snippet, and "
+                "relevance score.  Optionally includes an AI-summarized answer over "
+                "the top results.",
+            "action_code": DPAT_API,
+            "groups": ("Search",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TavilySearchRequestDataType::Fields{"query",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TavilySearchRequestDataType::Fields{
+                    "search_depth", "max_results", "include_answer",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TavilySearchRequestDataType::Fields - (
+                    "query", "search_depth", "max_results", "include_answer",
+                )
+            ),
+            "output_type": TavilySearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TavilyDataProvider::AppName,
+            "path": "/extract",
+            "action": "extract",
+            "display_name": "Extract URLs",
+            "short_desc": "Extract main content from URLs via Tavily",
+            "desc": "Extracts the main readable content from a list of URLs via "
+                "Tavily's `/extract` endpoint.  Useful as a follow-up to a `search` "
+                "result when the agent decides to read specific pages in full.",
+            "action_code": DPAT_API,
+            "groups": ("Extract",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TavilyExtractRequestDataType::Fields{"urls",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TavilyExtractRequestDataType::Fields - ("urls",)
+            ),
+            "output_type": TavilyExtractDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TavilyDataProvider::AppName,
+            "path": "/crawl",
+            "action": "crawl",
+            "display_name": "Crawl Site",
+            "short_desc": "Crawl a site starting from a seed URL",
+            "desc": "Multi-page web crawl starting from a seed URL via Tavily's "
+                "`/crawl` endpoint.  Returns a tree of discovered pages with their "
+                "extracted content.",
+            "action_code": DPAT_API,
+            "groups": ("Crawl",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TavilyCrawlRequestDataType::Fields{"url",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TavilyCrawlRequestDataType::Fields{
+                    "max_depth", "max_breadth", "limit",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TavilyCrawlRequestDataType::Fields - (
+                    "url", "max_depth", "max_breadth", "limit",
+                )
+            ),
+            "output_type": TavilyCrawlDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TavilyDataProvider::AppName,
+            "path": "/map",
+            "action": "map",
+            "display_name": "Map Site URLs",
+            "short_desc": "Enumerate URLs reachable from a seed URL",
+            "desc": "Enumerates URLs reachable from a seed URL via Tavily's `/map` "
+                "endpoint without fetching page content.  Useful for site discovery "
+                "before a targeted `/extract` or `/crawl` call.",
+            "action_code": DPAT_API,
+            "groups": ("Crawl",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TavilyMapRequestDataType::Fields{"url",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TavilyMapRequestDataType::Fields - ("url",)
+            ),
+            "output_type": TavilyMapDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage TavilyDataProvider Module
+
+    @tableofcontents
+
+    @section tavilydataproviderintro TavilyDataProvider Introduction
+
+    The %TavilyDataProvider module provides a data provider API for
+    [Tavily](https://www.tavily.com) web-search services.
+
+    The following data providers are exposed:
+    - @ref TavilyDataProvider::TavilyDataProvider "TavilyDataProvider" — root
+    - @ref TavilyDataProvider::TavilySearchDataProvider "TavilySearchDataProvider"
+    - @ref TavilyDataProvider::TavilyExtractDataProvider "TavilyExtractDataProvider"
+    - @ref TavilyDataProvider::TavilyCrawlDataProvider "TavilyCrawlDataProvider"
+    - @ref TavilyDataProvider::TavilyMapDataProvider "TavilyMapDataProvider"
+
+    For agent-tool wiring see the @ref tavilyrestclientintro
+    "TavilyRestClient" module's `TavilyAgentTools` namespace.
+
+    @section TavilyDataProviderRelnotes Release Notes
+
+    @subsection TavilyDataProviderv1_0 TavilyDataProvider v1.0
+    - the initial version of the %TavilyDataProvider module
+*/
+
+#! contains all public definitions in the TavilyDataProvider module
+public namespace TavilyDataProvider {
+#! Tavily application name
+public const AppName = "Tavily";
+}
+
+#! App logo loaded from file
+public const TavilyLogo = File::readTextFile(get_script_dir() + "/tavily-logo.svg");

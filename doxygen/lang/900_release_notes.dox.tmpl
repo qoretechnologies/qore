@@ -2544,6 +2544,17 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://tally.so/">Tally.so</a>'s form management API
       - provides TallyRestConnection for connection management with \c tally:// URL scheme
 
+    - @ref tavilydataproviderintro "TavilyDataProvider" module
+      - new module providing a data provider API for <a href="https://www.tavily.com">Tavily</a> agentic web-search services
+      - exposes four actions: `search` (`/search`), `extract` (`/extract`), `crawl` (`/crawl`), and `map` (`/map`)
+      - action catalog integration with 4 actions under the \c tavily scheme
+
+    - @ref tavilyrestclientintro "TavilyRestClient" module
+      - new module providing a REST client for <a href="https://www.tavily.com">Tavily</a>'s agentic web-search API
+      - supports API key (Bearer token) authentication
+      - exports `TavilyAgentTools::makeSearchTool()` / `makeExtractTool()` factories and a `makeDispatcher()` callable for plugging Tavily directly into @ref qoreagentstrategiesintro "QoreAgentStrategies" via `AgentContext.tools` + `AgentContext.tool_dispatch`
+      - provides TavilyRestConnection for connection management with \c tavily:// URL scheme
+
     - @ref terminalformatintro "TerminalFormat" module
       - new module for rendering markdown and rich text to ANSI terminals
       - TerminalMarkdownRenderer: converts markdown (headings, bold, italic, code, tables, lists, blockquotes) to ANSI escape sequences
