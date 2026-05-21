@@ -56,7 +56,7 @@ module TavilyDataProvider {
             "logo": TavilyLogo,
             "logo_file_name": "tavily-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (DataProvider::AppGroup::AiLlm,),
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::WebAutomation,),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

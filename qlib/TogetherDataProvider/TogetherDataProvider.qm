@@ -57,7 +57,7 @@ module TogetherDataProvider {
             "logo": TogetherLogo,
             "logo_file_name": "together-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (DataProvider::AppGroup::AiLlm,),
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::DesignCreative,),
         });
 
         # chat-completion action

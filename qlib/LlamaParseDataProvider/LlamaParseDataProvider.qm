@@ -52,7 +52,7 @@ module LlamaParseDataProvider {
             "logo": LlamaParseLogo,
             "logo_file_name": "llamaparse-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (DataProvider::AppGroup::AiLlm,),
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::Documents,),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

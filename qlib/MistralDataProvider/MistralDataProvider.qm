@@ -54,7 +54,7 @@ module MistralDataProvider {
             "logo": MistralLogo,
             "logo_file_name": "mistral-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (DataProvider::AppGroup::AiLlm,),
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::Documents,),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

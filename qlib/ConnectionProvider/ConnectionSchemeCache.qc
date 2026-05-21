@@ -96,6 +96,10 @@ public class ConnectionSchemeCache {
 
             "circlerest": "CircleRestClient",
 
+            "chroma": "ChromaRestClient",
+
+            "cohere": "CohereRestClient",
+
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
             "amqps": "AmqpDataProvider",
@@ -121,6 +125,8 @@ public class ConnectionSchemeCache {
 
             "deel": "DeelRestClient",
 
+            "deepseek": "DeepSeekRestClient",
+
             "discord": "DiscordRestClient",
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
@@ -138,7 +144,11 @@ public class ConnectionSchemeCache {
             "esrest": "ElasticSearchDataProvider",
             "esrests": "ElasticSearchDataProvider",
 
+            "exa": "ExaRestClient",
+
             "firecrawlrest": "FirecrawlRestClient",
+
+            "fireworks": "FireworksRestClient",
 
             "freshbooks": "FreshBooksRestClient",
 
@@ -149,6 +159,8 @@ public class ConnectionSchemeCache {
             "gohighlevelres": "GoHighLevelRestClient",
 
             "gorgiasrest": "GorgiasRestClient",
+
+            "groq": "GroqRestClient",
 
             "qdrantrest": "QdrantDataProvider",
             "qdrantrests": "QdrantDataProvider",
@@ -161,6 +173,8 @@ public class ConnectionSchemeCache {
 
             "insightlyrest": "InsightlyRestClient",
             "insightlyrests": "InsightlyRestClient",
+
+            "jina": "JinaRestClient",
 
             "jotform": "JotformRestClient",
 
@@ -178,12 +192,16 @@ public class ConnectionSchemeCache {
 
             "linear": "LinearRestClient",
 
+            "llamaparse": "LlamaParseRestClient",
+
             "mailgun": "MailgunRestClient",
 
             "mewsrest": "MewsRestClient",
 
             "memcached": "MemcachedDataProvider",
             "memcacheds": "MemcachedDataProvider",
+            "milvus": "MilvusRestClient",
+            "mistral": "MistralRestClient",
             "mongodb": "MongoDbDataProvider",
 
             # provided by the jni module
@@ -198,11 +216,15 @@ public class ConnectionSchemeCache {
 
             "netsuite": "NetSuiteRestClient",
 
+            "ollama": "OllamaRestClient",
+
             "openai": "OpenAiRestClient",
 
             "perplexity": "PerplexityRestClient",
 
             "pdfco": "PdfCoRestClient",
+
+            "pinecone": "PineconeRestClient",
 
             "segment": "SegmentRestClient",
 
@@ -277,6 +299,10 @@ public class ConnectionSchemeCache {
             "tableaures": "TableauRestClient",
             "tally": "TallyRestClient",
 
+            "tavily": "TavilyRestClient",
+
+            "together": "TogetherRestClient",
+
             "onedrive": "OneDriveRestClient",
 
             "sse": "ServerSentEventClient",
@@ -302,9 +328,12 @@ public class ConnectionSchemeCache {
 
             "unleashed": "UnleashedRestClient",
 
+            "unstructured": "UnstructuredRestClient",
+
             "voyage": "VoyageRestClient",
 
             "wave": "WaveRestClient",
+            "weaviate": "WeaviateRestClient",
             "woocommerce": "WooCommerceRestClient",
             "woocommerces": "WooCommerceRestClient",
 

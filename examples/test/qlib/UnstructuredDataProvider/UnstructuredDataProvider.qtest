@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/UnstructuredRestClient.qm
+%requires ../../../../qlib/UnstructuredDataProvider
+
+%exec-class UnstructuredDataProviderTest
+
+#! Subclasses the real UnstructuredRestClientIo and overrides partitionText
+#! to skip the multipart upload — returns a canned element tree.
+class FakeUnstructuredRestClientIo inherits UnstructuredRestClient::UnstructuredRestClientIo {
+    public {
+        string last_text;
+        *hash<auto> last_options;
+        list<hash<auto>> canned_elements;
+    }
+    constructor() : UnstructuredRestClientIo({"apikey": "fake-key"}) {}
+
+    list<hash<auto>> partitionText(string text, *hash<auto> options) {
+        last_text = text;
+        last_options = options;
+        return canned_elements;
+    }
+}
+
+public class UnstructuredDataProviderTest inherits QUnit::Test {
+    constructor() : Test("UnstructuredDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("partition-text forwards to partitionText()",
+            \partitionTextTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("unstructured");
+        assertEq("unstructured", f.getInfo().name);
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("UnstructuredIo");
+        assertEq("UnstructuredIo", app.name);
+        assertEq("unstructured", app.scheme);
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("UnstructuredIo");
+        assertEq(1, actions.size());
+        assertEq("partition-text", actions[0].action);
+    }
+
+    private partitionTextTest() {
+        FakeUnstructuredRestClientIo fake();
+        fake.canned_elements = (
+            {"type": "Title", "text": "Section One", "element_id": "e1",
+             "metadata": {"page_number": 1}},
+            {"type": "NarrativeText", "text": "Body paragraph.", "element_id": "e2",
+             "metadata": {"page_number": 1}},
+        );
+        UnstructuredDataProvider::UnstructuredPartitionTextDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "text": "Section One\n\nBody paragraph.",
+            "strategy": "fast",
+            "languages": ("eng",),
+        });
+        assertEq("Section One\n\nBody paragraph.", fake.last_text);
+        assertEq("fast", fake.last_options.strategy);
+        assertEq(("eng",), fake.last_options.languages);
+        # text was removed from options before forwarding
+        assertEq(NOTHING, fake.last_options.text);
+        assertEq(2, resp.elt_list.size());
+        assertEq("Title", resp.elt_list[0].type);
+        assertEq("Section One", resp.elt_list[0].text);
+    }
+}

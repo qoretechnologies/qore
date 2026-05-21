@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/MilvusDataProvider
+
+%exec-class MilvusDataProviderTest
+
+class FakeMilvusRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method;
+        string last_path;
+        *hash<auto> last_body;
+        hash<auto> response_body;
+    }
+    constructor() : RestClientIo({"url": "http://localhost:19530"}) {}
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        last_method = "POST";
+        last_path = path;
+        last_body = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    string getSafeUrl() { return "http://localhost:19530"; }
+}
+
+public class MilvusDataProviderTest inherits QUnit::Test {
+    constructor() : Test("MilvusDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("list-collections hits /collections/list",
+            \listCollectionsTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("milvus");
+        assertEq("milvus", f.getInfo().name);
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Milvus");
+        assertEq("Milvus", app.name);
+        assertEq("milvus", app.scheme);
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Milvus");
+        assertEq(1, actions.size());
+        assertEq("list-collections", actions[0].action);
+    }
+
+    private listCollectionsTest() {
+        FakeMilvusRestClientIo fake();
+        fake.response_body = {
+            "code": 0,
+            "data": ("vectors", "docs", "embeddings"),
+        };
+        MilvusDataProvider::MilvusListCollectionsDataProvider prov(fake);
+        auto resp = prov.doRequest(NOTHING);
+        assertEq("POST", fake.last_method);
+        assertEq("/collections/list", fake.last_path);
+        assertEq(3, resp.data.size());
+        assertEq("vectors", resp.data[0]);
+    }
+}
