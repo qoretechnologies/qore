@@ -89,6 +89,12 @@ protected:
     }
 };
 
+enum class QoreComplexBufferInitKind : uint8_t {
+    Constructor = 0,
+    Sized = 1,
+    Filled = 2,
+};
+
 class NewHashDeclNode : public ParseNode {
 protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
@@ -235,9 +241,11 @@ protected:
 public:
     const QoreTypeInfo* typeInfo;
     QoreValue args{};
+    QoreComplexBufferInitKind initKind;
 
-    DLLLOCAL NewComplexBufferNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreValue a)
-            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a) {
+    DLLLOCAL NewComplexBufferNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreValue a,
+            QoreComplexBufferInitKind initKind = QoreComplexBufferInitKind::Constructor)
+            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a), initKind(initKind) {
         assert(QoreTypeInfo::getUniqueReturnComplexBuffer(typeInfo));
     }
 
@@ -260,9 +268,13 @@ public:
     DLLLOCAL virtual const char* getTypeName() const {
         return "new complex buffer operator expression";
     }
+
+    DLLLOCAL bool shouldEvaluateWithNode() const {
+        return initKind != QoreComplexBufferInitKind::Constructor;
+    }
 };
 
 DLLLOCAL QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, QoreValue val,
-    ExceptionSink* xsink);
+    ExceptionSink* xsink, QoreComplexBufferInitKind initKind = QoreComplexBufferInitKind::Constructor);
 
 #endif

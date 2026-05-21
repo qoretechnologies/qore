@@ -1904,6 +1904,7 @@ static bool write_expr_complex_buffer_new(AOTExprWriteCtx& ctx) {
         if (ncb->typeInfo) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
             ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(ncb->typeInfo).c_str());
+            ctx.writer.writeU8(static_cast<uint8_t>(ncb->initKind));
             if (ncb->args.hasNode()) {
                 ctx.writer.writeU8(1);
                 return ::classifyAndWriteExpr(ctx.writer, ncb->args,
@@ -1921,6 +1922,7 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     if (!type_path || !*type_path) {
         return QoreValue();
     }
+    QoreComplexBufferInitKind init_kind = static_cast<QoreComplexBufferInitKind>(QoreAOTBinaryReader::readU8(ctx.ptr));
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
     QoreValue arg_val;
     if (num_args > 0) {
@@ -1939,7 +1941,7 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
         arg_val.discard(nullptr);
         return QoreValue();
     }
-    NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val);
+    NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val, init_kind);
     return QoreValue(ncb);
 }
 

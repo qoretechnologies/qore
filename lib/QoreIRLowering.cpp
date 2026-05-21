@@ -4381,7 +4381,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     }
     if (auto* new_cb = dynamic_cast<const NewComplexBufferNode*>(node)) {
         std::vector<QoreIRValue> operands;
-        if (!new_cb->args.isNothing()) {
+        if (!new_cb->args.isNothing() && !new_cb->shouldEvaluateWithNode()) {
             QoreIRValue arg = lowerExpression(new_cb->args, error);
             if (!arg.isValid()) {
                 return QoreIRValue();

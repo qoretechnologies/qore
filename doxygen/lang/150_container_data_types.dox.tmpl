@@ -183,8 +183,14 @@ buffer<int64> ids = new buffer<int64>((10, 20, 30));
 assert ids[0] == 10;
 ids[1] = 25;
 
+buffer<int64> empty_ids = buffer<int64>::sized(1000);       # zero-filled
+buffer<int64> retry_counts = buffer<int64>::filled(1000, 3);
+buffer<int64> retry_counts_named = buffer<int64>::filled(size: 1000, value: 3);
+
 buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
 assert scores[1] === NOTHING;
+
+buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
 
 foreach float score in (scores) {
     if (exists score) {
@@ -194,6 +200,11 @@ foreach float score in (scores) {
 
 list<*float> boxed = scores.toList();
     @endcode
+
+    Use \c buffer<T>::sized(size) to allocate a zero-filled buffer and \c buffer<T>::filled(size, value) to allocate
+    a buffer initialized with a repeated value.  \c size must be a non-negative \c int, and \c value must be
+    assignable to the buffer's element type; for example \c buffer<int8>::filled(10, 1000) raises a
+    \c BUFFER-RANGE-ERROR.
 
     @par Slicing and Conversion:
     Buffers support list-style inclusive range slicing and explicit conversion to and from lists:

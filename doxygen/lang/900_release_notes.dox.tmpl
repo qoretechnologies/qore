@@ -1222,7 +1222,11 @@ cargo install tree-sitter-cli@0.26.5
     Qore NOTHING as null elements:
     @code{.py}
 buffer<int64> ids = new buffer<int64>((10, 20, 30));
+buffer<int64> zeros = buffer<int64>::sized(1000);
+buffer<int64> retry_counts = buffer<int64>::filled(1000, 3);
+buffer<int64> retry_counts_named = buffer<int64>::filled(size: 1000, value: 3);
 buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
+buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
 
 printf("rows=%d total=%d\n", ids.size(), ids.sum());
 list<*float> boxed = scores.toList();

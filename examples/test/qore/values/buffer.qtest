@@ -19,6 +19,7 @@ class BufferTest inherits QUnit::Test {
         addTestCase("iteration and slicing", \iterationAndSlicing());
         addTestCase("reductions", \reductions());
         addTestCase("operators", \operators());
+        addTestCase("factories", \factories());
         addTestCase("writable elements", \writableElements());
         addTestCase("construction errors", \constructionErrors());
         set_return_value(main());
@@ -263,6 +264,71 @@ class BufferTest inherits QUnit::Test {
             int zero = 0;
             auto result = a / zero;
         });
+    }
+
+    factories() {
+        buffer<int64> sized = buffer<int64>::sized(3);
+        assertEq("buffer<int64>", sized.fullType());
+        assertEq((0, 0, 0), sized.toList());
+
+        buffer<int64> filled = buffer<int64>::filled(3, 7);
+        assertEq("buffer<int64>", filled.fullType());
+        assertEq((7, 7, 7), filled.toList());
+
+        buffer<int64> named_sized = buffer<int64>::sized(size: 3);
+        assertEq((0, 0, 0), named_sized.toList());
+
+        buffer<int64> named_filled = buffer<int64>::filled(value: 7, size: 3);
+        assertEq((7, 7, 7), named_filled.toList());
+
+        list<string> factory_eval_order = ();
+        code<int()> get_factory_size = int sub () { factory_eval_order += "size"; return 3; };
+        code<int()> get_factory_value = int sub () { factory_eval_order += "value"; return 7; };
+        buffer<int64> named_eval_order = buffer<int64>::filled(value: get_factory_value(), size: get_factory_size());
+        assertEq((7, 7, 7), named_eval_order.toList());
+        assertEq(("value", "size"), factory_eval_order);
+
+        buffer<float64> floats = buffer<float64>::filled(2, 1.25);
+        assertEq("buffer<float64>", floats.fullType());
+        assertEq((1.25, 1.25), floats.toList());
+
+        buffer<bool> bools = buffer<bool>::filled(3, True);
+        assertEq("buffer<bool>", bools.fullType());
+        assertEq((True, True, True), bools.toList());
+
+        buffer<*int64> nullable = buffer<*int64>::filled(3, NOTHING);
+        assertEq("buffer<*int64>", nullable.fullType());
+        assertEq((NOTHING, NOTHING, NOTHING), nullable.toList());
+        assertEq(0, nullable.count());
+
+        assertThrows("BUFFER-SIZE-ERROR", sub () { auto result = buffer<int64>::sized(-1); });
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto result = buffer<int8>::filled(1, 1000); });
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "argument 'size' expects int", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::sized(\"3\"); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "argument 'value' expects", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::filled(1, NOTHING); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "supported factories", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::unknown(1); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "unknown named argument 'length'", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::sized(length: 3); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("NAMED-ARG-POSITIONAL-AFTER-NAMED", "positional argument cannot follow", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::filled(size: 3, 7); }", ""));
+        }
     }
 
     writableElements() {

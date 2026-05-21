@@ -160,8 +160,44 @@ QoreValue NewComplexListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) 
     return qore_list_private::newComplexList(typeInfo, args, xsink);
 }
 
-QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, QoreValue val,
+static int qore_get_buffer_factory_size(const QoreListNode* args_list, const char* factory, ExceptionSink* xsink,
+        size_t& size) {
+    QoreValue size_arg = args_list->retrieveEntry(0);
+    if (size_arg.getType() != NT_INT) {
+        xsink->raiseException("BUFFER-CONSTRUCTOR-ERROR", "buffer<T>::%s() expects argument 'size' to be an int; "
+            "got type '%s'", factory, size_arg.getFullTypeName());
+        return -1;
+    }
+
+    int64 count = size_arg.getAsBigInt();
+    if (count < 0) {
+        xsink->raiseException("BUFFER-SIZE-ERROR", "buffer<T>::%s() expects argument 'size' to be >= 0; got " QLLD,
+            factory, count);
+        return -1;
+    }
+    size = static_cast<size_t>(count);
+    return 0;
+}
+
+static const QoreListNode* qore_get_buffer_factory_args(QoreValue val, const char* factory, size_t expected_args,
         ExceptionSink* xsink) {
+    if (val.getType() != NT_LIST) {
+        xsink->raiseException("BUFFER-CONSTRUCTOR-ERROR", "buffer<T>::%s() expects %d argument%s; got type '%s'",
+            factory, (int)expected_args, expected_args == 1 ? "" : "s", val.getFullTypeName());
+        return nullptr;
+    }
+
+    const QoreListNode* args_list = val.get<const QoreListNode>();
+    if (args_list->size() != expected_args) {
+        xsink->raiseException("BUFFER-CONSTRUCTOR-ERROR", "buffer<T>::%s() expects %d argument%s; got %d",
+            factory, (int)expected_args, expected_args == 1 ? "" : "s", (int)args_list->size());
+        return nullptr;
+    }
+    return args_list;
+}
+
+QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, QoreValue val,
+        ExceptionSink* xsink, QoreComplexBufferInitKind initKind) {
     const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(typeInfo);
     if (!bti) {
         xsink->raiseException("BUFFER-TYPE-ERROR", "cannot construct invalid buffer type '%s'",
@@ -170,6 +206,35 @@ QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo,
     }
 
     ValueHolder holder(val, xsink);
+    if (initKind == QoreComplexBufferInitKind::Sized || initKind == QoreComplexBufferInitKind::Filled) {
+        const char* factory = initKind == QoreComplexBufferInitKind::Sized ? "sized" : "filled";
+        const QoreListNode* args_list = qore_get_buffer_factory_args(val, factory,
+            initKind == QoreComplexBufferInitKind::Sized ? 1 : 2, xsink);
+        if (!args_list) {
+            return nullptr;
+        }
+
+        size_t size = 0;
+        if (qore_get_buffer_factory_size(args_list, factory, xsink, size)) {
+            return nullptr;
+        }
+
+        ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(bti->getBufferElementType(), bti->hasNullableElements(),
+            size), xsink);
+        if (initKind == QoreComplexBufferInitKind::Filled) {
+            QoreValue fill_value = args_list->retrieveEntry(1);
+            for (size_t i = 0; i < size; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "buffer filled construction")) {
+                    return nullptr;
+                }
+                if ((*rv)->setEntry(i, fill_value, xsink)) {
+                    return nullptr;
+                }
+            }
+        }
+        return rv.release();
+    }
+
     if (val.isNothing()) {
         return new QoreBufferNode(bti->getBufferElementType(), bti->hasNullableElements());
     }
@@ -195,7 +260,7 @@ QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo,
 }
 
 static QoreBufferNode* qore_new_complex_buffer(const QoreTypeInfo* typeInfo, const QoreValue args,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreComplexBufferInitKind initKind) {
     QoreValue val{};
     if (!args.isNothing()) {
         ValueEvalOptimizedRefHolder a(args, xsink);
@@ -204,9 +269,9 @@ static QoreBufferNode* qore_new_complex_buffer(const QoreTypeInfo* typeInfo, con
         }
         val = a.takeReferencedValue();
     }
-    return qore_new_complex_buffer_from_value(typeInfo, val, xsink);
+    return qore_new_complex_buffer_from_value(typeInfo, val, xsink, initKind);
 }
 
 QoreValue NewComplexBufferNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_new_complex_buffer(typeInfo, args, xsink);
+    return qore_new_complex_buffer(typeInfo, args, xsink, initKind);
 }

@@ -6581,6 +6581,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (QoreTypeInfo::getComplexBufferType(vti)) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
             writeTypePathRef(writer, vti);
+            writer.writeU8(static_cast<uint8_t>(QoreComplexBufferInitKind::Constructor));
             const QoreValue& new_args = vrn->getNewArgs();
             if (new_args.hasNode()) {
                 writer.writeU8(1);
@@ -7302,6 +7303,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (ncb->typeInfo) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
             writeTypePathRef(writer, ncb->typeInfo);
+            writer.writeU8(static_cast<uint8_t>(ncb->initKind));
             if (ncb->args.hasNode()) {
                 writer.writeU8(1);
                 return write_inline_expr(ncb->args);
