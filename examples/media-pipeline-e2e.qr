@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file media-pipeline-e2e.qr
+#! End-to-end media-generation pipeline demo for Phase 5c:
+#!   text prompt → Stability AI image → BFL video (text-to-video)
+#!   → save outputs to local files
+#!
+#! Run with the following environment variables set:
+#!   STABILITY_AI_API_KEY  - Stability AI API key
+#!   BFL_API_KEY           - Black Forest Labs API key
+#!
+#! Optional:
+#!   PROMPT                - the text prompt; defaults to a fantasy landscape
+#!   OUTPUT_DIR            - directory for output files (default: /tmp)
+
+%modern
+
+%requires QoreMediaUtils
+%requires StabilityAiRestClient
+%requires BflRestClient
+
+%exec-class MediaPipelineE2E
+
+class MediaPipelineE2E {
+    private {
+        string stability_key;
+        string bfl_key;
+        string user_prompt;
+        string output_dir;
+    }
+
+    constructor() {
+        if (!validateEnv()) {
+            exit(0);
+        }
+        user_prompt = getenv("PROMPT")
+            ?? "a misty fantasy forest at golden hour, painted in the style "
+               "of Albert Bierstadt, ultra-detailed";
+        output_dir = getenv("OUTPUT_DIR") ?? "/tmp";
+
+        printf("Prompt: %s\n", user_prompt);
+        printf("Output: %s\n\n", output_dir);
+
+        # Step 1: Stability AI image — uses QoreMediaUtils lazy-loaded factory
+        printf("Step 1: Stability AI image generation (ultra) ...\n");
+        QoreMediaUtils::AbstractImageGenerator stab =
+            QoreMediaUtils::MediaProviderRegistry::createImageGenerator(
+                <QoreMediaUtils::ImageGeneratorConfig>{
+                    "backend":       "stability-ai",
+                    "api_key":       stability_key,
+                    "model":         "ultra",
+                    "output_format": "png",
+                    "aspect_ratio":  "16:9",
+                });
+        hash<QoreMediaUtils::ImageResult> img = stab.generateImage(user_prompt);
+        string img_path = output_dir + "/stability-image.png";
+        File f();
+        f.open2(img_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(img.image);
+        f.close();
+        printf("  wrote %d bytes to %s\n\n", img.image.size(), img_path);
+
+        # Step 2: BFL video — submit + poll asynchronously
+        printf("Step 2: BFL text-to-video generation (flux-1.1-pro-video) ...\n");
+        printf("  (this typically takes 1-3 minutes)\n");
+        QoreMediaUtils::AbstractVideoGenerator vid =
+            QoreMediaUtils::MediaProviderRegistry::createVideoGenerator(
+                <QoreMediaUtils::VideoGeneratorConfig>{
+                    "backend":      "bfl",
+                    "api_key":      bfl_key,
+                    "model":        "flux-1.1-pro-video",
+                    "aspect_ratio": "16:9",
+                });
+        hash<QoreMediaUtils::VideoResult> v = vid.generateVideo(user_prompt);
+        printf("  video URL: %s\n", v.video_url);
+        printf("  job id:    %s\n", v.metadata.id);
+
+        # Step 3: download the video bytes to a local file
+        if (v.video_url.val()) {
+            printf("Step 3: downloading video to local file ...\n");
+            binary video_bytes = BflRestClient::fetchBytes(v.video_url);
+            string vid_path = output_dir + "/bfl-video.mp4";
+            File vf();
+            vf.open2(vid_path, O_CREAT | O_WRONLY | O_TRUNC);
+            vf.write(video_bytes);
+            vf.close();
+            printf("  wrote %d bytes to %s\n", video_bytes.size(), vid_path);
+        }
+
+        printf("\nDone.\n");
+    }
+
+    private bool validateEnv() {
+        *string sk = getenv("STABILITY_AI_API_KEY");
+        *string bk = getenv("BFL_API_KEY");
+        list<string> missing = ();
+        if (!sk.val()) {
+            push missing, "STABILITY_AI_API_KEY";
+        }
+        if (!bk.val()) {
+            push missing, "BFL_API_KEY";
+        }
+        if (missing) {
+            printf("Missing required environment variables:\n");
+            foreach string k in (missing) {
+                printf("  - %s\n", k);
+            }
+            printf("\nSee the top of this file for a description of each.\n");
+            return False;
+        }
+        stability_key = sk;
+        bfl_key       = bk;
+        return True;
+    }
+}

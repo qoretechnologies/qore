@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Integration test for the Phase 5c media-generation pipeline:
+#!   text prompt → image generator → video generator (text-to-video)
+#!   → assemble result
+#!
+#! Uses in-process fakes for both backends so the test runs in CI without
+#! network access.  Verifies the wire-together: data flows through
+#! QoreMediaUtils' MediaProviderRegistry with the right shapes.
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreMediaUtils.qm
+
+%exec-class MediaPipelineE2ETest
+
+class FakeImageGen inherits QoreMediaUtils::AbstractImageGenerator {
+    public { int call_count = 0; }
+    string getMode() { return "fake-image"; }
+    hash<QoreMediaUtils::ImageResult> generateImage(string prompt,
+            *hash<auto> opts) {
+        ++call_count;
+        return <QoreMediaUtils::ImageResult>{
+            "image":        binary("FAKE-PNG:" + prompt),
+            "content_type": "image/png",
+            "seed":         42,
+            "model":        opts.model ?? "fake-ultra",
+        };
+    }
+}
+
+class FakeImageGenFactory inherits QoreMediaUtils::AbstractImageGeneratorFactory {
+    string getMode() { return "fake-image"; }
+    string getDisplayName() { return "Fake Image Gen (test)"; }
+    QoreMediaUtils::AbstractImageGenerator create(
+            hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        return new FakeImageGen();
+    }
+}
+
+class FakeVideoGen inherits QoreMediaUtils::AbstractVideoGenerator {
+    public { int call_count = 0; }
+    string getMode() { return "fake-video"; }
+    hash<QoreMediaUtils::VideoResult> generateVideo(string prompt,
+            *hash<auto> opts) {
+        ++call_count;
+        return <QoreMediaUtils::VideoResult>{
+            "video_url":    "https://fake.example.com/v_" + prompt + ".mp4",
+            "content_type": "video/mp4",
+            "model":        opts.model ?? "fake-video-pro",
+            "metadata":     {"id": "fake-job-1"},
+        };
+    }
+}
+
+class FakeVideoGenFactory inherits QoreMediaUtils::AbstractVideoGeneratorFactory {
+    string getMode() { return "fake-video"; }
+    string getDisplayName() { return "Fake Video Gen (test)"; }
+    QoreMediaUtils::AbstractVideoGenerator create(
+            hash<QoreMediaUtils::VideoGeneratorConfig> config) {
+        return new FakeVideoGen();
+    }
+}
+
+public class MediaPipelineE2ETest inherits QUnit::Test {
+    constructor() : Test("MediaPipelineE2E Integration Test", "1.0") {
+        addTestCase("text prompt flows to image generator and produces bytes",
+            \imageFlowTest());
+        addTestCase("text prompt flows to video generator and produces URL",
+            \videoFlowTest());
+        addTestCase("full pipeline: image + video chained from same prompt",
+            \fullPipelineTest());
+        set_return_value(main());
+    }
+
+    private imageFlowTest() {
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+            new FakeImageGenFactory());
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterImageGeneratorFactory(
+            "fake-image");
+
+        QoreMediaUtils::AbstractImageGenerator gen =
+            QoreMediaUtils::MediaProviderRegistry::createImageGenerator(
+                <QoreMediaUtils::ImageGeneratorConfig>{
+                    "backend": "fake-image",
+                    "api_key": "test",
+                });
+        hash<QoreMediaUtils::ImageResult> r =
+            gen.generateImage("a fantasy landscape");
+        assertEq(binary("FAKE-PNG:a fantasy landscape"), r.image);
+        assertEq("image/png", r.content_type);
+    }
+
+    private videoFlowTest() {
+        QoreMediaUtils::MediaProviderRegistry::registerVideoGeneratorFactory(
+            new FakeVideoGenFactory());
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterVideoGeneratorFactory(
+            "fake-video");
+
+        QoreMediaUtils::AbstractVideoGenerator gen =
+            QoreMediaUtils::MediaProviderRegistry::createVideoGenerator(
+                <QoreMediaUtils::VideoGeneratorConfig>{
+                    "backend": "fake-video",
+                    "api_key": "test",
+                });
+        hash<QoreMediaUtils::VideoResult> r =
+            gen.generateVideo("a misty forest");
+        assertEq("https://fake.example.com/v_a misty forest.mp4", r.video_url);
+        assertEq("video/mp4", r.content_type);
+        assertEq("fake-job-1", r.metadata.id);
+    }
+
+    private fullPipelineTest() {
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+            new FakeImageGenFactory());
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterImageGeneratorFactory(
+            "fake-image");
+        QoreMediaUtils::MediaProviderRegistry::registerVideoGeneratorFactory(
+            new FakeVideoGenFactory());
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterVideoGeneratorFactory(
+            "fake-video");
+
+        string prompt = "a serene mountain lake at dawn";
+
+        # Step 1: generate image from prompt
+        QoreMediaUtils::AbstractImageGenerator img_gen =
+            QoreMediaUtils::MediaProviderRegistry::createImageGenerator(
+                <QoreMediaUtils::ImageGeneratorConfig>{
+                    "backend": "fake-image", "api_key": "k",
+                });
+        hash<QoreMediaUtils::ImageResult> img = img_gen.generateImage(prompt);
+        assertTrue(img.image.size() > 0);
+
+        # Step 2: generate video from same prompt (independent — could
+        # also be chained image-to-video by passing img.image via opts)
+        QoreMediaUtils::AbstractVideoGenerator vid_gen =
+            QoreMediaUtils::MediaProviderRegistry::createVideoGenerator(
+                <QoreMediaUtils::VideoGeneratorConfig>{
+                    "backend": "fake-video", "api_key": "k",
+                });
+        hash<QoreMediaUtils::VideoResult> vid = vid_gen.generateVideo(prompt);
+        assertTrue(vid.video_url =~ /serene mountain lake at dawn/);
+
+        # Both backends were invoked once each
+        FakeImageGen img_concrete = cast<FakeImageGen>(img_gen);
+        FakeVideoGen vid_concrete = cast<FakeVideoGen>(vid_gen);
+        assertEq(1, img_concrete.call_count);
+        assertEq(1, vid_concrete.call_count);
+    }
+}
