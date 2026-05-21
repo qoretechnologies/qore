@@ -1228,6 +1228,9 @@ buffer<int64> retry_counts_named = buffer<int64>::filled(size: 1000, value: 3);
 buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
 buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
 
+buffer<int64> middle = ids.view(start: 1, count: 2);
+middle[0] = 25;     # updates ids[1]
+
 printf("rows=%d total=%d\n", ids.size(), ids.sum());
 list<*float> boxed = scores.toList();
     @endcode

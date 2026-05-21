@@ -620,8 +620,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         if (for_remove) {
             return -1;
         }
-        ensureUnique();
         QoreBufferNode* b = getValue().get<QoreBufferNode>();
+        if (!b->isUniqueForMutation()) {
+            ensureUnique();
+            b = getValue().get<QoreBufferNode>();
+        }
         return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
         if (for_remove)
@@ -1387,8 +1390,11 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                             "(index must evaluate to a non-negative integer)", idx);
                         return -1;
                     }
-                    ensureUnique();
                     QoreBufferNode* b = getValue().get<QoreBufferNode>();
+                    if (!b->isUniqueForMutation()) {
+                        ensureUnique();
+                        b = getValue().get<QoreBufferNode>();
+                    }
                     if (setBufferElementLValue(b, static_cast<size_t>(idx))) {
                         return -1;
                     }

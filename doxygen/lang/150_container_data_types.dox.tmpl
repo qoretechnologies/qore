@@ -207,14 +207,19 @@ list<*float> boxed = scores.toList();
     \c BUFFER-RANGE-ERROR.
 
     @par Slicing and Conversion:
-    Buffers support list-style inclusive range slicing and explicit conversion to and from lists:
+    Buffers support list-style inclusive range slicing, zero-copy views, and explicit conversion to and from lists:
     @code{.py}
 buffer<int64> ids = new buffer<int64>((10, 20, 30, 40));
 buffer<int64> middle = ids[1..2];       # buffer<int64>((20, 30))
 buffer<int64> reversed = ids[3..1];     # buffer<int64>((40, 30, 20))
+buffer<int64> view = ids.view(start: 1, count: 2);
+view[0] = 25;                           # updates ids[1]
 list<int> boxed = ids.toList();
 buffer<int64> again = new buffer<int64>(boxed);
     @endcode
+
+    Range slices create independent buffers.  \c view(start, count) creates a zero-copy view sharing storage with the
+    source buffer, so assignments through either buffer are visible through the other one.
 
     @par Operators:
     Numeric buffers support elementwise arithmetic with another numeric buffer of the same length or with a scalar

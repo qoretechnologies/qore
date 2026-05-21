@@ -27,9 +27,9 @@ is not blocking.
 
 - Phase 1's built-in `buffer<T>` substrate is implemented in libqore,
   including dense construction from lists, typed indexing/assignment,
-  `buffer<T>::sized()` / `buffer<T>::filled()` factories, slicing, iteration,
-  reductions, and elementwise arithmetic/comparison operators in AST, IR, and
-  JIT execution paths.
+  `buffer<T>::sized()` / `buffer<T>::filled()` factories, slicing, zero-copy
+  views, iteration, reductions, and elementwise arithmetic/comparison operators
+  in AST, IR, and JIT execution paths.
 - Phase 2's typed DBI result API is implemented in libqore and the PostgreSQL,
   MySQL, ODBC, and Oracle drivers have branch-local support for the typed
   select methods.
@@ -2570,7 +2570,7 @@ tests and conservative defaults.
 - Element types: `int8`, `int16`, `int32`, `int64`, `float32`, `float64`,
   `bool`.
 - Elementwise arithmetic/comparison operators, reductions, static factories,
-  slicing, iteration, and conversion to/from `list<T>`.
+  slicing, zero-copy views, iteration, and conversion to/from `list<T>`.
 - Ensure `buffer<T>` is reachable through whichever name-based type lookup
   the `reflection` binary module exposes for non-class types, and through
   the `*Type` family in `Qore::Reflection`. Do not route native non-class

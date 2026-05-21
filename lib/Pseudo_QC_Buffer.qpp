@@ -149,8 +149,8 @@ buffer<*int64> scores = new buffer<*int64>((10, NOTHING, 30));
 assertEq(2, scores.count());
     @endcode
 */
-int <buffer>::count() [flags=CONSTANT] {
-   return b->countValid();
+int <buffer>::count() [flags=RET_VALUE_ONLY] {
+   return b->countValid(xsink);
 }
 
 //! Returns a typed list containing the buffer's elements
@@ -178,7 +178,33 @@ auto copy = original.clone();
     @endcode
 */
 auto <buffer>::clone() [flags=RET_VALUE_ONLY] {
-   return b->copy();
+   return b->copy(xsink);
+}
+
+//! Returns a zero-copy view over a contiguous range of this buffer
+/**
+    Writes through the returned buffer update this buffer, and writes through this buffer are visible through the
+    returned view.
+
+    @param start zero-based first element in the view
+    @param count number of elements in the view
+    @return a new buffer sharing storage with this buffer
+
+    @throw BUFFER-RANGE-ERROR if @a start or @a count is negative, or if the requested range exceeds the buffer size
+
+    @par Example:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30, 40));
+buffer<int64> middle = ids.view(start: 1, count: 2);
+middle[0] = 25;
+assertEq((10, 25, 30, 40), ids.toList());
+    @endcode
+*/
+auto <buffer>::view(int start, int count) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   if (start < 0 || count < 0 || start > (int64)b->size() || count > (int64)b->size() - start)
+      return xsink->raiseException("BUFFER-RANGE-ERROR", "buffer.view(start: " QLLD ", count: " QLLD
+         ") is out of range for buffer length " QSD, start, count, b->size());
+   return b->view(static_cast<size_t>(start), static_cast<size_t>(count));
 }
 
 //! Returns a ListIterator over a boxed copy of the buffer's values

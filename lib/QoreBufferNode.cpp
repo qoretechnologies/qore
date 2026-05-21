@@ -715,6 +715,53 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
     }
 }
 
+QoreBufferNode::QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t length)
+        : AbstractQoreNode(NT_BUFFER, true, false), element_type(parent->element_type),
+        nullable_elements(parent->nullable_elements), length(length), view_parent(parent), view_offset(offset) {
+    assert(parent);
+    assert(!parent->isView());
+    assert(offset <= parent->length);
+    assert(length <= parent->length - offset);
+    view_parent->ref();
+    ++view_parent->view_ref_count;
+}
+
+QoreBufferNode::~QoreBufferNode() {
+    if (view_parent) {
+        --view_parent->view_ref_count;
+        view_parent->deref(nullptr);
+    }
+}
+
+QoreBufferNode* QoreBufferNode::storageRoot() {
+    return view_parent ? view_parent : this;
+}
+
+const QoreBufferNode* QoreBufferNode::storageRoot() const {
+    return view_parent ? view_parent : this;
+}
+
+size_t QoreBufferNode::physicalIndex(size_t index) const {
+    assert(index < length);
+    return view_offset + index;
+}
+
+uint8_t* QoreBufferNode::dataBytes() {
+    return storageRoot()->data_buffer.data();
+}
+
+const uint8_t* QoreBufferNode::dataBytes() const {
+    return storageRoot()->data_buffer.data();
+}
+
+uint8_t* QoreBufferNode::validityBytes() {
+    return storageRoot()->validity_buffer.data();
+}
+
+const uint8_t* QoreBufferNode::validityBytes() const {
+    return storageRoot()->validity_buffer.data();
+}
+
 size_t QoreBufferNode::dataByteSize(size_t n_length) const {
     return element_type == QoreBufferElementType::Bool
         ? qore_buffer_bitmap_bytes(n_length)
@@ -722,6 +769,7 @@ size_t QoreBufferNode::dataByteSize(size_t n_length) const {
 }
 
 void QoreBufferNode::resizeStorage(size_t n_length) {
+    assert(!isView());
     length = n_length;
     data_buffer.resize(dataByteSize(length), true);
     if (nullable_elements) {
@@ -736,25 +784,28 @@ void QoreBufferNode::resizeStorage(size_t n_length) {
 bool QoreBufferNode::getValidityBit(size_t index) const {
     assert(nullable_elements);
     assert(index < length);
-    const uint8_t* bytes = validity_buffer.data();
-    return bytes[index / 8] & (uint8_t(1) << (index % 8));
+    size_t physical = physicalIndex(index);
+    const uint8_t* bytes = validityBytes();
+    return bytes[physical / 8] & (uint8_t(1) << (physical % 8));
 }
 
 void QoreBufferNode::setValidityBit(size_t index, bool valid) {
     assert(nullable_elements);
     assert(index < length);
-    uint8_t* bytes = validity_buffer.data();
-    uint8_t mask = uint8_t(1) << (index % 8);
-    bool was_valid = bytes[index / 8] & mask;
+    QoreBufferNode* root = storageRoot();
+    size_t physical = physicalIndex(index);
+    uint8_t* bytes = root->validity_buffer.data();
+    uint8_t mask = uint8_t(1) << (physical % 8);
+    bool was_valid = bytes[physical / 8] & mask;
     if (valid) {
-        bytes[index / 8] |= mask;
-        if (!was_valid && null_count > 0) {
-            --null_count;
+        bytes[physical / 8] |= mask;
+        if (!was_valid && root->null_count > 0) {
+            --root->null_count;
         }
     } else {
-        bytes[index / 8] &= ~mask;
+        bytes[physical / 8] &= ~mask;
         if (was_valid) {
-            ++null_count;
+            ++root->null_count;
         }
     }
 }
@@ -762,19 +813,21 @@ void QoreBufferNode::setValidityBit(size_t index, bool valid) {
 bool QoreBufferNode::getBoolBit(size_t index) const {
     assert(element_type == QoreBufferElementType::Bool);
     assert(index < length);
-    const uint8_t* bytes = data_buffer.data();
-    return bytes[index / 8] & (uint8_t(1) << (index % 8));
+    size_t physical = physicalIndex(index);
+    const uint8_t* bytes = dataBytes();
+    return bytes[physical / 8] & (uint8_t(1) << (physical % 8));
 }
 
 void QoreBufferNode::setBoolBit(size_t index, bool value) {
     assert(element_type == QoreBufferElementType::Bool);
     assert(index < length);
-    uint8_t* bytes = data_buffer.data();
-    uint8_t mask = uint8_t(1) << (index % 8);
+    size_t physical = physicalIndex(index);
+    uint8_t* bytes = dataBytes();
+    uint8_t mask = uint8_t(1) << (physical % 8);
     if (value) {
-        bytes[index / 8] |= mask;
+        bytes[physical / 8] |= mask;
     } else {
-        bytes[index / 8] &= ~mask;
+        bytes[physical / 8] &= ~mask;
     }
 }
 
@@ -820,7 +873,8 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
                     "buffer<%s> element %d", i, qore_buffer_element_type_name(element_type), (int)index);
                 return -1;
             }
-            uint8_t* ptr = data_buffer.data() + (index * qore_buffer_element_storage_size(element_type));
+            size_t physical = physicalIndex(index);
+            uint8_t* ptr = dataBytes() + (physical * qore_buffer_element_storage_size(element_type));
             switch (element_type) {
                 case QoreBufferElementType::Int8: {
                     int8_t v = static_cast<int8_t>(i);
@@ -865,9 +919,9 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
                     return -1;
                 }
                 float v = static_cast<float>(d);
-                memcpy(data_buffer.data() + (index * sizeof(v)), &v, sizeof(v));
+                memcpy(dataBytes() + (physicalIndex(index) * sizeof(v)), &v, sizeof(v));
             } else {
-                memcpy(data_buffer.data() + (index * sizeof(d)), &d, sizeof(d));
+                memcpy(dataBytes() + (physicalIndex(index) * sizeof(d)), &d, sizeof(d));
             }
             break;
         }
@@ -923,15 +977,40 @@ bool QoreBufferNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsi
     if (!b || element_type != b->element_type || nullable_elements != b->nullable_elements || length != b->length) {
         return false;
     }
-    if (data_buffer.size() != b->data_buffer.size()
-            || memcmp(data_buffer.data(), b->data_buffer.data(), data_buffer.size())) {
-        return false;
+    for (size_t i = 0; i < length; ++i) {
+        if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer comparison")) {
+            return false;
+        }
+        if (isElementNull(i) != b->isElementNull(i)) {
+            return false;
+        }
+        if (!isElementNull(i)) {
+            switch (element_type) {
+                case QoreBufferElementType::Int8:
+                case QoreBufferElementType::Int16:
+                case QoreBufferElementType::Int32:
+                case QoreBufferElementType::Int64:
+                    if (getReferencedEntry(i).getAsBigInt() != b->getReferencedEntry(i).getAsBigInt()) {
+                        return false;
+                    }
+                    break;
+                case QoreBufferElementType::Float32:
+                case QoreBufferElementType::Float64:
+                    if (getReferencedEntry(i).getAsFloat() != b->getReferencedEntry(i).getAsFloat()) {
+                        return false;
+                    }
+                    break;
+                case QoreBufferElementType::Bool:
+                    if (getBoolBit(i) != b->getBoolBit(i)) {
+                        return false;
+                    }
+                    break;
+                default:
+                    assert(false);
+            }
+        }
     }
-    if (validity_buffer.size() != b->validity_buffer.size()) {
-        return false;
-    }
-    return !validity_buffer.size()
-        || !memcmp(validity_buffer.data(), b->validity_buffer.data(), validity_buffer.size());
+    return true;
 }
 
 const char* QoreBufferNode::getTypeName() const {
@@ -944,25 +1023,41 @@ QoreValue QoreBufferNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) cons
     return const_cast<QoreBufferNode*>(this);
 }
 
-QoreBufferNode* QoreBufferNode::copy() const {
-    return copy(nullable_elements);
+QoreBufferNode* QoreBufferNode::copy(ExceptionSink* xsink) const {
+    return copy(nullable_elements, xsink);
 }
 
-QoreBufferNode* QoreBufferNode::copy(bool n_nullable_elements) const {
+QoreBufferNode* QoreBufferNode::copy(bool n_nullable_elements, ExceptionSink* xsink) const {
     assert(n_nullable_elements || !nullable_elements);
 
-    QoreBufferNode* rv = new QoreBufferNode(element_type, n_nullable_elements);
-    rv->length = length;
-    rv->null_count = n_nullable_elements ? (nullable_elements ? null_count : 0) : 0;
-    rv->data_buffer = data_buffer;
+    QoreBufferNode* rv = new QoreBufferNode(element_type, n_nullable_elements, length);
+    if (element_type == QoreBufferElementType::Bool) {
+        for (size_t i = 0; i < length; ++i) {
+            if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer copy")) {
+                rv->deref(nullptr);
+                return nullptr;
+            }
+            rv->setBoolBit(i, getBoolBit(i));
+        }
+    } else if (length) {
+        size_t element_size = qore_buffer_element_storage_size(element_type);
+        memcpy(rv->data_buffer.data(), static_cast<const uint8_t*>(getRawData()), length * element_size);
+    }
+
     if (n_nullable_elements) {
         if (nullable_elements) {
-            rv->validity_buffer = validity_buffer;
+            for (size_t i = 0; i < length; ++i) {
+                if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer copy validity")) {
+                    rv->deref(nullptr);
+                    return nullptr;
+                }
+                rv->setValidityBit(i, !isElementNull(i));
+            }
         } else {
-            rv->validity_buffer.resize(qore_buffer_bitmap_bytes(length), true);
             if (length) {
                 memset(rv->validity_buffer.data(), 0xff, rv->validity_buffer.size());
             }
+            rv->null_count = 0;
         }
     }
     return rv;
@@ -974,6 +1069,28 @@ const QoreTypeInfo* QoreBufferNode::getTypeInfo() const {
 
 const QoreTypeInfo* QoreBufferNode::getElementTypeInfo() const {
     return qore_buffer_element_scalar_type_info(element_type, nullable_elements);
+}
+
+void* QoreBufferNode::getRawData() {
+    if (!length) {
+        return nullptr;
+    }
+    size_t physical = physicalIndex(0);
+    if (element_type == QoreBufferElementType::Bool) {
+        return dataBytes() + (physical / 8);
+    }
+    return dataBytes() + (physical * qore_buffer_element_storage_size(element_type));
+}
+
+const void* QoreBufferNode::getRawData() const {
+    if (!length) {
+        return nullptr;
+    }
+    size_t physical = physicalIndex(0);
+    if (element_type == QoreBufferElementType::Bool) {
+        return dataBytes() + (physical / 8);
+    }
+    return dataBytes() + (physical * qore_buffer_element_storage_size(element_type));
 }
 
 bool QoreBufferNode::isElementNull(size_t index) const {
@@ -988,35 +1105,36 @@ QoreValue QoreBufferNode::getReferencedEntry(size_t index) const {
         return QoreValue();
     }
 
+    size_t physical = physicalIndex(index);
     switch (element_type) {
         case QoreBufferElementType::Int8: {
             int8_t v;
-            memcpy(&v, data_buffer.data() + index, sizeof(v));
+            memcpy(&v, dataBytes() + physical, sizeof(v));
             return static_cast<int64>(v);
         }
         case QoreBufferElementType::Int16: {
             int16_t v;
-            memcpy(&v, data_buffer.data() + (index * sizeof(v)), sizeof(v));
+            memcpy(&v, dataBytes() + (physical * sizeof(v)), sizeof(v));
             return static_cast<int64>(v);
         }
         case QoreBufferElementType::Int32: {
             int32_t v;
-            memcpy(&v, data_buffer.data() + (index * sizeof(v)), sizeof(v));
+            memcpy(&v, dataBytes() + (physical * sizeof(v)), sizeof(v));
             return static_cast<int64>(v);
         }
         case QoreBufferElementType::Int64: {
             int64_t v;
-            memcpy(&v, data_buffer.data() + (index * sizeof(v)), sizeof(v));
+            memcpy(&v, dataBytes() + (physical * sizeof(v)), sizeof(v));
             return static_cast<int64>(v);
         }
         case QoreBufferElementType::Float32: {
             float v;
-            memcpy(&v, data_buffer.data() + (index * sizeof(v)), sizeof(v));
+            memcpy(&v, dataBytes() + (physical * sizeof(v)), sizeof(v));
             return static_cast<double>(v);
         }
         case QoreBufferElementType::Float64: {
             double v;
-            memcpy(&v, data_buffer.data() + (index * sizeof(v)), sizeof(v));
+            memcpy(&v, dataBytes() + (physical * sizeof(v)), sizeof(v));
             return v;
         }
         case QoreBufferElementType::Bool:
@@ -1062,8 +1180,23 @@ QoreListNode* QoreBufferNode::toList(ExceptionSink* xsink) const {
     return rv.release();
 }
 
-size_t QoreBufferNode::countValid() const {
-    return nullable_elements ? length - static_cast<size_t>(null_count) : length;
+size_t QoreBufferNode::countValid(ExceptionSink* xsink) const {
+    if (!nullable_elements) {
+        return length;
+    }
+    if (!isView()) {
+        return length - static_cast<size_t>(null_count);
+    }
+    size_t rv = 0;
+    for (size_t i = 0; i < length; ++i) {
+        if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer count")) {
+            return 0;
+        }
+        if (!isElementNull(i)) {
+            ++rv;
+        }
+    }
+    return rv;
 }
 
 QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
@@ -1244,7 +1377,8 @@ QoreBufferNode* QoreBufferNode::slice(size_t offset, size_t count, ExceptionSink
         }
     } else if (count) {
         size_t element_size = qore_buffer_element_storage_size(element_type);
-        memcpy((*rv)->data_buffer.data(), data_buffer.data() + (offset * element_size), count * element_size);
+        const uint8_t* source = static_cast<const uint8_t*>(getRawData()) + (offset * element_size);
+        memcpy((*rv)->data_buffer.data(), source, count * element_size);
     }
 
     if (nullable_elements) {
@@ -1256,6 +1390,21 @@ QoreBufferNode* QoreBufferNode::slice(size_t offset, size_t count, ExceptionSink
         }
     }
     return rv.release();
+}
+
+QoreBufferNode* QoreBufferNode::view(size_t offset, size_t count) const {
+    assert(offset <= length);
+    assert(count <= length - offset);
+    QoreBufferNode* root = const_cast<QoreBufferNode*>(storageRoot());
+    return new QoreBufferNode(root, view_offset + offset, count);
+}
+
+bool QoreBufferNode::isUniqueForMutation() const {
+    if (isView()) {
+        return true;
+    }
+
+    return reference_count() == (view_ref_count.load(std::memory_order_acquire) + 1);
 }
 
 QoreBufferNode* QoreBufferNode::sliceRange(size_t start, size_t stop, ExceptionSink* xsink) const {

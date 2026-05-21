@@ -2724,7 +2724,10 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 bool needs_nullable_copy = false;
                 ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
                 if (needs_nullable_copy) {
-                    QoreBufferNode* copy = b->copy(true);
+                    QoreBufferNode* copy = b->copy(true, xsink);
+                    if (!copy) {
+                        return true;
+                    }
                     AbstractQoreNode* old = n.assign(copy);
                     if (lvhelper) {
                         lvhelper->saveTemp(old);

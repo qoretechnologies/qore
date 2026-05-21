@@ -35,6 +35,7 @@
 
 #include <qore/AbstractQoreNode.h>
 
+#include <atomic>
 #include <cstdint>
 #include <cstddef>
 
@@ -218,16 +219,18 @@ public:
     }
 
     //! Creates a deep copy of the buffer.
-    /** @return a new buffer with the same element type, nullability, values, and validity bitmap
+    /** @param xsink optional exception sink for cooperative cancellation
+        @return a new buffer with the same element type, nullability, values, and validity bitmap
      */
-    DLLEXPORT QoreBufferNode* copy() const;
+    DLLEXPORT QoreBufferNode* copy(ExceptionSink* xsink = nullptr) const;
 
     //! Creates a deep copy of the buffer with preserved or widened element nullability.
     /** This can widen a non-nullable buffer<T> to buffer<*T> by adding an all-valid validity bitmap.
         @param n_nullable_elements true if the copied buffer should have nullable elements
+        @param xsink optional exception sink for cooperative cancellation
         @return a new buffer with the requested nullability and copied values
      */
-    DLLLOCAL QoreBufferNode* copy(bool n_nullable_elements) const;
+    DLLLOCAL QoreBufferNode* copy(bool n_nullable_elements, ExceptionSink* xsink = nullptr) const;
 
     //! Returns the number of elements in the buffer.
     /** @return the buffer length
@@ -259,21 +262,19 @@ public:
 
     //! Returns a mutable pointer to the raw dense element storage.
     /** This is an internal helper for runtime/JIT integrations that already validate element storage semantics.
-        The returned pointer uses the buffer's physical representation; buffer<bool> is bit-packed.
+        The returned pointer uses the buffer's physical representation and includes this buffer's view offset;
+        buffer<bool> is bit-packed and may start at a non-byte-aligned bit offset.
         @return the raw storage pointer, or nullptr for an empty buffer
      */
-    DLLLOCAL void* getRawData() {
-        return data_buffer.data();
-    }
+    DLLLOCAL void* getRawData();
 
     //! Returns a const pointer to the raw dense element storage.
     /** This is an internal helper for runtime/JIT integrations that already validate element storage semantics.
-        The returned pointer uses the buffer's physical representation; buffer<bool> is bit-packed.
+        The returned pointer uses the buffer's physical representation and includes this buffer's view offset;
+        buffer<bool> is bit-packed and may start at a non-byte-aligned bit offset.
         @return the raw storage pointer, or nullptr for an empty buffer
      */
-    DLLLOCAL const void* getRawData() const {
-        return data_buffer.data();
-    }
+    DLLLOCAL const void* getRawData() const;
 
     //! Returns this buffer's complex Qore type.
     /** @return type info for buffer<T> or buffer<*T>
@@ -315,9 +316,10 @@ public:
     DLLEXPORT QoreListNode* toList(ExceptionSink* xsink) const;
 
     //! Counts valid values in the buffer.
-    /** @return the number of non-null elements; for non-nullable buffers this is identical to size()
+    /** @param xsink optional exception sink for cooperative cancellation
+        @return the number of non-null elements; for non-nullable buffers this is identical to size()
      */
-    DLLEXPORT size_t countValid() const;
+    DLLEXPORT size_t countValid(ExceptionSink* xsink = nullptr) const;
 
     //! Sums valid numeric buffer values.
     /** @param xsink exception sink for cancellation errors
@@ -352,6 +354,23 @@ public:
      */
     DLLEXPORT QoreBufferNode* slice(size_t offset, size_t count, ExceptionSink* xsink = nullptr) const;
 
+    //! Creates a zero-copy view over a contiguous element range.
+    /** The returned buffer shares storage with this buffer; writes through either buffer are visible through the
+        other buffer. The caller owns the returned reference.
+        @param offset first element in the view
+        @param count number of elements in the view
+        @return a new buffer view over the requested range
+        @throw assert failure if the requested range is out of bounds
+     */
+    DLLEXPORT QoreBufferNode* view(size_t offset, size_t count) const;
+
+    //! Returns true if this buffer can be mutated without breaking ordinary value-copy semantics.
+    /** Zero-copy views intentionally alias their root buffer and are ignored by this check. Ordinary references to
+        the same root buffer still force copy-on-write before mutation.
+        @return true if direct element mutation should update this buffer's shared storage
+     */
+    DLLLOCAL bool isUniqueForMutation() const;
+
     //! Creates a deep copy of an inclusive element range, supporting reverse ranges.
     /** @param start first element to copy
         @param stop final element to copy
@@ -363,7 +382,7 @@ public:
 
 protected:
     //! @copydoc AbstractQoreNode::~AbstractQoreNode()
-    DLLEXPORT virtual ~QoreBufferNode() = default;
+    DLLEXPORT virtual ~QoreBufferNode();
 
     //! @copydoc AbstractQoreNode::evalImpl(bool&, ExceptionSink*) const
     DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
@@ -375,7 +394,21 @@ private:
     mutable int64 null_count = 0;
     AlignedByteBuffer data_buffer;
     AlignedByteBuffer validity_buffer;
+    QoreBufferNode* view_parent = nullptr;
+    size_t view_offset = 0;
+    mutable std::atomic_int view_ref_count{0};
 
+    DLLLOCAL QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t length);
+    DLLLOCAL bool isView() const {
+        return view_parent;
+    }
+    DLLLOCAL QoreBufferNode* storageRoot();
+    DLLLOCAL const QoreBufferNode* storageRoot() const;
+    DLLLOCAL size_t physicalIndex(size_t index) const;
+    DLLLOCAL uint8_t* dataBytes();
+    DLLLOCAL const uint8_t* dataBytes() const;
+    DLLLOCAL uint8_t* validityBytes();
+    DLLLOCAL const uint8_t* validityBytes() const;
     DLLLOCAL size_t dataByteSize(size_t n_length) const;
     DLLLOCAL void resizeStorage(size_t n_length);
     DLLLOCAL bool getValidityBit(size_t index) const;

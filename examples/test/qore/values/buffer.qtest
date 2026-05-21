@@ -17,6 +17,7 @@ class BufferTest inherits QUnit::Test {
         addTestCase("float buffer", \floatBuffer());
         addTestCase("pseudo methods", \pseudoMethods());
         addTestCase("iteration and slicing", \iterationAndSlicing());
+        addTestCase("views", \views());
         addTestCase("reductions", \reductions());
         addTestCase("operators", \operators());
         addTestCase("factories", \factories());
@@ -141,6 +142,53 @@ class BufferTest inherits QUnit::Test {
         buffer<*int64> nullableSlice = nullable[0..2];
         assertEq("buffer<*int64>", nullableSlice.fullType());
         assertEq((1, NOTHING, 3), nullableSlice.toList());
+    }
+
+    views() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3, 4));
+        buffer<int64> v = b.view(start: 1, count: 2);
+        assertEq("buffer<int64>", v.fullType());
+        assertEq((2, 3), v.toList());
+
+        v[0] = 20;
+        assertEq((1, 20, 3, 4), b.toList());
+
+        b[2] = 30;
+        assertEq((20, 30), v.toList());
+
+        buffer<int64> nested = v.view(1, 1);
+        nested[0] = 300;
+        assertEq((1, 20, 300, 4), b.toList());
+
+        buffer<int64> copy = b[1..2];
+        copy[0] = 2000;
+        assertEq((1, 20, 300, 4), b.toList());
+        assertEq((2000, 300), copy.toList());
+
+        buffer<int64> empty = b.view(2, 0);
+        assertEq((), empty.toList());
+
+        buffer<*int64> nullable = new buffer<*int64>((1, NOTHING, 3, 4));
+        buffer<*int64> nullable_view = nullable.view(1, 2);
+        assertEq((NOTHING, 3), nullable_view.toList());
+        nullable_view[0] = 10;
+        nullable_view[1] = NOTHING;
+        assertEq((1, 10, NOTHING, 4), nullable.toList());
+        assertEq((10, NOTHING), nullable_view.toList());
+        assertEq(3, nullable.count());
+        assertEq(1, nullable_view.count());
+
+        buffer<bool> flags = new buffer<bool>((True, False, True, False));
+        buffer<bool> flags_view = flags.view(1, 2);
+        assertEq((False, True), flags_view.toList());
+        flags_view[0] = True;
+        flags[2] = False;
+        assertEq((True, True, False, False), flags.toList());
+        assertEq((True, False), flags_view.toList());
+
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto invalid = b.view(-1, 1); });
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto invalid = b.view(1, -1); });
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto invalid = b.view(3, 2); });
     }
 
     reductions() {
