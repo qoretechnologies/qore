@@ -240,6 +240,7 @@ public class DataProvider {
             "weaviate": "WeaviateDataProvider",
             "milvus": "MilvusDataProvider",
             "tavily": "TavilyDataProvider",
+            "exa": "ExaDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

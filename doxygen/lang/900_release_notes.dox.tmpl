@@ -1842,6 +1842,17 @@ cargo install tree-sitter-cli@0.26.5
         buffer management
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
 
+    - @ref exadataproviderintro "ExaDataProvider" module
+      - new module providing a data provider API for <a href="https://exa.ai">Exa</a> (formerly Metaphor) neural web-search services
+      - exposes three actions: `search` (`/search`, neural/keyword/auto), `find-similar` (`/findSimilar`), and `contents` (`/contents`)
+      - action catalog integration with 3 actions under the \c exa scheme
+
+    - @ref exarestclientintro "ExaRestClient" module
+      - new module providing a REST client for <a href="https://exa.ai">Exa</a>'s neural-search API
+      - supports API key authentication via the \c x-api-key header (not Authorization: Bearer)
+      - exports `ExaAgentTools::makeSearchTool()` / `makeFindSimilarTool()` / `makeContentsTool()` factories and a `makeDispatcher()` callable for plugging Exa into @ref qoreagentstrategiesintro "QoreAgentStrategies" via `AgentContext.tools` + `AgentContext.tool_dispatch`
+      - provides ExaRestConnection for connection management with \c exa:// URL scheme
+
     - @ref firecrawldataproviderintro "FirecrawlDataProvider" module
       - new module providing a data provider API for <a href="https://www.firecrawl.dev/">Firecrawl</a> web scraping and crawling
       - web scraping (single page and batch), crawling (multi-page with status tracking)

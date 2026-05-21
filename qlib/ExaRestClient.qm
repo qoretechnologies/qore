@@ -1,0 +1,344 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ExaRestClient.qm Qore user module for calling Exa neural-search REST services
+
+/*  ExaRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreLlmTypes
+
+module ExaRestClient {
+    version = "1.0";
+    desc = "user module for calling Exa (Metaphor) neural-search REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("exa",
+            ExaRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ExaRestClient Module
+
+    @tableofcontents
+
+    @section exarestclientintro ExaRestClient Introduction
+
+    The %ExaRestClient module provides a REST client for
+    [Exa](https://exa.ai) (formerly Metaphor) — a neural web-search API
+    that complements keyword search with embedding-based semantic
+    retrieval.
+
+    Exa exposes three primary endpoints:
+    - `POST /search` — neural / keyword / auto search
+    - `POST /findSimilar` — find pages similar to a seed URL
+    - `POST /contents` — fetch text / highlights / summaries for URLs
+
+    @par Agent integration
+
+    The @ref ExaAgentTools namespace exports `ToolDefinition` factories
+    and a dispatch callable for plugging Exa into
+    @ref QoreAgentStrategies::SimpleAgentStrategy "SimpleAgentStrategy".
+
+    @section ExaRestClientRelnotes Release Notes
+
+    @subsection ExaRestClientv1_0 ExaRestClient v1.0
+    - the initial version of the %ExaRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace ExaRestClient {
+public class ExaRestClientBase {
+    public {
+        const DefaultUrl = "https://api.exa.ai";
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Exa uses the `x-api-key` header (NOT Authorization: Bearer)
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv;
+        rv += DefaultOptions + opts;
+        if (rv.apikey) {
+            hash<auto!> dh;
+            if (rv.default_headers) {
+                dh += rv.default_headers;
+            }
+            dh."x-api-key" = rv.apikey;
+            rv.default_headers = dh;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for Exa (sync)
+public class ExaRestClient inherits RestClient::RestClient, ExaRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ExaRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! REST client for Exa using multiplexed HTTP connections (async)
+public class ExaRestClientIo inherits RestClientIo::RestClientIo, ExaRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ExaRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Exa REST connections
+public class ExaRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "exa://api.exa.ai";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Exa Neural Search Connection",
+            "short_desc": "A connection to the Exa neural-search REST API",
+            "desc": "A connection to [Exa](https://exa.ai) (formerly Metaphor) — a "
+                "neural web-search API providing embedding-based semantic retrieval "
+                "alongside keyword search.\n\n"
+                "Requires an API key sent as the `x-api-key` header (NOT "
+                "`Authorization: Bearer`).  Get your API key from the "
+                "[Exa dashboard](https://dashboard.exa.ai/).",
+            "cls": Class::forName("ExaRestConnection"),
+            "auto_url": True,
+            "schemes": {"exa": True},
+            "base_scheme_map": {"https": "exa"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Exa API key (x-api-key header)",
+                    "type": "string",
+                    "desc": "The Exa API key — sent as the `x-api-key` header.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "exa";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("ExaDataProvider");
+        return create_object("ExaDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private ExaRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ExaRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ExaRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return ExaRestClientBase::getOptions(rv);
+    }
+}
+
+#! Agent-tool helpers for Exa
+public namespace ExaAgentTools {
+    #! Returns a @ref QoreLlmUtils::ToolDefinition describing the
+    #! `exa_search` tool that agents can choose to invoke
+    public hash<QoreLlmUtils::ToolDefinition> sub makeSearchTool() {
+        return <QoreLlmUtils::ToolDefinition>{
+            "name": "exa_search",
+            "description": "Search the web using Exa's neural / embedding-based "
+                "search.  Excellent for semantic queries where keyword matching falls "
+                "short (e.g., 'companies similar to Anthropic', 'papers about Mamba "
+                "state-space models').  Returns ranked results with title, url, and "
+                "optional text content / highlights.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query in natural language.",
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": ("neural", "keyword", "auto"),
+                        "description": "Search type: 'neural' (semantic), 'keyword' "
+                            "(traditional), or 'auto' (Exa picks).  Default: auto.",
+                    },
+                    "num_results": {
+                        "type": "integer",
+                        "description": "Number of results to return.  Default 10.",
+                    },
+                    "include_domains": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Restrict results to these domains.",
+                    },
+                    "exclude_domains": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Exclude results from these domains.",
+                    },
+                    "start_published_date": {
+                        "type": "string",
+                        "description": "ISO date — only include pages published on or "
+                            "after this date.",
+                    },
+                    "end_published_date": {
+                        "type": "string",
+                        "description": "ISO date — only include pages published on or "
+                            "before this date.",
+                    },
+                },
+                "required": ("query",),
+            },
+        };
+    }
+
+    #! Returns a @ref QoreLlmUtils::ToolDefinition for the `exa_find_similar` tool
+    public hash<QoreLlmUtils::ToolDefinition> sub makeFindSimilarTool() {
+        return <QoreLlmUtils::ToolDefinition>{
+            "name": "exa_find_similar",
+            "description": "Find web pages similar to a seed URL using Exa's neural "
+                "search.  Use this when the agent has already identified a relevant "
+                "page and wants to discover related ones.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The seed URL to find similar pages for.",
+                    },
+                    "num_results": {
+                        "type": "integer",
+                        "description": "Number of similar results to return.  Default 10.",
+                    },
+                    "exclude_source_domain": {
+                        "type": "boolean",
+                        "description": "When True, exclude pages from the seed URL's "
+                            "own domain from the results.",
+                    },
+                },
+                "required": ("url",),
+            },
+        };
+    }
+
+    #! Returns a @ref QoreLlmUtils::ToolDefinition for the `exa_contents` tool
+    public hash<QoreLlmUtils::ToolDefinition> sub makeContentsTool() {
+        return <QoreLlmUtils::ToolDefinition>{
+            "name": "exa_contents",
+            "description": "Fetch full content / highlights / summaries for one or "
+                "more URLs (typically from a prior `exa_search` or "
+                "`exa_find_similar` result).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of Exa result IDs (or absolute URLs) to "
+                            "fetch content for.",
+                    },
+                    "text": {
+                        "type": "boolean",
+                        "description": "Include full text content.",
+                    },
+                    "highlights": {
+                        "type": "object",
+                        "description": "Highlight configuration (num_sentences, "
+                            "highlights_per_url, query).",
+                    },
+                    "summary": {
+                        "type": "object",
+                        "description": "Summary configuration (query for guided "
+                            "summarization).",
+                    },
+                },
+                "required": ("ids",),
+            },
+        };
+    }
+
+    #! Builds a tool-dispatcher callable wired to the given Exa REST client
+    /** Recognised tool names: `exa_search`, `exa_find_similar`, `exa_contents`.
+        Other tool names cause the dispatcher to throw \c AGENT-TOOL-ERROR.
+
+        @param client the @ref ExaRestClient::ExaRestClientIo to use
+
+        @return a callable that invokes the relevant Exa endpoint
+    */
+    public code sub makeDispatcher(ExaRestClient::ExaRestClientIo client) {
+        return auto sub (string tool_name, hash<auto> args) {
+            switch (tool_name) {
+                case "exa_search": {
+                    return client.restPost("/search", args + {}).body;
+                }
+                case "exa_find_similar": {
+                    return client.restPost("/findSimilar", args + {}).body;
+                }
+                case "exa_contents": {
+                    return client.restPost("/contents", args + {}).body;
+                }
+                default:
+                    throw "AGENT-TOOL-ERROR",
+                        sprintf("Exa dispatcher does not handle tool %y; expected "
+                            "one of: exa_search, exa_find_similar, exa_contents",
+                            tool_name);
+            }
+        };
+    }
+}
+}
