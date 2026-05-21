@@ -142,9 +142,12 @@ public class AzureOpenAiChatCompletionResponseDataType inherits HashDataType {
             },
             "created": {
                 "display_name": "Created",
-                "short_desc": "Unix timestamp",
-                "type": IntOrNothingType,
-                "desc": "Unix timestamp when the completion was created",
+                "short_desc": "When the completion was created",
+                "type": DateOrNothingType,
+                "desc": "When the completion was created. The Azure OpenAI "
+                    "response carries this as a Unix epoch-seconds integer; "
+                    "the data provider converts it to a Qore `date` for "
+                    "downstream consumers.",
             },
             "model": {
                 "display_name": "Model",
@@ -231,7 +234,7 @@ public class AzureOpenAiEmbeddingResponseDataType inherits HashDataType {
         const Fields = {
             "object": {
                 "display_name": "Object",
-                "short_desc": "Object type discriminator (usually `list`)",
+                "short_desc": "Object type discriminator (usually \"list\")",
                 "type": StringOrNothingType,
                 "desc": "Object type discriminator (typically `list`)",
             },

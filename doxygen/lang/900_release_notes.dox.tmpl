@@ -1147,6 +1147,44 @@ cargo install tree-sitter-cli@0.26.5
         - new @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class for extension management
         - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
           permessage-deflate compression
+    - @ref awsrestclientintro "AwsRestClient" module
+      - added the full AWS credential chain: AWS_* environment variables, ECS task-role
+        (\c AWS_CONTAINER_CREDENTIALS_RELATIVE_URI / \c _FULL_URI), IMDSv2 token-protected
+        flow, and STS \c AssumeRole bootstrap; all four sources tried in order before the
+        canonical RequiredOptions error fires
+      - new connection / opts knobs: \c aws_role_arn, \c aws_role_session_name,
+        \c aws_external_id, \c aws_sts_endpoint, \c aws_imds_url, \c aws_imds_disabled
+      - new static helpers: \c AwsRestClientBase::applyEnvCredentials(),
+        \c assumeRole(), \c getImdsCredentials(), \c getEcsCredentials()
+      - fixed pre-existing \c buildResponse arity bug in
+        @ref AwsRestClient::AwsRestClientIo::restDoRequest() "AwsRestClientIo::restDoRequest()"
+        — was being called with 4 args but the current signature requires 7
+    - @ref openairestclientintro "OpenAiRestClient" module
+      - @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" is now formally the
+        OpenAI-compatible base for any backend that speaks the OpenAI chat-completions
+        wire shape (xAI Grok, Perplexity, Azure OpenAI, etc.)
+      - new virtual \c getChatCompletionsPath() subclass hook so derived providers can
+        override the URL path (e.g. Perplexity uses \c /chat/completions instead of
+        \c /v1/chat/completions, Azure routes through deployment-name URLs)
+    - @ref grokrestclientintro "GrokRestClient" module
+      - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
+        \c grok via @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — thin
+        subclass of \c OpenAiLlmProvider with the xAI default URL applied
+    - @ref perplexityrestclientintro "PerplexityRestClient" module
+      - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
+        \c perplexity via @ref PerplexityRestClient::PerplexityLlmProvider
+        "PerplexityLlmProvider" — overrides \c getChatCompletionsPath() to
+        \c /chat/completions
+    - @ref geminirestclientintro "GeminiRestClient" module
+      - request/response body shapers extracted into the standalone
+        @ref geminibodyshapeintro "GeminiBodyShape" module so the upcoming
+        Vertex AI Gemini-on-Vertex pathway can reuse them without forcing a
+        \c GeminiRestClient import; behavior is unchanged
+    - @ref voyagerestclientintro "VoyageRestClient" module
+      - @ref QoreRagUtils::VoyageReranker::rerank() "VoyageReranker::rerank()" updated
+        for the new optional \c *hash<auto> opts parameter on
+        @ref QoreRagUtils::AbstractReranker "AbstractReranker"; forwards
+        \c truncation, \c max_chunks_per_doc, and \c return_documents to Voyage
 
     @par Comprehensive Regular Expression Improvements
     @parblock
@@ -1927,6 +1965,10 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a data provider API for <a href="https://qdrant.tech/">Qdrant</a> vector database instances
       - supports collection management, point CRUD, vector search (query API), alias management,
         snapshot management, cluster management, and service health endpoints
+      - registers \c QdrantVectorStore as the reference concrete
+        @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore" implementation under
+        backend identifier \c qdrant — usable directly from \c QoreRagUtils' \c RagPipeline
+        ingest and retrieval pathways
     - @ref qlsintro "QLS" module
       - new module providing a Language Server Protocol (LSP) implementation for %Qore
       - supports hover, go-to-definition, find references, and document/workspace symbols
@@ -2003,12 +2045,23 @@ cargo install tree-sitter-cli@0.26.5
         shared by QoreLlmUtils and the LLM REST client modules
       - separated from QoreLlmUtils so REST client modules can supply provider implementations
         without forming a dependency cycle
+      - adds \c provider_options to @ref QoreLlmUtils::LlmBackendConfig "LlmBackendConfig"
+        so provider subclasses (Azure OpenAI, Bedrock, Vertex AI) carry vendor-specific
+        configuration without bloating the shared hashdecl
+      - \c ProviderModuleMap extended with lazy-load entries for \c azure-openai, \c bedrock,
+        \c vertex-ai, \c grok, and \c perplexity
     - @ref qoreragtypesintro "QoreRagTypes" module
       - new module providing the provider-neutral hashdecls and abstract embedder /
         reranker / vector-store classes shared by QoreRagUtils and individual RAG
         REST client modules
       - separated from QoreRagUtils so REST client modules can supply embedder
         and reranker implementations without forming a dependency cycle
+      - @ref QoreRagUtils::AbstractReranker::rerank() "AbstractReranker::rerank()" gains a
+        trailing optional \c *hash<auto> opts parameter so cloud rerankers (Cohere, Voyage,
+        Jina) can accept per-call options (\c max_chunks_per_doc, \c rank_fields,
+        \c truncation) without each defining a private API; existing subclasses updated
+      - \c EmbedderModuleMap extended with lazy-load entries for \c bedrock and \c vertex-ai;
+        \c VectorStoreModuleMap registers \c qdrant
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
       - supports HTTP/OpenAI-compatible, Anthropic Messages API, and custom callback modes
@@ -2292,6 +2345,41 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
       - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)
       - provides ZohoInvoiceRestConnection for connection management with \c zohoinvoice:// URL scheme
+    - @ref awseventstreamintro "AwsEventStream" module
+      - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
+      - full prelude + headers + payload + CRC32 validation; ten header value-type tags decoded (bool, int8/16/32/64, byte-array, UTF-8 string, timestamp, UUID)
+    - @ref azureauthintro "AzureAuth" module
+      - new module exchanging Microsoft Entra (Azure AD) credentials for bearer access tokens
+      - supports \c client_credentials and managed-identity (IMDS-for-Azure) flows with thread-safe token caching and 5-minute safety-window refresh
+    - @ref azureopenairestclientintro "AzureOpenAiRestClient" module
+      - new module providing a REST client and \c LlmProvider for <a href="https://azure.microsoft.com/en-us/products/ai-services/openai-service/">Azure OpenAI Service</a>
+      - subclasses \c OpenAiLlmProvider with deployment-routed URLs and three authentication modes: api-key, Entra client-credentials, Entra managed-identity
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c azure-openai
+    - @ref azureopenaidataproviderintro "AzureOpenAiDataProvider" module
+      - new module providing a data provider API for Azure OpenAI Service — deployment-routed chat completions and embeddings
+      - registers ChatCompletion + Embedding actions in the action catalog under the \c azure-openai scheme
+    - @ref bedrockrestclientintro "BedrockRestClient" module
+      - new module providing a REST client and \c LlmProvider for <a href="https://aws.amazon.com/bedrock/">AWS Bedrock</a>
+      - speaks the unified Converse API covering Anthropic, Llama, Mistral, Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families
+      - Titan + Cohere embedder via \c InvokeModel; full AWS credential chain (static, env, ECS task-role, IMDSv2, STS AssumeRole) inherited from \c AwsRestClient
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c bedrock and @ref qoreragutilsintro "QoreRagUtils" under embedder backend \c bedrock
+    - @ref bedrockdataproviderintro "BedrockDataProvider" module
+      - new module providing a data provider API for AWS Bedrock
+      - registers Converse + Embed actions in the action catalog under the \c bedrock scheme
+    - @ref gcpauthintro "GcpAuth" module
+      - new module exchanging GCP service-account credentials for bearer access tokens
+      - service-account JWT-bearer flow (RS256-signed via the json module), GCE/GKE/Cloud-Run metadata server, and full Application Default Credentials chain with token caching
+    - @ref geminibodyshapeintro "GeminiBodyShape" module
+      - new helper module exposing pure-static request/response shapers for the Gemini \c generateContent wire format
+      - shared between @ref geminirestclientintro "GeminiRestClient" and @ref vertexairestclientintro "VertexAiRestClient" so the native Gemini and Gemini-on-Vertex paths stay in lock-step
+    - @ref vertexairestclientintro "VertexAiRestClient" module
+      - new module providing a REST client and \c LlmProvider for <a href="https://cloud.google.com/vertex-ai">Google Vertex AI</a>
+      - Gemini-on-Vertex via regional \c :generateContent endpoints; Gecko embeddings via \c :predict
+      - authentication via @ref gcpauthintro "GcpAuth" — service-account JSON, ADC, or the GCE/GKE/Cloud-Run metadata server
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c vertex-ai and @ref qoreragutilsintro "QoreRagUtils" under embedder backend \c vertex-ai
+    - @ref vertexaidataproviderintro "VertexAiDataProvider" module
+      - new module providing a data provider API for Google Vertex AI
+      - registers GenerateContent + Embed actions in the action catalog under the \c vertex-ai scheme
     @section qore_2_2_1 Qore 2.2.1
 
     @par Release Summary

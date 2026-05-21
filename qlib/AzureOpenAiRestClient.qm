@@ -173,10 +173,13 @@ public class AzureOpenAiRestConnection inherits RestClient::RestConnection {
                     "default_value": AuthModeApiKey,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": AuthModeApiKey,
+                            "display_name": "API Key",
                             "desc": "Azure resource api-key header"},
                         <AllowedValueInfo>{"value": AuthModeEntraClientCredentials,
+                            "display_name": "Entra Client Credentials",
                             "desc": "Entra (Azure AD) client_credentials grant"},
                         <AllowedValueInfo>{"value": AuthModeEntraManagedIdentity,
+                            "display_name": "Entra Managed Identity",
                             "desc": "Azure managed-identity (IMDS-for-Azure)"},
                     ),
                 },
