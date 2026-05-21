@@ -4222,18 +4222,9 @@ protected:
     }
 };
 
-//! Vector of type infos for union member types
-typedef std::vector<const QoreTypeInfo*> type_vec_t;
-
-//! Creates or retrieves a cached union type for the given member types
-/** @param member_types vector of member types
-    @param or_nothing if true, the union type also accepts NOTHING
-    @return the union type info, or nullptr on error
-*/
-DLLLOCAL const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing = false);
-
-//! Creates or retrieves a cached or-nothing union type for the given member types
-DLLLOCAL const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types);
+// qore_get_union_type / qore_get_union_or_nothing_type are now declared DLLEXPORT in
+// include/qore/QoreType.h so module qpp signatures can use union<...> types.
+// type_vec_t is defined in include/qore/common.h.
 
 //! Type info for typed callable types: code<ReturnType(ParamTypes...)>
 /** This class represents a callable type with specified return type and parameter types.
