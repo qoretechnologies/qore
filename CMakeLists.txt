@@ -2540,6 +2540,8 @@ qore_user_module("qlib/DeepSeekRestClient.qm" "ConnectionProvider;Mime;RestClien
 qore_user_module("qlib/DeepSeekDataProvider" "DeepSeekRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "deepseek-logo.svg")
 qore_user_module("qlib/GroqRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
 qore_user_module("qlib/GroqDataProvider" "GroqRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "groq-logo.svg")
+qore_user_module("qlib/TogetherRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes;QoreRagTypes")
+qore_user_module("qlib/TogetherDataProvider" "TogetherRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "together-ai-logo.svg")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")

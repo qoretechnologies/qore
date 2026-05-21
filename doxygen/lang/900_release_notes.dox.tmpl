@@ -2486,6 +2486,18 @@ cargo install tree-sitter-cli@0.26.5
       - TerminalMarkdownRenderer: converts markdown (headings, bold, italic, code, tables, lists, blockquotes) to ANSI escape sequences
       - TerminalTableRenderer: formats tabular data with Unicode box-drawing characters and column alignment
 
+    - @ref togetherdataproviderintro "TogetherDataProvider" module
+      - new module providing a data provider API for <a href="https://www.together.ai">Together AI</a> hosted open-weight inference
+      - exposes three actions: `chat-completion` (OpenAI-compatible `/v1/chat/completions`), `create-embeddings` (`/v1/embeddings`), and `generate-image` (`/v1/images/generations` for FLUX/SDXL)
+      - action catalog integration with 3 actions under the \c together scheme
+
+    - @ref togetherrestclientintro "TogetherRestClient" module
+      - new module providing a REST client for <a href="https://www.together.ai">Together AI</a>'s OpenAI-compatible inference API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat; registers a `together` embedder backend with @ref qorerragutilsintro "QoreRagUtils"
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c together
+      - provides TogetherRestConnection for connection management with \c together:// URL scheme
+
     - @ref unbouncedataproviderintro "UnbounceDataProvider" module
       - new module providing a data provider API for <a href="https://unbounce.com/">Unbounce</a> landing page services
       - account and sub-account management (list, get)

@@ -413,6 +413,7 @@ public class LlmProviderRegistry {
             "vertex-ai":     "VertexAiRestClient",
             "deepseek":      "DeepSeekRestClient",
             "groq":          "GroqRestClient",
+            "together":      "TogetherRestClient",
         };
     }
 

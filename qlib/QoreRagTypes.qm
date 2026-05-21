@@ -637,6 +637,7 @@ public class RagProviderRegistry {
             "local-onnx": "QoreRagUtils",
             "bedrock":    "BedrockRestClient",
             "vertex-ai":  "VertexAiRestClient",
+            "together":   "TogetherRestClient",
         };
 
         #! Map of reranker backend names to providing modules

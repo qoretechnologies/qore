@@ -229,6 +229,7 @@ public class DataProvider {
 
             "grok": "GrokDataProvider",
             "groq": "GroqDataProvider",
+            "together": "TogetherDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",
