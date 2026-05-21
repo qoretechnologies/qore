@@ -266,7 +266,7 @@ public:
         buffer<bool> is bit-packed and may start at a non-byte-aligned bit offset.
         @return the raw storage pointer, or nullptr for an empty buffer
      */
-    DLLLOCAL void* getRawData();
+    DLLEXPORT void* getRawData();
 
     //! Returns a const pointer to the raw dense element storage.
     /** This is an internal helper for runtime/JIT integrations that already validate element storage semantics.
@@ -274,7 +274,7 @@ public:
         buffer<bool> is bit-packed and may start at a non-byte-aligned bit offset.
         @return the raw storage pointer, or nullptr for an empty buffer
      */
-    DLLLOCAL const void* getRawData() const;
+    DLLEXPORT const void* getRawData() const;
 
     //! Returns this buffer's complex Qore type.
     /** @return type info for buffer<T> or buffer<*T>

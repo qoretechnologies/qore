@@ -13,7 +13,360 @@
 #include "QC_GroupedDataFrame.h"
 #include "df_csv.h"
 
+#include <algorithm>
+#include <sstream>
+
 using namespace QoreDataFrameNS;
+
+namespace {
+
+static std::string qdfBuildInsertSql(const std::string& table_name,
+        const std::vector<Column>& columns) {
+    std::ostringstream sql;
+    sql << "INSERT INTO " << table_name << " (";
+    for (size_t c = 0; c < columns.size(); ++c) {
+        if (c) {
+            sql << ", ";
+        }
+        sql << columns[c].name;
+    }
+    sql << ") VALUES (";
+    for (size_t c = 0; c < columns.size(); ++c) {
+        if (c) {
+            sql << ", ";
+        }
+        sql << "%v";
+    }
+    sql << ")";
+    return sql.str();
+}
+
+static bool qdfHasMethod(const QoreObject* obj, const char* name) {
+    const QoreClass* cls = obj->getClass();
+    return cls && cls->findMethod(name);
+}
+
+static QoreObject* qdfGetSqlStatement(QoreObject* ds, ValueHolder& stmt_val,
+        ExceptionSink* xsink) {
+    if (!qdfHasMethod(ds, "getSQLStatement")) {
+        return nullptr;
+    }
+
+    stmt_val = ds->evalMethod("getSQLStatement", nullptr, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreObject* stmt = stmt_val->get<QoreObject>();
+    if (!stmt) {
+        xsink->raiseException("DATAFRAME-DB-ERROR",
+            "getSQLStatement() returned type '%s'; expected an SQLStatement object",
+            stmt_val->getTypeName());
+        return nullptr;
+    }
+    return stmt;
+}
+
+static int qdfPrepareStatement(QoreObject* stmt, const std::string& sql,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(new QoreStringNode(sql), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(stmt->evalMethod("prepare", *args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qdfExecStatementArgs(QoreObject* stmt, QoreListNode* bind_args,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(bind_args, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(stmt->evalMethod("execArgs", *args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static QoreListNode* qdfBuildRowArgs(const std::vector<Column>& columns,
+        int64_t row, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    int64_t n = 0;
+    for (const Column& col : columns) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "building DataFrame row bind arguments")) {
+            return nullptr;
+        }
+        args->push(col.data->getValueAt(row, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ++n;
+    }
+    return args.release();
+}
+
+static QoreHashNode* qdfBuildColumnHashRange(const std::vector<Column>& columns,
+        int64_t start, int64_t count, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+
+    int64_t n = 0;
+    for (const Column& col : columns) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "building DataFrame column batch")) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreListNode> values(
+            columnToQoreListRange(*col.data, start, count, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        h->setKeyValue(col.name.c_str(), values.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ++n;
+    }
+
+    return h.release();
+}
+
+static const char* qdfColumnQoreType(ColumnType type) {
+    switch (type) {
+        case ColumnType::FLOAT64:
+            return "float";
+        case ColumnType::INT64:
+            return "integer";
+        case ColumnType::BOOL:
+            return "bool";
+        case ColumnType::DATE:
+            return "date";
+        case ColumnType::STRING:
+        case ColumnType::AUTO:
+        default:
+            return "string";
+    }
+}
+
+static QoreHashNode* qdfBuildTableDescription(const std::vector<Column>& columns,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> desc(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> cols(new QoreHashNode(autoTypeInfo), xsink);
+
+    int64_t n = 0;
+    for (const Column& col : columns) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "building DataFrame table description")) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> cdesc(new QoreHashNode(autoTypeInfo), xsink);
+        cdesc->setKeyValue("qore_type", new QoreStringNode(qdfColumnQoreType(col.data->type)), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        cols->setKeyValue(col.name.c_str(), cdesc.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ++n;
+    }
+
+    desc->setKeyValue("columns", cols.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return desc.release();
+}
+
+static int qdfLoadModule(QoreProgram* pgm, const char* module, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(new QoreStringNode(module), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(pgm->callFunction("load_module", *args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qdfCallObjectMethod(QoreObject* obj, const char* method,
+        QoreValue arg, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(arg, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(obj->evalMethod(method, *args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qdfCallObjectMethod(QoreObject* obj, const char* method,
+        ExceptionSink* xsink) {
+    ValueHolder rv(obj->evalMethod(method, nullptr, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qdfCallObjectBoolMethod(QoreObject* obj, const char* method,
+        bool& result, ExceptionSink* xsink) {
+    ValueHolder rv(obj->evalMethod(method, nullptr, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    result = rv->getAsBool();
+    return 0;
+}
+
+static int qdfTryGenericBulkInsert(QoreProgram* pgm, QoreObject* ds,
+        const std::string& table_name, const QoreHashNode* options,
+        const std::vector<Column>& columns, int64_t n_rows, int64_t block_size,
+        ExceptionSink* xsink) {
+    // SqlUtil delegates SQL generation and array-bind handling to the
+    // driver-specific AbstractTable implementation, and emulates bulk DML when
+    // a driver does not support native array binding.
+    ExceptionSink load_xsink;
+    if (qdfLoadModule(pgm, "SqlUtil", &load_xsink)) {
+        return 1;
+    }
+
+    const QoreClass* table_cls = pgm->findClass("SqlUtil::Table", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (!table_cls) {
+        xsink->raiseException("DATAFRAME-DB-ERROR",
+            "SqlUtil was loaded, but SqlUtil::Table is not available");
+        return -1;
+    }
+
+    ReferenceHolder<QoreListNode> table_args(new QoreListNode(autoTypeInfo), xsink);
+    table_args->push(ds->refSelf(), xsink);
+    if (options) {
+        QoreValue table_description = options->getKeyValue("table_description");
+        if (!table_description.isNullOrNothing()) {
+            if (table_description.getType() != NT_HASH) {
+                xsink->raiseException("DATAFRAME-DB-ERROR",
+                    "DataFrame::toTable() option 'table_description' has type '%s'; expected 'hash'",
+                    table_description.getTypeName());
+                return -1;
+            }
+            table_args->push(table_description.refSelf(), xsink);
+        } else {
+            table_args->push(qdfBuildTableDescription(columns, xsink), xsink);
+        }
+    } else {
+        table_args->push(qdfBuildTableDescription(columns, xsink), xsink);
+    }
+    table_args->push(new QoreStringNode(table_name), xsink);
+    if (options) {
+        QoreValue table_options = options->getKeyValue("table_options");
+        if (!table_options.isNullOrNothing()) {
+            table_args->push(table_options.refSelf(), xsink);
+        }
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> table(table_cls->execConstructor(*table_args, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    bool exists = false;
+    if (qdfCallObjectBoolMethod(*table, "checkExistence", exists, xsink)) {
+        xsink->clear();
+        return 1;
+    }
+    if (!exists) {
+        return 1;
+    }
+
+    bool inserted_any = false;
+    for (int64_t start = 0; start < n_rows; start += block_size) {
+        if (qore_check_cancel(xsink, "writing DataFrame to table")) {
+            return -1;
+        }
+
+        int64_t count = std::min(block_size, n_rows - start);
+        ReferenceHolder<QoreHashNode> data(qdfBuildColumnHashRange(columns, start, count, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (qdfCallObjectMethod(*table, "bulkInsert", data.release(), xsink)) {
+            if (!inserted_any) {
+                xsink->clear();
+                return 1;
+            }
+            return -1;
+        }
+        inserted_any = true;
+    }
+
+    return 0;
+}
+
+static int qdfPreparedRowInsert(QoreObject* ds, const std::string& sql,
+        const std::vector<Column>& columns, int64_t n_rows, ExceptionSink* xsink) {
+    ValueHolder stmt_val(xsink);
+    QoreObject* stmt = qdfGetSqlStatement(ds, stmt_val, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (!stmt) {
+        return 1;
+    }
+
+    if (qdfPrepareStatement(stmt, sql, xsink)) {
+        return -1;
+    }
+
+    for (int64_t r = 0; r < n_rows; ++r) {
+        if ((r % 100) == 0 && r > 0
+                && qore_check_cancel(xsink, "writing DataFrame to table")) {
+            return -1;
+        }
+
+        ReferenceHolder<QoreListNode> bind_args(qdfBuildRowArgs(columns, r, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (qdfExecStatementArgs(stmt, bind_args.release(), xsink)) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int qdfExecRowInsert(QoreObject* ds, const std::string& sql,
+        const std::vector<Column>& columns, int64_t n_rows, ExceptionSink* xsink) {
+    for (int64_t r = 0; r < n_rows; ++r) {
+        if ((r % 100) == 0 && r > 0
+                && qore_check_cancel(xsink, "writing DataFrame to table")) {
+            return -1;
+        }
+
+        ReferenceHolder<QoreListNode> call_args(qdfBuildRowArgs(columns, r, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        call_args->insert(new QoreStringNode(sql), xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        ValueHolder result(ds->evalMethod("exec", *call_args, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+} // namespace
 
 //! Columnar DataFrame for typed, SQL-like data manipulation
 /** Provides a column-oriented data structure with typed columns (float64, int64,
@@ -581,8 +934,8 @@ nothing DataFrame::writeCSV(string path, *hash<CsvOptions> options) [dom=FILESYS
     @param sql the SQL SELECT query to execute
     @param bind_args optional bind arguments for the query
 
-    Calls the datasource's \c select() method, which returns a column-oriented
-    hash of lists, and builds a DataFrame from the result.
+    Calls the datasource's \c select() method. Both column-oriented hashes and
+    row-oriented lists are accepted.
 
     @return new DataFrame object with query results
 
@@ -602,7 +955,6 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
         return QoreValue();
     }
 
-    // Call ds.select(sql, bind_args...) via Qore method dispatch
     ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
     call_args->push(sql->refSelf(), xsink);
     if (bind_args) {
@@ -688,10 +1040,26 @@ nothing DataFrame::writeParquet(string path) [dom=FILESYSTEM] {
 //! Inserts DataFrame rows into a database table
 /** @param ds a Datasource or DatasourcePool object
     @param table_name the target table name
-    @param options optional hash: \c commit_interval (int, default 1000 — commit every N rows)
+    @param options optional hash:
+    - \c block_size (int, default 10000): rows per bulk database execution when
+      supported
+    - \c commit_interval (int): deprecated alias for \c block_size, kept for
+      compatibility; this method does not commit transactions
+    - \c table_options (hash): optional SqlUtil::Table options passed to the
+      generic table wrapper
+    - \c table_description (hash): optional SqlUtil table description hash; if
+      omitted, one is inferred from the DataFrame column types
 
-    Generates INSERT statements with bind placeholders and executes one per row.
-    Column names from the DataFrame are used as the column list.
+    Column names from the DataFrame are used as the column list. When available,
+    the method writes through SqlUtil::AbstractTable bulk inserts, allowing each
+    driver to use its native bulk DML / array-bind support or SqlUtil's
+    emulation. If the generic SqlUtil module cannot be loaded, the method falls
+    back to a prepared insert statement when possible and finally to per-row
+    \c exec() calls.
+
+    @note This method does not commit or roll back the datasource. Use
+    Datasource::commit(), Datasource::rollback(), DatasourcePool::commit(), or
+    DatasourcePool::rollback() in caller-managed transaction handling.
 
     @par Example:
     @code{.py}
@@ -714,77 +1082,47 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
         return QoreValue();
     }
 
-    // Get column names
-    ReferenceHolder<QoreListNode> col_names_list(df->columnNames(xsink), xsink);
+    int64_t block_size = 10000;
+    if (options) {
+        QoreValue bs = options->getKeyValue("block_size");
+        if (!bs.isNullOrNothing()) {
+            block_size = bs.getAsBigInt();
+        } else {
+            QoreValue ci = options->getKeyValue("commit_interval");
+            if (!ci.isNullOrNothing()) {
+                block_size = ci.getAsBigInt();
+            }
+        }
+    }
+    if (block_size <= 0) {
+        block_size = n_rows_val;
+    }
+
+    std::vector<Column> columns;
+    {
+        std::lock_guard<std::mutex> lk(df->getMutex());
+        columns = df->getColumns();
+    }
+
+    int rc = qdfTryGenericBulkInsert(getProgram(), ds, table_name->c_str(), options,
+        columns, n_rows_val, block_size, xsink);
     if (*xsink) {
         return QoreValue();
     }
-
-    // Build INSERT SQL: INSERT INTO table (col1, col2, ...) VALUES (%v, %v, ...)
-    QoreStringNode* sql = new QoreStringNode("INSERT INTO ");
-    sql->concat(table_name->c_str());
-    sql->concat(" (");
-    for (int64_t c = 0; c < n_cols_val; ++c) {
-        if (c > 0) {
-            sql->concat(", ");
-        }
-        QoreValue cname_val = col_names_list->retrieveEntry(c);
-        if (cname_val.getType() == NT_STRING) {
-            QoreStringValueHelper cname(cname_val);
-            sql->concat(cname->c_str());
-        }
-    }
-    sql->concat(") VALUES (");
-    for (int64_t c = 0; c < n_cols_val; ++c) {
-        if (c > 0) {
-            sql->concat(", ");
-        }
-        sql->concat("%v");
-    }
-    sql->concat(")");
-    SimpleRefHolder<QoreStringNode> sql_holder(sql);
-
-    // Parse commit interval
-    int64_t commit_interval = 1000;
-    if (options) {
-        QoreValue ci = options->getKeyValue("commit_interval");
-        if (!ci.isNullOrNothing()) {
-            commit_interval = ci.getAsBigInt();
-        }
+    if (rc == 0) {
+        return QoreValue();
     }
 
-    // Insert rows one at a time via exec()
-    for (int64_t r = 0; r < n_rows_val; ++r) {
-        // Periodic cancellation check
-        if ((r % 10000) == 0 && r > 0) {
-            if (qore_check_cancel(xsink, "writing DataFrame to table")) {
-                return QoreValue();
-            }
-        }
-
-        // Get row values
-        ReferenceHolder<QoreHashNode> row(df->getRow(r, xsink), xsink);
-        if (*xsink) {
-            return QoreValue();
-        }
-
-        // Build call args: (sql, val1, val2, ...)
-        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
-        call_args->push(sql->refSelf(), xsink);
-
-        ConstHashIterator hi(*row);
-        while (hi.next()) {
-            call_args->push(hi.get().refSelf(), xsink);
-        }
-
-        // Execute INSERT
-        QoreValue result = ds->evalMethod("exec", *call_args, xsink);
-        if (*xsink) {
-            return QoreValue();
-        }
-        result.discard(xsink);
+    std::string sql = qdfBuildInsertSql(table_name->c_str(), columns);
+    rc = qdfPreparedRowInsert(ds, sql, columns, n_rows_val, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (rc == 0) {
+        return QoreValue();
     }
 
+    qdfExecRowInsert(ds, sql, columns, n_rows_val, xsink);
     return QoreValue();
 }
 

@@ -10,6 +10,8 @@
 
 #include "df_column.h"
 
+#include <cstring>
+
 namespace QoreDataFrameNS {
 
 const char* columnTypeName(ColumnType type) {
@@ -232,10 +234,193 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
     return buildColumnData(values, type, xsink);
 }
 
+std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* values,
+        ExceptionSink* xsink) {
+    if (!values) {
+        return std::make_shared<ColumnData>();
+    }
+
+    auto col = std::make_shared<ColumnData>();
+    int64_t n = values ? (int64_t)values->size() : 0;
+    col->n_rows = n;
+    col->null_mask.resize(n, 0);
+
+    switch (values->getElementType()) {
+        case QoreBufferElementType::Int8:
+        case QoreBufferElementType::Int16:
+        case QoreBufferElementType::Int32:
+        case QoreBufferElementType::Int64: {
+            col->type = ColumnType::INT64;
+            col->int_data.resize(n);
+            if (!values->hasNullableElements()) {
+                switch (values->getElementType()) {
+                    case QoreBufferElementType::Int8: {
+                        const int8_t* src = static_cast<const int8_t*>(values->getRawData());
+                        for (int64_t i = 0; i < n; ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                                return nullptr;
+                            }
+                            col->int_data[i] = src[i];
+                        }
+                        break;
+                    }
+                    case QoreBufferElementType::Int16: {
+                        const int16_t* src = static_cast<const int16_t*>(values->getRawData());
+                        for (int64_t i = 0; i < n; ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                                return nullptr;
+                            }
+                            col->int_data[i] = src[i];
+                        }
+                        break;
+                    }
+                    case QoreBufferElementType::Int32: {
+                        const int32_t* src = static_cast<const int32_t*>(values->getRawData());
+                        for (int64_t i = 0; i < n; ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                                return nullptr;
+                            }
+                            col->int_data[i] = src[i];
+                        }
+                        break;
+                    }
+                    case QoreBufferElementType::Int64: {
+                        const int64_t* src = static_cast<const int64_t*>(values->getRawData());
+                        if (n) {
+                            std::memcpy(col->int_data.data(), src, n * sizeof(int64_t));
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            } else {
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (values->isElementNull(i)) {
+                        col->null_mask[i] = 1;
+                        col->int_data[i] = 0;
+                    } else {
+                        col->int_data[i] = values->getReferencedEntry(i).getAsBigInt();
+                    }
+                }
+            }
+            break;
+        }
+        case QoreBufferElementType::Float32:
+        case QoreBufferElementType::Float64: {
+            col->type = ColumnType::FLOAT64;
+            col->float_data.resize(n);
+            if (!values->hasNullableElements()) {
+                if (values->getElementType() == QoreBufferElementType::Float64) {
+                    const double* src = static_cast<const double*>(values->getRawData());
+                    if (n) {
+                        std::memcpy(col->float_data.data(), src, n * sizeof(double));
+                    }
+                } else {
+                    const float* src = static_cast<const float*>(values->getRawData());
+                    for (int64_t i = 0; i < n; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                            return nullptr;
+                        }
+                        col->float_data(i) = src[i];
+                    }
+                }
+            } else {
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (values->isElementNull(i)) {
+                        col->null_mask[i] = 1;
+                        col->float_data(i) = std::numeric_limits<double>::quiet_NaN();
+                    } else {
+                        col->float_data(i) = values->getReferencedEntry(i).getAsFloat();
+                    }
+                }
+            }
+            break;
+        }
+        case QoreBufferElementType::Bool: {
+            col->type = ColumnType::BOOL;
+            col->bool_data.resize(n);
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                    return nullptr;
+                }
+                if (values->isElementNull(i)) {
+                    col->null_mask[i] = 1;
+                    col->bool_data[i] = 0;
+                } else {
+                    col->bool_data[i] = values->getReferencedEntry(i).getAsBool() ? 1 : 0;
+                }
+            }
+            break;
+        }
+        default:
+            xsink->raiseException("DATAFRAME-ERROR",
+                "unsupported buffer element type '%s' for DataFrame column",
+                qore_buffer_element_type_name(values->getElementType()));
+            return nullptr;
+    }
+
+    return col;
+}
+
 QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
     for (int64_t i = 0; i < col.n_rows; ++i) {
+        if (col.isNull(i)) {
+            list->push(QoreValue(), xsink);
+        } else {
+            switch (col.type) {
+                case ColumnType::FLOAT64:
+                    list->push(col.float_data(i), xsink);
+                    break;
+                case ColumnType::INT64:
+                    list->push(col.int_data[i], xsink);
+                    break;
+                case ColumnType::STRING:
+                    list->push(new QoreStringNode(col.str_data[i]), xsink);
+                    break;
+                case ColumnType::BOOL:
+                    list->push((bool)col.bool_data[i], xsink);
+                    break;
+                case ColumnType::DATE:
+                    list->push(DateTimeNode::makeAbsolute(currentTZ(),
+                        col.date_data[i] / 1000000,
+                        (int)(col.date_data[i] % 1000000)), xsink);
+                    break;
+                default:
+                    list->push(QoreValue(), xsink);
+                    break;
+            }
+        }
+    }
+
+    return list.release();
+}
+
+QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
+        int64_t count, ExceptionSink* xsink) {
+    if (start < 0 || count < 0 || start + count > col.n_rows) {
+        xsink->raiseException("DATAFRAME-INDEX-ERROR",
+            "column slice start " QLLD " count " QLLD " out of range for " QLLD " rows",
+            start, count, col.n_rows);
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+
+    for (int64_t i = start; i < start + count; ++i) {
+        if (i != start && !((i - start) % 100)
+                && qore_check_cancel(xsink, "converting DataFrame column range to list")) {
+            return nullptr;
+        }
         if (col.isNull(i)) {
             list->push(QoreValue(), xsink);
         } else {

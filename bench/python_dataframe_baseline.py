@@ -205,8 +205,9 @@ def add_sql_cases(results: dict[str, dict[str, object]]) -> None:
 
         insert_rows = rows // 2
         insert_df = pd.DataFrame(make_columns(insert_rows))
+        conn.execute(text("DROP TABLE IF EXISTS qore_df_pybench_insert"))
         conn.execute(text(
-            "CREATE TEMP TABLE qore_df_pybench_insert ("
+            "CREATE TABLE qore_df_pybench_insert ("
             "id int, customer_id int, status text, amount float8, score float8, region text, flag bool)"
         ))
         conn.commit()
@@ -220,6 +221,11 @@ def add_sql_cases(results: dict[str, dict[str, object]]) -> None:
             "pandas_sql_to_table", 5, 1, approx_bytes(insert_rows), to_table
         )
     finally:
+        try:
+            conn.execute(text("DROP TABLE IF EXISTS qore_df_pybench_insert"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
         conn.close()
         engine.dispose()
 

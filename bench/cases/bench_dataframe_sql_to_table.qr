@@ -37,7 +37,8 @@ class BenchDataFrameSqlToTable {
         r.setup = sub () {
             df = DataFrameBench::makeFrame(rows);
             ds.open();
-            ds.exec("CREATE TEMP TABLE qore_df_bench_insert ("
+            ds.exec("DROP TABLE IF EXISTS qore_df_bench_insert");
+            ds.exec("CREATE TABLE qore_df_bench_insert ("
                 "id int, customer_id int, status text, amount float8, score float8, region text, flag bool)");
             ds.commit();
             r.bytes_processed = DataFrameBench::approxBytes(rows);
@@ -50,6 +51,8 @@ class BenchDataFrameSqlToTable {
         };
 
         int rc = r.run();
+        ds.exec("DROP TABLE IF EXISTS qore_df_bench_insert");
+        ds.commit();
         ds.close();
         exit(rc);
     }

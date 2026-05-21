@@ -93,8 +93,16 @@ DLLLOCAL std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
 DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
     ExceptionSink* xsink);
 
+//! Build a ColumnData from a typed Qore buffer
+DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* values,
+    ExceptionSink* xsink);
+
 //! Convert a column's values to a QoreListNode
 DLLLOCAL QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink);
+
+//! Convert a range of column values to a QoreListNode
+DLLLOCAL QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
+    int64_t count, ExceptionSink* xsink);
 
 } // namespace QoreDataFrameNS
 

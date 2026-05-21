@@ -104,15 +104,19 @@ QoreDataFrame* QoreDataFrame::fromColumns(const QoreHashNode* columns,
 
     ConstHashIterator hi(columns);
     while (hi.next()) {
-        const QoreListNode* values = hi.get().get<const QoreListNode>();
-        if (!values) {
+        QoreValue col_value = hi.get();
+        const QoreListNode* values = col_value.getType() == NT_LIST
+            ? col_value.get<const QoreListNode>() : nullptr;
+        const QoreBufferNode* buffer = col_value.getType() == NT_BUFFER
+            ? col_value.get<const QoreBufferNode>() : nullptr;
+        if (!values && !buffer) {
             xsink->raiseException("DATAFRAME-ERROR",
-                "column '%s' value must be a list", hi.getKey());
+                "column '%s' value must be a list or buffer", hi.getKey());
             delete df;
             return nullptr;
         }
 
-        int64_t col_rows = (int64_t)values->size();
+        int64_t col_rows = values ? (int64_t)values->size() : (int64_t)buffer->size();
         if (expected_rows < 0) {
             expected_rows = col_rows;
         } else if (col_rows != expected_rows) {
@@ -125,7 +129,9 @@ QoreDataFrame* QoreDataFrame::fromColumns(const QoreHashNode* columns,
 
         Column col;
         col.name = hi.getKey();
-        col.data = buildColumnDataAuto(values, xsink);
+        col.data = values
+            ? buildColumnDataAuto(values, xsink)
+            : buildColumnDataFromBuffer(buffer, xsink);
         if (*xsink) {
             delete df;
             return nullptr;

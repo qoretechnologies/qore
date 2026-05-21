@@ -137,9 +137,13 @@ class DatasourceProxy inherits AbstractDatasource {
     auto select(string sql, ...) { return call_function_args(\real_ds.vselect(), (sql, argv)); }
     auto selectRow(string sql, ...) { return call_function_args(\real_ds.vselectRow(), (sql, argv)); }
     auto selectRows(string sql, ...) { return call_function_args(\real_ds.vselectRows(), (sql, argv)); }
+    auto selectTyped(string sql, ...) { return call_function_args(\real_ds.vselectTyped(), (sql, argv)); }
+    auto selectRowsTyped(string sql, ...) { return call_function_args(\real_ds.vselectRowsTyped(), (sql, argv)); }
     auto vselect(string sql, *softlist<auto> vargs) { return real_ds.vselect(sql, vargs); }
     auto vselectRow(string sql, *softlist<auto> vargs) { return real_ds.vselectRow(sql, vargs); }
     auto vselectRows(string sql, *softlist<auto> vargs) { return real_ds.vselectRows(sql, vargs); }
+    auto vselectTyped(string sql, *softlist<auto> vargs) { return real_ds.vselectTyped(sql, vargs); }
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) { return real_ds.vselectRowsTyped(sql, vargs); }
     nothing beginTransaction() { real_ds.beginTransaction(); }
     *string getUserName() { return real_ds.getUserName(); }
     *string getPassword() { return real_ds.getPassword(); }
@@ -331,6 +335,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("pg_get_indexdef parser", \pgIndexDefParserTest());
             addTestCase("populate column backfill", \populateColumnTest());
             addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
+            addTestCase("temporary table resolution", \temporaryTableResolutionTest());
         }
 
         set_return_value(main());
@@ -396,6 +401,35 @@ class PgsqlTest inherits SqlTestBase {
         # 1 = drop trigger
         # 2 = drop function
         assertEq(2, res, "2 actions must be performed");
+    }
+
+    private temporaryTableResolutionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        string tname = ("qore_pgsql_temp_" + get_random_string()).lwr();
+        ds.exec(sprintf("create temp table %s (id int, name text)", tname));
+
+        Table unqualified(ds, tname);
+        assertTrue(unqualified.checkExistence(), "unqualified temporary table exists");
+        assertRegex("^pg_temp_", unqualified.getSchemaName(),
+            "unqualified temporary table resolves to the active temp schema");
+        assertTrue(unqualified.describe().hasKey("id"), "unqualified temporary table can be described");
+        unqualified.insert({"id": 1, "name": "one"});
+
+        Table pg_temp(ds, "pg_temp." + tname);
+        assertTrue(pg_temp.checkExistence(), "pg_temp temporary table exists");
+        assertEq(unqualified.getSchemaName(), pg_temp.getSchemaName(),
+            "pg_temp alias resolves to the same active temp schema");
+        assertTrue(pg_temp.describe().hasKey("name"), "pg_temp temporary table can be described");
+        pg_temp.insert({"id": 2, "name": "two"});
+
+        assertEq(2, ds.selectRow(sprintf("select count(*) c from %s", tname)).c,
+            "temporary table inserts use the resolved table object");
     }
 
     #! Tests that bulk upsert UNNEST works with non-DatasourcePool AbstractDatasource subclasses
