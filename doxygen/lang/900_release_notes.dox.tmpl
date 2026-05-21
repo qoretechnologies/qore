@@ -2195,6 +2195,9 @@ foreach string module_name in (registry.getProcessModules()) {
         QoreRecordLimitProcessor preserve DataFrameBlock and BufferColumns
         values for simple top-level field projection/removal and contiguous
         limiting
+      - QoreSetFieldsProcessor and QoreSearchReplaceProcessor preserve
+        DataFrameBlock and BufferColumns values for top-level constant-field and
+        string-column updates
       - record type reflects DataFrame column schema (int, float, string, bool, date)
       - record iterator APIs declare
         <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt>

@@ -1199,6 +1199,24 @@ sub invalid_dataframe_api() {
         assertEq((1, 2), limited_columns.getColumn("id").toList(),
             "record-limit processor slices ColumnarResult rows directly");
 
+        QoreSetFieldsProcessor setter({"fields": {"source": "crm"}});
+        auto set_columns = setter.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(set_columns),
+            "set-fields processor preserves ColumnarResult BufferColumns shape");
+        assertEq(("crm", "crm", "crm", "crm"), set_columns.getColumn("source"),
+            "set-fields processor adds per-row constant columns without row materialization");
+        assertEq((1, 2, 3, 4), set_columns.getColumn("id").toList(),
+            "set-fields processor keeps existing dense columns");
+
+        QoreSearchReplaceProcessor replacer({"field": "name", "search": "a", "replace": "A", "is_regex": False});
+        auto replaced_columns = replacer.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(replaced_columns),
+            "search-replace processor preserves ColumnarResult BufferColumns shape");
+        assertEq(("Alice", "Bob", "CArol", "DAve"), replaced_columns.getColumn("name"),
+            "search-replace processor updates list-backed string columns without row materialization");
+        assertEq((1, 2, 3, 4), replaced_columns.getColumn("id").toList(),
+            "search-replace processor keeps existing dense columns");
+
         hash<DataProviderExpression> or_expr = <DataProviderExpression>{
             "exp": "||",
             "args": (

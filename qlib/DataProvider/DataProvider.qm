@@ -801,6 +801,9 @@ pipeline.waitDone();
     @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
     @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" preserve \c DataFrameBlock and
     \c BufferColumns values for simple top-level field projection/removal and contiguous limiting.
+    @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
+    @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" also preserve these shapes for
+    top-level constant-field and string-column updates.
     @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" supports \c DataFrameBlock and
     \c BufferColumns input as well; it accumulates logical rows from the block and, when used through pipeline
     \c flush(), preserves a DataFrame, ColumnarResult, or hash-of-lists aggregate block for downstream
@@ -1130,6 +1133,9 @@ if (errors) {
       @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
       @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" to preserve shaped
       \c DataFrameBlock and \c BufferColumns values for simple projection/removal and limiting
+    - updated @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
+      @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" to preserve shaped
+      \c DataFrameBlock and \c BufferColumns values for top-level constant-field and string-column updates
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and

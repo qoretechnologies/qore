@@ -509,6 +509,20 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return result;
     }
 
+    #! Returns a list containing \a count copies of \a value
+    /** @param value the value to repeat
+        @param count the number of values
+
+        @since %DataProvider 3.5
+    */
+    static list<auto> repeatValue(auto value, int count) {
+        list<auto> result;
+        for (int i = 0; i < count; ++i) {
+            push result, value;
+        }
+        return result;
+    }
+
     #! Detects the pipeline shape for a runtime value
     /** @param data the value to inspect
 
