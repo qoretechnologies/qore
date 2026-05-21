@@ -663,7 +663,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
                 if (!bulk) {
                     return;
                 }
-                return Class::forName("DataFrame").newObject(bulk);
+                return Class::getClass(records).newObject(bulk);
             }
         }
         throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",

@@ -128,6 +128,15 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         #! - \c agg (hash<auto!>): per-aggregate accumulator state keyed by output name
         hash<string, hash<auto!>> groups;
 
+        #! Preferred shape for the next pipeline flush output
+        DataProviderShape pending_output_shape = DataProviderShape::RowRecords;
+
+        #! True if the pending output shape has been set for the current accumulation window
+        bool pending_output_shape_set = False;
+
+        #! Runtime DataFrame class captured from DataFrameBlock input for shape-preserving flushes
+        *Class pending_dataframe_class;
+
         #! Flag indicating if the processor has been configured
         bool configured = False;
     }
@@ -167,8 +176,20 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         return ProviderInfo;
     }
 
-    #! Accumulates a record into the appropriate group
-    private *auto processRecordImpl(auto record) {
+    #! Records the shape of accumulated input for shape-preserving pipeline flushes
+    private updatePendingOutputShape(DataProviderShape shape) {
+        if (!pending_output_shape_set) {
+            pending_output_shape = cast<enum<DataProviderShape>>(shape);
+            pending_output_shape_set = True;
+            return;
+        }
+        if (pending_output_shape != shape) {
+            pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
+        }
+    }
+
+    #! Accumulates one logical record into the appropriate group
+    private accumulateRecord(auto record) {
         if (!configured) {
             throw "PROCESSOR-ERROR", "QoreGroupByProcessor: not configured; provide constructor options";
         }
@@ -242,13 +263,26 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
         grp.agg = agg;
         groups{key} = grp;
+    }
 
+    #! Accumulates a record into the appropriate group
+    private *auto processRecordImpl(auto record) {
+        updatePendingOutputShape(DataProviderShape::RowRecords);
+        accumulateRecord(record);
         # accumulation only — never emit during processRecord
         return;
     }
 
-    #! Emits one record per group with computed aggregates
-    private *list<auto> flushRecordsImpl() {
+    #! Accumulates hash-of-lists records without converting the whole block to a row list first
+    private accumulateHashOfLists(hash<auto> records) {
+        HashListIterator it(records);
+        while (it.next()) {
+            accumulateRecord(it.getValue());
+        }
+    }
+
+    #! Builds one result record per group with computed aggregates
+    private *list<auto> buildFlushRows() {
         if (!configured || !groups) {
             return;
         }
@@ -282,15 +316,107 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             push results, result;
         }
 
-        # clear accumulated state
-        remove groups;
-
         return results;
     }
 
-    #! GroupBy does not support bulk API — records must be processed individually
+    #! Clears accumulated group and shape state after a flush
+    private clearAccumulatedState() {
+        remove groups;
+        pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
+        pending_output_shape_set = False;
+        remove pending_dataframe_class;
+    }
+
+    #! Emits one record per group with computed aggregates for direct row-record callers
+    private *list<auto> flushRecordsImpl() {
+        *list<auto> results = buildFlushRows();
+        if (!results) {
+            return;
+        }
+        clearAccumulatedState();
+        return results;
+    }
+
+    #! Emits accumulated results in the negotiated pipeline shape when possible
+    private flushImpl(code enqueue) {
+        *list<auto> results = buildFlushRows();
+        if (!results) {
+            return;
+        }
+        DataProviderShape output_shape = pending_output_shape;
+        *Class dataframe_class = pending_dataframe_class;
+        clearAccumulatedState();
+
+        switch (output_shape) {
+            case DataProviderShape::DataFrameBlock:
+                enqueue(dataframe_class.newObject(results));
+                return;
+            case DataProviderShape::HashOfLists:
+            case DataProviderShape::BufferColumns:
+                enqueue(AbstractDataProcessor::recordsToHashList(results));
+                return;
+            case DataProviderShape::RowRecords:
+                map enqueue($1), results;
+                return;
+        }
+        map enqueue($1), results;
+    }
+
+    #! Processes records in hash-of-lists form by accumulating each logical row
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProviderShape::HashOfLists);
+        accumulateHashOfLists(records);
+        return;
+    }
+
+    #! Processes data in an explicitly negotiated shape
+    /** @param records the input records
+        @param shape the negotiated input shape
+
+        @return @ref nothing because grouped results are emitted on flush
+
+        @since DataProvider 3.5
+    */
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                updatePendingOutputShape(DataProviderShape::DataFrameBlock);
+                pending_dataframe_class = Class::getClass(records);
+                accumulateHashOfLists(records.toColumnHash());
+                return;
+            case DataProviderShape::HashOfLists:
+            case DataProviderShape::BufferColumns:
+                updatePendingOutputShape(DataProviderShape::HashOfLists);
+                accumulateHashOfLists(records);
+                return;
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! GroupBy supports bulk API and accumulates each logical row from the block
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
+    }
+
+    #! Returns supported input shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    /** Grouped results are emitted on flush.  Pipeline flush preserves a DataFrame or hash-of-lists
+        carrier when the current accumulation window used one consistently; direct flushRecords()
+        still returns row records for compatibility.
+
+        @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns the processor capability bitfield

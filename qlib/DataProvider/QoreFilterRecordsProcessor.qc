@@ -316,7 +316,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         if (!filtered) {
             return df.head(0);
         }
-        return Class::forName("DataFrame").newObject(filtered);
+        return Class::getClass(df).newObject(filtered);
     }
 
     #! Returns @ref True — this processor supports bulk (hash-of-lists) data

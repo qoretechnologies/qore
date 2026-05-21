@@ -99,6 +99,9 @@ pipeline.waitDone();
     When a pipeline receives a \c DataFrame, it is detected as
     @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".  Processors that support that shape can
     keep the DataFrame representation; processors that only support bulk records receive a hash-of-lists conversion.
+    The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and
+    @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" both support \c DataFrameBlock, so common
+    filter-and-aggregate pipelines can stay columnar until terminal output records are emitted.
 
     @section dataproviderdataframe_relnotes DataProviderDataFrame Release Notes
 
@@ -111,5 +114,6 @@ pipeline.waitDone();
       every row
     - DataFrames submitted to a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" can remain in
       \c DataFrameBlock shape through DataFrame-aware processors such as
-      @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
+      @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and
+      @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor"
 */

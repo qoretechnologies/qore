@@ -854,6 +854,40 @@ sub invalid_dataframe_api() {
         assertEq(2, filtered.numRows(), "DataFrameBlock filter keeps matching rows");
         assertEq(("Carol", "Dave"), filtered.getColumn("name"), "DataFrameBlock filter preserves row order");
 
+        hash<DataProviderExpression> fallback_expr = <DataProviderExpression>{
+            "exp": "||",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "inactive"),
+                },
+                <DataProviderExpression>{
+                    "exp": "<",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 100),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor fallback_proc({"where_cond": fallback_expr});
+        DataFrame::DataFrame fallback_filtered = fallback_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(2, fallback_filtered.numRows(), "DataFrameBlock filter fallback keeps matching rows");
+        assertEq(("Alice", "Bob"), fallback_filtered.getColumn("name"),
+            "DataFrameBlock filter fallback preserves runtime DataFrame class");
+
+        QoreGroupByProcessor grouper({"group_by": "status", "aggregates": "orders=count(),total=sum(amount)"});
+        assertTrue(grouper.supportsInputShape(DataProviderShape::DataFrameBlock),
+            "group-by processor supports DataFrameBlock input");
+        assertNothing(grouper.processRecordsShape(df, DataProviderShape::DataFrameBlock),
+            "DataFrameBlock group-by accumulates without immediate output");
+        *list<auto> grouped_blocks = grouper.flushAndCollect();
+        assertEq(1, grouped_blocks.size(), "DataFrameBlock group-by flush emits one shaped block");
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(grouped_blocks[0]),
+            "DataFrameBlock group-by preserves DataFrame shape on pipeline flush");
+        auto grouped_df = grouped_blocks[0].sortBy(("status",));
+        assertEq(("active", "inactive"), grouped_df.getColumn("status"),
+            "DataFrameBlock group-by keeps group fields");
+        assertEq((3, 1), grouped_df.getColumn("orders"), "DataFrameBlock group-by counts records");
+        assertEq((395.0, 220.0), grouped_df.getColumn("total"), "DataFrameBlock group-by computes sums");
+
         list<auto> callback_rows;
         DataProviderPipeline pipe(<PipelineOptionInfo>{
             "name": "dataframe-shape-pipeline-test",
@@ -870,6 +904,29 @@ sub invalid_dataframe_api() {
         assertEq("Dave", callback_rows[1].name, "pipeline preserves second matching DataFrame row");
         assertEq(4, pipe.getInfo().record_count, "pipeline counts DataFrame input rows");
         assertTrue(pipe.getInfo().bulk, "DataFrame input keeps pipeline in bulk mode");
+
+        list<auto> grouped_callback_rows;
+        DataProviderPipeline grouped_pipe(<PipelineOptionInfo>{
+            "name": "dataframe-shape-filter-group-test",
+            "output_callback": sub (auto row) {
+                push grouped_callback_rows, row;
+            },
+        });
+        grouped_pipe.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+        grouped_pipe.append(new QoreGroupByProcessor({
+            "group_by": "status",
+            "aggregates": "orders=count(),total=sum(amount)",
+        }));
+        grouped_pipe.submit(df);
+        grouped_pipe.waitDone();
+
+        assertEq(1, grouped_callback_rows.size(), "filter -> group-by pipeline emits one aggregate row");
+        assertEq("active", grouped_callback_rows[0].status, "filter -> group-by preserves group value");
+        assertEq(2, grouped_callback_rows[0].orders, "filter -> group-by counts filtered rows");
+        assertEq(305.0, grouped_callback_rows[0].total, "filter -> group-by sums filtered rows");
+        assertEq(4, grouped_pipe.getInfo().record_count,
+            "filter -> group-by pipeline counts DataFrame input rows");
+        assertTrue(grouped_pipe.getInfo().bulk, "filter -> group-by pipeline stays in bulk mode");
 
         DataProviderDataFrame::DataFrameDataProvider prov(df);
         AbstractDataProviderBulkRecordInterface bulk = prov.searchRecordsBulk(2);

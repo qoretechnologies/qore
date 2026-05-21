@@ -794,6 +794,10 @@ pipeline.waitDone();
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
     \c DataFrameBlock directly and evaluates simple comparison and conjunction filters through DataFrame filtering.
     More complex expressions fall back to row-record evaluation while preserving the resulting DataFrame shape.
+    @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" supports \c DataFrameBlock and
+    \c HashOfLists input as well; it accumulates logical rows from the block and, when used through pipeline
+    \c flush(), preserves a DataFrame or hash-of-lists aggregate block for downstream shape-aware processors.
+    Direct calls to \c flushRecords() still return ordinary row records for compatibility.
 
     @section dataprovider_debugging Debugging Data Providers
 
@@ -1111,6 +1115,8 @@ if (errors) {
       legacy \c submitImpl() processors
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
       \c DataFrameBlock input directly for simple comparison and conjunction predicates
+    - updated @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to process hash-of-lists and
+      DataFrame blocks directly and preserve shaped aggregate blocks on pipeline flush
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and

@@ -2712,10 +2712,12 @@ Polars / pandas-style ergonomics for DataFrame.
   buffer-columns, and DataFrame blocks.
 - [x] `DataProviderPipeline` auto-routing with conversion costs.
 - [x] Sticky-typed-form bias for current-stage compatibility.
-- [x] Stock processors updated where worthwhile. Started with
-  `QoreFilterRecordsProcessor`; vectorized analytics paths remain separate;
-  `QoreGroupByProcessor` remains a rewrite candidate because it is not bulk
-  aware today.
+- [x] Stock processors updated where worthwhile. `QoreFilterRecordsProcessor`
+  now evaluates vectorizable filters directly on `DataFrameBlock` input, and
+  `QoreGroupByProcessor` now accepts `DataFrameBlock` / hash-of-lists blocks,
+  accumulates logical rows from the block, and preserves a shaped aggregate
+  block on pipeline flush for downstream shape-aware processors. Vectorized
+  analytics paths remain separate.
 
 End-to-end zero-conversion typed pipelines for analytics workloads.
 
@@ -2738,7 +2740,12 @@ End-to-end zero-conversion typed pipelines for analytics workloads.
   `intersect()`, `unionWith()`, `symmetricDifference()`, and `invert()` aliases
   for readability. This lets callers compose predicates without materializing
   rows and apply one `df[mask]` / `df.filter(mask)` operation.
-- Cross-stage fusion in pipelines.
+- [x] Initial cross-stage fusion in pipelines. DataFrame-aware filter output can
+  now feed group-by in `DataFrameBlock` form, and group-by flush preserves a
+  DataFrame or hash-of-lists aggregate block for later shape-aware stages. This
+  is representation-level fusion; algebraic rewrites such as combining
+  arbitrary adjacent predicates or reordering filters past aggregations remain
+  out of scope for this ABI slice.
 - [x] **Fast-math flag for floating-point plugin operations.** Adds a
   per-operation declarative bit (working name `fp_reassociation_allowed`)
   and a corresponding Program-level parse directive (`%fp-fast-math`) that
