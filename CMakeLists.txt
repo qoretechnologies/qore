@@ -2564,6 +2564,8 @@ qore_user_module("qlib/TavilyRestClient.qm" "ConnectionProvider;Mime;RestClient;
 qore_user_module("qlib/TavilyDataProvider" "TavilyRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "tavily-logo.svg")
 qore_user_module("qlib/ExaRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreLlmTypes")
 qore_user_module("qlib/ExaDataProvider" "ExaRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "exa-logo.svg")
+qore_user_module("qlib/LlamaParseRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreRagTypes")
+qore_user_module("qlib/LlamaParseDataProvider" "LlamaParseRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "llamaparse-logo.svg")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")

@@ -1,0 +1,581 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LlamaParseRestClient.qm Qore user module for calling LlamaParse document-extraction REST services
+
+/*  LlamaParseRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreRagTypes
+
+module LlamaParseRestClient {
+    version = "1.0";
+    desc = "user module for calling LlamaParse document-extraction REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("llamaparse",
+            LlamaParseRestConnection::ConnectionScheme);
+        QoreRagUtils::RagProviderRegistry::registerChunkerFactory(
+            new LlamaParseChunkerFactory());
+    };
+}
+
+/** @mainpage LlamaParseRestClient Module
+
+    @tableofcontents
+
+    @section llamaparserestclientintro LlamaParseRestClient Introduction
+
+    The %LlamaParseRestClient module provides a REST client for
+    [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started) —
+    a document extraction service from LlamaIndex that turns PDFs, docx,
+    HTML, and image documents into structured markdown.
+
+    @par Async job lifecycle
+
+    LlamaParse is asynchronous: every parse goes through an
+    upload → poll job → fetch result lifecycle.  The
+    @ref LlamaParseRestClient::LlamaParseRestClientIo::parseDocument()
+    method encapsulates all three phases.  The polling logic lives in a
+    discrete @ref LlamaParseRestClient::LlamaParseRestClientIo::pollUntilDone()
+    method so future Phase 5 modules with similar async patterns can
+    extract it into a shared helper.
+
+    @par URL-only document submission (v1)
+
+    The v1 client submits documents by URL only (via the JSON variant
+    of LlamaParse's `/upload` endpoint).  Local-file upload via
+    multipart/form-data is planned for a follow-up release — until then,
+    callers should host files at a URL LlamaParse can fetch (or proxy
+    them through their own server).
+
+    @par Companion chunker
+
+    See @ref qoreragutilsintro "QoreRagUtils"'s @c LlamaParseChunker
+    (lazy-loaded via the @c "llama-parse" chunker strategy) for the
+    RAG-pipeline adapter that wraps `parseDocument()` and splits the
+    returned markdown into `ChunkInfo` records.
+
+    @section LlamaParseRestClientRelnotes Release Notes
+
+    @subsection LlamaParseRestClientv1_0 LlamaParseRestClient v1.0
+    - the initial version of the %LlamaParseRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace LlamaParseRestClient {
+public class LlamaParseRestClientBase {
+    public {
+        #! Default LlamaParse REST API URL
+        const DefaultUrl = "https://api.cloud.llamaindex.ai/api/parsing";
+
+        #! Terminal job statuses
+        const JobStatusSuccess   = "SUCCESS";
+        const JobStatusError     = "ERROR";
+        const JobStatusCancelled = "CANCELLED";
+
+        const TerminalStatuses = (JobStatusSuccess, JobStatusError, JobStatusCancelled);
+
+        #! Default polling interval (ms) when waiting for a job to complete
+        const DefaultPollIntervalMs = 1500ms;
+
+        #! Default overall job timeout
+        const DefaultJobTimeout = 5m;
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+        };
+    }
+
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (rv.apikey) {
+            rv.token = rv.apikey;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for LlamaParse (sync)
+public class LlamaParseRestClient inherits RestClient::RestClient, LlamaParseRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(LlamaParseRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! REST client for LlamaParse using multiplexed HTTP connections (async)
+/** Provides high-level @ref parseDocument() that owns the
+    upload → poll → fetch lifecycle internally.
+*/
+public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaParseRestClientBase {
+    private {
+        #! Injectable sleeper closure (for deterministic test polling)
+        code<nothing(timeout)> sleeper;
+    }
+
+    #! Creates the object
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(LlamaParseRestClientBase::getOptions(opts), shared_mgr) {
+        sleeper = code<nothing(timeout)> sub (timeout to) { Qore::usleep(to); };
+    }
+
+    #! Injects a custom sleeper closure (test seam)
+    /** Useful in tests that want to drive @ref pollUntilDone() without
+        burning wall-clock time.  Pass a no-op closure to skip sleeps.
+
+        @param s closure invoked on each poll iteration with the wait
+            duration that would otherwise be passed to \c usleep()
+    */
+    setSleeper(code<nothing(timeout)> s) {
+        sleeper = s;
+    }
+
+    #! Parses a document end-to-end: upload → poll job → fetch result
+    /** @param url public URL of the document to parse
+        @param options optional LlamaParse parameters
+            (\c parsing_instruction, \c language, \c result_type
+            (\c markdown / \c text / \c json), \c poll_interval_ms,
+            \c job_timeout)
+
+        @return a hash with the following keys:
+            - \c job_id — the LlamaParse job id
+            - \c status — final job status (always \c SUCCESS at this point)
+            - \c result_type — the requested result type
+            - \c content — the parsed document content
+    */
+    hash<auto> parseDocument(string url, *hash<auto> options) {
+        string result_type = options.result_type ?? "markdown";
+        if (result_type != "markdown" && result_type != "text" && result_type != "json") {
+            throw "LLAMAPARSE-ERROR",
+                sprintf("invalid result_type %y; expected markdown, text, or json",
+                    result_type);
+        }
+
+        hash<auto> upload_body = {"input_url": url};
+        if (options.parsing_instruction.val()) {
+            upload_body.parsing_instruction = options.parsing_instruction;
+        }
+        if (options.language.val()) {
+            upload_body.language = options.language;
+        }
+        if (options.extra) {
+            upload_body += options.extra;
+        }
+
+        hash<auto> upload_resp = restPost("/upload", upload_body);
+        *string job_id = upload_resp.body.id;
+        if (!job_id) {
+            throw "LLAMAPARSE-ERROR",
+                "LlamaParse /upload did not return a job id",
+                {"body": upload_resp.body};
+        }
+
+        hash<auto> job = pollUntilDone(job_id,
+            options.job_timeout ?? DefaultJobTimeout,
+            options.poll_interval_ms ?? DefaultPollIntervalMs);
+
+        if (job.status != JobStatusSuccess) {
+            throw "LLAMAPARSE-ERROR",
+                sprintf("LlamaParse job %y ended with status %y", job_id, job.status),
+                {"job": job};
+        }
+
+        # Fetch the result
+        hash<auto> result_resp = restGet(sprintf("/job/%s/result/%s",
+            job_id, result_type));
+        # Result endpoint returns either a hash with a `markdown`/`text`/`json` field
+        # or a hash with everything; surface the body as `content`
+        auto content;
+        switch (result_type) {
+            case "markdown":
+                content = result_resp.body.markdown ?? result_resp.body;
+                break;
+            case "text":
+                content = result_resp.body.text ?? result_resp.body;
+                break;
+            case "json":
+                content = result_resp.body.pages ?? result_resp.body;
+                break;
+        }
+
+        return {
+            "job_id":      job_id,
+            "status":      job.status,
+            "result_type": result_type,
+            "content":     content,
+        };
+    }
+
+    #! Polls a LlamaParse job until it reaches a terminal state
+    /** @param job_id the LlamaParse job id from a prior \c /upload
+        @param to overall timeout for the wait
+        @param poll_interval_ms how long to wait between polls
+
+        @return the final job status hash from
+            \c GET /job/<id> (terminal state)
+
+        @throw LLAMAPARSE-ERROR overall timeout exceeded
+    */
+    hash<auto> pollUntilDone(string job_id, *timeout to, *timeout poll_interval_ms) {
+        timeout overall = to ?? DefaultJobTimeout;
+        timeout interval = poll_interval_ms ?? DefaultPollIntervalMs;
+        # timeout is in ms; int(timeout) gives the ms count
+        int overall_ms = overall;
+        date start = now_us();
+        while (True) {
+            hash<auto> resp = restGet(sprintf("/job/%s", job_id));
+            *string status = resp.body.status;
+            if (status && inlist(status, TerminalStatuses)) {
+                return resp.body;
+            }
+            int elapsed_ms = get_duration_milliseconds(now_us() - start);
+            if (elapsed_ms >= overall_ms) {
+                throw "LLAMAPARSE-ERROR",
+                    sprintf("LlamaParse job %y did not reach a terminal state "
+                        "within %y; last status: %y", job_id, overall, status);
+            }
+            sleeper(interval);
+        }
+    }
+}
+
+#! Class for LlamaParse REST connections
+public class LlamaParseRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "llamaparse://api.cloud.llamaindex.ai/api/parsing";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "LlamaParse Document Extraction Connection",
+            "short_desc": "A connection to the LlamaParse document-extraction REST API",
+            "desc": "A connection to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started) "
+                "— a document extraction service from LlamaIndex that converts PDFs, "
+                "docx, HTML, and image documents into structured markdown.\n\n"
+                "Requires an API key for Bearer authentication.  Get your API key from "
+                "the [LlamaCloud dashboard](https://cloud.llamaindex.ai/).",
+            "cls": Class::forName("LlamaParseRestConnection"),
+            "auto_url": True,
+            "schemes": {"llamaparse": True},
+            "base_scheme_map": {"https": "llamaparse"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "LlamaParse API key (Bearer token)",
+                    "type": "string",
+                    "desc": "The LlamaParse API key used for Bearer authentication.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "llamaparse";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("LlamaParseDataProvider");
+        return create_object("LlamaParseDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private LlamaParseRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new LlamaParseRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new LlamaParseRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return LlamaParseRestClientBase::getOptions(rv);
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! LlamaParse-backed chunker — extracts a document via LlamaParse, then splits
+/** Accepts a URL in the @ref chunk() `content` parameter, sends it to
+    LlamaParse for extraction, and splits the returned markdown into
+    @ref ChunkInfo records at section-header boundaries (`# `, `## `,
+    `### `).
+
+    @par Configuration
+
+    @ref ChunkerConfig fields:
+
+    - \c strategy must be \c "llama-parse"
+    - \c target_tokens — soft cap per chunk (default 512); when a section
+      exceeds this, it is further split at paragraph boundaries
+    - \c options.api_key (required) — LlamaParse API key
+    - \c options.url (optional) — override the default LlamaParse URL
+    - \c options.parsing_instruction (optional) — natural-language hint
+      passed to LlamaParse
+    - \c options.language (optional) — document language hint
+    - \c options.result_type (optional) — `markdown` (default), `text`,
+      or `json`
+    - \c options.poll_interval_ms (optional) — polling interval in ms
+    - \c options.job_timeout (optional) — overall job timeout
+
+    @par Input modes
+
+    - URL — `content` starts with \c http:// or \c https:// → sent to
+      LlamaParse for extraction
+    - Inline — `content` is treated as already-extracted markdown; split
+      directly without calling LlamaParse.  Useful when callers already
+      have markdown they want to chunk with the same section-aware logic
+*/
+public class LlamaParseChunker inherits AbstractChunker {
+    public {
+        #! Default LlamaParse REST API URL
+        const DefaultUrl = "https://api.cloud.llamaindex.ai/api/parsing";
+    }
+
+    private {
+        hash<ChunkerConfig> config;
+        *LlamaParseRestClient::LlamaParseRestClientIo rest_client;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<ChunkerConfig> config) {
+        self.config = config;
+    }
+
+    list<hash<ChunkInfo>> chunk(string content, *hash<auto> metadata) {
+        if (!content.val()) {
+            return ();
+        }
+
+        string markdown;
+        *hash<auto> chunk_metadata = metadata;
+        if (content =~ /^https?:\/\//) {
+            # URL — extract via LlamaParse
+            if (!config.options.api_key.val()) {
+                throw "LLAMAPARSE-CHUNKER-ERROR",
+                    "LlamaParseChunker requires 'options.api_key' when "
+                    "extracting URL content";
+            }
+            ensureRestClient();
+            hash<auto> result = rest_client.parseDocument(content,
+                config.options ?? {});
+            if (result.content.typeCode() == NT_STRING) {
+                markdown = result.content;
+            } else {
+                # JSON result — flatten to markdown best-effort
+                markdown = result.content.toString();
+            }
+            chunk_metadata = (chunk_metadata ?? {}) + {
+                "source_url": content,
+                "llamaparse_job_id": result.job_id,
+            };
+        } else {
+            # Inline — treat content as already-extracted markdown
+            markdown = content;
+        }
+
+        return splitMarkdown(markdown, chunk_metadata);
+    }
+
+    string getStrategy() {
+        return "llama-parse";
+    }
+
+    #! Returns the underlying REST client — useful for advanced operations
+    *LlamaParseRestClient::LlamaParseRestClientIo getRestClient() {
+        ensureRestClient();
+        return rest_client;
+    }
+
+    #! Splits markdown into ChunkInfo records at #/##/### section boundaries
+    private list<hash<ChunkInfo>> splitMarkdown(string markdown, *hash<auto> metadata) {
+        int target = config.target_tokens > 0 ? config.target_tokens : 512;
+
+        list<hash<auto>> sections = parseSections(markdown);
+        list<hash<ChunkInfo>> chunks = ();
+        int idx = 0;
+        foreach hash<auto> section in (sections) {
+            int section_tokens = approximateTokens(section.text);
+            *hash<auto> sec_metadata = metadata;
+            if (section.heading.val()) {
+                sec_metadata = (sec_metadata ?? {}) + {"section": section.heading};
+            }
+            if (section_tokens <= target) {
+                push chunks, <ChunkInfo>{
+                    "index": idx,
+                    "content": section.text,
+                    "token_count": section_tokens,
+                    "metadata": sec_metadata,
+                };
+                ++idx;
+            } else {
+                list<string> paragraphs = splitParagraphs(section.text);
+                list<string> current = ();
+                int current_tokens = 0;
+                foreach string p in (paragraphs) {
+                    int pt = approximateTokens(p);
+                    if (current && current_tokens + pt > target) {
+                        push chunks, <ChunkInfo>{
+                            "index": idx,
+                            "content": (foldl $1 + "\n\n" + $2, current),
+                            "token_count": current_tokens,
+                            "metadata": sec_metadata,
+                        };
+                        ++idx;
+                        current = ();
+                        current_tokens = 0;
+                    }
+                    push current, p;
+                    current_tokens += pt;
+                }
+                if (current) {
+                    push chunks, <ChunkInfo>{
+                        "index": idx,
+                        "content": (foldl $1 + "\n\n" + $2, current),
+                        "token_count": current_tokens,
+                        "metadata": sec_metadata,
+                    };
+                    ++idx;
+                }
+            }
+        }
+        return chunks;
+    }
+
+    private list<hash<auto>> parseSections(string markdown) {
+        list<hash<auto>> sections = ();
+        *string current_heading;
+        list<string> current_lines = ();
+        foreach string line in (markdown.split("\n")) {
+            if (line =~ /^#{1,3} /) {
+                if (current_lines || current_heading.val()) {
+                    push sections, {
+                        "heading": current_heading,
+                        "text": (foldl $1 + "\n" + $2, current_lines) ?? "",
+                    };
+                }
+                current_heading = line;
+                current_heading =~ s/^#+\s+//;
+                current_lines = ();
+            } else {
+                push current_lines, line;
+            }
+        }
+        if (current_lines || current_heading.val()) {
+            push sections, {
+                "heading": current_heading,
+                "text": (foldl $1 + "\n" + $2, current_lines) ?? "",
+            };
+        }
+        list<hash<auto>> trimmed = ();
+        foreach hash<auto> s in (sections) {
+            string t = s.text;
+            t =~ s/^\s+//;
+            t =~ s/\s+$//;
+            if (t.val() || s.heading.val()) {
+                push trimmed, {"heading": s.heading, "text": t};
+            }
+        }
+        return trimmed;
+    }
+
+    private list<string> splitParagraphs(string text) {
+        string normalized = regex_subst(text, "\n[ \t]*\n(?:[ \t]*\n)*", "\n\n",
+            Qore::RE_Global);
+        list<string> paragraphs = ();
+        foreach string part in (normalized.split("\n\n")) {
+            string trimmed = part;
+            trimmed =~ s/^\s+//;
+            trimmed =~ s/\s+$//;
+            if (trimmed.val()) {
+                push paragraphs, trimmed;
+            }
+        }
+        return paragraphs;
+    }
+
+    private ensureRestClient() {
+        if (rest_client) {
+            return;
+        }
+        init_mutex.lock();
+        on_exit init_mutex.unlock();
+        if (rest_client) {
+            return;
+        }
+        hash<auto!> opts = {
+            "url": config.options.url ?? DefaultUrl,
+            "apikey": config.options.api_key,
+        };
+        rest_client = new LlamaParseRestClient::LlamaParseRestClientIo(opts);
+    }
+}
+
+#! Factory for @ref LlamaParseChunker
+public class LlamaParseChunkerFactory inherits AbstractChunkerFactory {
+    string getStrategy() {
+        return "llama-parse";
+    }
+
+    string getDisplayName() {
+        return "LlamaParse document extraction + section-aware chunker";
+    }
+
+    AbstractChunker create(hash<ChunkerConfig> config) {
+        return new LlamaParseChunker(config);
+    }
+}
+}

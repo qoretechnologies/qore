@@ -241,6 +241,7 @@ public class DataProvider {
             "milvus": "MilvusDataProvider",
             "tavily": "TavilyDataProvider",
             "exa": "ExaDataProvider",
+            "llamaparse": "LlamaParseDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

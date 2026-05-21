@@ -2137,6 +2137,20 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key and OAuth2 authentication
       - provides LinearRestConnection for connection management with \c linear:// URL scheme
 
+    - @ref llamaparsedataproviderintro "LlamaParseDataProvider" module
+      - new module providing a data provider API for <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a> document extraction
+      - exposes one action: `parse-document` (encapsulates the async upload → poll → fetch lifecycle internally)
+      - action catalog integration with 1 action under the \c llamaparse scheme
+      - v1 supports URL-based document submission only; local-file upload via multipart/form-data is planned
+
+    - @ref llamaparserestclientintro "LlamaParseRestClient" module
+      - new module providing a REST client for <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a>'s document-extraction API
+      - supports API key (Bearer token) authentication
+      - `LlamaParseRestClientIo::parseDocument()` handles the full upload → poll job → fetch result lifecycle in a single call
+      - polling logic isolated in a discrete `pollUntilDone()` method with an injectable sleeper closure for deterministic test-time polling
+      - registers a `llama-parse` chunker strategy in @ref qoreragutilsintro "QoreRagUtils" via `LlamaParseChunker` — split-at-section-boundary markdown chunker that either extracts the source via LlamaParse (when given a URL) or splits inline markdown directly
+      - provides LlamaParseRestConnection for connection management with \c llamaparse:// URL scheme
+
     - @ref mailgundataproviderintro "MailgunDataProvider" module
       - new module providing a data provider API for <a href="https://www.mailgun.com/">Mailgun</a> email services
       - send emails, validate addresses, manage domains, routes, and mailing lists
