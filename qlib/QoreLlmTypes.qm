@@ -382,6 +382,7 @@ public class LlmProviderRegistry {
             "grok":          "GrokRestClient",
             "perplexity":    "PerplexityRestClient",
             "azure-openai":  "AzureOpenAiRestClient",
+            "bedrock":       "BedrockRestClient",
         };
     }
 

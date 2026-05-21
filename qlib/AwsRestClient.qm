@@ -1219,7 +1219,9 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
             prepared.serialized_body);
 
         # Deserialize and return
-        return buildResponse(raw, prepared.error_passthru, method, path);
+        return buildResponse(raw, prepared.error_passthru,
+            prepared.allow_any_response, method, path, hdr,
+            prepared.serialized_body);
     }
 
     #! Internal: adds AWS Signature V4 to the request headers

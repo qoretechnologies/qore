@@ -2531,6 +2531,7 @@ qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSche
 qore_user_module("qlib/AwsEventStream.qm" "")
 qore_user_module("qlib/AzureAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/AzureOpenAiRestClient.qm" "OpenAiRestClient;AzureAuth;QoreLlmTypes;ConnectionProvider")
+qore_user_module("qlib/BedrockRestClient.qm" "AwsRestClient;QoreLlmTypes;QoreRagTypes;ConnectionProvider")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")

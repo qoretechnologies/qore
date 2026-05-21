@@ -635,6 +635,7 @@ public class RagProviderRegistry {
             "sglang":     "SGLangRestClient",
             "bge-m3":     "BgeM3RestClient",
             "local-onnx": "QoreRagUtils",
+            "bedrock":    "BedrockRestClient",
         };
 
         #! Map of reranker backend names to providing modules
