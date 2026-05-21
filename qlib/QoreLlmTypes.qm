@@ -383,6 +383,7 @@ public class LlmProviderRegistry {
             "perplexity":    "PerplexityRestClient",
             "azure-openai":  "AzureOpenAiRestClient",
             "bedrock":       "BedrockRestClient",
+            "vertex-ai":     "VertexAiRestClient",
         };
     }
 

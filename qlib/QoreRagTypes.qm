@@ -636,6 +636,7 @@ public class RagProviderRegistry {
             "bge-m3":     "BgeM3RestClient",
             "local-onnx": "QoreRagUtils",
             "bedrock":    "BedrockRestClient",
+            "vertex-ai":  "VertexAiRestClient",
         };
 
         #! Map of reranker backend names to providing modules
