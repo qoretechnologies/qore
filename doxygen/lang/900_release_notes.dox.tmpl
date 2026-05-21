@@ -1784,6 +1784,19 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key (Bearer token) authentication
       - provides DeelRestConnection for connection management with \c deel:// URL scheme
 
+    - @ref deepseekdataproviderintro "DeepSeekDataProvider" module
+      - new module providing a data provider API for <a href="https://platform.deepseek.com">DeepSeek</a> chat models
+      - exposes the OpenAI-compatible `/v1/chat/completions` endpoint as a `chat-completion` action
+      - response schema surfaces DeepSeek's `reasoning_content` (reasoner models) and prompt-cache hit/miss token counts
+      - action catalog integration with 1 action under the \c deepseek scheme
+
+    - @ref deepseekrestclientintro "DeepSeekRestClient" module
+      - new module providing a REST client for <a href="https://platform.deepseek.com">DeepSeek</a>'s OpenAI-compatible API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" — chat, tools, structured output, and SSE streaming work unchanged
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c deepseek
+      - provides DeepSeekRestConnection for connection management with \c deepseek:// URL scheme
+
     - @ref easypostdataproviderintro "EasyPostDataProvider" module
       - new module providing a data provider API for <a href="https://www.easypost.com/">EasyPost</a> multi-carrier shipping
       - address creation and verification, parcel definition, shipment lifecycle (create, buy, refund, label retrieval)

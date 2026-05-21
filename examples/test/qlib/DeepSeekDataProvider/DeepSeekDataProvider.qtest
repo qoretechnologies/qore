@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/DeepSeekDataProvider
+
+%exec-class DeepSeekDataProviderTest
+
+class FakeDeepSeekRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.deepseek.com", "token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    string getSafeUrl() {
+        return "https://api.deepseek.com";
+    }
+}
+
+public class DeepSeekDataProviderTest inherits QUnit::Test {
+    constructor() : Test("DeepSeekDataProvider Test", "1.0") {
+        addTestCase("factory registered with DataProvider", \factoryTest());
+        addTestCase("app registered with action catalog",   \appCatalogTest());
+        addTestCase("root provider lists children",         \rootProviderTest());
+        addTestCase("chat-completion provider basic shape", \chatProviderTest());
+        addTestCase("chat-completion sends OpenAI-shape body, "
+            "converts Unix created field", \chatRequestTest());
+        addTestCase("request type schema is enforceable",   \requestSchemaTest());
+        set_return_value(main());
+    }
+
+    private factoryTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("deepseek");
+        assertEq("deepseek", f.getInfo().name);
+        hash<DataProviderInfo> info = f.getProviderInfo();
+        assertEq("deepseek", info.name);
+        assertEq("DeepSeekDataProvider", info.type);
+        assertTrue(info.supports_children);
+    }
+
+    private appCatalogTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("DeepSeek");
+        assertEq("DeepSeek", app.name);
+        assertEq("deepseek", app.scheme);
+        assertEq("deepseek-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.size() > 0);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("DeepSeek");
+        assertEq(1, actions.size());
+        assertEq("chat-completion", actions[0].action);
+        assertEq("/chat-completion", actions[0].path);
+        assertEq(DPAT_API, actions[0].action_code);
+        # `messages` and `model` must be present and required
+        assertTrue(exists actions[0].options.messages);
+        assertTrue(actions[0].options.messages.required);
+        assertTrue(exists actions[0].options.model);
+        assertTrue(actions[0].options.model.required);
+    }
+
+    private rootProviderTest() {
+        FakeDeepSeekRestClientIo fake();
+        DeepSeekDataProvider::DeepSeekDataProvider prov(fake);
+        assertEq("deepseek", prov.getName());
+        list<string> children = prov.getChildProviderNames();
+        assertEq(("chat-completion",), children);
+        AbstractDataProvider chat = prov.getChildProvider("chat-completion");
+        assertTrue(chat instanceof
+            DeepSeekDataProvider::DeepSeekChatCompletionDataProvider);
+    }
+
+    private chatProviderTest() {
+        FakeDeepSeekRestClientIo fake();
+        DeepSeekDataProvider::DeepSeekChatCompletionDataProvider prov(fake);
+        assertEq("chat-completion", prov.getName());
+        hash<DataProviderInfo> info = prov.getInfo();
+        assertTrue(info.supports_request);
+        AbstractDataProviderType rt = prov.getRequestType();
+        AbstractDataProviderType rsp = prov.getResponseType();
+        assertTrue(exists rt);
+        assertTrue(exists rsp);
+    }
+
+    private chatRequestTest() {
+        FakeDeepSeekRestClientIo fake();
+        # response has Unix-seconds `created`; provider must convert to date
+        fake.response_body = {
+            "id": "test-id",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "deepseek-chat",
+            "choices": (
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello!",
+                    },
+                    "finish_reason": "stop",
+                },
+            ),
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+            },
+        };
+
+        DeepSeekDataProvider::DeepSeekChatCompletionDataProvider prov(fake);
+        hash<auto> req = {
+            "model": "deepseek-chat",
+            "messages": (
+                {"role": "user", "content": "Hi"},
+            ),
+            "temperature": 0.7,
+        };
+        auto resp = prov.doRequest(req);
+
+        # OpenAI-compatible POST path
+        assertEq("POST", fake.last_method);
+        assertEq("chat/completions", fake.last_path);
+        # Request body forwarded unchanged
+        assertEq("deepseek-chat", fake.last_request.model);
+        assertEq(0.7, fake.last_request.temperature);
+        assertEq(1, fake.last_request.messages.size());
+        # Response shape and converted `created`
+        assertEq("test-id", resp.id);
+        assertEq(1700000000, int(resp.created - 1970-01-01Z));
+        assertEq(NT_DATE, resp.created.typeCode());
+        assertEq("Hello!", resp.choices[0].message.content);
+        assertEq(15, resp.usage.total_tokens);
+    }
+
+    private requestSchemaTest() {
+        DeepSeekDataProvider::DeepSeekChatCompletionRequestDataType t();
+        hash<auto> fields = t.getFields();
+        assertTrue(exists fields.messages);
+        assertTrue(exists fields.model);
+        assertTrue(exists fields.temperature);
+        assertTrue(exists fields.max_tokens);
+        # tool_choice has constrained values
+        assertTrue(exists fields.tool_choice);
+    }
+}

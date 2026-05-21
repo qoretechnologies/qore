@@ -2536,6 +2536,8 @@ qore_user_module("qlib/BedrockRestClient.qm" "AwsRestClient;QoreLlmTypes;QoreRag
 qore_user_module("qlib/BedrockDataProvider" "BedrockRestClient;AwsRestClient;DataProvider" "bedrock-logo.svg")
 qore_user_module("qlib/VertexAiRestClient.qm" "GcpAuth;GeminiBodyShape;QoreLlmTypes;QoreRagTypes;ConnectionProvider")
 qore_user_module("qlib/VertexAiDataProvider" "VertexAiRestClient;GcpAuth;GeminiBodyShape;DataProvider" "vertex-ai-logo.svg")
+qore_user_module("qlib/DeepSeekRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
+qore_user_module("qlib/DeepSeekDataProvider" "DeepSeekRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "deepseek-logo.svg")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")
