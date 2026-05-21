@@ -33,6 +33,7 @@
 %requires(reexport) ConnectionProvider
 %requires(reexport) DataProvider
 %requires mongodb
+%requires QoreRagTypes
 
 module MongoDbDataProvider {
     version = "1.0";
@@ -46,6 +47,11 @@ module MongoDbDataProvider {
 
         # register the data provider factory
         DataProvider::registerFactory(new MongoDbDataProviderFactory());
+
+        # register the MongoDB Atlas Vector Search vector-store factory in
+        # QoreRagUtils so RagPipeline can target Atlas via backend "mongo-atlas"
+        QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
+            new QoreRagUtils::MongoAtlasVectorStoreFactory());
 
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{

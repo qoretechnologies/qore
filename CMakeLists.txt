@@ -2574,7 +2574,7 @@ qore_user_module("qlib/QdrantDataProvider" "RestClient;DataProvider" "qdrant-log
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;RestClientIo;DataProvider" "Haltian-EmpathicBuilding.svg")
 qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")
 qore_user_module("qlib/MemcachedDataProvider" "DataProvider" "memcached-logo.svg")
-qore_user_module("qlib/MongoDbDataProvider" "DataProvider;ConnectionProvider" "mongodb-logo.svg")
+qore_user_module("qlib/MongoDbDataProvider" "DataProvider;ConnectionProvider;QoreRagTypes" "mongodb-logo.svg")
 qore_user_module("qlib/RedisDataProvider" "DataProvider;ConnectionProvider" "redis-logo.svg")
 
 # base 8 modules

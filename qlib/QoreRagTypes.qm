@@ -660,9 +660,10 @@ public class RagProviderRegistry {
             registered at runtime via @ref registerVectorStoreFactory().
         */
         const VectorStoreModuleMap = {
-            "qdrant":   "QdrantDataProvider",
-            "pgvector": "QoreRagUtils",
-            "chroma":   "ChromaRestClient",
+            "qdrant":      "QdrantDataProvider",
+            "pgvector":    "QoreRagUtils",
+            "chroma":      "ChromaRestClient",
+            "mongo-atlas": "MongoDbDataProvider",
         };
     }
 
