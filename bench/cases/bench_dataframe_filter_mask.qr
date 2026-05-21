@@ -1,0 +1,38 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameFilterMask
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameFilterMask {
+    constructor() {
+        Bench::BenchRunner r("dataframe_filter_mask");
+        r.iterations = 12;
+        r.warmup = 3;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::RowMask selected = (df.column("status") == "active")
+                & (df.column("score") >= 90.0)
+                & (df.column("amount") > 1000.0);
+            DataFrame::DataFrame filtered = df.filter(selected);
+            DataFrameBench::verifyRows("dataframe_filter_mask", filtered, 1);
+        };
+
+        exit(r.run());
+    }
+}

@@ -1,0 +1,56 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameSqlFromQuery
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameSqlFromQuery {
+    constructor() {
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            printf("dataframe_sql_from_query: skipped (QORE_DB_CONNSTR_PGSQL not set)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataframe_sql_from_query");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::sqlRows();
+        Datasource ds(connstr);
+        try {
+            ds.open();
+            ds.close();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("dataframe_sql_from_query: skipped (%s: %s)\n", ex.err, ex.desc);
+            exit(0);
+        }
+
+        r.setup = sub () {
+            ds.open();
+            ds.exec("CREATE TEMP TABLE qore_df_bench_query ("
+                "id int, customer_id int, status text, amount float8, score float8, region text, flag bool)");
+            DataFrame::DataFrame seed(DataFrameBench::makeColumns(rows));
+            seed.toTable(ds, "qore_df_bench_query");
+            ds.commit();
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame df = DataFrame::DataFrame::fromQuery(ds,
+                "SELECT id, customer_id, status, amount, score, region, flag FROM qore_df_bench_query");
+            DataFrameBench::verifyRows("dataframe_sql_from_query", df, rows);
+        };
+
+        int rc = r.run();
+        ds.close();
+        exit(rc);
+    }
+}

@@ -1,0 +1,35 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameConstructColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameConstructColumns {
+    constructor() {
+        Bench::BenchRunner r("dataframe_construct_columns");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        hash<auto> columns;
+
+        r.setup = sub () {
+            columns = DataFrameBench::makeColumns(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame df(columns);
+            DataFrameBench::verifyRows("dataframe_construct_columns", df, rows);
+        };
+
+        exit(r.run());
+    }
+}
