@@ -2365,6 +2365,7 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a composable abstraction layer for retrieval-augmented generation (RAG)
       - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
       - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c BgeM3FastApiEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
+      - adds \c PgVectorRagProvider — vector-store backend `pgvector` wrapping any \c AbstractDatasource pointing at a PostgreSQL database with the [pgvector](https://github.com/pgvector/pgvector) extension; supports cosine, L2, and inner-product distance operators with pass-through SQL filtering
 
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
