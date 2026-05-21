@@ -90,16 +90,81 @@ public class GoogleDocumentAiProcessDocumentRequestDataType inherits HashDataTyp
     constructor() { addQoreFields(Fields); }
 }
 
+#! Typed sub-hash for the top-level Google Document AI `Document` object
+/** Covers the common top-level fields of the
+    [`Document`](https://cloud.google.com/document-ai/docs/reference/rest/v1/Document)
+    proto.  Container fields (`pages`, `entities`, `tables`, etc.) flow
+    through as untyped lists so downstream consumers can access any
+    field the processor returns.
+*/
+public class GoogleDocumentAiDocumentDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "mimeType": {
+                "display_name": "MIME Type",
+                "desc": "MIME type of the source document.",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "text": {
+                "display_name": "Text",
+                "desc": "Full extracted text content (UTF-8).",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "pages": {
+                "display_name": "Pages",
+                "desc": "Per-page layout — each entry has `pageNumber`, "
+                    "`dimension`, `layout`, `paragraphs`, `lines`, `tokens`, "
+                    "`visualElements`, `tables`, `formFields`, and "
+                    "`blocks`.",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "entities": {
+                "display_name": "Entities",
+                "desc": "Typed entities extracted by specialist processors "
+                    "(invoice, receipt, contract, etc.) — each entry has "
+                    "`type`, `mentionText`, `confidence`, `normalizedValue`, "
+                    "`pageAnchor`, and `properties` (nested sub-entities).",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "entityRelations": {
+                "display_name": "Entity Relations",
+                "desc": "Relationships between extracted entities (parent/"
+                    "child IDs plus a `relation` string).",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "textChanges": {
+                "display_name": "Text Changes",
+                "desc": "Edits applied to the OCR text by post-processing "
+                    "(e.g. translation, redaction) — list of "
+                    "`{textAnchor, changedText, provenance}` objects.",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "textStyles": {
+                "display_name": "Text Styles",
+                "desc": "Font + colour styling info per text span.",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "uri": {
+                "display_name": "Source URI",
+                "desc": "GCS URI of the source document (when "
+                    "`gcs_uri` was used for submission).",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
 public class GoogleDocumentAiProcessDocumentResponseDataType inherits HashDataType {
     public {
         const Fields = {
             "document": {
                 "display_name": "Document",
-                "desc": "The parsed `Document` object — contains `text` (raw "
-                    "extracted text), `pages` (per-page layout with paragraphs, "
-                    "tables, blocks, tokens), `entities` (typed entities for "
-                    "specialist processors), and `mimeType`.",
-                "type": AbstractDataProviderTypeMap."*hash",
+                "desc": "The parsed "
+                    "@ref GoogleDocumentAiDataProvider::GoogleDocumentAiDocumentDataType "
+                    "\"GoogleDocumentAiDocument\" — contains `text`, `pages`, "
+                    "`entities`, `mimeType`, and processor-specific extras.",
+                "type": new GoogleDocumentAiDocumentDataType(),
             },
             "humanReviewStatus": {
                 "display_name": "Human Review Status",

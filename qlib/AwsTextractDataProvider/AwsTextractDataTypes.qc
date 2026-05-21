@@ -23,13 +23,120 @@
 */
 
 public namespace AwsTextractDataProvider {
-#! Shared document-source fields used by both detect-document-text and analyze-document
-public hashdecl AwsTextractDocumentSourceFields {
-    *binary document_bytes;
-    *string document_path;
-    *string s3_bucket;
-    *string s3_name;
-    *string s3_version;
+#! Typed sub-hash for a single Textract Block element
+/** Textract returns text + structure as a flat list of typed Block
+    objects.  This hashdecl captures the common Block fields documented
+    in the [AWS Textract API reference](https://docs.aws.amazon.com/textract/latest/dg/API_Block.html).
+    Block-type-specific fields (Query / Page / etc.) flow through via
+    `auto`-typed sub-fields so downstream consumers can access them
+    without losing the documented common shape.
+*/
+public class AwsTextractBlockDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "BlockType": {
+                "display_name": "Block Type",
+                "desc": "Block type: `PAGE`, `LINE`, `WORD`, `TABLE`, `CELL`, "
+                    "`KEY_VALUE_SET`, `SELECTION_ELEMENT`, `QUERY`, "
+                    "`QUERY_RESULT`, `SIGNATURE`, `LAYOUT_TITLE`, "
+                    "`LAYOUT_HEADER`, `LAYOUT_TEXT`, `LAYOUT_FIGURE`, etc.",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Id": {
+                "display_name": "Block ID",
+                "desc": "Textract-assigned block identifier (UUID).",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Text": {
+                "display_name": "Text",
+                "desc": "Extracted text content (for `WORD`, `LINE`, "
+                    "`LAYOUT_*`, `QUERY_RESULT` blocks).",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Confidence": {
+                "display_name": "Confidence",
+                "desc": "OCR / detection confidence (0–100).",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
+            "Page": {
+                "display_name": "Page Number",
+                "desc": "1-indexed page number this block belongs to.",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "Geometry": {
+                "display_name": "Geometry",
+                "desc": "Bounding box + polygon vertices in document-relative "
+                    "(0–1) coordinates.  Has sub-keys `BoundingBox` "
+                    "(`Width`, `Height`, `Left`, `Top`) and `Polygon` "
+                    "(list of `{X, Y}` vertices).",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "Relationships": {
+                "display_name": "Relationships",
+                "desc": "List of `{Type, Ids}` relationship objects linking "
+                    "this block to children (`CHILD`), keys/values (`KEY` / "
+                    "`VALUE`), answers (`ANSWER`), or merged cells (`MERGED_CELL`).",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "TextType": {
+                "display_name": "Text Type",
+                "desc": "For `WORD` blocks: `PRINTED` or `HANDWRITING`.",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "RowIndex": {
+                "display_name": "Row Index",
+                "desc": "For `CELL` blocks: 1-indexed row position.",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "ColumnIndex": {
+                "display_name": "Column Index",
+                "desc": "For `CELL` blocks: 1-indexed column position.",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "RowSpan": {
+                "display_name": "Row Span",
+                "desc": "For `CELL` blocks: how many rows this cell spans.",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "ColumnSpan": {
+                "display_name": "Column Span",
+                "desc": "For `CELL` blocks: how many columns this cell spans.",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "SelectionStatus": {
+                "display_name": "Selection Status",
+                "desc": "For `SELECTION_ELEMENT` blocks: `SELECTED` or "
+                    "`NOT_SELECTED`.",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Query": {
+                "display_name": "Query",
+                "desc": "For `QUERY` blocks: the submitted query "
+                    "(`{Text, Alias}`).",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "EntityTypes": {
+                "display_name": "Entity Types",
+                "desc": "For `KEY_VALUE_SET` blocks: list of `KEY` or `VALUE`.",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+#! Typed sub-hash for Textract DocumentMetadata
+public class AwsTextractDocumentMetadataDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "Pages": {
+                "display_name": "Pages",
+                "desc": "Number of pages in the analyzed document.",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
 }
 
 #! Detect-document-text request: extract raw text from a document
@@ -84,14 +191,16 @@ public class AwsTextractDetectDocumentTextResponseDataType inherits HashDataType
             "DocumentMetadata": {
                 "display_name": "Document Metadata",
                 "desc": "Document-level metadata (`Pages` count).",
-                "type": AbstractDataProviderTypeMap."*hash",
+                "type": new AwsTextractDocumentMetadataDataType(),
             },
             "Blocks": {
                 "display_name": "Blocks",
-                "desc": "Extracted text blocks — each has `BlockType` "
-                    "(`PAGE`, `LINE`, `WORD`), `Text`, `Confidence`, `Geometry` "
-                    "(bounding box), and ID references.",
-                "type": AbstractDataProviderTypeMap."*softlist",
+                "desc": "Extracted text blocks — each is an "
+                    "@ref AwsTextractDataProvider::AwsTextractBlockDataType "
+                    "\"AwsTextractBlock\" with `BlockType`, `Text`, "
+                    "`Confidence`, `Geometry`, and relationship IDs.",
+                "type": new ListDataType("AwsTextractBlockList",
+                    new AwsTextractBlockDataType(), True),
             },
             "DetectDocumentTextModelVersion": {
                 "display_name": "Model Version",
@@ -110,12 +219,17 @@ public class AwsTextractAnalyzeDocumentRequestDataType inherits HashDataType {
             "feature_types": {
                 "display_name": "Feature Types",
                 "short_desc": "Which structural features to extract (list)",
-                "type": AbstractDataProviderTypeMap."softlist",
-                "desc": "Which structural features to extract.  One or more of "
-                    "`TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.  "
-                    "Pass at least one.",
+                "type": new ListDataType(AbstractDataProviderTypeMap."string", True),
+                "desc": "Which structural features to extract.  Pass at least one.",
                 "required": True,
                 "example_value": ("TABLES", "FORMS"),
+                "element_allowed_values": (
+                    <AllowedValueInfo>{"value": "TABLES",     "display_name": "Tables"},
+                    <AllowedValueInfo>{"value": "FORMS",      "display_name": "Forms (key/value pairs)"},
+                    <AllowedValueInfo>{"value": "SIGNATURES", "display_name": "Signatures"},
+                    <AllowedValueInfo>{"value": "LAYOUT",     "display_name": "Layout (titles, headers, paragraphs)"},
+                    <AllowedValueInfo>{"value": "QUERIES",    "display_name": "Queries (ask questions of the document)"},
+                ),
             },
             "queries": {
                 "display_name": "Queries",
@@ -171,7 +285,7 @@ public class AwsTextractAnalyzeDocumentResponseDataType inherits HashDataType {
             "DocumentMetadata": {
                 "display_name": "Document Metadata",
                 "desc": "Document-level metadata (`Pages` count).",
-                "type": AbstractDataProviderTypeMap."*hash",
+                "type": new AwsTextractDocumentMetadataDataType(),
             },
             "Blocks": {
                 "display_name": "Blocks",

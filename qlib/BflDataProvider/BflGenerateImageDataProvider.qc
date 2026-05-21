@@ -120,10 +120,47 @@ public class BflGenerateImageResponseDataType inherits HashDataType {
             },
             "result": {
                 "display_name": "Result",
-                "desc": "Result hash — contains `sample` (image URL) and "
-                    "`seed` (seed used).  The URL points at a temporary CDN "
-                    "location; download the image immediately to persist.",
-                "type": AbstractDataProviderTypeMap."*hash",
+                "desc": "Result object with the generated image URL.  The URL "
+                    "points at a temporary CDN location; download the image "
+                    "immediately to persist.",
+                "type": new BflGenerateImageResultDataType(),
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+#! Typed sub-hash for the `result` field of the generate-image response
+public class BflGenerateImageResultDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "sample": {
+                "display_name": "Image URL",
+                "desc": "Temporary CDN URL of the generated image.  BFL "
+                    "CDN URLs expire; download the image immediately.",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "seed": {
+                "display_name": "Seed",
+                "desc": "Random seed used for this generation — pass the same "
+                    "seed + prompt + model to reproduce the image.",
+                "type": AbstractDataProviderTypeMap."*softint",
+            },
+            "prompt": {
+                "display_name": "Final Prompt",
+                "desc": "The actual prompt used by the model — BFL may rewrite "
+                    "the input prompt internally before generation.",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "start_time": {
+                "display_name": "Start Time",
+                "desc": "Unix timestamp of when generation started.",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
+            "end_time": {
+                "display_name": "End Time",
+                "desc": "Unix timestamp of when generation completed.",
+                "type": AbstractDataProviderTypeMap."*float",
             },
         };
     }

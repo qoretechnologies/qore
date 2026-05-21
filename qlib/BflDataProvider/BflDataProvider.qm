@@ -41,20 +41,21 @@ module BflDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BflDataProvider::AppName,
             "display_name": "Black Forest Labs",
-            "short_desc": "Black Forest Labs FLUX image (+ video) generation",
+            "short_desc": "Black Forest Labs FLUX text-to-image generation",
             "desc": "Provides access to [Black Forest Labs](https://bfl.ai) — "
-                "the company behind the FLUX image and video generation "
-                "models.\n\n"
-                "**Image models**:\n"
+                "the company behind the FLUX image generation models.\n\n"
+                "**Image models** (selectable via the `model` action option):\n"
                 "- `flux-pro-1.1` (default) — production text-to-image\n"
                 "- `flux-pro-1.1-ultra` — highest quality, 4MP output\n"
                 "- `flux-pro` — original FLUX Pro\n"
                 "- `flux-dev` — faster + cheaper development model\n"
                 "- `flux-kontext-pro` / `flux-kontext-max` — image-to-image "
                 "edit (needs an `input_image`)\n\n"
-                "**Video models** (use via @ref qoremediautilsintro \"QoreMediaUtils\" "
-                "or the REST client directly):\n"
-                "- `flux-1.1-pro-video` — text-to-video / image-to-video",
+                "**Video generation** is exposed only via the "
+                "@ref qoremediautilsintro \"QoreMediaUtils\" "
+                "`bfl` video-generator backend or the "
+                "@ref bflrestclientintro \"BflRestClient\" `submitAndWait()` "
+                "method directly — not as an action in this data provider.",
             "scheme": "bfl",
             "logo": BflLogo,
             "logo_file_name": "bfl-logo.svg",

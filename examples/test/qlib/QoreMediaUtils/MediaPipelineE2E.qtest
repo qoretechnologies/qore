@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Integration test for the Phase 5c media-generation pipeline:
+#! Integration test for the end-to-end media-generation pipeline:
 #!   text prompt → image generator → video generator (text-to-video)
 #!   → assemble result
 #!
@@ -92,6 +92,9 @@ public class MediaPipelineE2ETest inherits QUnit::Test {
             gen.generateImage("a fantasy landscape");
         assertEq(binary("FAKE-PNG:a fantasy landscape"), r.image);
         assertEq("image/png", r.content_type);
+        # Verify the factory created and the generator was invoked exactly once
+        FakeImageGen concrete = cast<FakeImageGen>(gen);
+        assertEq(1, concrete.call_count);
     }
 
     private videoFlowTest() {
@@ -111,6 +114,9 @@ public class MediaPipelineE2ETest inherits QUnit::Test {
         assertEq("https://fake.example.com/v_a misty forest.mp4", r.video_url);
         assertEq("video/mp4", r.content_type);
         assertEq("fake-job-1", r.metadata.id);
+        # Verify the factory created and the generator was invoked exactly once
+        FakeVideoGen concrete = cast<FakeVideoGen>(gen);
+        assertEq(1, concrete.call_count);
     }
 
     private fullPipelineTest() {

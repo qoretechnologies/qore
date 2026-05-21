@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file media-pipeline-e2e.qr
-#! End-to-end media-generation pipeline demo for Phase 5c:
+#! End-to-end media-generation pipeline demo:
 #!   text prompt → Stability AI image → BFL video (text-to-video)
 #!   → save outputs to local files
 #!

@@ -1570,18 +1570,6 @@ cargo install tree-sitter-cli@0.26.5
       - shipping (courier packages, labels, courier and service metadata)
       - polling-based event triggers for 22 journal event types (order created, paid, packaged, etc.)
 
-    - @ref bfldataproviderintro "BflDataProvider" module
-      - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
-      - exposes one action: `generate-image` — submit a text prompt + FLUX model, drive the async submit-then-poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils", and receive a result hash with the generated image URL
-      - supports six image models: `flux-pro-1.1` (default), `flux-pro-1.1-ultra` (4MP), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (image-to-image edit)
-      - action catalog integration with 1 action under the \c bfl scheme; registered with the `DesignCreative` AppGroup
-
-    - @ref bflrestclientintro "BflRestClient" module
-      - new module providing a REST client for <a href="https://bfl.ai">Black Forest Labs</a> with `x-key` header authentication
-      - registers TWO QoreMediaUtils backends — `bfl` image generator (six FLUX models) and `bfl` video generator (`flux-1.1-pro-video`)
-      - exposes a high-level `submitAndWait()` method on the async client that drives the submit → poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
-      - provides BflRestConnection for connection management with \c bfl:// URL scheme
-
     - @ref baselinkerrestclientintro "BaseLinkerRestClient" module
       - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
       - supports API token authentication via \c X-BLToken header
@@ -1597,6 +1585,18 @@ cargo install tree-sitter-cli@0.26.5
       - speaks the unified Converse API covering Anthropic, Llama, Mistral, Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families
       - Titan + Cohere embedder via \c InvokeModel; full AWS credential chain (static, env, ECS task-role, IMDSv2, STS AssumeRole) inherited from \c AwsRestClient
       - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c bedrock and @ref qoreragutilsintro "QoreRagUtils" under embedder backend \c bedrock
+
+    - @ref bfldataproviderintro "BflDataProvider" module
+      - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
+      - exposes one action: `generate-image` — submit a text prompt + FLUX model, drive the async submit-then-poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils", and receive a result hash with the generated image URL
+      - supports six image models: `flux-pro-1.1` (default), `flux-pro-1.1-ultra` (4MP), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (image-to-image edit)
+      - action catalog integration with 1 action under the \c bfl scheme; registered with the `DesignCreative` AppGroup
+
+    - @ref bflrestclientintro "BflRestClient" module
+      - new module providing a REST client for <a href="https://bfl.ai">Black Forest Labs</a> with `x-key` header authentication
+      - registers TWO QoreMediaUtils backends — `bfl` image generator (six FLUX models) and `bfl` video generator (`flux-1.1-pro-video`)
+      - exposes a high-level `submitAndWait()` method on the async client that drives the submit → poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+      - provides BflRestConnection for connection management with \c bfl:// URL scheme
 
     - @ref bgem3fastapidataproviderintro "BgeM3FastApiDataProvider" module
       - new module providing a data provider API for the BGE-M3 FastAPI embedding sidecar
@@ -2457,6 +2457,13 @@ cargo install tree-sitter-cli@0.26.5
       - thread-safe lazy-initialized REST client with configurable timeouts
       - JSON schema enforcement via response_format (HTTP) and tool-use extraction (Anthropic)
 
+    - @ref qoremediautilsintro "QoreMediaUtils" module
+      - new module providing a provider-neutral abstraction layer for generative media (image + video)
+      - @ref QoreMediaUtils::AbstractImageGenerator "AbstractImageGenerator" — text-to-image / image-to-image / image-editing contract
+      - @ref QoreMediaUtils::AbstractVideoGenerator "AbstractVideoGenerator" — text-to-video / image-to-video contract
+      - @ref QoreMediaUtils::MediaProviderRegistry "MediaProviderRegistry" with lazy-loaded `ImageGeneratorModuleMap` + `VideoGeneratorModuleMap` — callers select a backend by name (\c "stability-ai", \c "bfl"); the registry lazy-loads the providing module on first lookup
+      - paired with new image / video provider modules (Stability AI, Black Forest Labs)
+
     - @ref qoremlutilsintro "QoreMLUtils" module
       - new module providing hyperparameter optimization and model explainability
       - GridSearch: exhaustive parameter grid search with k-fold cross-validation
@@ -2506,13 +2513,6 @@ cargo install tree-sitter-cli@0.26.5
       - supports multi-line input detection, incremental parsing, and special commands (/help, /vars, /reset, etc.)
       - uses @ref qorecodecompletionintro "QoreCodeCompletion" module for context-aware code completion
       - @ref linenoiseintro "linenoise" is now a mandatory dependency (no longer optional)
-
-    - @ref qoremediautilsintro "QoreMediaUtils" module
-      - new module providing a provider-neutral abstraction layer for generative media (image + video)
-      - @ref QoreMediaUtils::AbstractImageGenerator "AbstractImageGenerator" — text-to-image / image-to-image / image-editing contract
-      - @ref QoreMediaUtils::AbstractVideoGenerator "AbstractVideoGenerator" — text-to-video / image-to-video contract
-      - @ref QoreMediaUtils::MediaProviderRegistry "MediaProviderRegistry" with lazy-loaded `ImageGeneratorModuleMap` + `VideoGeneratorModuleMap` — callers select a backend by name (\c "stability-ai", \c "bfl"); the registry lazy-loads the providing module on first lookup
-      - paired with new image / video provider modules (Stability AI, Black Forest Labs)
 
     - @ref qorespeechutilsintro "QoreSpeechUtils" module
       - new module providing a provider-neutral abstraction layer for speech AI

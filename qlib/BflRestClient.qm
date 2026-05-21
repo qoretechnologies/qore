@@ -241,11 +241,23 @@ public class BflRestConnection inherits RestClient::RestConnection {
 
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, DefaultUrl, attributes, options) {
     }
 
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+            : RestConnection(BflRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the config hash with the canonical URL forced
+    /** Black Forest Labs has a single fixed API endpoint; the URL is
+        always overridden to prevent the framework's \c auto_url machinery
+        from falling back to \c "bfl://localhost" when no source option
+        exists to build a URL from.  See
+        data-provider-development-guide.md pitfall #17.
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        config.url = DefaultUrl;
+        return config;
     }
 
     string getType() { return "bfl"; }
@@ -275,6 +287,23 @@ public class BflRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         return BflRestClientBase::getOptions(rv);
+    }
+
+    #! Re-corrects URL and ping_path on options updates (auto_url support)
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != DefaultUrl && url != BflRestClient::DefaultUrl) {
+                update.url = DefaultUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
     }
 }
 

@@ -311,12 +311,24 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
     #! Creates the AssemblyAiRestConnection object
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, DefaultUrl, attributes, options) {
     }
 
     #! Creates the AssemblyAiRestConnection object from a configuration hash
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+            : RestConnection(AssemblyAiRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the config hash with the canonical URL forced
+    /** AssemblyAI has a single fixed API endpoint; the URL is always
+        overridden to prevent the framework's \c auto_url machinery from
+        falling back to \c "assemblyai://localhost" when no source option
+        exists to build a URL from.  See
+        data-provider-development-guide.md pitfall #17.
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        config.url = DefaultUrl;
+        return config;
     }
 
     #! Returns \c "assemblyai"
