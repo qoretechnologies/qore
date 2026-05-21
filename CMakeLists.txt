@@ -2546,6 +2546,8 @@ qore_user_module("qlib/FireworksRestClient.qm" "ConnectionProvider;Mime;RestClie
 qore_user_module("qlib/FireworksDataProvider" "FireworksRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "fireworks-ai-logo.svg")
 qore_user_module("qlib/OllamaRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes;QoreRagTypes")
 qore_user_module("qlib/OllamaDataProvider" "OllamaRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "ollama-logo.svg")
+qore_user_module("qlib/JinaRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreRagTypes")
+qore_user_module("qlib/JinaDataProvider" "JinaRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "jina-logo.svg")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")

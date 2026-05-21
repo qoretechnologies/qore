@@ -232,6 +232,7 @@ public class DataProvider {
             "together": "TogetherDataProvider",
             "fireworks": "FireworksDataProvider",
             "ollama": "OllamaDataProvider",
+            "jina": "JinaDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

@@ -2016,6 +2016,18 @@ cargo install tree-sitter-cli@0.26.5
       - supports Bearer token (API key) authentication
       - provides InstantlyRestConnection for connection management with \c instantly:// URL scheme
 
+    - @ref jinadataproviderintro "JinaDataProvider" module
+      - new module providing a data provider API for <a href="https://jina.ai">Jina AI</a> embeddings and reranking services
+      - exposes two actions: `create-embeddings` (jina-embeddings-v3 task-aware multilingual) and `rerank` (jina-reranker-v2-base-multilingual)
+      - action catalog integration with 2 actions under the \c jina scheme
+
+    - @ref jinarestclientintro "JinaRestClient" module
+      - new module providing a REST client for <a href="https://jina.ai">Jina AI</a>'s embeddings + reranking API
+      - supports API key (Bearer token) authentication
+      - registers a `jina` embedder backend and a `jina` reranker backend with @ref qorerragutilsintro "QoreRagUtils"
+      - closes the cloud-reranker gap alongside Voyage; reranker supports both cross-encoder and late-interaction (ColBERT) models
+      - provides JinaRestConnection for connection management with \c jina:// URL scheme
+
     - @ref jotformdataproviderintro "JotformDataProvider" module
       - new module providing a data provider API for <a href="https://www.jotform.com/">JotForm</a> form and submission management
       - form and submission CRUD with dynamic field resolution based on form questions

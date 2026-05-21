@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/JinaRestClient.qm
+
+%exec-class JinaRestClientTest
+
+public class JinaRestClientTest inherits QUnit::Test {
+    constructor() : Test("JinaRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",     \connectionSchemeTest());
+        addTestCase("embedder factory registered",      \embedderFactoryTest());
+        addTestCase("reranker factory registered",      \rerankerFactoryTest());
+        addTestCase("embedder requires api_key",        \embedderConfigTest());
+        addTestCase("reranker requires api_key",        \rerankerConfigTest());
+        addTestCase("REST client options apply Bearer mapping",
+            \restOptionsTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("jina");
+        assertEq("Jina AI REST Connection", info.display_name);
+        assertTrue(info.schemes.jina);
+        assertEq("apikey", info.required_options);
+    }
+
+    private embedderFactoryTest() {
+        QoreRagUtils::AbstractEmbedderFactory ef =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("jina");
+        assertEq("jina", ef.getType());
+        assertEq("Jina AI embeddings", ef.getDisplayName());
+    }
+
+    private rerankerFactoryTest() {
+        QoreRagUtils::AbstractRerankerFactory rf =
+            QoreRagUtils::RagProviderRegistry::getRerankerFactoryEx("jina");
+        assertEq("jina", rf.getType());
+        assertEq("Jina AI rerank", rf.getDisplayName());
+    }
+
+    private embedderConfigTest() {
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::JinaEmbedder(<QoreRagUtils::EmbedderConfig>{
+                "backend": "jina",
+                "model": "jina-embeddings-v3",
+            });
+        });
+        QoreRagUtils::JinaEmbedder e(<QoreRagUtils::EmbedderConfig>{
+            "backend": "jina",
+            "api_key": "k",
+        });
+        assertEq("jina-embeddings-v3", e.getModel());
+    }
+
+    private rerankerConfigTest() {
+        assertThrows("RERANKER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::JinaReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "jina",
+                "model": "jina-reranker-v2-base-multilingual",
+            });
+        });
+        QoreRagUtils::JinaReranker r(<QoreRagUtils::RerankerConfig>{
+            "backend": "jina",
+            "api_key": "k",
+        });
+        assertEq("jina-reranker-v2-base-multilingual", r.getModel());
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = JinaRestClient::JinaRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("https://api.jina.ai", opts.url);
+        assertEq("v1", opts.api);
+        assertEq("/v1", opts.default_path);
+    }
+}
