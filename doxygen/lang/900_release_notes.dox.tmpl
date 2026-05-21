@@ -1703,6 +1703,18 @@ cargo install tree-sitter-cli@0.26.5
       - supports OAuth2 authentication with automatic token refresh
       - provides CloseRestConnection for connection management with \c closerest:// URL scheme
 
+    - @ref coheredataproviderintro "CohereDataProvider" module
+      - new module providing a data provider API for <a href="https://cohere.com">Cohere</a> chat (Command R/R+), embeddings, reranking, and classification services
+      - exposes four actions: `chat` (`/v2/chat`), `embed` (`/v2/embed`), `rerank` (`/v2/rerank`), and `classify` (`/v1/classify`)
+      - action catalog integration with 4 actions under the \c cohere scheme
+
+    - @ref cohererestclientintro "CohereRestClient" module
+      - new module providing a REST client for <a href="https://cohere.com">Cohere</a>'s v2 REST API
+      - supports API key (Bearer token) authentication
+      - registers a `cohere` LlmProvider (Command R/R+ chat with tool calling), a `cohere` embedder backend (`embed-multilingual-v3.0`), and a `cohere` reranker backend (`rerank-v3.5`) — closes the cloud-reranker gap alongside Voyage and Jina
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c cohere
+      - provides CohereRestConnection for connection management with \c cohere:// URL scheme
+
     - @ref constantcontactdataproviderintro "ConstantContactDataProvider" module
       - new module providing a data provider API for <a href="https://www.constantcontact.com/">Constant Contact</a> email marketing
       - contact management (create, update, delete, list, find by ID)

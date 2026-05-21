@@ -641,6 +641,7 @@ public class RagProviderRegistry {
             "fireworks":  "FireworksRestClient",
             "ollama":     "OllamaRestClient",
             "jina":       "JinaRestClient",
+            "cohere":     "CohereRestClient",
         };
 
         #! Map of reranker backend names to providing modules
@@ -649,6 +650,7 @@ public class RagProviderRegistry {
             "local-onnx":   "QoreRagUtils",
             "http-gateway": "QoreRagUtils",
             "jina":         "JinaRestClient",
+            "cohere":       "CohereRestClient",
         };
 
         #! Map of vector-store backend names to providing modules

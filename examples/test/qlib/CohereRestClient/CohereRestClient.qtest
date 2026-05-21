@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/CohereRestClient.qm
+
+%exec-class CohereRestClientTest
+
+public class CohereRestClientTest inherits QUnit::Test {
+    constructor() : Test("CohereRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",       \connectionSchemeTest());
+        addTestCase("LLM factory registered + advertises capabilities",
+            \llmFactoryTest());
+        addTestCase("Embedder factory registered",        \embedderFactoryTest());
+        addTestCase("Reranker factory registered",        \rerankerFactoryTest());
+        addTestCase("LLM provider requires api_key",      \providerConfigTest());
+        addTestCase("REST client options apply Bearer mapping + v2 path",
+            \restOptionsTest());
+        addTestCase("embedder requires api_key",          \embedderConfigTest());
+        addTestCase("reranker requires api_key",          \rerankerConfigTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("cohere");
+        assertEq("Cohere REST Connection", info.display_name);
+        assertTrue(info.schemes.cohere);
+        assertEq("apikey", info.required_options);
+    }
+
+    private llmFactoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("cohere");
+        assertEq("cohere", f.getMode());
+        assertEq("Cohere chat (Command R/R+)", f.getDisplayName());
+        assertEq("CohereRestClient", f.getInfo().module_name);
+        hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
+        # Cohere v1 doesn't ship streaming yet; document this clearly
+        assertFalse(info.supports_streaming);
+        assertTrue(info.supports_tools);
+        assertTrue(info.supports_structured_output);
+    }
+
+    private embedderFactoryTest() {
+        QoreRagUtils::AbstractEmbedderFactory ef =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("cohere");
+        assertEq("cohere", ef.getType());
+        assertEq("Cohere embeddings", ef.getDisplayName());
+    }
+
+    private rerankerFactoryTest() {
+        QoreRagUtils::AbstractRerankerFactory rf =
+            QoreRagUtils::RagProviderRegistry::getRerankerFactoryEx("cohere");
+        assertEq("cohere", rf.getType());
+        assertEq("Cohere rerank", rf.getDisplayName());
+    }
+
+    private providerConfigTest() {
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new CohereRestClient::CohereLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "model": "command-r-plus",
+                });
+        });
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = CohereRestClient::CohereRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        # Cohere defaults to v2 (not v1) — important distinction
+        assertEq("https://api.cohere.com", opts.url);
+        assertEq("v2", opts.api);
+        assertEq("/v2", opts.default_path);
+    }
+
+    private embedderConfigTest() {
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::CohereEmbedder(<QoreRagUtils::EmbedderConfig>{
+                "backend": "cohere",
+            });
+        });
+        QoreRagUtils::CohereEmbedder e(<QoreRagUtils::EmbedderConfig>{
+            "backend": "cohere",
+            "api_key": "k",
+        });
+        assertEq("embed-multilingual-v3.0", e.getModel());
+    }
+
+    private rerankerConfigTest() {
+        assertThrows("RERANKER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::CohereReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "cohere",
+            });
+        });
+        QoreRagUtils::CohereReranker r(<QoreRagUtils::RerankerConfig>{
+            "backend": "cohere",
+            "api_key": "k",
+        });
+        assertEq("rerank-v3.5", r.getModel());
+    }
+}

@@ -1,0 +1,756 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file CohereRestClient.qm Qore user module for calling Cohere REST services
+
+/*  CohereRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreLlmTypes
+%requires QoreRagTypes
+
+module CohereRestClient {
+    version = "1.0";
+    desc = "user module for calling Cohere REST services (chat + embed + rerank)";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("cohere",
+            CohereRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(
+            new CohereLlmProviderFactory());
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
+            new CohereEmbedderFactory());
+        QoreRagUtils::RagProviderRegistry::registerRerankerFactory(
+            new CohereRerankerFactory());
+    };
+}
+
+/** @mainpage CohereRestClient Module
+
+    @tableofcontents
+
+    @section cohererestclientintro CohereRestClient Introduction
+
+    The %CohereRestClient module provides an API for calling
+    [Cohere](https://cohere.com) REST services — chat (Command R/R+),
+    embeddings, and reranking.
+
+    Cohere exposes:
+    - `/v2/chat` — chat completions (Command R, Command R+)
+    - `/v2/embed` — embedding models (embed-v3.0, multilingual variants)
+    - `/v2/rerank` — reranker models (rerank-v3.5, multilingual variants)
+
+    This module closes the cloud-reranker gap in
+    @ref qorerragutilsintro "QoreRagUtils" alongside Voyage and Jina,
+    and provides a full chat LLM provider for Cohere's Command series.
+
+    @section CohereRestClientRelnotes Release Notes
+
+    @subsection CohereRestClientv1_0 CohereRestClient v1.0
+    - the initial version of the %CohereRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace CohereRestClient {
+public class CohereRestClientBase {
+    public {
+        #! Default Cohere REST API URL
+        const DefaultUrl = "https://api.cohere.com";
+
+        #! Default Cohere API version
+        const DefaultApiVersion = "v2";
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "api": DefaultApiVersion,
+            "default_path": "/" + DefaultApiVersion,
+        };
+    }
+
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (opts.api) {
+            rv.default_path = "/" + opts.api;
+        }
+        if (rv.apikey) {
+            rv.token = rv.apikey;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for Cohere REST API (sync)
+public class CohereRestClient inherits RestClient::RestClient, CohereRestClientBase {
+    private {
+        string api;
+    }
+
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(CohereRestClientBase::getOptions(opts), True) {
+        if (validator instanceof NullRestSchemaValidator) {
+            setConnectionPath(getString(opts, "api") ?? DefaultApiVersion);
+        }
+    }
+}
+
+#! REST client for Cohere REST API using multiplexed HTTP connections
+public class CohereRestClientIo inherits RestClientIo::RestClientIo, CohereRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(CohereRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Cohere REST connections
+public class CohereRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "cohere://api.cohere.com";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Cohere REST Connection",
+            "short_desc": "A connection to the Cohere REST API",
+            "desc": "A connection to the [Cohere](https://cohere.com) REST API for chat, "
+                "embeddings, reranking, and classification.\n\n"
+                "Requires an API key for Bearer authentication.  Get your API key from the "
+                "[Cohere dashboard](https://dashboard.cohere.com/api-keys).",
+            "cls": Class::forName("CohereRestConnection"),
+            "auto_url": True,
+            "schemes": {"cohere": True},
+            "base_scheme_map": {"https": "cohere"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Cohere API key for authentication",
+                    "type": "string",
+                    "desc": "The Cohere API key used for Bearer authentication.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "api": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "The API version to use",
+                    "desc": "The API version to use.  Defaults to v2.",
+                    "type": "string",
+                    "default_value": CohereRestClientBase::DefaultApiVersion,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": DefaultPingPath,
+                },
+            },
+            "required_options": "apikey",
+        };
+
+        const DefaultPingMethod = "GET";
+        const DefaultPingHeaders = {"Accept": MimeTypeJson};
+        const DefaultPingPath = "models";
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "cohere";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("CohereDataProvider");
+        return create_object("CohereDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private CohereRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new CohereRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new CohereRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return CohereRestClientBase::getOptions(rv);
+    }
+}
+
+#! LLM provider for Cohere chat (Command R/R+)
+/** Cohere's `/v2/chat` endpoint uses an OpenAI-shape-adjacent message
+    schema (role + content), but the response shape differs (single
+    `message` not `choices[]`, `content` as a typed array of parts).
+    This provider translates between Qore's neutral @ref ChatMessage /
+    @ref ChatResponse hashdecls and Cohere's wire format.
+
+    @par Configuration
+
+    - \c url (optional): override the default \c https://api.cohere.com
+    - \c api_key (required): Cohere API key
+    - \c model (required): Cohere model name, e.g. \c "command-r-plus",
+      \c "command-r"
+
+    @note Streaming is not implemented in v1.  Use the synchronous
+    @ref chat() method.
+*/
+public class CohereLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    private {
+        *CohereRestClient::CohereRestClientIo rest_client;
+        Mutex rest_mutex();
+    }
+
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : QoreLlmUtils::AbstractLlmProvider(config) {
+        if (!config.api_key.val()) {
+            throw "LLM-CONFIG-ERROR",
+                "Cohere provider requires 'api_key' in LlmBackendConfig";
+        }
+%ifdef NoJson
+        throw "LLM-DEPENDENCY-ERROR",
+            "json module is required for Cohere LLM provider but is not available";
+%endif
+    }
+
+    string getMode() {
+        return "cohere";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": system_prompt},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": user_prompt},
+        );
+        *hash<QoreLlmUtils::LlmRequestOptions> co = opts;
+        if (output_schema) {
+            # Cohere v2 supports JSON schema response_format
+            if (!co) {
+                co = <QoreLlmUtils::LlmRequestOptions>{};
+            }
+            hash<auto> body_options = co.body_options ?? {};
+            body_options.response_format = {
+                "type": "json_object",
+                "schema": output_schema,
+            };
+            co.body_options = body_options;
+        }
+        hash<QoreLlmUtils::ChatResponse> resp = chat(messages, NOTHING, co);
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": resp.content ?? "",
+            "usage": resp.usage,
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+
+        hash<auto> body = {
+            "model": getRequestModel(opts),
+            "messages": buildCohereMessages(messages),
+        };
+        if (exists opts.temperature) {
+            body.temperature = opts.temperature;
+        }
+        int max_tok = getRequestMaxOutputTokens(opts);
+        if (max_tok) {
+            body.max_tokens = max_tok;
+        }
+        if (tools) {
+            body.tools = buildCohereTools(tools);
+        }
+        if (opts.body_options) {
+            body += opts.body_options;
+        }
+
+        hash<auto> resp;
+        try {
+            resp = rest_client.restPost("/chat", body);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Cohere chat request failed: %s", ex.desc), ex;
+        }
+
+        return parseCohereChatResponse(resp.body);
+    }
+
+    private list<hash<auto>> buildCohereMessages(
+            list<hash<QoreLlmUtils::ChatMessage>> messages) {
+        list<hash<auto>> rv = ();
+        foreach hash<QoreLlmUtils::ChatMessage> m in (messages) {
+            hash<auto> wire = {"role": m.role};
+            if (exists m.content) {
+                wire.content = m.content;
+            }
+            if (exists m.tool_call_id) {
+                wire.tool_call_id = m.tool_call_id;
+            }
+            if (m.tool_calls) {
+                wire.tool_calls = map (
+                    "id": $1.id,
+                    "type": "function",
+                    "function": (
+                        "name": $1.name,
+                        "arguments": $1.arguments
+                            ? call_function_args("to_json", ($1.arguments,))
+                            : "{}",
+                    ),
+                ), m.tool_calls;
+            }
+            push rv, wire;
+        }
+        return rv;
+    }
+
+    private list<hash<auto>> buildCohereTools(
+            list<hash<QoreLlmUtils::ToolDefinition>> tools) {
+        list<hash<auto>> rv = ();
+        foreach hash<QoreLlmUtils::ToolDefinition> t in (tools) {
+            push rv, {
+                "type": "function",
+                "function": {
+                    "name": t.name,
+                    "description": t.description ?? "",
+                    "parameters": t.parameters ?? {},
+                },
+            };
+        }
+        return rv;
+    }
+
+    private hash<QoreLlmUtils::ChatResponse> parseCohereChatResponse(hash<auto> body) {
+        # extract text content from typed content parts
+        *string text;
+        if (body.message.content && body.message.content.typeCode() == NT_LIST) {
+            foreach hash<auto> part in (body.message.content) {
+                if (part."type" == "text" && exists part.text) {
+                    if (!exists text) {
+                        text = part.text;
+                    } else {
+                        text += part.text;
+                    }
+                }
+            }
+        } else if (body.message.content && body.message.content.typeCode() == NT_STRING) {
+            text = body.message.content;
+        }
+
+        # translate finish_reason to neutral stop_reason
+        string stop_reason;
+        switch (body.finish_reason) {
+            case "COMPLETE":
+            case "complete":
+            case "stop":
+                stop_reason = "end_turn";
+                break;
+            case "MAX_TOKENS":
+            case "max_tokens":
+            case "length":
+                stop_reason = "max_tokens";
+                break;
+            case "TOOL_CALL":
+            case "tool_call":
+            case "tool_use":
+                stop_reason = "tool_use";
+                break;
+            case "STOP_SEQUENCE":
+            case "stop_sequence":
+                stop_reason = "stop_sequence";
+                break;
+            default:
+                stop_reason = body.finish_reason ?? "end_turn";
+                break;
+        }
+
+        # extract tool calls
+        *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls;
+        if (body.message.tool_calls) {
+            tool_calls = ();
+            foreach hash<auto> tc in (body.message.tool_calls) {
+                *hash<auto> args;
+                if (tc."function".arguments && tc."function".arguments.typeCode() == NT_STRING) {
+                    try {
+                        args = call_function_args("parse_json",
+                            (tc."function".arguments,));
+                    } catch (hash<ExceptionInfo> ex) {
+                        # leave args undefined on parse failure
+                    }
+                } else if (tc."function".arguments.typeCode() == NT_HASH) {
+                    args = tc."function".arguments;
+                }
+                push tool_calls, <QoreLlmUtils::ChatToolCall>{
+                    "id": tc.id ?? "",
+                    "name": tc."function".name ?? "",
+                    "arguments": args,
+                };
+            }
+        }
+
+        return <QoreLlmUtils::ChatResponse>{
+            "id": body.id,
+            "model": body.model,
+            "stop_reason": stop_reason,
+            "content": text,
+            "tool_calls": tool_calls,
+            "usage": body.usage ?? {},
+            "raw": body,
+        };
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                hash<auto> opts = {
+                    "apikey": config_h.api_key,
+                };
+                if (config_h.url.val()) {
+                    opts.url = config_h.url;
+                }
+                rest_client = new CohereRestClient::CohereRestClientIo(opts);
+            }
+        }
+    }
+}
+
+#! Factory for @ref CohereLlmProvider
+public class CohereLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "cohere";
+    }
+
+    string getDisplayName() {
+        return "Cohere chat (Command R/R+)";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new CohereLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": False,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": False,
+        };
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! Cohere-backed embedder — calls the Cohere `/v2/embed` endpoint
+public class CohereEmbedder inherits AbstractEmbedder {
+    public {
+        const DefaultModel = "embed-multilingual-v3.0";
+        const Backend = "cohere";
+    }
+
+    private {
+        hash<EmbedderConfig> config;
+        string model_name;
+        *CohereRestClient::CohereRestClientIo rest_client;
+        *int cached_dimension;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<EmbedderConfig> config) {
+        if (!config.api_key.val()) {
+            throw "EMBEDDER-CONFIG-ERROR",
+                "CohereEmbedder requires 'api_key' in EmbedderConfig";
+        }
+        self.config = config;
+        model_name = config.model ?? DefaultModel;
+        if (exists config.dimension) {
+            cached_dimension = config.dimension;
+        }
+    }
+
+    list<float> encode(string text, *hash<auto> opts) {
+        list<list<float>> rv = encodeBatch((text,), opts);
+        return rv[0];
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        if (!texts) {
+            return ();
+        }
+
+        hash<auto> body = {
+            "model": model_name,
+            "texts": texts,
+            "input_type": opts.input_type ?? "search_document",
+            "embedding_types": ("float",),
+        };
+        if (exists opts.truncate) {
+            body.truncate = opts.truncate;
+        }
+
+        hash<auto> resp = pickRestClient(opts).restPost("/embed", body);
+
+        # Cohere v2 returns embeddings.float = [[...], ...]
+        *list<auto> vectors = resp.body.embeddings."float";
+        if (!exists vectors) {
+            # fall back to v1 envelope (embeddings as top-level list)
+            vectors = resp.body.embeddings;
+        }
+        if (!exists vectors) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response missing 'embeddings.float' field", Backend),
+                {"body": resp.body};
+        }
+        if (vectors.size() != texts.size()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response returned %d vectors for %d input texts",
+                    Backend, vectors.size(), texts.size()),
+                {"body": resp.body};
+        }
+
+        list<list<float>> result = ();
+        foreach auto vec in (vectors) {
+            list<float> typed = validateAndCastVector(vec, resp.body);
+            if (!exists cached_dimension) {
+                cached_dimension = typed.size();
+            }
+            push result, typed;
+        }
+        return result;
+    }
+
+    int getDimension() {
+        if (exists cached_dimension) {
+            return cached_dimension;
+        }
+        encode(" ");
+        return cached_dimension ?? -1;
+    }
+
+    *string getModel() {
+        return model_name;
+    }
+
+    private list<float> validateAndCastVector(auto raw, auto body) {
+        if (!exists raw || raw.typeCode() != NT_LIST || !raw.lsize()) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response returned an empty or non-list vector", Backend),
+                {"body": body};
+        }
+        try {
+            return cast<list<float>>(raw);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "EMBEDDER-RESPONSE-ERROR",
+                sprintf("%s: response vector contains non-numeric elements: %s",
+                    Backend, ex.desc),
+                {"body": body};
+        }
+    }
+
+    private CohereRestClient::CohereRestClientIo pickRestClient(*hash<auto> opts) {
+        if (exists opts.timeout || exists opts.connect_timeout) {
+            return new CohereRestClient::CohereRestClientIo(
+                buildRestOptions(opts.timeout, opts.connect_timeout));
+        }
+        ensureRestClient();
+        return rest_client;
+    }
+
+    private hash<auto> buildRestOptions(*timeout req_timeout, *timeout conn_timeout) {
+        hash<auto!> opts = {
+            "apikey": config.api_key,
+        };
+        if (config.url.val()) {
+            opts.url = config.url;
+        }
+        *timeout effective_timeout = req_timeout ?? config.timeout;
+        if (exists effective_timeout) {
+            opts.timeout = effective_timeout;
+        }
+        *timeout effective_connect = conn_timeout ?? config.connect_timeout;
+        if (exists effective_connect) {
+            opts.connect_timeout = effective_connect;
+        }
+        return opts;
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                rest_client = new CohereRestClient::CohereRestClientIo(buildRestOptions());
+            }
+        }
+    }
+}
+
+#! Factory for @ref CohereEmbedder
+public class CohereEmbedderFactory inherits AbstractEmbedderFactory {
+    string getType() {
+        return "cohere";
+    }
+
+    string getDisplayName() {
+        return "Cohere embeddings";
+    }
+
+    AbstractEmbedder create(hash<EmbedderConfig> config) {
+        return new CohereEmbedder(config);
+    }
+}
+
+#! Cohere-backed reranker — calls the Cohere `/v2/rerank` endpoint
+public class CohereReranker inherits AbstractReranker {
+    public {
+        const DefaultModel = "rerank-v3.5";
+    }
+
+    private {
+        hash<RerankerConfig> config;
+        string model_name;
+        *CohereRestClient::CohereRestClientIo rest_client;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<RerankerConfig> config) {
+        if (!config.api_key.val()) {
+            throw "RERANKER-CONFIG-ERROR",
+                "CohereReranker requires 'api_key' in RerankerConfig";
+        }
+        self.config = config;
+        model_name = config.model ?? DefaultModel;
+    }
+
+    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
+            *hash<auto> opts) {
+        if (!documents) {
+            return ();
+        }
+        ensureRestClient();
+
+        hash<auto> body = {
+            "model": model_name,
+            "query": query,
+            "documents": documents,
+            "top_n": top_k,
+            "return_documents": True,
+        };
+        if (opts) {
+            if (exists opts.max_chunks_per_doc) {
+                body."max_chunks_per_doc" = opts.max_chunks_per_doc;
+            }
+            if (exists opts.rank_fields) {
+                body."rank_fields" = opts.rank_fields;
+            }
+            if (exists opts.return_documents) {
+                body."return_documents" = opts.return_documents;
+            }
+        }
+
+        hash<auto> resp = rest_client.restPost("/rerank", body);
+
+        list<hash<auto>> data = resp.body.results ?? ();
+        list<hash<RerankResult>> result = ();
+        foreach hash<auto> item in (data) {
+            int idx = item."index";
+            string doc = item.document.typeCode() == NT_STRING
+                ? item.document
+                : (exists item.document.text ? item.document.text : documents[idx]);
+            push result, <RerankResult>{
+                "index": idx,
+                "score": item.relevance_score.toFloat(),
+                "document": doc,
+            };
+        }
+        return result;
+    }
+
+    *string getModel() {
+        return model_name;
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                hash<auto> opts = {
+                    "apikey": config.api_key,
+                };
+                if (config.url.val()) {
+                    opts.url = config.url;
+                }
+                rest_client = new CohereRestClient::CohereRestClientIo(opts);
+            }
+        }
+    }
+}
+
+#! Factory for @ref CohereReranker
+public class CohereRerankerFactory inherits AbstractRerankerFactory {
+    string getType() {
+        return "cohere";
+    }
+
+    string getDisplayName() {
+        return "Cohere rerank";
+    }
+
+    AbstractReranker create(hash<RerankerConfig> config) {
+        return new CohereReranker(config);
+    }
+}
+}

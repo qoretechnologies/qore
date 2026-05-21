@@ -233,6 +233,7 @@ public class DataProvider {
             "fireworks": "FireworksDataProvider",
             "ollama": "OllamaDataProvider",
             "jina": "JinaDataProvider",
+            "cohere": "CohereDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",
