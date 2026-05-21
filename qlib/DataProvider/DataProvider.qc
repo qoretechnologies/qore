@@ -242,6 +242,7 @@ public class DataProvider {
             "tavily": "TavilyDataProvider",
             "exa": "ExaDataProvider",
             "llamaparse": "LlamaParseDataProvider",
+            "unstructured": "UnstructuredDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

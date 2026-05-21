@@ -2597,6 +2597,19 @@ cargo install tree-sitter-cli@0.26.5
       - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c together
       - provides TogetherRestConnection for connection management with \c together:// URL scheme
 
+    - @ref unstructureddataproviderintro "UnstructuredDataProvider" module
+      - new module providing a data provider API for <a href="https://unstructured.io">Unstructured.io</a> document partitioning
+      - exposes one action: `partition-text` (synthesizes a `text/plain` multipart upload from a string and returns the typed element tree)
+      - action catalog integration with 1 action under the \c unstructured scheme
+
+    - @ref unstructuredrestclientintro "UnstructuredRestClient" module
+      - new module providing a REST client for <a href="https://unstructured.io">Unstructured.io</a>'s document-partitioning API
+      - supports API key authentication via the \c unstructured-api-key header
+      - works against the Serverless API and self-hosted Unstructured deployments (same module, different URL)
+      - provides `partition()` (multipart-aware), `partitionFile()` (reads a local file), and `partitionText()` (synthesizes a `text/plain` multipart upload) methods
+      - registers an `unstructured` chunker strategy in @ref qoreragutilsintro "QoreRagUtils" via `UnstructuredChunker` — collapses Unstructured's typed element tree (Title / NarrativeText / ListItem / Table / ...) into flat `ChunkInfo` records by grouping under the most recent Title with target-token soft caps
+      - provides UnstructuredRestConnection for connection management with \c unstructured:// URL scheme
+
     - @ref unbouncedataproviderintro "UnbounceDataProvider" module
       - new module providing a data provider API for <a href="https://unbounce.com/">Unbounce</a> landing page services
       - account and sub-account management (list, get)

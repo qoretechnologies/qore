@@ -698,9 +698,10 @@ public class RagProviderRegistry {
             registered at runtime via @ref registerChunkerFactory().
         */
         const ChunkerModuleMap = {
-            "structured":  "QoreRagUtils",
-            "fixed":       "QoreRagUtils",
-            "llama-parse": "LlamaParseRestClient",
+            "structured":   "QoreRagUtils",
+            "fixed":        "QoreRagUtils",
+            "llama-parse":  "LlamaParseRestClient",
+            "unstructured": "UnstructuredRestClient",
         };
     }
 

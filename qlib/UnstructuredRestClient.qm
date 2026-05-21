@@ -1,0 +1,454 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file UnstructuredRestClient.qm Qore user module for calling Unstructured.io REST services
+
+/*  UnstructuredRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreRagTypes
+
+module UnstructuredRestClient {
+    version = "1.0";
+    desc = "user module for calling Unstructured.io document-partitioning REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("unstructured",
+            UnstructuredRestConnection::ConnectionScheme);
+        QoreRagUtils::RagProviderRegistry::registerChunkerFactory(
+            new UnstructuredChunkerFactory());
+    };
+}
+
+/** @mainpage UnstructuredRestClient Module
+
+    @tableofcontents
+
+    @section unstructuredrestclientintro UnstructuredRestClient Introduction
+
+    The %UnstructuredRestClient module provides a REST client for
+    [Unstructured.io](https://unstructured.io) — a document partitioning
+    service that breaks PDFs, docx, HTML, images, and other formats into
+    a typed element tree (Title, NarrativeText, ListItem, Table, Image,
+    ...) suitable for RAG ingestion.
+
+    Works against both the Unstructured Serverless API
+    (`https://api.unstructuredapp.io/general/v0`) and self-hosted
+    Unstructured deployments — same module, different URL.
+
+    @par Submission shapes
+
+    The v1 client supports two submission shapes via the
+    `/general` endpoint:
+
+    - `partitionFile(filename, content_type, body)` — multipart upload
+      of arbitrary binary content (PDF, docx, etc.)
+    - `partitionText(text, *options)` — synthesizes a `text/plain`
+      multipart upload from a string (useful when the caller has
+      already extracted text from elsewhere)
+
+    Both delegate to the same low-level
+    @ref UnstructuredRestClient::UnstructuredRestClientIo::partition()
+    multipart helper.
+
+    @par Companion chunker
+
+    @ref QoreRagUtils::UnstructuredChunker (lazy-loaded via the
+    @c "unstructured" chunker strategy) wraps `partitionText()` and
+    collapses the returned element tree into flat `ChunkInfo` records.
+
+    @section UnstructuredRestClientRelnotes Release Notes
+
+    @subsection UnstructuredRestClientv1_0 UnstructuredRestClient v1.0
+    - the initial version of the %UnstructuredRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace UnstructuredRestClient {
+public class UnstructuredRestClientBase {
+    public {
+        #! Default Unstructured Serverless API URL
+        const DefaultUrl = "https://api.unstructuredapp.io";
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Unstructured uses the `unstructured-api-key` header
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv;
+        rv += DefaultOptions + opts;
+        if (rv.apikey) {
+            hash<auto!> dh;
+            if (rv.default_headers) {
+                dh += rv.default_headers;
+            }
+            dh."unstructured-api-key" = rv.apikey;
+            rv.default_headers = dh;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for Unstructured.io (sync)
+public class UnstructuredRestClient inherits RestClient::RestClient, UnstructuredRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(UnstructuredRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! REST client for Unstructured.io using multiplexed HTTP connections (async)
+/** Provides `partition()` (multipart-aware), `partitionFile()`, and
+    `partitionText()` helpers that wrap the
+    `POST /general/v0/general` endpoint.
+*/
+public class UnstructuredRestClientIo inherits RestClientIo::RestClientIo, UnstructuredRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(UnstructuredRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Partitions a document already present in memory
+    /** @param filename the filename to send in the multipart Content-Disposition
+        @param content_type the content type of the file
+        @param body the file content (binary or string)
+        @param options optional Unstructured fields (e.g. \c strategy:
+            \c "fast" / \c "hi_res" / \c "ocr_only" / \c "auto";
+            \c chunking_strategy: \c "by_title" / \c "basic";
+            \c languages, \c coordinates, \c output_format)
+
+        @return list of element hashes (Title, NarrativeText, ListItem, etc.)
+    */
+    list<hash<auto>> partition(string filename, string content_type, data body,
+            *hash<auto> options) {
+        Mime::MultiPartFormDataMessage msg();
+        msg.addPart(body, "files", filename, content_type);
+        if (options) {
+            foreach hash<auto> p in (options.pairIterator()) {
+                if (p.value.typeCode() == NT_LIST) {
+                    # repeated fields (e.g. languages)
+                    foreach auto v in (p.value) {
+                        msg.addPart(v.toString(), p.key);
+                    }
+                } else {
+                    msg.addPart(p.value.toString(), p.key);
+                }
+            }
+        }
+        hash<MessageInfo> mi = msg.getMsgAndHeaders();
+        hash<auto> resp = restPost("/general/v0/general", mi.body, mi.hdr);
+        # Unstructured returns the elt_list directly as the body (a list of hashes)
+        if (resp.body.typeCode() == NT_LIST) {
+            return cast<list<hash<auto>>>(resp.body);
+        }
+        # Some Unstructured deployments wrap in {elt_list: [...]}
+        if (resp.body.elt_list && resp.body.elt_list.typeCode() == NT_LIST) {
+            return cast<list<hash<auto>>>(resp.body.elt_list);
+        }
+        throw "UNSTRUCTURED-ERROR",
+            sprintf("unexpected /general response shape: %y", resp.body),
+            {"body": resp.body};
+    }
+
+    #! Partitions raw text by synthesizing a text/plain multipart upload
+    /** @param text the document text to partition
+        @param options optional Unstructured fields
+
+        @return list of element hashes
+    */
+    list<hash<auto>> partitionText(string text, *hash<auto> options) {
+        return partition("input.txt", "text/plain", text, options);
+    }
+
+    #! Partitions a file on disk (reads the file, then calls @ref partition())
+    /** @param path local file path
+        @param content_type the content type of the file
+        @param options optional Unstructured fields
+
+        @return list of element hashes
+    */
+    list<hash<auto>> partitionFile(string path, string content_type,
+            *hash<auto> options) {
+        binary body = File::readBinaryFile(path);
+        # Extract just the basename for the multipart filename
+        string filename = path;
+        filename =~ s/^.*\///;
+        return partition(filename, content_type, body, options);
+    }
+}
+
+#! Class for Unstructured.io REST connections
+public class UnstructuredRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "unstructured://api.unstructuredapp.io";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Unstructured.io Document Partitioning Connection",
+            "short_desc": "A connection to the Unstructured.io REST API",
+            "desc": "A connection to [Unstructured.io](https://unstructured.io) — a "
+                "document partitioning service that breaks PDFs, docx, HTML, and "
+                "images into a typed element tree.\n\n"
+                "Works against the Serverless API "
+                "(`https://api.unstructuredapp.io/general/v0`) and self-hosted "
+                "deployments — same module, different URL.\n\n"
+                "Auth: the `unstructured-api-key` header.",
+            "cls": Class::forName("UnstructuredRestConnection"),
+            "auto_url": True,
+            "schemes": {"unstructured": True},
+            "base_scheme_map": {"http": "unstructured", "https": "unstructured"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Unstructured.io API key",
+                    "type": "string",
+                    "desc": "The Unstructured.io API key — sent as the "
+                        "`unstructured-api-key` header.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "unstructured";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("UnstructuredDataProvider");
+        return create_object("UnstructuredDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private UnstructuredRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new UnstructuredRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new UnstructuredRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return UnstructuredRestClientBase::getOptions(rv);
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! Unstructured.io-backed chunker
+/** Posts text content to Unstructured.io for partitioning, then collapses
+    the returned element tree into flat @ref ChunkInfo records.
+
+    @par Configuration
+
+    @ref ChunkerConfig fields:
+
+    - \c strategy must be \c "unstructured"
+    - \c target_tokens — soft cap per chunk (default 512); content
+      grouping respects element boundaries first, then accumulates
+      until the cap is reached
+    - \c options.api_key (required) — Unstructured.io API key
+    - \c options.url (optional) — override the default Unstructured URL
+    - \c options.unstructured_options (optional) — passthrough hash of
+      Unstructured-specific fields (`strategy`, `languages`, `coordinates`,
+      `chunking_strategy`, etc.) sent on every request
+
+    @par Element-tree flattening
+
+    Each element in Unstructured's response has \c type (Title /
+    NarrativeText / ListItem / Table / ...), \c text, and
+    \c metadata.  Flattening rule: group consecutive elt_list under the
+    most recent Title (or root if none yet); start a new chunk when the
+    running token count would exceed \c target_tokens.  Each chunk's
+    metadata carries the Title text (if any) under \c section and the
+    list of constituent element types under \c element_types.
+*/
+public class UnstructuredChunker inherits AbstractChunker {
+    public {
+        #! Default Unstructured URL
+        const DefaultUrl = "https://api.unstructuredapp.io";
+    }
+
+    private {
+        hash<ChunkerConfig> config;
+        *UnstructuredRestClient::UnstructuredRestClientIo rest_client;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<ChunkerConfig> config) {
+        self.config = config;
+    }
+
+    list<hash<ChunkInfo>> chunk(string content, *hash<auto> metadata) {
+        if (!content.val()) {
+            return ();
+        }
+        if (!config.options.api_key.val()) {
+            throw "UNSTRUCTURED-CHUNKER-ERROR",
+                "UnstructuredChunker requires 'options.api_key'";
+        }
+        ensureRestClient();
+        list<hash<auto>> elt_list_list = rest_client.partitionText(content,
+            config.options.unstructured_options ?? {});
+        return flattenElements(elt_list_list, metadata);
+    }
+
+    string getStrategy() {
+        return "unstructured";
+    }
+
+    #! Returns the underlying REST client
+    *UnstructuredRestClient::UnstructuredRestClientIo getRestClient() {
+        ensureRestClient();
+        return rest_client;
+    }
+
+    #! Walks the Unstructured element tree into flat ChunkInfo records
+    private list<hash<ChunkInfo>> flattenElements(list<hash<auto>> elt_list,
+            *hash<auto> base_metadata) {
+        int target = config.target_tokens > 0 ? config.target_tokens : 512;
+
+        list<hash<ChunkInfo>> chunks = ();
+        # State accumulator passed by reference to flushChunk()
+        hash<auto> state;
+        state.current_section = NOTHING;
+        state.current_texts = ();
+        state.current_types = ();
+        state.current_tokens = 0;
+        state.idx = 0;
+
+        foreach hash<auto> el in (elt_list) {
+            *string text = el.text;
+            if (!text.val()) {
+                continue;
+            }
+            string el_type = el."type" ?? "Element";
+
+            # Title resets section + flushes accumulated content
+            if (el_type == "Title") {
+                flushChunk(\state, \chunks, base_metadata);
+                state.current_section = text;
+                # Don't include the Title itself in the chunk body — record
+                # it as section metadata instead
+                continue;
+            }
+
+            int t = approximateTokens(text);
+            if (state.current_texts && state.current_tokens + t > target) {
+                flushChunk(\state, \chunks, base_metadata);
+            }
+            push state.current_texts, text;
+            push state.current_types, el_type;
+            state.current_tokens += t;
+        }
+        flushChunk(\state, \chunks, base_metadata);
+        return chunks;
+    }
+
+    private nothing flushChunk(reference<hash<auto>> state,
+            reference<list<hash<ChunkInfo>>> chunks,
+            *hash<auto> base_metadata) {
+        if (!state.current_texts) {
+            return;
+        }
+        *hash<auto> md = base_metadata;
+        if (state.current_section.val()) {
+            md = (md ?? {}) + {"section": state.current_section};
+        }
+        if (state.current_types) {
+            md = (md ?? {}) + {"element_types": state.current_types};
+        }
+        push chunks, <ChunkInfo>{
+            "index": state.idx,
+            "content": (foldl $1 + "\n\n" + $2, state.current_texts),
+            "token_count": state.current_tokens,
+            "metadata": md,
+        };
+        ++state.idx;
+        state.current_texts = ();
+        state.current_types = ();
+        state.current_tokens = 0;
+    }
+
+    private ensureRestClient() {
+        if (rest_client) {
+            return;
+        }
+        init_mutex.lock();
+        on_exit init_mutex.unlock();
+        if (rest_client) {
+            return;
+        }
+        hash<auto!> opts = {
+            "url": config.options.url ?? DefaultUrl,
+            "apikey": config.options.api_key,
+        };
+        rest_client = new UnstructuredRestClient::UnstructuredRestClientIo(opts);
+    }
+}
+
+#! Factory for @ref UnstructuredChunker
+public class UnstructuredChunkerFactory inherits AbstractChunkerFactory {
+    string getStrategy() {
+        return "unstructured";
+    }
+
+    string getDisplayName() {
+        return "Unstructured.io element-tree chunker";
+    }
+
+    AbstractChunker create(hash<ChunkerConfig> config) {
+        return new UnstructuredChunker(config);
+    }
+}
+}
