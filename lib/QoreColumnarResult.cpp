@@ -182,7 +182,7 @@ static bool columnar_shape_from_native_type(const std::string& native_type, int6
     if (type.find("char") != std::string::npos || type.find("text") != std::string::npos
             || type.find("clob") != std::string::npos || type == "string" || type == "enum"
             || type == "set" || type == "uuid" || type == "xml") {
-        shape = {QoreColumnarColumnType::String, QoreBufferElementType::Invalid, stringTypeInfo, true, false};
+        shape = {QoreColumnarColumnType::String, QoreBufferElementType::String, stringTypeInfo, true, true};
         return true;
     }
 
@@ -234,7 +234,7 @@ static bool columnar_shape_from_desc(const QoreHashNode* desc, ColumnarShape& sh
                 columnar_get_desc_nullable(desc), false};
             return true;
         case NT_STRING:
-            shape = {QoreColumnarColumnType::String, QoreBufferElementType::Invalid, stringTypeInfo, true, false};
+            shape = {QoreColumnarColumnType::String, QoreBufferElementType::String, stringTypeInfo, true, true};
             return true;
         case NT_DATE:
             shape = {QoreColumnarColumnType::Date, QoreBufferElementType::Invalid, dateTypeInfo,
@@ -306,7 +306,7 @@ static ColumnarShape columnar_shape_from_kind(ColumnarInferredKind kind, bool nu
         case ColumnarInferredKind::Number:
             return {QoreColumnarColumnType::Number, QoreBufferElementType::Invalid, numberTypeInfo, nullable, false};
         case ColumnarInferredKind::String:
-            return {QoreColumnarColumnType::String, QoreBufferElementType::Invalid, stringTypeInfo, nullable, false};
+            return {QoreColumnarColumnType::String, QoreBufferElementType::String, stringTypeInfo, nullable, true};
         case ColumnarInferredKind::Date:
             return {QoreColumnarColumnType::Date, QoreBufferElementType::Invalid, dateTypeInfo, nullable, false};
         case ColumnarInferredKind::Binary:
@@ -473,6 +473,22 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
 
     if (value.getType() == NT_BUFFER) {
         const QoreBufferNode* source = value.get<const QoreBufferNode>();
+        if (source->getElementType() == QoreBufferElementType::String) {
+            ReferenceHolder<QoreListNode> values(new QoreListNode(source->getElementTypeInfo()), xsink);
+            for (size_t i = 0; i < source->size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar string buffer column")) {
+                    return QoreValue();
+                }
+                if (columnar_mask_at(mask, i)) {
+                    values->push(source->getReferencedEntry(i), xsink);
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                }
+            }
+            return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
+        }
+
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
             source->hasNullableElements(), selected), xsink);
         size_t out = 0;
@@ -556,6 +572,9 @@ static QoreColumnarColumnType columnar_type_from_buffer(QoreBufferElementType bu
     }
     if (buffer_type == QoreBufferElementType::Bool) {
         return QoreColumnarColumnType::Bool;
+    }
+    if (buffer_type == QoreBufferElementType::String) {
+        return QoreColumnarColumnType::String;
     }
     return QoreColumnarColumnType::Auto;
 }

@@ -162,7 +162,7 @@ printf("%y\n", l1.fullType());
     boxing used by @ref list "lists", making it suitable for typed database columns, numeric vectors, and other
     high-volume tabular data.  Reading an element widens storage-specific values to normal Qore scalar types:
     \c int8, \c int16, \c int32, and \c int64 read as Qore \c int values; \c float32 and \c float64 read as Qore
-    \c float values.
+    \c float values; \c string stores UTF-8 string bytes with offsets.
 
     Supported storage element types are:
     - \c int8
@@ -172,6 +172,7 @@ printf("%y\n", l1.fullType());
     - \c float32
     - \c float64
     - \c bool
+    - \c string
 
     Nullable buffers use \c buffer<*T>.  A nullable buffer carries a per-element validity bitmap; reading a null
     element returns @ref nothing "NOTHING".  Both @ref null "NULL" and @ref nothing "NOTHING" initialize nullable
@@ -191,6 +192,9 @@ buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
 assert scores[1] === NOTHING;
 
 buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
+
+buffer<*string> names = new buffer<*string>(("Alice", NOTHING, "Carol"));
+buffer<string> blanks = buffer<string>::filled(3, "");
 
 foreach float score in (scores) {
     if (exists score) {
@@ -215,7 +219,10 @@ buffer<int64> reversed = ids[3..1];     # buffer<int64>((40, 30, 20))
 buffer<int64> view = ids.view(start: 1, count: 2);
 view[0] = 25;                           # updates ids[1]
 list<int> boxed = ids.toList();
-buffer<int64> again = new buffer<int64>(boxed);
+buffer<int64> again = new buffer<int64>(cast<list<int>>(boxed));
+
+buffer<string> names = new buffer<string>(("Alice", "", "Carol"));
+buffer<string> tail = names[1..2];       # buffer<string>(("", "Carol"))
     @endcode
 
     Range slices create independent buffers.  \c view(start, count) creates a zero-copy view sharing storage with the
@@ -242,6 +249,13 @@ buffer<*bool> valid = scores >= 2.0;       # buffer<*bool>((False, NOTHING, True
     @endcode
 
     Boolean buffers support elementwise comparisons with boolean buffers or scalar boolean values, but not arithmetic.
+    String buffers support elementwise comparisons with string buffers or scalar string values:
+    @code{.py}
+buffer<string> names = new buffer<string>(("Alice", "Bob", "Carol"));
+buffer<bool> is_bob = names == "Bob";    # buffer<bool>((False, True, False))
+buffer<bool> before_c = names < "C";     # buffer<bool>((True, True, False))
+    @endcode
+
     Applying a buffer operation to two buffers of different lengths raises a \c BUFFER-SIZE-ERROR; unsupported operand
     combinations raise a \c BUFFER-OPERATION-ERROR; division by zero raises \c DIVISION-BY-ZERO.
 
@@ -255,18 +269,21 @@ assert ids.mean() == 20.0;
 assert ids.min() == 10;
 assert ids.max() == 30;
     @endcode
+    String buffers do not provide numeric reductions; calling \c sum(), \c mean(), \c min(), or \c max() on
+    \c buffer<string> raises \c BUFFER-OPERATION-ERROR.
 
     @par Columnar SQL Results:
     %Qore's DBI layer can return query results as ordered typed columns with the
-    @ref Qore::SQL::ColumnarResult "ColumnarResult" class. Numeric and boolean columns can be represented as dense
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" class. Numeric, boolean, and string columns can be represented as dense
     buffers, which avoids per-cell boxing when loading large result sets into analytics code:
     @code{.py}
 Datasource ds("pgsql:user/pass@sales%dbhost");
 ColumnarResult result = ds.selectColumnar(
-    "select order_id, score, active from order_scores where score >= %v",
+    "select order_id, customer_name, score, active from order_scores where score >= %v",
     90.0);
 
 buffer<int64> order_ids = result.getColumn("order_id");
+buffer<*string> customer_names = result.getColumn("customer_name");
 buffer<float64> scores = result.getColumn("score");
 buffer<bool> active = result.getColumn("active");
 
@@ -285,7 +302,7 @@ ColumnarResult projected = ColumnarResult::fromColumnHash(projected_columns);
     @ref Qore::SQL::ColumnarResult::nullMask() "ColumnarResult::nullMask()" returns a dense
     \c buffer<bool> mask for null or non-null values, so nullable dense columns can be filtered without
     materializing rows.  @ref Qore::SQL::ColumnarResult::slice() "ColumnarResult::slice()" returns contiguous
-    row ranges and preserves primitive dense columns as zero-copy buffer views.
+    row ranges and preserves dense columns as zero-copy buffer views.
     @ref Qore::SQL::ColumnarResult::fromColumnHash() "ColumnarResult::fromColumnHash()" creates a new
     columnar result from existing column containers and references dense buffers directly, which is useful for
     projection and augmentation pipelines that should avoid row materialization.
@@ -315,7 +332,7 @@ while (True) {
     ColumnarResult.
 
     Native columnar DBI support is the preferred path for high-throughput DataFrame and DataProvider workloads.
-    It lets database drivers fill typed result columns directly, so numeric and boolean values can flow from SQL
+    It lets database drivers fill typed result columns directly, so numeric, boolean, and string values can flow from SQL
     to DataFrame and shape-aware DataProvider processors without first allocating one hash per row. This is the
     basis for the fastest SQL read path in the dataframe benchmark suite. When native columnar support is not
     available, the APIs remain functional, but the compatibility fallback has to convert row-oriented or

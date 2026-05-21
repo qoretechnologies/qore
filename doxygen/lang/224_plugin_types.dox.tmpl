@@ -256,6 +256,8 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     - nullable element buffers such as \c buffer<*int64>, because the v1 helper
       ABI does not carry a validity bitmap;
     - \c buffer<bool>, because it is bit-packed rather than byte-addressable;
+    - \c buffer<string>, because it is variable-width offset storage rather
+      than a fixed-width numeric frame;
     - mixed element storage between the result and input buffers;
     - result/input aliasing, because the v1 helper ABI exposes distinct output
       and input frames.
@@ -272,8 +274,10 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     @ref Qore::SQL::ColumnarResult "ColumnarResult", imported back from
     ColumnarResult, and passed through DataProvider pipelines as
     \c DataProviderShape::BufferColumns. This lets SQL, DataFrame, and
-    DataProvider code share primitive numeric and boolean columns without
-    converting every cell to a row hash.
+    DataProvider code share primitive numeric, boolean, and string columns without
+    converting every cell to a row hash. String columns can also use
+    \c buffer<string> or \c buffer<*string> in ColumnarResult and DataFrame
+    data paths; dense-buffer plugin helpers remain numeric-only in the v1 ABI.
 
     @code{.py}
 %requires dataframe
@@ -283,6 +287,7 @@ DataFrame df({
     "score": new buffer<float64>((95.0, 88.0, 92.0, 75.0)),
     "completed_at": new buffer<*int64>((1710000000, NOTHING, 1710001200, NOTHING)),
     "active": new buffer<bool>((True, False, True, True)),
+    "name": new buffer<*string>(("Alice", "Bob", NOTHING, "Dave")),
 });
 
 ColumnarResult columns = df.toColumnarResult();

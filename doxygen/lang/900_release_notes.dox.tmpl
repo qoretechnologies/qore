@@ -30,7 +30,7 @@
       @ref <list>::foldl() "<list>::foldl()", and the hash/object analogues) bypasses
       per-element virtual calls for built-in iterators
     - new dense \c buffer<T> values store primitive arrays without per-element boxing and
-      new typed DBI select APIs can return numeric and boolean result columns as buffers
+      new typed DBI select APIs can return numeric, boolean, and string result columns as buffers
     - copy-on-write @ref string_views "string view" layer makes
       @ref <string>::substr() "<string>::substr()" and
       @ref string_slicing "[] slice operations" allocation-free for read-only consumers
@@ -1232,8 +1232,8 @@ cargo install tree-sitter-cli@0.26.5
     %Qore now has a dense \c buffer<T> value type for primitive column data and typed DBI result APIs that can
     expose query results with runtime hashdecl metadata.
 
-    The new \c buffer<T> type stores \c int8, \c int16, \c int32, \c int64, \c float32, \c float64, and
-    \c bool values without per-element boxing.  Nullable buffers use \c buffer<*T> and preserve SQL NULL /
+    The new \c buffer<T> type stores \c int8, \c int16, \c int32, \c int64, \c float32, \c float64,
+    \c bool, and \c string values without per-element boxing.  Nullable buffers use \c buffer<*T> and preserve SQL NULL /
     Qore NOTHING as null elements:
     @code{.py}
 buffer<int64> ids = new buffer<int64>((10, 20, 30));
@@ -1242,6 +1242,7 @@ buffer<int64> retry_counts = buffer<int64>::filled(1000, 3);
 buffer<int64> retry_counts_named = buffer<int64>::filled(size: 1000, value: 3);
 buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
 buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
+buffer<*string> names = new buffer<*string>(("Alice", NOTHING, "Carol"));
 
 buffer<int64> middle = ids.view(start: 1, count: 2);
 middle[0] = 25;     # updates ids[1]
@@ -1263,6 +1264,9 @@ buffer<bool> high = adjusted > 20;         # buffer<bool>((False, True, True))
 
 buffer<*float64> scores = new buffer<*float64>((1.5, NOTHING, 4.25));
 buffer<*bool> passing = scores >= 2.0;     # buffer<*bool>((False, NOTHING, True))
+
+buffer<string> names = new buffer<string>(("Alice", "Bob", "Carol"));
+buffer<bool> named_bob = names == "Bob";   # buffer<bool>((False, True, False))
     @endcode
 
     The new @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" and
@@ -1276,7 +1280,7 @@ hash<auto> result = db.selectTyped(
 
 buffer<int64> customer_ids = result.customer_id;
 buffer<*float64> balances = result.balance;      # driver metadata can preserve SQL width/nullability
-list<*string> names = result.customer_name;      # string buffers are deferred, so strings use typed lists
+buffer<*string> names = result.customer_name;     # text columns can remain dense through columnar paths
     @endcode
 
     When a driver does not yet provide native typed select support, libqore falls back to the ordinary driver result

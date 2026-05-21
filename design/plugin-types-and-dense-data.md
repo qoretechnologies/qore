@@ -134,7 +134,7 @@ DataFrame/DataProvider workloads.
 | Module | Native `selectColumnar()` | Native `fetchColumnar()` | Native dense buffers | Notes |
 |--------|---------------------------|--------------------------|----------------------|-------|
 | core DBI fallback | compatibility | compatibility | conversion only | Functional baseline for all drivers. |
-| `module-pgsql` | yes | yes | yes for numeric/bool-compatible columns | Primary benchmarked native path. |
+| `module-pgsql` | yes | yes | yes for numeric/bool/string-compatible columns | Primary benchmarked native path. |
 | `module-mysql` | yes | yes | partial, via typed column hash conversion | Uses driver result metadata and `ColumnarResult::fromColumnHash()`. |
 | `module-oracle` | yes | yes | partial, via typed column hash conversion | Native DBI methods are registered. |
 | `module-odbc` | yes | yes | partial, via typed column hash conversion | Native DBI methods are registered. |
@@ -149,7 +149,7 @@ When applying this work to external modules, check:
 3. Native `Datasource::selectColumnar()` support.
 4. Native `SQLStatement::fetchColumnar()` support.
 5. Null handling and column metadata preservation.
-6. Direct dense buffer construction for numeric and boolean columns where the
+6. Direct dense buffer construction for numeric, boolean, and string columns where the
    driver API exposes typed storage.
 7. Release notes and module docs describing native vs fallback behavior.
 8. Tests for empty results, null columns, partial fetches, and fallback
@@ -162,7 +162,7 @@ features:
 
 | Feature | Status | Rationale |
 |---------|--------|-----------|
-| `buffer<*string>` | deferred | Requires Arrow-style offsets + byte buffer + validity bitmap and a clear immutability model. |
+| `buffer<string>` / `buffer<*string>` | implemented | Uses offsets + UTF-8 byte storage in `QoreBufferNode` with optional validity bitmap. |
 | `buffer<decimal128>` | deferred | Needs fixed-width decimal representation, precision/scale metadata, overflow rules, and SQL mapping policy. |
 | nested buffers / array columns | deferred | Requires nested offset metadata and more QORD schema work. |
 | GPU/device buffers | deferred | Requires a device-location model and explicit transfer semantics. |
@@ -170,7 +170,8 @@ features:
 
 Short-term mappings remain:
 
-- SQL string/text columns use typed lists.
+- SQL string/text columns use `buffer<string>` or `buffer<*string>` when columnar metadata or inferred values identify
+  a string column.
 - SQL date/time values use Qore date lists unless a driver has a more specific
   dense mapping.
 - SQL `NUMERIC` / `DECIMAL` values use `list<number>` unless a future
@@ -201,8 +202,7 @@ targets are:
 
 - more DPQL expression forms lowered to dense masks
 - wider vectorized analytics outputs
-- avoiding DataFrame fallback for list-backed string predicates once
-  `buffer<*string>` exists
+- extending dense string predicate lowering beyond equality/range comparisons where benchmarks show a payoff
 - direct packed-column support in more DBI drivers
 - benchmark-driven native codegen callbacks for module-owned dense kernels
 

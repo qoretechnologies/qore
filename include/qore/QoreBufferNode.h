@@ -38,6 +38,8 @@
 #include <atomic>
 #include <cstdint>
 #include <cstddef>
+#include <string>
+#include <vector>
 
 //! Dense storage element types supported by buffer<T>.
 enum class QoreBufferElementType : uint8_t {
@@ -49,6 +51,7 @@ enum class QoreBufferElementType : uint8_t {
     Float32,
     Float64,
     Bool,
+    String,
 };
 
 //! Elementwise operation supported by dense buffer helpers.
@@ -309,6 +312,13 @@ public:
      */
     DLLEXPORT int setEntry(size_t index, QoreValue value, ExceptionSink* xsink);
 
+    //! Fills every element with a value.
+    /** @param value the source value to store in every element
+        @param xsink exception sink for type and range errors
+        @return 0 on success, -1 on error
+     */
+    DLLEXPORT int fill(QoreValue value, ExceptionSink* xsink);
+
     //! Converts the buffer to a typed Qore list.
     /** @param xsink exception sink for allocation and cancellation errors
         @return a new list containing all buffer elements, or null on error
@@ -409,6 +419,10 @@ private:
     DLLLOCAL const uint8_t* dataBytes() const;
     DLLLOCAL uint8_t* validityBytes();
     DLLLOCAL const uint8_t* validityBytes() const;
+    DLLLOCAL uint64_t* stringOffsets();
+    DLLLOCAL const uint64_t* stringOffsets() const;
+    DLLLOCAL char* stringBytes();
+    DLLLOCAL const char* stringBytes() const;
     DLLLOCAL size_t dataByteSize(size_t n_length) const;
     DLLLOCAL void resizeStorage(size_t n_length);
     DLLLOCAL bool getValidityBit(size_t index) const;
@@ -416,6 +430,13 @@ private:
     DLLLOCAL bool getBoolBit(size_t index) const;
     DLLLOCAL void setBoolBit(size_t index, bool value);
     DLLLOCAL void setNull(size_t index);
+    DLLLOCAL int assignStringStorage(const std::vector<std::string>& values, const std::vector<uint8_t>& nulls,
+        ExceptionSink* xsink);
+    DLLLOCAL int assignStringRange(const QoreBufferNode& source, size_t offset, size_t count, bool reverse,
+        ExceptionSink* xsink);
+    DLLLOCAL int assignStringList(const QoreListNode* list, ExceptionSink* xsink);
+    DLLLOCAL int fillString(QoreValue value, ExceptionSink* xsink);
+    DLLLOCAL int setStringValue(size_t index, QoreValue value, ExceptionSink* xsink);
     DLLLOCAL int setValue(size_t index, QoreValue value, ExceptionSink* xsink);
 };
 

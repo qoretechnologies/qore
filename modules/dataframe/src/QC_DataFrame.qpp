@@ -891,7 +891,7 @@ hash<auto> DataFrame::toColumnHash() [flags=RET_VALUE_ONLY] {
 }
 
 //! Converts the DataFrame to a SQL ColumnarResult
-/** Dense numeric and boolean columns are returned as \c buffer<T> values.
+/** Dense numeric, boolean, and string columns are returned as \c buffer<T> values.
     Existing buffer-backed DataFrame columns are passed through without copying
     under Qore's normal copy-on-write semantics.
 
@@ -910,7 +910,7 @@ auto DataFrame::toColumnarResult() [flags=RET_VALUE_ONLY] {
 //! Creates a DataFrame from a SQL ColumnarResult
 /** This method preserves dense \c buffer<T> columns stored in native
     ColumnarResult objects, so SQL-to-DataFrame flows can avoid materializing
-    primitive columns as lists. ColumnarResult-compatible objects are still
+    primitive and string columns as lists. ColumnarResult-compatible objects are still
     accepted through their \c toColumnHash() method.
 
     @param result a \c Qore::SQL::ColumnarResult object

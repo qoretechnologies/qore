@@ -39,6 +39,8 @@
 #include <cstring>
 #include <limits>
 #include <new>
+#include <string>
+#include <vector>
 
 static constexpr size_t QORE_BUFFER_ALIGNMENT = 64;
 
@@ -148,6 +150,8 @@ const char* qore_buffer_element_type_name(QoreBufferElementType element_type) {
             return "float64";
         case QoreBufferElementType::Bool:
             return "bool";
+        case QoreBufferElementType::String:
+            return "string";
         default:
             return "invalid";
     }
@@ -168,6 +172,8 @@ bool qore_buffer_element_type_from_name(const char* name, QoreBufferElementType&
         element_type = QoreBufferElementType::Float64;
     } else if (!strcmp(name, "bool")) {
         element_type = QoreBufferElementType::Bool;
+    } else if (!strcmp(name, "string")) {
+        element_type = QoreBufferElementType::String;
     } else {
         element_type = QoreBufferElementType::Invalid;
         return false;
@@ -191,6 +197,9 @@ const QoreTypeInfo* qore_buffer_element_scalar_type_info(QoreBufferElementType e
         case QoreBufferElementType::Bool:
             rv = nullable ? boolOrNothingTypeInfo : boolTypeInfo;
             break;
+        case QoreBufferElementType::String:
+            rv = nullable ? stringOrNothingTypeInfo : stringTypeInfo;
+            break;
         default:
             rv = nullable ? anyTypeInfo : autoTypeInfo;
             break;
@@ -211,6 +220,8 @@ size_t qore_buffer_element_storage_size(QoreBufferElementType element_type) {
         case QoreBufferElementType::Float64:
             return sizeof(int64_t);
         case QoreBufferElementType::Bool:
+            return 0;
+        case QoreBufferElementType::String:
             return 0;
         default:
             return 0;
@@ -287,6 +298,7 @@ struct qore_buffer_parse_operand_t {
     bool can_be_int = false;
     bool can_be_float = false;
     bool can_be_bool = false;
+    bool can_be_string = false;
     bool known = false;
 };
 
@@ -318,6 +330,7 @@ static qore_buffer_parse_operand_t qore_buffer_parse_operand(const QoreTypeInfo*
     rv.can_be_int = QoreTypeInfo::parseReturns(typeInfo, NT_INT) != QTI_NOT_EQUAL;
     rv.can_be_float = QoreTypeInfo::parseReturns(typeInfo, NT_FLOAT) != QTI_NOT_EQUAL;
     rv.can_be_bool = QoreTypeInfo::parseReturns(typeInfo, NT_BOOLEAN) != QTI_NOT_EQUAL;
+    rv.can_be_string = QoreTypeInfo::parseReturns(typeInfo, NT_STRING) != QTI_NOT_EQUAL;
     return rv;
 }
 
@@ -329,9 +342,14 @@ static bool qore_buffer_parse_operand_is_bool_scalar(const qore_buffer_parse_ope
     return !operand.is_buffer && operand.can_be_bool && !operand.can_be_int && !operand.can_be_float;
 }
 
+static bool qore_buffer_parse_operand_is_string_scalar(const qore_buffer_parse_operand_t& operand) {
+    return !operand.is_buffer && operand.can_be_string && !operand.can_be_int && !operand.can_be_float
+        && !operand.can_be_bool;
+}
+
 static bool qore_buffer_parse_operand_is_null_scalar(const qore_buffer_parse_operand_t& operand) {
     return !operand.is_buffer && !operand.can_be_int && !operand.can_be_float && !operand.can_be_bool
-        && (operand.may_be_nothing || operand.may_be_null);
+        && !operand.can_be_string && (operand.may_be_nothing || operand.may_be_null);
 }
 
 static bool qore_buffer_parse_operand_is_supported_for_comparison(const qore_buffer_parse_operand_t& buffer_operand,
@@ -354,6 +372,12 @@ static bool qore_buffer_parse_operand_is_supported_for_comparison(const qore_buf
             ? (!other_operand.has_specific_buffer_type
                 || other_operand.element_type == QoreBufferElementType::Bool)
             : qore_buffer_parse_operand_is_bool_scalar(other_operand);
+    }
+    if (buffer_operand.element_type == QoreBufferElementType::String) {
+        return other_operand.is_buffer
+            ? (!other_operand.has_specific_buffer_type
+                || other_operand.element_type == QoreBufferElementType::String)
+            : qore_buffer_parse_operand_is_string_scalar(other_operand);
     }
     return false;
 }
@@ -430,6 +454,8 @@ static QoreBufferElementType qore_buffer_runtime_operand_element_type(const qore
             return QoreBufferElementType::Float64;
         case NT_BOOLEAN:
             return QoreBufferElementType::Bool;
+        case NT_STRING:
+            return QoreBufferElementType::String;
         default:
             return QoreBufferElementType::Invalid;
     }
@@ -462,6 +488,10 @@ static bool qore_buffer_runtime_operand_is_bool(const qore_buffer_runtime_operan
     return qore_buffer_runtime_operand_element_type(operand) == QoreBufferElementType::Bool;
 }
 
+static bool qore_buffer_runtime_operand_is_string(const qore_buffer_runtime_operand_t& operand) {
+    return qore_buffer_runtime_operand_element_type(operand) == QoreBufferElementType::String;
+}
+
 static int qore_buffer_validate_runtime_operands(const qore_buffer_runtime_operand_t& left,
         const qore_buffer_runtime_operand_t& right, QoreBufferBinaryOperation op, ExceptionSink* xsink) {
     assert(left.buffer || right.buffer);
@@ -480,17 +510,20 @@ static int qore_buffer_validate_runtime_operands(const qore_buffer_runtime_opera
     if (comparison) {
         if (left_null_scalar || right_null_scalar) {
             const qore_buffer_runtime_operand_t& other = left_null_scalar ? right : left;
-            if (qore_buffer_runtime_operand_is_numeric(other) || qore_buffer_runtime_operand_is_bool(other)) {
+            if (qore_buffer_runtime_operand_is_numeric(other) || qore_buffer_runtime_operand_is_bool(other)
+                    || qore_buffer_runtime_operand_is_string(other)) {
                 return 0;
             }
         }
         bool numeric = qore_buffer_runtime_operand_is_numeric(left) && qore_buffer_runtime_operand_is_numeric(right);
         bool boolean = qore_buffer_runtime_operand_is_bool(left) && qore_buffer_runtime_operand_is_bool(right);
-        if (numeric || boolean) {
+        bool string = qore_buffer_runtime_operand_is_string(left) && qore_buffer_runtime_operand_is_string(right);
+        if (numeric || boolean || string) {
             return 0;
         }
         xsink->raiseException("BUFFER-OPERATION-ERROR", "cannot apply '%s' to %s and %s; buffer comparisons "
-            "support numeric buffers with int/float operands or bool buffers with bool operands",
+            "support numeric buffers with int/float operands, bool buffers with bool operands, or string buffers "
+            "with string operands",
             qore_buffer_op_symbol(op), left.buffer ? QoreTypeInfo::getName(left.buffer->getTypeInfo())
                 : left.scalar.getFullTypeName(),
             right.buffer ? QoreTypeInfo::getName(right.buffer->getTypeInfo()) : right.scalar.getFullTypeName());
@@ -615,6 +648,29 @@ static bool qore_buffer_compute_comparison_value(QoreValue left, QoreValue right
         }
     }
 
+    if (left.getType() == NT_STRING && right.getType() == NT_STRING) {
+        QoreStringNodeValueHelper lstr(left);
+        QoreStringNodeValueHelper rstr(right);
+        int cmp = lstr->compare(*rstr);
+        switch (op) {
+            case QoreBufferBinaryOperation::Equal:
+                return cmp == 0;
+            case QoreBufferBinaryOperation::NotEqual:
+                return cmp != 0;
+            case QoreBufferBinaryOperation::LessThan:
+                return cmp < 0;
+            case QoreBufferBinaryOperation::LessThanOrEqual:
+                return cmp <= 0;
+            case QoreBufferBinaryOperation::GreaterThan:
+                return cmp > 0;
+            case QoreBufferBinaryOperation::GreaterThanOrEqual:
+                return cmp >= 0;
+            default:
+                assert(false);
+                return false;
+        }
+    }
+
     int64 l = left.getAsBigInt();
     int64 r = right.getAsBigInt();
     switch (op) {
@@ -703,6 +759,10 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
     if (!list) {
         return;
     }
+    if (element_type == QoreBufferElementType::String) {
+        assignStringList(list, xsink);
+        return;
+    }
 
     ConstListIterator i(list);
     while (i.next()) {
@@ -762,10 +822,36 @@ const uint8_t* QoreBufferNode::validityBytes() const {
     return storageRoot()->validity_buffer.data();
 }
 
+uint64_t* QoreBufferNode::stringOffsets() {
+    assert(element_type == QoreBufferElementType::String);
+    return reinterpret_cast<uint64_t*>(storageRoot()->data_buffer.data());
+}
+
+const uint64_t* QoreBufferNode::stringOffsets() const {
+    assert(element_type == QoreBufferElementType::String);
+    return reinterpret_cast<const uint64_t*>(storageRoot()->data_buffer.data());
+}
+
+char* QoreBufferNode::stringBytes() {
+    assert(element_type == QoreBufferElementType::String);
+    QoreBufferNode* root = storageRoot();
+    return reinterpret_cast<char*>(root->data_buffer.data() + root->dataByteSize(root->length));
+}
+
+const char* QoreBufferNode::stringBytes() const {
+    assert(element_type == QoreBufferElementType::String);
+    const QoreBufferNode* root = storageRoot();
+    return reinterpret_cast<const char*>(root->data_buffer.data() + root->dataByteSize(root->length));
+}
+
 size_t QoreBufferNode::dataByteSize(size_t n_length) const {
-    return element_type == QoreBufferElementType::Bool
-        ? qore_buffer_bitmap_bytes(n_length)
-        : n_length * qore_buffer_element_storage_size(element_type);
+    if (element_type == QoreBufferElementType::Bool) {
+        return qore_buffer_bitmap_bytes(n_length);
+    }
+    if (element_type == QoreBufferElementType::String) {
+        return (n_length + 1) * sizeof(uint64_t);
+    }
+    return n_length * qore_buffer_element_storage_size(element_type);
 }
 
 void QoreBufferNode::resizeStorage(size_t n_length) {
@@ -834,6 +920,224 @@ void QoreBufferNode::setBoolBit(size_t index, bool value) {
 void QoreBufferNode::setNull(size_t index) {
     assert(nullable_elements);
     setValidityBit(index, false);
+}
+
+int QoreBufferNode::assignStringStorage(const std::vector<std::string>& values,
+        const std::vector<uint8_t>& nulls, ExceptionSink* xsink) {
+    assert(!isView());
+    assert(element_type == QoreBufferElementType::String);
+    assert(values.size() == length);
+    assert(nulls.empty() || nulls.size() == length);
+
+    size_t total = 0;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building string buffer offsets")) {
+            return -1;
+        }
+        if (!nulls.empty() && nulls[i]) {
+            continue;
+        }
+        if (values[i].size() > std::numeric_limits<size_t>::max() - total) {
+            xsink->raiseException("BUFFER-RANGE-ERROR", "buffer<string> byte storage size overflow");
+            return -1;
+        }
+        total += values[i].size();
+    }
+
+    size_t offsets_size = dataByteSize(length);
+    if (total > std::numeric_limits<size_t>::max() - offsets_size) {
+        xsink->raiseException("BUFFER-RANGE-ERROR", "buffer<string> storage size overflow");
+        return -1;
+    }
+    data_buffer.resize(offsets_size + total, true);
+
+    uint64_t* offsets = stringOffsets();
+    offsets[0] = 0;
+    size_t pos = 0;
+    char* bytes = stringBytes();
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building string buffer data")) {
+            return -1;
+        }
+        if (nulls.empty() || !nulls[i]) {
+            const std::string& value = values[i];
+            if (!value.empty()) {
+                memcpy(bytes + pos, value.data(), value.size());
+                pos += value.size();
+            }
+        }
+        offsets[i + 1] = static_cast<uint64_t>(pos);
+    }
+
+    if (nullable_elements) {
+        memset(validity_buffer.data(), 0, validity_buffer.size());
+        null_count = static_cast<int64>(length);
+        for (size_t i = 0; i < length; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "building string buffer validity")) {
+                return -1;
+            }
+            if (nulls.empty() || !nulls[i]) {
+                setValidityBit(i, true);
+            }
+        }
+    }
+    return 0;
+}
+
+int QoreBufferNode::assignStringRange(const QoreBufferNode& source, size_t offset, size_t count, bool reverse,
+        ExceptionSink* xsink) {
+    assert(!isView());
+    assert(element_type == QoreBufferElementType::String);
+    assert(source.element_type == QoreBufferElementType::String);
+    assert(count == length);
+    assert(offset < source.length || !count);
+    assert(!count || (reverse ? offset + 1 >= count : count <= source.length - offset));
+
+    std::vector<std::string> values(count);
+    std::vector<uint8_t> nulls(nullable_elements ? count : 0, 0);
+    const uint64_t* offsets = source.stringOffsets();
+    const char* bytes = source.stringBytes();
+    for (size_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "copying string buffer data")) {
+            return -1;
+        }
+        size_t source_index = reverse ? offset - i : offset + i;
+        if (source.isElementNull(source_index)) {
+            if (nullable_elements) {
+                nulls[i] = 1;
+            }
+            continue;
+        }
+        size_t physical = source.physicalIndex(source_index);
+        uint64_t begin = offsets[physical];
+        uint64_t end = offsets[physical + 1];
+        size_t len = static_cast<size_t>(end - begin);
+        if (len) {
+            values[i].assign(bytes + begin, len);
+        }
+    }
+    return assignStringStorage(values, nulls, xsink);
+}
+
+int QoreBufferNode::assignStringList(const QoreListNode* list, ExceptionSink* xsink) {
+    assert(element_type == QoreBufferElementType::String);
+    assert(!isView());
+    assert(list);
+
+    std::vector<std::string> values(length);
+    std::vector<uint8_t> nulls(nullable_elements ? length : 0, 0);
+    ConstListIterator i(list);
+    while (i.next()) {
+        if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink, "buffer<string> construction")) {
+            return -1;
+        }
+
+        QoreValue value = i.getValue();
+        if (value.isNothing() || value.getType() == NT_NULL) {
+            if (!nullable_elements) {
+                xsink->raiseException("BUFFER-TYPE-ERROR",
+                    "cannot assign NOTHING or NULL to non-nullable buffer<string> element %d", (int)i.index());
+                return -1;
+            }
+            nulls[i.index()] = 1;
+            continue;
+        }
+        if (value.getType() != NT_STRING) {
+            xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign type '%s' to buffer<string> element %d; "
+                "expected string", value.getFullTypeName(), (int)i.index());
+            return -1;
+        }
+
+        QoreStringValueHelper str(value, QCS_UTF8, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        values[i.index()].assign(str->c_str(), str->size());
+    }
+    return assignStringStorage(values, nulls, xsink);
+}
+
+int QoreBufferNode::fillString(QoreValue value, ExceptionSink* xsink) {
+    assert(element_type == QoreBufferElementType::String);
+    assert(!isView());
+
+    std::vector<std::string> values(length);
+    std::vector<uint8_t> nulls(nullable_elements ? length : 0, 0);
+    if (value.isNothing() || value.getType() == NT_NULL) {
+        if (!nullable_elements) {
+            xsink->raiseException("BUFFER-TYPE-ERROR",
+                "cannot assign NOTHING or NULL to non-nullable buffer<string> elements");
+            return -1;
+        }
+        for (size_t i = 0; i < length; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "filling nullable string buffer")) {
+                return -1;
+            }
+            nulls[i] = 1;
+        }
+        return assignStringStorage(values, nulls, xsink);
+    }
+    if (value.getType() != NT_STRING) {
+        xsink->raiseException("BUFFER-TYPE-ERROR",
+            "cannot assign type '%s' to buffer<string> elements; expected string", value.getFullTypeName());
+        return -1;
+    }
+
+    QoreStringValueHelper str(value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "filling string buffer")) {
+            return -1;
+        }
+        values[i].assign(str->c_str(), str->size());
+    }
+    return assignStringStorage(values, nulls, xsink);
+}
+
+int QoreBufferNode::setStringValue(size_t index, QoreValue value, ExceptionSink* xsink) {
+    assert(index < length);
+    assert(element_type == QoreBufferElementType::String);
+    if (value.getType() != NT_STRING) {
+        xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign type '%s' to buffer<string> element %d; "
+            "expected string", value.getFullTypeName(), (int)index);
+        return -1;
+    }
+
+    QoreStringValueHelper str(value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    QoreBufferNode* root = storageRoot();
+    std::vector<std::string> values(root->length);
+    std::vector<uint8_t> nulls(root->nullable_elements ? root->length : 0, 0);
+    const uint64_t* offsets = root->stringOffsets();
+    const char* bytes = root->stringBytes();
+    size_t target = physicalIndex(index);
+    for (size_t i = 0; i < root->length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "updating string buffer")) {
+            return -1;
+        }
+        if (i == target) {
+            values[i].assign(str->c_str(), str->size());
+            continue;
+        }
+        if (root->isElementNull(i)) {
+            if (root->nullable_elements) {
+                nulls[i] = 1;
+            }
+            continue;
+        }
+        uint64_t begin = offsets[i];
+        uint64_t end = offsets[i + 1];
+        size_t len = static_cast<size_t>(end - begin);
+        if (len) {
+            values[i].assign(bytes + begin, len);
+        }
+    }
+    return root->assignStringStorage(values, nulls, xsink);
 }
 
 static bool qore_buffer_integer_fits(QoreBufferElementType element_type, int64 value) {
@@ -934,6 +1238,8 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
             setBoolBit(index, value.getAsBool());
             break;
         }
+        case QoreBufferElementType::String:
+            return setStringValue(index, value, xsink);
         default:
             assert(false);
     }
@@ -1005,6 +1311,24 @@ bool QoreBufferNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsi
                         return false;
                     }
                     break;
+                case QoreBufferElementType::String:
+                    {
+                        size_t left_physical = physicalIndex(i);
+                        size_t right_physical = b->physicalIndex(i);
+                        const uint64_t* left_offsets = stringOffsets();
+                        const uint64_t* right_offsets = b->stringOffsets();
+                        uint64_t left_begin = left_offsets[left_physical];
+                        uint64_t left_end = left_offsets[left_physical + 1];
+                        uint64_t right_begin = right_offsets[right_physical];
+                        uint64_t right_end = right_offsets[right_physical + 1];
+                        size_t len = static_cast<size_t>(left_end - left_begin);
+                        if (len != right_end - right_begin
+                                || (len && memcmp(stringBytes() + left_begin, b->stringBytes() + right_begin,
+                                    len))) {
+                            return false;
+                        }
+                    }
+                    break;
                 default:
                     assert(false);
             }
@@ -1031,7 +1355,12 @@ QoreBufferNode* QoreBufferNode::copy(bool n_nullable_elements, ExceptionSink* xs
     assert(n_nullable_elements || !nullable_elements);
 
     QoreBufferNode* rv = new QoreBufferNode(element_type, n_nullable_elements, length);
-    if (element_type == QoreBufferElementType::Bool) {
+    if (element_type == QoreBufferElementType::String) {
+        if (rv->assignStringRange(*this, 0, length, false, xsink)) {
+            rv->deref(nullptr);
+            return nullptr;
+        }
+    } else if (element_type == QoreBufferElementType::Bool) {
         for (size_t i = 0; i < length; ++i) {
             if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer copy")) {
                 rv->deref(nullptr);
@@ -1044,7 +1373,7 @@ QoreBufferNode* QoreBufferNode::copy(bool n_nullable_elements, ExceptionSink* xs
         memcpy(rv->data_buffer.data(), static_cast<const uint8_t*>(getRawData()), length * element_size);
     }
 
-    if (n_nullable_elements) {
+    if (n_nullable_elements && element_type != QoreBufferElementType::String) {
         if (nullable_elements) {
             for (size_t i = 0; i < length; ++i) {
                 if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer copy validity")) {
@@ -1075,6 +1404,9 @@ void* QoreBufferNode::getRawData() {
     if (!length) {
         return nullptr;
     }
+    if (element_type == QoreBufferElementType::String) {
+        return nullptr;
+    }
     size_t physical = physicalIndex(0);
     if (element_type == QoreBufferElementType::Bool) {
         return dataBytes() + (physical / 8);
@@ -1084,6 +1416,9 @@ void* QoreBufferNode::getRawData() {
 
 const void* QoreBufferNode::getRawData() const {
     if (!length) {
+        return nullptr;
+    }
+    if (element_type == QoreBufferElementType::String) {
         return nullptr;
     }
     size_t physical = physicalIndex(0);
@@ -1139,6 +1474,14 @@ QoreValue QoreBufferNode::getReferencedEntry(size_t index) const {
         }
         case QoreBufferElementType::Bool:
             return getBoolBit(index);
+        case QoreBufferElementType::String: {
+            const uint64_t* offsets = stringOffsets();
+            const char* bytes = stringBytes();
+            uint64_t begin = offsets[physical];
+            uint64_t end = offsets[physical + 1];
+            size_t len = static_cast<size_t>(end - begin);
+            return QoreValue::makeStringValue(len ? bytes + begin : "", len, QCS_UTF8);
+        }
         default:
             assert(false);
             return QoreValue();
@@ -1164,6 +1507,24 @@ int QoreBufferNode::setEntry(size_t index, QoreValue value, ExceptionSink* xsink
         return 0;
     }
     return setValue(index, value, xsink);
+}
+
+int QoreBufferNode::fill(QoreValue value, ExceptionSink* xsink) {
+    if (!xsink) {
+        return -1;
+    }
+    if (element_type == QoreBufferElementType::String) {
+        return fillString(value, xsink);
+    }
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "buffer filled construction")) {
+            return -1;
+        }
+        if (setEntry(i, value, xsink)) {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 QoreListNode* QoreBufferNode::toList(ExceptionSink* xsink) const {
@@ -1200,6 +1561,10 @@ size_t QoreBufferNode::countValid(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
+    if (element_type == QoreBufferElementType::String) {
+        xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.sum() is not supported");
+        return QoreValue();
+    }
     if (qore_buffer_element_type_is_float(element_type)) {
         double rv = 0.0;
         for (size_t i = 0; i < length; ++i) {
@@ -1232,6 +1597,10 @@ QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::mean(ExceptionSink* xsink) const {
+    if (element_type == QoreBufferElementType::String) {
+        xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.mean() is not supported");
+        return QoreValue();
+    }
     size_t count = 0;
     double rv = 0.0;
     for (size_t i = 0; i < length; ++i) {
@@ -1252,6 +1621,10 @@ QoreValue QoreBufferNode::mean(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
+    if (element_type == QoreBufferElementType::String) {
+        xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.min() is not supported");
+        return QoreValue();
+    }
     bool found = false;
     int64 int_rv = 0;
     double float_rv = 0.0;
@@ -1308,6 +1681,10 @@ QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
+    if (element_type == QoreBufferElementType::String) {
+        xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.max() is not supported");
+        return QoreValue();
+    }
     bool found = false;
     int64 int_rv = 0;
     double float_rv = 0.0;
@@ -1368,6 +1745,13 @@ QoreBufferNode* QoreBufferNode::slice(size_t offset, size_t count, ExceptionSink
     assert(count <= length - offset);
     ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(element_type, nullable_elements, count), xsink);
 
+    if (element_type == QoreBufferElementType::String) {
+        if (rv->assignStringRange(*this, offset, count, false, xsink)) {
+            return nullptr;
+        }
+        return rv.release();
+    }
+
     if (element_type == QoreBufferElementType::Bool) {
         for (size_t i = 0; i < count; ++i) {
             if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer slice")) {
@@ -1417,6 +1801,13 @@ QoreBufferNode* QoreBufferNode::sliceRange(size_t start, size_t stop, ExceptionS
 
     size_t count = start - stop + 1;
     ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(element_type, nullable_elements, count), xsink);
+    if (element_type == QoreBufferElementType::String) {
+        if (rv->assignStringRange(*this, start, count, true, xsink)) {
+            return nullptr;
+        }
+        return rv.release();
+    }
+
     for (size_t i = 0; i < count; ++i) {
         if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer reverse slice")) {
             return nullptr;

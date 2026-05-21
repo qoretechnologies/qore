@@ -15,6 +15,7 @@ class BufferTest inherits QUnit::Test {
         addTestCase("nullable int buffer", \nullableIntBuffer());
         addTestCase("bool buffer", \boolBuffer());
         addTestCase("float buffer", \floatBuffer());
+        addTestCase("string buffer", \stringBuffer());
         addTestCase("pseudo methods", \pseudoMethods());
         addTestCase("iteration and slicing", \iterationAndSlicing());
         addTestCase("views", \views());
@@ -83,6 +84,60 @@ class BufferTest inherits QUnit::Test {
         assertEq(2.0, f32[1]);
         assertEq(1.25, f64[0]);
         assertEq(2.5, f64[1]);
+    }
+
+    stringBuffer() {
+        buffer<string> b = new buffer<string>(("alpha", "", "z"));
+
+        assertEq("buffer<string>", b.fullType());
+        assertEq(3, elements b);
+        assertEq("alpha", b[0]);
+        assertEq("", b[1]);
+        assertEq("z", b[2]);
+        assertEq(("alpha", "", "z"), b.toList());
+
+        b[1] = "beta";
+        b[0] = "";
+        assertEq(("", "beta", "z"), b.toList());
+
+        buffer<string> view = b.view(start: 0, count: 2);
+        assertEq(("", "beta"), view.toList());
+        view[0] = "aardvark";
+        assertEq(("aardvark", "beta", "z"), b.toList());
+
+        buffer<string> reversed = b[2..0];
+        assertEq(("z", "beta", "aardvark"), reversed.toList());
+
+        buffer<*string> nullable = new buffer<*string>(("x", NOTHING, ""));
+        assertEq("buffer<*string>", nullable.fullType());
+        assertEq(("x", NOTHING, ""), nullable.toList());
+        nullable[1] = "y";
+        nullable[2] = NOTHING;
+        assertEq(("x", "y", NOTHING), nullable.toList());
+
+        buffer<bool> equal = b == "beta";
+        assertEq((False, True, False), equal.toList());
+
+        buffer<bool> less = b < "c";
+        assertEq((True, True, False), less.toList());
+
+        buffer<*bool> nullableEqual = nullable == "x";
+        assertEq((True, False, NOTHING), nullableEqual.toList());
+
+        buffer<string> empty_filled = buffer<string>::filled(2, "");
+        assertEq(("", ""), empty_filled.toList());
+
+        buffer<string> empty_sized = buffer<string>::sized(2);
+        assertEq(("", ""), empty_sized.toList());
+
+        buffer<*string> nullable_filled = buffer<*string>::filled(2, NOTHING);
+        assertEq((NOTHING, NOTHING), nullable_filled.toList());
+        assertEq(0, nullable_filled.count());
+
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.sum(); });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.mean(); });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.min(); });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.max(); });
     }
 
     pseudoMethods() {

@@ -612,6 +612,23 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
             }
             break;
         }
+        case QoreBufferElementType::String: {
+            col->type = ColumnType::STRING;
+            col->str_data.resize(n);
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                    return nullptr;
+                }
+                if (values->isElementNull(i)) {
+                    col->null_mask[i] = 1;
+                } else if (!getDataFrameString(values->getReferencedEntry(i), col->str_data[i])) {
+                    xsink->raiseException("DATAFRAME-ERROR",
+                        "buffer<string> element " QLLD " could not be converted to a DataFrame string", i);
+                    return nullptr;
+                }
+            }
+            break;
+        }
         default:
             xsink->raiseException("DATAFRAME-ERROR",
                 "unsupported buffer element type '%s' for DataFrame column",
@@ -733,11 +750,22 @@ QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) 
         case ColumnType::BOOL:
             element_type = QoreBufferElementType::Bool;
             break;
+        case ColumnType::STRING:
+            element_type = QoreBufferElementType::String;
+            break;
         default:
             xsink->raiseException("DATAFRAME-COLUMN-ERROR",
                 "column type '%s' cannot be represented as a dense buffer",
                 columnTypeName(col.type));
             return nullptr;
+    }
+
+    if (element_type == QoreBufferElementType::String) {
+        ReferenceHolder<QoreListNode> values(columnToQoreList(col, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new QoreBufferNode(element_type, col.countNull() > 0, *values, xsink);
     }
 
     ReferenceHolder<QoreBufferNode> buffer(
@@ -764,6 +792,9 @@ QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) 
                 break;
             case ColumnType::BOOL:
                 value = QoreValue(static_cast<bool>(col.bool_data[i]));
+                break;
+            case ColumnType::STRING:
+                value = QoreValue::makeStringValue(col.str_data[i]);
                 break;
             default:
                 assert(false);

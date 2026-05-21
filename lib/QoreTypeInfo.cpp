@@ -3656,7 +3656,7 @@ static const QoreTypeInfo* qore_resolve_runtime_wildcard_type_arg(const QorePars
 }
 
 static constexpr const char* qore_buffer_supported_element_types =
-    "int8, int16, int32, int64, float32, float64, bool";
+    "int8, int16, int32, int64, float32, float64, bool, string";
 
 static const QoreTypeInfo* qore_resolve_runtime_buffer_type(const QoreParseTypeInfo& pti, bool or_nothing) {
     if (pti.subtypes.size() != 1 || pti.subtypes[0]->hasExplicitSubtypeList()) {

@@ -223,13 +223,8 @@ QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo,
             size), xsink);
         if (initKind == QoreComplexBufferInitKind::Filled) {
             QoreValue fill_value = args_list->retrieveEntry(1);
-            for (size_t i = 0; i < size; ++i) {
-                if (i && !(i % 100) && qore_check_cancel(xsink, "buffer filled construction")) {
-                    return nullptr;
-                }
-                if ((*rv)->setEntry(i, fill_value, xsink)) {
-                    return nullptr;
-                }
+            if ((*rv)->fill(fill_value, xsink)) {
+                return nullptr;
             }
         }
         return rv.release();

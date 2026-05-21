@@ -1307,12 +1307,15 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 return -1;
             }
             if (QoreTypeInfo::getComplexBufferType(receiver_type_info)) {
-                ReferenceHolder<> holder(this, nullptr);
+                AbstractQoreNode* original = val.getInternalNode();
                 QoreParseListNode* factory_args = takeParseArgs();
                 int factory_err = parse_init_complex_buffer_factory(loc, receiver_type_info, scope->getIdentifier(),
                     factory_args, val, parse_context);
                 delete scope;
                 scope = nullptr;
+                if (val.hasNode() && val.getInternalNode() != original) {
+                    deref();
+                }
                 return factory_err;
             }
             const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);

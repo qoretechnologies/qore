@@ -155,12 +155,8 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         return record + {field: replaceStringValue(field_val)};
     }
 
-    #! Applies the configured replacement to one scalar value
-    private auto replaceStringValue(auto field_val) {
-        if (!exists field_val || field_val.typeCode() != NT_STRING) {
-            return field_val;
-        }
-        string val = field_val;
+    #! Applies the configured replacement to one string value
+    private string replaceStringOnlyValue(string val) {
         if (is_regex) {
             val = regex_subst(val, search, replace_str, regex_opts);
         } else {
@@ -177,13 +173,49 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         return val;
     }
 
+    #! Applies the configured replacement to one nullable string value
+    private *string replaceNullableStringValue(*string field_val) {
+        if (!exists field_val) {
+            return NOTHING;
+        }
+        return replaceStringOnlyValue(field_val);
+    }
+
+    #! Applies the configured replacement to one scalar value
+    private auto replaceStringValue(auto field_val) {
+        if (!exists field_val || field_val.typeCode() != NT_STRING) {
+            return field_val;
+        }
+        return replaceStringOnlyValue(field_val);
+    }
+
     #! Applies configured replacement to a top-level column block field
     private hash<auto> replaceColumnBlock(hash<auto> records) {
         hash<auto> result = records + {};
-        if (!records.hasKey(field) || result{field}.typeCode() != NT_LIST) {
+        if (!records.hasKey(field)) {
             return result;
         }
-        result{field} = map replaceStringValue($1), result{field};
+        if (result{field}.typeCode() == NT_LIST) {
+            result{field} = map replaceStringValue($1), result{field};
+            return result;
+        }
+        if (result{field}.typeCode() == NT_BUFFER
+                && (result{field}.fullType() == "buffer<string>"
+                    || result{field}.fullType() == "buffer<*string>")) {
+            if (result{field}.fullType() == "buffer<string>") {
+                list<string> values = ();
+                foreach string value in (result{field}) {
+                    values += replaceStringOnlyValue(value);
+                }
+                result{field} = new buffer<string>(cast<list<string>>(values));
+            } else {
+                list<*string> values = ();
+                foreach *string value in (result{field}) {
+                    values += replaceNullableStringValue(value);
+                }
+                result{field} = new buffer<*string>(cast<list<*string>>(values));
+            }
+        }
         return result;
     }
 

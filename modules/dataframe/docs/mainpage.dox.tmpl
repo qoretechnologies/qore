@@ -28,7 +28,7 @@
     The dataframe, DBI columnar result, dense \c buffer<T>, and DataProvider
     pipeline APIs are designed to handle production ETL and analytics workloads
     without unnecessary row-hash materialization. The fastest paths keep
-    primitive numeric and boolean values in typed columns, use dense boolean
+    primitive numeric, boolean, and string values in typed columns, use dense boolean
     masks for filtering, and let shape-aware DataProvider processors preserve
     \c DataFrameBlock or \c BufferColumns representation until row-oriented
     behavior is required.
@@ -148,12 +148,12 @@ printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
     @section dataframe_dense_columnar Dense Buffers And Columnar Results
 
     DataFrames can be constructed from dense \c buffer<T> values for primitive
-    numeric and boolean columns. Buffer-backed columns keep a reference to the
+    numeric, boolean, and string columns. Buffer-backed columns keep a reference to the
     original dense storage, so \c getColumnBuffer(), \c toColumnarResult(), and
     \c fromColumnarResult() can move primitive columns between DataFrame,
     @ref buffer "buffer<T>", and
     @ref Qore::SQL::ColumnarResult "ColumnarResult" without first boxing every
-    cell into a list. String and date columns currently remain list-backed.
+    cell into a list. Date columns currently remain list-backed.
 
     @code{.py}
 %requires dataframe
@@ -162,15 +162,17 @@ DataFrame::DataFrame scores({
     "id": new buffer<int64>((1001, 1002, 1003, 1004)),
     "score": new buffer<float64>((95.5, 88.0, 92.0, 81.5)),
     "active": new buffer<bool>((True, False, True, True)),
-    "name": ("Alice", "Bob", "Carol", "Dave"),
+    "name": new buffer<*string>(("Alice", "Bob", "Carol", NOTHING)),
 });
 
 buffer<int64> ids = scores.getColumnBuffer("id");
+buffer<*string> names = scores.getColumnBuffer("name");
 ColumnarResult columns = scores.toColumnarResult();
 buffer<float64> dense_scores = columns.getColumn("score");
-list<string> names = columns.getColumn("name");
+buffer<*string> dense_names = columns.getColumn("name");
 
 buffer<bool> high_score = dense_scores >= 90.0;
+buffer<*bool> named = dense_names == "Alice";
 ColumnarResult selected_columns = columns.filter(high_score);
 DataFrame::DataFrame selected = DataFrame::DataFrame::fromColumnarResult(selected_columns);
     @endcode

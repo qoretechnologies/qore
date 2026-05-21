@@ -102,6 +102,8 @@ static QoreBufferElementType bufferTypeFromDataFrameType(ColumnType type) {
             return QoreBufferElementType::Int64;
         case ColumnType::BOOL:
             return QoreBufferElementType::Bool;
+        case ColumnType::STRING:
+            return QoreBufferElementType::String;
         default:
             return QoreBufferElementType::Invalid;
     }

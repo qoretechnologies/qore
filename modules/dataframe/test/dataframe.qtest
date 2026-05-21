@@ -319,34 +319,40 @@ sub invalid_dataframe_api() {
 %endif
         buffer<int64> ids = new buffer<int64>((1001, 1002, 1003));
         buffer<float64> scores = new buffer<float64>((95.5, 88.0, 92.0));
-        DataFrame::DataFrame df({"id": ids, "score": scores, "name": ("Alice", "Bob", "Carol")});
+        buffer<*string> names = new buffer<*string>(("Alice", "Bob", "Carol"));
+        DataFrame::DataFrame df({"id": ids, "score": scores, "name": names});
 
         assertEq((1001, 1002, 1003), df.getColumn("id"), "buffer constructor preserves column values");
         assertEq((1001, 1002, 1003), df.getColumnBuffer("id").toList(),
             "getColumnBuffer returns dense integer values");
         assertEq((95.5, 88.0, 92.0), df.getColumnBuffer("score").toList(),
             "getColumnBuffer returns dense float values");
+        assertEq(("Alice", "Bob", "Carol"), df.getColumnBuffer("name").toList(),
+            "getColumnBuffer returns dense string values");
+        assertEq(("Bob", "Carol"), names.view(start: 1, count: 2).toList(),
+            "buffer<string> views preserve offsets");
+        names[1] = "Bobby";
+        assertEq(("Alice", "Bob", "Carol"), df.getColumnBuffer("name").toList(),
+            "buffer-backed string DataFrame columns follow buffer copy-on-write semantics");
         ids[0] = 9999;
         assertEq((1001, 1002, 1003), df.getColumnBuffer("id").toList(),
             "buffer-backed DataFrame columns follow buffer copy-on-write semantics");
         DataFrame::DataFrame filtered_df = df.filter(df.column("id").compare(">=", 1002));
         assertEq((1002, 1003), filtered_df.getColumnBuffer("id").toList(),
             "filtered buffer-backed DataFrame columns remain dense");
-        assertThrows("DATAFRAME-COLUMN-ERROR", \df.getColumnBuffer(), ("name",),
-            "string columns are not exposed as dense buffers");
 
         auto result = df.toColumnarResult();
         assertEq("ColumnarResult", result.className(), "toColumnarResult returns a ColumnarResult");
         assertEq((1001, 1002, 1003), result.getColumn("id").toList(),
             "ColumnarResult preserves dense integer column");
-        assertEq(("Alice", "Bob", "Carol"), result.getColumn("name"),
-            "ColumnarResult keeps non-dense string column as a list");
+        assertEq(("Alice", "Bob", "Carol"), result.getColumn("name").toList(),
+            "ColumnarResult preserves dense string column");
 
         DataFrame::DataFrame roundtrip = DataFrame::DataFrame::fromColumnarResult(result);
         assertEq((1001, 1002, 1003), roundtrip.getColumnBuffer("id").toList(),
             "fromColumnarResult preserves dense columns");
-        assertEq(("Alice", "Bob", "Carol"), roundtrip.getColumn("name"),
-            "fromColumnarResult preserves list columns");
+        assertEq(("Alice", "Bob", "Carol"), roundtrip.getColumnBuffer("name").toList(),
+            "fromColumnarResult preserves dense string columns");
     }
 
     roundTripTest() {
@@ -611,8 +617,8 @@ sub invalid_dataframe_api() {
         auto filtered = result.filter(result.getColumn("amount") >= 125.0);
         assertEq((2, 3, 4), filtered.getColumn("id").toList(),
             "ColumnarResult::filter accepts dense boolean masks");
-        assertEq(("Bob", "Carol", "Dave"), filtered.getColumn("name"),
-            "ColumnarResult::filter preserves list columns");
+        assertEq(("Bob", "Carol", "Dave"), filtered.getColumn("name").toList(),
+            "ColumnarResult::filter preserves dense string columns");
 
         auto amount_mask = result.getColumn("amount") >= 125.0;
         auto not_carol = result.getColumn("id") != 3;
@@ -1216,8 +1222,8 @@ sub invalid_dataframe_api() {
             "BufferColumns filter preserves BufferColumns shape");
         assertEq((3, 4), filtered.getColumn("id").toList(),
             "BufferColumns vectorized filter keeps matching dense rows");
-        assertEq(("Carol", "Dave"), filtered.getColumn("name"),
-            "BufferColumns vectorized filter preserves list columns");
+        assertEq(("Carol", "Dave"), filtered.getColumn("name").toList(),
+            "BufferColumns vectorized filter preserves dense string columns");
 
         auto raw_filtered = proc.processRecordsShape(raw_buffers, DataProviderShape::BufferColumns);
         assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(raw_filtered),
@@ -1294,7 +1300,7 @@ sub invalid_dataframe_api() {
         auto set_columns = setter.processRecordsShape(columns, DataProviderShape::BufferColumns);
         assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(set_columns),
             "set-fields processor preserves ColumnarResult BufferColumns shape");
-        assertEq(("crm", "crm", "crm", "crm"), set_columns.getColumn("source"),
+        assertEq(("crm", "crm", "crm", "crm"), set_columns.getColumn("source").toList(),
             "set-fields processor adds per-row constant columns without row materialization");
         assertEq((1, 2, 3, 4), set_columns.getColumn("id").toList(),
             "set-fields processor keeps existing dense columns");
@@ -1303,8 +1309,8 @@ sub invalid_dataframe_api() {
         auto replaced_columns = replacer.processRecordsShape(columns, DataProviderShape::BufferColumns);
         assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(replaced_columns),
             "search-replace processor preserves ColumnarResult BufferColumns shape");
-        assertEq(("Alice", "Bob", "CArol", "DAve"), replaced_columns.getColumn("name"),
-            "search-replace processor updates list-backed string columns without row materialization");
+        assertEq(("Alice", "Bob", "CArol", "DAve"), replaced_columns.getColumn("name").toList(),
+            "search-replace processor updates dense string columns without row materialization");
         assertEq((1, 2, 3, 4), replaced_columns.getColumn("id").toList(),
             "search-replace processor keeps existing dense columns");
 
