@@ -42,7 +42,7 @@ hash<auto> result = p.predictMatrix(X_test);
     @endcode
 
 */
-qclass MLPipeline [arg=QoreMLPipeline* pipeline; ns=Qore::ML; flags=final];
+qclass MLPipeline [arg=QoreMLPipeline* pipeline; ns=Qore::ML; vparent=AbstractMLModel];
 
 //! Creates an empty MLPipeline
 /** Create a pipeline and add steps with addStandardScaler(), addMinMaxScaler(),

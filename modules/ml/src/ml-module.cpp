@@ -445,6 +445,10 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreTextFeatures::deserializeState(data, len, xsink);
     });
+    MLSerialization::registerAlgorithm("MLPipeline", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreMLPipeline::deserializeState(data, len, xsink);
+    });
 }
 
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
