@@ -707,6 +707,19 @@ static bool checkRegistrationAndIntrospection() {
         std::cerr << "plugin value bit extraction failed\n";
         return false;
     }
+    TypeProfile plugin_profile;
+    for (int i = 0; i < 64; ++i) {
+        plugin_profile.record(*plugin_value);
+    }
+    QoreIRTypeProfileKey plugin_key = plugin_profile.dominantKey();
+    if (plugin_key.kind != QoreIRTypeProfileKind::PluginType
+            || plugin_key.plugin_module_name != "plugin-smoke"
+            || plugin_key.plugin_local_type_id != 0
+            || plugin_profile.getPluginTypeCount("plugin-smoke", 0) != 64
+            || plugin_profile.dominantType() != NT_ALL) {
+        std::cerr << "plugin value TypeProfile smoke checks failed\n";
+        return false;
+    }
 
     QoreAOTBinaryWriter value_writer;
     uint32_t value_sec = value_writer.beginSection(QoreAOTSectionType::PROGRAM_METADATA);

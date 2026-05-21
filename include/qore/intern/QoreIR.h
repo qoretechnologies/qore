@@ -76,6 +76,10 @@ class NewComplexBufferNode;
 class VarRefNewObjectNode;
 class QoreEnumMember;
 class TypedHashDecl;
+class AbstractQoreNode;
+
+DLLLOCAL bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
+    uint16_t& local_type_id, const QoreTypeInfo*& type_info);
 
 /** IR opcode identifiers.
 
@@ -933,6 +937,8 @@ enum class QoreIRTypeProfileKind : uint8_t {
 struct QoreIRTypeProfileKey {
     QoreIRTypeProfileKind kind = QoreIRTypeProfileKind::None;
     const QoreTypeInfo* type_info = nullptr;
+    std::string plugin_module_name;
+    uint16_t plugin_local_type_id = 0;
 
     bool isValid() const {
         return kind != QoreIRTypeProfileKind::None;
@@ -973,15 +979,37 @@ struct QoreIRTypeProfileKey {
     }
 
     static QoreIRTypeProfileKey builtin(QoreIRTypeProfileKind kind) {
-        return { kind, nullptr };
+        return { kind, nullptr, {}, 0 };
     }
 
     static QoreIRTypeProfileKey qoreClass(const QoreTypeInfo* type_info) {
-        return { QoreIRTypeProfileKind::QoreClass, type_info };
+        return { QoreIRTypeProfileKind::QoreClass, type_info, {}, 0 };
+    }
+
+    static QoreIRTypeProfileKey pluginType(std::string module_name, uint16_t local_type_id,
+            const QoreTypeInfo* type_info) {
+        return { QoreIRTypeProfileKind::PluginType, type_info, std::move(module_name), local_type_id };
     }
 
     static QoreIRTypeProfileKey pluginType(const QoreTypeInfo* type_info) {
-        return { QoreIRTypeProfileKind::PluginType, type_info };
+        return { QoreIRTypeProfileKind::PluginType, type_info, {}, 0 };
+    }
+};
+
+struct QoreIRPluginTypeProfileId {
+    std::string module_name;
+    uint16_t local_type_id = 0;
+    const QoreTypeInfo* type_info = nullptr;
+
+    bool operator==(const QoreIRPluginTypeProfileId& other) const {
+        return local_type_id == other.local_type_id && module_name == other.module_name;
+    }
+};
+
+struct QoreIRPluginTypeProfileIdHash {
+    size_t operator()(const QoreIRPluginTypeProfileId& id) const {
+        return std::hash<std::string>()(id.module_name)
+            ^ (std::hash<uint16_t>()(id.local_type_id) + 0x9e3779b9u);
     }
 };
 
@@ -995,6 +1023,8 @@ struct TypeProfile {
     std::atomic<uint32_t> other_count{0};
     mutable std::mutex extended_mutex;
     std::unique_ptr<std::unordered_map<const QoreTypeInfo*, uint32_t>> extended_type_counts;
+    std::unique_ptr<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
+        QoreIRPluginTypeProfileIdHash>> plugin_type_counts;
 
     uint32_t total() const {
         return int_count.load(std::memory_order_relaxed)
@@ -1028,6 +1058,29 @@ struct TypeProfile {
         }
         auto i = extended_type_counts->find(type_info);
         return i == extended_type_counts->end() ? 0 : i->second;
+    }
+
+    void recordPluginTypeInfo(std::string module_name, uint16_t local_type_id, const QoreTypeInfo* type_info) {
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (!plugin_type_counts) {
+                plugin_type_counts = std::make_unique<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
+                    QoreIRPluginTypeProfileIdHash>>();
+            }
+            QoreIRPluginTypeProfileId key{std::move(module_name), local_type_id, type_info};
+            ++(*plugin_type_counts)[std::move(key)];
+        }
+        other_count.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    uint32_t getPluginTypeCount(const std::string& module_name, uint16_t local_type_id) const {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (!plugin_type_counts) {
+            return 0;
+        }
+        QoreIRPluginTypeProfileId key{module_name, local_type_id, nullptr};
+        auto i = plugin_type_counts->find(key);
+        return i == plugin_type_counts->end() ? 0 : i->second;
     }
 
     QoreIRTypeProfileKey dominantKey(float threshold = 0.95f) const {
@@ -1071,6 +1124,28 @@ struct TypeProfile {
             }
         }
 
+        QoreIRPluginTypeProfileId dominant_plugin;
+        uint32_t dominant_plugin_count = 0;
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (plugin_type_counts) {
+                uint32_t n = 0;
+                for (const auto& i : *plugin_type_counts) {
+                    if (++n % 100 == 0 && qore_check_cancel(nullptr, "plugin TypeProfile dominant-key scan")) {
+                        return {};
+                    }
+                    if (i.second > dominant_plugin_count) {
+                        dominant_plugin = i.first;
+                        dominant_plugin_count = i.second;
+                    }
+                }
+            }
+        }
+        if (dominant_plugin_count && (float)dominant_plugin_count / ft >= threshold) {
+            return QoreIRTypeProfileKey::pluginType(std::move(dominant_plugin.module_name),
+                dominant_plugin.local_type_id, dominant_plugin.type_info);
+        }
+
         if ((float)other_count.load(std::memory_order_relaxed) / ft >= threshold) {
             return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinOther);
         }
@@ -1104,6 +1179,18 @@ struct TypeProfile {
             case NT_NOTHING:
                 nothing_count.fetch_add(1, std::memory_order_relaxed);
                 break;
+            case NT_PLUGIN_VALUE: {
+                std::string module_name;
+                uint16_t local_type_id = 0;
+                const QoreTypeInfo* type_info = nullptr;
+                if (qore_plugin_get_value_profile_info(v.getInternalNode(), module_name, local_type_id,
+                        type_info)) {
+                    recordPluginTypeInfo(std::move(module_name), local_type_id, type_info);
+                } else {
+                    recordTypeInfo(v.getFullTypeInfo());
+                }
+                break;
+            }
             default:
                 recordTypeInfo(v.getFullTypeInfo());
                 break;

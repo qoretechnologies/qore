@@ -258,7 +258,10 @@ based on runtime frequency. The current profile buckets are builtin-only
 (`int`, `float`, `string`, `bool`, `nothing`, `other`), so plugin-type
 specialization needs an extensible profile key, such as an interned
 `QoreTypeInfo*` or stable plugin type id, before it can be used for external
-types.
+types. The implemented profile key keeps the legacy builtin fast path and
+adds explicit `plugin_type` keys carrying `(module_name, local_type_id,
+type_info)` so plugin values whose public `QoreTypeInfo*` is intentionally
+generic, such as `autoTypeInfo`, can still be profiled precisely.
 
 **Opcode metadata registry.** `include/qore/intern/QoreOpcodeRegistry.h`
 defines `struct OpcodeInfo` with fields including `name`, `description`,
@@ -2548,7 +2551,8 @@ calendar time depends on what other branch work is in flight.
   where `kind ∈ {builtin_int, builtin_float,
   builtin_string, builtin_bool, builtin_nothing, builtin_other,
   qore_class, plugin_type}` and `payload` is the interned `QoreTypeInfo*`
-  for the user-class / plugin-type cases. Builtin keys keep the existing
+  for user-class cases and the stable `(module_name, local_type_id,
+  type_info)` tuple for plugin-type cases. Builtin keys keep the existing
   fast-path and atomic-counter layout; plugin-typed observations populate
   a per-guard concurrent hash map (using libqore's existing
   reader/writer-locked hash pattern, not a new TBB-style primitive)

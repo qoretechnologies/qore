@@ -1871,6 +1871,19 @@ const QoreTypeInfo* qore_plugin_get_value_type_info(const AbstractQoreNode* node
     return value->getPluginType().type_info;
 }
 
+bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
+        uint16_t& local_type_id, const QoreTypeInfo*& type_info) {
+    if (!qore_plugin_is_value_node(node)) {
+        return false;
+    }
+    const QorePluginValueNode* value = static_cast<const QorePluginValueNode*>(node);
+    const QorePluginResolvedTypeInfo& type = value->getPluginType();
+    module_name = type.module_name;
+    local_type_id = type.local_type_id;
+    type_info = type.type_info;
+    return true;
+}
+
 int qore_plugin_serialize_value_node(const AbstractQoreNode* node,
         QorePluginSerializedValueInfo& info, ExceptionSink* xsink) {
     info = QorePluginSerializedValueInfo();
