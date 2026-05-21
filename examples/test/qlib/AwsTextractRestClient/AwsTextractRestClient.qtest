@@ -1,0 +1,56 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/AwsTextractRestClient.qm
+
+%exec-class AwsTextractRestClientTest
+
+public class AwsTextractRestClientTest inherits QUnit::Test {
+    constructor() : Test("AwsTextractRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",      \connectionSchemeTest());
+        addTestCase("aws_region builds the Textract URL",
+            \urlConstructionTest());
+        addTestCase("aws_service defaults to textract",  \awsServiceDefaultTest());
+        addTestCase("explicit URL is honoured",          \explicitUrlTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("aws-textract");
+        assertEq("AWS Textract Connection", info.display_name);
+        assertTrue(info.schemes."aws-textract");
+    }
+
+    private urlConstructionTest() {
+        hash<auto> opts = AwsTextractRestClient::applyTextractDefaults({
+            "aws_region": "us-east-1",
+            "aws_keyid":  "AKIA...",
+            "aws_secret": "secret",
+        });
+        assertEq("https://textract.us-east-1.amazonaws.com", opts.url);
+        assertEq("textract", opts.aws_service);
+    }
+
+    private awsServiceDefaultTest() {
+        hash<auto> opts = AwsTextractRestClient::applyTextractDefaults({
+            "aws_region": "eu-west-1",
+            "aws_service": "some-other-service",
+        });
+        # Module hard-codes aws_service to "textract" — overrides caller
+        assertEq("textract", opts.aws_service);
+    }
+
+    private explicitUrlTest() {
+        hash<auto> opts = AwsTextractRestClient::applyTextractDefaults({
+            "url": "https://my-vpc-endpoint.example.com",
+            "aws_region": "us-east-1",
+        });
+        # Explicit URL preserved
+        assertEq("https://my-vpc-endpoint.example.com", opts.url);
+    }
+}

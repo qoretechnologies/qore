@@ -1,0 +1,202 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AwsTextractRestClient.qm Qore user module for calling AWS Textract REST services
+
+/*  AwsTextractRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires(reexport) AwsRestClient
+%requires QoreAsyncJobUtils
+
+module AwsTextractRestClient {
+    version = "1.0";
+    desc = "user module for calling AWS Textract document-AI REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("aws-textract",
+            AwsTextractRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage AwsTextractRestClient Module
+
+    @tableofcontents
+
+    @section awstextractrestclientintro AwsTextractRestClient Introduction
+
+    The %AwsTextractRestClient module provides an API for calling
+    [AWS Textract](https://aws.amazon.com/textract/) document-extraction
+    REST services.
+
+    AWS Textract uses an action-style JSON API: POST with body
+    `{"Document": {...}}` and an `X-Amz-Target` header naming the action
+    (\c Textract.DetectDocumentText, \c Textract.AnalyzeDocument, etc.).
+    SigV4 signing is inherited from
+    @ref awsrestclientintro "AwsRestClient", so the full AWS credential
+    chain (static keys, env, ECS task role, IMDSv2, STS AssumeRole) works
+    transparently.
+
+    The main classes are:
+    - @ref AwsTextractRestClient::AwsTextractRestClient — sync REST client
+    - @ref AwsTextractRestClient::AwsTextractRestClientIo — async REST client
+    - @ref AwsTextractRestClient::AwsTextractRestConnection — connection
+
+    @par Example: detect text in an inline document
+
+    @code{.py}
+%modern
+%requires AwsTextractRestClient
+
+AwsTextractRestClient::AwsTextractRestClient rest({
+    "aws_region": "us-east-1",
+    "aws_access_key_id":     "AKIA...",
+    "aws_secret_access_key": "...",
+});
+binary png = File::readBinaryFile("/tmp/page.png");
+hash<auto> resp = rest.post("/", {"Document": {"Bytes": png}}, NOTHING, {
+    "X-Amz-Target": "Textract.DetectDocumentText",
+});
+foreach hash<auto> block in (resp.body.Blocks) {
+    if (block.BlockType == "LINE") {
+        printf("%s\n", block.Text);
+    }
+}
+    @endcode
+
+    @section AwsTextractRestClientRelnotes Release Notes
+
+    @subsection AwsTextractRestClientv1_0 AwsTextractRestClient v1.0
+    - the initial version of the %AwsTextractRestClient module
+*/
+
+#! contains all public symbols in the AwsTextractRestClient module
+public namespace AwsTextractRestClient {
+#! Default AWS Textract service identifier (used for SigV4 scope)
+public const TextractService = "textract";
+
+#! Default AWS Textract runtime host pattern
+public const TextractHostPattern = "textract.%s.amazonaws.com";
+
+#! Textract REST connection (registered under the \c "aws-textract" scheme)
+public class AwsTextractRestConnection inherits AwsRestClient::AwsRestConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "AWS Textract Connection",
+            "short_desc": "A connection to AWS Textract document-extraction services",
+            "desc": "A connection to [AWS Textract](https://aws.amazon.com/textract/) "
+                "for document text and structure extraction via SigV4-signed REST "
+                "calls.  Inherits all AWS credential modes from "
+                "AwsRestConnection (static keys, env vars, ECS task-role, IMDSv2, "
+                "STS AssumeRole).",
+            "cls": Class::forName("AwsTextractRestConnection"),
+            "schemes": {"aws-textract": True},
+            "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options,
+        };
+    }
+
+    constructor(string name, string description, string url,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : AwsRestClient::AwsRestConnection(name, description,
+                AwsTextractRestClient::ensureTextractUrl(url, options),
+                attributes,
+                AwsTextractRestClient::ensureTextractService(options)) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : AwsRestClient::AwsRestConnection(config, attr) {
+    }
+
+    string getType() {
+        return "aws-textract";
+    }
+
+    bool hasDataProvider() { return True; }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("AwsTextractDataProvider");
+        return create_object("AwsTextractDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! Helper: returns a default Textract URL when none was supplied
+public string sub ensureTextractUrl(string url, *hash<auto> options) {
+    if (url.val()) {
+        return url;
+    }
+    *string region = options.aws_region;
+    if (!region.val()) {
+        throw "AWS-TEXTRACT-CONFIG-ERROR",
+            "AwsTextractRestConnection requires either a url or aws_region";
+    }
+    return "https://" + sprintf(TextractHostPattern, region);
+}
+
+#! Helper: forces \c aws_service to "textract" in the options hash
+public hash<auto> sub ensureTextractService(*hash<auto> options) {
+    return (options ?? {}) + {"aws_service": TextractService};
+}
+
+#! Sync REST client for AWS Textract
+/** Inherits SigV4 signing from @ref AwsRestClient::AwsRestClient.
+*/
+public class AwsTextractRestClient inherits AwsRestClient::AwsRestClient {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : AwsRestClient::AwsRestClient(
+                AwsTextractRestClient::applyTextractDefaults(opts), do_not_connect) {
+    }
+}
+
+#! Async REST client for AWS Textract
+public class AwsTextractRestClientIo inherits AwsRestClient::AwsRestClientIo {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : AwsRestClient::AwsRestClientIo(
+                AwsTextractRestClient::applyTextractDefaults(opts), shared_mgr) {
+    }
+}
+
+#! Helper: applies Textract URL and service defaults to the raw options hash
+public hash<auto> sub applyTextractDefaults(hash<auto> opts) {
+    hash<auto> rv = opts + {"aws_service": TextractService};
+    if (!rv.url.val()) {
+        *string region = rv.aws_region;
+        if (region.val()) {
+            rv.url = "https://" + sprintf(TextractHostPattern, region);
+        }
+    }
+    return rv;
+}
+}

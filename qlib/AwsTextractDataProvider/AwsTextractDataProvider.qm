@@ -1,0 +1,171 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AwsTextractDataProvider module definition
+
+/*  AwsTextractDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) AwsTextractRestClient
+%requires RestClientIo
+
+module AwsTextractDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for AWS Textract document AI";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new AwsTextractDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AwsTextractDataProvider::AppName,
+            "display_name": "AWS Textract",
+            "short_desc": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
+            "desc": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) "
+                "— a managed document-AI service for extracting text, structure, "
+                "and answers from scanned documents and PDFs.\n\n"
+                "**Common use cases**:\n"
+                "- **Invoice and receipt parsing**: extract key/value pairs from "
+                "forms with the `FORMS` feature\n"
+                "- **Table extraction**: structured rows and columns from "
+                "scanned tables with the `TABLES` feature\n"
+                "- **Document Q&A**: ask specific questions of a document with "
+                "the `QUERIES` feature (e.g., \"What is the total?\")\n"
+                "- **Signature detection**: flag handwritten signatures in "
+                "contracts with the `SIGNATURES` feature\n"
+                "- **Layout-preserving OCR**: extract text grouped by paragraphs, "
+                "titles, headers, footers with the `LAYOUT` feature",
+            "scheme": "aws-textract",
+            "logo": AwsTextractLogo,
+            "logo_file_name": "aws-textract-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (
+                DataProvider::AppGroup::AiLlm,
+                DataProvider::AppGroup::Documents,
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsTextractDataProvider::AppName,
+            "path": "/detect-document-text",
+            "action": "detect-document-text",
+            "display_name": "Detect Document Text",
+            "short_desc": "Extract raw text from a document (no structure)",
+            "desc": "Calls Textract's `DetectDocumentText` API to extract the "
+                "text content of a single-page or multi-page document.  Returns "
+                "a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, "
+                "confidence, and bounding-box geometry.\n\n"
+                "Pass the document via one of:\n"
+                "- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n"
+                "- `document_path` — local file path (read and uploaded as bytes)\n"
+                "- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
+            "action_code": DPAT_API,
+            "groups": ("Document Extraction",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsTextractDetectDocumentTextRequestDataType::Fields{
+                    "document_bytes", "document_path", "s3_bucket", "s3_name",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsTextractDetectDocumentTextRequestDataType::Fields{"s3_version",}
+            ),
+            "output_type": AwsTextractDetectDocumentTextDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsTextractDataProvider::AppName,
+            "path": "/analyze-document",
+            "action": "analyze-document",
+            "display_name": "Analyze Document",
+            "short_desc": "Extract text + tables/forms/signatures/queries from a document",
+            "desc": "Calls Textract's `AnalyzeDocument` API to extract text plus "
+                "structural features.  `feature_types` selects which features "
+                "to extract — pass at least one of `TABLES`, `FORMS`, "
+                "`SIGNATURES`, `LAYOUT`, `QUERIES`.\n\n"
+                "When `QUERIES` is included, also pass a `queries` list — each "
+                "query has a `Text` field with the question to ask.",
+            "action_code": DPAT_API,
+            "groups": ("Document Extraction",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsTextractAnalyzeDocumentRequestDataType::Fields{"feature_types",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsTextractAnalyzeDocumentRequestDataType::Fields{
+                    "document_bytes", "document_path", "s3_bucket", "s3_name",
+                    "queries",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsTextractAnalyzeDocumentRequestDataType::Fields{"s3_version",}
+            ),
+            "output_type": AwsTextractAnalyzeDocumentDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage AwsTextractDataProvider Module
+
+    @tableofcontents
+
+    @section awstextractdataproviderintro AwsTextractDataProvider Introduction
+
+    The %AwsTextractDataProvider module provides a data provider API for
+    [AWS Textract](https://aws.amazon.com/textract/).  Two synchronous
+    DPAT_API actions are registered:
+
+    - `detect-document-text` — raw text extraction (`Blocks` with
+      `PAGE`/`LINE`/`WORD` types)
+    - `analyze-document` — text + structural features (`TABLES`, `FORMS`,
+      `SIGNATURES`, `LAYOUT`, `QUERIES`)
+
+    Documents are submitted as inline bytes (up to 10 MB) or via S3
+    reference (no size limit).
+
+    @par Async API
+
+    AWS Textract also offers async APIs (`StartDocumentTextDetection`,
+    `StartDocumentAnalysis`) for very large documents — those are not
+    exposed by this module; use
+    @ref awstextractrestclientintro "AwsTextractRestClient" directly
+    together with @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" if
+    needed.
+
+    @section AwsTextractDataProviderRelnotes Release Notes
+
+    @subsection AwsTextractDataProviderv1_0 AwsTextractDataProvider v1.0
+    - the initial version of the %AwsTextractDataProvider module
+*/
+
+#! contains all public definitions in the AwsTextractDataProvider module
+public namespace AwsTextractDataProvider {
+#! AWS Textract application name
+public const AppName = "AwsTextract";
+}
+
+#! App logo loaded from file
+public const AwsTextractLogo =
+    File::readTextFile(get_script_dir() + "/aws-textract-logo.svg");

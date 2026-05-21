@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/AwsTextractRestClient.qm
+%requires ../../../../qlib/AwsTextractDataProvider
+
+%exec-class AwsTextractDataProviderTest
+
+class FakeAwsTextractClient inherits AwsTextractRestClient::AwsTextractRestClientIo {
+    public {
+        string last_path;
+        *hash<auto> last_body;
+        *hash<auto> last_headers;
+        hash<auto> response;
+    }
+    constructor() : AwsTextractRestClient::AwsTextractRestClientIo(
+            {"aws_region": "us-east-1",
+             "aws_keyid": "AKIA", "aws_secret": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        last_path = path;
+        last_body = body;
+        last_headers = hdr;
+        return cast<hash<RestClient::RestResponseInfo>>(response);
+    }
+    string getSafeUrl() { return "https://textract.us-east-1.amazonaws.com"; }
+}
+
+public class AwsTextractDataProviderTest inherits QUnit::Test {
+    constructor() : Test("AwsTextractDataProvider Test", "1.0") {
+        addTestCase("factory + app + 2 actions registered", \registrationTest());
+        addTestCase("detect-document-text builds Document.Bytes from document_bytes",
+            \detectBytesTest());
+        addTestCase("detect-document-text builds Document.S3Object from s3_bucket + s3_name",
+            \detectS3Test());
+        addTestCase("detect-document-text sets X-Amz-Target header",
+            \detectAmzTargetTest());
+        addTestCase("analyze-document forwards feature_types into FeatureTypes",
+            \analyzeFeatureTypesTest());
+        addTestCase("analyze-document forwards queries when QUERIES requested",
+            \analyzeQueriesTest());
+        addTestCase("buildDocument raises when no source given",
+            \noSourceTest());
+        addTestCase("app declares Documents AppGroup",   \documentsAppGroupTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("aws-textract");
+        assertEq("aws-textract", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("AwsTextract");
+        assertEq("AwsTextract", app.name);
+        assertEq("aws-textract", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("AwsTextract");
+        assertEq(2, actions.size());
+
+        list<string> action_codes = sort(map $1.action, actions);
+        assertEq(("analyze-document", "detect-document-text"), action_codes);
+    }
+
+    private detectBytesTest() {
+        FakeAwsTextractClient fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"DocumentMetadata": {"Pages": 1}, "Blocks": ()},
+        };
+        AwsTextractDataProvider::AwsTextractDetectDocumentTextDataProvider prov(fake);
+        prov.doRequest({"document_bytes": binary("FAKE-PNG")});
+        assertEq("/", fake.last_path);
+        assertEq(binary("FAKE-PNG"), fake.last_body.Document.Bytes);
+        # No S3Object set when bytes were supplied
+        assertEq(NOTHING, fake.last_body.Document.S3Object);
+    }
+
+    private detectS3Test() {
+        FakeAwsTextractClient fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"DocumentMetadata": {"Pages": 1}, "Blocks": ()},
+        };
+        AwsTextractDataProvider::AwsTextractDetectDocumentTextDataProvider prov(fake);
+        prov.doRequest({
+            "s3_bucket":  "my-bucket",
+            "s3_name":    "docs/invoice.pdf",
+            "s3_version": "v42",
+        });
+        assertEq("my-bucket",         fake.last_body.Document.S3Object.Bucket);
+        assertEq("docs/invoice.pdf",  fake.last_body.Document.S3Object.Name);
+        assertEq("v42",               fake.last_body.Document.S3Object.Version);
+        # No Bytes set when S3 was supplied
+        assertEq(NOTHING, fake.last_body.Document.Bytes);
+    }
+
+    private detectAmzTargetTest() {
+        FakeAwsTextractClient fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"DocumentMetadata": {"Pages": 1}, "Blocks": ()},
+        };
+        AwsTextractDataProvider::AwsTextractDetectDocumentTextDataProvider prov(fake);
+        prov.doRequest({"document_bytes": binary("x")});
+        assertEq("Textract.DetectDocumentText", fake.last_headers."X-Amz-Target");
+        assertEq("application/x-amz-json-1.1",  fake.last_headers."Content-Type");
+    }
+
+    private analyzeFeatureTypesTest() {
+        FakeAwsTextractClient fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"DocumentMetadata": {"Pages": 1}, "Blocks": ()},
+        };
+        AwsTextractDataProvider::AwsTextractAnalyzeDocumentDataProvider prov(fake);
+        prov.doRequest({
+            "document_bytes": binary("x"),
+            "feature_types":  ("TABLES", "FORMS"),
+        });
+        assertEq("Textract.AnalyzeDocument", fake.last_headers."X-Amz-Target");
+        assertEq(("TABLES", "FORMS"), fake.last_body.FeatureTypes);
+        # No QueriesConfig when queries weren't supplied
+        assertEq(NOTHING, fake.last_body.QueriesConfig);
+    }
+
+    private analyzeQueriesTest() {
+        FakeAwsTextractClient fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"DocumentMetadata": {"Pages": 1}, "Blocks": ()},
+        };
+        AwsTextractDataProvider::AwsTextractAnalyzeDocumentDataProvider prov(fake);
+        prov.doRequest({
+            "document_bytes": binary("x"),
+            "feature_types":  ("QUERIES",),
+            "queries":        ({"Text": "What is the invoice total?",
+                                "Alias": "total"},),
+        });
+        assertEq(("QUERIES",), fake.last_body.FeatureTypes);
+        assertEq("What is the invoice total?",
+            fake.last_body.QueriesConfig.Queries[0].Text);
+        assertEq("total", fake.last_body.QueriesConfig.Queries[0].Alias);
+    }
+
+    private noSourceTest() {
+        FakeAwsTextractClient fake();
+        AwsTextractDataProvider::AwsTextractDetectDocumentTextDataProvider prov(fake);
+        assertThrows("AWS-TEXTRACT-CONFIG-ERROR", sub () {
+            prov.doRequest({});
+        });
+    }
+
+    private documentsAppGroupTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("AwsTextract");
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm,     app.groups));
+        assertTrue(inlist(DataProvider::AppGroup::Documents, app.groups));
+    }
+}

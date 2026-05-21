@@ -1524,6 +1524,18 @@ cargo install tree-sitter-cli@0.26.5
       - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
       - full prelude + headers + payload + CRC32 validation; ten header value-type tags decoded (bool, int8/16/32/64, byte-array, UTF-8 string, timestamp, UUID)
 
+    - @ref awstextractdataproviderintro "AwsTextractDataProvider" module
+      - new module providing a data provider API for <a href="https://aws.amazon.com/textract/">AWS Textract</a> document AI
+      - exposes two sync actions: `detect-document-text` (raw text extraction) and `analyze-document` (text + structural features: `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`)
+      - documents are submitted as inline bytes (up to 10 MB) or via S3 reference (no size limit)
+      - action catalog integration with 2 actions under the \c aws-textract scheme; registered with the `Documents` AppGroup
+
+    - @ref awstextractrestclientintro "AwsTextractRestClient" module
+      - new module providing a SigV4-signed REST client for <a href="https://aws.amazon.com/textract/">AWS Textract</a>
+      - subclasses @ref awsrestclientintro "AwsRestClient" — inherits the full AWS credential chain (static keys, env, ECS task role, IMDSv2, STS AssumeRole)
+      - uses Textract's `X-Amz-Target` action-style routing for sync calls; async actions (`StartDocumentTextDetection` / `StartDocumentAnalysis`) can be driven via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+      - provides AwsTextractRestConnection for connection management with \c aws-textract:// URL scheme
+
     - @ref azureauthintro "AzureAuth" module
       - new module exchanging Microsoft Entra (Azure AD) credentials for bearer access tokens
       - supports \c client_credentials and managed-identity (IMDS-for-Azure) flows with thread-safe token caching and 5-minute safety-window refresh

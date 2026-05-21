@@ -2544,6 +2544,8 @@ qore_user_module("qlib/DeepgramRestClient.qm" "ConnectionProvider;Mime;RestClien
 qore_user_module("qlib/DeepgramDataProvider" "DeepgramRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "deepgram-logo.svg")
 qore_user_module("qlib/AssemblyAiRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreAsyncJobUtils;QoreSpeechUtils")
 qore_user_module("qlib/AssemblyAiDataProvider" "AssemblyAiRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "assemblyai-logo.svg")
+qore_user_module("qlib/AwsTextractRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;AwsRestClient;QoreAsyncJobUtils")
+qore_user_module("qlib/AwsTextractDataProvider" "AwsTextractRestClient;AwsRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "aws-textract-logo.svg")
 qore_user_module("qlib/GroqRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
 qore_user_module("qlib/GroqDataProvider" "GroqRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "groq-logo.svg")
 qore_user_module("qlib/TogetherRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes;QoreRagTypes")

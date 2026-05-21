@@ -82,6 +82,8 @@ public class ConnectionSchemeCache {
 
             "awsrests": "AwsRestClient",
 
+            "aws-textract": "AwsTextractRestClient",
+
             "baselinkerrest": "BaseLinkerRestClient",
 
             "bge-m3": "BgeM3RestClient",
