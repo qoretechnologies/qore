@@ -934,8 +934,9 @@ nothing DataFrame::writeCSV(string path, *hash<CsvOptions> options) [dom=FILESYS
     @param sql the SQL SELECT query to execute
     @param bind_args optional bind arguments for the query
 
-    Calls the datasource's \c select() method. Both column-oriented hashes and
-    row-oriented lists are accepted.
+    Calls the datasource's \c selectColumnar() method when available, otherwise
+    falls back to \c select(). ColumnarResult objects, column-oriented hashes,
+    and row-oriented lists are accepted.
 
     @return new DataFrame object with query results
 
@@ -957,20 +958,48 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
 
     ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
     call_args->push(sql->refSelf(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     if (bind_args) {
         // Flatten bind args into the call
         for (size_t i = 0; i < bind_args->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "preparing DataFrame query arguments")) {
+                return QoreValue();
+            }
             call_args->push(bind_args->retrieveEntry(i).refSelf(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
         }
     }
 
-    QoreValue result = ds->evalMethod("select", *call_args, xsink);
+    QoreValue result = ds->evalMethod(qdfHasMethod(ds, "selectColumnar") ? "selectColumnar" : "select",
+        *call_args, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
     QoreDataFrame* df_result = nullptr;
-    if (result.getType() == NT_HASH) {
+    if (result.getType() == NT_OBJECT) {
+        QoreObject* result_obj = result.get<QoreObject>();
+        if (!qdfHasMethod(result_obj, "toColumnHash")) {
+            xsink->raiseException("DATAFRAME-DB-ERROR",
+                "unexpected query result object class '%s'; expected a ColumnarResult object with toColumnHash()",
+                result_obj->getClassName());
+        } else {
+            ValueHolder columns(result_obj->evalMethod("toColumnHash", nullptr, xsink), xsink);
+            if (!*xsink) {
+                if (columns->getType() != NT_HASH) {
+                    xsink->raiseException("DATAFRAME-DB-ERROR",
+                        "ColumnarResult::toColumnHash() returned type '%s'; expected 'hash'",
+                        columns->getTypeName());
+                } else {
+                    df_result = QoreDataFrame::fromColumns(columns->get<const QoreHashNode>(), xsink);
+                }
+            }
+        }
+    } else if (result.getType() == NT_HASH) {
         // Column-oriented: {"col1": (v1, v2, ...), ...}
         df_result = QoreDataFrame::fromColumns(result.get<const QoreHashNode>(), xsink);
     } else if (result.getType() == NT_LIST) {

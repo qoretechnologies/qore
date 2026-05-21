@@ -496,6 +496,15 @@ QoreValue DatasourcePool::selectTyped(const QoreString* sql, const QoreListNode*
     return dpah->selectTyped(sql, args, xsink);
 }
 
+QoreColumnarResult* DatasourcePool::selectColumnar(const QoreString* sql, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink);
+    if (!dpah)
+        return nullptr;
+
+    return dpah->selectColumnar(sql, args, xsink);
+}
+
 QoreHashNode* DatasourcePool::selectRow(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {
    DatasourcePoolActionHelper dpah(*this, xsink);
    if (!dpah)

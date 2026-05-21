@@ -98,6 +98,8 @@ public:
     DLLLOCAL QoreHashNode* selectRow(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue selectRows(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue selectTyped(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
+    DLLLOCAL QoreColumnarResult* selectColumnar(const QoreString *query_str, const QoreListNode* args,
+        ExceptionSink* xsink);
     DLLLOCAL QoreValue selectRowsTyped(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue exec(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue execRaw(const QoreString *query_str, ExceptionSink* xsink);

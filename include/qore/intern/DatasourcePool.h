@@ -191,6 +191,7 @@ public:
     DLLLOCAL QoreHashNode* selectRow(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue selectRows(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue selectTyped(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink);
+    DLLLOCAL QoreColumnarResult* selectColumnar(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue selectRowsTyped(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL int beginTransaction(ExceptionSink* xsink);
     DLLLOCAL QoreValue exec(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink);

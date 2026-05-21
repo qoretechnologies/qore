@@ -31,7 +31,9 @@
 
 #include <qore/Qore.h>
 #include <qore/DBI.h>
+#include <qore/QoreColumnarResult.h>
 
+#include "qore/intern/QC_ColumnarResult.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Serializable.h"
 
@@ -530,6 +532,39 @@ auto DatasourcePool::selectTyped(string sql, ...) {
    return ds->selectTyped(sql, *vargs, xsink);
 }
 
+//! Executes an %SQL select statement on the server and returns a columnar result
+/** This method has the same execution semantics as DatasourcePool::select(), but returns a
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" object optimized for column-oriented consumers such as
+    DataFrame. Drivers with @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT can fill the columnar result directly.
+    Other drivers use libqore's compatibility fallback, which translates the existing column hash returned by
+    DatasourcePool::select() into the same columnar structure.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @par Example:
+    @code{.py}
+ColumnarResult result = db.selectColumnar("select id, name from customer where status = %v", "active");
+buffer<int64> ids = result.getColumn("id");
+    @endcode
+
+    @see
+    - DatasourcePool::vselectColumnar()
+    - Datasource::selectColumnar()
+
+    @since %Qore 2.3
+ */
+ColumnarResult DatasourcePool::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY] {
+   ReferenceHolder<QoreListNode> vargs(args->size() > 1 ? args->copyListFrom(1) : 0, xsink);
+   if (*xsink) {
+      return QoreValue();
+   }
+   return qore_columnar_result_to_object(ds->selectColumnar(sql, *vargs, xsink), xsink);
+}
+
 //! Executes an %SQL select statement on the server and returns the first row as a hash (the column values)
 /** If more than one row is returned, then it is treated as an error and a \c DBI-SELECT-ROW-ERROR is returned (however the DBI driver should raise its own exception here to avoid retrieving more than one row from the server). For a similar method taking a list for all bind arguments, see DatasourcePool::vselectRow().
 
@@ -668,6 +703,25 @@ buffer<int64> ids = result.id;
  */
 auto DatasourcePool::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
    return ds->selectTyped(sql, arguments, xsink);
+}
+
+//! Executes a select statement on the server and returns a columnar result, taking a list for all bind arguments
+/** This method is the same as DatasourcePool::selectColumnar(), except this method takes a single list argument after
+    the %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @see DatasourcePool::selectColumnar()
+
+    @since %Qore 2.3
+ */
+ColumnarResult DatasourcePool::vselectColumnar(string sql, *softlist<auto> arguments)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return qore_columnar_result_to_object(ds->selectColumnar(sql, arguments, xsink), xsink);
 }
 
 //! Executes a select statement on the server and returns the first row as a hash (column names and values), taking a list for all bind arguments

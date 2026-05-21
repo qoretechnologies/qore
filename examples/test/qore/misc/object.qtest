@@ -137,11 +137,15 @@ class NullDatasource inherits AbstractDatasource {
     auto vexec(string sql, *softlist<auto> vargs) {}
     auto execRaw(string sql) {}
     auto select(string sql, ...) {}
+    auto selectTyped(string sql, ...) {}
     auto selectRow(string sql, ...) {}
     auto selectRows(string sql, ...) {}
+    auto selectRowsTyped(string sql, ...) {}
     auto vselect(string sql, *softlist<auto> vargs) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
     auto vselectRow(string sql, *softlist<auto> vargs) {}
     auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
     nothing beginTransaction() {}
     *string getUserName() {}
     *string getPassword() {}

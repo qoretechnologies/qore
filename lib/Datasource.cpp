@@ -980,6 +980,20 @@ QoreValue Datasource::selectTyped(const QoreString* query_str, const QoreListNod
     return rv;
 }
 
+QoreColumnarResult* Datasource::selectColumnar(const QoreString* query_str, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    QoreColumnarResult* rv = qore_dbi_private::get(*priv->dsl)->selectColumnar(this, query_str, args, xsink);
+    autoCommit(xsink);
+
+    // set active_transaction flag if in a transaction and the active_transaction flag
+    // has not yet been set and no exception was raised
+    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+        priv->active_transaction = true;
+
+    return rv;
+}
+
 QoreValue Datasource::selectRows(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
     QoreValue rv = qore_dbi_private::get(*priv->dsl)->selectRows(this, query_str, args, xsink);

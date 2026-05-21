@@ -41,6 +41,7 @@
 #include <string>
 
 class DBIDriver;
+class QoreColumnarResult;
 class DatasourceStatementHelper;
 
 //! the base class for accessing databases in Qore through a Qore DBI driver
@@ -298,6 +299,18 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT QoreValue selectTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
+
+    //! executes SQL through the columnar select function and returns a columnar result
+    /** this function is not "const" to allow for implicit connections (and reconnections)
+        @param query_str the query to execute
+        @param args query arguments for placeholders or DBI formatting codes
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return a columnar result; caller owns the reference
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreColumnarResult* selectColumnar(const QoreString* query_str, const QoreListNode* args,
+        ExceptionSink* xsink);
 
     //! executes SQL throught the "selectRows" function of the DBI driver and returns the result, makes an implicit connection if necessary
     /** this function is not "const" to allow for implicit connections (and reconnections)

@@ -29,6 +29,8 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreColumnarResult.h>
+#include "qore/intern/QC_ColumnarResult.h"
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_Serializable.h"
@@ -278,6 +280,14 @@ const DBI_CAP_HAS_RESULTSET_OUTPUT = DBI_CAP_HAS_RESULTSET_OUTPUT;
     @since %Qore 2.3
  */
 const DBI_CAP_HAS_TYPED_SELECT = DBI_CAP_HAS_TYPED_SELECT;
+
+//! Indicates that the DBI driver provides native columnar select/fetch APIs
+/** Drivers without this capability still support Datasource::selectColumnar(), DatasourcePool::selectColumnar(), and
+    SQLStatement::fetchColumnar() through libqore's compatibility fallback.
+
+    @since %Qore 2.3
+ */
+const DBI_CAP_HAS_COLUMNAR_SELECT = DBI_CAP_HAS_COLUMNAR_SELECT;
 ///@}
 
 //! This class provides the %Qore interface to databases
@@ -807,6 +817,41 @@ auto Datasource::selectTyped(string sql, ...) {
     return ds->selectTyped(sql, *argl, xsink);
 }
 
+//! Executes an %SQL select statement on the server and returns a columnar result
+/** This method has the same execution semantics as Datasource::select(), but returns a
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" object optimized for column-oriented consumers such as
+    DataFrame. Drivers with @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT can fill the columnar result directly.
+    Other drivers use libqore's compatibility fallback, which translates the existing column hash returned by
+    Datasource::select() into the same columnar structure.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @par Example:
+    @code{.py}
+ColumnarResult result = db.selectColumnar("select id, name from customer where status = %v", "active");
+buffer<int64> ids = result.getColumn("id");
+list<*string> names = result.getColumn("name");
+    @endcode
+
+    @see
+    - Datasource::vselectColumnar()
+    - Datasource::select()
+    - Datasource::selectTyped()
+
+    @since %Qore 2.3
+ */
+ColumnarResult Datasource::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_columnar_result_to_object(ds->selectColumnar(sql, *argl, xsink), xsink);
+}
+
 //! Executes an %SQL select statement on the server and returns the first row as a hash (the column values)
 /** If more than one row is returned, then it is treated as an error and a \c DBI-SELECT-ROW-ERROR is returned (however the DBI driver should raise its own exception here to avoid retrieving more than one row from the server). For a similar method taking a list for all bind arguments, see Datasource::vselectRow().
 
@@ -961,6 +1006,24 @@ buffer<int64> ids = result.id;
  */
 auto Datasource::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     return ds->selectTyped(sql, arguments, xsink);
+}
+
+//! Executes a select statement on the server and returns a columnar result, taking a list for all bind arguments
+/** This method is the same as Datasource::selectColumnar(), except this method takes a single list argument after the
+    %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @see Datasource::selectColumnar()
+
+    @since %Qore 2.3
+ */
+ColumnarResult Datasource::vselectColumnar(string sql, *softlist<auto> arguments) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_columnar_result_to_object(ds->selectColumnar(sql, arguments, xsink), xsink);
 }
 
 //! Executes a select statement on the server and returns the first row as a hash (column names and values), taking a list for all bind arguments

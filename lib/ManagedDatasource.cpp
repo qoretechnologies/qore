@@ -297,6 +297,15 @@ QoreValue ManagedDatasource::selectTyped(const QoreString* query_str, const Qore
     return Datasource::selectTyped(query_str, args, xsink);
 }
 
+QoreColumnarResult* ManagedDatasource::selectColumnar(const QoreString* query_str, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    DatasourceActionHelper dbah(*this, xsink);
+    if (!dbah)
+        return nullptr;
+
+    return Datasource::selectColumnar(query_str, args, xsink);
+}
+
 QoreHashNode* ManagedDatasource::selectRow(const QoreString *sql, const QoreListNode *args, ExceptionSink *xsink) {
     DatasourceActionHelper dbah(*this, xsink);
     if (!dbah)

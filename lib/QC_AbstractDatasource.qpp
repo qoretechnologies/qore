@@ -29,10 +29,34 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreColumnarResult.h>
+
+#include "qore/intern/QC_ColumnarResult.h"
 
 class AbstractDatasource {};
 
 DLLLOCAL extern QoreClass* QC_ABSTRACTSQLSTATEMENT;
+
+static QoreObject* qore_abstract_datasource_vselect_columnar(QoreObject* self, const QoreString* sql,
+        const QoreListNode* arguments, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+    call_args->push(new QoreStringNode(*sql), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    call_args->push(arguments ? arguments->listRefSelf() : QoreValue(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder result(self->evalMethod("vselect", *call_args, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    return qore_columnar_result_to_object(
+        qore_columnar_result_from_value(*result, nullptr, "AbstractDatasource::vselect()", xsink), xsink);
+}
 
 //! This class defines an abstract interface for database access, inherited by both the Datasource and DatasourcePool classes
 /**
@@ -148,6 +172,33 @@ buffer<int64> ids = result.id;
  */
 abstract auto AbstractDatasource::selectTyped(string sql, ...);
 
+//! Executes an %SQL select statement and returns a columnar result
+/** Implementations can return a @ref Qore::SQL::ColumnarResult "ColumnarResult" optimized for column-oriented
+    consumers such as DataFrame. The base implementation keeps existing AbstractDatasource subclasses source-compatible
+    by calling AbstractDatasource::vselect() and converting a column hash or row list result.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @par Example:
+    @code{.py}
+ColumnarResult result = db.selectColumnar("select id, name from customer where status = %v", "active");
+buffer<int64> ids = result.getColumn("id");
+    @endcode
+
+    @since %Qore 2.3
+ */
+ColumnarResult AbstractDatasource::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> arguments((args->size() > 1 ? args->copyListFrom(1) : nullptr), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_abstract_datasource_vselect_columnar(self, sql, *arguments, xsink);
+}
+
 //! Executes an %SQL select statement on the server and returns the first row as a hash (the column values)
 /** If more than one row is returned, then it is treated as an error and a \c DBI-SELECT-ROW-ERROR is returned (however the DBI driver should raise its own exception here to avoid retrieving more than one row from the server). For a similar method taking a list for all bind arguments, see AbstractDatasource::vselectRow().
 
@@ -257,6 +308,25 @@ abstract auto AbstractDatasource::vselect(string sql, *softlist<auto> arguments)
     @since %Qore 2.3
  */
 abstract auto AbstractDatasource::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS];
+
+//! Executes a select statement and returns a columnar result, taking a list for all bind arguments
+/** This method is the same as AbstractDatasource::selectColumnar(), except this method takes a single argument after
+    the %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @see AbstractDatasource::selectColumnar()
+
+    @since %Qore 2.3
+ */
+ColumnarResult AbstractDatasource::vselectColumnar(string sql, *softlist<auto> arguments)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_abstract_datasource_vselect_columnar(self, sql, arguments, xsink);
+}
 
 //! Executes a select statement on the server and returns the first row as a hash (column names and values), taking a list for all bind arguments
 /** This method is the same as the AbstractDatasource::selectRow() method, except this method takes a single argument after the %SQL command giving the list of bind value parameters

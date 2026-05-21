@@ -25,6 +25,7 @@ public class DatasourceTest inherits QUnit::Test {
         addTestCase("oracle test", \oracleTest());
         addTestCase("serialization test", \serializationTest());
         addTestCase("typed select test", \typedSelectTest());
+        addTestCase("columnar select test", \columnarSelectTest());
 
         set_return_value(main());
     }
@@ -139,6 +140,42 @@ public class DatasourceTest inherits QUnit::Test {
         assertEq("alice", rows[0].name);
         assertEq(2, rows[1].id);
         assertNothing(rows[1].name);
+    }
+
+    columnarSelectTest() {
+        Datasource ds = getAnyDatasource();
+        string sql = getTypedSelectSql(ds.getDriverName());
+
+        ColumnarResult result = ds.selectColumnar(sql);
+        assertEq(2, result.numRows());
+        assertEq(2, result.numCols());
+
+        auto id_col = result.getColumn("id");
+        list<auto> ids = id_col.type() == Type::List ? id_col : id_col.toList();
+        assertEq((1, 2), ids);
+        assertEq(("alice", NOTHING), result.getColumn("name"));
+
+        hash<auto> columns = result.toColumnHash();
+        assertEq(True, exists columns.id);
+        assertEq(True, exists columns.name);
+
+        list<hash<auto>> rows = result.toRows();
+        assertEq(2, elements rows);
+        assertEq(1, rows[0].id);
+        assertEq("alice", rows[0].name);
+        assertEq(2, rows[1].id);
+        assertNothing(rows[1].name);
+
+        SQLStatement stmt(ds);
+        stmt.prepare(sql);
+        stmt.exec();
+
+        ColumnarResult fetched = stmt.fetchColumnar(rows: -1);
+        auto fetched_id_col = fetched.getColumn("id");
+        list<auto> fetched_ids = fetched_id_col.type() == Type::List ? fetched_id_col : fetched_id_col.toList();
+        assertEq((1, 2), fetched_ids);
+        assertEq(("alice", NOTHING), fetched.getColumn("name"));
+        stmt.commit();
     }
 
     string getTypedSelectSql(string driver) {

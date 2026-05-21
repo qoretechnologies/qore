@@ -119,6 +119,13 @@
       @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" and the
       corresponding @ref Qore::SQL::DatasourcePool "DatasourcePool" methods expose typed DBI
       result values with runtime hashdecls and dense buffers where possible
+    - new @ref Qore::SQL::ColumnarResult "ColumnarResult" SQL result container and
+      @ref Qore::SQL::Datasource::selectColumnar() "Datasource::selectColumnar()" /
+      @ref Qore::SQL::DatasourcePool::selectColumnar() "DatasourcePool::selectColumnar()" /
+      @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" APIs expose
+      query results as ordered typed columns for DataFrame and analytics workloads; drivers without
+      native support use a libqore compatibility fallback, and DataFrame::fromQuery() uses the
+      columnar API automatically when available
     - new experimental @ref plugin_types "plugin-type" registration ABI
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper

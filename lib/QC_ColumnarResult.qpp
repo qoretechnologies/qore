@@ -1,0 +1,149 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_ColumnarResult.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+*/
+
+#include <qore/QoreColumnarResult.h>
+
+//! Dense column-oriented SQL result set
+/** Represents a SQL result set as ordered typed columns. Primitive numeric and
+    boolean columns can use dense \c buffer<T> storage; other columns use typed
+    lists or generic lists as needed.
+
+    Columnar results are normally returned by Datasource::selectColumnar(),
+    DatasourcePool::selectColumnar(), and SQLStatement::fetchColumnar().
+
+    @par Example: loading a query result by column
+    @code{.py}
+Datasource ds("pgsql:user/pass@orders%dbhost");
+ColumnarResult result = ds.selectColumnar(
+    "select order_id, customer_name, total from orders where status = %v order by order_id",
+    "open");
+
+buffer<int64> order_ids = result.getColumn("order_id");
+list<*string> customers = result.getColumn("customer_name");
+list<*number> totals = result.getColumn("total");
+
+printf("loaded %d rows from %d columns\n", result.numRows(), result.numCols());
+    @endcode
+
+    @par Example: fetching a prepared statement in blocks
+    @code{.py}
+SQLStatement stmt(ds);
+stmt.prepare("select order_id, total from orders where created >= %v");
+stmt.exec(2026-01-01);
+
+while (True) {
+    ColumnarResult block = stmt.fetchColumnar(rows: 10000);
+    if (!block.numRows()) {
+        break;
+    }
+    buffer<int64> order_ids = block.getColumn("order_id");
+    list<*number> totals = block.getColumn("total");
+    processOrderTotals(order_ids, totals);
+}
+    @endcode
+
+    @par Example: building a DataFrame
+    @code{.py}
+DataFrame::DataFrame df = DataFrame::DataFrame::fromQuery(ds,
+    "select order_id, customer_name, total from orders where status = %v",
+    ("open",));
+    @endcode
+
+    DataFrame::fromQuery() uses Datasource::selectColumnar() when available. DBI drivers that do not yet provide a
+    native columnar implementation still work through libqore's compatibility fallback, which converts the existing
+    column-hash result to a ColumnarResult.
+
+    @since %Qore 2.3
+*/
+qclass ColumnarResult [arg=QoreColumnarResult* result; ns=Qore::SQL; flags=final];
+
+//! ColumnarResult objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+ColumnarResult::copy() {
+    xsink->raiseException("COPY-ERROR", "ColumnarResult objects cannot be copied");
+}
+
+//! Returns the number of rows in the result
+/** @return row count
+*/
+int ColumnarResult::numRows() [flags=CONSTANT] {
+    return result->numRows();
+}
+
+//! Returns the number of columns in the result
+/** @return column count
+*/
+int ColumnarResult::numCols() [flags=CONSTANT] {
+    return result->numColumns();
+}
+
+//! Returns the column names in result order
+/** @return ordered list of column names
+*/
+list<string> ColumnarResult::columnNames() [flags=RET_VALUE_ONLY] {
+    return result->getColumnNames(xsink);
+}
+
+//! Returns result schema metadata in result order
+/** Each schema hash contains:
+    - \c name: column name
+    - \c type: columnar storage type name
+    - \c nullable: True if the column can contain null values
+    - \c buffer_type: dense buffer element type, when dense buffer storage is used
+    - \c native_type: database-native type name, when available
+
+    @return ordered list of schema hashes
+
+    @par Example:
+    @code{.py}
+foreach hash<auto> column in (result.schema()) {
+    printf("%s: %s%s\n", column.name, column.type, column.nullable ? " nullable" : "");
+}
+    @endcode
+*/
+list<hash<auto>> ColumnarResult::schema() [flags=RET_VALUE_ONLY] {
+    return result->getSchema(xsink);
+}
+
+//! Returns a column container by name
+/** Primitive columns may be returned as \c buffer<T> values. Other columns are
+    returned as lists.
+
+    @param name column name
+    @return referenced column container
+
+    @throw COLUMNAR-RESULT-ERROR if the column does not exist
+*/
+auto ColumnarResult::getColumn(string name) [flags=RET_VALUE_ONLY] {
+    return result->getColumnValue(name->c_str(), xsink);
+}
+
+//! Returns a hash of column containers
+/** @return hash keyed by column name
+
+    @par Example:
+    @code{.py}
+hash<auto> columns = result.toColumnHash();
+buffer<int64> ids = columns.id;
+    @endcode
+*/
+hash<auto> ColumnarResult::toColumnHash() [flags=RET_VALUE_ONLY] {
+    return result->toColumnHash(xsink);
+}
+
+//! Materializes the result as a list of row hashes
+/** This conversion boxes values per cell and is intended for compatibility
+    paths, diagnostics, and APIs that require row-oriented data.
+
+    @return list of row hashes
+*/
+list<hash<auto>> ColumnarResult::toRows() [flags=RET_VALUE_ONLY] {
+    return result->toRows(xsink);
+}
