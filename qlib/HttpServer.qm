@@ -1280,7 +1280,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         } else {
             family = AF_INET;
         }
-        udp_sock.bindINET(bind_addr, bind_port, True, family, SOCK_DGRAM);
+        # SO_REUSEADDR must be False for UDP/QUIC: on Linux it lets IPv6 [::] and
+        # IPv4 0.0.0.0 silently share a UDP port, after which the kernel delivers
+        # IPv4 datagrams only to the IPv4 socket — the H3 listener bound on [::]
+        # would then never receive any traffic from IPv4 clients.  With reuseaddr
+        # disabled the bind fails on conflict and the random-port retry path in
+        # addINETListenersInternResolved() picks a fresh port that actually works.
+        udp_sock.bindINET(bind_addr, bind_port, False, family, SOCK_DGRAM);
 
         # Get the actual port that was bound
         hash<auto> sock_info = udp_sock.getSocketInfo(False);
