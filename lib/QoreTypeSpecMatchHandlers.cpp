@@ -249,12 +249,28 @@ static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTy
 }
 
 // Handler for QTS_COMPLEXBUFFER: dense buffer storage type match
+static qore_type_result_e match_complex_buffer_type(const QoreTypeInfo* target_ti, const QoreTypeInfo* source_ti,
+        bool& may_need_filter) {
+    const QoreComplexBufferTypeInfo* target = QoreTypeInfo::getComplexBufferType(target_ti);
+    const QoreComplexBufferTypeInfo* source = QoreTypeInfo::getComplexBufferType(source_ti);
+    if (!target || !source || target->getBufferElementType() != source->getBufferElementType()) {
+        return QTI_NOT_EQUAL;
+    }
+    if (target->hasNullableElements() == source->hasNullableElements()) {
+        return QTI_IDENT;
+    }
+    if (target->hasNullableElements() && !source->hasNullableElements()) {
+        may_need_filter = true;
+        return QTI_NEAR;
+    }
+    return QTI_NOT_EQUAL;
+}
+
 static qore_type_result_e match_QTS_COMPLEXBUFFER(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
     switch (ctx.t.getTypeSpec()) {
         case QTS_COMPLEXBUFFER: {
-            qore_type_result_e rv = QoreTypeInfo::equal(self.getComplexBuffer(), ctx.t.getComplexBuffer())
-                ? QTI_IDENT
-                : QTI_NOT_EQUAL;
+            qore_type_result_e rv = match_complex_buffer_type(self.getComplexBuffer(), ctx.t.getComplexBuffer(),
+                ctx.may_need_filter);
             ctx.max_result = rv;
             return rv;
         }

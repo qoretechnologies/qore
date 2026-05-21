@@ -391,6 +391,9 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(lstr && rstr && lstr->equalSoft(**rstr, xsink));
         }
         case QoreIROpcode::EqAny:
+            if (qore_buffer_binary_op_applies(left, right)) {
+                return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::Equal, xsink);
+            }
             return QoreValue(QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
         case QoreIROpcode::NeInt:
             return QoreValue(left.getAsBigInt() != right.getAsBigInt());
@@ -405,6 +408,9 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(!lstr || !rstr || !lstr->equalSoft(**rstr, xsink));
         }
         case QoreIROpcode::NeAny:
+            if (qore_buffer_binary_op_applies(left, right)) {
+                return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::NotEqual, xsink);
+            }
             return QoreValue(!QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
         case QoreIROpcode::EqHard:
             return QoreValue(left.isEqualHard(right));
@@ -423,6 +429,9 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(lstr && rstr && (lstr->compare(*rstr) < 0));
         }
         case QoreIROpcode::LtAny:
+            if (qore_buffer_binary_op_applies(left, right)) {
+                return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::LessThan, xsink);
+            }
             return QoreValue(QoreLogicalLessThanOperatorNode::doLessThan(left, right, xsink));
         case QoreIROpcode::LeInt:
             return QoreValue(left.getAsBigInt() <= right.getAsBigInt());
@@ -437,6 +446,9 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(lstr && rstr && (lstr->compare(*rstr) <= 0));
         }
         case QoreIROpcode::LeAny:
+            if (qore_buffer_binary_op_applies(left, right)) {
+                return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::LessThanOrEqual, xsink);
+            }
             return QoreValue(QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals(left, right, xsink));
         case QoreIROpcode::GtInt:
             return QoreValue(left.getAsBigInt() > right.getAsBigInt());
@@ -451,6 +463,9 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(lstr && rstr && (lstr->compare(*rstr) > 0));
         }
         case QoreIROpcode::GtAny:
+            if (qore_buffer_binary_op_applies(left, right)) {
+                return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::GreaterThan, xsink);
+            }
             return QoreValue(QoreLogicalGreaterThanOperatorNode::doGreaterThan(left, right, xsink));
         case QoreIROpcode::GeInt:
             return QoreValue(left.getAsBigInt() >= right.getAsBigInt());
@@ -465,6 +480,9 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(lstr && rstr && (lstr->compare(*rstr) >= 0));
         }
         case QoreIROpcode::GeAny:
+            if (qore_buffer_binary_op_applies(left, right)) {
+                return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::GreaterThanOrEqual, xsink);
+            }
             return QoreValue(QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(left, right, xsink));
         case QoreIROpcode::CmpInt: {
             int64_t l = left.getAsBigInt();

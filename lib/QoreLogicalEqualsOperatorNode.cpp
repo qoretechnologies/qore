@@ -73,6 +73,11 @@ QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
     if (*xsink)
         return QoreValue();
 
+    if (qore_buffer_binary_op_applies(*l, *r)) {
+        return qore_buffer_binary_op(*l, *r,
+            invertFallbackResult() ? QoreBufferBinaryOperation::NotEqual : QoreBufferBinaryOperation::Equal, xsink);
+    }
+
     if (qore_plugin_value_may_have_operation(*l) || qore_plugin_value_may_have_operation(*r)) {
         bool plugin_matched = false;
         QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), getPluginOperationName(),
@@ -124,6 +129,15 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 
     parse_context.typeInfo = boolTypeInfo;
     typeInfo = boolTypeInfo;
+
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(lti, rti,
+        invertFallbackResult() ? QoreBufferBinaryOperation::NotEqual : QoreBufferBinaryOperation::Equal);
+    if (bufferResultTypeInfo) {
+        parse_context.typeInfo = bufferResultTypeInfo;
+        typeInfo = bufferResultTypeInfo;
+        set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
+        return err;
+    }
 
     int plugin_rc = try_plugin_binary_parse_eq(parse_context, lti, rti, getPluginOperationName(),
         left_analysis, right_analysis, typeInfo);

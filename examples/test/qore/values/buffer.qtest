@@ -18,6 +18,7 @@ class BufferTest inherits QUnit::Test {
         addTestCase("pseudo methods", \pseudoMethods());
         addTestCase("iteration and slicing", \iterationAndSlicing());
         addTestCase("reductions", \reductions());
+        addTestCase("operators", \operators());
         addTestCase("writable elements", \writableElements());
         addTestCase("construction errors", \constructionErrors());
         set_return_value(main());
@@ -176,6 +177,92 @@ class BufferTest inherits QUnit::Test {
         assertEq(2.0, floats.mean());
         assertEq(1.5, floats.min());
         assertEq(2.5, floats.max());
+    }
+
+    operators() {
+        buffer<int64> a = new buffer<int64>((1, 2, 3));
+        buffer<int64> b = new buffer<int64>((10, 20, 30));
+
+        buffer<int64> sum = a + b;
+        assertEq("buffer<int64>", sum.fullType());
+        assertEq((11, 22, 33), sum.toList());
+
+        buffer<int64> diff = b - a;
+        assertEq((9, 18, 27), diff.toList());
+
+        buffer<int64> scaledRight = a * 2;
+        assertEq((2, 4, 6), scaledRight.toList());
+
+        buffer<int64> scaledLeft = 2 * a;
+        assertEq((2, 4, 6), scaledLeft.toList());
+
+        buffer<int64> divided = b / 10;
+        assertEq((1, 2, 3), divided.toList());
+
+        buffer<float64> floats = new buffer<float64>((1.5, 2.5));
+        buffer<float64> shifted = floats + 0.5;
+        assertEq("buffer<float64>", shifted.fullType());
+        assertEq((2.0, 3.0), shifted.toList());
+
+        buffer<*int64> nullable = new buffer<*int64>((1, NOTHING, 3));
+        buffer<*int64> nullableSum = nullable + 10;
+        assertEq("buffer<*int64>", nullableSum.fullType());
+        assertEq((11, NOTHING, 13), nullableSum.toList());
+
+        *int optionalOffset = 1;
+        buffer<*int64> optionalScalarSum = a + optionalOffset;
+        assertEq("buffer<*int64>", optionalScalarSum.fullType());
+        assertEq((2, 3, 4), optionalScalarSum.toList());
+
+        buffer<*int64> widened = new buffer<int64>((1, 2));
+        assertEq("buffer<*int64>", widened.fullType());
+        assertEq((1, 2), widened.toList());
+
+        buffer<*int64> nullBroadcast = a + NOTHING;
+        assertEq("buffer<*int64>", nullBroadcast.fullType());
+        assertEq((NOTHING, NOTHING, NOTHING), nullBroadcast.toList());
+
+        buffer<bool> greater = a > 1;
+        assertEq("buffer<bool>", greater.fullType());
+        assertEq((False, True, True), greater.toList());
+
+        buffer<bool> lessEqual = a <= b;
+        assertEq((True, True, True), lessEqual.toList());
+
+        buffer<bool> equal = a == new buffer<int64>((1, 0, 3));
+        assertEq((True, False, True), equal.toList());
+
+        buffer<bool> notEqual = a != 2;
+        assertEq((True, False, True), notEqual.toList());
+
+        buffer<*bool> nullableGreater = nullable > 1;
+        assertEq("buffer<*bool>", nullableGreater.fullType());
+        assertEq((False, NOTHING, True), nullableGreater.toList());
+
+        buffer<*bool> nullCompare = a == NULL;
+        assertEq("buffer<*bool>", nullCompare.fullType());
+        assertEq((NOTHING, NOTHING, NOTHING), nullCompare.toList());
+
+        buffer<bool> bools = new buffer<bool>((True, False));
+        buffer<bool> boolEqual = bools == True;
+        assertEq((True, False), boolEqual.toList());
+
+        buffer<bool> boolLess = bools < True;
+        assertEq((False, True), boolLess.toList());
+
+        assertThrows("BUFFER-SIZE-ERROR", sub () {
+            auto result = a + new buffer<int64>((1, 2));
+        });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () {
+            auto result = bools + 1;
+        });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () {
+            auto result = bools + NOTHING;
+        });
+        assertThrows("DIVISION-BY-ZERO", sub () {
+            int zero = 0;
+            auto result = a / zero;
+        });
     }
 
     writableElements() {

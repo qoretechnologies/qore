@@ -1228,6 +1228,21 @@ printf("rows=%d total=%d\n", ids.size(), ids.sum());
 list<*float> boxed = scores.toList();
     @endcode
 
+    Buffers support elementwise arithmetic and comparisons. Numeric buffers can be combined with another numeric
+    buffer of the same length or with a scalar \c int / \c float value; comparisons produce dense boolean masks and
+    nullable inputs propagate nullable result elements:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30));
+buffer<int64> offsets = new buffer<int64>((1, 2, 3));
+
+buffer<int64> adjusted = ids + offsets;    # buffer<int64>((11, 22, 33))
+buffer<int64> doubled = ids * 2;           # buffer<int64>((20, 40, 60))
+buffer<bool> high = adjusted > 20;         # buffer<bool>((False, True, True))
+
+buffer<*float64> scores = new buffer<*float64>((1.5, NOTHING, 4.25));
+buffer<*bool> passing = scores >= 2.0;     # buffer<*bool>((False, NOTHING, True))
+    @endcode
+
     The new @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" and
     @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" methods, plus the corresponding
     @ref Qore::SQL::DatasourcePool "DatasourcePool" methods, opt into typed query results without changing existing

@@ -228,6 +228,461 @@ bool qore_buffer_element_type_is_float(QoreBufferElementType element_type) {
     return element_type == QoreBufferElementType::Float32 || element_type == QoreBufferElementType::Float64;
 }
 
+static bool qore_buffer_element_type_is_numeric(QoreBufferElementType element_type) {
+    return qore_buffer_element_type_is_integer(element_type) || qore_buffer_element_type_is_float(element_type);
+}
+
+static bool qore_buffer_op_is_comparison(QoreBufferBinaryOperation op) {
+    switch (op) {
+        case QoreBufferBinaryOperation::Equal:
+        case QoreBufferBinaryOperation::NotEqual:
+        case QoreBufferBinaryOperation::LessThan:
+        case QoreBufferBinaryOperation::LessThanOrEqual:
+        case QoreBufferBinaryOperation::GreaterThan:
+        case QoreBufferBinaryOperation::GreaterThanOrEqual:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static const char* qore_buffer_op_symbol(QoreBufferBinaryOperation op) {
+    switch (op) {
+        case QoreBufferBinaryOperation::Add:
+            return "+";
+        case QoreBufferBinaryOperation::Subtract:
+            return "-";
+        case QoreBufferBinaryOperation::Multiply:
+            return "*";
+        case QoreBufferBinaryOperation::Divide:
+            return "/";
+        case QoreBufferBinaryOperation::Equal:
+            return "==";
+        case QoreBufferBinaryOperation::NotEqual:
+            return "!=";
+        case QoreBufferBinaryOperation::LessThan:
+            return "<";
+        case QoreBufferBinaryOperation::LessThanOrEqual:
+            return "<=";
+        case QoreBufferBinaryOperation::GreaterThan:
+            return ">";
+        case QoreBufferBinaryOperation::GreaterThanOrEqual:
+            return ">=";
+        default:
+            return "?";
+    }
+}
+
+bool qore_buffer_binary_op_applies(const QoreValue& left, const QoreValue& right) {
+    return left.getType() == NT_BUFFER || right.getType() == NT_BUFFER;
+}
+
+struct qore_buffer_parse_operand_t {
+    bool is_buffer = false;
+    bool has_specific_buffer_type = false;
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    bool nullable_elements = false;
+    bool may_be_nothing = false;
+    bool may_be_null = false;
+    bool can_be_int = false;
+    bool can_be_float = false;
+    bool can_be_bool = false;
+    bool known = false;
+};
+
+static qore_buffer_parse_operand_t qore_buffer_parse_operand(const QoreTypeInfo* typeInfo) {
+    qore_buffer_parse_operand_t rv;
+    if (!typeInfo) {
+        return rv;
+    }
+    rv.known = QoreTypeInfo::hasType(typeInfo);
+    rv.may_be_nothing = QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) != QTI_NOT_EQUAL;
+    rv.may_be_null = QoreTypeInfo::parseReturns(typeInfo, NT_NULL) != QTI_NOT_EQUAL;
+
+    const QoreTypeInfo* buffer_type = QoreTypeInfo::getReturnComplexBufferOrNothing(typeInfo);
+    if (buffer_type) {
+        rv.is_buffer = true;
+        if (const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(buffer_type)) {
+            rv.has_specific_buffer_type = true;
+            rv.element_type = bti->getBufferElementType();
+            rv.nullable_elements = bti->hasNullableElements();
+        }
+        return rv;
+    }
+
+    if (QoreTypeInfo::isType(typeInfo, NT_BUFFER)) {
+        rv.is_buffer = true;
+        return rv;
+    }
+
+    rv.can_be_int = QoreTypeInfo::parseReturns(typeInfo, NT_INT) != QTI_NOT_EQUAL;
+    rv.can_be_float = QoreTypeInfo::parseReturns(typeInfo, NT_FLOAT) != QTI_NOT_EQUAL;
+    rv.can_be_bool = QoreTypeInfo::parseReturns(typeInfo, NT_BOOLEAN) != QTI_NOT_EQUAL;
+    return rv;
+}
+
+static bool qore_buffer_parse_operand_is_numeric_scalar(const qore_buffer_parse_operand_t& operand) {
+    return !operand.is_buffer && (operand.can_be_int || operand.can_be_float);
+}
+
+static bool qore_buffer_parse_operand_is_bool_scalar(const qore_buffer_parse_operand_t& operand) {
+    return !operand.is_buffer && operand.can_be_bool && !operand.can_be_int && !operand.can_be_float;
+}
+
+static bool qore_buffer_parse_operand_is_null_scalar(const qore_buffer_parse_operand_t& operand) {
+    return !operand.is_buffer && !operand.can_be_int && !operand.can_be_float && !operand.can_be_bool
+        && (operand.may_be_nothing || operand.may_be_null);
+}
+
+static bool qore_buffer_parse_operand_is_supported_for_comparison(const qore_buffer_parse_operand_t& buffer_operand,
+        const qore_buffer_parse_operand_t& other_operand) {
+    assert(buffer_operand.is_buffer);
+    if (!buffer_operand.has_specific_buffer_type) {
+        return true;
+    }
+    if (qore_buffer_parse_operand_is_null_scalar(other_operand)) {
+        return true;
+    }
+    if (qore_buffer_element_type_is_numeric(buffer_operand.element_type)) {
+        return other_operand.is_buffer
+            ? (!other_operand.has_specific_buffer_type
+                || qore_buffer_element_type_is_numeric(other_operand.element_type))
+            : qore_buffer_parse_operand_is_numeric_scalar(other_operand);
+    }
+    if (buffer_operand.element_type == QoreBufferElementType::Bool) {
+        return other_operand.is_buffer
+            ? (!other_operand.has_specific_buffer_type
+                || other_operand.element_type == QoreBufferElementType::Bool)
+            : qore_buffer_parse_operand_is_bool_scalar(other_operand);
+    }
+    return false;
+}
+
+static bool qore_buffer_parse_operand_is_supported_for_arithmetic(const qore_buffer_parse_operand_t& buffer_operand,
+        const qore_buffer_parse_operand_t& other_operand) {
+    assert(buffer_operand.is_buffer);
+    if (!buffer_operand.has_specific_buffer_type) {
+        return true;
+    }
+    if (!qore_buffer_element_type_is_numeric(buffer_operand.element_type)) {
+        return false;
+    }
+    if (qore_buffer_parse_operand_is_null_scalar(other_operand)) {
+        return true;
+    }
+    return other_operand.is_buffer
+        ? (!other_operand.has_specific_buffer_type || qore_buffer_element_type_is_numeric(other_operand.element_type))
+        : qore_buffer_parse_operand_is_numeric_scalar(other_operand);
+}
+
+const QoreTypeInfo* qore_buffer_binary_op_type(const QoreTypeInfo* leftTypeInfo, const QoreTypeInfo* rightTypeInfo,
+        QoreBufferBinaryOperation op) {
+    qore_buffer_parse_operand_t left = qore_buffer_parse_operand(leftTypeInfo);
+    qore_buffer_parse_operand_t right = qore_buffer_parse_operand(rightTypeInfo);
+
+    if (!left.is_buffer && !right.is_buffer) {
+        return nullptr;
+    }
+
+    const qore_buffer_parse_operand_t& buffer_operand = left.is_buffer ? left : right;
+    const qore_buffer_parse_operand_t& other_operand = left.is_buffer ? right : left;
+    bool comparison = qore_buffer_op_is_comparison(op);
+    bool supported = comparison
+        ? qore_buffer_parse_operand_is_supported_for_comparison(buffer_operand, other_operand)
+        : qore_buffer_parse_operand_is_supported_for_arithmetic(buffer_operand, other_operand);
+    if (!supported) {
+        return nothingTypeInfo;
+    }
+
+    if (comparison) {
+        bool nullable = (left.is_buffer && left.nullable_elements) || (right.is_buffer && right.nullable_elements)
+            || left.may_be_nothing || right.may_be_nothing || left.may_be_null || right.may_be_null;
+        return qore_get_complex_buffer_type(QoreBufferElementType::Bool, nullable);
+    }
+
+    if (!buffer_operand.has_specific_buffer_type || (other_operand.is_buffer && !other_operand.has_specific_buffer_type)) {
+        return bufferTypeInfo;
+    }
+
+    bool nullable = (left.is_buffer && left.nullable_elements) || (right.is_buffer && right.nullable_elements)
+        || left.may_be_nothing || right.may_be_nothing || left.may_be_null || right.may_be_null;
+    bool floating = qore_buffer_element_type_is_float(buffer_operand.element_type)
+        || (other_operand.is_buffer
+            ? qore_buffer_element_type_is_float(other_operand.element_type)
+            : other_operand.can_be_float);
+    return qore_get_complex_buffer_type(floating ? QoreBufferElementType::Float64 : QoreBufferElementType::Int64,
+        nullable);
+}
+
+struct qore_buffer_runtime_operand_t {
+    const QoreBufferNode* buffer = nullptr;
+    QoreValue scalar;
+};
+
+static QoreBufferElementType qore_buffer_runtime_operand_element_type(const qore_buffer_runtime_operand_t& operand) {
+    if (operand.buffer) {
+        return operand.buffer->getElementType();
+    }
+    switch (operand.scalar.getType()) {
+        case NT_INT:
+            return QoreBufferElementType::Int64;
+        case NT_FLOAT:
+            return QoreBufferElementType::Float64;
+        case NT_BOOLEAN:
+            return QoreBufferElementType::Bool;
+        default:
+            return QoreBufferElementType::Invalid;
+    }
+}
+
+static bool qore_buffer_runtime_operand_is_null_scalar(const qore_buffer_runtime_operand_t& operand) {
+    return !operand.buffer && (operand.scalar.isNothing() || operand.scalar.getType() == NT_NULL);
+}
+
+static bool qore_buffer_runtime_operand_nullable(const qore_buffer_runtime_operand_t& operand) {
+    return operand.buffer ? operand.buffer->hasNullableElements() : qore_buffer_runtime_operand_is_null_scalar(operand);
+}
+
+static QoreValue qore_buffer_runtime_operand_value(const qore_buffer_runtime_operand_t& operand, size_t index,
+        bool& is_null) {
+    if (operand.buffer) {
+        is_null = operand.buffer->isElementNull(index);
+        return is_null ? QoreValue() : operand.buffer->getReferencedEntry(index);
+    }
+    is_null = qore_buffer_runtime_operand_is_null_scalar(operand);
+    return is_null ? QoreValue() : operand.scalar;
+}
+
+static bool qore_buffer_runtime_operand_is_numeric(const qore_buffer_runtime_operand_t& operand) {
+    QoreBufferElementType element_type = qore_buffer_runtime_operand_element_type(operand);
+    return qore_buffer_element_type_is_numeric(element_type);
+}
+
+static bool qore_buffer_runtime_operand_is_bool(const qore_buffer_runtime_operand_t& operand) {
+    return qore_buffer_runtime_operand_element_type(operand) == QoreBufferElementType::Bool;
+}
+
+static int qore_buffer_validate_runtime_operands(const qore_buffer_runtime_operand_t& left,
+        const qore_buffer_runtime_operand_t& right, QoreBufferBinaryOperation op, ExceptionSink* xsink) {
+    assert(left.buffer || right.buffer);
+
+    if (left.buffer && right.buffer && left.buffer->size() != right.buffer->size()) {
+        xsink->raiseException("BUFFER-SIZE-ERROR", "cannot apply '%s' to buffer<%s> with length " QSD
+            " and buffer<%s> with length " QSD "; buffer operands must have the same length",
+            qore_buffer_op_symbol(op), qore_buffer_element_type_name(left.buffer->getElementType()),
+            left.buffer->size(), qore_buffer_element_type_name(right.buffer->getElementType()), right.buffer->size());
+        return -1;
+    }
+
+    bool comparison = qore_buffer_op_is_comparison(op);
+    bool left_null_scalar = qore_buffer_runtime_operand_is_null_scalar(left);
+    bool right_null_scalar = qore_buffer_runtime_operand_is_null_scalar(right);
+    if (comparison) {
+        if (left_null_scalar || right_null_scalar) {
+            const qore_buffer_runtime_operand_t& other = left_null_scalar ? right : left;
+            if (qore_buffer_runtime_operand_is_numeric(other) || qore_buffer_runtime_operand_is_bool(other)) {
+                return 0;
+            }
+        }
+        bool numeric = qore_buffer_runtime_operand_is_numeric(left) && qore_buffer_runtime_operand_is_numeric(right);
+        bool boolean = qore_buffer_runtime_operand_is_bool(left) && qore_buffer_runtime_operand_is_bool(right);
+        if (numeric || boolean) {
+            return 0;
+        }
+        xsink->raiseException("BUFFER-OPERATION-ERROR", "cannot apply '%s' to %s and %s; buffer comparisons "
+            "support numeric buffers with int/float operands or bool buffers with bool operands",
+            qore_buffer_op_symbol(op), left.buffer ? QoreTypeInfo::getName(left.buffer->getTypeInfo())
+                : left.scalar.getFullTypeName(),
+            right.buffer ? QoreTypeInfo::getName(right.buffer->getTypeInfo()) : right.scalar.getFullTypeName());
+        return -1;
+    }
+
+    if (left_null_scalar || right_null_scalar) {
+        const qore_buffer_runtime_operand_t& other = left_null_scalar ? right : left;
+        if (qore_buffer_runtime_operand_is_numeric(other)) {
+            return 0;
+        }
+    }
+
+    if (qore_buffer_runtime_operand_is_numeric(left) && qore_buffer_runtime_operand_is_numeric(right)) {
+        return 0;
+    }
+
+    xsink->raiseException("BUFFER-OPERATION-ERROR", "cannot apply '%s' to %s and %s; buffer arithmetic supports "
+        "int/float buffers with int/float operands",
+        qore_buffer_op_symbol(op), left.buffer ? QoreTypeInfo::getName(left.buffer->getTypeInfo())
+            : left.scalar.getFullTypeName(),
+        right.buffer ? QoreTypeInfo::getName(right.buffer->getTypeInfo()) : right.scalar.getFullTypeName());
+    return -1;
+}
+
+static QoreBufferElementType qore_buffer_arithmetic_result_element_type(const qore_buffer_runtime_operand_t& left,
+        const qore_buffer_runtime_operand_t& right) {
+    return qore_buffer_element_type_is_float(qore_buffer_runtime_operand_element_type(left))
+        || qore_buffer_element_type_is_float(qore_buffer_runtime_operand_element_type(right))
+        ? QoreBufferElementType::Float64
+        : QoreBufferElementType::Int64;
+}
+
+static QoreValue qore_buffer_compute_arithmetic_value(QoreValue left, QoreValue right,
+        QoreBufferBinaryOperation op, QoreBufferElementType result_element_type, ExceptionSink* xsink) {
+    if (result_element_type == QoreBufferElementType::Float64) {
+        double l = left.getAsFloat();
+        double r = right.getAsFloat();
+        switch (op) {
+            case QoreBufferBinaryOperation::Add:
+                return l + r;
+            case QoreBufferBinaryOperation::Subtract:
+                return l - r;
+            case QoreBufferBinaryOperation::Multiply:
+                return l * r;
+            case QoreBufferBinaryOperation::Divide:
+                if (!r) {
+                    xsink->raiseException("DIVISION-BY-ZERO", "division by zero found in buffer floating-point "
+                        "expression");
+                    return QoreValue();
+                }
+                return l / r;
+            default:
+                assert(false);
+                return QoreValue();
+        }
+    }
+
+    int64 l = left.getAsBigInt();
+    int64 r = right.getAsBigInt();
+    switch (op) {
+        case QoreBufferBinaryOperation::Add:
+            return l + r;
+        case QoreBufferBinaryOperation::Subtract:
+            return l - r;
+        case QoreBufferBinaryOperation::Multiply:
+            return l * r;
+        case QoreBufferBinaryOperation::Divide:
+            if (!r) {
+                xsink->raiseException("DIVISION-BY-ZERO", "division by zero found in buffer integer expression");
+                return QoreValue();
+            }
+            return l / r;
+        default:
+            assert(false);
+            return QoreValue();
+    }
+}
+
+static bool qore_buffer_compute_comparison_value(QoreValue left, QoreValue right, QoreBufferBinaryOperation op) {
+    if (left.getType() == NT_BOOLEAN && right.getType() == NT_BOOLEAN) {
+        bool l = left.getAsBool();
+        bool r = right.getAsBool();
+        switch (op) {
+            case QoreBufferBinaryOperation::Equal:
+                return l == r;
+            case QoreBufferBinaryOperation::NotEqual:
+                return l != r;
+            case QoreBufferBinaryOperation::LessThan:
+                return !l && r;
+            case QoreBufferBinaryOperation::LessThanOrEqual:
+                return !l || r;
+            case QoreBufferBinaryOperation::GreaterThan:
+                return l && !r;
+            case QoreBufferBinaryOperation::GreaterThanOrEqual:
+                return l || !r;
+            default:
+                assert(false);
+                return false;
+        }
+    }
+
+    if (left.getType() == NT_FLOAT || right.getType() == NT_FLOAT) {
+        double l = left.getAsFloat();
+        double r = right.getAsFloat();
+        switch (op) {
+            case QoreBufferBinaryOperation::Equal:
+                return l == r;
+            case QoreBufferBinaryOperation::NotEqual:
+                return l != r;
+            case QoreBufferBinaryOperation::LessThan:
+                return l < r;
+            case QoreBufferBinaryOperation::LessThanOrEqual:
+                return l <= r;
+            case QoreBufferBinaryOperation::GreaterThan:
+                return l > r;
+            case QoreBufferBinaryOperation::GreaterThanOrEqual:
+                return l >= r;
+            default:
+                assert(false);
+                return false;
+        }
+    }
+
+    int64 l = left.getAsBigInt();
+    int64 r = right.getAsBigInt();
+    switch (op) {
+        case QoreBufferBinaryOperation::Equal:
+            return l == r;
+        case QoreBufferBinaryOperation::NotEqual:
+            return l != r;
+        case QoreBufferBinaryOperation::LessThan:
+            return l < r;
+        case QoreBufferBinaryOperation::LessThanOrEqual:
+            return l <= r;
+        case QoreBufferBinaryOperation::GreaterThan:
+            return l > r;
+        case QoreBufferBinaryOperation::GreaterThanOrEqual:
+            return l >= r;
+        default:
+            assert(false);
+            return false;
+    }
+}
+
+QoreValue qore_buffer_binary_op(const QoreValue& left, const QoreValue& right, QoreBufferBinaryOperation op,
+        ExceptionSink* xsink) {
+    if (!qore_buffer_binary_op_applies(left, right)) {
+        return QoreValue();
+    }
+
+    qore_buffer_runtime_operand_t l{left.getType() == NT_BUFFER ? left.get<const QoreBufferNode>() : nullptr, left};
+    qore_buffer_runtime_operand_t r{right.getType() == NT_BUFFER ? right.get<const QoreBufferNode>() : nullptr, right};
+    if (qore_buffer_validate_runtime_operands(l, r, op, xsink)) {
+        return QoreValue();
+    }
+
+    bool comparison = qore_buffer_op_is_comparison(op);
+    size_t length = l.buffer ? l.buffer->size() : r.buffer->size();
+    bool nullable = qore_buffer_runtime_operand_nullable(l) || qore_buffer_runtime_operand_nullable(r);
+    QoreBufferElementType result_element_type = comparison
+        ? QoreBufferElementType::Bool
+        : qore_buffer_arithmetic_result_element_type(l, r);
+
+    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(result_element_type, nullable, length), xsink);
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "buffer elementwise operation")) {
+            return QoreValue();
+        }
+
+        bool left_null = false;
+        bool right_null = false;
+        QoreValue lv = qore_buffer_runtime_operand_value(l, i, left_null);
+        QoreValue rv_value = qore_buffer_runtime_operand_value(r, i, right_null);
+        if (left_null || right_null) {
+            if ((*rv)->setEntry(i, QoreValue(), xsink)) {
+                return QoreValue();
+            }
+            continue;
+        }
+
+        QoreValue value = comparison
+            ? QoreValue(qore_buffer_compute_comparison_value(lv, rv_value, op))
+            : qore_buffer_compute_arithmetic_value(lv, rv_value, op, result_element_type, xsink);
+        if (*xsink || (*rv)->setEntry(i, value, xsink)) {
+            return QoreValue();
+        }
+    }
+
+    return rv.release();
+}
+
 QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements)
         : AbstractQoreNode(NT_BUFFER, true, false), element_type(element_type),
         nullable_elements(nullable_elements) {
@@ -490,11 +945,26 @@ QoreValue QoreBufferNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) cons
 }
 
 QoreBufferNode* QoreBufferNode::copy() const {
-    QoreBufferNode* rv = new QoreBufferNode(element_type, nullable_elements);
+    return copy(nullable_elements);
+}
+
+QoreBufferNode* QoreBufferNode::copy(bool n_nullable_elements) const {
+    assert(n_nullable_elements || !nullable_elements);
+
+    QoreBufferNode* rv = new QoreBufferNode(element_type, n_nullable_elements);
     rv->length = length;
-    rv->null_count = null_count;
+    rv->null_count = n_nullable_elements ? (nullable_elements ? null_count : 0) : 0;
     rv->data_buffer = data_buffer;
-    rv->validity_buffer = validity_buffer;
+    if (n_nullable_elements) {
+        if (nullable_elements) {
+            rv->validity_buffer = validity_buffer;
+        } else {
+            rv->validity_buffer.resize(qore_buffer_bitmap_bytes(length), true);
+            if (length) {
+                memset(rv->validity_buffer.data(), 0xff, rv->validity_buffer.size());
+            }
+        }
+    }
     return rv;
 }
 

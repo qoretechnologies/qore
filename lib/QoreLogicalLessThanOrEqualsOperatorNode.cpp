@@ -74,6 +74,10 @@ QoreValue QoreLogicalLessThanOrEqualsOperatorNode::evalImpl(bool& needs_deref, E
     if (*xsink)
         return QoreValue();
 
+    if (qore_buffer_binary_op_applies(*lh, *rh)) {
+        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::LessThanOrEqual, xsink);
+    }
+
     if (qore_plugin_value_may_have_operation(*lh) || qore_plugin_value_may_have_operation(*rh)) {
         bool plugin_matched = false;
         QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "le",
@@ -114,6 +118,15 @@ int QoreLogicalLessThanOrEqualsOperatorNode::parseInitIntern(const char* name, Q
 
     parse_context.typeInfo = boolTypeInfo;
     typeInfo = boolTypeInfo;
+
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(lti, rti,
+        QoreBufferBinaryOperation::LessThanOrEqual);
+    if (bufferResultTypeInfo) {
+        parse_context.typeInfo = bufferResultTypeInfo;
+        typeInfo = bufferResultTypeInfo;
+        set_binary_analysis_le(parse_context, left_analysis, right_analysis);
+        return err;
+    }
 
     int plugin_rc = try_plugin_binary_parse_le(parse_context, lti, rti, left_analysis, right_analysis, typeInfo);
     if (plugin_rc < 0 && !err) {

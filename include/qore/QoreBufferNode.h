@@ -50,6 +50,20 @@ enum class QoreBufferElementType : uint8_t {
     Bool,
 };
 
+//! Elementwise operation supported by dense buffer helpers.
+enum class QoreBufferBinaryOperation : uint8_t {
+    Add = 0,
+    Subtract,
+    Multiply,
+    Divide,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+};
+
 //! Returns the Qore source name for the given buffer element type.
 /** @param element_type the buffer element type
     @return the Qore source name, or "invalid" for invalid element types
@@ -88,6 +102,35 @@ DLLEXPORT bool qore_buffer_element_type_is_integer(QoreBufferElementType element
     @return true for float32 and float64
  */
 DLLEXPORT bool qore_buffer_element_type_is_float(QoreBufferElementType element_type);
+
+//! Returns true if either operand is a dense buffer value.
+/** @param left the left operand
+    @param right the right operand
+    @return true if an elementwise buffer operation should be attempted
+ */
+DLLEXPORT bool qore_buffer_binary_op_applies(const QoreValue& left, const QoreValue& right);
+
+//! Returns the parse-time result type for an elementwise dense buffer operation.
+/** @param leftTypeInfo the left operand type
+    @param rightTypeInfo the right operand type
+    @param op the operation to analyze
+    @return the result type, or nullptr if neither operand is a buffer
+ */
+DLLEXPORT const QoreTypeInfo* qore_buffer_binary_op_type(const QoreTypeInfo* leftTypeInfo,
+    const QoreTypeInfo* rightTypeInfo, QoreBufferBinaryOperation op);
+
+//! Applies an elementwise dense buffer operation.
+/** One operand must be a buffer. The other operand may be a buffer of the same length or a supported scalar.
+    Null elements propagate to nullable result buffers.
+
+    @param left the left operand
+    @param right the right operand
+    @param op the operation to apply
+    @param xsink exception sink for validation, allocation, range, division-by-zero, and cancellation errors
+    @return the result buffer, or NOTHING on error
+ */
+DLLEXPORT QoreValue qore_buffer_binary_op(const QoreValue& left, const QoreValue& right,
+    QoreBufferBinaryOperation op, ExceptionSink* xsink);
 
 //! Dense, homogeneous primitive array value for buffer<T>.
 class QoreBufferNode : public AbstractQoreNode {
@@ -178,6 +221,13 @@ public:
     /** @return a new buffer with the same element type, nullability, values, and validity bitmap
      */
     DLLEXPORT QoreBufferNode* copy() const;
+
+    //! Creates a deep copy of the buffer with preserved or widened element nullability.
+    /** This can widen a non-nullable buffer<T> to buffer<*T> by adding an all-valid validity bitmap.
+        @param n_nullable_elements true if the copied buffer should have nullable elements
+        @return a new buffer with the requested nullability and copied values
+     */
+    DLLLOCAL QoreBufferNode* copy(bool n_nullable_elements) const;
 
     //! Returns the number of elements in the buffer.
     /** @return the buffer length

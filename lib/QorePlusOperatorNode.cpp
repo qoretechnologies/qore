@@ -64,6 +64,10 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     qore_type_t lt = lh->getType();
     qore_type_t rt = rh->getType();
 
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::Add, xsink);
+    }
+
     if (lt == NT_LIST) {
         const QoreListNode* l = lh->get<const QoreListNode>();
         // issue #2791: perform type folding at the source
@@ -249,10 +253,15 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     printd(5, "QorePlusOperatorNode::parseInitImpl() this: %p l: '%s' r: '%s'\n", this,
         QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo));
 
-    // if either side is a list, then the return type is list (highest priority)
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(leftTypeInfo, rightTypeInfo,
+        QoreBufferBinaryOperation::Add);
     bool is_list_left = QoreTypeInfo::isType(leftTypeInfo, NT_LIST);
     bool is_list_right = QoreTypeInfo::isType(rightTypeInfo, NT_LIST);
-    if (is_list_left || is_list_right) {
+    if (bufferResultTypeInfo) {
+        returnTypeInfo = bufferResultTypeInfo;
+    }
+    // if either side is a list, then the return type is list (highest priority)
+    else if (is_list_left || is_list_right) {
         if (is_list_left && is_list_right) {
             parse_context.typeInfo = QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo)
                 ? leftTypeInfo

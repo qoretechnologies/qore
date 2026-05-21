@@ -205,6 +205,30 @@ list<int> boxed = ids.toList();
 buffer<int64> again = new buffer<int64>(boxed);
     @endcode
 
+    @par Operators:
+    Numeric buffers support elementwise arithmetic with another numeric buffer of the same length or with a scalar
+    \c int / \c float value.  Integer arithmetic produces \c buffer<int64>; any floating operand produces
+    \c buffer<float64>.  Comparisons are also elementwise and produce \c buffer<bool>:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30));
+buffer<int64> offsets = new buffer<int64>((1, 2, 3));
+
+buffer<int64> adjusted = ids + offsets;    # buffer<int64>((11, 22, 33))
+buffer<int64> doubled = ids * 2;           # buffer<int64>((20, 40, 60))
+buffer<bool> high = adjusted > 20;         # buffer<bool>((False, True, True))
+    @endcode
+
+    Nullable elements propagate through arithmetic and comparisons:
+    @code{.py}
+buffer<*float64> scores = new buffer<*float64>((1.5, NOTHING, 4.25));
+buffer<*float64> bumped = scores + 0.5;    # buffer<*float64>((2.0, NOTHING, 4.75))
+buffer<*bool> valid = scores >= 2.0;       # buffer<*bool>((False, NOTHING, True))
+    @endcode
+
+    Boolean buffers support elementwise comparisons with boolean buffers or scalar boolean values, but not arithmetic.
+    Applying a buffer operation to two buffers of different lengths raises a \c BUFFER-SIZE-ERROR; unsupported operand
+    combinations raise a \c BUFFER-OPERATION-ERROR; division by zero raises \c DIVISION-BY-ZERO.
+
     @par Reductions:
     Numeric and boolean buffers provide dense reductions:
     @code{.py}

@@ -2571,6 +2571,23 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     return true;
 }
 
+static bool qore_complex_buffer_accepts_runtime(const QoreTypeInfo* target_ti, const QoreBufferNode& source,
+        bool& needs_nullable_copy) {
+    needs_nullable_copy = false;
+    const QoreComplexBufferTypeInfo* target = QoreTypeInfo::getComplexBufferType(target_ti);
+    if (!target || target->getBufferElementType() != source.getElementType()) {
+        return false;
+    }
+    if (target->hasNullableElements() == source.hasNullableElements()) {
+        return true;
+    }
+    if (target->hasNullableElements() && !source.hasNullableElements()) {
+        needs_nullable_copy = true;
+        return true;
+    }
+    return false;
+}
+
 bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, q_type_map_t map,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
         LValueHelper* lvhelper) const {
@@ -2704,7 +2721,20 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
         case QTS_COMPLEXBUFFER: {
             if (n.getType() == NT_BUFFER) {
                 QoreBufferNode* b = n.get<QoreBufferNode>();
-                ok = QoreTypeInfo::equal(u.ti, b->getTypeInfo());
+                bool needs_nullable_copy = false;
+                ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
+                if (needs_nullable_copy) {
+                    QoreBufferNode* copy = b->copy(true);
+                    AbstractQoreNode* old = n.assign(copy);
+                    if (lvhelper) {
+                        lvhelper->saveTemp(old);
+                    } else {
+                        discard(old, xsink);
+                        if (xsink && *xsink) {
+                            return true;
+                        }
+                    }
+                }
             }
             break;
         }
@@ -2825,8 +2855,9 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXSOFTLIST:
         case QTS_COMPLEXHARDREF:
         case QTS_COMPLEXREF:
-        case QTS_COMPLEXBUFFER:
             return QoreTypeInfo::equal(u.ti, other.u.ti);
+        case QTS_COMPLEXBUFFER:
+            return u.ti == other.u.ti;
         case QTS_PARAMCLASS:
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
@@ -3023,9 +3054,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 return QTI_NOT_EQUAL;
             }
             const QoreBufferNode* b = n.get<const QoreBufferNode>();
-            return QoreTypeInfo::equal(u.ti, b->getTypeInfo())
-                ? (exact ? QTI_IDENT : QTI_AMBIGUOUS)
-                : QTI_NOT_EQUAL;
+            bool needs_nullable_copy = false;
+            if (!qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy)) {
+                return QTI_NOT_EQUAL;
+            }
+            return needs_nullable_copy ? QTI_NEAR : (exact ? QTI_IDENT : QTI_AMBIGUOUS);
         }
 
         case QTS_COMPLEXREF:
