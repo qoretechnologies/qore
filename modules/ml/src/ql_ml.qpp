@@ -820,7 +820,7 @@ printf("Accuracy: %.1f%%\n", acc * 100);  # 80.0%
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_accuracy(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_accuracy(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -841,7 +841,7 @@ printf("Matrix: %y\n", cm.matrix);  # ((1, 1), (1, 1))
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-hash<ConfusionMatrixResult> ml_confusion_matrix(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+hash<ConfusionMatrixResult> ml_confusion_matrix(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -866,7 +866,7 @@ foreach hash<ClassMetrics> cls in (report.per_class) {
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-hash<ClassificationReport> ml_classification_report(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+hash<ClassificationReport> ml_classification_report(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -886,7 +886,7 @@ float mse = ml_mse((3.0, 5.0, 7.0), (2.8, 5.2, 7.1));
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_mse(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_mse(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -907,7 +907,7 @@ printf("Average prediction error: $%.2f\n", rmse);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_rmse(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_rmse(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -928,7 +928,7 @@ printf("Predictions are off by %.1f days on average\n", mae);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_mae(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_mae(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -949,7 +949,7 @@ printf("Model explains %.0f%% of the variance\n", r2 * 100);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_r2_score(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_r2_score(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -970,7 +970,7 @@ printf("Model explains %.0f%% of the variance\n", ev * 100);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_explained_variance(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_explained_variance(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -991,7 +991,7 @@ printf("Clustering quality: %.2f\n", score);  # > 0.5 is generally good
 
     @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
 */
-float ml_silhouette_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+float ml_silhouette_score(list<list<float>> data, list<float> labels) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd lbl = qoreListToVector(labels, xsink);
@@ -1006,7 +1006,7 @@ float ml_silhouette_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
 
     @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
 */
-float ml_davies_bouldin_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+float ml_davies_bouldin_score(list<list<float>> data, list<float> labels) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd lbl = qoreListToVector(labels, xsink);
@@ -1021,7 +1021,7 @@ float ml_davies_bouldin_score(list<auto> data, list<auto> labels) [dom=DEFAULT] 
 
     @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
 */
-float ml_calinski_harabasz_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+float ml_calinski_harabasz_score(list<list<float>> data, list<float> labels) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd lbl = qoreListToVector(labels, xsink);
@@ -1191,7 +1191,7 @@ AbstractMLModel ml_load_model(string path) [dom=FILESYSTEM] {
     float q1 = ml_percentile(values, 25.0);
     @endcode
 */
-float ml_percentile(list<auto> data, float p) [dom=DEFAULT] {
+float ml_percentile(list<float> data, float p) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_percentile(vec, p);
@@ -1201,7 +1201,7 @@ float ml_percentile(list<auto> data, float p) [dom=DEFAULT] {
 /** @param data list of numeric values
     @return IQR value
 */
-float ml_iqr(list<auto> data) [dom=DEFAULT] {
+float ml_iqr(list<float> data) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_iqr(vec);
@@ -1211,7 +1211,7 @@ float ml_iqr(list<auto> data) [dom=DEFAULT] {
 /** @param data list of numeric values
     @return skewness (0 = symmetric, positive = right-skewed, negative = left-skewed)
 */
-float ml_skewness(list<auto> data) [dom=DEFAULT] {
+float ml_skewness(list<float> data) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_skewness(vec);
@@ -1221,7 +1221,7 @@ float ml_skewness(list<auto> data) [dom=DEFAULT] {
 /** @param data list of numeric values
     @return kurtosis (0 = normal-like tails, positive = heavy tails)
 */
-float ml_kurtosis(list<auto> data) [dom=DEFAULT] {
+float ml_kurtosis(list<float> data) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_kurtosis(vec);
@@ -1231,7 +1231,7 @@ float ml_kurtosis(list<auto> data) [dom=DEFAULT] {
 /** @param data matrix as list of row lists
     @return correlation matrix as list of row lists (values -1 to 1)
 */
-list<auto> ml_correlation_matrix(list<auto> data) [dom=DEFAULT] {
+list<list<float>> ml_correlation_matrix(list<list<float>> data) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd corr = ::ml_correlation_matrix(mat);
@@ -1250,7 +1250,7 @@ list<auto> ml_correlation_matrix(list<auto> data) [dom=DEFAULT] {
 /** @param data matrix as list of row lists
     @return covariance matrix as list of row lists
 */
-list<auto> ml_covariance_matrix(list<auto> data) [dom=DEFAULT] {
+list<list<float>> ml_covariance_matrix(list<list<float>> data) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd cov = ::ml_covariance_matrix(mat);
@@ -1279,7 +1279,7 @@ list<auto> ml_covariance_matrix(list<auto> data) [dom=DEFAULT] {
     if (r.p_value < 0.05) { printf("Significant difference!\n"); }
     @endcode
 */
-hash<HypothesisTestResult> ml_t_test(list<auto> a, list<auto> b) [dom=DEFAULT] {
+hash<HypothesisTestResult> ml_t_test(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -1311,7 +1311,7 @@ hash<HypothesisTestResult> ml_t_test(list<auto> a, list<auto> b) [dom=DEFAULT] {
     hash<ML::HypothesisTestResult> r = ml_chi_squared_test(((10, 20), (30, 40)));
     @endcode
 */
-hash<HypothesisTestResult> ml_chi_squared_test(list<auto> table) [dom=DEFAULT] {
+hash<HypothesisTestResult> ml_chi_squared_test(list<list<float>> table) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(table, xsink);
     if (*xsink) { return QoreValue(); }
     double statistic, p_value, df;
@@ -1375,7 +1375,7 @@ float ml_normal_ppf(float p, float mean = 0.0, float std_dev = 1.0) [dom=DEFAULT
     # sim ≈ 0.5 — partially similar directions
     @endcode
 */
-float ml_cosine_similarity(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_cosine_similarity(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -1403,7 +1403,7 @@ float ml_cosine_similarity(list<auto> a, list<auto> b) [dom=DEFAULT] {
     # dp = 1*4 + 2*5 + 3*6 = 32.0
     @endcode
 */
-float ml_dot_product(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_dot_product(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -1431,7 +1431,7 @@ float ml_dot_product(list<auto> a, list<auto> b) [dom=DEFAULT] {
     # dist = 5.0
     @endcode
 */
-float ml_euclidean_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_euclidean_distance(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -1459,7 +1459,7 @@ float ml_euclidean_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
     # dist = 3 + 4 = 7.0
     @endcode
 */
-float ml_manhattan_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_manhattan_distance(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -1492,7 +1492,7 @@ float ml_manhattan_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_l2_normalize(list<auto> v) [dom=DEFAULT] {
+list<float> ml_l2_normalize(list<float> v) [dom=DEFAULT] {
     if (!v->size()) {
         xsink->raiseException("ML-VECTOR-ERROR", "input vector is empty");
         return QoreValue();
@@ -1530,7 +1530,7 @@ list<float> ml_l2_normalize(list<auto> v) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_mean_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
+list<float> ml_mean_pool(list<list<float>> embeddings, list<int> mask) [dom=DEFAULT] {
     if (!embeddings->size()) {
         xsink->raiseException("ML-VECTOR-ERROR", "embeddings list is empty");
         return QoreValue();
@@ -1599,7 +1599,7 @@ list<float> ml_mean_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_max_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
+list<float> ml_max_pool(list<list<float>> embeddings, list<int> mask) [dom=DEFAULT] {
     if (!embeddings->size()) {
         xsink->raiseException("ML-VECTOR-ERROR", "embeddings list is empty");
         return QoreValue();
@@ -1670,7 +1670,7 @@ list<float> ml_max_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_cosine_similarity_batch(list<auto> query, list<auto> candidates) [dom=DEFAULT] {
+list<float> ml_cosine_similarity_batch(list<float> query, list<list<float>> candidates) [dom=DEFAULT] {
     VectorXd q = qoreListToVector(query, xsink);
     if (*xsink) { return QoreValue(); }
     double q_norm = q.norm();
