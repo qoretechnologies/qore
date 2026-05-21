@@ -94,7 +94,7 @@ Imputer::copy() {
     @throw ML-IMPUTER-ERROR empty data
     @throw ML-DATA-ERROR data format errors
 */
-nothing Imputer::fit(list<auto> data) {
+nothing Imputer::fit(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -110,7 +110,7 @@ nothing Imputer::fit(list<auto> data) {
     @throw ML-IMPUTER-ERROR empty data
     @throw ML-DATA-ERROR data format errors
 */
-nothing Imputer::fitMatrix(list<auto> matrix) {
+nothing Imputer::fitMatrix(list<list<*float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -156,7 +156,7 @@ hash<auto> Imputer::transform(hash<auto> record) {
     @throw ML-IMPUTER-ERROR imputer not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-list<list<float>> Imputer::transformMatrix(list<auto> matrix) {
+list<list<float>> Imputer::transformMatrix(list<list<*float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -212,7 +212,7 @@ list<hash<auto>> Imputer::fitTransform(list<auto> data) {
     @throw ML-IMPUTER-ERROR empty data
     @throw ML-DATA-ERROR data format errors
 */
-list<list<float>> Imputer::fitTransformMatrix(list<auto> matrix) {
+list<list<float>> Imputer::fitTransformMatrix(list<list<*float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

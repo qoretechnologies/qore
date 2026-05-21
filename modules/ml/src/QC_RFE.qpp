@@ -92,7 +92,7 @@ nothing RFE::fitMatrix(list<auto> matrix, list<auto> target) {
 /** @param matrix list of row lists
     @return list of row lists with only selected features
 */
-list<auto> RFE::transformMatrix(list<auto> matrix) {
+list<auto> RFE::transformMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd result = rfe->transform(X, xsink);

@@ -144,7 +144,7 @@ Lasso::copy() {
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-LASSO-ERROR if fitting fails
 */
-nothing Lasso::fit(list<auto> data, string target_field) {
+nothing Lasso::fit(list<hash<auto>> data, string target_field) {
     if (!data || data->empty()) {
         xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
         return QoreValue();
@@ -209,7 +209,7 @@ nothing Lasso::fit(list<auto> data, string target_field) {
     @throw ML-DATA-ERROR if the matrix is empty or malformed
     @throw ML-LASSO-ERROR if fitting fails
 */
-nothing Lasso::fitMatrix(list<auto> X, list<auto> y) {
+nothing Lasso::fitMatrix(list<list<float>> X, list<float> y) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -249,7 +249,7 @@ hash<LassoResult> Lasso::predict(hash<auto> record) {
 
     @throw ML-LASSO-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<LassoResult>> Lasso::predictMatrix(list<auto> X) {
+list<hash<LassoResult>> Lasso::predictMatrix(list<list<float>> X) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -357,7 +357,7 @@ list<float> Lasso::getFeatureStds() [flags=RET_VALUE_ONLY] {
     @throw ML-LASSO-ERROR if fitting fails or dimensions mismatch
     @throw ML-DATA-ERROR if the target vector is malformed
 */
-nothing Lasso::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+nothing Lasso::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<float> y) {
     VectorXd target = qoreListToVector(y, xsink);
     if (*xsink) {
         return QoreValue();

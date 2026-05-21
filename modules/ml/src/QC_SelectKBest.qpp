@@ -86,7 +86,7 @@ nothing SelectKBest::fitMatrix(list<auto> matrix, list<auto> target) {
 /** @param matrix list of row lists
     @return list of row lists with only selected features
 */
-list<auto> SelectKBest::transformMatrix(list<auto> matrix) {
+list<auto> SelectKBest::transformMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd result = skb->transform(X, xsink);

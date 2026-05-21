@@ -164,7 +164,7 @@ ElasticNet::copy() {
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-ELASTICNET-ERROR if fitting fails
 */
-nothing ElasticNet::fit(list<auto> data, string target_field) {
+nothing ElasticNet::fit(list<hash<auto>> data, string target_field) {
     if (!data || data->empty()) {
         xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
         return QoreValue();
@@ -230,7 +230,7 @@ nothing ElasticNet::fit(list<auto> data, string target_field) {
     @throw ML-DATA-ERROR if the matrix is empty or malformed
     @throw ML-ELASTICNET-ERROR if fitting fails
 */
-nothing ElasticNet::fitMatrix(list<auto> X, list<auto> y) {
+nothing ElasticNet::fitMatrix(list<list<float>> X, list<float> y) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -270,7 +270,7 @@ hash<ElasticNetResult> ElasticNet::predict(hash<auto> record) {
 
     @throw ML-ELASTICNET-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<ElasticNetResult>> ElasticNet::predictMatrix(list<auto> X) {
+list<hash<ElasticNetResult>> ElasticNet::predictMatrix(list<list<float>> X) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -386,7 +386,7 @@ list<float> ElasticNet::getFeatureStds() [flags=RET_VALUE_ONLY] {
     @throw ML-ELASTICNET-ERROR if fitting fails or dimensions mismatch
     @throw ML-DATA-ERROR if the target vector is malformed
 */
-nothing ElasticNet::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+nothing ElasticNet::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<float> y) {
     VectorXd target = qoreListToVector(y, xsink);
     if (*xsink) {
         return QoreValue();

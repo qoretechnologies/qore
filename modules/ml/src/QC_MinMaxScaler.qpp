@@ -89,7 +89,7 @@ MinMaxScaler::copy() {
     @throw ML-MIN-MAX-SCALER-ERROR empty data
     @throw ML-DATA-ERROR data format errors
 */
-nothing MinMaxScaler::fit(list<auto> data) {
+nothing MinMaxScaler::fit(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -105,7 +105,7 @@ nothing MinMaxScaler::fit(list<auto> data) {
     @throw ML-MIN-MAX-SCALER-ERROR empty data
     @throw ML-DATA-ERROR data format errors
 */
-nothing MinMaxScaler::fitMatrix(list<auto> matrix) {
+nothing MinMaxScaler::fitMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -151,7 +151,7 @@ hash<auto> MinMaxScaler::transform(hash<auto> record) {
     @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-list<list<float>> MinMaxScaler::transformMatrix(list<auto> matrix) {
+list<list<float>> MinMaxScaler::transformMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -209,7 +209,7 @@ hash<auto> MinMaxScaler::inverseTransform(hash<auto> record) {
     @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-list<list<float>> MinMaxScaler::inverseTransformMatrix(list<auto> matrix) {
+list<list<float>> MinMaxScaler::inverseTransformMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -265,7 +265,7 @@ list<hash<auto>> MinMaxScaler::fitTransform(list<auto> data) {
     @throw ML-MIN-MAX-SCALER-ERROR empty data
     @throw ML-DATA-ERROR data format errors
 */
-list<list<float>> MinMaxScaler::fitTransformMatrix(list<auto> matrix) {
+list<list<float>> MinMaxScaler::fitTransformMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

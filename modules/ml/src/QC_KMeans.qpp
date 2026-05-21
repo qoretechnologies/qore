@@ -122,7 +122,7 @@ km.fit(data_records);
     @throw ML-KMEANS-ERROR no data or k > n_samples
     @throw ML-DATA-ERROR data format errors
 */
-nothing KMeans::fit(list<auto> data) {
+nothing KMeans::fit(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -138,7 +138,7 @@ nothing KMeans::fit(list<auto> data) {
     @throw ML-KMEANS-ERROR no data or k > n_samples
     @throw ML-DATA-ERROR data format errors
 */
-nothing KMeans::fitMatrix(list<auto> matrix) {
+nothing KMeans::fitMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -152,7 +152,7 @@ nothing KMeans::fitMatrix(list<auto> matrix) {
     @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing KMeans::update(list<auto> data) {
+nothing KMeans::update(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -208,7 +208,7 @@ hash<KMeansResult> KMeans::predict(hash<auto> record) {
     @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-list<hash<KMeansResult>> KMeans::predictMatrix(list<auto> matrix) {
+list<hash<KMeansResult>> KMeans::predictMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

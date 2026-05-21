@@ -63,7 +63,7 @@ NaiveBayes::copy() {
 /** @param data list of hash records
     @param target_field the target column name
 */
-nothing NaiveBayes::fit(list<auto> data, string target_field) {
+nothing NaiveBayes::fit(list<hash<auto>> data, string target_field) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) { return QoreValue(); }
@@ -137,7 +137,7 @@ hash<auto> NaiveBayes::predict(hash<auto> record) {
 /** @param matrix list of row lists
     @return list of NaiveBayesResult hashes
 */
-list<hash<auto>> NaiveBayes::predictMatrix(list<auto> matrix) {
+list<hash<auto>> NaiveBayes::predictMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     return nb->predictMatrix(X, xsink);

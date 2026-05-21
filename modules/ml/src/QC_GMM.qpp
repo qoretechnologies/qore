@@ -151,7 +151,7 @@ gmm.fit(data_records);
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-GMM-ERROR if fitting fails
 */
-nothing GMM::fit(list<auto> data) {
+nothing GMM::fit(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -171,7 +171,7 @@ gmm.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
 
     @throw ML-DATA-ERROR if the matrix is empty or malformed
 */
-nothing GMM::fitMatrix(list<auto> matrix) {
+nothing GMM::fitMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -191,7 +191,7 @@ gmm.update(new_observations);  # refine clusters with new data
     @throw ML-GMM-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing GMM::update(list<auto> data) {
+nothing GMM::update(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -261,7 +261,7 @@ list<hash<GMMResult>> results = gmm.predictMatrix(test_data);
 
     @throw ML-GMM-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<GMMResult>> GMM::predictMatrix(list<auto> matrix) {
+list<hash<GMMResult>> GMM::predictMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

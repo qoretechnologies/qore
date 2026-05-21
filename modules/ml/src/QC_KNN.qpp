@@ -152,7 +152,7 @@ knn.fit(training_data, "species");
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-KNN-ERROR if fitting fails
 */
-nothing KNN::fit(list<auto> data, string target_field) {
+nothing KNN::fit(list<hash<auto>> data, string target_field) {
     // Extract field names from first record, excluding target
     if (!data || data->empty()) {
         xsink->raiseException("ML-DATA-ERROR", "empty data list provided");

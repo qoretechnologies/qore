@@ -133,7 +133,7 @@ lof.fit(data_records);
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-LOF-ERROR if fitting fails
 */
-nothing LOF::fit(list<auto> data) {
+nothing LOF::fit(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -153,7 +153,7 @@ lof.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
 
     @throw ML-DATA-ERROR if the matrix is empty or malformed
 */
-nothing LOF::fitMatrix(list<auto> matrix) {
+nothing LOF::fitMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -203,7 +203,7 @@ list<hash<LOFResult>> results = lof.scoreMatrix(test_data);
 
     @throw ML-LOF-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<LOFResult>> LOF::scoreMatrix(list<auto> matrix) {
+list<hash<LOFResult>> LOF::scoreMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

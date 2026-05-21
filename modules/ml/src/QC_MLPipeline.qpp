@@ -268,7 +268,7 @@ nothing MLPipeline::addKNNClassification(string name, object obj) {
     @throw ML-PIPELINE-ERROR pipeline has no steps or step errors
     @throw ML-DATA-ERROR data format errors
 */
-nothing MLPipeline::fitMatrix(list<auto> matrix) {
+nothing MLPipeline::fitMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -304,7 +304,7 @@ nothing MLPipeline::fitMatrixWithTarget(list<auto> matrix, list<auto> target) {
     @throw ML-PIPELINE-ERROR pipeline not fitted
     @throw ML-DATA-ERROR data format errors
 */
-list<list<float>> MLPipeline::transformMatrix(list<auto> matrix) {
+list<list<float>> MLPipeline::transformMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -331,7 +331,7 @@ list<list<float>> MLPipeline::transformMatrix(list<auto> matrix) {
     @throw ML-PIPELINE-ERROR pipeline not fitted or last step is not an estimator
     @throw ML-DATA-ERROR data format errors
 */
-list<hash<auto>> MLPipeline::predictMatrix(list<auto> matrix) {
+list<hash<auto>> MLPipeline::predictMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

@@ -57,7 +57,7 @@ VarianceThreshold::copy() {
 //! Fits on a numeric matrix (computes per-feature variance)
 /** @param matrix list of row lists
 */
-nothing VarianceThreshold::fitMatrix(list<auto> matrix) {
+nothing VarianceThreshold::fitMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     vt->fit(X, xsink);
@@ -67,7 +67,7 @@ nothing VarianceThreshold::fitMatrix(list<auto> matrix) {
 /** @param matrix list of row lists
     @return list of row lists with low-variance features removed
 */
-list<auto> VarianceThreshold::transformMatrix(list<auto> matrix) {
+list<auto> VarianceThreshold::transformMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd result = vt->transform(X, xsink);
@@ -87,7 +87,7 @@ list<auto> VarianceThreshold::transformMatrix(list<auto> matrix) {
 /** @param matrix list of row lists
     @return list of row lists with low-variance features removed
 */
-list<auto> VarianceThreshold::fitTransformMatrix(list<auto> matrix) {
+list<auto> VarianceThreshold::fitTransformMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd result = vt->fitTransform(X, xsink);
