@@ -96,6 +96,69 @@ extern "C" DLLEXPORT void ml_qore_module_desc(QoreModuleInfo& mod_info) {
 
 QoreNamespace MLNS("Qore::ML");
 
+//! Wraps a freshly-deserialized priv pointer in a QoreObject of the right qclass.
+/** The algorithm tag is the same string written by ml_serialize() (i.e. the value
+    returned by QoreMLModel::getAlgorithmName()). On unknown algorithm the priv is
+    deref'd and an ML-DESERIALIZE-ERROR is raised.
+
+    @param algorithm  algorithm tag from the serialization header
+    @param priv       freshly-allocated priv pointer (factory takes ownership on success)
+    @param pgm        the calling Qore program (the QoreObject is bound to this program)
+    @param xsink      exception sink for the unknown-algorithm error path
+    @return new QoreObject on success, nullptr on failure (priv is consumed in both cases)
+*/
+QoreObject* makeMLModelObject(const std::string& algorithm, AbstractPrivateData* priv,
+        QoreProgram* pgm, ExceptionSink* xsink) {
+    struct Entry {
+        const char* name;
+        QoreClass** cls;
+        qore_classid_t* cid;
+    };
+    static const Entry table[] = {
+        {"KMeans",               &QC_KMEANS,               &CID_KMEANS},
+        {"LinearRegression",     &QC_LINEARREGRESSION,     &CID_LINEARREGRESSION},
+        {"Ridge",                &QC_RIDGE,                &CID_RIDGE},
+        {"Lasso",                &QC_LASSO,                &CID_LASSO},
+        {"ElasticNet",           &QC_ELASTICNET,           &CID_ELASTICNET},
+        {"LogisticRegression",   &QC_LOGISTICREGRESSION,   &CID_LOGISTICREGRESSION},
+        {"PCA",                  &QC_PCA,                  &CID_PCA},
+        {"IsolationForest",      &QC_ISOLATIONFOREST,      &CID_ISOLATIONFOREST},
+        {"LOF",                  &QC_LOF,                  &CID_LOF},
+        {"GMM",                  &QC_GMM,                  &CID_GMM},
+        {"HoltWinters",          &QC_HOLTWINTERS,          &CID_HOLTWINTERS},
+        {"KNN",                  &QC_KNN,                  &CID_KNN},
+        {"StandardScaler",       &QC_STANDARDSCALER,       &CID_STANDARDSCALER},
+        {"MinMaxScaler",         &QC_MINMAXSCALER,         &CID_MINMAXSCALER},
+        {"Imputer",              &QC_IMPUTER,              &CID_IMPUTER},
+        {"DecisionTree",         &QC_DECISIONTREE,         &CID_DECISIONTREE},
+        {"RandomForest",         &QC_RANDOMFOREST,         &CID_RANDOMFOREST},
+        {"GradientBoostedTrees", &QC_GRADIENTBOOSTEDTREES, &CID_GRADIENTBOOSTEDTREES},
+        {"SVM",                  &QC_SVM,                  &CID_SVM},
+        {"NaiveBayes",           &QC_NAIVEBAYES,           &CID_NAIVEBAYES},
+        {"OneHotEncoder",        &QC_ONEHOTENCODER,        &CID_ONEHOTENCODER},
+        {"LabelEncoder",         &QC_LABELENCODER,         &CID_LABELENCODER},
+        {"VarianceThreshold",    &QC_VARIANCETHRESHOLD,    &CID_VARIANCETHRESHOLD},
+        {"PolynomialFeatures",   &QC_POLYNOMIALFEATURES,   &CID_POLYNOMIALFEATURES},
+        {"SelectKBest",          &QC_SELECTKBEST,          &CID_SELECTKBEST},
+        {"RFE",                  &QC_RFE,                  &CID_RFE},
+        {"DateTimeFeatures",     &QC_DATETIMEFEATURES,     &CID_DATETIMEFEATURES},
+        {"TextFeatures",         &QC_TEXTFEATURES,         &CID_TEXTFEATURES},
+        {"SparseMatrix",         &QC_SPARSEMATRIX,         &CID_SPARSEMATRIX},
+        {"MLPipeline",           &QC_MLPIPELINE,           &CID_MLPIPELINE},
+    };
+    for (const Entry& e : table) {
+        if (algorithm == e.name) {
+            QoreObject* obj = new QoreObject(*e.cls, pgm);
+            obj->setPrivate(*e.cid, priv);
+            return obj;
+        }
+    }
+    priv->deref(xsink);
+    xsink->raiseException("ML-DESERIALIZE-ERROR",
+        "unknown algorithm '%s'", algorithm.c_str());
+    return nullptr;
+}
+
 // Forward declarations for hashdecl init functions (generated from ql_ml.qpp)
 DLLLOCAL TypedHashDecl* init_hashdecl_IsolationForestResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_DBSCANResult(QoreNamespace& ns);
