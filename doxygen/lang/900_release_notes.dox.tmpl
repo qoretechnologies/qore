@@ -1913,6 +1913,20 @@ cargo install tree-sitter-cli@0.26.5
       - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
       - provides GorgiasRestConnection for connection management with \c gorgiasrest:// URL scheme
 
+    - @ref groqdataproviderintro "GroqDataProvider" module
+      - new module providing a data provider API for <a href="https://groq.com">Groq</a> LPU-accelerated open-weight LLM inference
+      - exposes the OpenAI-compatible `/v1/chat/completions` endpoint as a `chat-completion` action
+      - response schema surfaces Groq's LPU timing breakdown (`prompt_time`, `completion_time`, `queue_time`)
+      - action catalog integration with 1 action under the \c groq scheme
+
+    - @ref groqrestclientintro "GroqRestClient" module
+      - new module providing a REST client for <a href="https://groq.com">Groq</a>'s OpenAI-compatible LPU inference API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" — chat, tools, structured output, and SSE streaming work unchanged
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c groq
+      - provides GroqRestConnection for connection management with \c groq:// URL scheme
+      - distinct from @ref grokrestclientintro "GrokRestClient" (xAI Grok); note the spelling: Groq (LPU inference) vs. Grok (xAI)
+
     - @ref httpclientiointro "HttpClientIo" module
       - new unified module providing HTTP/2 and HTTP/3 multiplexed client I/O support
       - protocol auto-selection: attempts HTTP/3 first, falls back to HTTP/2 with caching

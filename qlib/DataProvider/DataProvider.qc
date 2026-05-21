@@ -228,6 +228,7 @@ public class DataProvider {
             "opcua": "OpcUaDataProvider",
 
             "grok": "GrokDataProvider",
+            "groq": "GroqDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

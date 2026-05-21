@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/GroqDataProvider
+
+%exec-class GroqDataProviderTest
+
+class FakeGroqRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.groq.com/openai", "token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    string getSafeUrl() {
+        return "https://api.groq.com/openai";
+    }
+}
+
+public class GroqDataProviderTest inherits QUnit::Test {
+    constructor() : Test("GroqDataProvider Test", "1.0") {
+        addTestCase("factory registered with DataProvider", \factoryTest());
+        addTestCase("app registered with action catalog",   \appCatalogTest());
+        addTestCase("root provider lists children",         \rootProviderTest());
+        addTestCase("chat-completion provider basic shape", \chatProviderTest());
+        addTestCase("chat-completion sends OpenAI-shape body, "
+            "converts Unix created field, preserves LPU usage timings",
+            \chatRequestTest());
+        addTestCase("request type schema is enforceable",   \requestSchemaTest());
+        set_return_value(main());
+    }
+
+    private factoryTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("groq");
+        assertEq("groq", f.getInfo().name);
+        hash<DataProviderInfo> info = f.getProviderInfo();
+        assertEq("groq", info.name);
+        assertEq("GroqDataProvider", info.type);
+        assertTrue(info.supports_children);
+    }
+
+    private appCatalogTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Groq");
+        assertEq("Groq", app.name);
+        assertEq("groq", app.scheme);
+        assertEq("groq-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.size() > 0);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Groq");
+        assertEq(1, actions.size());
+        assertEq("chat-completion", actions[0].action);
+        assertEq("/chat-completion", actions[0].path);
+        assertEq(DPAT_API, actions[0].action_code);
+        assertTrue(exists actions[0].options.messages);
+        assertTrue(actions[0].options.messages.required);
+        assertTrue(exists actions[0].options.model);
+        assertTrue(actions[0].options.model.required);
+    }
+
+    private rootProviderTest() {
+        FakeGroqRestClientIo fake();
+        GroqDataProvider::GroqDataProvider prov(fake);
+        assertEq("groq", prov.getName());
+        list<string> children = prov.getChildProviderNames();
+        assertEq(("chat-completion",), children);
+        AbstractDataProvider chat = prov.getChildProvider("chat-completion");
+        assertTrue(chat instanceof
+            GroqDataProvider::GroqChatCompletionDataProvider);
+    }
+
+    private chatProviderTest() {
+        FakeGroqRestClientIo fake();
+        GroqDataProvider::GroqChatCompletionDataProvider prov(fake);
+        assertEq("chat-completion", prov.getName());
+        hash<DataProviderInfo> info = prov.getInfo();
+        assertTrue(info.supports_request);
+        assertTrue(exists prov.getRequestType());
+        assertTrue(exists prov.getResponseType());
+    }
+
+    private chatRequestTest() {
+        FakeGroqRestClientIo fake();
+        # response includes LPU timing fields unique to Groq
+        fake.response_body = {
+            "id": "test-id",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "llama-3.3-70b-versatile",
+            "choices": (
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello!",
+                    },
+                    "finish_reason": "stop",
+                },
+            ),
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+                "prompt_time": 0.025,
+                "completion_time": 0.080,
+                "total_time": 0.110,
+                "queue_time": 0.005,
+            },
+            "x_groq": {"id": "req_abc123"},
+        };
+
+        GroqDataProvider::GroqChatCompletionDataProvider prov(fake);
+        hash<auto> req = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": (
+                {"role": "user", "content": "Hi"},
+            ),
+            "temperature": 0.7,
+        };
+        auto resp = prov.doRequest(req);
+
+        # OpenAI-compatible POST path
+        assertEq("POST", fake.last_method);
+        assertEq("chat/completions", fake.last_path);
+        # Request body forwarded unchanged
+        assertEq("llama-3.3-70b-versatile", fake.last_request.model);
+        assertEq(0.7, fake.last_request.temperature);
+        # Response shape + Unix-seconds to date conversion
+        assertEq("test-id", resp.id);
+        assertEq(1700000000, int(resp.created - 1970-01-01Z));
+        assertEq(NT_DATE, resp.created.typeCode());
+        assertEq("Hello!", resp.choices[0].message.content);
+        # Groq's LPU timing fields preserved
+        assertEq(0.025, resp.usage.prompt_time);
+        assertEq(0.080, resp.usage.completion_time);
+        assertEq(0.005, resp.usage.queue_time);
+        # x_groq metadata preserved
+        assertEq("req_abc123", resp.x_groq.id);
+    }
+
+    private requestSchemaTest() {
+        GroqDataProvider::GroqChatCompletionRequestDataType t();
+        hash<auto> fields = t.getFields();
+        assertTrue(exists fields.messages);
+        assertTrue(exists fields.model);
+        assertTrue(exists fields.temperature);
+        assertTrue(exists fields.max_tokens);
+        assertTrue(exists fields.tool_choice);
+    }
+}

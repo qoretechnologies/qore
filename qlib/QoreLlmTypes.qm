@@ -412,6 +412,7 @@ public class LlmProviderRegistry {
             "bedrock":       "BedrockRestClient",
             "vertex-ai":     "VertexAiRestClient",
             "deepseek":      "DeepSeekRestClient",
+            "groq":          "GroqRestClient",
         };
     }
 

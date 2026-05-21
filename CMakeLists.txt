@@ -2538,6 +2538,8 @@ qore_user_module("qlib/VertexAiRestClient.qm" "GcpAuth;GeminiBodyShape;QoreLlmTy
 qore_user_module("qlib/VertexAiDataProvider" "VertexAiRestClient;GcpAuth;GeminiBodyShape;DataProvider" "vertex-ai-logo.svg")
 qore_user_module("qlib/DeepSeekRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
 qore_user_module("qlib/DeepSeekDataProvider" "DeepSeekRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "deepseek-logo.svg")
+qore_user_module("qlib/GroqRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
+qore_user_module("qlib/GroqDataProvider" "GroqRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "groq-logo.svg")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")

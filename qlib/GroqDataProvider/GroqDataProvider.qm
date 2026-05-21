@@ -1,0 +1,145 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore GroqDataProvider module definition
+
+/*  GroqDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) GroqRestClient
+%requires RestClientIo
+
+module GroqDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Groq LPU inference";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new GroqDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GroqDataProvider::AppName,
+            "display_name": "Groq",
+            "short_desc": "Groq LPU inference for open-weight models at very high throughput",
+            "desc": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for "
+                "open-weight LLMs (Llama, Mixtral, Gemma, Qwen) at exceptionally high "
+                "token-per-second throughput.\n\n"
+                "Groq exposes an OpenAI-compatible chat-completions API, so existing "
+                "OpenAI-shape consumers (chat, tools, structured output, streaming) work "
+                "unchanged.\n\n"
+                "**Common use cases**:\n"
+                "- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token "
+                "on 70B-class models\n"
+                "- **High-throughput tool-calling agents** where total response time matters\n"
+                "- **Open-weight model deployments** without owning GPU infrastructure",
+            "scheme": "groq",
+            "logo": GroqLogo,
+            "logo_file_name": "groq-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GroqDataProvider::AppName,
+            "path": "/chat-completion",
+            "action": "chat-completion",
+            "display_name": "Chat Completion",
+            "short_desc": "Generate a chat completion from a Groq-hosted open-weight model",
+            "desc": "Sends a list of chat messages to a Groq-hosted model using the "
+                "OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated "
+                "response.\n\n"
+                "**Example use cases**:\n"
+                "- Low-latency chat with `llama-3.3-70b-versatile`\n"
+                "- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n"
+                "- Structured extraction (pass `response_format` with a JSON schema)",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GroqChatCompletionRequestDataType::Fields{"messages", "model",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GroqChatCompletionRequestDataType::Fields{"temperature", "max_tokens",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GroqChatCompletionRequestDataType::Fields - (
+                    "messages", "model", "temperature", "max_tokens",
+                )
+            ),
+            "output_type": GroqChatCompletionDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage GroqDataProvider Module
+
+    @tableofcontents
+
+    @section groqdataproviderintro GroqDataProvider Introduction
+
+    The %GroqDataProvider module provides a data provider API for
+    [Groq](https://groq.com) LPU-accelerated inference services.
+
+    The following data providers are exposed:
+    - @ref GroqDataProvider::GroqDataProvider "GroqDataProvider" — the root provider
+    - @ref GroqDataProvider::GroqChatCompletionDataProvider
+      "GroqChatCompletionDataProvider" — OpenAI-compatible chat
+
+    @par Example:
+    @code{.py}
+%requires GroqDataProvider
+
+GroqRestConnection rc = get_connection("groq");
+GroqDataProvider::GroqDataProvider prov(rc.getAsync());
+
+AbstractDataProvider chat = prov.getChildProvider("chat-completion");
+hash<auto> result = chat.doRequest({
+    "model": "llama-3.3-70b-versatile",
+    "messages": (
+        {"role": "user", "content": "Hello!"},
+    ),
+});
+printf("Response: %s\n", result.choices[0].message.content);
+    @endcode
+
+    @note The module name \c GroqDataProvider is distinct from
+    @ref grokdataproviderintro "GrokDataProvider" (xAI's Grok product) —
+    note the spelling: Groq (LPU inference) vs. Grok (xAI).
+
+    @section GroqDataProviderRelnotes Release Notes
+
+    @subsection GroqDataProviderv1_0 GroqDataProvider v1.0
+    - the initial version of the %GroqDataProvider module
+*/
+
+#! contains all public definitions in the GroqDataProvider module
+public namespace GroqDataProvider {
+#! Groq application name
+public const AppName = "Groq";
+}
+
+#! App logo loaded from file
+public const GroqLogo = File::readTextFile(get_script_dir() + "/groq-logo.svg");
