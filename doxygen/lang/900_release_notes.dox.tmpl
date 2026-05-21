@@ -1462,6 +1462,18 @@ cargo install tree-sitter-cli@0.26.5
       - provides AnthropicRestConnection for connection management with \c anthropic:// URL scheme
       - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
 
+    - @ref assemblyaidataproviderintro "AssemblyAiDataProvider" module
+      - new module providing a data provider API for <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text services
+      - exposes a single `transcribe` action that submits an audio URL, polls until the transcript reaches a terminal status, and returns the completed transcript
+      - opt-in analytics: speaker diarization, summarization (3 models / 5 styles), sentiment analysis, entity detection, IAB topic categories, and content-safety classification
+      - action catalog integration with 1 action under the \c assemblyai scheme; registered with the `Speech & Voice` AppGroup
+
+    - @ref assemblyairestclientintro "AssemblyAiRestClient" module
+      - new module providing a REST client for <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text services
+      - supports API key authentication via the bare `Authorization` header (no `Bearer` / `Token` prefix)
+      - drives the async transcription lifecycle (submit → poll → fetch) via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" with an injectable sleeper for deterministic tests
+      - provides AssemblyAiRestConnection for connection management with \c assemblyai:// URL scheme
+
     - @ref apollodataproviderintro "ApolloDataProvider" module
       - new module providing a data provider API for <a href="https://www.apollo.io/">Apollo</a> B2B sales intelligence
       - contact management (create, update, delete, search, get by ID)

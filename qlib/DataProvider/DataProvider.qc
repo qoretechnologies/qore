@@ -82,6 +82,7 @@ public class DataProvider {
 
             "aftership": "AftershipDataProvider",
             "anthropic": "AnthropicDataProvider",
+            "assemblyai": "AssemblyAiDataProvider",
             "asyncapi": "AsyncApiDataProvider",
             "azure-openai": "AzureOpenAiDataProvider",
             "bedrock": "BedrockDataProvider",

@@ -78,6 +78,8 @@ public class ConnectionSchemeCache {
 
             "anthropic": "AnthropicRestClient",
 
+            "assemblyai": "AssemblyAiRestClient",
+
             "awsrests": "AwsRestClient",
 
             "baselinkerrest": "BaseLinkerRestClient",

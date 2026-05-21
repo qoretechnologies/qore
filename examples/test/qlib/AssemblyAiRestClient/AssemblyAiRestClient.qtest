@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreAsyncJobUtils.qm
+%requires ../../../../qlib/AssemblyAiRestClient.qm
+
+%exec-class AssemblyAiRestClientTest
+
+#! Drives the submit -> poll -> fetch lifecycle deterministically:
+#! - POST /v2/transcript returns {id: "t1", status: "queued"}
+#! - GETs of /v2/transcript/t1 walk through queued/processing/completed
+class FakeAssemblyAiClient inherits AssemblyAiRestClient::AssemblyAiRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+        list<string> poll_sequence = ("queued", "processing", "completed");
+        int poll_index = 0;
+        int sleep_calls = 0;
+        *string final_error;
+    }
+
+    constructor() : AssemblyAiRestClient::AssemblyAiRestClientIo(
+            {"url": "https://api.assemblyai.com", "apikey": "x"}) {
+        setSleeper(nothing sub (timeout to) { ++sleep_calls; });
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"method": "POST", "path": path, "body": body};
+        if (path == "/v2/transcript") {
+            return <RestClient::RestResponseInfo>{
+                "body": {"id": "t1", "status": "queued"},
+            };
+        }
+        throw "FAKE-ERROR", sprintf("unexpected POST %y", path);
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push calls, {"method": "GET", "path": path};
+        if (path == "/v2/transcript/t1") {
+            string status = poll_sequence[poll_index];
+            if (poll_index < poll_sequence.size() - 1) {
+                ++poll_index;
+            }
+            hash<auto!> body;
+            body.id = "t1";
+            body.status = status;
+            if (status == "completed") {
+                body.text = "Hello world.";
+                body.audio_duration = 5;
+                body.confidence = 0.97;
+            }
+            if (status == "error" && final_error) {
+                body.error = final_error;
+            }
+            return <RestClient::RestResponseInfo>{"body": body};
+        }
+        throw "FAKE-ERROR", sprintf("unexpected GET %y", path);
+    }
+
+    string getSafeUrl() { return "https://api.assemblyai.com"; }
+}
+
+public class AssemblyAiRestClientTest inherits QUnit::Test {
+    constructor() : Test("AssemblyAiRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",      \connectionSchemeTest());
+        addTestCase("apikey maps to bare Authorization header",
+            \bareAuthMappingTest());
+        addTestCase("existing default_headers are preserved",
+            \preserveExistingHeadersTest());
+        addTestCase("transcribe runs submit-poll-fetch lifecycle",
+            \transcribeLifecycleTest());
+        addTestCase("transcribe strips polling-control options before submit",
+            \stripsPollingOptsTest());
+        addTestCase("transcribe raises ASSEMBLYAI-ERROR on `error` status",
+            \errorStatusTest());
+        addTestCase("transcribe honours overall timeout",
+            \timeoutTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("assemblyai");
+        assertEq("AssemblyAI REST Connection", info.display_name);
+        assertTrue(info.schemes.assemblyai);
+        assertEq("apikey", info.required_options);
+    }
+
+    private bareAuthMappingTest() {
+        hash<auto> opts = AssemblyAiRestClient::AssemblyAiRestClientBase::getOptions({
+            "apikey": "secret-key-123",
+        });
+        # bare key — no Bearer / Token prefix
+        assertEq("secret-key-123", opts.default_headers.Authorization);
+        assertEq(NOTHING, opts.apikey);
+    }
+
+    private preserveExistingHeadersTest() {
+        hash<auto> opts = AssemblyAiRestClient::AssemblyAiRestClientBase::getOptions({
+            "apikey": "k",
+            "default_headers": {"X-Trace-Id": "abc"},
+        });
+        assertEq("k", opts.default_headers.Authorization);
+        assertEq("abc", opts.default_headers."X-Trace-Id");
+    }
+
+    private transcribeLifecycleTest() {
+        FakeAssemblyAiClient fake();
+        hash<auto> result = fake.transcribe("https://example.com/a.mp3", {
+            "poll_interval": 1ms,
+            "speaker_labels": True,
+        });
+
+        assertEq("t1", result.id);
+        assertEq("completed", result.status);
+        assertEq("Hello world.", result.text);
+
+        # First call is POST /v2/transcript with audio_url + speaker_labels
+        assertEq("POST", fake.calls[0].method);
+        assertEq("/v2/transcript", fake.calls[0].path);
+        assertEq("https://example.com/a.mp3", fake.calls[0].body.audio_url);
+        assertEq(True, fake.calls[0].body.speaker_labels);
+
+        # Then 3 GETs to /v2/transcript/t1 (queued, processing, completed)
+        list<hash<auto>> polls = select fake.calls, $1.path == "/v2/transcript/t1";
+        assertEq(3, polls.size());
+        # Sleeper invoked between polls (status changed twice = 2 sleeps)
+        assertEq(2, fake.sleep_calls);
+    }
+
+    private stripsPollingOptsTest() {
+        FakeAssemblyAiClient fake();
+        fake.transcribe("https://example.com/a.mp3", {
+            "poll_interval": 1ms,
+            "transcription_timeout": 5s,
+            "speaker_labels": True,
+        });
+        # poll_interval and transcription_timeout MUST NOT be in the submit body
+        # (otherwise AssemblyAI would reject the request)
+        assertEq(NOTHING, fake.calls[0].body.poll_interval);
+        assertEq(NOTHING, fake.calls[0].body.transcription_timeout);
+        assertEq(True, fake.calls[0].body.speaker_labels);
+    }
+
+    private errorStatusTest() {
+        FakeAssemblyAiClient fake();
+        fake.poll_sequence = ("queued", "error");
+        fake.final_error = "audio file unreadable";
+        try {
+            fake.transcribe("https://example.com/bad.mp3", {"poll_interval": 1ms});
+            fail("expected ASSEMBLYAI-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSEMBLYAI-ERROR", ex.err);
+            assertTrue(ex.desc =~ /unreadable/);
+            assertEq("t1", ex.arg.job_id);
+        }
+    }
+
+    private timeoutTest() {
+        FakeAssemblyAiClient fake();
+        fake.poll_sequence = ("queued", "queued", "queued", "queued");
+        assertThrows("ASSEMBLYAI-ERROR", sub () {
+            fake.transcribe("https://example.com/a.mp3", {
+                "poll_interval": 1ms,
+                "transcription_timeout": 50ms,
+            });
+        });
+    }
+}
