@@ -2319,6 +2319,17 @@ cargo install tree-sitter-cli@0.26.5
       - @ref QoreApiMetadata::QoreApiMetadata "QoreApiMetadata" facade with search, serialization
         (JSON/YAML), and the full merge pipeline
 
+    - @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" module
+      - new module providing a provider-neutral async-job polling helper
+      - @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" — drives an
+        upload → poll → fetch loop with caller-supplied status fetcher and
+        terminal predicate closures; injectable sleeper for deterministic
+        test polling; configurable timeout + exception class
+      - usable by any REST integration that follows the upload-then-poll
+        async-job pattern (document extraction, batch OCR, async image and
+        video generation); currently powers
+        @ref llamaparserestclientintro "LlamaParseRestClient"
+
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
       - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)

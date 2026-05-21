@@ -1,0 +1,203 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreAsyncJobUtils.qm shared async-job polling abstraction
+
+/*  QoreAsyncJobUtils.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+module QoreAsyncJobUtils {
+    version = "1.0";
+    desc = "user module providing a generic async-job polling helper shared "
+        "across REST providers (LlamaParse, async OCR, video generation, etc.)";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreAsyncJobUtils Module
+
+    @tableofcontents
+
+    @section qoreasyncjobutilsintro QoreAsyncJobUtils Module Introduction
+
+    The %QoreAsyncJobUtils module provides a single class —
+    @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" — that
+    encapsulates the upload → poll → fetch lifecycle used by every async
+    REST API (document extraction, OCR batch jobs, image/video generation,
+    long-running search indexing).
+
+    Provider modules hand the poller two closures plus optional timeouts;
+    the poller drives the polling loop, calls an injectable sleeper between
+    iterations (overridable for deterministic tests), and raises a caller-
+    supplied error class when the overall timeout is exceeded.
+
+    @section qoreasyncjobutilsusage Usage Example
+
+    @code{.py}
+%modern
+%requires QoreAsyncJobUtils
+
+QoreAsyncJobUtils::AsyncJobPoller poller(
+    # status fetcher closure: takes the job id, returns a status hash
+    hash<auto> sub (string job_id) {
+        return rest_client.restGet("/job/" + job_id).body;
+    },
+    # terminal predicate: returns True when the status hash is terminal
+    bool sub (hash<auto> status) {
+        return status.status == "SUCCESS" || status.status == "FAILED";
+    },
+    "MyProvider job",        # human label used in timeout error messages
+    "MYPROVIDER-ERROR",      # exception class on overall-timeout
+);
+
+# Optional: install a deterministic sleeper for tests
+poller.setSleeper(nothing sub (timeout to) { ++sleep_count; });
+
+hash<auto> final_status = poller.poll("job-123", 5m, 1500ms);
+    @endcode
+
+    @section qoreasyncjobutilsrelnotes Release Notes
+
+    @subsection qoreasyncjobutils_1_0 QoreAsyncJobUtils v1.0
+    - initial version
+*/
+
+#! contains all public symbols of the %QoreAsyncJobUtils module
+public namespace QoreAsyncJobUtils {
+#! Drives a poll-until-terminal loop with injectable status fetch + sleeper
+/** The class is provider-agnostic: it doesn't know what an HTTP REST call
+    is, what "SUCCESS" means, or how to construct a sleep — those concerns
+    are passed in via closures so tests can drive the loop deterministically
+    and multiple provider modules can share the implementation.
+*/
+public class AsyncJobPoller {
+    public {
+        #! Default poll interval (ms between status fetches)
+        const DefaultPollInterval = 1500ms;
+
+        #! Default overall timeout (entire poll loop)
+        const DefaultTimeout = 5m;
+
+        #! Default exception class raised on overall-timeout
+        const DefaultErrorClass = "ASYNC-JOB-TIMEOUT";
+
+        #! Default human-readable job label used in timeout messages
+        const DefaultLabel = "async job";
+    }
+
+    private {
+        #! Status-fetch closure: \c (string job_id) -> hash<auto>
+        code<hash<auto>(string)> status_fetcher;
+
+        #! Terminal predicate: \c (hash<auto> status) -> bool
+        code<bool(hash<auto>)> terminal_predicate;
+
+        #! Sleeper closure (test seam): \c (timeout to) -> nothing
+        code<nothing(timeout)> sleeper;
+
+        #! Exception class raised when the overall timeout fires
+        string error_class;
+
+        #! Human-readable label used in timeout error messages
+        string label;
+    }
+
+    #! Creates the poller
+    /** @param fetcher closure invoked per iteration with the job id;
+            must return a non-NOTHING hash representing the job's current
+            status (typically the parsed REST response body)
+        @param terminal closure invoked with each status hash;
+            returns @c True when the status represents a terminal state
+            (success or failure) at which point @ref poll() returns
+        @param label human-readable identifier for the job kind
+            (used in timeout error messages); defaults to "async job"
+        @param exception_class exception class raised when the overall
+            timeout expires before a terminal status is observed;
+            defaults to "ASYNC-JOB-TIMEOUT"
+    */
+    constructor(code<hash<auto>(string)> fetcher, code<bool(hash<auto>)> terminal,
+            *string lbl, *string exception_class) {
+        status_fetcher = fetcher;
+        terminal_predicate = terminal;
+        label = lbl ?? DefaultLabel;
+        error_class = exception_class ?? DefaultErrorClass;
+        sleeper = code<nothing(timeout)> sub (timeout to) { Qore::usleep(to); };
+    }
+
+    #! Injects a custom sleeper closure (test seam)
+    /** Useful in tests that want to drive @ref poll() without burning
+        wall-clock time.  Pass a no-op closure to skip sleeps entirely
+        or increment a counter to verify call counts.
+
+        @param s closure invoked on each poll iteration with the wait
+            duration that would otherwise be passed to \c usleep()
+    */
+    setSleeper(code<nothing(timeout)> s) {
+        sleeper = s;
+    }
+
+    #! Polls the job until it reaches a terminal state or the timeout fires
+    /** Calls @c status_fetcher repeatedly, checking @c terminal_predicate
+        on each fetched status; sleeps between iterations using the
+        installed sleeper.  Returns the first status hash for which the
+        terminal predicate returns @c True.
+
+        @param job_id the job identifier passed to the status fetcher
+        @param overall_to overall timeout for the polling loop;
+            defaults to @ref DefaultTimeout
+        @param interval poll interval between status fetches;
+            defaults to @ref DefaultPollInterval
+
+        @return the terminal status hash
+
+        @throw <error_class> the overall timeout was exceeded before any
+            terminal status was observed; \c error_class is whichever
+            class was passed to the constructor (defaults to
+            \c "ASYNC-JOB-TIMEOUT").  The exception's @c arg member
+            carries the last observed status hash (or @c NOTHING if no
+            successful fetch was made).
+    */
+    hash<auto> poll(string job_id, *timeout overall_to, *timeout interval) {
+        timeout overall = overall_to ?? DefaultTimeout;
+        timeout step = interval ?? DefaultPollInterval;
+        # timeout converts to ms when assigned from a relative date or int
+        int overall_ms = overall;
+        date start = now_us();
+        *hash<auto> last_status;
+        while (True) {
+            last_status = status_fetcher(job_id);
+            if (last_status && terminal_predicate(last_status)) {
+                return last_status;
+            }
+            int elapsed_ms = get_duration_milliseconds(now_us() - start);
+            if (elapsed_ms >= overall_ms) {
+                throw error_class,
+                    sprintf("%s %y did not reach a terminal state within %y; "
+                        "last status: %y", label, job_id, overall, last_status),
+                    {"job_id": job_id, "last_status": last_status};
+            }
+            sleeper(step);
+        }
+    }
+}
+}
