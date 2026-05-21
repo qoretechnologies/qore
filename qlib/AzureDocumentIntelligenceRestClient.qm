@@ -1,0 +1,301 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AzureDocumentIntelligenceRestClient.qm Qore user module for Azure Document Intelligence
+
+/*  AzureDocumentIntelligenceRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreAsyncJobUtils
+
+module AzureDocumentIntelligenceRestClient {
+    version = "1.0";
+    desc = "user module for calling Azure Document Intelligence REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("azure-documentintelligence",
+            AzureDocumentIntelligenceRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage AzureDocumentIntelligenceRestClient Module
+
+    @tableofcontents
+
+    @section azuredocumentintelligencerestclientintro AzureDocumentIntelligenceRestClient Introduction
+
+    The %AzureDocumentIntelligenceRestClient module provides a REST client
+    for [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence)
+    (formerly Form Recognizer) — Microsoft's managed document extraction
+    service with prebuilt models for invoices, receipts, IDs, business
+    cards, US tax forms, contracts, and a custom-model workflow.
+
+    Authentication uses the `Ocp-Apim-Subscription-Key` header with the
+    Azure resource's subscription key.  Entra (Azure AD) bearer-token
+    auth via @ref azureauthintro "AzureAuth" can be added by the caller
+    via the \c default_headers connection option.
+
+    The main classes are:
+    - @ref AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClient — sync client
+    - @ref AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo — async client
+    - @ref AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestConnection — connection
+
+    @par Async lifecycle
+
+    Document Intelligence's `analyze` API is asynchronous: POST returns a
+    `Operation-Location` header pointing to a polling URL; subsequent GETs
+    return `{status: \"running\" / \"succeeded\" / \"failed\"}` and the
+    parsed `analyzeResult` once succeeded.  The high-level
+    @ref AzureDocumentIntelligenceRestClientIo::analyzeDocument() helper
+    drives this loop via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"'s
+    `AsyncJobPoller`.
+
+    @section AzureDocumentIntelligenceRestClientRelnotes Release Notes
+
+    @subsection AzureDocumentIntelligenceRestClientv1_0 AzureDocumentIntelligenceRestClient v1.0
+    - the initial version of the %AzureDocumentIntelligenceRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+#! contains all public symbols of the AzureDocumentIntelligenceRestClient module
+public namespace AzureDocumentIntelligenceRestClient {
+#! Default API version
+public const DefaultApiVersion = "2024-11-30";
+
+#! Status returned by the polling endpoint when the job is complete
+public const StatusSucceeded = "succeeded";
+
+#! Status returned by the polling endpoint on terminal failure
+public const StatusFailed = "failed";
+
+#! All terminal statuses
+public const TerminalStatuses = (StatusSucceeded, StatusFailed);
+
+#! Default poll interval between status checks (ms)
+public const DefaultPollInterval = 2000ms;
+
+#! Default overall analysis timeout
+public const DefaultAnalysisTimeout = 10m;
+
+#! Common base class for AzureDocumentIntelligenceRestClient functionality
+public class AzureDocumentIntelligenceRestClientBase {
+    public {
+        const DefaultOptions = {
+            "data": "json",
+        };
+    }
+
+    #! Maps the \c apikey option to the Ocp-Apim-Subscription-Key header
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv;
+        rv += DefaultOptions + opts;
+        if (rv.apikey) {
+            hash<auto!> dh;
+            if (rv.default_headers) {
+                dh += rv.default_headers;
+            }
+            dh."Ocp-Apim-Subscription-Key" = rv.apikey;
+            rv.default_headers = dh;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! Sync REST client for Azure Document Intelligence
+public class AzureDocumentIntelligenceRestClient
+        inherits RestClient::RestClient,
+        AzureDocumentIntelligenceRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(AzureDocumentIntelligenceRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! Async REST client for Azure Document Intelligence
+/** Owns an @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" for the
+    analyze-then-poll lifecycle exposed via @ref analyzeDocument().
+*/
+public class AzureDocumentIntelligenceRestClientIo
+        inherits RestClientIo::RestClientIo,
+        AzureDocumentIntelligenceRestClientBase {
+    private {
+        QoreAsyncJobUtils::AsyncJobPoller poller;
+    }
+
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(AzureDocumentIntelligenceRestClientBase::getOptions(opts), shared_mgr) {
+        poller = new QoreAsyncJobUtils::AsyncJobPoller(
+            hash<auto> sub (string poll_url) {
+                return restGet(poll_url).body;
+            },
+            bool sub (hash<auto> status) {
+                return status.status && inlist(status.status, TerminalStatuses);
+            },
+            "Azure Document Intelligence analysis",
+            "AZURE-DOCUMENT-INTELLIGENCE-ERROR",
+        );
+    }
+
+    setSleeper(code<nothing(timeout)> s) {
+        poller.setSleeper(s);
+    }
+
+    #! Submits an analyze request and waits for the result
+    /** @param model_id Document Intelligence model ID
+            (e.g. \c "prebuilt-document", \c "prebuilt-invoice",
+            \c "prebuilt-receipt", or a custom model GUID)
+        @param body analyze request body — typically
+            \c {urlSource: "..."} or \c {base64Source: "<b64>"}
+        @param options optional polling-control fields: \c poll_interval
+            (defaults to 2s), \c analysis_timeout (defaults to 10m),
+            \c api_version (defaults to "2024-11-30")
+
+        @return the \c analyzeResult hash from the polling endpoint —
+            includes \c content, \c pages, \c tables, \c keyValuePairs,
+            \c documents (typed entities for prebuilt models), and \c styles
+
+        @throw AZURE-DOCUMENT-INTELLIGENCE-ERROR analysis ended in failure,
+            timed out, or the service did not return an \c Operation-Location
+            header
+    */
+    hash<auto> analyzeDocument(string model_id, hash<auto> body,
+            *hash<auto> options) {
+        string api_version = options.api_version ?? DefaultApiVersion;
+        timeout overall_to = options.analysis_timeout ?? DefaultAnalysisTimeout;
+        timeout poll_interval = options.poll_interval ?? DefaultPollInterval;
+
+        string submit_path = sprintf(
+            "/documentintelligence/documentModels/%s:analyze?api-version=%s",
+            model_id, api_version);
+        hash<auto> submit_resp = restPost(submit_path, body);
+        # The poll URL is in the Operation-Location response header
+        *string op_location = submit_resp.headers."operation-location"
+            ?? submit_resp.headers."Operation-Location";
+        if (!op_location.val()) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR",
+                "Azure Document Intelligence did not return an "
+                "Operation-Location header on submit",
+                {"headers": submit_resp.headers, "body": submit_resp.body};
+        }
+
+        # Drive the poll loop; the AsyncJobPoller passes the URL as "job_id"
+        hash<auto> final_status = poller.poll(op_location, overall_to, poll_interval);
+        if (final_status.status == StatusFailed) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR",
+                sprintf("Azure Document Intelligence analysis ended in failure: %s",
+                    final_status.error.message ?? "unknown"),
+                {"poll_url": op_location, "last_status": final_status};
+        }
+        return final_status.analyzeResult ?? final_status;
+    }
+}
+
+#! Connection class for Azure Document Intelligence
+public class AzureDocumentIntelligenceRestConnection inherits RestClient::RestConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Azure Document Intelligence Connection",
+            "short_desc": "A connection to Azure Document Intelligence",
+            "desc": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) "
+                "(formerly Form Recognizer) — Microsoft's managed document "
+                "extraction service.\n\n"
+                "Requires the Azure resource URL (`https://<resource-name>.cognitiveservices.azure.com`) "
+                "and a subscription key sent via the `Ocp-Apim-Subscription-Key` "
+                "header.  Get the resource URL and key from the Azure portal "
+                "under your Document Intelligence resource > Keys and Endpoint.",
+            "cls": Class::forName("AzureDocumentIntelligenceRestConnection"),
+            "schemes": {
+                "azure-documentintelligence": True,
+            },
+            "base_scheme_map": {
+                "https": "azure-documentintelligence",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "Subscription Key",
+                    "short_desc": "Azure Document Intelligence subscription key",
+                    "type": "string",
+                    "desc": "Azure Document Intelligence subscription key — sent "
+                        "as the `Ocp-Apim-Subscription-Key` header.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    constructor(string name, string description, string url,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config, attr) {
+    }
+
+    string getType() {
+        return "azure-documentintelligence";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("AzureDocumentIntelligenceDataProvider");
+        return create_object("AzureDocumentIntelligenceDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private AzureDocumentIntelligenceRestClient getImpl(bool connect = True,
+            *hash<auto> rtopts) {
+        return new AzureDocumentIntelligenceRestClient(
+            getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AzureDocumentIntelligenceRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return AzureDocumentIntelligenceRestClientBase::getOptions(rv);
+    }
+}
+}

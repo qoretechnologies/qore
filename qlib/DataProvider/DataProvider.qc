@@ -90,6 +90,7 @@ public class DataProvider {
             "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
             "aws-textract": "AwsTextractDataProvider",
+            "azure-documentintelligence": "AzureDocumentIntelligenceDataProvider",
 
             "baselinker": "BaseLinkerDataProvider",
 

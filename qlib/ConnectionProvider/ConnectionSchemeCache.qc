@@ -84,6 +84,8 @@ public class ConnectionSchemeCache {
 
             "aws-textract": "AwsTextractRestClient",
 
+            "azure-documentintelligence": "AzureDocumentIntelligenceRestClient",
+
             "baselinkerrest": "BaseLinkerRestClient",
 
             "bge-m3": "BgeM3RestClient",

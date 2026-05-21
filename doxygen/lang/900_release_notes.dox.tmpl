@@ -1540,6 +1540,19 @@ cargo install tree-sitter-cli@0.26.5
       - new module exchanging Microsoft Entra (Azure AD) credentials for bearer access tokens
       - supports \c client_credentials and managed-identity (IMDS-for-Azure) flows with thread-safe token caching and 5-minute safety-window refresh
 
+    - @ref azuredocumentintelligencedataproviderintro "AzureDocumentIntelligenceDataProvider" module
+      - new module providing a data provider API for <a href="https://azure.microsoft.com/products/ai-services/ai-document-intelligence">Azure Document Intelligence</a> (formerly Form Recognizer)
+      - exposes one action: `analyze-document` — submits a document to a prebuilt or custom model, drives the async poll-until-complete lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils", and returns the parsed `analyzeResult`
+      - prebuilt models: `prebuilt-document`, `prebuilt-layout`, `prebuilt-invoice`, `prebuilt-receipt`, `prebuilt-idDocument`, `prebuilt-businessCard`, `prebuilt-tax.us.w2`, `prebuilt-contract`, plus custom-trained model GUIDs
+      - documents accepted as public URL, inline bytes (base64 auto-encoded), or local file path
+      - action catalog integration with 1 action under the \c azure-documentintelligence scheme; registered with the `Documents` AppGroup
+
+    - @ref azuredocumentintelligencerestclientintro "AzureDocumentIntelligenceRestClient" module
+      - new module providing a REST client for <a href="https://azure.microsoft.com/products/ai-services/ai-document-intelligence">Azure Document Intelligence</a>
+      - subscription-key authentication via the `Ocp-Apim-Subscription-Key` header
+      - `AzureDocumentIntelligenceRestClientIo.analyzeDocument()` helper drives the analyze → poll `Operation-Location` → fetch `analyzeResult` lifecycle internally via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+      - provides AzureDocumentIntelligenceRestConnection for connection management with \c azure-documentintelligence:// URL scheme
+
     - @ref azureopenaidataproviderintro "AzureOpenAiDataProvider" module
       - new module providing a data provider API for Azure OpenAI Service — deployment-routed chat completions and embeddings
       - registers ChatCompletion + Embedding actions in the action catalog under the \c azure-openai scheme

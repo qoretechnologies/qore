@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreAsyncJobUtils.qm
+%requires ../../../../qlib/AzureDocumentIntelligenceRestClient.qm
+
+%exec-class AzureDocumentIntelligenceRestClientTest
+
+class FakeAzureDocIntelClient
+        inherits AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+        list<string> poll_sequence = ("running", "running", "succeeded");
+        int poll_index = 0;
+    }
+
+    constructor() : AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo(
+            {"url": "https://my-docint.cognitiveservices.azure.com",
+             "apikey": "key"}) {
+        setSleeper(nothing sub (timeout to) {});
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"method": "POST", "path": path, "body": body};
+        return <RestClient::RestResponseInfo>{
+            "headers": {
+                "operation-location": "/documentintelligence/documentModels/prebuilt-document/analyzeResults/result-xyz?api-version=2024-11-30",
+            },
+            "body": "",
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push calls, {"method": "GET", "path": path};
+        string status = poll_sequence[poll_index];
+        if (poll_index < poll_sequence.size() - 1) {
+            ++poll_index;
+        }
+        hash<auto!> body;
+        body.status = status;
+        if (status == "succeeded") {
+            body.analyzeResult = {
+                "apiVersion": "2024-11-30",
+                "modelId":    "prebuilt-document",
+                "content":    "Hello world.",
+                "pages":      ({"pageNumber": 1},),
+            };
+        }
+        return <RestClient::RestResponseInfo>{"body": body};
+    }
+
+    string getSafeUrl() { return "https://my-docint.cognitiveservices.azure.com"; }
+}
+
+#! Fake that returns NO operation-location header — used to test the missing-header guard
+class FakeNoOpLocationClient
+        inherits AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo {
+    constructor() : AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo(
+            {"url": "https://x.cognitiveservices.azure.com", "apikey": "k"}) {}
+    hash<RestClient::RestResponseInfo> restPost(string p, auto b, *hash<auto> h) {
+        return <RestClient::RestResponseInfo>{"headers": {}, "body": ""};
+    }
+    string getSafeUrl() { return "https://x.cognitiveservices.azure.com"; }
+}
+
+public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
+    constructor() : Test("AzureDocumentIntelligenceRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",  \connectionSchemeTest());
+        addTestCase("apikey maps to Ocp-Apim-Subscription-Key header",
+            \apikeyMappingTest());
+        addTestCase("analyzeDocument runs submit-poll-fetch lifecycle",
+            \lifecycleTest());
+        addTestCase("missing Operation-Location header raises",
+            \missingOperationLocationTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("azure-documentintelligence");
+        assertEq("Azure Document Intelligence Connection", info.display_name);
+        assertTrue(info.schemes."azure-documentintelligence");
+        assertEq("apikey", info.required_options);
+    }
+
+    private apikeyMappingTest() {
+        hash<auto> opts =
+            AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientBase::getOptions({
+                "apikey": "secret-key",
+                "url":    "https://x.cognitiveservices.azure.com",
+            });
+        assertEq("secret-key", opts.default_headers."Ocp-Apim-Subscription-Key");
+        assertEq(NOTHING, opts.apikey);
+    }
+
+    private lifecycleTest() {
+        FakeAzureDocIntelClient fake();
+        hash<auto> result = fake.analyzeDocument("prebuilt-document",
+            {"urlSource": "https://example.com/doc.pdf"},
+            {"poll_interval": 1ms});
+
+        # First call: POST analyze
+        assertEq("POST", fake.calls[0].method);
+        assertTrue(fake.calls[0].path =~ /\/documentintelligence\/documentModels\/prebuilt-document:analyze/);
+
+        # Subsequent calls: GETs on the operation-location URL
+        list<hash<auto>> polls = select fake.calls, $1.method == "GET";
+        assertEq(3, polls.size());
+
+        # analyzeResult is unwrapped from the polled response
+        assertEq("Hello world.", result.content);
+        assertEq("prebuilt-document", result.modelId);
+    }
+
+    private missingOperationLocationTest() {
+        FakeNoOpLocationClient stub();
+        assertThrows("AZURE-DOCUMENT-INTELLIGENCE-ERROR", sub () {
+            stub.analyzeDocument("prebuilt-document", {});
+        });
+    }
+}
