@@ -226,9 +226,56 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
         };
     }
 
-    #! Does not support bulk API
+    #! Processes records in bulk (hash-of-lists) format
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        list<auto> results;
+        HashListIterator it(records);
+        while (it.next()) {
+            *auto result = processRecordImpl(it.getValue());
+            if (exists result) {
+                if (result.typeCode() == NT_LIST) {
+                    results += result;
+                } else {
+                    push results, result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        return AbstractDataProcessor::recordsToHashList(results);
+    }
+
+    #! Processes data in an explicitly negotiated shape
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+                return processRecordsBulkImpl(records);
+            case DataProviderShape::BufferColumns:
+            case DataProviderShape::DataFrameBlock:
+                return processRecordsBulkImpl(AbstractDataProcessor::convertShape(
+                    records, shape, DataProviderShape::HashOfLists)[0]);
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Supports bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return (DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns the processor capability bitfield

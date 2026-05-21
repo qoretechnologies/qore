@@ -443,10 +443,10 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
 
     #! Processes records in bulk (hash-of-lists) format
     private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
-        list<auto> record_list = AbstractDataProcessor::hashListToRecords(records);
         list<auto> results;
-        foreach auto rec in (record_list) {
-            *auto result = processRecordImpl(rec);
+        HashListIterator it(records);
+        while (it.next()) {
+            *auto result = processRecordImpl(it.getValue());
             if (exists result) {
                 if (result.typeCode() == NT_LIST) {
                     results += result;
@@ -470,8 +470,11 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
         switch (shape) {
             case DataProviderShape::HashOfLists:
-            case DataProviderShape::BufferColumns:
                 return processRecordsBulkImpl(records);
+            case DataProviderShape::BufferColumns:
+            case DataProviderShape::DataFrameBlock:
+                return processRecordsBulkImpl(AbstractDataProcessor::convertShape(
+                    records, shape, DataProviderShape::HashOfLists)[0]);
             case DataProviderShape::RowRecords:
                 return processRecordImpl(records);
         }
@@ -482,6 +485,17 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     #! Returns True — analytics processors support bulk API
     private bool supportsBulkApiImpl() {
         return True;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return (DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns the output type for the pipeline processor

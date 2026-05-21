@@ -2198,6 +2198,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - QoreSetFieldsProcessor and QoreSearchReplaceProcessor preserve
         DataFrameBlock and BufferColumns values for top-level constant-field and
         string-column updates
+      - analytics processors, including QoreCorrelationProcessor and
+        QoreCrossCorrelationProcessor, accept DataFrameBlock and BufferColumns
+        input and emit hash-of-lists event blocks
       - record type reflects DataFrame column schema (int, float, string, bool, date)
       - record iterator APIs declare
         <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt>

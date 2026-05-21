@@ -209,12 +209,14 @@ pipeline.waitDone();
     when possible. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
     QoreRecordLimitProcessor, QoreSetFieldsProcessor, and
     QoreSearchReplaceProcessor preserve DataFrameBlock and BufferColumns shapes
-    for simple top-level fields. Supported compiled filter forms include
-    \c &&, \c ||, \c !, and scalar \c ==, \c !=, \c <, \c <=, \c >, and
-    \c >= comparisons, plus \c isNull and \c isNotNull checks. Predicates that
-    use string operators, field-to-field comparisons, null literal comparisons,
-    or unsupported column containers fall back to the generic row semantics to
-    preserve behavior.
+    for simple top-level fields. Analytics processors, including correlation
+    and cross-correlation processors, accept DataFrameBlock and BufferColumns
+    input and emit hash-of-lists analytics event blocks. Supported compiled
+    filter forms include \c &&, \c ||, \c !, and scalar \c ==, \c !=, \c <,
+    \c <=, \c >, and \c >= comparisons, plus \c isNull and \c isNotNull checks.
+    Predicates that use string operators, field-to-field comparisons, null
+    literal comparisons, or unsupported column containers fall back to the
+    generic row semantics to preserve behavior.
 
     @code{.py}
 ColumnarResult dense_columns = employees.toColumnarResult();
