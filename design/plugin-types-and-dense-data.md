@@ -34,14 +34,15 @@ storage element names are:
 - `int8`, `int16`, `int32`, `int64`
 - `float32`, `float64`
 - `bool`
+- `string`
 
 Narrow integer and floating storage types are not general scalar local-variable
-types. Reading an element widens to Qore `int`, `float`, or `bool`.
+types. Reading an element widens to Qore `int`, `float`, `bool`, or `string`.
 
 Implemented APIs include list construction, `sized()` and `filled()`
 factories, typed indexing and assignment, slicing, zero-copy views, iteration,
-reductions, QORD serialization, and elementwise arithmetic/comparison
-operators in AST, IR, and JIT execution paths.
+numeric reductions, QORD serialization, numeric/bool/string comparisons, and
+numeric elementwise arithmetic operators in AST, IR, and JIT execution paths.
 
 ### Plugin-Type ABI
 
