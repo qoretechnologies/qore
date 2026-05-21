@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreMediaUtils.qm
+
+%exec-class QoreMediaUtilsTest
+
+class FakeImageGen inherits QoreMediaUtils::AbstractImageGenerator {
+    public { string mode; }
+    constructor(string m) { mode = m; }
+    string getMode() { return mode; }
+    hash<QoreMediaUtils::ImageResult> generateImage(string prompt, *hash<auto> opts) {
+        return <QoreMediaUtils::ImageResult>{
+            "image": binary("FAKE-PNG-" + prompt),
+            "content_type": "image/png",
+        };
+    }
+}
+
+class FakeImageGenFactory inherits QoreMediaUtils::AbstractImageGeneratorFactory {
+    public { string mode; }
+    constructor(string m) { mode = m; }
+    string getMode() { return mode; }
+    string getDisplayName() { return mode + " (test)"; }
+    QoreMediaUtils::AbstractImageGenerator create(
+            hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        return new FakeImageGen(mode);
+    }
+}
+
+class FakeVideoGen inherits QoreMediaUtils::AbstractVideoGenerator {
+    public { string mode; }
+    constructor(string m) { mode = m; }
+    string getMode() { return mode; }
+    hash<QoreMediaUtils::VideoResult> generateVideo(string prompt, *hash<auto> opts) {
+        return <QoreMediaUtils::VideoResult>{
+            "video_url":    "https://example.com/" + prompt + ".mp4",
+            "content_type": "video/mp4",
+        };
+    }
+}
+
+class FakeVideoGenFactory inherits QoreMediaUtils::AbstractVideoGeneratorFactory {
+    public { string mode; }
+    constructor(string m) { mode = m; }
+    string getMode() { return mode; }
+    string getDisplayName() { return mode + " (test)"; }
+    QoreMediaUtils::AbstractVideoGenerator create(
+            hash<QoreMediaUtils::VideoGeneratorConfig> config) {
+        return new FakeVideoGen(mode);
+    }
+}
+
+public class QoreMediaUtilsTest inherits QUnit::Test {
+    constructor() : Test("QoreMediaUtils Test", "1.0") {
+        addTestCase("register + lookup image generator",
+            \registerImageTest());
+        addTestCase("createImageGenerator end-to-end",
+            \createImageTest());
+        addTestCase("duplicate image-factory register raises MEDIA-CONFIG-ERROR",
+            \dupImageTest());
+        addTestCase("getImageGeneratorFactoryEx raises for unknown backend",
+            \unknownImageTest());
+        addTestCase("register + lookup video generator",
+            \registerVideoTest());
+        addTestCase("createVideoGenerator end-to-end",
+            \createVideoTest());
+        addTestCase("createImageGenerator raises when backend missing",
+            \missingBackendTest());
+        addTestCase("knownImageGeneratorBackends includes lazy-loadable modes",
+            \knownBackendsTest());
+        set_return_value(main());
+    }
+
+    private registerImageTest() {
+        FakeImageGenFactory f("test-img-A");
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(f);
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterImageGeneratorFactory("test-img-A");
+        QoreMediaUtils::AbstractImageGeneratorFactory got =
+            QoreMediaUtils::MediaProviderRegistry::getImageGeneratorFactoryEx("test-img-A");
+        assertEq("test-img-A", got.getMode());
+    }
+
+    private createImageTest() {
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+            new FakeImageGenFactory("test-img-C"));
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterImageGeneratorFactory("test-img-C");
+
+        QoreMediaUtils::AbstractImageGenerator gen =
+            QoreMediaUtils::MediaProviderRegistry::createImageGenerator(
+                <QoreMediaUtils::ImageGeneratorConfig>{"backend": "test-img-C"});
+        hash<QoreMediaUtils::ImageResult> r = gen.generateImage("a cat");
+        assertEq(binary("FAKE-PNG-a cat"), r.image);
+        assertEq("image/png", r.content_type);
+    }
+
+    private dupImageTest() {
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+            new FakeImageGenFactory("test-img-D"));
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterImageGeneratorFactory("test-img-D");
+        assertThrows("MEDIA-CONFIG-ERROR", sub () {
+            QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+                new FakeImageGenFactory("test-img-D"));
+        });
+    }
+
+    private unknownImageTest() {
+        assertThrows("MEDIA-CONFIG-ERROR", sub () {
+            QoreMediaUtils::MediaProviderRegistry::getImageGeneratorFactoryEx(
+                "not-a-real-backend-xyz");
+        });
+    }
+
+    private registerVideoTest() {
+        QoreMediaUtils::MediaProviderRegistry::registerVideoGeneratorFactory(
+            new FakeVideoGenFactory("test-vid-A"));
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterVideoGeneratorFactory("test-vid-A");
+        assertEq("test-vid-A",
+            QoreMediaUtils::MediaProviderRegistry::getVideoGeneratorFactoryEx("test-vid-A").getMode());
+    }
+
+    private createVideoTest() {
+        QoreMediaUtils::MediaProviderRegistry::registerVideoGeneratorFactory(
+            new FakeVideoGenFactory("test-vid-C"));
+        on_exit QoreMediaUtils::MediaProviderRegistry::deregisterVideoGeneratorFactory("test-vid-C");
+
+        QoreMediaUtils::AbstractVideoGenerator gen =
+            QoreMediaUtils::MediaProviderRegistry::createVideoGenerator(
+                <QoreMediaUtils::VideoGeneratorConfig>{"backend": "test-vid-C"});
+        hash<QoreMediaUtils::VideoResult> r = gen.generateVideo("a sunset");
+        assertEq("https://example.com/a sunset.mp4", r.video_url);
+        assertEq("video/mp4", r.content_type);
+    }
+
+    private missingBackendTest() {
+        assertThrows("MEDIA-CONFIG-ERROR", sub () {
+            QoreMediaUtils::MediaProviderRegistry::createImageGenerator(
+                <QoreMediaUtils::ImageGeneratorConfig>{});
+        });
+    }
+
+    private knownBackendsTest() {
+        list<string> backends =
+            QoreMediaUtils::MediaProviderRegistry::knownImageGeneratorBackends();
+        # Stability AI + BFL ship as lazy-loadable image generators
+        assertTrue(inlist("stability-ai", backends));
+        assertTrue(inlist("bfl",          backends));
+
+        list<string> vbackends =
+            QoreMediaUtils::MediaProviderRegistry::knownVideoGeneratorBackends();
+        # BFL ships as a lazy-loadable video generator
+        assertTrue(inlist("bfl", vbackends));
+    }
+}

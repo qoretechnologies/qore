@@ -2495,6 +2495,13 @@ cargo install tree-sitter-cli@0.26.5
       - uses @ref qorecodecompletionintro "QoreCodeCompletion" module for context-aware code completion
       - @ref linenoiseintro "linenoise" is now a mandatory dependency (no longer optional)
 
+    - @ref qoremediautilsintro "QoreMediaUtils" module
+      - new module providing a provider-neutral abstraction layer for generative media (image + video)
+      - @ref QoreMediaUtils::AbstractImageGenerator "AbstractImageGenerator" — text-to-image / image-to-image / image-editing contract
+      - @ref QoreMediaUtils::AbstractVideoGenerator "AbstractVideoGenerator" — text-to-video / image-to-video contract
+      - @ref QoreMediaUtils::MediaProviderRegistry "MediaProviderRegistry" with lazy-loaded `ImageGeneratorModuleMap` + `VideoGeneratorModuleMap` — callers select a backend by name (\c "stability-ai", \c "bfl"); the registry lazy-loads the providing module on first lookup
+      - paired with new image / video provider modules (Stability AI, Black Forest Labs)
+
     - @ref qorespeechutilsintro "QoreSpeechUtils" module
       - new module providing a provider-neutral abstraction layer for speech AI
       - @ref QoreSpeechUtils::AbstractTranscriber "AbstractTranscriber" — common
