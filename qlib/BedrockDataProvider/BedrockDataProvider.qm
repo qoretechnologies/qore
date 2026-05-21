@@ -1,0 +1,179 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore BedrockDataProvider module definition
+
+/*  BedrockDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) AwsRestClient
+%requires(reexport) BedrockRestClient
+%requires RestClientIo
+
+module BedrockDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for AWS Bedrock — unified "
+        "Converse API across Anthropic, Llama, Mistral, Cohere, AI21, Titan, and "
+        "DeepSeek-on-Bedrock model families, plus Titan / Cohere embeddings";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new BedrockDataProviderFactory());
+
+        # register the application in the action catalog
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": BedrockDataProvider::AppName,
+            "display_name": "AWS Bedrock",
+            "short_desc": "Generative AI on AWS Bedrock",
+            "desc": "**AWS Bedrock** provides serverless access to a curated catalog "
+                "of foundation models through a single SigV4-signed REST API:\n\n"
+                "- **Unified Converse API** — one body shape across the Anthropic "
+                "(Claude), Meta (Llama), Mistral, Cohere, AI21 (Jamba), Amazon "
+                "(Titan, Nova), and DeepSeek-on-Bedrock model families\n"
+                "- **Embeddings** — Titan Text Embeddings v2 and Cohere "
+                "embed-english / embed-multilingual models\n"
+                "- **Multimodal input** — `image` and `document` content blocks "
+                "natively in the Converse body\n"
+                "- **Tool use** — function-calling via `toolConfig.tools` with the "
+                "same shape across all supported model families\n"
+                "- **Bedrock Guardrails** — apply PII redaction, denied topics, "
+                "and content filters declaratively\n\n"
+                "Authentication uses the standard AWS credential chain: explicit "
+                "keys → environment variables → ECS task role → IMDSv2 → STS "
+                "AssumeRole — handled by the underlying `AwsRestClient`.\n\n"
+                "Project: <https://aws.amazon.com/bedrock/>",
+            "scheme": "bedrock",
+            "logo": BedrockLogo,
+            "logo_file_name": "bedrock-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register: Converse (chat) action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BedrockDataProvider::AppName,
+            "path": "/converse",
+            "action": "converse",
+            "display_name": "Converse",
+            "short_desc": "Generate a chat completion via the unified Converse API",
+            "desc": "Generate a chat completion via the unified Bedrock Converse "
+                "API. One request body shape works across every supported model "
+                "family (Anthropic Claude, Meta Llama, Mistral, Cohere, AI21, "
+                "Amazon Titan / Nova, DeepSeek). Supports text, image, and "
+                "document content blocks, tool use, and Bedrock Guardrails.",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BedrockConverseRequestDataType::Fields{"modelId", "messages"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BedrockConverseRequestDataType::Fields - ("modelId", "messages")
+            ),
+            "output_type": BedrockConverseDataProvider::ResponseType,
+        });
+
+        # register: Embed action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BedrockDataProvider::AppName,
+            "path": "/embed",
+            "action": "embed",
+            "display_name": "Embed Text",
+            "short_desc": "Generate text embeddings via a Bedrock embedding model",
+            "desc": "Generate dense vector embeddings for text using a Bedrock "
+                "embedding model (Amazon Titan Text Embeddings v2, or Cohere "
+                "`embed-english-v3` / `embed-multilingual-v3`). The action "
+                "auto-routes to the correct request body shape based on the "
+                "model ID prefix.",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BedrockEmbedRequestDataType::Fields{"modelId",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BedrockEmbedRequestDataType::Fields - ("modelId",)
+            ),
+            "output_type": BedrockEmbedDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage BedrockDataProvider Module
+
+    @tableofcontents
+
+    @section bedrockdataproviderintro Introduction to the BedrockDataProvider Module
+
+    The %BedrockDataProvider module provides a
+    @ref dataproviderintro "data provider" API for AWS Bedrock so the
+    unified Converse chat API and Bedrock embedding models are discoverable
+    from `qctl`, the Qorus action catalog, and DPQL queries.
+
+    @par Provided children
+
+    - `/converse` — @ref BedrockDataProvider::BedrockConverseDataProvider
+    - `/embed` — @ref BedrockDataProvider::BedrockEmbedDataProvider
+
+    @par Factory
+
+    The factory name is <b><tt>bedrock</tt></b>; resolve a connected
+    provider via:
+    @code{.py}
+AbstractDataProvider p = DataProvider::getFactoryObjectFromString(
+    "bedrock{aws_region=us-east-1,aws_keyid=...,aws_secret=...}");
+    @endcode
+
+    @par Example: DPQL Converse call
+
+    @code{.unparsed}
+qdp 'bedrock{aws_region=us-east-1}/converse' \
+  modelId=anthropic.claude-3-5-sonnet-20240620-v1:0,'messages=[{role=user,content=[{text="Summarize Q3 results"}]}]'
+    @endcode
+
+    @section bedrockdataproviderrelnotes Release Notes
+
+    @subsection bedrockdataprovider_v1_0 BedrockDataProvider v1.0
+    - initial release: Converse + Embed actions registered with the action
+      catalog under the \c bedrock app + scheme
+*/
+
+#! Contains all public definitions in the BedrockDataProvider module
+public namespace BedrockDataProvider {
+#! AWS Bedrock app name
+public const AppName = "AWSBedrock";
+}
+
+#! Module-level constants in a private namespace per the audit-changes design rule
+namespace Priv {
+    #! Bedrock logo loaded from the SVG file shipped with the module
+    public const BedrockLogo = File::readTextFile(get_script_dir() + "/bedrock-logo.svg");
+}
+public namespace BedrockDataProvider {
+    #! Re-export the logo into the module's public namespace
+    public const BedrockLogo = Priv::BedrockLogo;
+}
