@@ -386,7 +386,7 @@ const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
         : (method
             ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
             : nullptr);
-    return qore_substitute_type_params(rv, receiver_type_info, getTypeParamInstantiation());
+    return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
 }
 
 static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func) {
@@ -619,7 +619,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                     //printd(5, "FunctionCallBase::parseArgsVariant() found abstract %s::%s\n", qc->getName(),
                     //    func->getName());
                     // issue #3387: set return type before clearing variant
-                    parse_context.typeInfo = qore_substitute_type_params(mv->parseGetReturnTypeInfo(),
+                    parse_context.typeInfo = qore_substitute_type_params_if_needed(mv->parseGetReturnTypeInfo(),
                         receiver_type_info, &type_param_instantiation);
                     variant = nullptr;
                     func = nullptr;
@@ -662,7 +662,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);
         }
 
-        parse_context.typeInfo = qore_substitute_type_params(
+        parse_context.typeInfo = qore_substitute_type_params_if_needed(
             variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo(),
             receiver_type_info, &type_param_instantiation);
 
@@ -1164,7 +1164,7 @@ QoreValue NewObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 }
 
 QoreValue NewObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    const QoreTypeInfo* oti = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
+    const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
     return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, oti);
 }
 
@@ -1259,7 +1259,7 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     assert(!parse_args || args || tmp_args
         || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
-    const QoreTypeInfo* oti = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
+    const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
     return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, oti);
 }
 
@@ -1493,5 +1493,5 @@ const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
         : (method
             ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
             : 0);
-    return qore_substitute_type_params(rv, receiver_type_info, getTypeParamInstantiation());
+    return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
 }

@@ -1248,6 +1248,89 @@ bool qore_type_contains_wildcard(const QoreTypeInfo* ti) {
     return false;
 }
 
+bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
+    if (!ti || !QoreTypeInfo::hasType(ti)) {
+        return false;
+    }
+
+    if (qore_get_type_parameter_type_info(ti)) {
+        return true;
+    }
+
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+            if (qore_type_contains_type_parameter(arg)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (const QoreWildcardTypeInfo* wti = QoreTypeInfo::getWildcardType(ti)) {
+        return qore_type_contains_type_parameter(wti->getBound());
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (hp->isParameterizedHashDecl()) {
+            for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                if (qore_type_contains_type_parameter(arg)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        if (qore_type_contains_type_parameter(cti->getReturnType())) {
+            return true;
+        }
+        for (const QoreTypeInfo* param : cti->getParamTypes()) {
+            if (qore_type_contains_type_parameter(param)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (QoreTypeInfo::getUnionType(ti)) {
+        for (const QoreReturnSpec& rt : ti->return_vec) {
+            const QoreTypeInfo* member = rt.spec.getTypeInfo();
+            if (member && member != nothingTypeInfo && qore_type_contains_type_parameter(member)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (subtype && qore_type_contains_type_parameter(subtype)) {
+        return true;
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (subtype && qore_type_contains_type_parameter(subtype)) {
+        return true;
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    return subtype && qore_type_contains_type_parameter(subtype);
+}
+
+const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
+        : ti;
+}
+
+const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, receiver_type_info, type_param_inst)
+        : ti;
+}
+
 static qore_type_result_e qore_wildcard_accepts(const QoreWildcardTypeInfo* target_wc,
         const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter) {
     assert(target_wc);

@@ -2529,7 +2529,7 @@ public:
 
     const QoreTypeInfo* specializeType(const QoreTypeInfo* ti) const {
         return hasTypeSpecialization()
-            ? qore_substitute_type_params(ti, specialization_receiver_type_info,
+            ? qore_substitute_type_params_if_needed(ti, specialization_receiver_type_info,
                 specialization_type_param_instantiation.empty() ? nullptr : &specialization_type_param_instantiation)
             : ti;
     }

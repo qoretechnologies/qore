@@ -2808,6 +2808,87 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
 #endif
 }
 
+bool LocalVarValue::TypeSubstitutionCache::matches(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+        const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst) const {
+    if (inputTypeInfo != typeInfo || inputRefTypeInfo != refTypeInfo || this->receiverTypeInfo != receiverTypeInfo) {
+        return false;
+    }
+
+    const UserSignature* owner = nullptr;
+    const type_vec_t* args = nullptr;
+    if (typeParamInst && !typeParamInst->empty()) {
+        owner = typeParamInst->owner;
+        args = &typeParamInst->type_args;
+    }
+
+    if (typeParamOwner != owner) {
+        return false;
+    }
+
+    if (!args) {
+        return typeParamArgs.empty();
+    }
+
+    if (typeParamArgs.size() != args->size()) {
+        return false;
+    }
+
+    for (size_t i = 0, e = typeParamArgs.size(); i < e; ++i) {
+        if (typeParamArgs[i] != (*args)[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void LocalVarValue::TypeSubstitutionCache::set(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+        const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst,
+        const QoreTypeInfo* resolvedTypeInfo, const QoreTypeInfo* resolvedRefTypeInfo) {
+    inputTypeInfo = typeInfo;
+    inputRefTypeInfo = refTypeInfo;
+    this->receiverTypeInfo = receiverTypeInfo;
+    typeParamOwner = nullptr;
+    typeParamArgs.clear();
+
+    if (typeParamInst && !typeParamInst->empty()) {
+        typeParamOwner = typeParamInst->owner;
+        typeParamArgs = typeParamInst->type_args;
+    }
+
+    this->resolvedTypeInfo = resolvedTypeInfo;
+    this->resolvedRefTypeInfo = resolvedRefTypeInfo;
+}
+
+void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const QoreTypeInfo*& refTypeInfo,
+        bool typeInfoNeedsSubstitution, bool refTypeInfoNeedsSubstitution) const {
+    const QoreTypeInfo* receiverTypeInfo = qore_get_current_receiver_type_info();
+    const QoreTypeParamInstantiation* typeParamInst = runtime_get_type_param_instantiation();
+
+    if (type_substitution_cache
+            && type_substitution_cache->matches(typeInfo, refTypeInfo, receiverTypeInfo, typeParamInst)) {
+        typeInfo = type_substitution_cache->resolvedTypeInfo;
+        refTypeInfo = type_substitution_cache->resolvedRefTypeInfo;
+        return;
+    }
+
+    const QoreTypeInfo* resolvedTypeInfo = typeInfoNeedsSubstitution
+        ? qore_substitute_type_params(typeInfo, receiverTypeInfo, typeParamInst)
+        : typeInfo;
+    const QoreTypeInfo* resolvedRefTypeInfo = refTypeInfoNeedsSubstitution
+        ? qore_substitute_type_params(refTypeInfo, receiverTypeInfo, typeParamInst)
+        : refTypeInfo;
+
+    if (!type_substitution_cache) {
+        type_substitution_cache.reset(new TypeSubstitutionCache);
+    }
+    type_substitution_cache->set(typeInfo, refTypeInfo, receiverTypeInfo, typeParamInst, resolvedTypeInfo,
+        resolvedRefTypeInfo);
+
+    typeInfo = resolvedTypeInfo;
+    refTypeInfo = resolvedRefTypeInfo;
+}
+
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
         const QoreTypeInfo* refTypeInfo) const {
     //printd(5, "LocalVarValue::getLValue() this: %p type: '%s' %d assigned: %d ti: '%s' rti: '%s' (%p)\n", this,

@@ -1342,7 +1342,7 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
         if (*xsink) {
             return -1;
         }
-        const QoreTypeInfo* member_type = qore_substitute_type_params(info.getTypeInfo(),
+        const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(info.getTypeInfo(),
             qore_object_private::get(o)->instantiated_type);
         printd(5, "qore_class_private::initMember() this: %p '%s::%s' type %s val: %s filter: %d\n", this, name.c_str(),
             member_name, QoreTypeInfo::getPath(member_type),
@@ -3091,7 +3091,7 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
     }
 
     for (const QoreTypeInfo* parent_type : parameterized_vparents) {
-        const QoreTypeInfo* subst = qore_substitute_type_params(parent_type, source);
+        const QoreTypeInfo* subst = qore_substitute_type_params_if_needed(parent_type, source);
         const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(subst);
         if (!parent_pti) {
             continue;
@@ -3121,7 +3121,7 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
     for (const QoreTypeInfo* parent_type : parameterized_vparents) {
         if (hasTypeParams() && rawConstructionDefaultsToAuto()) {
             type_vec_t raw_args(type_params.size(), autoTypeInfo);
-            parent_type = qore_substitute_type_params(parent_type, getTypeInfo(raw_args));
+            parent_type = qore_substitute_type_params_if_needed(parent_type, getTypeInfo(raw_args));
         }
         const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(parent_type);
         if (!parent_pti) {

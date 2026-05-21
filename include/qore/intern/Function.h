@@ -672,6 +672,8 @@ public:
         return is_user ? const_cast<AbstractQoreFunctionVariant*>(this)->getUserVariantBase() : nullptr;
     }
 
+    DLLLOCAL const UserSignature* getGenericSignature() const;
+
     DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
         assert(false);
         return QoreValue();
@@ -757,9 +759,15 @@ protected:
     //! emitted by qpp at TU scope.
     const QoreProgramLocation* builtin_src_loc = nullptr;
 
+    mutable std::atomic<const UserSignature*> generic_signature_cache {genericSignatureCacheUnknown()};
+
     DLLLOCAL virtual ~AbstractQoreFunctionVariant() {}
 
 private:
+    DLLLOCAL static const UserSignature* genericSignatureCacheUnknown() {
+        return reinterpret_cast<const UserSignature*>(static_cast<uintptr_t>(1));
+    }
+
     // not implemented
     DLLLOCAL AbstractQoreFunctionVariant(const AbstractQoreFunctionVariant& old) = delete;
     DLLLOCAL AbstractQoreFunctionVariant& operator=(AbstractQoreFunctionVariant& orig) = delete;

@@ -3620,6 +3620,9 @@ struct QoreTypeParamInstantiation {
     }
 };
 
+//! Returns the current call-local generic type-parameter instantiation, if any
+DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
+
 //! Creates or retrieves a cached union type for the given member types
 /** @param member_types vector of member types
     @param or_nothing if true, the union type also accepts NOTHING
@@ -3652,6 +3655,16 @@ DLLLOCAL const QoreTypeInfo* qore_get_wildcard_super_type(const QoreTypeInfo* bo
 
 //! Returns true if the type info or any nested generic argument contains a wildcard
 DLLLOCAL bool qore_type_contains_wildcard(const QoreTypeInfo* ti);
+
+//! Returns true if the type info or any nested generic argument contains a symbolic type parameter
+DLLLOCAL bool qore_type_contains_type_parameter(const QoreTypeInfo* ti);
+
+//! Substitutes symbolic type parameters in the given type only if the type can contain symbolic parameters
+DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti);
+
+//! Substitutes symbolic type parameters in the given type only if the type can contain symbolic parameters
+DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
+    const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst = nullptr);
 
 //! Checks whether a target generic type argument accepts a source type argument
 DLLLOCAL qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,

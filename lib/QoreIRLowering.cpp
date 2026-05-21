@@ -4367,8 +4367,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals, new_hd->loc, nullptr)
                 ->result;
         }
-        const QoreTypeInfo* hd_type_info = qore_substitute_type_params(new_hd->hd->getTypeInfo(),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* hd_type_info = qore_substitute_type_params_if_needed(new_hd->hd->getTypeInfo());
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hd_type_info);
         if (!hd) {
             error = "hashdecl construction target could not be resolved after generic type substitution";
@@ -4837,8 +4836,7 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
         // This ensures local variable references in the hash initializer are properly
         // lowered as individual IR instructions (LoadLocal etc.), enabling correct AOT
         // serialization instead of baking pre-evaluated values into the AST.
-        const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(vrn->getTypeInfo(),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* runtime_type_info = qore_substitute_type_params_if_needed(vrn->getTypeInfo());
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
         if (hd && vrn->isHashDeclConstruct()) {
             // Undo ast_delegate_count: hashdecl args are fully lowered via IR,
