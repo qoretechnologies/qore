@@ -83,6 +83,10 @@ struct QorePluginLLVMCodegenContext {
     uint32_t num_operands;
     //! Optional diagnostic pointer set by the callback on failure.
     const char** error_message;
+    //! Registered operation metadata. Present when struct_size covers this field.
+    const QorePluginOpcodeInfoExtended* operation_info;
+    //! True when both the operation descriptor and Program parse options allow IEEE-unsafe FP reassociation.
+    bool fp_reassociation_enabled;
 };
 
 //! Optional LLVM codegen callback for a registered plugin operation.

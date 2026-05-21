@@ -15107,6 +15107,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 codegen_ctx.boxed_operands = boxed_operands.empty() ? nullptr : boxed_operands.data();
                 codegen_ctx.num_operands = static_cast<uint32_t>(boxed_operands.size());
                 codegen_ctx.error_message = &codegen_error;
+                codegen_ctx.operation_info = &codegen_info.info;
+                codegen_ctx.fp_reassociation_enabled = pinst->operation.fp_reassociation_enabled;
 
                 result = codegen_info.codegen(&codegen_ctx);
                 if (!result) {

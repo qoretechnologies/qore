@@ -247,13 +247,15 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
     return val.getTypeInfo();
 }
 
-static QoreIRPluginOperationRef pluginOperationRefFromInfo(const QorePluginResolvedOperationInfo& info) {
+static QoreIRPluginOperationRef pluginOperationRefFromInfo(const QorePluginResolvedOperationInfo& info,
+        QoreProgram* pgm) {
     QoreIRPluginOperationRef ref;
     ref.global_operation_id = info.global_operation_id;
     ref.module_name = info.module_name;
     ref.local_operation_id = info.local_operation_id;
     ref.canonical_signature_version = info.canonical_signature_version;
     ref.signature_hash = info.signature_hash;
+    ref.fp_reassociation_enabled = pgm && qore_plugin_allows_fp_reassociation(info, pgm->getParseOptions());
     return ref;
 }
 
@@ -280,8 +282,8 @@ static QoreIRValue tryDescriptorPluginSubscriptLowering(QoreIRLowering& lowering
     if (!rhs.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginSubscript, pluginOperationRefFromInfo(info), {lhs, rhs},
-        op->loc)->result;
+    return builder.createPluginOp(QoreIROpcode::PluginSubscript,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
 }
 
 static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -313,7 +315,8 @@ static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, Qo
     if (!end.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginCall, pluginOperationRefFromInfo(info), {seq, start, end},
+    return builder.createPluginOp(QoreIROpcode::PluginCall,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {seq, start, end},
         op->loc)->result;
 }
 
@@ -342,8 +345,8 @@ static QoreIRValue tryDescriptorPluginBinaryLowering(QoreIRLowering& lowering, Q
     if (!rhs.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginBinary, pluginOperationRefFromInfo(info), {lhs, rhs},
-        op->loc)->result;
+    return builder.createPluginOp(QoreIROpcode::PluginBinary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
 }
 
 static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -366,8 +369,8 @@ static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, Qo
     if (!value.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginUnary, pluginOperationRefFromInfo(info), {value},
-        op->loc)->result;
+    return builder.createPluginOp(QoreIROpcode::PluginUnary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {value}, op->loc)->result;
 }
 
 static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,

@@ -347,6 +347,16 @@ static QorePluginExtension sample_extensions[]{
     codegen error. Codegen that may raise through the exception sink is followed
     by the same exception check used by runtime-helper dispatch.
 
+    \c QorePluginLLVMCodegenContext also carries the registered operation
+    metadata in \c operation_info and the already-gated
+    \c fp_reassociation_enabled decision. A callback must only emit
+    IEEE-unsafe reassociation, contraction, or vector-reduction code when
+    \c fp_reassociation_enabled is \c true; this means both the operation
+    descriptor set \c fp_reassociation_allowed and the active Program enabled
+    @ref fp-fast-math "%fp-fast-math". Callbacks compiled against newer headers
+    should still check \c struct_size before reading newly added fields when
+    they need to support older libqore builds.
+
     @section plugin_types_values Plugin Value Instances
 
     Registered plugin types can wrap module-defined value bits in a first-class

@@ -2749,8 +2749,12 @@ End-to-end zero-conversion typed pipelines for analytics workloads.
   this flag is the load-bearing path for vectorising FP reductions.
   Implemented as a conservative-default descriptor field plus extended
   `QoreParseOptions::FP_FAST_MATH`; reflection exposes the metadata so
-  tools can verify both sides of the gate. Optimizer passes still have to
-  call the gate before introducing any concrete reassociation rewrite.
+  tools can verify both sides of the gate. Plugin LLVM codegen callbacks now
+  receive both the operation metadata and the already-gated
+  `fp_reassociation_enabled` decision in `QorePluginLLVMCodegenContext`, so
+  module-owned native rewrites have the same conservative default as core
+  optimizer passes. Core optimizer passes still have to call the gate before
+  introducing any concrete reassociation rewrite.
 
 Long-tail performance work, ongoing rather than discrete phase.
 

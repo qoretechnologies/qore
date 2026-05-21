@@ -834,6 +834,7 @@ struct QoreIRPluginOperationRef {
     uint16_t local_operation_id = 0;
     uint8_t canonical_signature_version = 1;
     uint64_t signature_hash = 0;
+    bool fp_reassociation_enabled = false;
 
     bool isValid() const {
         return global_operation_id != 0 || !module_name.empty();

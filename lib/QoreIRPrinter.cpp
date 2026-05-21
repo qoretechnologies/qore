@@ -575,6 +575,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " module:" << plugin_inst->operation.module_name
                         << " local:" << plugin_inst->operation.local_operation_id;
                 }
+                if (plugin_inst->operation.fp_reassociation_enabled) {
+                    out << " fp-fast-math";
+                }
                 out << ">";
             } else if (inst->opcode == QoreIROpcode::VrnConstruct) {
                 out << " <vrn-construct>";

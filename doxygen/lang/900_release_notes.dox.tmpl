@@ -1322,8 +1322,10 @@ foreach string module_name in (registry.getProcessModules()) {
     and round-tripped through \c Serializable using the registered plugin
     serializer callbacks. Modules can opt into inline LLVM lowering with the
     \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension from
-    \c <qore/QorePluginLLVM.h>; incompatible optional LLVM extensions fall back
-    to runtime-helper dispatch, while required mismatches fail registration.
+    \c <qore/QorePluginLLVM.h>; callbacks receive operation metadata plus the
+    gated \c fp_reassociation_enabled decision, incompatible optional LLVM
+    extensions fall back to runtime-helper dispatch, and required mismatches
+    fail registration.
     Registered operations can also provide \c QorePluginLoweringCallback
     pattern matchers so IR lowering can emit plugin-dispatch IR before generic
     \c any fallback; claimed-node \c NotApplicable results fail with

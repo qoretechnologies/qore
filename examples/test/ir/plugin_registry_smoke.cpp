@@ -142,6 +142,8 @@ static uint64_t smokeDenseUnary(void* result_buffer_data, int64_t result_size, c
     return smokeBitsFromValue(QoreValue());
 }
 
+static bool smokeLLVMCodegenSawFpGate = false;
+
 static llvm::Value* smokeLLVMCodegen(QorePluginLLVMCodegenContext* ctx) {
     if (!ctx || ctx->struct_size < sizeof(QorePluginLLVMCodegenContext)
             || ctx->abi_version != QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION || !ctx->qore_value_type) {
@@ -150,6 +152,8 @@ static llvm::Value* smokeLLVMCodegen(QorePluginLLVMCodegenContext* ctx) {
         }
         return nullptr;
     }
+    smokeLLVMCodegenSawFpGate = ctx->operation_info && ctx->operation_info->fp_reassociation_allowed
+        && ctx->fp_reassociation_enabled;
     return llvm::ConstantInt::get(ctx->qore_value_type, smokeBitsFromValue(QoreValue(static_cast<int64>(4242))));
 }
 
@@ -459,6 +463,42 @@ static bool checkProfiledPluginGuardLowering() {
     return true;
 }
 
+static bool checkPluginLLVMCodegenFastMathContext(uint32_t global_id) {
+    QoreIRFunction func("plugin-codegen-fast-math-context-smoke");
+    QoreIRBuilder builder(&func);
+    QoreIRBasicBlock* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+    auto* lhs = builder.createConstInt(2);
+    auto* rhs = builder.createConstInt(3);
+
+    QoreIRPluginOperationRef op_ref;
+    op_ref.global_operation_id = global_id;
+    op_ref.fp_reassociation_enabled = true;
+    auto* op = builder.createPluginOp(QoreIROpcode::PluginBinary, op_ref, {lhs->result, rhs->result});
+    builder.createReturn(op->result);
+
+    std::string verify_error;
+    if (!QoreIRVerifier::verify(func, verify_error)) {
+        std::cerr << "plugin LLVM fast-math context IR verify failed: " << verify_error << "\n";
+        return false;
+    }
+
+    llvm::LLVMContext llvm_context;
+    llvm::Module module("plugin-codegen-fast-math-context-module", llvm_context);
+    QoreIRToLLVM lowering(llvm_context);
+    std::string lowering_error;
+    smokeLLVMCodegenSawFpGate = false;
+    if (!lowering.lowerFunction(func, module, lowering_error)) {
+        std::cerr << "plugin LLVM fast-math context lowering failed: " << lowering_error << "\n";
+        return false;
+    }
+    if (!smokeLLVMCodegenSawFpGate) {
+        std::cerr << "plugin LLVM codegen callback did not receive enabled FP reassociation context\n";
+        return false;
+    }
+    return true;
+}
+
 static bool checkRegistrationAndIntrospection() {
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
@@ -537,11 +577,17 @@ static bool checkRegistrationAndIntrospection() {
     codegen_ctx.qore_value_type = llvm_builder.getInt64Ty();
     codegen_ctx.pointer_type = llvm_builder.getPtrTy();
     codegen_ctx.error_message = &codegen_error;
+    codegen_ctx.operation_info = &codegen_info.info;
+    codegen_ctx.fp_reassociation_enabled = true;
+    smokeLLVMCodegenSawFpGate = false;
     llvm::Value* codegen_value = codegen_info.codegen(&codegen_ctx);
     if (!codegen_value || codegen_error || !llvm::isa<llvm::ConstantInt>(codegen_value)
             || llvm::cast<llvm::ConstantInt>(codegen_value)->getZExtValue()
-                != smokeBitsFromValue(QoreValue(static_cast<int64>(4242)))) {
+                != smokeBitsFromValue(QoreValue(static_cast<int64>(4242))) || !smokeLLVMCodegenSawFpGate) {
         std::cerr << "process plugin LLVM codegen callback returned the wrong value\n";
+        return false;
+    }
+    if (!checkPluginLLVMCodegenFastMathContext(global_id)) {
         return false;
     }
     uint64_t signature_hash = qore_plugin_compute_signature_hash_v1(ops[0].signature);
