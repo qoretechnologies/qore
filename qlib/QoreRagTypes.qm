@@ -666,6 +666,7 @@ public class RagProviderRegistry {
             "mongo-atlas": "MongoDbDataProvider",
             "pinecone":    "PineconeRestClient",
             "weaviate":    "WeaviateRestClient",
+            "milvus":      "MilvusRestClient",
         };
     }
 

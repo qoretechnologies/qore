@@ -2558,6 +2558,8 @@ qore_user_module("qlib/PineconeRestClient.qm" "ConnectionProvider;Mime;RestClien
 qore_user_module("qlib/PineconeDataProvider" "PineconeRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "pinecone-logo.svg")
 qore_user_module("qlib/WeaviateRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreRagTypes")
 qore_user_module("qlib/WeaviateDataProvider" "WeaviateRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "weaviate-logo.svg")
+qore_user_module("qlib/MilvusRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreRagTypes")
+qore_user_module("qlib/MilvusDataProvider" "MilvusRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "milvus-logo.svg")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")

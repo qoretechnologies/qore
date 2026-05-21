@@ -238,6 +238,7 @@ public class DataProvider {
             "chroma": "ChromaDataProvider",
             "pinecone": "PineconeDataProvider",
             "weaviate": "WeaviateDataProvider",
+            "milvus": "MilvusDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",
