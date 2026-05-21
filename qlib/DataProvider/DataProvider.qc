@@ -255,6 +255,7 @@ public class DataProvider {
             "pdfco": "PdfCoDataProvider",
             "segment": "SegmentDataProvider",
             "pop3": "Pop3ClientDataProvider",
+            "stability-ai": "StabilityAiDataProvider",
 
             # provided by the jni module
             "powerpointread": "PowerPointDataProvider",

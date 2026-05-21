@@ -1,0 +1,133 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore StabilityAiDataProvider module definition
+
+/*  StabilityAiDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) StabilityAiRestClient
+%requires RestClientIo
+
+module StabilityAiDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Stability AI image generation";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new StabilityAiDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": StabilityAiDataProvider::AppName,
+            "display_name": "Stability AI",
+            "short_desc": "Stability AI text-to-image generation (Stable Diffusion)",
+            "desc": "Provides access to [Stability AI](https://stability.ai) "
+                "— the company behind Stable Diffusion.  Three model tiers:\n\n"
+                "- **Ultra** (`ultra`): highest-quality SD3 Ultra, best for "
+                "marketing artwork, photo-real images, and brand visuals\n"
+                "- **SD3** (`sd3`): Stable Diffusion 3 / 3.5 — the default "
+                "balanced quality / speed model\n"
+                "- **Core** (`core`): faster + cheaper model with "
+                "preset-driven style transfer for prototyping and bulk work",
+            "scheme": "stability-ai",
+            "logo": StabilityAiLogo,
+            "logo_file_name": "stability-ai-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (
+                DataProvider::AppGroup::AiLlm,
+                DataProvider::AppGroup::DesignCreative,
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": StabilityAiDataProvider::AppName,
+            "path": "/generate-image",
+            "action": "generate-image",
+            "display_name": "Generate Image",
+            "short_desc": "Generate an image from a text prompt",
+            "desc": "Generates an image from a text prompt via Stability AI's "
+                "v2beta `/stable-image/generate/*` endpoints.  The `model` "
+                "option selects the endpoint (`ultra` / `sd3` / `core`).\n\n"
+                "Returns raw image bytes — `image` holds the bytes, "
+                "`content_type` the MIME type, and `finish_reason` flags "
+                "content-safety blocks (`CONTENT_FILTERED`).",
+            "action_code": DPAT_API,
+            "groups": ("Image Generation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                StabilityAiGenerateImageRequestDataType::Fields{"prompt",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                StabilityAiGenerateImageRequestDataType::Fields{
+                    "model", "output_format", "aspect_ratio",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                StabilityAiGenerateImageRequestDataType::Fields - (
+                    "prompt", "model", "output_format", "aspect_ratio",
+                )
+            ),
+            "output_type": StabilityAiGenerateImageDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage StabilityAiDataProvider Module
+
+    @tableofcontents
+
+    @section stabilityaidataproviderintro StabilityAiDataProvider Introduction
+
+    The %StabilityAiDataProvider module provides a data provider API for
+    [Stability AI](https://stability.ai) text-to-image generation.
+
+    A single DPAT_API action is registered:
+    - `generate-image` — submit a text prompt and receive image bytes
+
+    The `model` option selects the underlying endpoint: `ultra`
+    (SD3 Ultra), `sd3` (Stable Diffusion 3 / 3.5), or `core` (faster +
+    cheaper, with `style_preset` support).
+
+    For programmatic use via @ref qoremediautilsintro "QoreMediaUtils",
+    see @ref stabilityairestclientintro "StabilityAiRestClient" —
+    `StabilityAiImageGenerator` implements
+    @ref QoreMediaUtils::AbstractImageGenerator "AbstractImageGenerator"
+    and is registered with `MediaProviderRegistry` automatically.
+
+    @section StabilityAiDataProviderRelnotes Release Notes
+
+    @subsection StabilityAiDataProviderv1_0 StabilityAiDataProvider v1.0
+    - the initial version of the %StabilityAiDataProvider module
+*/
+
+#! contains all public definitions in the StabilityAiDataProvider module
+public namespace StabilityAiDataProvider {
+#! Stability AI application name
+public const AppName = "StabilityAi";
+}
+
+#! App logo loaded from file
+public const StabilityAiLogo =
+    File::readTextFile(get_script_dir() + "/stability-ai-logo.svg");

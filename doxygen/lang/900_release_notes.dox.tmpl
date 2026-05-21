@@ -2696,6 +2696,18 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://tally.so/">Tally.so</a>'s form management API
       - provides TallyRestConnection for connection management with \c tally:// URL scheme
 
+    - @ref stabilityaidataproviderintro "StabilityAiDataProvider" module
+      - new module providing a data provider API for <a href="https://stability.ai">Stability AI</a> text-to-image generation
+      - exposes one action: `generate-image` — submits a text prompt and returns raw image bytes from one of three model tiers (`ultra` SD3 Ultra, `sd3` Stable Diffusion 3 / 3.5, `core` faster + cheaper with style presets)
+      - configurable `output_format` (PNG / JPEG / WebP), `aspect_ratio` (11 presets), `negative_prompt`, `seed`, and `style_preset` (`core` only)
+      - action catalog integration with 1 action under the \c stability-ai scheme; registered with the `DesignCreative` AppGroup
+
+    - @ref stabilityairestclientintro "StabilityAiRestClient" module
+      - new module providing a REST client for <a href="https://stability.ai">Stability AI</a> v2beta endpoints
+      - supports Bearer-token authentication
+      - registers a `stability-ai` image-generator backend in @ref qoremediautilsintro "QoreMediaUtils" — callable via `MediaProviderRegistry::createImageGenerator()` without an explicit `%requires` for this module
+      - provides StabilityAiRestConnection for connection management with \c stability-ai:// URL scheme
+
     - @ref tavilydataproviderintro "TavilyDataProvider" module
       - new module providing a data provider API for <a href="https://www.tavily.com">Tavily</a> agentic web-search services
       - exposes four actions: `search` (`/search`), `extract` (`/extract`), `crawl` (`/crawl`), and `map` (`/map`)

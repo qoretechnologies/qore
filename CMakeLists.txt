@@ -2551,6 +2551,8 @@ qore_user_module("qlib/GoogleDocumentAiRestClient.qm" "ConnectionProvider;Mime;R
 qore_user_module("qlib/GoogleDocumentAiDataProvider" "GoogleDocumentAiRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider;GcpAuth" "google-document-ai-logo.svg")
 qore_user_module("qlib/AzureDocumentIntelligenceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreAsyncJobUtils")
 qore_user_module("qlib/AzureDocumentIntelligenceDataProvider" "AzureDocumentIntelligenceRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "azure-document-intelligence-logo.svg")
+qore_user_module("qlib/StabilityAiRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreMediaUtils")
+qore_user_module("qlib/StabilityAiDataProvider" "StabilityAiRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "stability-ai-logo.svg")
 qore_user_module("qlib/GroqRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
 qore_user_module("qlib/GroqDataProvider" "GroqRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "groq-logo.svg")
 qore_user_module("qlib/TogetherRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes;QoreRagTypes")
