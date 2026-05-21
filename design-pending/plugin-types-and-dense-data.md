@@ -1919,6 +1919,7 @@ renaming or removing:
 | `unknown_helper_abi` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `unknown_value_access` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `unknown_result_alias` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `unknown_type_promotion_kind` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `invalid_extension_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `extension_unrecognized_required` | `PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED` |
 | `invalid_dependency` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
@@ -2720,17 +2721,18 @@ End-to-end zero-conversion typed pipelines for analytics workloads.
 - Lazy expression fusion (when at least two participating ops declare
   purity + commutativity / associativity).
 - Cross-stage fusion in pipelines.
-- **Fast-math flag for floating-point plugin operations.** Adds a
+- [x] **Fast-math flag for floating-point plugin operations.** Adds a
   per-operation declarative bit (working name `fp_reassociation_allowed`)
-  and a corresponding Program-level parse directive (working name
-  `%fp-fast-math`) that together enable IEEE-unsafe rewrites — vector
+  and a corresponding Program-level parse directive (`%fp-fast-math`) that
+  together enable IEEE-unsafe rewrites — vector
   reduction over `sum`/`mean`, contraction across `add`/`mul`, FMA
   formation, etc. — for ops that opt in. Plain `is_associative = true` on
   an FP op is insufficient by design (per §3.3 operation-name table) so
   this flag is the load-bearing path for vectorising FP reductions.
-  Scope, default, and Program-vs-call-site granularity are tracked in
-  Open Question 10. Until this ships, FP ops in the operation-name table
-  cannot be reassociated regardless of declared algebra.
+  Implemented as a conservative-default descriptor field plus extended
+  `QoreParseOptions::FP_FAST_MATH`; reflection exposes the metadata so
+  tools can verify both sides of the gate. Optimizer passes still have to
+  call the gate before introducing any concrete reassociation rewrite.
 
 Long-tail performance work, ongoing rather than discrete phase.
 
@@ -2909,17 +2911,13 @@ feature wishlist.
    to a native plugin data type if that simplifies operators and zero-copy
    columns. The exact ownership model, private-data compatibility layer, and
    migration path for existing in-tree tests still need design.
-10. **FP fast-math flag for plugin operations.** Phase 7 commits to shipping
-    a fast-math flag (working name `fp_reassociation_allowed` per-op +
-    `%fp-fast-math` parse directive). Open: declaration site (per-op only?
-    per-Program only? both, with op overriding Program?), default
-    (off-everywhere by default; on by `%fp-fast-math`?), interaction with
-    `%modern` strictness, whether the flag is a single bit or a
-    multi-flag set (associate, reassociate, contract, NaN-oblivious,
-    inf-oblivious, signed-zero-oblivious — the gcc/LLVM model), and
-    whether it gates only reductions or also per-element FMA/contract
-    rewrites. Recommended starting point: single bit, per-op, defaulting
-    off, with `%fp-fast-math` flipping it for ops that don't override.
+10. **FP fast-math flag for plugin operations.** Resolved for v1 as a
+    two-part opt-in: a per-operation `fp_reassociation_allowed` descriptor
+    field and a Program-level `%fp-fast-math` / `QoreParseOptions::FP_FAST_MATH`
+    option. Both default off, and both must be true before libqore may
+    introduce IEEE-unsafe FP reassociation. The v1 flag is intentionally a
+    single broad permission bit; finer gcc/LLVM-style subflags can be added
+    in a later ABI revision if real modules need them.
 
 ---
 

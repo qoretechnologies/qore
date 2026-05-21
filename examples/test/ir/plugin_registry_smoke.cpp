@@ -228,6 +228,10 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
     ops[0].signature.access = QorePluginValueAccess::ReadOnly;
     ops[0].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
     ops[0].signature.helper_abi = QorePluginHelperAbi::BinaryValue;
+    ops[0].info.is_commutative = true;
+    ops[0].info.is_associative = true;
+    ops[0].info.is_pure_modulo_xsink = true;
+    ops[0].info.fp_reassociation_allowed = true;
     ops[0].runtime_helper = reinterpret_cast<void (*)()>(smokeBinary);
     ops[0].lowering_pattern = smokeOperatorLowering;
     ops[0].lowering_claimed_node_kinds = 1ULL << NT_OPERATOR;
@@ -244,6 +248,8 @@ static QorePluginTypeRegistration smokeRegistration(QorePluginTypeDescriptor& ty
     ops[1].signature.access = QorePluginValueAccess::ReadOnly;
     ops[1].signature.result_alias = QorePluginResultAlias::FreshNoAliasInputs;
     ops[1].signature.helper_abi = QorePluginHelperAbi::DenseBufferBinary;
+    ops[1].info.is_pure_modulo_xsink = true;
+    ops[1].info.can_vectorize = true;
     ops[1].runtime_helper = reinterpret_cast<void (*)()>(smokeDenseBinary);
 
     ops[2] = {};
@@ -456,7 +462,7 @@ static bool checkRegistrationAndIntrospection() {
     }
     QorePluginLLVMCodegenInfo codegen_info;
     if (qore_plugin_get_llvm_codegen_info(global_id, codegen_info, &xsink) || xsink || !codegen_info.codegen
-            || codegen_info.local_operation_id != 0) {
+            || codegen_info.local_operation_id != 0 || !codegen_info.info.fp_reassociation_allowed) {
         std::cerr << "process plugin LLVM codegen lookup failed\n";
         return false;
     }
@@ -508,11 +514,24 @@ static bool checkRegistrationAndIntrospection() {
         std::cerr << "process plugin operation introspection did not expose signature_hash\n";
         return false;
     }
+    if (!op_hash->getKeyValue("is_associative").getAsBool()
+            || !op_hash->getKeyValue("fp_reassociation_allowed").getAsBool()) {
+        std::cerr << "process plugin operation introspection did not expose FP reassociation metadata\n";
+        return false;
+    }
 
     ReferenceHolder<QoreHashNode> resolved(qore_plugin_resolve_process_operation(bigIntTypeInfo, bigIntTypeInfo,
         "add", &xsink), &xsink);
     if (xsink || !resolved || resolved->getKeyValue("global_id").getAsBigInt() != static_cast<int64>(global_id)) {
         std::cerr << "process plugin operation resolution failed\n";
+        return false;
+    }
+    QorePluginResolvedOperationInfo resolved_info;
+    if (qore_plugin_resolve_program_operation_info(nullptr, bigIntTypeInfo, bigIntTypeInfo, "add",
+            QorePluginHelperAbi::BinaryValue, resolved_info, &xsink) || xsink
+            || qore_plugin_allows_fp_reassociation(resolved_info, QoreParseOptions())
+            || !qore_plugin_allows_fp_reassociation(resolved_info, QoreParseOptions::FP_FAST_MATH)) {
+        std::cerr << "process plugin FP reassociation gate failed\n";
         return false;
     }
     ReferenceHolder<QoreHashNode> missing_resolved(qore_plugin_resolve_process_operation(bigIntTypeInfo,

@@ -11,6 +11,7 @@
 #define _QORE_INTERN_QOREPLUGINREGISTRY_H
 
 #include <qore/QorePluginType.h>
+#include <qore/QoreParseOptions.h>
 #include <qore/QoreValue.h>
 
 #include <cstdint>
@@ -46,6 +47,7 @@ struct QorePluginLLVMCodegenInfo {
     uint16_t local_operation_id = 0;
     std::string operation_name;
     QorePluginOperationSignature signature = {};
+    QorePluginOpcodeInfoExtended info = {};
     QorePluginLLVMCodegenCallback codegen = nullptr;
 };
 
@@ -53,6 +55,7 @@ struct QorePluginLoweringInfo {
     std::string module_name;
     uint16_t local_operation_id = 0;
     std::string operation_name;
+    QorePluginOpcodeInfoExtended info = {};
     uint64_t claimed_node_kinds = 0;
     QorePluginLoweringCallback lowering = nullptr;
 };
@@ -63,9 +66,16 @@ struct QorePluginResolvedOperationInfo {
     uint16_t local_operation_id = 0;
     std::string operation_name;
     QorePluginOperationSignature signature = {};
+    QorePluginOpcodeInfoExtended info = {};
     uint8_t canonical_signature_version = QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
     uint64_t signature_hash = 0;
 };
+
+//! Returns true when both the Program and operation descriptor allow IEEE-unsafe FP reassociation.
+DLLLOCAL inline bool qore_plugin_allows_fp_reassociation(const QorePluginResolvedOperationInfo& info,
+        const QoreParseOptions& parse_options) {
+    return info.info.fp_reassociation_allowed && parse_options.hasAll(QoreParseOptions::FP_FAST_MATH);
+}
 
 struct QorePluginModuleHandle {
     static constexpr uint64_t Magic = 0x516f7265506c6731ULL; // "QorePlg1"

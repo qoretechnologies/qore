@@ -67,6 +67,7 @@
     |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br><br>Since %Qore 0.8.6
     |@ref exec-class "%exec-class" <em>@ref qore_classes "class_name"</em>|Instantiates the named class as the application class; also turns on @ref no-top-level "%no-top-level". If the program is read from stdin or from the command line, an argument must be given specifying the class name. Any top level statements before this directive are silently ignored
+    |@ref fp-fast-math "%fp-fast-math"|Allows optimizers to use IEEE-unsafe floating-point reassociation and contraction, but only for operations whose metadata also opts in. Set programmatically with the string \c "fp-fast-math" on @ref ParseOptions<br><br>Since %Qore 2.3
     |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators
     |@ref ifdef "%ifdef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref ifndef "%ifndef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifndef "%ifndef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
@@ -1179,6 +1180,33 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Enables the named warning while parsing. See @ref warnings for more information.
+
+    <hr>
+    @section fp-fast-math %fp-fast-math
+
+    @par Parse Directive:
+    <tt>%%fp-fast-math</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-set-parse-option=fp-fast-math</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::QoreParseOptions::FP_FAST_MATH (string name: \c "fp-fast-math")
+
+    @par Description:
+    Enables IEEE-unsafe floating-point optimizer rewrites for the current @ref Qore::Program "Program".
+    This option alone does not reorder arithmetic. A registered plugin operation must also set
+    \c QorePluginOpcodeInfoExtended::fp_reassociation_allowed before libqore may reassociate,
+    vector-reduce, contract, or otherwise change the evaluation order of that operation.
+
+    @note This is an extended parse option (bit 71). The Qore constant \c PO_FP_FAST_MATH
+    is defined as \c 0 for compatibility with the legacy 64-bit parse-option space; use
+    the string name \c "fp-fast-math" with the @ref ParseOptions class when setting parse
+    options programmatically.
+
+    @since %Qore 2.3
+
+    @see @ref plugin_types
 
     <hr>
     @section endif %endif

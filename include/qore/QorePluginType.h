@@ -147,6 +147,7 @@ struct QorePluginOpcodeInfoExtended {
     uint64_t (*make_identity)(const QoreTypeInfo* result_type, ExceptionSink* xsink);
     bool is_pure_modulo_xsink;
     bool can_vectorize;
+    bool fp_reassociation_allowed;
     QorePluginOpcodeTypePromotion type_promotion_kind;
     QorePluginTypePromotionCallback type_promotion_callback;
     bool is_simd_friendly;

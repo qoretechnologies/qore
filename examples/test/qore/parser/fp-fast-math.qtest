@@ -1,0 +1,33 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FpFastMathParseOptionTest
+
+class FpFastMathParseOptionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("FpFastMathParseOptionTest", "1.0") {
+        addTestCase("%fp-fast-math directive sets parse option", \testDirective());
+        addTestCase("ParseOptions supports fp-fast-math by name", \testParseOptionsName());
+        set_return_value(main());
+    }
+
+    testDirective() {
+        Program p(PO_NEW_STYLE, True);
+        p.parse("%fp-fast-math\nsub f() { }\n", "fp-fast-math-directive");
+        assertTrue(p.getFullParseOptions().hasAll("fp-fast-math"));
+    }
+
+    testParseOptionsName() {
+        ParseOptions opts("fp-fast-math");
+        assertTrue(opts.hasAll("fp-fast-math"));
+        assertEq(("fp-fast-math",), opts.toStringList());
+
+        Program p(opts, True);
+        p.parse("sub f() { }\n", "fp-fast-math-parseoptions");
+        assertTrue(p.getFullParseOptions().hasAll("fp-fast-math"));
+    }
+}

@@ -185,6 +185,32 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     module-local tests that can inspect descriptor tables before module init
     commits them.
 
+    @section plugin_types_operation_metadata Operation Metadata
+
+    \c QorePluginOpcodeInfoExtended is a declarative contract between the
+    module and libqore. Zero-initialize it, then set every property that
+    accurately describes the helper for all accepted operands. Unset boolean
+    fields are \c false, so do not leave a field unset unless \c false is the
+    correct promise for that operation.
+
+    The most important optimization fields are:
+    - \c is_pure_modulo_xsink: the operation only reports errors through the
+      exception sink and has no externally visible side effects.
+    - \c is_commutative and \c is_associative: operands can be reordered or
+      regrouped under the operation's mathematical semantics.
+    - \c can_vectorize and \c is_simd_friendly: dense helper calls can be
+      batched or lowered to native vector code.
+    - \c fp_reassociation_allowed: the operation explicitly permits
+      IEEE-unsafe floating-point reassociation.
+
+    Floating-point reassociation has a two-part gate. The registered operation
+    must set \c fp_reassociation_allowed, and the current Program must enable
+    @ref fp-fast-math "%fp-fast-math". Without both, libqore must preserve
+    source evaluation order for floating-point plugin operations even when
+    \c is_associative is set. This prevents ordinary metadata such as
+    \c is_associative from silently enabling rewrites that can change NaN,
+    infinity, signed-zero, or rounding behavior.
+
     @section plugin_types_dense_buffers Dense-Buffer Helpers
 
     Dense-buffer helpers are for numeric kernels that already operate on
@@ -356,6 +382,9 @@ foreach string module_name in (registry.getProcessModules()) {
             op.secondary_type,
             op.return_type,
             op.helper_abi);
+        if (op.fp_reassociation_allowed) {
+            printf("    permits FP reassociation when %%fp-fast-math is enabled\n");
+        }
     }
 }
     @endcode
@@ -433,8 +462,13 @@ QORE_PLUGIN_CROSS_TYPE_TRACE=1 qore my-script.q
 
     The following pieces are intentionally not part of the current shipped
     surface:
-    - optional LLVM codegen extension hooks are reserved for a later ABI
-      header.
+    - plugin-type profile-guided specialization is not yet exposed as a
+      user-visible control;
+    - lazy expression fusion and cross-stage DataProvider fusion are still
+      conservative and only use explicitly implemented module paths;
+    - \c %fp-fast-math and \c fp_reassociation_allowed expose the safety gate
+      for FP reassociation, but optimizer passes must still opt into concrete
+      rewrites one by one.
 
     @see
     - @ref Qore::Reflection::PluginRegistry

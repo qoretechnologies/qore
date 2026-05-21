@@ -439,6 +439,16 @@ const char* resultAliasName(QorePluginResultAlias alias) {
     return "<unknown>";
 }
 
+const char* typePromotionKindName(QorePluginOpcodeTypePromotion kind) {
+    switch (kind) {
+        case QorePluginOpcodeTypePromotion::Exact: return "Exact";
+        case QorePluginOpcodeTypePromotion::WideningLattice: return "WideningLattice";
+        case QorePluginOpcodeTypePromotion::IdentityLHS: return "IdentityLHS";
+        case QorePluginOpcodeTypePromotion::Custom: return "Custom";
+    }
+    return "<unknown>";
+}
+
 using PluginUnaryHelper = uint64_t (*)(uint64_t, ExceptionSink*);
 using PluginBinaryHelper = uint64_t (*)(uint64_t, uint64_t, ExceptionSink*);
 using PluginCallHelper = uint64_t (*)(uint64_t, uint64_t, ExceptionSink*);
@@ -1079,6 +1089,15 @@ bool validateRegistrationDescriptor(const QorePluginTypeRegistration* reg, Plugi
                 return true;
             }
         }
+        if (static_cast<uint8_t>(op.info.type_promotion_kind)
+                > static_cast<uint8_t>(QorePluginOpcodeTypePromotion::Custom)) {
+            if (state.fail("PLUGIN-REGISTRATION-INVALID-DESCRIPTOR", module, item,
+                    "info.type_promotion_kind", "known QorePluginOpcodeTypePromotion",
+                    std::to_string(static_cast<uint8_t>(op.info.type_promotion_kind)).c_str(),
+                    "unknown_type_promotion_kind", "3.3")) {
+                return true;
+            }
+        }
 
         if (!op.runtime_helper && (!op.runtime_helper_symbol || !*op.runtime_helper_symbol)) {
             if (state.fail("PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING", module, item,
@@ -1343,11 +1362,60 @@ QoreHashNode* makeOperationHash(const RegisteredPluginModule& module, const Regi
     if (hasException(xsink)) {
         return nullptr;
     }
+    h->setKeyValue("can_return_nothing", op.info.can_return_nothing, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("never_returns_nothing", op.info.never_returns_nothing, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("is_commutative", op.info.is_commutative, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("is_associative", op.info.is_associative, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("is_idempotent", op.info.is_idempotent, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("annihilator_zero", op.info.annihilator_zero, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("has_identity", op.info.has_identity, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("identity_kind", static_cast<int64>(op.info.identity_kind), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
     h->setKeyValue("is_pure_modulo_xsink", op.info.is_pure_modulo_xsink, xsink);
     if (hasException(xsink)) {
         return nullptr;
     }
     h->setKeyValue("can_vectorize", op.info.can_vectorize, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("fp_reassociation_allowed", op.info.fp_reassociation_allowed, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("type_promotion_kind", new QoreStringNode(typePromotionKindName(op.info.type_promotion_kind)),
+        xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("is_simd_friendly", op.info.is_simd_friendly, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("cost_class", static_cast<int64>(op.info.cost_class), xsink);
     return hasException(xsink) ? nullptr : h.release();
 }
 
@@ -1572,6 +1640,7 @@ int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id, QorePluginLL
     info.local_operation_id = op.local_id;
     info.operation_name = op.operation_name;
     info.signature = op.signature;
+    info.info = op.info;
     info.codegen = op.llvm_codegen;
     return 0;
 }
@@ -1611,6 +1680,7 @@ int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
             info.module_name = module.module_name;
             info.local_operation_id = op.local_id;
             info.operation_name = op.operation_name;
+            info.info = op.info;
             info.claimed_node_kinds = op.lowering_claimed_node_kinds;
             info.lowering = op.lowering_pattern;
             infos.push_back(std::move(info));
@@ -1677,6 +1747,7 @@ int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeI
             info.local_operation_id = op.local_id;
             info.operation_name = op.operation_name;
             info.signature = op.signature;
+            info.info = op.info;
             info.canonical_signature_version = op.canonical_signature_version;
             info.signature_hash = op.signature_hash;
             return 0;
@@ -1741,6 +1812,7 @@ static int resolveProgramOperationInfoForValues(QoreProgram* pgm, QoreValue lhs,
             info.local_operation_id = op.local_id;
             info.operation_name = op.operation_name;
             info.signature = op.signature;
+            info.info = op.info;
             info.canonical_signature_version = op.canonical_signature_version;
             info.signature_hash = op.signature_hash;
             return 0;

@@ -142,6 +142,8 @@ static QorePluginOpcodeInfoExtended samplePureInfo(bool vectorizable) {
     info.may_have_side_effects = false;
     info.may_throw_exception = false;
     info.never_returns_nothing = true;
+    info.is_commutative = true;
+    info.is_associative = true;
     info.is_pure_modulo_xsink = true;
     info.can_vectorize = vectorizable;
     info.type_promotion_kind = QorePluginOpcodeTypePromotion::Exact;

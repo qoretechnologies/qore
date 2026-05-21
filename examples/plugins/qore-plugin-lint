@@ -172,6 +172,10 @@ foreach hash<auto> op in (ops) {
     if (op.helper_abi =~ /^DenseBuffer/ && !op.can_vectorize) {
         push warnings, sprintf("dense-buffer operation %y is not marked can_vectorize", op.operation_name);
     }
+    if (op.fp_reassociation_allowed && !op.is_associative) {
+        push warnings, sprintf("operation %y allows FP reassociation but is not marked is_associative",
+            op.operation_name);
+    }
     if (!op.primary_type || !op.return_type) {
         push errors, sprintf("operation %y has incomplete reflected type metadata", op.operation_name);
     }
