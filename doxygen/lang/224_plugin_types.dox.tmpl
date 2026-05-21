@@ -320,6 +320,16 @@ ColumnarResult filtered_columns = filter.processRecordsShape(
     contiguous slicing preserves them with zero-copy buffer views. Ordering,
     aggregation, and reshaping can allocate new storage.
 
+    The goal of these plugin-type and dense-buffer paths is to make typed
+    columnar data a first-class runtime representation instead of a convention
+    layered on top of row hashes. DataFrame, DBI, and DataProvider components
+    can then choose a dense representation for operations that benefit from it
+    and fall back to normal row semantics only when an operation requires
+    dynamic row behavior. In the dataframe benchmark suite, the covered
+    columnar construction, filtering, aggregation, join, SQL read/write, and
+    DataProvider pipeline cases outperform equivalent pandas operations when
+    native columnar DBI support is available for SQL reads.
+
     @section plugin_types_lowering Lowering Pattern Hooks
 
     Operations can register an optional \c QorePluginLoweringCallback in

@@ -302,11 +302,11 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Memcached caching servers
     |binary|<a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a>|Provides a columnar \
         DataFrame with typed columns, SQL-like query operations (select, filter, sort, groupby, join, pivot, \
-        melt, window functions), CSV/Parquet/database I/O, and ML integration
+        melt, window functions), dense ColumnarResult interop, CSV/Parquet/database I/O, and ML integration
     |user|<a href="../../modules/DataProviderDataFrame/html/index.html#dataproviderdataframeintro">DataProviderDataFrame</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
         <a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a> columnar DataFrames \
-        with searchable record iteration and filtering
+        with searchable record iteration, filtering, and pipeline shape preservation
     |binary|<a href="../../modules/ml/html/index.html#mlintro">ml</a>|Provides 20 machine learning algorithms \
         including DecisionTree, RandomForest, GradientBoostedTrees, LogisticRegression, KNN, KMeans, GMM, \
         IsolationForest, LOF, PCA, LinearRegression, HoltWinters, and preprocessing/pipeline utilities \
@@ -879,13 +879,11 @@ ModuleName/
         %Qore and <a href="https://www.python.org/">Python</a>, enabling %Qore code to call Python modules and \
         Python code to call %Qore APIs, including cross-language inheritance
     |binary|<a href="https://github.com/qoretechnologies/module-sqlite3">sqlite3</a>|Provides an SQLite3 DBI driver
-    |binary|<a href="https://github.com/qoretechnologies/module-ssh">ssh</a>|Provides an embedded SSH/SFTP client and \
-        server implementation for %Qore including SSH sessions, command channels, SFTP, and a pluggable SSH server \
-        framework, also provides the following user modules:\n\
-        - <a href="https://github.com/qoretechnologies/module-ssh">QorusSshIntegration</a>: \
-            reserved module name used by Qorus-specific SSH adapters\n\
-        - <a href="https://github.com/qoretechnologies/module-ssh">SftpServerDataProvider</a>: \
-            provides virtual SFTP filesystem and atomic exchange helpers for the \c ssh module\n\
+	    |binary|<a href="https://github.com/qoretechnologies/module-ssh">ssh</a>|Provides an embedded SSH/SFTP client and \
+	        server implementation for %Qore including SSH sessions, command channels, SFTP, and a pluggable SSH server \
+	        framework, also provides the following user modules:\n\
+	        - <a href="https://github.com/qoretechnologies/module-ssh">SftpServerDataProvider</a>: \
+	            provides virtual SFTP filesystem and atomic exchange helpers for the \c ssh module\n\
         - <a href="https://github.com/qoretechnologies/module-ssh">SshServerAuthProvider</a>: \
             provides typed auth-provider abstractions and built-in config-driven SSH auth implementations\n\
         - <a href="https://github.com/qoretechnologies/module-ssh">SshServerCommandProvider</a>: \
@@ -917,7 +915,7 @@ ModuleName/
         <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> with support for Python, Java, \
         JSON, YAML, JavaScript, Kotlin, TypeScript, and %Qore
     |binary|<a href="https://github.com/qoretechnologies/module-uuid">uuid</a>|Provices an API for generating UUIDs
-    |binary|<a href="https://qoretechnologies.com/manual/qorus/current/v8/v8/html">v8</a>|Provides the ability to \
+	    |binary|<a href="https://github.com/qoretechnologies/module-v8">v8</a>|Provides the ability to \
         embed, compile, and execute JavaScript code, also provides the following user modules:\n\
         - <a href="https://github.com/qoretechnologies/module-v8">TypeScriptActionInterface</a>: \
             provides an API for %Qore \

@@ -357,11 +357,11 @@
 
     @par Examples:
     @code{.py}
-# Qorus-style: locate vendored modules relative to an OMQ_DIR env var
-%prepend-module-path "${OMQ_DIR}/lib/modules"
-%prepend-module-path "${OMQ_DIR}/qlib"
-%prepend-module-path "${OMQ_DIR}/user/modules"
-%requires QorusInterfaceCore
+# deployment-style: locate vendored modules relative to an APP_DIR env var
+%prepend-module-path "${APP_DIR}/lib/modules"
+%prepend-module-path "${APP_DIR}/qlib"
+%prepend-module-path "${APP_DIR}/user/modules"
+%requires AppInterfaceCore
 
 # script-local vendored modules
 %prepend-module-path "${SCRIPT_DIR}/qlib"

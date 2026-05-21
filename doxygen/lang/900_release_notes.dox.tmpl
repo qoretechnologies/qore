@@ -129,6 +129,10 @@
       dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
       columns; ColumnarResult::fromColumnHash() and ColumnarResult::fromRows() provide explicit
       constructors for projected or row-compatible columnar blocks
+    - the dataframe benchmark suite shows Qore outperforming pandas for the
+      included typed column construction, filtering, aggregation, join,
+      SQL read/write, and DataProvider pipeline cases; the fastest SQL-read
+      path requires a DBI driver with native columnar support
     - new experimental @ref plugin_types "plugin-type" registration ABI
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper
@@ -1822,6 +1826,10 @@ foreach string module_name in (registry.getProcessModules()) {
         through \c ColumnarResult with \c toColumnarResult() and
         \c fromColumnarResult(), and preserve buffer-backed columns under Qore
         copy-on-write semantics where possible
+      - optimized typed-column construction, dense predicate masks, direct
+        ColumnarResult conversion, and native columnar DBI reads are designed
+        for production ETL and analytics workloads that benefit from keeping
+        data columnar instead of materializing row hashes
       - \c ColumnarResult::filter(), \c ColumnarResult::slice(),
         \c ColumnarResult::combineMasks(), \c ColumnarResult::invertMask(), and
         \c ColumnarResult::nullMask() provide dense filtering, contiguous
@@ -2181,7 +2189,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - provides CustomerIoRestConnection for connection management with \c customerio:// URL scheme
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
-      - wraps DataFrame as a record-oriented DataProvider for Qorus data pipeline integration
+      - wraps DataFrame as a record-oriented DataProvider for data pipeline integration
       - supports searchRecords with hash-based where conditions (equality and comparison operators)
       - DataProvider pipelines recognize \c ColumnarResult values as
         \c BufferColumns shape and can convert between BufferColumns,

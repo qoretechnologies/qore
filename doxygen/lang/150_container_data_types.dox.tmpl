@@ -314,6 +314,13 @@ while (True) {
     fallback. The fallback preserves query behavior and converts existing hash-of-list or row-list results into a
     ColumnarResult.
 
+    Native columnar DBI support is the preferred path for high-throughput DataFrame and DataProvider workloads.
+    It lets database drivers fill typed result columns directly, so numeric and boolean values can flow from SQL
+    to DataFrame and shape-aware DataProvider processors without first allocating one hash per row. This is the
+    basis for the fastest SQL read path in the dataframe benchmark suite. When native columnar support is not
+    available, the APIs remain functional, but the compatibility fallback has to convert row-oriented or
+    hash-of-list results before downstream code can use dense column operations.
+
     The dataframe module can consume and produce ColumnarResult values directly.
     Buffer-backed DataFrame columns are preserved for dense column access and
     columnar export under normal Qore copy-on-write semantics:
