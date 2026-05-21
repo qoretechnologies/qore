@@ -329,8 +329,160 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
 
 std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
         ExceptionSink* xsink) {
-    ColumnType type = inferColumnType(values);
-    return buildColumnData(values, type, xsink);
+    int64_t n = values ? (int64_t)values->size() : 0;
+    if (!n) {
+        return buildColumnData(values, ColumnType::STRING, xsink);
+    }
+
+    auto col = std::make_shared<ColumnData>();
+    col->type = ColumnType::AUTO;
+    col->n_rows = n;
+    col->null_mask.resize(n, 0);
+
+    auto set_float_nulls = [&](int64_t count) -> bool {
+        for (int64_t j = 0; j < count; ++j) {
+            if (j && !(j % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+                return true;
+            }
+            if (col->null_mask[j]) {
+                col->float_data(j) = std::numeric_limits<double>::quiet_NaN();
+            }
+        }
+        return false;
+    };
+
+    auto initialize_type = [&](ColumnType type, int64_t initialized_rows) -> bool {
+        col->type = type;
+        switch (type) {
+            case ColumnType::FLOAT64:
+                col->float_data.resize(n);
+                return set_float_nulls(initialized_rows);
+            case ColumnType::INT64:
+                col->int_data.resize(n);
+                break;
+            case ColumnType::STRING:
+                col->str_data.resize(n);
+                break;
+            case ColumnType::BOOL:
+                col->bool_data.resize(n);
+                break;
+            case ColumnType::DATE:
+                col->date_data.resize(n);
+                break;
+            default:
+                break;
+        }
+        return false;
+    };
+
+    auto widen_int_to_float = [&](int64_t initialized_rows) -> bool {
+        Eigen::VectorXd float_data(n);
+        for (int64_t j = 0; j < initialized_rows; ++j) {
+            if (j && !(j % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+                return true;
+            }
+            float_data(j) = col->null_mask[j]
+                ? std::numeric_limits<double>::quiet_NaN() : (double)col->int_data[j];
+        }
+        col->int_data.clear();
+        col->int_data.shrink_to_fit();
+        col->float_data = std::move(float_data);
+        col->type = ColumnType::FLOAT64;
+        return false;
+    };
+
+    for (int64_t i = 0; i < n; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+            return nullptr;
+        }
+
+        QoreValue v = values->retrieveEntry(i);
+        if (v.isNullOrNothing()) {
+            col->null_mask[i] = 1;
+            if (col->type == ColumnType::FLOAT64) {
+                col->float_data(i) = std::numeric_limits<double>::quiet_NaN();
+            }
+            continue;
+        }
+
+        switch (v.getType()) {
+            case NT_INT:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::INT64, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type == ColumnType::FLOAT64) {
+                    col->float_data(i) = v.getAsFloat();
+                    continue;
+                } else if (col->type != ColumnType::INT64) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->int_data[i] = v.getAsBigInt();
+                break;
+
+            case NT_FLOAT:
+            case NT_NUMBER:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::FLOAT64, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type == ColumnType::INT64) {
+                    if (widen_int_to_float(i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::FLOAT64) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->float_data(i) = v.getAsFloat();
+                break;
+
+            case NT_STRING: {
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::STRING, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::STRING) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                QoreStringValueHelper str(v);
+                col->str_data[i] = str->c_str();
+                break;
+            }
+
+            case NT_BOOLEAN:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::BOOL, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::BOOL) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->bool_data[i] = v.getAsBool() ? 1 : 0;
+                break;
+
+            case NT_DATE:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::DATE, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::DATE) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->date_data[i] = v.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                break;
+
+            default:
+                return buildColumnData(values, ColumnType::STRING, xsink);
+        }
+    }
+
+    if (col->type == ColumnType::AUTO) {
+        if (initialize_type(ColumnType::FLOAT64, n)) {
+            return nullptr;
+        }
+    }
+
+    return col;
 }
 
 std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* values,
