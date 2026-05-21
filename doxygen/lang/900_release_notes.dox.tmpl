@@ -1956,6 +1956,18 @@ cargo install tree-sitter-cli@0.26.5
       - auto-appends locationId to all API requests
       - provides GoHighLevelRestConnection for connection management with \c gohighlevelres:// URL scheme
 
+    - @ref googledocumentaidataproviderintro "GoogleDocumentAiDataProvider" module
+      - new module providing a data provider API for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
+      - exposes one action: `process-document` — submits a document to a Document AI processor and returns the parsed `Document` object with text + layout + typed entities
+      - documents accepted as inline bytes (base64 auto-encoded), local file path, or GCS object URI
+      - prebuilt processors for invoices, receipts, US driver's licenses, passports, W2s, and a custom-processor workflow
+      - action catalog integration with 1 action under the \c google-documentai scheme; registered with the `Documents` AppGroup
+
+    - @ref googledocumentairestclientintro "GoogleDocumentAiRestClient" module
+      - new module providing a REST client for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
+      - uses @ref gcpauthintro "GcpAuth" — explicit service-account JSON or Application Default Credentials
+      - regional URL construction from `gcp_region`; provides GoogleDocumentAiRestConnection for connection management with \c google-documentai:// URL scheme
+
     - @ref gorgiasdataproviderintro "GorgiasDataProvider" module
       - new module providing a data provider API for <a href="https://www.gorgias.com/">Gorgias</a> helpdesk
       - ticket management (create, update, delete, list)

@@ -2546,6 +2546,8 @@ qore_user_module("qlib/AssemblyAiRestClient.qm" "ConnectionProvider;Mime;RestCli
 qore_user_module("qlib/AssemblyAiDataProvider" "AssemblyAiRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "assemblyai-logo.svg")
 qore_user_module("qlib/AwsTextractRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;AwsRestClient;QoreAsyncJobUtils")
 qore_user_module("qlib/AwsTextractDataProvider" "AwsTextractRestClient;AwsRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "aws-textract-logo.svg")
+qore_user_module("qlib/GoogleDocumentAiRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;GcpAuth")
+qore_user_module("qlib/GoogleDocumentAiDataProvider" "GoogleDocumentAiRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider;GcpAuth" "google-document-ai-logo.svg")
 qore_user_module("qlib/GroqRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
 qore_user_module("qlib/GroqDataProvider" "GroqRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "groq-logo.svg")
 qore_user_module("qlib/TogetherRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes;QoreRagTypes")

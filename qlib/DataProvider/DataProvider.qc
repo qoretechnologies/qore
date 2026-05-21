@@ -149,6 +149,7 @@ public class DataProvider {
             "gorgias": "GorgiasDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
+            "google-documentai": "GoogleDocumentAiDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
             "generator": "GeneratorDataProvider",
 
