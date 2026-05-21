@@ -127,7 +127,8 @@
       native support use a libqore compatibility fallback, and DataFrame::fromQuery() uses the
       columnar API automatically when available; ColumnarResult values can now be filtered with
       dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
-      columns
+      columns; ColumnarResult::fromColumnHash() and ColumnarResult::fromRows() provide explicit
+      constructors for projected or row-compatible columnar blocks
     - new experimental @ref plugin_types "plugin-type" registration ABI
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper

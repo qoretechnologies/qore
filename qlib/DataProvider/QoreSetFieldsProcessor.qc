@@ -102,6 +102,16 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
         return result;
     }
 
+    #! Applies configured constant fields to a DataFrame without copying existing columns
+    private auto setDataFrameFields(auto records) {
+        auto result = records;
+        int record_count = records.numRows();
+        foreach hash<auto> i in (fields.pairIterator()) {
+            result = result.withColumn(i.key, AbstractDataProcessor::repeatValue(i.value, record_count));
+        }
+        return result;
+    }
+
     #! Processes an explicitly-shaped block without row materialization
     private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
         if (!configured) {
@@ -116,13 +126,11 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
                 return setColumnBlockFields(records, record_count);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return AbstractDataProcessor::getDataFrameClass().newObject(
-                        setColumnBlockFields(records.toColumnHash(), record_count)).toColumnarResult();
+                    return ColumnarResult::fromColumnHash(setColumnBlockFields(records.toColumnHash(), record_count));
                 }
                 return setColumnBlockFields(records, record_count);
             case DataProviderShape::DataFrameBlock:
-                return AbstractDataProcessor::getDataFrameClass().newObject(
-                    setColumnBlockFields(records.toColumnarResult().toColumnHash(), record_count));
+                return setDataFrameFields(records);
         }
         throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
             self.className(), AbstractDataProcessor::shapeName(shape));

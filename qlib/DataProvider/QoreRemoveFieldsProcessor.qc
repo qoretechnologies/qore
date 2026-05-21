@@ -137,7 +137,7 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
                 case DataProviderShape::DataFrameBlock:
                     return AbstractDataProcessor::getDataFrameClass().newObject(selected);
                 case DataProviderShape::BufferColumns:
-                    return AbstractDataProcessor::getDataFrameClass().newObject(selected).toColumnarResult();
+                    return ColumnarResult::fromRows(selected);
             }
         }
 
@@ -148,8 +148,7 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
                 return removeDataFrameFields(records);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return removeDataFrameFields(AbstractDataProcessor::getDataFrameClass().newObject(
-                        records.toColumnHash())).toColumnarResult();
+                    return ColumnarResult::fromColumnHash(records.toColumnHash() - field_list);
                 }
                 return records - field_list;
             case DataProviderShape::HashOfLists:

@@ -274,12 +274,21 @@ buffer<bool> high_active = result.combineMasks(scores >= 90.0, active == True, "
 ColumnarResult selected = result.filter(high_active);
 ColumnarResult missing_scores = result.filter(result.nullMask("score"));
 ColumnarResult first_page = result.slice(offset: 0, count: 1000);
+
+hash<auto> projected_columns = {
+    "order_id": result.getColumn("order_id"),
+    "score": result.getColumn("score"),
+};
+ColumnarResult projected = ColumnarResult::fromColumnHash(projected_columns);
     @endcode
 
     @ref Qore::SQL::ColumnarResult::nullMask() "ColumnarResult::nullMask()" returns a dense
     \c buffer<bool> mask for null or non-null values, so nullable dense columns can be filtered without
     materializing rows.  @ref Qore::SQL::ColumnarResult::slice() "ColumnarResult::slice()" returns contiguous
     row ranges and preserves primitive dense columns as zero-copy buffer views.
+    @ref Qore::SQL::ColumnarResult::fromColumnHash() "ColumnarResult::fromColumnHash()" creates a new
+    columnar result from existing column containers and references dense buffers directly, which is useful for
+    projection and augmentation pipelines that should avoid row materialization.
 
     Prepared statements can be fetched in blocks without materializing row hashes:
     @code{.py}

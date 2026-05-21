@@ -187,6 +187,14 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         return result;
     }
 
+    #! Applies configured replacement to a top-level DataFrame column without copying other columns
+    private auto replaceDataFrameColumn(auto records) {
+        if (!records.columnNames().contains(field)) {
+            return records;
+        }
+        return records.withColumn(field, map replaceStringValue($1), records.getColumn(field));
+    }
+
     #! Processes an explicitly-shaped block without row materialization when possible
     private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
         if (!configured) {
@@ -209,7 +217,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 case DataProviderShape::DataFrameBlock:
                     return AbstractDataProcessor::getDataFrameClass().newObject(processed);
                 case DataProviderShape::BufferColumns:
-                    return AbstractDataProcessor::getDataFrameClass().newObject(processed).toColumnarResult();
+                    return ColumnarResult::fromRows(processed);
             }
         }
 
@@ -220,13 +228,11 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 return replaceColumnBlock(records);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return AbstractDataProcessor::getDataFrameClass().newObject(
-                        replaceColumnBlock(records.toColumnHash())).toColumnarResult();
+                    return ColumnarResult::fromColumnHash(replaceColumnBlock(records.toColumnHash()));
                 }
                 return replaceColumnBlock(records);
             case DataProviderShape::DataFrameBlock:
-                return AbstractDataProcessor::getDataFrameClass().newObject(
-                    replaceColumnBlock(records.toColumnarResult().toColumnHash()));
+                return replaceDataFrameColumn(records);
         }
         throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
             self.className(), AbstractDataProcessor::shapeName(shape));

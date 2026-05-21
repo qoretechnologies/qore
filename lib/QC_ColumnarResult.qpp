@@ -70,6 +70,50 @@ ColumnarResult::copy() {
     xsink->raiseException("COPY-ERROR", "ColumnarResult objects cannot be copied");
 }
 
+//! Creates a ColumnarResult from a hash of column containers
+/** @param columns hash keyed by column name, where each value is a list or a typed buffer
+    @param desc optional schema metadata keyed by column name; when present, each column
+        descriptor can contain \c native_type, \c type, \c nullable, and \c maxsize
+
+    @return a new ColumnarResult
+
+    Dense buffer columns are referenced directly, so callers can build projected
+    or augmented column blocks without boxing dense values through row records.
+
+    @par Example: building a projected dense block
+    @code{.py}
+hash<auto> columns = result.toColumnHash();
+ColumnarResult compact = ColumnarResult::fromColumnHash({
+    "id": columns.id,
+    "total": columns.total,
+});
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if a column value is not a list or buffer, or
+        if column lengths differ
+*/
+static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<auto> desc)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_columnar_result_to_object(QoreColumnarResult::fromColumnHash(columns, desc, xsink), xsink);
+}
+
+//! Creates a ColumnarResult from row hashes
+/** @param rows list of row hashes
+    @param desc optional schema metadata keyed by column name
+
+    @return a new ColumnarResult
+
+    This is a compatibility constructor for row-oriented data. Prefer
+    fromColumnHash() when column containers are already available.
+
+    @throw COLUMNAR-RESULT-ERROR if row values are not hashes or cannot be
+        converted to columns
+*/
+static ColumnarResult ColumnarResult::fromRows(list<hash<auto>> rows, *hash<auto> desc)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_columnar_result_to_object(QoreColumnarResult::fromRows(rows, desc, xsink), xsink);
+}
+
 //! Returns the number of rows in the result
 /** @return row count
 */

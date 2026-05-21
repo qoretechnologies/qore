@@ -1085,6 +1085,18 @@ sub invalid_dataframe_api() {
             "BufferColumns record count uses ColumnarResult rows");
         assertEq((2, 3), columns.slice(offset: 1, count: 2).getColumn("id").toList(),
             "ColumnarResult::slice preserves dense contiguous row ranges");
+        ColumnarResult projected_columns = ColumnarResult::fromColumnHash({
+            "id": columns.getColumn("id"),
+            "amount": columns.getColumn("amount"),
+        });
+        assertEq(("id", "amount"), projected_columns.columnNames(),
+            "ColumnarResult::fromColumnHash builds projected columnar blocks");
+        assertEq((1, 2, 3, 4), projected_columns.getColumn("id").toList(),
+            "ColumnarResult::fromColumnHash preserves dense buffers");
+        ColumnarResult row_columns = ColumnarResult::fromRows(({"id": 1, "amount": 90.0},
+            {"id": 2, "amount": 220.0}));
+        assertEq((1, 2), row_columns.getColumn("id").toList(),
+            "ColumnarResult::fromRows builds compatibility columnar blocks");
 
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),

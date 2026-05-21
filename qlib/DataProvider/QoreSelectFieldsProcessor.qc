@@ -187,7 +187,7 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
                 case DataProviderShape::DataFrameBlock:
                     return AbstractDataProcessor::getDataFrameClass().newObject(selected);
                 case DataProviderShape::BufferColumns:
-                    return AbstractDataProcessor::getDataFrameClass().newObject(selected).toColumnarResult();
+                    return ColumnarResult::fromRows(selected);
             }
         }
 
@@ -198,8 +198,7 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
                 return selectDataFrame(records);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return selectDataFrame(AbstractDataProcessor::getDataFrameClass().newObject(
-                        records.toColumnHash())).toColumnarResult();
+                    return ColumnarResult::fromColumnHash(selectColumnBlock(records.toColumnHash()));
                 }
                 return selectColumnBlock(records);
             case DataProviderShape::HashOfLists:
