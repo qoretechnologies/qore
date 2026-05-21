@@ -102,7 +102,8 @@ class TestReranker inherits AbstractReranker {
         int rerank_calls = 0;
     }
 
-    list<hash<RerankResult>> rerank(string query, list<string> documents, int k) {
+    list<hash<RerankResult>> rerank(string query, list<string> documents, int k,
+            *hash<auto> opts) {
         ++rerank_calls;
         last_query = query;
         list<hash<RerankResult>> rv = ();

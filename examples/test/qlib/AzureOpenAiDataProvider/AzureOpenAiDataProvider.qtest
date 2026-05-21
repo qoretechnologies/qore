@@ -1,0 +1,229 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/AzureAuth.qm
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/AzureOpenAiRestClient.qm
+%requires ../../../../qlib/AzureOpenAiDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class AzureOpenAiDataProviderTest
+
+class FakeAzureHandler inherits AbstractHttpRequestHandler {
+    public {
+        string last_path = "";
+        string last_api_key_header = "";
+        string last_authorization = "";
+        *hash<auto> last_body;
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        last_path = cx.raw_path;
+        last_api_key_header = hdr."api-key" ?? "";
+        last_authorization = hdr."authorization" ?? "";
+        string body_str = body ? (body.typeCode() == NT_BINARY
+            ? body.toString("UTF-8") : body) : "";
+%ifndef NoJson
+        try { last_body = parse_json(body_str); } catch () {}
+%endif
+        if (last_path =~ /\/chat\/completions/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+                "id": "chatcmpl-fake",
+                "object": "chat.completion",
+                "created": 1700000000,
+                "model": "gpt-4o-2024-08-06",
+                "choices": (
+                    {"index": 0,
+                     "message": {"role": "assistant", "content": "Hello from Azure OpenAI"},
+                     "finish_reason": "stop"},
+                ),
+                "usage": {"prompt_tokens": 7, "completion_tokens": 5, "total_tokens": 12},
+            }));
+        }
+        if (last_path =~ /\/embeddings/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+                "object": "list",
+                "data": ({"index": 0, "object": "embedding",
+                          "embedding": (0.1, 0.2, 0.3)},),
+                "model": "text-embedding-3-small",
+                "usage": {"prompt_tokens": 3, "total_tokens": 3},
+            }));
+        }
+        return makeResponse(404, "unknown azure path: " + last_path);
+    }
+}
+
+public class AzureOpenAiDataProviderTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeAzureHandler handler;
+    }
+
+    constructor() : Test("AzureOpenAiDataProvider Test", "1.0") {
+        addTestCase("factory + provider info",            \factoryTest());
+        addTestCase("app registered with logo + group",   \appTest());
+        addTestCase("chat-completion + embedding actions registered", \actionsTest());
+        addTestCase("ChatCompletion action end-to-end",   \chatCompletionTest());
+        addTestCase("Embedding action end-to-end",        \embeddingTest());
+        addTestCase("URL routes through deployment + api-version",
+            \deploymentPathTest());
+        addTestCase("api-key auth header sent on chat call", \apiKeyHeaderTest());
+        addTestCase("child providers discoverable",       \childrenTest());
+
+        try { setupServer(); }
+        catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("setup error: %s\n", get_exception_string(ex));
+            }
+        }
+        set_return_value(main());
+    }
+
+    static checkJson(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    private setupServer() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        handler = new FakeAzureHandler();
+        http.setDefaultHandler("azure", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private factoryTest() {
+        AbstractDataProviderFactory f = DataProvider::getFactoryEx("azure-openai");
+        assertEq("azure-openai", f.getName());
+        hash<DataProviderInfo> pi = f.getProviderInfo();
+        assertTrue(pi.supports_children);
+    }
+
+    private appTest() {
+        hash<DataProviderAppInfo> app =
+            DataProviderActionCatalog::getApp(AzureOpenAiDataProvider::AppName);
+        assertEq("Azure OpenAI", app.display_name);
+        assertEq("azure-openai", app.scheme);
+        assertEq("azure-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.val(), "logo content was loaded from the SVG file");
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm, app.groups));
+    }
+
+    private actionsTest() {
+        list<hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActionsEx(AzureOpenAiDataProvider::AppName);
+        list<string> names = map $1.action, actions;
+        assertTrue(inlist("chat-completion", names));
+        assertTrue(inlist("embedding", names));
+
+        hash<DataProviderActionInfo> chat = DataProviderActionCatalog::getAppActionEx(
+            AzureOpenAiDataProvider::AppName, "chat-completion");
+        assertEq(DPAT_API, chat.action_code);
+        assertEq("/chat-completion", chat.path);
+        assertTrue(chat.options.deployment.required);
+        assertTrue(chat.options.messages.required);
+    }
+
+    private chatCompletionTest() {
+        AzureOpenAiDataProviderTest::checkJson(self);
+        if (!http) {
+            testSkip("no fake server");
+        }
+        AzureOpenAiChatCompletionDataProvider p(buildOptions());
+        auto resp = p.doRequest({
+            "deployment": "gpt-4o",
+            "messages": (
+                {"role": "user", "content": "ping"},
+            ),
+            "max_tokens": 50,
+        });
+        assertEq("Hello from Azure OpenAI", resp.choices[0].message.content);
+        assertEq("stop", resp.choices[0].finish_reason);
+        assertEq(12, resp.usage.total_tokens);
+        assertEq("user", handler.last_body.messages[0].role);
+        # max_tokens forwarded
+        assertEq(50, handler.last_body.max_tokens);
+    }
+
+    private embeddingTest() {
+        AzureOpenAiDataProviderTest::checkJson(self);
+        if (!http) {
+            testSkip("no fake server");
+        }
+        AzureOpenAiEmbeddingDataProvider p(buildOptions());
+        auto resp = p.doRequest({
+            "deployment": "text-embedding-3-small",
+            "input": "embed me",
+        });
+        assertEq((0.1, 0.2, 0.3), resp.data[0].embedding);
+        assertEq("embed me", handler.last_body.input);
+    }
+
+    private deploymentPathTest() {
+        AzureOpenAiDataProviderTest::checkJson(self);
+        if (!http) {
+            testSkip("no fake server");
+        }
+        AzureOpenAiChatCompletionDataProvider p(buildOptions());
+        p.doRequest({
+            "deployment": "my-gpt4o-deploy",
+            "messages": ({"role": "user", "content": "x"},),
+        });
+        assertTrue(handler.last_path =~ /\/openai\/deployments\/my-gpt4o-deploy\/chat\/completions/,
+            sprintf("expected deployment-routed path, got %y", handler.last_path));
+        assertTrue(handler.last_path =~ /api-version=2024-10-21/,
+            "api-version query param must be present");
+    }
+
+    private apiKeyHeaderTest() {
+        AzureOpenAiDataProviderTest::checkJson(self);
+        if (!http) {
+            testSkip("no fake server");
+        }
+        AzureOpenAiChatCompletionDataProvider p(buildOptions());
+        p.doRequest({
+            "deployment": "gpt-4o",
+            "messages": ({"role": "user", "content": "x"},),
+        });
+        assertEq("test-azure-key", handler.last_api_key_header);
+    }
+
+    private childrenTest() {
+        AzureOpenAiDataProviderTest::checkJson(self);
+        if (!http) {
+            testSkip("no fake server");
+        }
+        AzureOpenAiDataProvider::AzureOpenAiDataProvider root(buildOptions());
+        list<string> names = root.getChildProviderNames();
+        assertTrue(inlist("chat-completion", names));
+        assertTrue(inlist("embedding", names));
+    }
+
+    private hash<auto> buildOptions() {
+        return {
+            "url": "http://localhost:" + port,
+            "azure_api_version": "2024-10-21",
+            "azure_auth_mode": "api_key",
+            "api_key": "test-azure-key",
+        };
+    }
+}

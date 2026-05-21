@@ -425,11 +425,26 @@ public class AbstractReranker {
         @param documents the candidate documents (typically from a first-stage vector search)
         @param top_k how many results to return after reranking; if greater than
             \c documents.size(), all documents are returned
+        @param opts optional per-call backend-specific options.  Concrete
+            rerankers free to ignore unknown keys.  Reserved keys recognized
+            by the cloud reranker family (Cohere, Voyage, Jina):
+            - \c max_chunks_per_doc (\c int): when documents are longer than
+              the model context, the maximum number of chunks the backend
+              should split a document into; backend-defined default
+            - \c rank_fields (\c list<string>): when documents are
+              structured (passed as JSON strings or hashes), the fields the
+              backend should attend to during scoring
+            - \c truncation (\c string): backend-specific truncation
+              strategy (e.g. Voyage's \c "STRING", \c "NONE")
+            - \c return_documents (\c bool): when explicitly \c False, the
+              caller is signalling it doesn't need document text echoed
+              back; concrete implementations are free to echo it anyway
 
         @return list of @ref RerankResult hashes ordered by descending score; the
             \c index field maps each result back to its position in the input
     */
-    abstract list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k);
+    abstract list<hash<RerankResult>> rerank(string query, list<string> documents,
+            int top_k, *hash<auto> opts);
 
     #! Returns the model name in use (informational)
     *string getModel() {
@@ -620,6 +635,8 @@ public class RagProviderRegistry {
             "sglang":     "SGLangRestClient",
             "bge-m3":     "BgeM3RestClient",
             "local-onnx": "QoreRagUtils",
+            "bedrock":    "BedrockRestClient",
+            "vertex-ai":  "VertexAiRestClient",
         };
 
         #! Map of reranker backend names to providing modules
@@ -630,11 +647,13 @@ public class RagProviderRegistry {
         };
 
         #! Map of vector-store backend names to providing modules
-        /** Currently empty; vector store implementations live outside
-            the standard library (Qdrant, pgvector, etc.).  Modules can
-            register factories at runtime via @ref registerVectorStoreFactory().
+        /** Each entry maps a backend / type string to the Qore module that
+            supplies the matching factory.  Additional vector stores can be
+            registered at runtime via @ref registerVectorStoreFactory().
         */
-        const VectorStoreModuleMap = {};
+        const VectorStoreModuleMap = {
+            "qdrant": "QdrantDataProvider",
+        };
     }
 
     private {

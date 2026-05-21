@@ -39,6 +39,8 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires OpenAiRestClient
+%requires QoreLlmTypes
 
 module PerplexityRestClient {
     version = "1.0";
@@ -48,6 +50,7 @@ module PerplexityRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("perplexity", PerplexityRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(new PerplexityLlmProviderFactory());
     };
 }
 
@@ -601,6 +604,78 @@ public class PerplexityRestConnection inherits RestClient::RestConnection {
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! LLM provider for Perplexity AI servers
+/** Perplexity exposes an OpenAI-compatible chat-completions wire shape but
+    publishes the endpoint at \c /chat/completions (not \c /v1/chat/completions),
+    so this provider reuses @ref OpenAiRestClient::OpenAiLlmProvider for body
+    construction and response parsing, and only overrides
+    @ref OpenAiRestClient::OpenAiLlmProvider::getChatCompletionsPath()
+    "getChatCompletionsPath()" to point at the Perplexity URL.
+
+    @par Configuration
+
+    - \c url (optional): override the default \c https://api.perplexity.ai
+    - \c api_key (required): Perplexity API key
+    - \c model (required): Perplexity model name, e.g. \c "sonar"
+*/
+public class PerplexityLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
+    public {
+        #! Default Perplexity REST API URL
+        const DefaultUrl = "https://api.perplexity.ai";
+    }
+
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : OpenAiRestClient::OpenAiLlmProvider(
+                PerplexityRestClient::applyPerplexityDefaults(config)) {
+    }
+
+    string getMode() {
+        return "perplexity";
+    }
+
+    #! Returns the Perplexity-specific chat-completions path
+    string getChatCompletionsPath() {
+        return "/chat/completions";
+    }
+}
+
+#! Namespace-local helper: returns config with the default Perplexity URL applied
+hash<QoreLlmUtils::LlmBackendConfig> sub applyPerplexityDefaults(
+        hash<QoreLlmUtils::LlmBackendConfig> config) {
+    if (!config.url.val()) {
+        config.url = PerplexityLlmProvider::DefaultUrl;
+    }
+    return config;
+}
+
+#! Factory for @ref PerplexityLlmProvider
+public class PerplexityLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "perplexity";
+    }
+
+    string getDisplayName() {
+        return "Perplexity AI chat completions";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new PerplexityLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,
+            "supports_tools": True,
+            "supports_structured_output": True,
+            "supports_multimodal": False,
+        };
     }
 }
 }

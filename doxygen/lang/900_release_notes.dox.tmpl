@@ -822,7 +822,6 @@ cargo install tree-sitter-cli@0.26.5
       search with Ctrl+R, tab completion). For a full-featured ncurses TUI REPL, see the
       <a href="https://github.com/qoretechnologies/module-ncurses">module-ncurses</a> \c qrepl application.
 
-
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
     - Core language
       - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
@@ -853,6 +852,33 @@ cargo install tree-sitter-cli@0.26.5
       - fixed scheduling of closure values created in object scope with the @ref background "background operator" so
         stale captured objects are rejected before thread creation and valid captured objects stay alive until the
         background expression finishes
+
+    - fixed a bug handling nested conditional parsing directives
+      (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
+
+    - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class when storing objects that create circular
+      references; the TreeMap class now supports deterministic garbage collection
+      (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
+
+    - fixed a potential crash when raising parse warnings with no associated @ref Qore::Program "Program" object
+
+    - fixed a bug where empty hash and list literals (\c {} and \c ()) were not accepted as function arguments
+      for complex hash and list types (e.g. \c hash<string,X> or \c list<X>) at runtime, even though assignment
+      to typed variables worked correctly
+      (<a href="https://github.com/qoretechnologies/qore/issues/2647">issue 2647</a>)
+
+    - fixed parsing of namespaced typed hash literals like \c <Qore::StatInfo>{} and \c <::Qore::StatInfo>{}
+      (<a href="https://github.com/qoretechnologies/qore/issues/5147">issue 5147</a>)
+
+    - @ref dataproviderintro "DataProvider" module
+      - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
+        an empty string key, preventing bulk operations from flushing correctly
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+
+    - @ref reflectionintro "reflection" module
+      - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy
+        (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)
+
     - @ref restclientintro "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
@@ -868,286 +894,17 @@ cargo install tree-sitter-cli@0.26.5
           the state parameter (e.g., Trello)
         - added template variable substitution in \c oauth2_auth_args (e.g., \c key: \c "{{oauth2_client_id}}")
           for providers that use non-standard parameter names
+
     - @ref resthandlerintro "RestHandler" module
       - fixed handling \c OPTIONS requests with an \c action parameter
         (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
       - added \c raw_response to bypass serialization and schema validation for custom response bodies
+
     - @ref utilintro "Util" module
       - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
-    - @ref reflectionintro "reflection" module
-      - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy
-        (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)
-    - fixed a bug handling nested conditional parsing directives
-      (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
-    - @ref dataproviderintro "DataProvider" module
-      - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
-        an empty string key, preventing bulk operations from flushing correctly
-        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-    - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class when storing objects that create circular
-      references; the TreeMap class now supports deterministic garbage collection
-      (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
-    - fixed a potential crash when raising parse warnings with no associated @ref Qore::Program "Program" object
-    - fixed a bug where empty hash and list literals (\c {} and \c ()) were not accepted as function arguments
-      for complex hash and list types (e.g. \c hash<string,X> or \c list<X>) at runtime, even though assignment
-      to typed variables worked correctly
-      (<a href="https://github.com/qoretechnologies/qore/issues/2647">issue 2647</a>)
-    - fixed parsing of namespaced typed hash literals like \c <Qore::StatInfo>{} and \c <::Qore::StatInfo>{}
-      (<a href="https://github.com/qoretechnologies/qore/issues/5147">issue 5147</a>)
 
     @subsection qore_2_3_0_updated_modules Updated Modules
-    - @ref astparserintro "astparser" module
-      - added a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based parser backend
-        for Qore source code analysis, providing a full concrete syntax tree (CST) for accurate formatting and
-        code transformation; the tree-sitter Qore grammar supports all Qore language constructs including
-        parse directives, regex literals, heredocs, implicit arguments, and complex expressions
-      - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" for
-        scope-aware symbol completion with scope level information
-        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
-      - added \c ADK_Typedef constant for typedef declarations
-        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
-      - added \c ASYK_TypeAlias constant for typedef symbol kind
-        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
-      - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName
-        constants for typedef usage kinds
-      - added \c ADK_Enum constant for enum declarations
-      - added \c ASYK_Enum constant for enum symbol kind
-      - added \c ASUK_EnumDeclName and \c ASUK_EnumMemberName
-        constants for enum usage kinds
-      - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
-        (now returns 0-indexed values consistent with LSP convention)
-        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
-    - @ref cdsrestclientintro "CdsRestClient" module
-      - added support for Microsoft Dynamics 365 Business Central
-        - new \c CdsRestClient::BusinessCentralRestConnection class for BC connections
-        - API profile support for BC-specific URL construction and OAuth2 scopes
-        - new \c bcrests connection scheme
-    - @ref cdsrestdataproviderintro "CdsRestDataProvider" module
-      - added support for Microsoft Dynamics 365 Business Central with new data provider classes for CRUD operations
-      - added support for the DataProvider expression framework for OData queries with support for
-        contains, startsWith, endsWith, null, and notNull operators
-    - @ref connectionproviderintro "ConnectionProvider" module
-      - added the \c ConnectionProvider::RestartableIoHelper class
-      - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
-      - \c RestClient::RestConnection inherits the \c http_version option from \c ConnectionProvider::HttpConnection
-      - added \c amqp and \c amqps connection scheme registrations for the
-        <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
-    - @ref dataproviderintro "DataProvider" module
-      - added DPQL (Data Provider Query Language) for human/AI-readable query expressions
-        - new \c DataProvider::DpqlTokenizer class for lexical analysis
-        - new \c DataProvider::DpqlParser class for parsing DPQL strings to \c DataProviderExpression hashes
-        - new \c DataProvider::DpqlSerializer class for converting expressions back to DPQL strings
-        - new \c DataProvider::DpqlCompletionProvider class for IDE/editor autocomplete
-        - static API methods: \c DataProvider::DataProvider::parseDpqlExpression(),
-          \c DataProvider::DataProvider::parseDpqlExpressionWithInfo(),
-          \c DataProvider::DataProvider::serializeDpqlExpression(),
-          \c DataProvider::DataProvider::getDpqlTokens(),
-          \c DataProvider::DataProvider::getDpqlCompletions(),
-          \c DataProvider::DataProvider::validateDpqlExpression()
-        - DPQL syntax example:
-          @code{.py}
-@name == "John" && @age > 18
-          @endcode
-        - supports field refs (<code>\@field</code>), comparison ops, logical ops, ranges, \c in, and regex
-        - the \c qdp CLI supports DPQL expressions for search criteria with auto-detection or the \c -q/--dpql option
-        - the \c qdp CLI accepts \c - or \c {} as an empty DPQL expression to search without filters
-        - new \c qdp --dpql-help output with DPQL syntax and examples
-        - DPQL now supports ISO-8601 date literals, binary literals (\c &lt;deadbeef&gt;), list/hash literals, and unquoted string values
-      - added \c http3 field to \c DataProvider::DataProviderDebugInfo hashdecl for HTTP/3 connection tracking
-      - added \c requires_action_context and \c action_context fields to
-        \c DataProvider::DataProviderActionInfo for context-sensitive action filtering and propagation
-      - added \c amqp factory registration to \c DataProvider::FactoryMap for the
-        <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
-      - added 67 generic DPQL expressions for arithmetic, string, type conversion, encoding,
-        cryptographic, regex, date/time, collection, and serialization operations
-      - added Qore-style prefix operator syntax for DPQL \c map and \c hash_map expressions, where the
-        body, key, value, and filter subexpressions are evaluated per source element
-      - added \c now() function returning current timestamp with microsecond precision
-      - added module-conditional expression registration for YAML, JSON, and XML serialization
-        functions (registered when the corresponding modules are available)
-      - added \c dp_get_all_expression_info() public function to retrieve all expression metadata
-    - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
-      - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
-        connectivity using the \c db:// URL scheme with automatic connection scheme registration
-      - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
-        (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
-    - @ref elasticsearchdataproviderintro "ElasticSearchDataProvider" module
-      - added Bulk API support with NDJSON format and partial failure handling
-        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-      - added Scroll API for efficient iteration over large result sets
-        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-      - added Aggregations API (terms, histogram, date_histogram, metrics, etc.)
-        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-      - enabled bulk operations on ElasticSearchIndexTableDataProvider
-        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-    - @ref httpserverintro "HttpServer" module
-      - implemented async I/O mode for high-concurrency connection handling (enabled by default)
-        (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
-        - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
-        - request processing is dispatched to ThreadPool for concurrent handler execution
-        - HTTP responses are sent asynchronously using @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()"
-        - enables handling many more concurrent connections with fewer threads
-        - sub-millisecond response latency for simple requests
-        - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
-        - new \c HttpServer::queueAsyncResponse() method for async response sending
-        - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
-      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive;
-        async request contexts now get numeric \c "peer-info" immediately and expose optional
-        \c "peer-info-future" for handlers that need reverse DNS
-      - QUIC/HTTP/3 listener support via \c addQuicListener() for serving HTTP/3 over UDP
-      - InputStream streaming response support: handlers can return an \c InputStream as the response body
-        for memory-efficient streaming across HTTP/1.x, HTTP/2, and HTTP/3
-        - pollable InputStreams (e.g. \c FileInputStream) are read by the I/O thread using event-loop integration
-        - non-pollable InputStreams are read by the handler thread with backpressure-aware retry
-        - \c Content-Length mismatch detection raises \c HTTP-STREAM-ERROR if the InputStream provides fewer
-          bytes than declared
-      - true incremental streaming for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
-        - handlers returning a Qore-defined \c InputStream subclass (including \c CallbackInputStream)
-          are now streamed chunk-by-chunk by a dedicated
-\if QORE_LANG_FINAL
-          @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
-\else
-          \c HttpServer::StreamResponseProducer
-\endif
-          worker thread — no materialization, memory bounded by the peer's flow-control window,
-          time-to-first-byte ≈ one RTT after the handler produces its first chunk
-        - resolves the previous behavior where such streams were fully buffered in memory before any
-          bytes reached the wire — unsuitable for multi-GB or open-ended responses typical of enterprise
-          integration workloads (DataStream over Connect protocol, gRPC-over-Connect, chunked uploads,
-          live event feeds)
-        - architectural invariant: \c read() never executes on the async I/O thread; the producer worker
-          handles blocking reads and uses CV-based
-\if QORE_LANG_FINAL
-          @ref Qore::Socket::waitForHttp2StreamDrain() "waitForHttp2StreamDrain()" /
-          @ref Qore::Socket::waitForQuicStreamDrain() "waitForQuicStreamDrain()"
-\else
-          \c waitForHttp2StreamDrain() / \c waitForQuicStreamDrain()
-\endif
-          for backpressure; read errors are surfaced as a clean \c RST_STREAM / \c cancelQuicStream to
-          the peer rather than a silent hang
-      - new
-\if QORE_LANG_FINAL
-        @ref HttpServer::HttpServer::removeHandler(string) "HttpServer::removeHandler()"
-\else
-        \c HttpServer::removeHandler()
-\endif
-        method (with name and handler-reference overloads) to complement \c setHandler() for dynamic
-        handler registration
-    - @ref httpserverutilintro "HttpServerUtil" module
-      - added functionality to support setting cookies
-      - refactored authentication methods to provide a more extensible and clear design
-      - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 and HTTP/3 mode control
-      - new
-\if QORE_LANG_FINAL
-        @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
-\else
-        \c HttpServer::StreamResponseProducer
-\endif
-        class: worker-thread response-body streamer used by the \c HttpServer / \c HttpServerAsyncIo
-        pipeline for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
-    - @ref loggerintro "Logger" module
-\if QORE_LANG_FINAL
-      - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
-\else
-      - added memory-based backpressure support to \c Qore::Logger::LoggerAppenderQueue
-\endif
-        to prevent unbounded memory growth when log producers outpace consumers
-\if QORE_LANG_FINAL
-        - new @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "Qore::Logger::LoggerAppenderQueue::constructor(softint)" with
-\else
-        - new \c Qore::Logger::LoggerAppenderQueue::constructor(softint) with
-\endif
-          configurable memory limit (default: 10 MiB, -1 for unlimited)
-        - updated \c Qore::Logger::LoggerAppenderQueue::push() with optional timeout parameter for
-          backpressure control: block indefinitely (0), block with timeout (>0), or drop immediately (<0)
-        - new monitoring methods: \c Qore::Logger::LoggerAppenderQueue::maxBytes(),
-          \c Qore::Logger::LoggerAppenderQueue::currentBytes(),
-          \c Qore::Logger::LoggerAppenderQueue::isFull()
-      - added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
-        constructor for memory-limited thread pool logging
-    - @ref qdxintro "Qdx" module
-      - added @ref Qdx::QoreTokenizer "QoreTokenizer" class for proper Qore lexical analysis
-        (<a href="https://github.com/qoretechnologies/qore/issues/5109">issue 5109</a>)
-        - correctly handles \c $# (loop iteration variable) vs \c # (comment start)
-        - supports strings, comments, regex, heredocs, substitution, and transliteration
-        - new @ref Qdx::count_braces() "count_braces()" and @ref Qdx::count_all_brackets() "count_all_brackets()"
-          helper functions for accurate bracket counting in Qore code
-    - new classes and methods in the @ref reflectionintro "reflection" module:
-      - \c Qore::Reflection::Enum class for enum reflection
-      - \c Qore::Reflection::EnumMember class for enum member reflection
-      - @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" to list enums in a namespace
-      - @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to get an enum by name
-      - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
-    - @ref restclientintro "RestClient" module
-      - new @ref RestClient::RestClientPool "RestClientPool" class providing thread-safe connection pooling
-        for @ref RestClient::RestClient "RestClient" instances, built on
-        @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
-    - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
-      - added \c Schema::DataSchema class for pure data schema definitions from YAML (\c .ysm) or
-        JSON (\c .jsm) files — enables schema management without writing Qore code
-      - added \c Schema::DataSchemaLoader class for loading, validating, and normalizing data schema
-        files against a JSON Schema (Draft 2020-12) meta-schema
-      - added \c Schema::MigrationExecutor class for data-driven migration actions with access level
-        enforcement and dependency-based step ordering (17 action types supported)
-      - added \c qschema CLI tool for schema management: \c align, \c drop, \c diff, \c validate,
-        \c info, \c export commands with colorized output and dry-run support
-      - separated module into individual \c .qc files for maintainability
-    - <a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a> module
-      - added \c toYaml() and \c toJson() methods on \c AbstractReverseObject and \c SchemaReverse
-        for exporting database schemas to \c .ysm/\c .jsm format
-      - added \c SchemaReverse::toQore() for structured hash output compatible with \c DataSchema
-      - fixed numeric scale extraction and trigger accumulation bugs
-    - @ref serversenteventclientintro "ServerSentEventClient" module
-      - added \c "3.0" to the \c http_version data provider option for HTTP/3 SSE connections
-    - @ref sqlutilintro "SqlUtil" module
-      - added \c SqlUtil::generate_auto_triggers() for generating standard database triggers
-        (created/modified timestamps, sequence-based ID columns) for PostgreSQL, Oracle, MySQL, and MSSQL
-      - added \c SqlUtil::generate_auto_triggers_all_drivers() for cross-driver trigger definitions
-      - implemented support for specifying the columns to use for upserts separately from the row data
-        (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
-      - fixed a silent mis-alignment in \c SqlUtil::Tables::populate() where a referring
-        table placed before its foreign-key target in the input hash caused the target to
-        be pre-cached from the live database during FK resolution and then skipped on its
-        own turn, leaving the cache out of sync with the template and producing zero-change
-        \c AbstractSchema::align() output for structurally divergent tables; \c populate()
-        now processes tables in foreign-key topological order and throws a clear
-        \c ALIGN-TABLE-ERROR if an FK cycle among template tables is detected
-    - @ref utilintro "Util" module
-      - added the @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output with automatic terminal detection
-    - @ref websocketclientintro "WebSocketClient" module
-      - added HTTP/3 WebSocket support (RFC 9220) with \c http3 event and debug info fields
-      - added \c "3.0" to the \c http_version data provider option for HTTP/3 WebSocket connections
-      - added optional AsyncAPI 3.0 validation support for WebSocket messages
-      - added WebSocket extension support with permessage-deflate compression
-        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
-        - new \c extensions constructor option for extension negotiation
-        - automatic compression/decompression when extensions are active
-        - new \c hasPerMessageDeflate() and \c getActiveExtensions() methods
-      - new \c heartbeat constructor option overrides the previously hardcoded 20s async-mode
-        PING interval; set to 0 to disable
-      - new \c idle_timeout constructor option closes the connection with
-        @ref WebSocketClient::WSCC_GoingAway "WSCC_GoingAway" and surfaces
-        \c {reason: "idle-timeout"} on @ref EVENT_WS_CLOSED when no real incoming traffic
-        arrives within the window — detects peers that silently stopped responding to PINGs
-      - fixed the async heartbeat pacing to no longer advance \c last_recv_activity_ms when the
-        client sends a PING; a separate \c last_ping_sent_ms now guards PING spacing so idle
-        detection sees the true incoming traffic timestamp
-    - @ref websockethandlerintro "WebSocketHandler" module
-      - added optional AsyncAPI 3.0 validation support for WebSocket messages
-      - added server-side WebSocket extension support with permessage-deflate compression
-        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
-        - new \c extensions constructor option to enable supported extensions
-        - automatic negotiation with clients via Sec-WebSocket-Extensions headers
-        - compression/decompression of messages when extensions are negotiated
-        - new @ref WebSocketHandler::WebSocketHandler::hasExtensionSupport() "hasExtensionSupport()" and @ref WebSocketHandler::WebSocketHandler::getSupportedExtensions() "getSupportedExtensions()" handler methods
-    - @ref websocketutilintro "WebSocketUtil" module
-      - added pluggable WebSocket extension framework
-        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
-        - new @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" base class for extension implementations
-        - new @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class for extension management
-        - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
-          permessage-deflate compression
-
     @par Comprehensive Regular Expression Improvements
     @parblock
     The @ref qore_regex "regular expression" subsystem has been significantly enhanced:
@@ -1225,6 +982,322 @@ cargo install tree-sitter-cli@0.26.5
     See @ref qore_regex_brace_delimiters for more information.
     @endparblock
 
+    - @ref astparserintro "astparser" module
+      - added a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based parser backend
+        for Qore source code analysis, providing a full concrete syntax tree (CST) for accurate formatting and
+        code transformation; the tree-sitter Qore grammar supports all Qore language constructs including
+        parse directives, regex literals, heredocs, implicit arguments, and complex expressions
+      - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" for
+        scope-aware symbol completion with scope level information
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - added \c ADK_Typedef constant for typedef declarations
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - added \c ASYK_TypeAlias constant for typedef symbol kind
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName
+        constants for typedef usage kinds
+      - added \c ADK_Enum constant for enum declarations
+      - added \c ASYK_Enum constant for enum symbol kind
+      - added \c ASUK_EnumDeclName and \c ASUK_EnumMemberName
+        constants for enum usage kinds
+      - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
+        (now returns 0-indexed values consistent with LSP convention)
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+
+    - @ref awsrestclientintro "AwsRestClient" module
+      - added the full AWS credential chain: AWS_* environment variables, ECS task-role
+        (\c AWS_CONTAINER_CREDENTIALS_RELATIVE_URI / \c _FULL_URI), IMDSv2 token-protected
+        flow, and STS \c AssumeRole bootstrap; all four sources tried in order before the
+        canonical RequiredOptions error fires
+      - new connection / opts knobs: \c aws_role_arn, \c aws_role_session_name,
+        \c aws_external_id, \c aws_sts_endpoint, \c aws_imds_url, \c aws_imds_disabled
+      - new static helpers: \c AwsRestClientBase::applyEnvCredentials(),
+        \c assumeRole(), \c getImdsCredentials(), \c getEcsCredentials()
+      - fixed pre-existing \c buildResponse arity bug in
+        @ref AwsRestClient::AwsRestClientIo::restDoRequest() "AwsRestClientIo::restDoRequest()"
+        — was being called with 4 args but the current signature requires 7
+
+    - @ref cdsrestclientintro "CdsRestClient" module
+      - added support for Microsoft Dynamics 365 Business Central
+        - new \c CdsRestClient::BusinessCentralRestConnection class for BC connections
+        - API profile support for BC-specific URL construction and OAuth2 scopes
+        - new \c bcrests connection scheme
+
+    - @ref cdsrestdataproviderintro "CdsRestDataProvider" module
+      - added support for Microsoft Dynamics 365 Business Central with new data provider classes for CRUD operations
+      - added support for the DataProvider expression framework for OData queries with support for
+        contains, startsWith, endsWith, null, and notNull operators
+
+    - @ref connectionproviderintro "ConnectionProvider" module
+      - added the \c ConnectionProvider::RestartableIoHelper class
+      - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
+      - \c RestClient::RestConnection inherits the \c http_version option from \c ConnectionProvider::HttpConnection
+      - added \c amqp and \c amqps connection scheme registrations for the
+        <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
+
+    - @ref dataproviderintro "DataProvider" module
+      - added DPQL (Data Provider Query Language) for human/AI-readable query expressions
+        - new \c DataProvider::DpqlTokenizer class for lexical analysis
+        - new \c DataProvider::DpqlParser class for parsing DPQL strings to \c DataProviderExpression hashes
+        - new \c DataProvider::DpqlSerializer class for converting expressions back to DPQL strings
+        - new \c DataProvider::DpqlCompletionProvider class for IDE/editor autocomplete
+        - static API methods: \c DataProvider::DataProvider::parseDpqlExpression(),
+          \c DataProvider::DataProvider::parseDpqlExpressionWithInfo(),
+          \c DataProvider::DataProvider::serializeDpqlExpression(),
+          \c DataProvider::DataProvider::getDpqlTokens(),
+          \c DataProvider::DataProvider::getDpqlCompletions(),
+          \c DataProvider::DataProvider::validateDpqlExpression()
+        - DPQL syntax example:
+          @code{.py}
+@name == "John" && @age > 18
+          @endcode
+        - supports field refs (<code>\@field</code>), comparison ops, logical ops, ranges, \c in, and regex
+        - the \c qdp CLI supports DPQL expressions for search criteria with auto-detection or the \c -q/--dpql option
+        - the \c qdp CLI accepts \c - or \c {} as an empty DPQL expression to search without filters
+        - new \c qdp --dpql-help output with DPQL syntax and examples
+        - DPQL now supports ISO-8601 date literals, binary literals (\c &lt;deadbeef&gt;), list/hash literals, and unquoted string values
+      - added \c http3 field to \c DataProvider::DataProviderDebugInfo hashdecl for HTTP/3 connection tracking
+      - added \c requires_action_context and \c action_context fields to
+        \c DataProvider::DataProviderActionInfo for context-sensitive action filtering and propagation
+      - added \c amqp factory registration to \c DataProvider::FactoryMap for the
+        <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
+      - added 67 generic DPQL expressions for arithmetic, string, type conversion, encoding,
+        cryptographic, regex, date/time, collection, and serialization operations
+      - added Qore-style prefix operator syntax for DPQL \c map and \c hash_map expressions, where the
+        body, key, value, and filter subexpressions are evaluated per source element
+      - added \c now() function returning current timestamp with microsecond precision
+      - added module-conditional expression registration for YAML, JSON, and XML serialization
+        functions (registered when the corresponding modules are available)
+      - added \c dp_get_all_expression_info() public function to retrieve all expression metadata
+
+    - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
+      - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
+        connectivity using the \c db:// URL scheme with automatic connection scheme registration
+      - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
+        (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
+
+    - @ref elasticsearchdataproviderintro "ElasticSearchDataProvider" module
+      - added Bulk API support with NDJSON format and partial failure handling
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - added Scroll API for efficient iteration over large result sets
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - added Aggregations API (terms, histogram, date_histogram, metrics, etc.)
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - enabled bulk operations on ElasticSearchIndexTableDataProvider
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+
+    - @ref geminirestclientintro "GeminiRestClient" module
+      - request/response body shapers extracted into the standalone
+        @ref geminibodyshapeintro "GeminiBodyShape" module so the upcoming
+        Vertex AI Gemini-on-Vertex pathway can reuse them without forcing a
+        \c GeminiRestClient import; behavior is unchanged
+
+    - @ref grokrestclientintro "GrokRestClient" module
+      - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
+        \c grok via @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — thin
+        subclass of \c OpenAiLlmProvider with the xAI default URL applied
+
+    - @ref httpserverintro "HttpServer" module
+      - implemented async I/O mode for high-concurrency connection handling (enabled by default)
+        (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
+        - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
+        - request processing is dispatched to ThreadPool for concurrent handler execution
+        - HTTP responses are sent asynchronously using @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()"
+        - enables handling many more concurrent connections with fewer threads
+        - sub-millisecond response latency for simple requests
+        - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
+        - new \c HttpServer::queueAsyncResponse() method for async response sending
+        - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
+      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive;
+        async request contexts now get numeric \c "peer-info" immediately and expose optional
+        \c "peer-info-future" for handlers that need reverse DNS
+      - QUIC/HTTP/3 listener support via \c addQuicListener() for serving HTTP/3 over UDP
+      - InputStream streaming response support: handlers can return an \c InputStream as the response body
+        for memory-efficient streaming across HTTP/1.x, HTTP/2, and HTTP/3
+        - pollable InputStreams (e.g. \c FileInputStream) are read by the I/O thread using event-loop integration
+        - non-pollable InputStreams are read by the handler thread with backpressure-aware retry
+        - \c Content-Length mismatch detection raises \c HTTP-STREAM-ERROR if the InputStream provides fewer
+          bytes than declared
+      - true incremental streaming for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
+        - handlers returning a Qore-defined \c InputStream subclass (including \c CallbackInputStream)
+          are now streamed chunk-by-chunk by a dedicated
+\if QORE_LANG_FINAL
+          @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+          \c HttpServer::StreamResponseProducer
+\endif
+          worker thread — no materialization, memory bounded by the peer's flow-control window,
+          time-to-first-byte ≈ one RTT after the handler produces its first chunk
+        - resolves the previous behavior where such streams were fully buffered in memory before any
+          bytes reached the wire — unsuitable for multi-GB or open-ended responses typical of enterprise
+          integration workloads (DataStream over Connect protocol, gRPC-over-Connect, chunked uploads,
+          live event feeds)
+        - architectural invariant: \c read() never executes on the async I/O thread; the producer worker
+          handles blocking reads and uses CV-based
+\if QORE_LANG_FINAL
+          @ref Qore::Socket::waitForHttp2StreamDrain() "waitForHttp2StreamDrain()" /
+          @ref Qore::Socket::waitForQuicStreamDrain() "waitForQuicStreamDrain()"
+\else
+          \c waitForHttp2StreamDrain() / \c waitForQuicStreamDrain()
+\endif
+          for backpressure; read errors are surfaced as a clean \c RST_STREAM / \c cancelQuicStream to
+          the peer rather than a silent hang
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::HttpServer::removeHandler(string) "HttpServer::removeHandler()"
+\else
+        \c HttpServer::removeHandler()
+\endif
+        method (with name and handler-reference overloads) to complement \c setHandler() for dynamic
+        handler registration
+
+    - @ref httpserverutilintro "HttpServerUtil" module
+      - added functionality to support setting cookies
+      - refactored authentication methods to provide a more extensible and clear design
+      - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 and HTTP/3 mode control
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+        \c HttpServer::StreamResponseProducer
+\endif
+        class: worker-thread response-body streamer used by the \c HttpServer / \c HttpServerAsyncIo
+        pipeline for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
+
+    - @ref loggerintro "Logger" module
+\if QORE_LANG_FINAL
+      - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
+\else
+      - added memory-based backpressure support to \c Qore::Logger::LoggerAppenderQueue
+\endif
+        to prevent unbounded memory growth when log producers outpace consumers
+\if QORE_LANG_FINAL
+        - new @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "Qore::Logger::LoggerAppenderQueue::constructor(softint)" with
+\else
+        - new \c Qore::Logger::LoggerAppenderQueue::constructor(softint) with
+\endif
+          configurable memory limit (default: 10 MiB, -1 for unlimited)
+        - updated \c Qore::Logger::LoggerAppenderQueue::push() with optional timeout parameter for
+          backpressure control: block indefinitely (0), block with timeout (>0), or drop immediately (<0)
+        - new monitoring methods: \c Qore::Logger::LoggerAppenderQueue::maxBytes(),
+          \c Qore::Logger::LoggerAppenderQueue::currentBytes(),
+          \c Qore::Logger::LoggerAppenderQueue::isFull()
+      - added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
+        constructor for memory-limited thread pool logging
+
+    - @ref openairestclientintro "OpenAiRestClient" module
+      - @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" is now formally the
+        OpenAI-compatible base for any backend that speaks the OpenAI chat-completions
+        wire shape (xAI Grok, Perplexity, Azure OpenAI, etc.)
+      - new virtual \c getChatCompletionsPath() subclass hook so derived providers can
+        override the URL path (e.g. Perplexity uses \c /chat/completions instead of
+        \c /v1/chat/completions, Azure routes through deployment-name URLs)
+
+    - @ref perplexityrestclientintro "PerplexityRestClient" module
+      - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
+        \c perplexity via @ref PerplexityRestClient::PerplexityLlmProvider
+        "PerplexityLlmProvider" — overrides \c getChatCompletionsPath() to
+        \c /chat/completions
+
+    - @ref qdxintro "Qdx" module
+      - added @ref Qdx::QoreTokenizer "QoreTokenizer" class for proper Qore lexical analysis
+        (<a href="https://github.com/qoretechnologies/qore/issues/5109">issue 5109</a>)
+        - correctly handles \c $# (loop iteration variable) vs \c # (comment start)
+        - supports strings, comments, regex, heredocs, substitution, and transliteration
+        - new @ref Qdx::count_braces() "count_braces()" and @ref Qdx::count_all_brackets() "count_all_brackets()"
+          helper functions for accurate bracket counting in Qore code
+
+    - new classes and methods in the @ref reflectionintro "reflection" module:
+      - \c Qore::Reflection::Enum class for enum reflection
+      - \c Qore::Reflection::EnumMember class for enum member reflection
+      - @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" to list enums in a namespace
+      - @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to get an enum by name
+      - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
+
+    - @ref restclientintro "RestClient" module
+      - new @ref RestClient::RestClientPool "RestClientPool" class providing thread-safe connection pooling
+        for @ref RestClient::RestClient "RestClient" instances, built on
+        @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
+
+    - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
+      - added \c Schema::DataSchema class for pure data schema definitions from YAML (\c .ysm) or
+        JSON (\c .jsm) files — enables schema management without writing Qore code
+      - added \c Schema::DataSchemaLoader class for loading, validating, and normalizing data schema
+        files against a JSON Schema (Draft 2020-12) meta-schema
+      - added \c Schema::MigrationExecutor class for data-driven migration actions with access level
+        enforcement and dependency-based step ordering (17 action types supported)
+      - added \c qschema CLI tool for schema management: \c align, \c drop, \c diff, \c validate,
+        \c info, \c export commands with colorized output and dry-run support
+      - separated module into individual \c .qc files for maintainability
+
+    - <a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a> module
+      - added \c toYaml() and \c toJson() methods on \c AbstractReverseObject and \c SchemaReverse
+        for exporting database schemas to \c .ysm/\c .jsm format
+      - added \c SchemaReverse::toQore() for structured hash output compatible with \c DataSchema
+      - fixed numeric scale extraction and trigger accumulation bugs
+
+    - @ref serversenteventclientintro "ServerSentEventClient" module
+      - added \c "3.0" to the \c http_version data provider option for HTTP/3 SSE connections
+
+    - @ref sqlutilintro "SqlUtil" module
+      - added \c SqlUtil::generate_auto_triggers() for generating standard database triggers
+        (created/modified timestamps, sequence-based ID columns) for PostgreSQL, Oracle, MySQL, and MSSQL
+      - added \c SqlUtil::generate_auto_triggers_all_drivers() for cross-driver trigger definitions
+      - implemented support for specifying the columns to use for upserts separately from the row data
+        (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
+      - fixed a silent mis-alignment in \c SqlUtil::Tables::populate() where a referring
+        table placed before its foreign-key target in the input hash caused the target to
+        be pre-cached from the live database during FK resolution and then skipped on its
+        own turn, leaving the cache out of sync with the template and producing zero-change
+        \c AbstractSchema::align() output for structurally divergent tables; \c populate()
+        now processes tables in foreign-key topological order and throws a clear
+        \c ALIGN-TABLE-ERROR if an FK cycle among template tables is detected
+
+    - @ref utilintro "Util" module
+      - added the @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output with automatic terminal detection
+
+    - @ref voyagerestclientintro "VoyageRestClient" module
+      - @ref QoreRagUtils::VoyageReranker::rerank() "VoyageReranker::rerank()" updated
+        for the new optional \c *hash<auto> opts parameter on
+        @ref QoreRagUtils::AbstractReranker "AbstractReranker"; forwards
+        \c truncation, \c max_chunks_per_doc, and \c return_documents to Voyage
+
+    - @ref websocketclientintro "WebSocketClient" module
+      - added HTTP/3 WebSocket support (RFC 9220) with \c http3 event and debug info fields
+      - added \c "3.0" to the \c http_version data provider option for HTTP/3 WebSocket connections
+      - added optional AsyncAPI 3.0 validation support for WebSocket messages
+      - added WebSocket extension support with permessage-deflate compression
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+        - new \c extensions constructor option for extension negotiation
+        - automatic compression/decompression when extensions are active
+        - new \c hasPerMessageDeflate() and \c getActiveExtensions() methods
+      - new \c heartbeat constructor option overrides the previously hardcoded 20s async-mode
+        PING interval; set to 0 to disable
+      - new \c idle_timeout constructor option closes the connection with
+        @ref WebSocketClient::WSCC_GoingAway "WSCC_GoingAway" and surfaces
+        \c {reason: "idle-timeout"} on @ref EVENT_WS_CLOSED when no real incoming traffic
+        arrives within the window — detects peers that silently stopped responding to PINGs
+      - fixed the async heartbeat pacing to no longer advance \c last_recv_activity_ms when the
+        client sends a PING; a separate \c last_ping_sent_ms now guards PING spacing so idle
+        detection sees the true incoming traffic timestamp
+
+    - @ref websockethandlerintro "WebSocketHandler" module
+      - added optional AsyncAPI 3.0 validation support for WebSocket messages
+      - added server-side WebSocket extension support with permessage-deflate compression
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+        - new \c extensions constructor option to enable supported extensions
+        - automatic negotiation with clients via Sec-WebSocket-Extensions headers
+        - compression/decompression of messages when extensions are negotiated
+        - new @ref WebSocketHandler::WebSocketHandler::hasExtensionSupport() "hasExtensionSupport()" and @ref WebSocketHandler::WebSocketHandler::getSupportedExtensions() "getSupportedExtensions()" handler methods
+
+    - @ref websocketutilintro "WebSocketUtil" module
+      - added pluggable WebSocket extension framework
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+        - new @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" base class for extension implementations
+        - new @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class for extension management
+        - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
+          permessage-deflate compression
+
     @subsection qore_2_3_0_new_builtin_modules New Builtin Modules
     - @ref dataframeintro "dataframe" module
       - new builtin module providing a columnar DataFrame with typed columns (int64, float64,
@@ -1245,6 +1318,7 @@ cargo install tree-sitter-cli@0.26.5
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
+
     - @ref i18nintro "i18n" module
       - new builtin module providing ICU-backed internationalization and localization primitives
       - native schema-versioned message catalogs with deterministic locale fallback, placeholder validation,
@@ -1260,6 +1334,7 @@ cargo install tree-sitter-cli@0.26.5
         \c LOCALE_CONTROL functional domain; catalog file APIs use \c FILESYSTEM
       - \c qore-i18n tool for AST-based extraction, catalog statistics, pseudolocalization, and simple PO
         import/export
+
     - @ref krb5intro "krb5" module
       - new builtin module providing Kerberos 5 and GSSAPI primitives for credential caches,
         keytabs, principals, service tickets, GSSAPI initiator and acceptor contexts,
@@ -1271,12 +1346,14 @@ cargo install tree-sitter-cli@0.26.5
         host-based service principals, SPNEGO header construction and parsing, credential
         lifecycle checks, cache maintenance, keytab rotation helpers, and Kerberos
         environment validation
+
     - @ref linenoiseintro "linenoise" module
       - integrated into the %Qore build tree (previously a separate external module)
       - provides readline-like line editing under a permissive (BSD) license
       - supports arrow key navigation, reverse search (Ctrl+R), and tab completion
       - includes @ref Qore::Linenoise::AbstractHistoryProvider "AbstractHistoryProvider" abstract class
         for external history management
+
     - @ref mlintro "ml" module
       - new builtin module providing machine learning algorithms powered by Eigen3
       - Isolation Forest for unsupervised anomaly detection
@@ -1328,6 +1405,7 @@ cargo install tree-sitter-cli@0.26.5
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
         Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation
+
     - @ref mongodbintro "mongodb" module
       - new builtin module providing <a href="https://www.mongodb.com/">MongoDB</a> client connectivity using libmongoc
       - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
@@ -1335,17 +1413,20 @@ cargo install tree-sitter-cli@0.26.5
         deleteMany)
       - aggregation pipeline support
       - automatic BSON to Qore value conversion (hashes, lists, dates, binary, ObjectId, etc.)
+
     - @ref ocrintro "ocr" module
       - new builtin module providing text extraction from images using Tesseract OCR
       - TesseractEngine class with extractText() and extractTextWithMetadata()
       - block-level bounding boxes and confidence scores
       - supports PNG, JPEG, TIFF, BMP, GIF input formats
       - thread-safe with std::mutex, dom=FILESYSTEM on all methods
+
     - @ref protobufintro "protobuf" module
       - new builtin module providing dynamic <a href="https://protobuf.dev/">Protocol Buffer</a> schema loading
         from files, strings, serialized descriptors, or programmatic hash definitions
       - encode/decode Qore hashes to/from protobuf binary format, JSON conversion,
         schema introspection, and file descriptor serialization
+
     - @ref tokenizerintro "tokenizer" module
       - new builtin module providing <a href="https://huggingface.co/">HuggingFace</a>-compatible text tokenization
       - supports BPE (GPT-2, Llama, Mistral), WordPiece (BERT, DistilBERT), and Unigram/SentencePiece (T5, XLM-R)
@@ -1364,31 +1445,45 @@ cargo install tree-sitter-cli@0.26.5
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
     @subsection qore_2_3_0_new_user_modules New User Modules
+    - \c LemlistDataProvider module
+      - new module providing a data provider API for <a href="https://www.lemlist.com/">Lemlist</a> sales outreach and email campaign services
+      - campaign management (create, pause, start campaigns)
+      - lead management (add, update, remove leads from campaigns)
+      - activity tracking (emails sent, opened, clicked, replied, bounced)
+      - task management (create and update manual tasks)
+      - contact management (list and retrieve contacts)
+      - webhook-based event triggers for 7 email and engagement event types
+      - action catalog integration with 13 actions and 7 triggers
+      - connection support with \c lemlist:// URL scheme
+
+    - \c TableauDataProvider module
+      - new module providing a data provider API for <a href="https://www.tableau.com/">Tableau</a> analytics
+      - datasource management (search, get, update, delete, download, add/remove tags)
+      - project management (search, create, update, delete)
+      - user management (search, get, create, update, delete)
+      - extract refresh task management (list, get, delete)
+      - webhook-based event triggers for datasource lifecycle events (created, deleted, updated, refresh started/succeeded/failed)
+      - polling-based event triggers for new datasources and new projects
+      - action catalog integration with 20 actions and 8 triggers
+      - connection support with \c tableaures:// URL scheme
+
     - @ref aftershipdataproviderintro "AftershipDataProvider" module
       - new module providing a data provider API for <a href="https://www.aftership.com/">Aftership</a> tracking and returns services
+
     - @ref aftershiprestclientintro "AftershipRestClient" module
       - new module providing a REST client for the <a href="https://www.aftership.com/">Aftership</a> tracking and returns API
       - supports API key authentication via as-api-key header
       - provides AftershipRestConnection for connection management with \c aftership:// URL scheme
+
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
-    - @ref baselinkerrestclientintro "BaseLinkerRestClient" module
-      - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
-      - supports API token authentication via \c X-BLToken header
-      - wraps BaseLinker's single-endpoint RPC-over-HTTP protocol (form-encoded POST to \c /connector.php)
-      - provides BaseLinkerRestConnection for connection management with \c baselinkerrest:// URL scheme
-    - @ref baselinkerdataproviderintro "BaseLinkerDataProvider" module
-      - new module providing a data provider API for <a href="https://baselinker.com/">BaseLinker</a> multichannel e-commerce integration
-      - order management (create, update, status/payment updates, delete, order line items)
-      - order returns management (create, update, status, refund)
-      - inventory management (catalogs, products with upsert, bulk stock and price updates)
-      - shipping (courier packages, labels, courier and service metadata)
-      - polling-based event triggers for 22 journal event types (order created, paid, packaged, etc.)
+
     - @ref anthropicrestclientintro "AnthropicRestClient" module
       - new module providing a REST client for <a href="https://www.anthropic.com/">Anthropic</a>'s Claude AI API
       - supports API key authentication via x-api-key header
       - provides AnthropicRestConnection for connection management with \c anthropic:// URL scheme
       - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
+
     - @ref apollodataproviderintro "ApolloDataProvider" module
       - new module providing a data provider API for <a href="https://www.apollo.io/">Apollo</a> B2B sales intelligence
       - contact management (create, update, delete, search, get by ID)
@@ -1400,10 +1495,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contacts, accounts, and deals
       - action catalog integration with 20+ actions and 4 triggers
       - connection support with \c apollorest:// URL scheme
+
     - @ref apollorestclientintro "ApolloRestClient" module
       - new module providing a REST client for <a href="https://www.apollo.io/">Apollo</a>'s B2B sales intelligence API
       - supports OAuth2 authentication and API key authentication via x-api-key header
       - provides ApolloRestConnection for connection management with \c apollorest:// URL scheme
+
     - @ref asyncapiintro "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings
@@ -1411,10 +1508,12 @@ cargo install tree-sitter-cli@0.26.5
       - new \c AsyncApi::AsyncApiSchemaTokenizer class for parsing \@EVENT and \@WEBSOCKET documentation blocks
       - new \c AsyncApi::AsyncApiTypeMapper class for mapping Qore types to JSON Schema types
       - new \c qore-asyncapi-gen CLI tool for generating schemas from source files
+
     - @ref asyncapidataproviderintro "AsyncApiDataProvider" module
       - new module providing a data provider API for AsyncAPI schemas
       - protocol-agnostic design with pluggable transports (WebSocket, MQTT, Kafka, etc.)
       - includes built-in WebSocket transport
+
     - @ref asyncsocketiointro "AsyncSocketIo" module
       - high-performance event loop for asynchronous socket I/O using epoll (Linux) / kqueue (macOS/BSD)
       - new @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" class providing a dedicated I/O
@@ -1430,15 +1529,59 @@ cargo install tree-sitter-cli@0.26.5
         infrastructure used by @ref httpclientiointro "HttpClientIo",
         @ref restclientio_intro "RestClientIo", and
         @ref httpserverasynciointro "HttpServerAsyncIo"
+
+    - @ref awseventstreamintro "AwsEventStream" module
+      - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
+      - full prelude + headers + payload + CRC32 validation; ten header value-type tags decoded (bool, int8/16/32/64, byte-array, UTF-8 string, timestamp, UUID)
+
+    - @ref azureauthintro "AzureAuth" module
+      - new module exchanging Microsoft Entra (Azure AD) credentials for bearer access tokens
+      - supports \c client_credentials and managed-identity (IMDS-for-Azure) flows with thread-safe token caching and 5-minute safety-window refresh
+
+    - @ref azureopenaidataproviderintro "AzureOpenAiDataProvider" module
+      - new module providing a data provider API for Azure OpenAI Service — deployment-routed chat completions and embeddings
+      - registers ChatCompletion + Embedding actions in the action catalog under the \c azure-openai scheme
+
+    - @ref azureopenairestclientintro "AzureOpenAiRestClient" module
+      - new module providing a REST client and \c LlmProvider for <a href="https://azure.microsoft.com/en-us/products/ai-services/openai-service/">Azure OpenAI Service</a>
+      - subclasses \c OpenAiLlmProvider with deployment-routed URLs and three authentication modes: api-key, Entra client-credentials, Entra managed-identity
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c azure-openai
+
+    - @ref baselinkerdataproviderintro "BaseLinkerDataProvider" module
+      - new module providing a data provider API for <a href="https://baselinker.com/">BaseLinker</a> multichannel e-commerce integration
+      - order management (create, update, status/payment updates, delete, order line items)
+      - order returns management (create, update, status, refund)
+      - inventory management (catalogs, products with upsert, bulk stock and price updates)
+      - shipping (courier packages, labels, courier and service metadata)
+      - polling-based event triggers for 22 journal event types (order created, paid, packaged, etc.)
+
+    - @ref baselinkerrestclientintro "BaseLinkerRestClient" module
+      - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
+      - supports API token authentication via \c X-BLToken header
+      - wraps BaseLinker's single-endpoint RPC-over-HTTP protocol (form-encoded POST to \c /connector.php)
+      - provides BaseLinkerRestConnection for connection management with \c baselinkerrest:// URL scheme
+
+    - @ref bedrockdataproviderintro "BedrockDataProvider" module
+      - new module providing a data provider API for AWS Bedrock
+      - registers Converse + Embed actions in the action catalog under the \c bedrock scheme
+
+    - @ref bedrockrestclientintro "BedrockRestClient" module
+      - new module providing a REST client and \c LlmProvider for <a href="https://aws.amazon.com/bedrock/">AWS Bedrock</a>
+      - speaks the unified Converse API covering Anthropic, Llama, Mistral, Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families
+      - Titan + Cohere embedder via \c InvokeModel; full AWS credential chain (static, env, ECS task-role, IMDSv2, STS AssumeRole) inherited from \c AwsRestClient
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c bedrock and @ref qoreragutilsintro "QoreRagUtils" under embedder backend \c bedrock
+
     - @ref bgem3fastapidataproviderintro "BgeM3FastApiDataProvider" module
       - new module providing a data provider API for the BGE-M3 FastAPI embedding sidecar
       - exposes embeddings (<tt>/embed</tt>), health (<tt>/health</tt>), and metrics (<tt>/metrics</tt>) as DPC actions
       - dense and sparse vector generation suitable for hybrid retrieval pipelines
+
     - @ref bgem3restclientintro "BgeM3RestClient" module
       - new module providing a REST client for <a href="https://huggingface.co/BAAI/bge-m3">BGE-M3</a> FastAPI embedding sidecar services
       - exposes the sidecar's native endpoints (<tt>/embed</tt>, <tt>/health</tt>, <tt>/metrics</tt>)
       - serves the \c bge-m3 multilingual embedding model with dense and sparse vector support
       - provides BgeM3RestConnection for connection management with \c bge-m3:// URL scheme
+
     - @ref bigcommercedataproviderintro "BigCommerceDataProvider" module
       - new module providing a data provider API for <a href="https://www.bigcommerce.com/">BigCommerce</a> e-commerce
       - customer management (create, update, search, delete)
@@ -1449,11 +1592,13 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+
     - @ref bigcommercerestclientintro "BigCommerceRestClient" module
       - new module providing a REST client for <a href="https://www.bigcommerce.com/">BigCommerce</a>'s e-commerce API
       - supports OAuth2 authentication (authorization_code grant) and manual X-Auth-Token mode
       - overrides \c gotOAuth2LoginInfo() to apply OAuth2 tokens as X-Auth-Token headers
       - provides BigCommerceRestConnection for connection management with \c bigcommerceres:// URL scheme
+
     - @ref bitlydataproviderintro "BitlyDataProvider" module
       - new module providing a data provider API for <a href="https://bitly.com/">Bitly</a> URL shortening
       - bitlink management (shorten, create, update, delete, list)
@@ -1465,11 +1610,13 @@ cargo install tree-sitter-cli@0.26.5
       - custom bitlink support
       - polling-based event triggers for bitlink click activity
       - action catalog integration with 21 actions and 1 trigger
+
     - @ref bitlyrestclientintro "BitlyRestClient" module
       - new module providing a REST client for <a href="https://bitly.com/">Bitly</a>'s URL shortening API
       - supports Bearer token and OAuth2 authentication
       - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
       - provides BitlyRestConnection for connection management with \c bitlyrest:// URL scheme
+
     - @ref chargebeedataproviderintro "ChargebeeDataProvider" module
       - new module providing a data provider API for <a href="https://www.chargebee.com/">Chargebee</a> subscription billing and revenue management
       - customer management (create, read, update, delete, search)
@@ -1481,10 +1628,12 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for customers, subscriptions, invoices, and all events
       - action catalog integration with 30 actions and 4 triggers
       - connection support with \c chargebee:// URL scheme
+
     - @ref chargebeerestclientintro "ChargebeeRestClient" module
       - new module providing a REST client for <a href="https://www.chargebee.com/">Chargebee</a>'s subscription billing API
       - supports HTTP Basic Authentication with API Key as username
       - provides ChargebeeRestConnection for connection management with \c chargebee:// URL scheme
+
     - @ref cin7coredataproviderintro "Cin7CoreDataProvider" module
       - new module providing a data provider API for <a href="https://www.cin7.com/">Cin7Core</a> inventory management and ERP
       - customer and supplier management (create, read, update, search)
@@ -1496,10 +1645,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for payments, invoices, credit notes, tracking, stock levels, and contact updates
       - action catalog integration with 35 actions and 8 triggers
       - connection support with \c cin7core:// URL scheme
+
     - @ref cin7corerestclientintro "Cin7CoreRestClient" module
       - new module providing a REST client for <a href="https://www.cin7.com/">Cin7Core</a> (DEAR Inventory) API
       - supports Account ID and API Key authentication via headers
       - provides Cin7CoreRestConnection for connection management with \c cin7core:// URL scheme
+
     - @ref circledataproviderintro "CircleDataProvider" module
       - new module providing a data provider API for <a href="https://circle.so/">Circle</a> community platform
       - post management (create, delete, list)
@@ -1510,11 +1661,13 @@ cargo install tree-sitter-cli@0.26.5
       - generic API call action for arbitrary API requests
       - polling-based event triggers for new posts, comments, spaces, communities, member invitations, and member tags
       - action catalog integration with 19 actions and 6 triggers
+
     - @ref circlerestclientintro "CircleRestClient" module
       - new module providing a REST client for <a href="https://circle.so/">Circle</a>'s community platform API
       - supports Bearer token authentication
       - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
       - provides CircleRestConnection for connection management with \c circlerest:// URL scheme
+
     - @ref clickfunnelsdataproviderintro "ClickFunnelsDataProvider" module
       - new module providing a data provider API for <a href="https://www.clickfunnels.com/">ClickFunnels</a> 2.0
       - contact management (create, read, update, delete, list)
@@ -1528,10 +1681,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contacts, orders, form submissions, enrollments, and fulfillments
       - action catalog integration with 56 actions and 8 triggers
       - connection support with \c clickfunnelsrest:// URL scheme
+
     - @ref clickfunnelsrestclientintro "ClickFunnelsRestClient" module
       - new module providing a REST client for <a href="https://www.clickfunnels.com/">ClickFunnels</a> 2.0 REST API
       - supports Bearer token authentication
       - provides ClickFunnelsRestConnection for connection management with \c clickfunnelsrest:// URL scheme
+
     - @ref closedataproviderintro "CloseDataProvider" module
       - new module providing a data provider API for <a href="https://www.close.com/">Close</a> CRM
       - lead management (create, read, update, delete, search)
@@ -1542,10 +1697,12 @@ cargo install tree-sitter-cli@0.26.5
       - event triggers for leads, contacts, and opportunities (created, updated, deleted)
       - action catalog integration with 43 actions and 9 triggers
       - connection support with \c closerest:// URL scheme
+
     - @ref closerestclientintro "CloseRestClient" module
       - new module providing a REST client for <a href="https://www.close.com/">Close</a> CRM's REST API
       - supports OAuth2 authentication with automatic token refresh
       - provides CloseRestConnection for connection management with \c closerest:// URL scheme
+
     - @ref constantcontactdataproviderintro "ConstantContactDataProvider" module
       - new module providing a data provider API for <a href="https://www.constantcontact.com/">Constant Contact</a> email marketing
       - contact management (create, update, delete, list, find by ID)
@@ -1560,10 +1717,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contacts, email campaigns, and contact lists
       - action catalog integration with 38 actions and 3 triggers
       - connection support with \c constantcontactres:// URL scheme
+
     - @ref constantcontactrestclientintro "ConstantContactRestClient" module
       - new module providing a REST client for <a href="https://www.constantcontact.com/">Constant Contact</a>'s email marketing API
       - supports OAuth2 authentication with bearer tokens
       - provides ConstantContactRestConnection for connection management with \c constantcontactres:// URL scheme
+
     - @ref customeriodataproviderintro "CustomerIoDataProvider" module
       - new module providing a data provider API for <a href="https://customer.io/">Customer.io</a> marketing automation services
       - customer management (create, update, delete, suppress, merge)
@@ -1575,17 +1734,20 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for email, SMS, push, Slack, and subscription events
       - action catalog integration with 46 actions and 21 triggers
       - connection support with \c customerio:// URL scheme
+
     - @ref customeriorestclientintro "CustomerIoRestClient" module
       - new module providing a REST client for <a href="https://customer.io/">Customer.io</a>'s App API and Track API
       - supports dual authentication: Bearer token (App API) and HTTP Basic Auth (Track API)
       - regional endpoint support for US and EU data centers
       - provides CustomerIoRestConnection for connection management with \c customerio:// URL scheme
+
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
       - wraps DataFrame as a record-oriented DataProvider for Qorus data pipeline integration
       - supports searchRecords with hash-based where conditions (equality and comparison operators)
       - record type reflects DataFrame column schema (int, float, string, bool, date)
       - factory registered as "dataframe" in DataProvider FactoryMap
+
     - @ref dataprovidermlintro "DataProviderML" module
       - new module providing data pipeline processors wrapping the ml binary module
       - 9 core ML pipeline processors: isolation-forest, dbscan-clustering, kmeans-clustering, pca,
@@ -1603,6 +1765,7 @@ cargo install tree-sitter-cli@0.26.5
       - ocr pipeline processor for text extraction from images via Tesseract or HTTP
       - vision-extraction pipeline processor for multimodal LLM image analysis
       - action catalog integration with the "ML Analytics" app
+
     - @ref deeldataproviderintro "DeelDataProvider" module
       - new module providing a data provider API for <a href="https://www.deel.com/">Deel</a> global workforce management
       - contract management (create, terminate, sign, search, get by ID)
@@ -1615,10 +1778,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contracts, timesheets, adjustments, and time-off requests
       - action catalog integration with 25 actions and 10 triggers
       - connection support with \c deel:// URL scheme
+
     - @ref deelrestclientintro "DeelRestClient" module
       - new module providing a REST client for <a href="https://www.deel.com/">Deel</a>'s global workforce management API
       - supports API key (Bearer token) authentication
       - provides DeelRestConnection for connection management with \c deel:// URL scheme
+
     - @ref easypostdataproviderintro "EasyPostDataProvider" module
       - new module providing a data provider API for <a href="https://www.easypost.com/">EasyPost</a> multi-carrier shipping
       - address creation and verification, parcel definition, shipment lifecycle (create, buy, refund, label retrieval)
@@ -1631,10 +1796,12 @@ cargo install tree-sitter-cli@0.26.5
       - cascading reference-data dropdowns for carrier selection driven by parent pickup/order rates
       - action catalog integration covering 14 resource types and ~70 actions
       - connection support with \c easypostrest:// URL scheme
+
     - @ref easypostrestclientintro "EasyPostRestClient" module
       - new module providing a REST client for <a href="https://www.easypost.com/">EasyPost</a>'s shipping REST API
       - supports HTTP Basic authentication using the EasyPost API key
       - provides EasyPostRestConnection for connection management with \c easypostrest:// URL scheme
+
     - @ref edifactutilintro "EdifactUtil" module
       - new module for parsing and generating UN/EDIFACT electronic data interchange messages
       - automatic UNA segment detection and custom delimiter support
@@ -1643,11 +1810,13 @@ cargo install tree-sitter-cli@0.26.5
       - writer classes for generating EDIFACT messages to files, streams, and strings
       - service segment filtering option to skip envelope segments during iteration
       - DataProvider integration for use in data pipelines and integration workflows
+
     - @ref elasticsearchloggerappenderintro "ElasticSearchLoggerAppender" module
       - new module providing a logger appender that sends log events to <a href="https://www.elastic.co/elasticsearch">ElasticSearch</a> using the Bulk API with
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe
         buffer management
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+
     - @ref firecrawldataproviderintro "FirecrawlDataProvider" module
       - new module providing a data provider API for <a href="https://www.firecrawl.dev/">Firecrawl</a> web scraping and crawling
       - web scraping (single page and batch), crawling (multi-page with status tracking)
@@ -1656,31 +1825,46 @@ cargo install tree-sitter-cli@0.26.5
       - typed response sub-types for metadata, actions results, change tracking, and branding
       - PDF parser configuration support with mode and maxPages options
       - connection support with \c firecrawlrest:// URL scheme
+
     - @ref firecrawlrestclientintro "FirecrawlRestClient" module
       - new module providing a REST client for <a href="https://www.firecrawl.dev/">Firecrawl</a>'s web scraping API
       - supports API key authentication via Bearer token
       - provides FirecrawlRestConnection for connection management with \c firecrawlrest:// URL scheme
+
     - @ref freshbooksdataproviderintro "FreshBooksDataProvider" module
       - new module providing a data provider API for <a href="https://www.freshbooks.com/">FreshBooks</a> accounting and invoicing services
       - connection support with \c freshbooks:// URL scheme
+
     - @ref freshbooksrestclientintro "FreshBooksRestClient" module
       - new module providing a REST client for <a href="https://www.freshbooks.com/">FreshBooks</a>' accounting API
       - supports OAuth2 authentication
       - provides FreshBooksRestConnection for connection management with \c freshbooks:// URL scheme
+
     - @ref freshsalesdataproviderintro "FreshsalesDataProvider" module
       - new module providing a data provider API for <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> CRM
       - supports contacts, accounts, deals, tasks, appointments, and notes
       - includes polling-based triggers for new contacts, deals, and accounts
       - connection support with \c freshsalesrest:// URL scheme
+
     - @ref freshsalesrestclientintro "FreshsalesRestClient" module
       - new module providing a REST client for <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> CRM API
       - supports API key token authentication
       - provides FreshsalesRestConnection for connection management with \c freshsalesrest:// URL scheme
+
+    - @ref gcpauthintro "GcpAuth" module
+      - new module exchanging GCP service-account credentials for bearer access tokens
+      - service-account JWT-bearer flow (RS256-signed via the json module), GCE/GKE/Cloud-Run metadata server, and full Application Default Credentials chain with token caching
+
+    - @ref geminibodyshapeintro "GeminiBodyShape" module
+      - new helper module exposing pure-static request/response shapers for the Gemini \c generateContent wire format
+      - shared between @ref geminirestclientintro "GeminiRestClient" and @ref vertexairestclientintro "VertexAiRestClient" so the native Gemini and Gemini-on-Vertex paths stay in lock-step
+
     - @ref generatordataproviderintro "GeneratorDataProvider" module
       - new module providing a data provider API for generating configurable test record streams for data
         pipeline testing with no external dependencies
       - supports configurable record count, field schema, sequential and random generation strategies,
         template-based record generation, null injection, and reproducible output via random seeds
+
     - @ref gohighleveldataproviderintro "GoHighLevelDataProvider" module
       - new module providing a data provider API for <a href="https://www.gohighlevel.com/">GoHighLevel</a> CRM
       - contact management (create, update, delete, search, get by ID)
@@ -1693,11 +1877,13 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new contacts, appointments, and messages
       - action catalog integration with 20 actions and 3 triggers
       - connection support with \c gohighlevelres:// URL scheme
+
     - @ref gohighlevelrestclientintro "GoHighLevelRestClient" module
       - new module providing a REST client for <a href="https://www.gohighlevel.com/">GoHighLevel</a>'s CRM and marketing automation API
       - supports OAuth2 authentication with bearer tokens
       - auto-appends locationId to all API requests
       - provides GoHighLevelRestConnection for connection management with \c gohighlevelres:// URL scheme
+
     - @ref gorgiasdataproviderintro "GorgiasDataProvider" module
       - new module providing a data provider API for <a href="https://www.gorgias.com/">Gorgias</a> helpdesk
       - ticket management (create, update, delete, list)
@@ -1707,11 +1893,13 @@ cargo install tree-sitter-cli@0.26.5
       - user listing (read-only)
       - polling-based event triggers for new and updated tickets
       - action catalog integration with 20 actions and 2 triggers
+
     - @ref gorgiasrestclientintro "GorgiasRestClient" module
       - new module providing a REST client for <a href="https://www.gorgias.com/">Gorgias</a>'s customer support API
       - supports OAuth2 authentication with subdomain-based URL configuration
       - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
       - provides GorgiasRestConnection for connection management with \c gorgiasrest:// URL scheme
+
     - @ref httpclientiointro "HttpClientIo" module
       - new unified module providing HTTP/2 and HTTP/3 multiplexed client I/O support
       - protocol auto-selection: attempts HTTP/3 first, falls back to HTTP/2 with caching
@@ -1726,6 +1914,7 @@ cargo install tree-sitter-cli@0.26.5
       - dead connection detection and eviction with QUIC session health checks
       - pending stream reservation tracking to limit blast radius of handshake failures
       - all I/O driven by the @ref asyncsocketiointro "AsyncSocketIo" event loop
+
     - @ref httpserverasynciointro "HttpServerAsyncIo" module
       - new module providing async I/O support classes for the @ref httpserverintro "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
@@ -1737,12 +1926,14 @@ cargo install tree-sitter-cli@0.26.5
         @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"'s \c heartbeat option)
         using the \c poll_timeout_ms timer on @ref Qore::SocketPollInfo "SocketPollInfo" so NAT/proxy
         intermediaries do not silently drop idle SSE connections
+
     - @ref httpstreamclientintro "HttpStreamClient" module
       - new module providing a convenience API for reading HTTP streaming responses
       - supports Server-Sent Events (SSE) with @ref HttpStreamClient::HTTPResponseStream::readServerSentEvent() "HTTPResponseStream::readServerSentEvent()"
       - supports incremental body reading with @ref HttpStreamClient::HTTPResponseStream::readChunk() "HTTPResponseStream::readChunk()"
       - automatic decompression for gzip, deflate, bzip2, brotli, zstd, and lz4 content encodings
       - works with the new @ref Qore::HTTPClient::sendAndStream() "HTTPClient::sendAndStream()" method
+
     - @ref huggingfacedataproviderintro "HuggingFaceDataProvider" module
       - new module providing a data provider API for <a href="https://huggingface.co/">Hugging Face</a> services
       - models, datasets, and spaces CRUD operations via the Hub API
@@ -1754,21 +1945,25 @@ cargo install tree-sitter-cli@0.26.5
       - conversation context store for multi-turn conversation persistence
       - action session for Creator WebSocket integration with event normalization
       - built on RestClientIo for async-capable multiplexed HTTP/2 and HTTP/3 connections
+
     - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
       - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
       - supports Bearer token authentication
       - provides HuggingFaceRestConnection for connection management with \c huggingface:// URL scheme
+
     - @ref insightlydataproviderintro "InsightlyDataProvider" module
       - new module providing a data provider API for <a href="https://www.insightly.com/">Insightly</a> CRM
       - supports contacts, organisations, leads, opportunities, projects, tasks, notes, calendar events, products, and emails
       - includes polling-based triggers for new contacts, organisations, leads, opportunities, and tasks
       - reference data support for users, pipelines, pipeline stages, lead sources/statuses, categories, and teams
+
     - @ref insightlyrestclientintro "InsightlyRestClient" module
       - new module providing a REST client for <a href="https://www.insightly.com/">Insightly</a>'s CRM API v3.1
       - supports API key authentication via HTTP Basic Auth
       - auto-detects regional pod (na1, eu1, au1) from API key
       - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
       - provides InsightlyRestConnection for connection management with \c insightlyrest:// URL scheme
+
     - @ref instantlydataproviderintro "InstantlyDataProvider" module
       - new module providing a data provider API for <a href="https://instantly.ai/">Instantly</a> email outreach and sales automation
       - campaign, lead, email account, email, and lead list management
@@ -1776,21 +1971,25 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for replies, bounces, interested leads, and campaign completion
       - action catalog integration with ~100 actions and 4 triggers
       - connection support with \c instantly:// URL scheme
+
     - @ref instantlyrestclientintro "InstantlyRestClient" module
       - new module providing a REST client for <a href="https://instantly.ai/">Instantly</a>'s email outreach API v2
       - supports Bearer token (API key) authentication
       - provides InstantlyRestConnection for connection management with \c instantly:// URL scheme
+
     - @ref jotformdataproviderintro "JotformDataProvider" module
       - new module providing a data provider API for <a href="https://www.jotform.com/">JotForm</a> form and submission management
       - form and submission CRUD with dynamic field resolution based on form questions
       - webhook-based event providers for new submissions and payments
       - reference data support for forms and form questions
       - action catalog integration with sensible default actions
+
     - @ref jotformrestclientintro "JotformRestClient" module
       - new module providing a REST client for the <a href="https://www.jotform.com/">JotForm</a> REST API
       - supports API key authentication
       - provides JotformRestConnection for connection management with \c jotform:// URL scheme
       - supports multiple API domains (standard, EU, HIPAA)
+
     - @ref katanadataproviderintro "KatanaDataProvider" module
       - new module providing a data provider API for <a href="https://katanamrp.com/">Katana</a> Manufacturing ERP
       - product, material, and variant management (create, read, update, delete, list)
@@ -1805,10 +2004,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers across all major resources
       - action catalog integration with trigger events for the most important resources
       - connection support with \c katanarest:// URL scheme
+
     - @ref katanarestclientintro "KatanaRestClient" module
       - new module providing a REST client for <a href="https://katanamrp.com/">Katana</a>'s Manufacturing ERP REST API
       - supports Bearer token (API key) authentication
       - provides KatanaRestConnection for connection management with \c katanarest:// URL scheme
+
     - @ref keapdataproviderintro "KeapDataProvider" module
       - new module providing a data provider API for <a href="https://keap.com/">Keap</a> CRM
       - contact management (create, update, delete, merge, list, find by ID)
@@ -1817,10 +2018,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contacts, opportunities, orders, tasks, and notes
       - action catalog integration with 45+ actions and 7 triggers
       - connection support with \c keaprest:// URL scheme
+
     - @ref keaprestclientintro "KeapRestClient" module
       - new module providing a REST client for <a href="https://keap.com/">Keap</a>'s CRM and marketing automation API
       - supports OAuth2 authentication with bearer tokens
       - provides KeapRestConnection for connection management with \c keaprest:// URL scheme
+
     - @ref kitdataproviderintro "KitDataProvider" module
       - new module providing a data provider API for <a href="https://kit.com/">Kit</a> email marketing
       - subscriber management (create, update, unsubscribe, bulk create, list, get by ID)
@@ -1829,25 +2032,24 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for 6 subscriber events
       - action catalog integration with 30+ actions and 6 triggers
       - connection support with \c kitrest:// URL scheme
+
     - @ref kitrestclientintro "KitRestClient" module
       - new module providing a REST client for <a href="https://kit.com/">Kit</a>'s email marketing API
       - supports OAuth2 and API key authentication
       - provides KitRestConnection for connection management with \c kitrest:// URL scheme
-    - \c LemlistDataProvider module
-      - new module providing a data provider API for <a href="https://www.lemlist.com/">Lemlist</a> sales outreach and email campaign services
-      - campaign management (create, pause, start campaigns)
-      - lead management (add, update, remove leads from campaigns)
-      - activity tracking (emails sent, opened, clicked, replied, bounced)
-      - task management (create and update manual tasks)
-      - contact management (list and retrieve contacts)
-      - webhook-based event triggers for 7 email and engagement event types
-      - action catalog integration with 13 actions and 7 triggers
-      - connection support with \c lemlist:// URL scheme
+
+    - @ref krb5utilintro "Krb5Util" module
+      - new module providing Qore-language helpers for the @ref krb5intro "krb5" binary module
+      - builds host-based service principals, SPNEGO Negotiate headers, credential lifecycle
+        reports, keytab rotation decisions, and deployment health checks without exposing
+        token or credential material in diagnostics
+
     - @ref lemlistrestclientintro "LemlistRestClient" module
       - new module providing a REST client for <a href="https://www.lemlist.com/">Lemlist</a>'s sales outreach API
       - supports HTTP Basic Authentication with API key (empty username, API key as password)
       - all requests include \c version=v2 query parameter automatically
       - provides LemlistRestConnection for connection management with \c lemlist:// URL scheme
+
     - @ref lineardataproviderintro "LinearDataProvider" module
       - new module providing a data provider API for <a href="https://linear.app/">Linear</a> issue tracking services
       - hierarchical data provider structure: issues, teams, projects, cycles, labels, comments
@@ -1855,20 +2057,24 @@ cargo install tree-sitter-cli@0.26.5
       - search capabilities with filtering for all entity types
       - action catalog integration with sensible default actions
       - connection support with \c linear:// URL scheme
+
     - @ref linearrestclientintro "LinearRestClient" module
       - new module providing a REST client for <a href="https://linear.app/">Linear</a>'s GraphQL API
       - supports API key and OAuth2 authentication
       - provides LinearRestConnection for connection management with \c linear:// URL scheme
+
     - @ref mailgundataproviderintro "MailgunDataProvider" module
       - new module providing a data provider API for <a href="https://www.mailgun.com/">Mailgun</a> email services
       - send emails, validate addresses, manage domains, routes, and mailing lists
       - webhook-based event triggers for delivery, opens, clicks, bounces, complaints, and unsubscribes
       - action catalog integration with sensible default actions
       - connection support with \c mailgun:// URL scheme
+
     - @ref mailgunrestclientintro "MailgunRestClient" module
       - new module providing a REST client for <a href="https://www.mailgun.com/">Mailgun</a>'s email API
       - supports API key authentication with US and EU region endpoints
       - provides MailgunRestConnection for connection management with \c mailgun:// URL scheme
+
     - @ref memcacheddataproviderintro "MemcachedDataProvider" module
       - new module providing a data provider API for <a href="https://memcached.org/">Memcached</a> caching servers
       - pure Qore implementation using TCP sockets with the memcached binary protocol
@@ -1877,6 +2083,7 @@ cargo install tree-sitter-cli@0.26.5
         commands
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
+
     - @ref mongodbdataproviderintro "MongoDbDataProvider" module
       - new module providing a data provider API for <a href="https://www.mongodb.com/">MongoDB</a> servers
       - hierarchical data provider structure: databases -> collections -> operations
@@ -1885,19 +2092,23 @@ cargo install tree-sitter-cli@0.26.5
       - bulk write operations support via bulk data provider
       - record-based interface for collections with search, create, update, upsert, and delete operations
       - connection support with \c mongodb:// URL scheme
+
     - @ref onedrivedataproviderintro "OneDriveDataProvider" module
       - new module providing a data provider API for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> cloud file storage
       - supports file/folder CRUD, search, sharing links, upload sessions, and delta query change tracking
+
     - @ref onedriverestclientintro "OneDriveRestClient" module
       - new module providing a REST client for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> via Microsoft Graph API
       - provides OneDriveRestConnection for connection management with \c onedrive:// URL scheme
       - supports OAuth2 with tenant-aware authentication and RestClientIo async pattern
+
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
       - new @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator" class for generating OpenAPI 3.0.3 schemas from Qore source code
       - new @ref OpenApi3::OpenApi3SchemaTokenizer "OpenApi3SchemaTokenizer" class for parsing \@SCHEMA documentation blocks
       - new @ref OpenApi3::OpenApi3TypeMapper "OpenApi3TypeMapper" class for mapping Qore types to OpenAPI types
       - new \c qore-openapi3-gen CLI tool for generating schemas from source files
+
     - @ref openapi3dataproviderintro "OpenApi3DataProvider" module
       - new module providing a @ref dataproviderintro "data provider" API for OpenAPI 3.0 / 3.1 schemas
       - introspects OpenAPI 3 schemas to expose REST operations as child data providers
@@ -1909,6 +2120,7 @@ cargo install tree-sitter-cli@0.26.5
       - request bodies declared via OpenAPI 3 \c requestBody are automatically mapped onto the
         request type \c body field
       - response bodies including schemas with multiple content types are supported
+
     - @ref pdfcodataproviderintro "PdfCoDataProvider" module
       - new module providing a data provider API for <a href="https://pdf.co/">PDF.co</a> document processing
       - PDF conversion (PDF to CSV, JSON, Text, HTML, XML, Excel, Images and vice versa)
@@ -1919,14 +2131,21 @@ cargo install tree-sitter-cli@0.26.5
       - text search, find and replace, email sending, and file upload
       - action catalog integration with 26 actions
       - connection support with \c pdfco:// URL scheme
+
     - @ref pdfcorestclientintro "PdfCoRestClient" module
       - new module providing a REST client for <a href="https://pdf.co/">PDF.co</a>'s document processing API
       - supports API key authentication via \c x-api-key header
       - provides PdfCoRestConnection for connection management with \c pdfco:// URL scheme
+
     - @ref qdrantdataproviderintro "QdrantDataProvider" module
       - new module providing a data provider API for <a href="https://qdrant.tech/">Qdrant</a> vector database instances
       - supports collection management, point CRUD, vector search (query API), alias management,
         snapshot management, cluster management, and service health endpoints
+      - registers \c QdrantVectorStore as the reference concrete
+        @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore" implementation under
+        backend identifier \c qdrant — usable directly from \c QoreRagUtils' \c RagPipeline
+        ingest and retrieval pathways
+
     - @ref qlsintro "QLS" module
       - new module providing a Language Server Protocol (LSP) implementation for %Qore
       - supports hover, go-to-definition, find references, and document/workspace symbols
@@ -1943,12 +2162,14 @@ cargo install tree-sitter-cli@0.26.5
       - code actions: sort imports, add @c %modern directive
       - document highlight for all occurrences of symbol under cursor
       - installed as @c qls system command, usable from any editor supporting LSP
+
     - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
       - new module providing configurable agent execution strategies for LLM agents
       - PlanningAgentStrategy: decompose → execute sub-tasks → synthesize
       - ReflexionAgentStrategy: execute → evaluate completeness → correct
       - ParallelToolDispatcher: concurrent tool execution with batching and timeouts
       - token budget tracking with AGENT-BUDGET-EXCEEDED enforcement
+
     - @ref qoreapimetadataintro "QoreApiMetadata" module
       - new module providing structured API metadata extraction for %Qore
       - bridges three information sources: astparser (source-level with docs), reflection (runtime
@@ -1960,11 +2181,13 @@ cargo install tree-sitter-cli@0.26.5
       - @ref QoreApiMetadata::SymbolMerger "SymbolMerger" for merging all pipelines with priority
       - @ref QoreApiMetadata::QoreApiMetadata "QoreApiMetadata" facade with search, serialization
         (JSON/YAML), and the full merge pipeline
+
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
       - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)
       - abstract provider interface for pluggable symbol resolution backends
       - %Qore keyword and built-in type completions
+
     - @ref qorecodeformatintro "QoreCodeFormat" module
       - new module providing automated Qore source code formatting using the tree-sitter-based CST from the
         @ref astparserintro "astparser" module
@@ -1972,9 +2195,11 @@ cargo install tree-sitter-cli@0.26.5
         operator wrapping
       - preserves comments, parse directives, and string literals
       - idempotent formatting (formatting already-formatted code produces identical output)
+
     - @ref qorecryptointro "QoreCrypto" module
       - new module providing provider-neutral envelope encryption helpers for sensitive long-lived records
       - supports AES-256-GCM content encryption with per-record data-encryption keys, key-provider-managed wrapping, and authenticated structured AAD
+
     - @ref qoreguardrailsintro "QoreGuardrails" module
       - new module providing input/output guardrails for AI-powered chat endpoints
       - PiiDetector: pattern-based detection/redaction of email, phone, SSN, credit card
@@ -1982,6 +2207,7 @@ cargo install tree-sitter-cli@0.26.5
       - TopicRestrictionRule: LLM-based topic boundary enforcement
       - OutputFormatEnforcer: length, forbidden/required pattern validation
       - GuardrailEngine: rule chain orchestration with severity-based short-circuit
+
     - @ref qorehistoryintro "QoreHistory" module
       - new module providing shared history management for %Qore tools
       - timestamped entries with multiline support
@@ -1993,71 +2219,90 @@ cargo install tree-sitter-cli@0.26.5
         bridging @ref QoreHistory::History "History" to
         @ref Qore::Linenoise::AbstractHistoryProvider "Linenoise::AbstractHistoryProvider"
       - used by @ref qorereplintro "QoreRepl" and \c qdp for history persistence
-    - @ref krb5utilintro "Krb5Util" module
-      - new module providing Qore-language helpers for the @ref krb5intro "krb5" binary module
-      - builds host-based service principals, SPNEGO Negotiate headers, credential lifecycle
-        reports, keytab rotation decisions, and deployment health checks without exposing
-        token or credential material in diagnostics
+
     - @ref qorellmtypesintro "QoreLlmTypes" module
       - new module providing the provider-neutral hashdecls and abstract provider classes
         shared by QoreLlmUtils and the LLM REST client modules
       - separated from QoreLlmUtils so REST client modules can supply provider implementations
         without forming a dependency cycle
-    - @ref qoreragtypesintro "QoreRagTypes" module
-      - new module providing the provider-neutral hashdecls and abstract embedder /
-        reranker / vector-store classes shared by QoreRagUtils and individual RAG
-        REST client modules
-      - separated from QoreRagUtils so REST client modules can supply embedder
-        and reranker implementations without forming a dependency cycle
+      - adds \c provider_options to @ref QoreLlmUtils::LlmBackendConfig "LlmBackendConfig"
+        so provider subclasses (Azure OpenAI, Bedrock, Vertex AI) carry vendor-specific
+        configuration without bloating the shared hashdecl
+      - \c ProviderModuleMap extended with lazy-load entries for \c azure-openai, \c bedrock,
+        \c vertex-ai, \c grok, and \c perplexity
+
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
       - supports HTTP/OpenAI-compatible, Anthropic Messages API, and custom callback modes
       - thread-safe lazy-initialized REST client with configurable timeouts
       - JSON schema enforcement via response_format (HTTP) and tool-use extraction (Anthropic)
+
     - @ref qoremlutilsintro "QoreMLUtils" module
       - new module providing hyperparameter optimization and model explainability
       - GridSearch: exhaustive parameter grid search with k-fold cross-validation
       - RandomSearch: random parameter sampling with k-fold cross-validation
       - PermutationImportance: model-agnostic feature importance via column shuffling
       - MLScoringUtils: default R², negative MSE, and accuracy scoring functions
+
     - @ref qoremodelregistryintro "QoreModelRegistry" module
       - new module providing a filesystem-backed ML model registry for versioning,
         tagging, comparison, and deployment management of trained models
       - multi-tenant support with optional \c tenant_id for tenant-isolated model storage
+
     - @ref qoreocrutilsintro "QoreOcrUtils" module
       - new module providing an OCR abstraction layer with native and HTTP backends
       - OcrEngine: dual-mode OCR (Tesseract native + HTTP endpoint)
       - ScannedPdfDetector: heuristic detection of scanned PDF pages
+
     - @ref qoreonnxexportintro "QoreOnnxExport" module
       - exports trained ML models to ONNX format (11 algorithms including tree ensembles)
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+
+    - @ref qoreragtypesintro "QoreRagTypes" module
+      - new module providing the provider-neutral hashdecls and abstract embedder /
+        reranker / vector-store classes shared by QoreRagUtils and individual RAG
+        REST client modules
+      - separated from QoreRagUtils so REST client modules can supply embedder
+        and reranker implementations without forming a dependency cycle
+      - @ref QoreRagUtils::AbstractReranker::rerank() "AbstractReranker::rerank()" gains a
+        trailing optional \c *hash<auto> opts parameter so cloud rerankers (Cohere, Voyage,
+        Jina) can accept per-call options (\c max_chunks_per_doc, \c rank_fields,
+        \c truncation) without each defining a private API; existing subclasses updated
+      - \c EmbedderModuleMap extended with lazy-load entries for \c bedrock and \c vertex-ai;
+        \c VectorStoreModuleMap registers \c qdrant
+
     - @ref qoreragutilsintro "QoreRagUtils" module
       - new module providing a composable abstraction layer for retrieval-augmented generation (RAG)
       - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
       - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c BgeM3FastApiEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
+
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
       - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)
       - supports multi-line input detection, incremental parsing, and special commands (/help, /vars, /reset, etc.)
       - uses @ref qorecodecompletionintro "QoreCodeCompletion" module for context-aware code completion
       - @ref linenoiseintro "linenoise" is now a mandatory dependency (no longer optional)
+
     - @ref qorestructuredextractionintro "QoreStructuredExtraction" module
       - new module providing LLM-based structured information extraction from unstructured text
       - built-in templates: NER, invoice, contact, and sentiment analysis schemas
       - ExtractionPipeline with validation, retry logic, and JSON code fence handling
       - ExtractionSchema with JSON Schema conversion for LLM prompt engineering
+
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
       - ONNX backend implemented for EmbeddingModel: batch tokenize, mean-pool, L2-normalize
       - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
       - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries
+
     - @ref qorevisionextractionintro "QoreVisionExtraction" module
       - new module providing multimodal LLM vision extraction
       - VisionLlmClient: image description, table extraction, and text extraction
       - supports OpenAI and Anthropic multimodal APIs with base64 image content blocks
+
     - @ref restclientio_intro "RestClientIo" module
       - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections
       - implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface for drop-in compatibility
@@ -2070,12 +2315,10 @@ cargo install tree-sitter-cli@0.26.5
       - data serialization/deserialization for JSON, YAML, XML, CBOR, URL-encoded, text, and binary formats
       - new @ref RestClientIo::RestClientIoPool "RestClientIoPool" class providing thread-safe connection pooling
         built on @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
+
     - @ref restschemadataproviderintro "RestSchemaDataProvider" module
       - new module providing a unified data provider API for both Swagger 2.0 and OpenAPI 3.0 / 3.1 REST schemas
-    - @ref sendcloudrestclientintro "SendCloudRestClient" module
-      - new module providing a REST client for <a href="https://www.sendcloud.com/">SendCloud</a>'s shipping automation API
-      - supports HTTP Basic Authentication with public and secret API keys
-      - provides SendCloudRestConnection for connection management with \c sendcloudrest:// URL scheme
+
     - @ref sendclouddataproviderintro "SendCloudDataProvider" module
       - new module providing a data provider API for <a href="https://www.sendcloud.com/">SendCloud</a> shipping services
       - parcel management (create, cancel, list, retrieve parcels and labels)
@@ -2084,14 +2327,22 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for parcel status changes and return updates
       - action catalog integration with 19 actions and 2 triggers
       - connection support with \c sendcloudrest:// URL scheme
+
+    - @ref sendcloudrestclientintro "SendCloudRestClient" module
+      - new module providing a REST client for <a href="https://www.sendcloud.com/">SendCloud</a>'s shipping automation API
+      - supports HTTP Basic Authentication with public and secret API keys
+      - provides SendCloudRestConnection for connection management with \c sendcloudrest:// URL scheme
+
     - @ref sglangdataproviderintro "SGLangDataProvider" module
       - new module providing a data provider API for SGLang services
       - exposes chat completions, embeddings, constrained generation (JSON schema/regex/EBNF), server info, and KV cache flush as DPC actions
+
     - @ref sglangrestclientintro "SGLangRestClient" module
       - new module providing a REST client for <a href="https://github.com/sgl-project/sglang">SGLang</a> model servers
       - exposes both OpenAI-compatible endpoints (<tt>/v1/chat/completions</tt>, <tt>/v1/embeddings</tt>) and SGLang-native endpoints (<tt>/generate</tt> with constrained decoding, <tt>/get_server_info</tt>, <tt>/flush_cache</tt>)
       - serves a single model per instance; the \c model option is required and captured by the connection
       - provides SGLangRestConnection for connection management with \c sglang:// URL scheme
+
     - @ref shippodataproviderintro "ShippoDataProvider" module
       - new module providing a data provider API for <a href="https://goshippo.com/">Shippo</a> shipping services
       - shipment and rate management (create shipments, get shipping rates)
@@ -2100,10 +2351,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new parcels, shipments, and labels
       - action catalog integration with 10 actions and 3 triggers
       - connection support with \c shippo:// URL scheme
+
     - @ref shipporestclientintro "ShippoRestClient" module
       - new module providing a REST client for <a href="https://goshippo.com/">Shippo</a>'s shipping API
       - supports dual authentication: OAuth2 and API token (\c ShippoToken header)
       - provides ShippoRestConnection for connection management with \c shippo:// URL scheme
+
     - @ref shipstationdataproviderintro "ShipStationDataProvider" module
       - new module providing a data provider API for <a href="https://www.shipstation.com/">ShipStation</a> shipping and logistics services
       - order management (create, update, delete, tag, assign users, mark as shipped)
@@ -2111,10 +2364,12 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+
     - @ref shipstationrestclientintro "ShipStationRestClient" module
       - new module providing a REST client for <a href="https://www.shipstation.com/">ShipStation</a>'s shipping and logistics API
       - supports HTTP Basic Authentication with API Key and API Secret
       - provides ShipStationRestConnection for connection management with \c shipstation:// URL scheme
+
     - @ref smartsheetdataproviderintro "SmartSheetDataProvider" module
       - new module providing a data provider API for <a href="https://www.smartsheet.com/">Smartsheet</a>
       - dynamic table modeling: sheets are exposed as tables with typed columns built from sheet metadata
@@ -2122,11 +2377,13 @@ cargo install tree-sitter-cli@0.26.5
       - row CRUD with column-name-based records (automatic column ID translation)
       - workspace, folder, report, user, and group management
       - polling-based event triggers for sheet updates and row changes
+
     - @ref smartsheetrestclientintro "SmartSheetRestClient" module
       - new module providing a REST client for <a href="https://www.smartsheet.com/">Smartsheet</a>'s spreadsheet and work management API
       - supports OAuth2 authentication with regional endpoint support (US, EU, AU, Gov)
       - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
       - provides SmartSheetRestConnection for connection management with \c smartsheetrest:// URL scheme
+
     - @ref squaredataproviderintro "SquareDataProvider" module
       - new module providing a data provider API for <a href="https://squareup.com/">Square</a> payments and commerce
       - customer management (create, update, list, find by ID, add/remove from groups)
@@ -2140,10 +2397,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, payments, appointments, catalog items, invoices, and events
       - action catalog integration with 23 actions and 7 triggers
       - connection support with \c squareres:// URL scheme
+
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for <a href="https://squareup.com/">Square</a>'s payments and commerce API
       - supports OAuth2 authentication with bearer tokens
       - provides SquareRestConnection for connection management with \c squareres:// URL scheme
+
     - @ref squarespacedataproviderintro "SquarespaceDataProvider" module
       - new module providing a data provider API for <a href="https://www.squarespace.com/">Squarespace</a> Commerce
       - order management (create, fulfill, list, get by ID)
@@ -2155,12 +2414,15 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for orders, products, and transactions
       - action catalog integration with 23 actions and 3 triggers
       - connection support with \c squarespaceres:// URL scheme
+
     - @ref squarespacerestclientintro "SquarespaceRestClient" module
       - new module providing a REST client for <a href="https://www.squarespace.com/">Squarespace</a>'s Commerce API
       - supports OAuth2 authentication with bearer tokens
       - provides SquarespaceRestConnection for connection management with \c squarespaceres:// URL scheme
+
     - @ref sshutilintro "sshutil" module
       - new module providing generic SSH client identity, server host-key, and remote host-key trust provider contracts
+
     - @ref systemeio_dataproviderintro "SystemeIoDataProvider" module
       - new module providing a data provider API for <a href="https://systeme.io/">Systeme.io</a> all-in-one marketing platform
       - contact management (create, update, delete, list, tag assignment)
@@ -2168,24 +2430,17 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new contacts and tags
       - action catalog integration with 28 actions and 2 triggers
       - connection support with \c systemeio:// URL scheme
+
     - @ref systemeiorestclientintro "SystemeIoRestClient" module
       - new module providing a REST client for <a href="https://systeme.io/">Systeme.io</a>'s marketing platform API
       - supports API key authentication via X-API-Key header
       - provides SystemeIoRestConnection for connection management with \c systemeio:// URL scheme
-    - \c TableauDataProvider module
-      - new module providing a data provider API for <a href="https://www.tableau.com/">Tableau</a> analytics
-      - datasource management (search, get, update, delete, download, add/remove tags)
-      - project management (search, create, update, delete)
-      - user management (search, get, create, update, delete)
-      - extract refresh task management (list, get, delete)
-      - webhook-based event triggers for datasource lifecycle events (created, deleted, updated, refresh started/succeeded/failed)
-      - polling-based event triggers for new datasources and new projects
-      - action catalog integration with 20 actions and 8 triggers
-      - connection support with \c tableaures:// URL scheme
+
     - @ref tableaurestclientintro "TableauRestClient" module
       - new module providing a REST client for <a href="https://www.tableau.com/">Tableau</a>'s analytics and BI REST API
       - supports Personal Access Token (PAT) session-token authentication
       - provides TableauRestConnection for connection management with \c tableaures:// URL scheme
+
     - @ref tallydataproviderintro "TallyDataProvider" module
       - new module providing a data provider API for <a href="https://tally.so/">Tally.so</a> form management services
       - form CRUD (create, get, update, delete, search) with workspace selection
@@ -2194,13 +2449,16 @@ cargo install tree-sitter-cli@0.26.5
       - webhook CRUD plus webhook delivery event introspection (search events, retry failed events)
       - polling-based form-submission event trigger
       - reference data for forms, workspaces, webhooks, and submissions enables in-UI dropdown selection
+
     - @ref tallyrestclientintro "TallyRestClient" module
       - new module providing a REST client for <a href="https://tally.so/">Tally.so</a>'s form management API
       - provides TallyRestConnection for connection management with \c tally:// URL scheme
+
     - @ref terminalformatintro "TerminalFormat" module
       - new module for rendering markdown and rich text to ANSI terminals
       - TerminalMarkdownRenderer: converts markdown (headings, bold, italic, code, tables, lists, blockquotes) to ANSI escape sequences
       - TerminalTableRenderer: formats tabular data with Unicode box-drawing characters and column alignment
+
     - @ref unbouncedataproviderintro "UnbounceDataProvider" module
       - new module providing a data provider API for <a href="https://unbounce.com/">Unbounce</a> landing page services
       - account and sub-account management (list, get)
@@ -2210,10 +2468,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event trigger for new leads
       - action catalog integration with 17 actions and 1 trigger
       - connection support with \c unbouncerest:// URL scheme
+
     - @ref unbouncerestclientintro "UnbounceRestClient" module
       - new module providing a REST client for <a href="https://unbounce.com/">Unbounce</a> landing page API
       - supports OAuth2 authentication with Bearer tokens
       - provides UnbounceRestConnection for connection management with \c unbouncerest:// URL scheme
+
     - @ref unleasheddataproviderintro "UnleashedDataProvider" module
       - new module providing a data provider API for <a href="https://www.unleashedsoftware.com/">Unleashed</a> inventory management and purchasing
       - customer management (create, read, update, search)
@@ -2223,18 +2483,32 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new customers and new sales orders
       - action catalog integration with 27 actions and 2 triggers
       - connection support with \c unleashed:// URL scheme
+
     - @ref unleashedrestclientintro "UnleashedRestClient" module
       - new module providing a REST client for <a href="https://www.unleashedsoftware.com/">Unleashed</a> Software API
       - supports HMAC-SHA256 signature-based authentication
       - provides UnleashedRestConnection for connection management with \c unleashed:// URL scheme
+
+    - @ref vertexaidataproviderintro "VertexAiDataProvider" module
+      - new module providing a data provider API for Google Vertex AI
+      - registers GenerateContent + Embed actions in the action catalog under the \c vertex-ai scheme
+
+    - @ref vertexairestclientintro "VertexAiRestClient" module
+      - new module providing a REST client and \c LlmProvider for <a href="https://cloud.google.com/vertex-ai">Google Vertex AI</a>
+      - Gemini-on-Vertex via regional \c :generateContent endpoints; Gecko embeddings via \c :predict
+      - authentication via @ref gcpauthintro "GcpAuth" — service-account JSON, ADC, or the GCE/GKE/Cloud-Run metadata server
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c vertex-ai and @ref qoreragutilsintro "QoreRagUtils" under embedder backend \c vertex-ai
+
     - @ref voyagedataproviderintro "VoyageDataProvider" module
       - new module providing a data provider API for <a href="https://voyageai.com/">Voyage AI</a> embedding and reranking services
       - supports text embeddings with flexible dimensions and quantization
       - supports document reranking with relevance scoring
+
     - @ref voyagerestclientintro "VoyageRestClient" module
       - new module providing a REST client for <a href="https://voyageai.com/">Voyage AI</a>'s embedding and reranking API
       - supports Bearer token authentication
       - provides VoyageRestConnection for connection management with \c voyage:// URL scheme
+
     - @ref wavedataproviderintro "WaveDataProvider" module
       - new module providing a data provider API for <a href="https://www.waveapps.com/">Wave</a> accounting and invoicing services
       - hierarchical data provider structure: customers, invoices, products, accounts, transactions, sales taxes
@@ -2244,19 +2518,23 @@ cargo install tree-sitter-cli@0.26.5
       - action catalog integration with 22 actions
       - webhook-based event trigger for new invoices
       - connection support with \c wave:// URL scheme
+
     - @ref waverestclientintro "WaveRestClient" module
       - new module providing a REST client for <a href="https://www.waveapps.com/">Wave</a>'s GraphQL API
       - supports OAuth2 authentication with Bearer tokens
       - provides WaveRestConnection for connection management with \c wave:// URL scheme
+
     - @ref woocommercedataproviderintro "WooCommerceDataProvider" module
       - new module providing a data provider API for <a href="https://woocommerce.com/">WooCommerce</a> e-commerce services
       - 51 actions across orders, products, customers, coupons, webhooks, reports, shipping, taxes, settings
       - 26 webhook-based triggers (15 built-in topics + 11 custom action triggers with enrichment)
       - connection support with \c woocommerce:// URL scheme
+
     - @ref woocommercerestclientintro "WooCommerceRestClient" module
       - new module providing a REST client for <a href="https://woocommerce.com/">WooCommerce</a>'s REST API v3
       - supports HTTP Basic Auth with consumer key and consumer secret
       - provides WooCommerceRestConnection for connection management with \c woocommerce:// URL scheme
+
     - @ref zohobooksdataproviderintro "ZohoBooksDataProvider" module
       - new module providing a data provider API for <a href="https://www.zoho.com/books/">Zoho Books</a> accounting and invoicing
       - full CRUD support for invoices, bills, payments, and sales orders
@@ -2266,10 +2544,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new invoices, bills, payments, customers, vendors, expenses, and more
       - action catalog integration with reference data support for organizations, customers, vendors, and items
       - connection support with \c zohobooks:// URL scheme
+
     - @ref zohobooksrestclientintro "ZohoBooksRestClient" module
       - new module providing a REST client for <a href="https://www.zoho.com/books/">Zoho Books</a>' accounting API
       - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)
       - provides ZohoBooksRestConnection for connection management with \c zohobooks:// URL scheme
+
     - @ref zohoinventorydataproviderintro "ZohoInventoryDataProvider" module
       - new module providing a data provider API for <a href="https://www.zoho.com/inventory/">Zoho Inventory</a>
       - full CRUD support for contacts, items, item groups, packages, purchase orders, sales orders, and shipment orders
@@ -2277,10 +2557,12 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new contacts, invoices, items, item groups, item adjustments, packages, purchase orders, and sales orders
       - action catalog integration with reference data support for organizations, contacts, items, and orders
       - connection support with \c zohoinventory:// URL scheme
+
     - @ref zohoinventoryrestclientintro "ZohoInventoryRestClient" module
       - new module providing a REST client for <a href="https://www.zoho.com/inventory/">Zoho Inventory</a>'s inventory management API
       - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)
       - provides ZohoInventoryRestConnection for connection management with \c zohoinventory:// URL scheme
+
     - @ref zohoinvoicedataproviderintro "ZohoInvoiceDataProvider" module
       - new module providing a data provider API for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a> invoicing and billing
       - full CRUD support for invoices, recurring invoices, contacts, expenses, recurring expenses, payments, estimates, projects, and items
@@ -2292,6 +2574,7 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
       - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)
       - provides ZohoInvoiceRestConnection for connection management with \c zohoinvoice:// URL scheme
+
     @section qore_2_2_1 Qore 2.2.1
 
     @par Release Summary

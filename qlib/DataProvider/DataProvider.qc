@@ -83,6 +83,8 @@ public class DataProvider {
             "aftership": "AftershipDataProvider",
             "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
+            "azure-openai": "AzureOpenAiDataProvider",
+            "bedrock": "BedrockDataProvider",
 
             "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
@@ -301,6 +303,8 @@ public class DataProvider {
             "avrowrite": "AvroDataProvider",
             "vcfread": "VcfDataProvider",
             "vcfwrite": "VcfDataProvider",
+
+            "vertex-ai": "VertexAiDataProvider",
 
             # provided by the jni module
             "visioread": "VisioDataProvider",
