@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/QoreAsyncJobUtils.qm
+%requires ../../../../qlib/QoreMediaUtils.qm
+%requires ../../../../qlib/BflRestClient.qm
+%requires ../../../../qlib/BflDataProvider
+
+%exec-class BflDataProviderTest
+
+class FakeBflClient inherits BflRestClient::BflRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+    }
+    constructor() : BflRestClient::BflRestClientIo(
+            {"apikey": "k", "url": "https://api.bfl.ai"}) {
+        setSleeper(nothing sub (timeout t) {});
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"method": "POST", "path": path, "body": body};
+        return <RestClient::RestResponseInfo>{
+            "body": {"id": "job-1", "polling_url": "/v1/get_result?id=job-1"},
+        };
+    }
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push calls, {"method": "GET", "path": path};
+        return <RestClient::RestResponseInfo>{
+            "body": {
+                "id":     "job-1",
+                "status": "Ready",
+                "result": {"sample": "https://cdn.bfl.ai/job-1.jpeg", "seed": 99},
+            },
+        };
+    }
+    string getSafeUrl() { return "https://api.bfl.ai"; }
+}
+
+public class BflDataProviderTest inherits QUnit::Test {
+    constructor() : Test("BflDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("generate-image submits to the right endpoint",
+            \endpointTest());
+        addTestCase("response surfaces Ready status + sample URL",
+            \responseTest());
+        addTestCase("unknown model raises BFL-CONFIG-ERROR",
+            \unknownModelTest());
+        addTestCase("app declares DesignCreative AppGroup",
+            \designCreativeTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("bfl");
+        assertEq("bfl", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("BlackForestLabs");
+        assertEq("BlackForestLabs", app.name);
+        assertEq("bfl", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("BlackForestLabs");
+        assertEq(1, actions.size());
+        assertEq("generate-image", actions[0].action);
+    }
+
+    private endpointTest() {
+        FakeBflClient fake();
+        BflDataProvider::BflGenerateImageDataProvider prov(fake);
+        prov.doRequest({"prompt": "a sunset", "model": "flux-pro-1.1-ultra"});
+        # Submit goes to the ultra endpoint
+        hash<auto> submit = fake.calls[0];
+        assertEq("/v1/flux-pro-1.1-ultra", submit.path);
+        assertEq("a sunset", submit.body.prompt);
+        # model is stripped from body (used to select endpoint)
+        assertEq(NOTHING, submit.body.model);
+    }
+
+    private responseTest() {
+        FakeBflClient fake();
+        BflDataProvider::BflGenerateImageDataProvider prov(fake);
+        auto r = prov.doRequest({"prompt": "x"});
+        assertEq("Ready", r.status);
+        assertEq("https://cdn.bfl.ai/job-1.jpeg", r.result.sample);
+    }
+
+    private unknownModelTest() {
+        # The DataProvider framework rejects unknown models via the
+        # allowed_values constraint on the model field before doRequest()
+        # runs, so the user sees a typed RUNTIME-TYPE-ERROR rather than
+        # the deeper BFL-CONFIG-ERROR.  Both shapes indicate the same
+        # thing — bad model identifier.
+        FakeBflClient fake();
+        BflDataProvider::BflGenerateImageDataProvider prov(fake);
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            prov.doRequest({"prompt": "x", "model": "not-a-real-model-xyz"});
+        });
+    }
+
+    private designCreativeTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("BlackForestLabs");
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm,          app.groups));
+        assertTrue(inlist(DataProvider::AppGroup::DesignCreative, app.groups));
+    }
+}

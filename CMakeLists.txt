@@ -2553,6 +2553,8 @@ qore_user_module("qlib/AzureDocumentIntelligenceRestClient.qm" "ConnectionProvid
 qore_user_module("qlib/AzureDocumentIntelligenceDataProvider" "AzureDocumentIntelligenceRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "azure-document-intelligence-logo.svg")
 qore_user_module("qlib/StabilityAiRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreMediaUtils")
 qore_user_module("qlib/StabilityAiDataProvider" "StabilityAiRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "stability-ai-logo.svg")
+qore_user_module("qlib/BflRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreAsyncJobUtils;QoreMediaUtils")
+qore_user_module("qlib/BflDataProvider" "BflRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "bfl-logo.svg")
 qore_user_module("qlib/GroqRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes")
 qore_user_module("qlib/GroqDataProvider" "GroqRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "groq-logo.svg")
 qore_user_module("qlib/TogetherRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes;QoreRagTypes")

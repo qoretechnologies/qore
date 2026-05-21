@@ -95,6 +95,8 @@ public class ConnectionSchemeCache {
 
             "bigcommerceres": "BigCommerceRestClient",
 
+            "bfl": "BflRestClient",
+
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
 

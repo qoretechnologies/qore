@@ -1570,6 +1570,18 @@ cargo install tree-sitter-cli@0.26.5
       - shipping (courier packages, labels, courier and service metadata)
       - polling-based event triggers for 22 journal event types (order created, paid, packaged, etc.)
 
+    - @ref bfldataproviderintro "BflDataProvider" module
+      - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
+      - exposes one action: `generate-image` — submit a text prompt + FLUX model, drive the async submit-then-poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils", and receive a result hash with the generated image URL
+      - supports six image models: `flux-pro-1.1` (default), `flux-pro-1.1-ultra` (4MP), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (image-to-image edit)
+      - action catalog integration with 1 action under the \c bfl scheme; registered with the `DesignCreative` AppGroup
+
+    - @ref bflrestclientintro "BflRestClient" module
+      - new module providing a REST client for <a href="https://bfl.ai">Black Forest Labs</a> with `x-key` header authentication
+      - registers TWO QoreMediaUtils backends — `bfl` image generator (six FLUX models) and `bfl` video generator (`flux-1.1-pro-video`)
+      - exposes a high-level `submitAndWait()` method on the async client that drives the submit → poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+      - provides BflRestConnection for connection management with \c bfl:// URL scheme
+
     - @ref baselinkerrestclientintro "BaseLinkerRestClient" module
       - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
       - supports API token authentication via \c X-BLToken header

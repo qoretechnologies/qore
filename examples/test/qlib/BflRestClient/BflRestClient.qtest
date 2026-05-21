@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreAsyncJobUtils.qm
+%requires ../../../../qlib/QoreMediaUtils.qm
+%requires ../../../../qlib/BflRestClient.qm
+
+%exec-class BflRestClientTest
+
+class FakeBflClient inherits BflRestClient::BflRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+        list<string> poll_sequence = ("Pending", "Pending", "Ready");
+        int poll_index = 0;
+        int sleep_calls = 0;
+    }
+    constructor() : BflRestClient::BflRestClientIo(
+            {"apikey": "k", "url": "https://api.bfl.ai"}) {
+        setSleeper(nothing sub (timeout t) { ++sleep_calls; });
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"method": "POST", "path": path, "body": body};
+        return <RestClient::RestResponseInfo>{
+            "body": {"id": "job-x", "polling_url": "/v1/get_result?id=job-x"},
+        };
+    }
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push calls, {"method": "GET", "path": path};
+        string status = poll_sequence[poll_index];
+        if (poll_index < poll_sequence.size() - 1) {
+            ++poll_index;
+        }
+        hash<auto!> body;
+        body.id = "job-x";
+        body.status = status;
+        if (status == "Ready") {
+            body.result = {
+                "sample": "https://cdn.bfl.ai/job-x.jpeg",
+                "seed":   42,
+            };
+        }
+        return <RestClient::RestResponseInfo>{"body": body};
+    }
+    string getSafeUrl() { return "https://api.bfl.ai"; }
+}
+
+public class BflRestClientTest inherits QUnit::Test {
+    constructor() : Test("BflRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",  \connectionSchemeTest());
+        addTestCase("apikey maps to x-key header",   \xkeyMappingTest());
+        addTestCase("image generator + factory registered with QoreMediaUtils",
+            \imageRegistryTest());
+        addTestCase("video generator + factory registered with QoreMediaUtils",
+            \videoRegistryTest());
+        addTestCase("submitAndWait drives submit→poll→Ready",
+            \submitAndWaitTest());
+        addTestCase("submitAndWait raises BFL-ERROR on Failed status",
+            \failedStatusTest());
+        addTestCase("submitAndWait raises when no polling_url returned",
+            \missingPollingUrlTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("bfl");
+        assertEq("Black Forest Labs Connection", info.display_name);
+        assertTrue(info.schemes.bfl);
+        assertEq("apikey", info.required_options);
+    }
+
+    private xkeyMappingTest() {
+        hash<auto> opts = BflRestClient::BflRestClientBase::getOptions({
+            "apikey": "secret-key",
+        });
+        assertEq("secret-key", opts.default_headers."x-key");
+        assertEq(NOTHING, opts.apikey);
+    }
+
+    private imageRegistryTest() {
+        QoreMediaUtils::AbstractImageGeneratorFactory f =
+            QoreMediaUtils::MediaProviderRegistry::getImageGeneratorFactoryEx("bfl");
+        assertEq("bfl", f.getMode());
+        assertEq("BflRestClient", f.getInfo().module_name);
+    }
+
+    private videoRegistryTest() {
+        QoreMediaUtils::AbstractVideoGeneratorFactory f =
+            QoreMediaUtils::MediaProviderRegistry::getVideoGeneratorFactoryEx("bfl");
+        assertEq("bfl", f.getMode());
+        assertEq("BflRestClient", f.getInfo().module_name);
+    }
+
+    private submitAndWaitTest() {
+        FakeBflClient fake();
+        hash<auto> r = fake.submitAndWait("/v1/flux-pro-1.1",
+            {"prompt": "x"}, {"poll_interval": 1ms});
+        assertEq("Ready", r.status);
+        assertEq("https://cdn.bfl.ai/job-x.jpeg", r.result.sample);
+        # submit + 3 polls
+        assertEq(1, (select fake.calls, $1.method == "POST").size());
+        assertEq(3, (select fake.calls, $1.method == "GET").size());
+        # 2 sleeps between the 3 polls (after Pending, Pending → before Ready)
+        assertEq(2, fake.sleep_calls);
+    }
+
+    private failedStatusTest() {
+        FakeBflClient fake();
+        fake.poll_sequence = ("Pending", "Failed");
+        assertThrows("BFL-ERROR", sub () {
+            fake.submitAndWait("/v1/flux-pro-1.1", {"prompt": "x"},
+                {"poll_interval": 1ms});
+        });
+    }
+
+    private missingPollingUrlTest() {
+        # Subclass that returns a submit response with no polling_url
+        FakeBflNoUrl fake();
+        assertThrows("BFL-ERROR", sub () {
+            fake.submitAndWait("/v1/flux-pro-1.1", {"prompt": "x"});
+        });
+    }
+}
+
+#! Fake without a polling_url in the submit response (for the negative test)
+class FakeBflNoUrl inherits BflRestClient::BflRestClientIo {
+    constructor() : BflRestClient::BflRestClientIo(
+            {"apikey": "k", "url": "https://api.bfl.ai"}) {}
+    hash<RestClient::RestResponseInfo> restPost(string p, auto b, *hash<auto> h) {
+        return <RestClient::RestResponseInfo>{
+            "body": {"id": "x"},  # no polling_url
+        };
+    }
+    string getSafeUrl() { return "https://api.bfl.ai"; }
+}

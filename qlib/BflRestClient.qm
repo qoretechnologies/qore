@@ -1,0 +1,446 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BflRestClient.qm Qore user module for calling Black Forest Labs (FLUX) REST services
+
+/*  BflRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreAsyncJobUtils
+%requires QoreMediaUtils
+
+module BflRestClient {
+    version = "1.0";
+    desc = "user module for calling Black Forest Labs (FLUX) REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("bfl",
+            BflRestConnection::ConnectionScheme);
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+            new BflImageGeneratorFactory());
+        QoreMediaUtils::MediaProviderRegistry::registerVideoGeneratorFactory(
+            new BflVideoGeneratorFactory());
+    };
+}
+
+/** @mainpage BflRestClient Module
+
+    @tableofcontents
+
+    @section bflrestclientintro BflRestClient Introduction
+
+    The %BflRestClient module provides a REST client for
+    [Black Forest Labs](https://bfl.ai) — the company behind the FLUX
+    image and video generation models.
+
+    BFL's API is asynchronous: every submit returns a `polling_url`
+    that must be polled until the result is ready.  This module wraps
+    the lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+    so callers see a synchronous request/response shape.
+
+    Two QoreMediaUtils backends are auto-registered on module load:
+    - `bfl` image generator (FLUX models)
+    - `bfl` video generator (FLUX video models)
+
+    @section BflRestClientRelnotes Release Notes
+
+    @subsection BflRestClientv1_0 BflRestClient v1.0
+    - the initial version of the %BflRestClient module
+*/
+
+#! contains all public symbols of the BflRestClient module
+public namespace BflRestClient {
+#! Default BFL REST API URL
+public const DefaultUrl = "https://api.bfl.ai";
+
+#! Default polling interval (ms) for async-job lifecycle
+public const DefaultPollInterval = 2000ms;
+
+#! Default overall timeout for async-job lifecycle
+public const DefaultJobTimeout = 5m;
+
+#! BFL terminal statuses
+public const StatusReady = "Ready";
+
+#! BFL error statuses
+public const ErrorStatuses = ("Error", "Failed", "Request Moderated", "Content Moderated");
+
+#! Image-generation endpoint paths by model
+public const ImageModelPathMap = {
+    "flux-pro-1.1":       "/v1/flux-pro-1.1",
+    "flux-pro-1.1-ultra": "/v1/flux-pro-1.1-ultra",
+    "flux-pro":           "/v1/flux-pro",
+    "flux-dev":           "/v1/flux-dev",
+    "flux-kontext-pro":   "/v1/flux-kontext-pro",
+    "flux-kontext-max":   "/v1/flux-kontext-max",
+};
+
+#! Default image model
+public const DefaultImageModel = "flux-pro-1.1";
+
+#! Video-generation endpoint paths by model
+public const VideoModelPathMap = {
+    "flux-1.1-pro-video":  "/v1/flux-1.1-pro-video",
+};
+
+#! Default video model
+public const DefaultVideoModel = "flux-1.1-pro-video";
+
+#! Common base class
+public class BflRestClientBase {
+    public {
+        const DefaultOptions = {
+            "url":  DefaultUrl,
+            "data": "json",
+        };
+    }
+
+    #! Maps the \c apikey option to BFL's \c x-key header
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv;
+        rv += DefaultOptions + opts;
+        if (rv.apikey) {
+            hash<auto!> dh;
+            if (rv.default_headers) {
+                dh += rv.default_headers;
+            }
+            dh."x-key" = rv.apikey;
+            rv.default_headers = dh;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! Sync REST client for BFL
+public class BflRestClient inherits RestClient::RestClient, BflRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(BflRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! Async REST client for BFL
+/** Owns an @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" for the
+    submit-then-poll lifecycle.
+*/
+public class BflRestClientIo inherits RestClientIo::RestClientIo, BflRestClientBase {
+    private {
+        QoreAsyncJobUtils::AsyncJobPoller poller;
+    }
+
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(BflRestClientBase::getOptions(opts), shared_mgr) {
+        poller = new QoreAsyncJobUtils::AsyncJobPoller(
+            hash<auto> sub (string poll_url) {
+                # BFL returns absolute URLs in polling_url — use as-is.
+                # restGet accepts both absolute and relative URLs.
+                return restGet(poll_url).body;
+            },
+            bool sub (hash<auto> status) {
+                return status.status &&
+                    (status.status == StatusReady ||
+                     inlist(status.status, ErrorStatuses));
+            },
+            "BFL job",
+            "BFL-ERROR",
+        );
+    }
+
+    setSleeper(code<nothing(timeout)> s) {
+        poller.setSleeper(s);
+    }
+
+    #! Submits a generation request and waits for the result
+    /** @param path submit endpoint path (e.g. \c "/v1/flux-pro-1.1")
+        @param body submit body (model-specific)
+        @param options optional polling-control fields: \c poll_interval
+            (defaults to 2s), \c job_timeout (defaults to 5m)
+
+        @return the completed job hash with \c result.sample (image URL),
+            \c status, etc.
+
+        @throw BFL-ERROR job timeout or job ended in a non-Ready terminal
+            state
+    */
+    hash<auto> submitAndWait(string path, hash<auto> body, *hash<auto> options) {
+        timeout overall_to = options.job_timeout ?? DefaultJobTimeout;
+        timeout interval = options.poll_interval ?? DefaultPollInterval;
+
+        hash<auto> submit_resp = restPost(path, body);
+        *string poll_url = submit_resp.body.polling_url;
+        if (!poll_url.val()) {
+            throw "BFL-ERROR",
+                "BFL submit did not return a polling_url",
+                {"body": submit_resp.body};
+        }
+        hash<auto> done = poller.poll(poll_url, overall_to, interval);
+        if (done.status != StatusReady) {
+            throw "BFL-ERROR",
+                sprintf("BFL job ended with status %y: %s",
+                    done.status, done.result.error ?? "unknown"),
+                {"poll_url": poll_url, "last_status": done};
+        }
+        return done;
+    }
+}
+
+#! Connection class for BFL
+public class BflRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "bfl://api.bfl.ai";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Black Forest Labs Connection",
+            "short_desc": "A connection to Black Forest Labs (FLUX models)",
+            "desc": "A connection to [Black Forest Labs](https://bfl.ai) — "
+                "the company behind FLUX image and video generation models.\n\n"
+                "Requires an API key sent via the `x-key` header.  Get your "
+                "API key from the [BFL portal](https://api.bfl.ai).",
+            "cls": Class::forName("BflRestConnection"),
+            "auto_url": True,
+            "schemes": {"bfl": True},
+            "base_scheme_map": {"https": "bfl"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "BFL API key (sent as `x-key` header)",
+                    "type": "string",
+                    "desc": "The BFL API key — sent as the `x-key` header.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() { return "bfl"; }
+    bool hasDataProvider() { return True; }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("BflDataProvider");
+        return create_object("BflDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private BflRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BflRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BflRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return BflRestClientBase::getOptions(rv);
+    }
+}
+
+#! Fetches a URL as raw bytes (used to download generated image / video assets)
+public binary sub fetchBytes(string url) {
+    HTTPClient hc({"url": url});
+    auto result = hc.get("");
+    if (result.typeCode() == NT_BINARY) {
+        return result;
+    }
+    return binary(string(result));
+}
+
+#! @ref QoreMediaUtils::AbstractImageGenerator implementation backed by BFL FLUX models
+public class BflImageGenerator inherits QoreMediaUtils::AbstractImageGenerator {
+    private {
+        BflRestClientIo rest;
+        string model;
+        *string aspect_ratio;
+    }
+
+    constructor(hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        if (!config.api_key.val()) {
+            throw "MEDIA-CONFIG-ERROR",
+                "ImageGeneratorConfig.api_key is required for the BFL backend";
+        }
+        rest = new BflRestClientIo({
+            "apikey": config.api_key,
+            "url":    config.url ?? BflRestClient::DefaultUrl,
+        });
+        model = config.model ?? BflRestClient::DefaultImageModel;
+        aspect_ratio = config.aspect_ratio;
+        if (!BflRestClient::ImageModelPathMap{model}) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("BFL image model %y is unknown; known models: %y",
+                    model, keys BflRestClient::ImageModelPathMap);
+        }
+    }
+
+    string getMode() { return "bfl"; }
+    *string getModel() { return model; }
+
+    hash<QoreMediaUtils::ImageResult> generateImage(string prompt, *hash<auto> opts) {
+        string m = opts.model ?? model;
+        *string path = BflRestClient::ImageModelPathMap{m};
+        if (!path) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("BFL image model %y is unknown; known models: %y",
+                    m, keys BflRestClient::ImageModelPathMap);
+        }
+
+        hash<auto!> body;
+        body.prompt = prompt;
+        if (opts.aspect_ratio.val() || aspect_ratio.val()) {
+            body.aspect_ratio = opts.aspect_ratio ?? aspect_ratio;
+        }
+        if (opts.width)            { body.width = opts.width; }
+        if (opts.height)           { body.height = opts.height; }
+        if (opts.seed)             { body.seed = opts.seed; }
+        if (opts.negative_prompt)  { body.negative_prompt = opts.negative_prompt; }
+        if (opts.prompt_upsampling) { body.prompt_upsampling = opts.prompt_upsampling; }
+        if (opts.input_image)      { body.input_image = opts.input_image; }
+
+        hash<auto> final_status = rest.submitAndWait(path, body, opts);
+
+        # BFL returns the image as a URL in result.sample — fetch the bytes
+        *string image_url = final_status.result.sample;
+        binary image_bytes;
+        if (image_url.val()) {
+            image_bytes = BflRestClient::fetchBytes(image_url);
+        }
+        return <QoreMediaUtils::ImageResult>{
+            "image":        image_bytes,
+            "content_type": "image/jpeg",  # BFL serves JPEGs from the result URL
+            "seed":         final_status.result.seed,
+            "model":        m,
+            "metadata": {
+                "id":              final_status.id,
+                "status":          final_status.status,
+                "result_url":      image_url,
+            },
+        };
+    }
+}
+
+#! Factory for @ref BflImageGenerator
+public class BflImageGeneratorFactory inherits QoreMediaUtils::AbstractImageGeneratorFactory {
+    string getMode() {
+        return "bfl";
+    }
+    string getDisplayName() {
+        return "Black Forest Labs (FLUX) text-to-image";
+    }
+    QoreMediaUtils::AbstractImageGenerator create(
+            hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        return new BflImageGenerator(config);
+    }
+}
+
+#! @ref QoreMediaUtils::AbstractVideoGenerator implementation backed by BFL FLUX video models
+public class BflVideoGenerator inherits QoreMediaUtils::AbstractVideoGenerator {
+    private {
+        BflRestClientIo rest;
+        string video_model;
+    }
+
+    constructor(hash<QoreMediaUtils::VideoGeneratorConfig> config) {
+        if (!config.api_key.val()) {
+            throw "MEDIA-CONFIG-ERROR",
+                "VideoGeneratorConfig.api_key is required for the BFL backend";
+        }
+        hash<auto> rest_opts = {
+            "apikey": config.api_key,
+            "url":    config.url ?? BflRestClient::DefaultUrl,
+        };
+        rest = new BflRestClientIo(rest_opts);
+        video_model = config.model ?? BflRestClient::DefaultVideoModel;
+        if (!BflRestClient::VideoModelPathMap{video_model}) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("BFL video model %y is unknown; known models: %y",
+                    video_model, keys BflRestClient::VideoModelPathMap);
+        }
+    }
+
+    string getMode() { return "bfl"; }
+    *string getModel() { return video_model; }
+
+    hash<QoreMediaUtils::VideoResult> generateVideo(string prompt, *hash<auto> opts) {
+        string m = opts.model ?? video_model;
+        *string path = BflRestClient::VideoModelPathMap{m};
+        if (!path) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("BFL video model %y is unknown; known models: %y",
+                    m, keys BflRestClient::VideoModelPathMap);
+        }
+        hash<auto> body = ("prompt": prompt);
+        if (opts.aspect_ratio) {
+            body.aspect_ratio = opts.aspect_ratio;
+        }
+        if (opts.duration_seconds) {
+            body.duration = opts.duration_seconds;
+        }
+        if (opts.seed) {
+            body.seed = opts.seed;
+        }
+        hash<auto> done_status = rest.submitAndWait(path, body, opts);
+        return <QoreMediaUtils::VideoResult>{
+            "video_url":    done_status.result.sample,
+            "content_type": "video/mp4",
+            "model":        m,
+            "metadata":     {"id": done_status.id, "status": done_status.status},
+        };
+    }
+}
+
+#! Factory for @ref BflVideoGenerator
+public class BflVideoGeneratorFactory inherits QoreMediaUtils::AbstractVideoGeneratorFactory {
+    string getMode() {
+        return "bfl";
+    }
+    string getDisplayName() {
+        return "Black Forest Labs (FLUX) text-to-video";
+    }
+    QoreMediaUtils::AbstractVideoGenerator create(
+            hash<QoreMediaUtils::VideoGeneratorConfig> config) {
+        return new BflVideoGenerator(config);
+    }
+}
+}

@@ -86,6 +86,7 @@ public class DataProvider {
             "asyncapi": "AsyncApiDataProvider",
             "azure-openai": "AzureOpenAiDataProvider",
             "bedrock": "BedrockDataProvider",
+            "bfl": "BflDataProvider",
 
             "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
