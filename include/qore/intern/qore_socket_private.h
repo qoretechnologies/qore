@@ -123,6 +123,7 @@ DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 DLLLOCAL int sock_get_error();
+DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
     const char* service, int family = Q_AF_UNSPEC, int flags = 0, int socktype = Q_SOCK_STREAM,
     int protocol = 0, int timeout_ms = -1);
@@ -2294,9 +2295,16 @@ struct qore_socket_private : public QoreReferenceCounter {
         reuse(reuseaddr);
 
         if ((::bind(sock, ai_addr, ai_addrlen)) == QORE_SOCKET_ERROR) {
+            // capture the bind() errno before close(), which invokes ::shutdown()
+            // on the not-yet-connected socket and clobbers errno with ENOTCONN —
+            // hiding the real reason (EADDRINUSE, EACCES, EAFNOSUPPORT, ...) from
+            // callers that read errno via sock_get_raw_error() after we return
+            // (e.g. qore_socket_bind_inet_resolved_direct's multi-address loop).
+            int bind_errno = sock_get_raw_error();
             if (xsink)
                 qore_socket_error(xsink, "SOCKET-BIND-ERROR", "error in bind()", 0, 0, 0, ai_addr);
             close();
+            sock_set_raw_error(bind_errno);
             return -1;
         }
 
