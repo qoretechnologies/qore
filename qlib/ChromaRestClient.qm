@@ -1,0 +1,385 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ChromaRestClient.qm Qore user module for calling Chroma vector store REST services
+
+/*  ChromaRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreRagTypes
+
+module ChromaRestClient {
+    version = "1.0";
+    desc = "user module for calling Chroma vector store REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("chroma",
+            ChromaRestConnection::ConnectionScheme);
+        QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
+            new ChromaVectorStoreFactory());
+    };
+}
+
+/** @mainpage ChromaRestClient Module
+
+    @tableofcontents
+
+    @section chromarestclientintro ChromaRestClient Introduction
+
+    The %ChromaRestClient module provides a REST client for
+    [Chroma](https://www.trychroma.com) — a lightweight, local-first
+    vector database — and registers `chroma` as a vector-store backend
+    in @ref qorerragutilsintro "QoreRagUtils".
+
+    @par Configuration
+
+    - \c url (optional): defaults to \c http://localhost:8000
+    - \c apikey (optional): Bearer token (Chroma Cloud / reverse-proxied)
+    - \c tenant (optional): Chroma tenant (defaults to \c "default_tenant")
+    - \c database (optional): Chroma database (defaults to \c "default_database")
+
+    @section ChromaRestClientRelnotes Release Notes
+
+    @subsection ChromaRestClientv1_0 ChromaRestClient v1.0
+    - the initial version of the %ChromaRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+public namespace ChromaRestClient {
+public class ChromaRestClientBase {
+    public {
+        const DefaultUrl = "http://localhost:8000";
+        const DefaultTenant = "default_tenant";
+        const DefaultDatabase = "default_database";
+
+        const DefaultOptions = {
+            "url": DefaultUrl,
+        };
+    }
+
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (rv.apikey) {
+            rv.token = rv.apikey;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! REST client for Chroma (sync)
+public class ChromaRestClient inherits RestClient::RestClient, ChromaRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ChromaRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! REST client for Chroma using multiplexed HTTP connections
+public class ChromaRestClientIo inherits RestClientIo::RestClientIo, ChromaRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ChromaRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Chroma REST connections
+public class ChromaRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "chroma://localhost:8000";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Chroma Vector Store Connection",
+            "short_desc": "A connection to a Chroma vector database",
+            "desc": "A connection to a [Chroma](https://www.trychroma.com) vector database.\n\n"
+                "Chroma is a lightweight, local-first vector database that pairs naturally "
+                "with local Ollama embeddings for self-hosted RAG.\n\n"
+                "Local deployments don't require authentication; supply an `apikey` for "
+                "Chroma Cloud or reverse-proxied deployments.",
+            "cls": Class::forName("ChromaRestConnection"),
+            "auto_url": True,
+            "schemes": {"chroma": True},
+            "base_scheme_map": {"http": "chroma", "https": "chroma"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Optional Bearer token (Chroma Cloud / proxied)",
+                    "type": "string",
+                    "desc": "Optional Bearer token.  Local Chroma servers do not require "
+                        "authentication; supply only for hosted Chroma Cloud or "
+                        "reverse-proxied deployments.",
+                    "sensitive": True,
+                },
+                "tenant": <ConnectionOptionInfo>{
+                    "display_name": "Tenant",
+                    "short_desc": "Chroma tenant",
+                    "desc": "Chroma tenant name.",
+                    "type": "string",
+                    "default_value": ChromaRestClientBase::DefaultTenant,
+                },
+                "database": <ConnectionOptionInfo>{
+                    "display_name": "Database",
+                    "short_desc": "Chroma database",
+                    "desc": "Chroma database name.",
+                    "type": "string",
+                    "default_value": ChromaRestClientBase::DefaultDatabase,
+                },
+            },
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "chroma";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("ChromaDataProvider");
+        return create_object("ChromaDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private ChromaRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ChromaRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ChromaRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return ChromaRestClientBase::getOptions(rv);
+    }
+}
+}
+
+public namespace QoreRagUtils {
+#! Chroma-backed vector store
+/** Connects to a Chroma server (local or remote) and operates on a
+    specific collection identified by collection ID.
+
+    @par Configuration
+
+    @ref VectorStoreConfig fields:
+    - \c collection (required): the Chroma collection ID (UUID, not name)
+    - \c url (optional): Chroma server URL (default \c http://localhost:8000)
+    - \c options.tenant (optional): Chroma tenant (default \c default_tenant)
+    - \c options.database (optional): Chroma database (default \c default_database)
+    - \c options.api_key (optional): Bearer token for hosted/proxied Chroma
+    - \c options.dimension (optional): expected vector dimension
+*/
+public class ChromaVectorStore inherits AbstractVectorStore {
+    public {
+        const Backend = "chroma";
+    }
+
+    private {
+        hash<VectorStoreConfig> config;
+        string collection_id;
+        string tenant;
+        string database;
+        *ChromaRestClient::ChromaRestClientIo rest_client;
+        *int cached_dimension;
+        Mutex init_mutex();
+    }
+
+    constructor(hash<VectorStoreConfig> config) {
+        self.config = config;
+        if (!config.collection.val()) {
+            throw "VECTOR-STORE-CONFIG-ERROR",
+                "ChromaVectorStore requires 'collection' (Chroma collection ID)";
+        }
+        collection_id = config.collection;
+        tenant = config.options.tenant
+            ?? ChromaRestClient::ChromaRestClientBase::DefaultTenant;
+        database = config.options.database
+            ?? ChromaRestClient::ChromaRestClientBase::DefaultDatabase;
+        if (exists config.options.dimension) {
+            cached_dimension = config.options.dimension;
+        }
+    }
+
+    upsert(list<hash<VectorRecord>> records) {
+        if (!records) {
+            return;
+        }
+        ensureRestClient();
+        list<string> ids = map $1.id, records;
+        list<list<float>> embeddings = map $1.vector, records;
+        list<*hash<auto>> metadatas = map $1.payload ?? {}, records;
+        hash<auto> body = {
+            "ids": ids,
+            "embeddings": embeddings,
+            "metadatas": metadatas,
+        };
+        rest_client.restPost(collectionPath("/upsert"), body);
+        if (!exists cached_dimension && records[0].vector) {
+            cached_dimension = records[0].vector.size();
+        }
+    }
+
+    deleteByIds(list<string> ids) {
+        if (!ids) {
+            return;
+        }
+        ensureRestClient();
+        rest_client.restPost(collectionPath("/delete"), {"ids": ids});
+    }
+
+    list<hash<VectorSearchResult>> search(list<float> query_vector, int k,
+            *hash<auto> filter) {
+        ensureRestClient();
+        hash<auto> body = {
+            "query_embeddings": (query_vector,),
+            "n_results": k,
+            "include": ("metadatas", "distances"),
+        };
+        if (filter && filter.typeCode() == NT_HASH) {
+            # Chroma filters use the 'where' (metadata) and 'where_document'
+            # (full-text) keys; pass through verbatim
+            if (exists filter.where) {
+                body."where" = filter.where;
+            }
+            if (exists filter.where_document) {
+                body."where_document" = filter.where_document;
+            }
+        }
+        hash<auto> resp = rest_client.restPost(collectionPath("/query"), body);
+
+        # Chroma v2 returns ids: [[...]], distances: [[...]], metadatas: [[...]]
+        # (one nested list per query embedding; we only ever send one).
+        *list<auto> id_rows = resp.body.ids;
+        *list<auto> dist_rows = resp.body.distances;
+        *list<auto> meta_rows = resp.body.metadatas;
+        list<string> ids = id_rows && id_rows[0] ? id_rows[0] : ();
+        list<auto> dists = dist_rows && dist_rows[0] ? dist_rows[0] : ();
+        list<auto> metas = meta_rows && meta_rows[0] ? meta_rows[0] : ();
+        list<hash<VectorSearchResult>> result = ();
+        int n = ids.size();
+        for (int i = 0; i < n; ++i) {
+            *hash<auto> payload = (i < metas.size() && metas[i].typeCode() == NT_HASH)
+                ? metas[i]
+                : NOTHING;
+            float dist = (i < dists.size()) ? dists[i].toFloat() : 0.0;
+            push result, <VectorSearchResult>{
+                "id": ids[i].toString(),
+                # Chroma reports distance; smaller = closer.  Surface as
+                # similarity = 1 - distance for cosine; for L2/IP we leave the
+                # raw distance as a negative score so larger = closer.
+                "score": 1.0 - dist,
+                "payload": payload,
+            };
+        }
+        return result;
+    }
+
+    string getCollection() {
+        return collection_id;
+    }
+
+    int getDimension() {
+        if (exists cached_dimension) {
+            return cached_dimension;
+        }
+        init_mutex.lock();
+        on_exit init_mutex.unlock();
+        if (exists cached_dimension) {
+            return cached_dimension;
+        }
+        ensureRestClient();
+        try {
+            hash<auto> resp = rest_client.restGet(collectionPath(""));
+            if (resp.body.dimension) {
+                cached_dimension = resp.body.dimension.toInt();
+                return cached_dimension;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore — return -1 below
+        }
+        return -1;
+    }
+
+    private string collectionPath(string subpath) {
+        return sprintf("/api/v2/tenants/%s/databases/%s/collections/%s%s",
+            tenant, database, collection_id, subpath);
+    }
+
+    private ensureRestClient() {
+        if (!rest_client) {
+            init_mutex.lock();
+            on_exit init_mutex.unlock();
+            if (!rest_client) {
+                hash<auto!> opts = {
+                    "url": config.url
+                        ?? ChromaRestClient::ChromaRestClientBase::DefaultUrl,
+                };
+                if (config.options.api_key.val()) {
+                    opts.apikey = config.options.api_key;
+                }
+                rest_client = new ChromaRestClient::ChromaRestClientIo(opts);
+            }
+        }
+    }
+}
+
+#! Factory for @ref ChromaVectorStore
+public class ChromaVectorStoreFactory inherits AbstractVectorStoreFactory {
+    string getType() {
+        return "chroma";
+    }
+
+    string getDisplayName() {
+        return "Chroma vector store";
+    }
+
+    AbstractVectorStore create(hash<VectorStoreConfig> config) {
+        return new ChromaVectorStore(config);
+    }
+}
+}

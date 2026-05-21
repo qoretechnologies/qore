@@ -662,6 +662,7 @@ public class RagProviderRegistry {
         const VectorStoreModuleMap = {
             "qdrant":   "QdrantDataProvider",
             "pgvector": "QoreRagUtils",
+            "chroma":   "ChromaRestClient",
         };
     }
 
