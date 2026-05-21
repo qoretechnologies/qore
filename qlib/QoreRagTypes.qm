@@ -642,6 +642,7 @@ public class RagProviderRegistry {
             "ollama":     "OllamaRestClient",
             "jina":       "JinaRestClient",
             "cohere":     "CohereRestClient",
+            "mistral":    "MistralRestClient",
         };
 
         #! Map of reranker backend names to providing modules

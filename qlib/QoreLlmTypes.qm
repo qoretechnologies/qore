@@ -417,6 +417,7 @@ public class LlmProviderRegistry {
             "fireworks":     "FireworksRestClient",
             "ollama":        "OllamaRestClient",
             "cohere":        "CohereRestClient",
+            "mistral":       "MistralRestClient",
         };
     }
 

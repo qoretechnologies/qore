@@ -2550,6 +2550,8 @@ qore_user_module("qlib/JinaRestClient.qm" "ConnectionProvider;Mime;RestClient;Re
 qore_user_module("qlib/JinaDataProvider" "JinaRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "jina-logo.svg")
 qore_user_module("qlib/CohereRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;QoreLlmTypes;QoreRagTypes")
 qore_user_module("qlib/CohereDataProvider" "CohereRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "cohere-logo.svg")
+qore_user_module("qlib/MistralRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;OpenAiRestClient;QoreLlmTypes;QoreRagTypes")
+qore_user_module("qlib/MistralDataProvider" "MistralRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "mistral-ai-logo.svg")
 qore_user_module("qlib/GcpAuth.qm" "RestClient;RestClientIo")
 qore_user_module("qlib/GeminiBodyShape.qm" "QoreLlmTypes")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")

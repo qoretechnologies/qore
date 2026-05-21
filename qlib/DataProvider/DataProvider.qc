@@ -234,6 +234,7 @@ public class DataProvider {
             "ollama": "OllamaDataProvider",
             "jina": "JinaDataProvider",
             "cohere": "CohereDataProvider",
+            "mistral": "MistralDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

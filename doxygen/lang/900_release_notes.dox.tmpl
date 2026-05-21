@@ -2147,6 +2147,19 @@ cargo install tree-sitter-cli@0.26.5
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
 
+    - @ref mistraldataproviderintro "MistralDataProvider" module
+      - new module providing a data provider API for <a href="https://mistral.ai">Mistral AI</a> chat, embeddings, and document OCR
+      - exposes three actions: `chat-completion` (OpenAI-compatible `/v1/chat/completions`), `create-embeddings` (`/v1/embeddings`), and `ocr` (`/v1/ocr` — extracts structured markdown from PDFs/images)
+      - action catalog integration with 3 actions under the \c mistral scheme
+
+    - @ref mistralrestclientintro "MistralRestClient" module
+      - new module providing a REST client for <a href="https://mistral.ai">Mistral AI</a>'s OpenAI-compatible API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat; registers a `mistral` embedder backend with @ref qorerragutilsintro "QoreRagUtils"
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c mistral
+      - provides MistralRestConnection for connection management with \c mistral:// URL scheme
+      - OCR is exposed via @ref mistraldataproviderintro "MistralDataProvider" — direct integration with the @ref qoreocrutilsintro "QoreOcrUtils" engine abstraction is planned for a follow-up release
+
     - @ref mongodbdataproviderintro "MongoDbDataProvider" module
       - new module providing a data provider API for <a href="https://www.mongodb.com/">MongoDB</a> servers
       - hierarchical data provider structure: databases -> collections -> operations
