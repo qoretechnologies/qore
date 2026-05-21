@@ -292,6 +292,7 @@ buffer<bool> selected = columns.combineMasks(
     "&&");
 DataFrame filtered = DataFrame::fromColumnarResult(columns.filter(selected));
 ColumnarResult incomplete = columns.filter(columns.nullMask("completed_at"));
+ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
     @endcode
 
     DataProvider filter processors compile supported DPQL/DataProvider
@@ -315,8 +316,9 @@ ColumnarResult filtered_columns = filter.processRecordsShape(
     DataFrame kernels still keep their vector-oriented internal representation
     for joins, groupby, windows, and ML conversion. Dense source buffers are
     preserved for columnar export and direct dense column access. Row filtering
-    preserves primitive dense columns by creating filtered dense buffers, while
-    ordering, aggregation, and reshaping can allocate new storage.
+    preserves primitive dense columns by creating filtered dense buffers, and
+    contiguous slicing preserves them with zero-copy buffer views. Ordering,
+    aggregation, and reshaping can allocate new storage.
 
     @section plugin_types_lowering Lowering Pattern Hooks
 

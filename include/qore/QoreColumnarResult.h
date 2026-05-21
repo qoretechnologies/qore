@@ -127,6 +127,9 @@ public:
     //! Returns a new result with rows selected by a boolean list or buffer mask.
     DLLEXPORT QoreColumnarResult* filter(QoreValue mask, ExceptionSink* xsink) const;
 
+    //! Returns a contiguous row slice, preserving dense buffer columns as views.
+    DLLEXPORT QoreColumnarResult* slice(size_t offset, size_t count, ExceptionSink* xsink) const;
+
     //! Combines two boolean row masks with && or || and returns a dense buffer<bool> mask.
     DLLEXPORT static QoreValue combineMasks(QoreValue lhs, QoreValue rhs, const char* op, ExceptionSink* xsink);
 

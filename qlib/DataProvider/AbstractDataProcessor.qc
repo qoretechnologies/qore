@@ -480,6 +480,35 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return result;
     }
 
+    #! Returns a contiguous slice of a hash-of-lists or hash-of-buffers column block
+    /** @param data the column block
+        @param start the zero-based first row
+        @param count the number of rows
+
+        @since %DataProvider 3.5
+    */
+    static hash<auto> sliceColumnBlock(hash<auto> data, int start, int count) {
+        if (start < 0 || count < 0) {
+            throw "PROCESSOR-SHAPE-ERROR", sprintf("column block slice expects non-negative start and count; got %d, %d",
+                start, count);
+        }
+        hash<auto> result;
+        foreach hash<auto> i in (data.pairIterator()) {
+            switch (i.value.typeCode()) {
+                case NT_BUFFER:
+                    result{i.key} = i.value.view(start, count);
+                    break;
+                case NT_LIST:
+                    result{i.key} = count ? i.value[start..(start + count - 1)] : ();
+                    break;
+                default:
+                    result{i.key} = i.value;
+                    break;
+            }
+        }
+        return result;
+    }
+
     #! Detects the pipeline shape for a runtime value
     /** @param data the value to inspect
 
@@ -588,7 +617,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         }
         if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::HashOfLists) {
             if (AbstractDataProcessor::isColumnarResult(data)) {
-                return (AbstractDataProcessor::recordsToHashList(data.toRows()),);
+                return (AbstractDataProcessor::bufferColumnsToHashList(data.toColumnHash()),);
             }
             if (AbstractDataProcessor::isHashOfBuffers(data)) {
                 return (AbstractDataProcessor::bufferColumnsToHashList(data),);

@@ -164,6 +164,31 @@ ColumnarResult ColumnarResult::filter(auto mask) [flags=RET_VALUE_ONLY] {
     return qore_columnar_result_to_object(result->filter(mask, xsink), xsink);
 }
 
+//! Returns a contiguous row slice as a new ColumnarResult
+/** @param offset zero-based first row
+    @param count number of rows to include
+
+    @return a new ColumnarResult with the requested row range
+
+    Dense buffer columns are preserved as zero-copy views.
+
+    @par Example:
+    @code{.py}
+ColumnarResult first_batch = result.slice(offset: 0, count: 1000);
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if the requested range is invalid
+*/
+ColumnarResult ColumnarResult::slice(int offset, int count) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (offset < 0 || count < 0) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR",
+            "slice offset " QLLD " and count " QLLD " must be non-negative", offset, count);
+        return QoreValue();
+    }
+    return qore_columnar_result_to_object(result->slice(static_cast<size_t>(offset), static_cast<size_t>(count),
+        xsink), xsink);
+}
+
 //! Combines two boolean row masks and returns a dense boolean mask
 /** @param lhs first \c list<bool> or \c buffer<bool> mask
     @param rhs second \c list<bool> or \c buffer<bool> mask

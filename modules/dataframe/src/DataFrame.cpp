@@ -386,39 +386,56 @@ QoreDataFrame* QoreDataFrame::sliceRows(int64_t start, int64_t count,
     df->n_rows = count;
 
     for (const auto& src_col : columns) {
-        auto new_data = std::make_shared<ColumnData>();
-        new_data->type = src_col.data->type;
-        new_data->n_rows = count;
-        new_data->null_mask.assign(
-            src_col.data->null_mask.begin() + start,
-            src_col.data->null_mask.begin() + start + count);
+        if (df->columns.size() && !(df->columns.size() % 100)
+                && qore_check_cancel(xsink, "slicing DataFrame rows")) {
+            delete df;
+            return nullptr;
+        }
 
-        switch (src_col.data->type) {
-            case ColumnType::FLOAT64:
-                new_data->float_data = src_col.data->float_data.segment(start, count);
-                break;
-            case ColumnType::INT64:
-                new_data->int_data.assign(
-                    src_col.data->int_data.begin() + start,
-                    src_col.data->int_data.begin() + start + count);
-                break;
-            case ColumnType::STRING:
-                new_data->str_data.assign(
-                    src_col.data->str_data.begin() + start,
-                    src_col.data->str_data.begin() + start + count);
-                break;
-            case ColumnType::BOOL:
-                new_data->bool_data.assign(
-                    src_col.data->bool_data.begin() + start,
-                    src_col.data->bool_data.begin() + start + count);
-                break;
-            case ColumnType::DATE:
-                new_data->date_data.assign(
-                    src_col.data->date_data.begin() + start,
-                    src_col.data->date_data.begin() + start + count);
-                break;
-            default:
-                break;
+        std::shared_ptr<ColumnData> new_data;
+        if (src_col.data->hasDenseBuffer()) {
+            ReferenceHolder<QoreBufferNode> buffer(src_col.data->dense_buffer->view(
+                static_cast<size_t>(start), static_cast<size_t>(count)), xsink);
+            new_data = buildColumnDataFromBuffer(*buffer, xsink);
+            if (*xsink) {
+                delete df;
+                return nullptr;
+            }
+        } else {
+            new_data = std::make_shared<ColumnData>();
+            new_data->type = src_col.data->type;
+            new_data->n_rows = count;
+            new_data->null_mask.assign(
+                src_col.data->null_mask.begin() + start,
+                src_col.data->null_mask.begin() + start + count);
+
+            switch (src_col.data->type) {
+                case ColumnType::FLOAT64:
+                    new_data->float_data = src_col.data->float_data.segment(start, count);
+                    break;
+                case ColumnType::INT64:
+                    new_data->int_data.assign(
+                        src_col.data->int_data.begin() + start,
+                        src_col.data->int_data.begin() + start + count);
+                    break;
+                case ColumnType::STRING:
+                    new_data->str_data.assign(
+                        src_col.data->str_data.begin() + start,
+                        src_col.data->str_data.begin() + start + count);
+                    break;
+                case ColumnType::BOOL:
+                    new_data->bool_data.assign(
+                        src_col.data->bool_data.begin() + start,
+                        src_col.data->bool_data.begin() + start + count);
+                    break;
+                case ColumnType::DATE:
+                    new_data->date_data.assign(
+                        src_col.data->date_data.begin() + start,
+                        src_col.data->date_data.begin() + start + count);
+                    break;
+                default:
+                    break;
+            }
         }
 
         Column col;

@@ -149,6 +149,7 @@ buffer<bool> active = columns.getColumn("active") == True;
 buffer<bool> selected_mask = columns.combineMasks(high, active, "&&");
 ColumnarResult high_active = columns.filter(selected_mask);
 ColumnarResult missing_scores = columns.filter(columns.nullMask("score"));
+ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
     @endcode
 
     Use @ref DataFrame::DataFrame::concat() "DataFrame::concat()" with
@@ -165,8 +166,9 @@ DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), axis
     compatibility with groupby, joins, window functions, and ML conversion.
     Therefore source buffers are preserved for columnar export and dense column
     access. Row filtering preserves primitive buffer-backed columns by creating
-    filtered dense buffers, while operations that reorder, aggregate, or reshape
-    rows may allocate new column storage.
+    filtered dense buffers, and contiguous row slicing preserves them with
+    zero-copy buffer views. Operations that reorder, aggregate, or reshape rows
+    may allocate new column storage.
 
     @section dataframe_dataprovider_pipelines DataProvider Pipeline Integration
 
@@ -204,11 +206,14 @@ pipeline.waitDone();
 
     QoreFilterRecordsProcessor compiles simple DPQL/DataProvider scalar
     comparisons to DataFrame row masks or dense ColumnarResult boolean masks
-    when possible. Supported compiled forms include \c &&, \c ||, \c !, and
-    scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, plus
-    \c isNull and \c isNotNull checks. Predicates that use string operators,
-    field-to-field comparisons, null literal comparisons, or unsupported column
-    containers fall back to the generic row semantics to preserve behavior.
+    when possible. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor, and
+    QoreRecordLimitProcessor preserve DataFrameBlock and BufferColumns shapes for
+    simple top-level fields. Supported compiled filter forms include \c &&,
+    \c ||, \c !, and scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >=
+    comparisons, plus \c isNull and \c isNotNull checks. Predicates that use
+    string operators, field-to-field comparisons, null literal comparisons, or
+    unsupported column containers fall back to the generic row semantics to
+    preserve behavior.
 
     @code{.py}
 ColumnarResult dense_columns = employees.toColumnarResult();

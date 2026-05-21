@@ -493,6 +493,31 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
     return QoreValue();
 }
 
+static QoreValue columnar_slice_value(QoreValue value, size_t offset, size_t count, ExceptionSink* xsink) {
+    if (value.getType() == NT_LIST) {
+        const QoreListNode* source = value.get<const QoreListNode>();
+        ReferenceHolder<QoreListNode> rv(new QoreListNode(source->getValueTypeInfo()), xsink);
+        size_t end = offset + count;
+        for (size_t i = offset; i < end; ++i) {
+            if (i != offset && !((i - offset) % 100) && qore_check_cancel(xsink, "slicing columnar list column")) {
+                return QoreValue();
+            }
+            rv->push(source->retrieveEntry(i).refSelf(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return rv.release();
+    }
+
+    if (value.getType() == NT_BUFFER) {
+        return value.get<const QoreBufferNode>()->view(offset, count);
+    }
+
+    assert(false);
+    return QoreValue();
+}
+
 static bool columnar_value_is_null(QoreValue value, size_t index) {
     switch (value.getType()) {
         case NT_LIST:
@@ -884,6 +909,33 @@ QoreColumnarResult* QoreColumnarResult::filter(QoreValue mask, ExceptionSink* xs
         }
         const Column& column = columns[i];
         ValueHolder data(columnar_filter_value(column.data, mask, selected, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->addColumn(column.name.c_str(), data.release(), column.column_type, column.buffer_type,
+                column.nullable, column.native_type.c_str(), xsink)) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+QoreColumnarResult* QoreColumnarResult::slice(size_t offset, size_t count, ExceptionSink* xsink) const {
+    assert(xsink);
+    if (offset > row_count || count > row_count - offset) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR",
+            "slice offset " QLLD " count " QLLD " out of range for " QLLD " rows",
+            static_cast<int64>(offset), static_cast<int64>(count), static_cast<int64>(row_count));
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreColumnarResult> rv(new QoreColumnarResult, xsink);
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "slicing columnar result")) {
+            return nullptr;
+        }
+        const Column& column = columns[i];
+        ValueHolder data(columnar_slice_value(column.data, offset, count, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }

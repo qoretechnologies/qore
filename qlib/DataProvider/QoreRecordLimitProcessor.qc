@@ -96,9 +96,45 @@ public class QoreRecordLimitProcessor inherits AbstractDataProvider {
         return ++count <= limit ? record : NOTHING;
     }
 
-    #! Indicates that this processor does not support the bulk API
+    #! Processes an explicitly-shaped block without materializing rows
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR", "QoreRecordLimitProcessor: not configured; provide the 'limit' option";
+        }
+
+        int record_count = AbstractDataProcessor::shapeRecordCount(records, shape);
+        int remaining = limit - count;
+        count += record_count;
+        if (remaining <= 0 || record_count <= 0) {
+            return;
+        }
+
+        int take = record_count < remaining ? record_count : remaining;
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return records;
+            case DataProviderShape::DataFrameBlock:
+                return records.head(take);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return records.slice(offset: 0, count: take);
+                }
+                return AbstractDataProcessor::sliceColumnBlock(records, 0, take);
+            case DataProviderShape::HashOfLists:
+                return AbstractDataProcessor::sliceColumnBlock(records, 0, take);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Processes hash-of-lists blocks without row materialization
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        return processRecordsShapeImpl(records, DataProviderShape::HashOfLists);
+    }
+
+    #! Indicates that this processor supports the bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the input type as the output type (record-limit does not change record structure)
@@ -116,6 +152,17 @@ public class QoreRecordLimitProcessor inherits AbstractDataProvider {
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_FILTER;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
     }
 }
 }

@@ -412,6 +412,12 @@ sub invalid_dataframe_api() {
         # Default head/tail (5 rows, but only 5 available)
         auto h5 = df.head();
         assertEq(5, h5.numRows(), "head() default 5");
+
+        DataFrame::DataFrame dense_df({"v": new buffer<int64>((1, 2, 3, 4, 5))});
+        assertEq((1, 2), dense_df.head(2).getColumnBuffer("v").toList(),
+            "head() preserves dense buffer-backed columns");
+        assertEq((2, 3, 4), dense_df.slice(1, 4).getColumnBuffer("v").toList(),
+            "slice() preserves dense buffer-backed columns");
     }
 
     nullHandlingTest() {
@@ -1077,6 +1083,8 @@ sub invalid_dataframe_api() {
             "ColumnarResult values are detected as BufferColumns shape");
         assertEq(4, AbstractDataProcessor::shapeRecordCount(columns, DataProviderShape::BufferColumns),
             "BufferColumns record count uses ColumnarResult rows");
+        assertEq((2, 3), columns.slice(offset: 1, count: 2).getColumn("id").toList(),
+            "ColumnarResult::slice preserves dense contiguous row ranges");
 
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),
@@ -1167,6 +1175,29 @@ sub invalid_dataframe_api() {
             "BufferColumns group-by computes dense sums");
         assertEq(("Alice", "Carol"), grouped_df.getColumn("first_name"),
             "BufferColumns group-by reads list columns without row materialization");
+
+        QoreSelectFieldsProcessor selector({"fields": ("customer=name", "id", "amount")});
+        auto selected_columns = selector.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(selected_columns),
+            "select-fields processor preserves ColumnarResult BufferColumns shape");
+        assertEq(("customer", "id", "amount"), selected_columns.columnNames(),
+            "select-fields processor applies column renames");
+        assertEq((1, 2, 3, 4), selected_columns.getColumn("id").toList(),
+            "select-fields processor keeps dense selected columns");
+
+        QoreRemoveFieldsProcessor remover({"fields": ("optional_id", "name")});
+        auto removed_columns = remover.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(("id", "segment", "amount"), removed_columns.columnNames(),
+            "remove-fields processor removes ColumnarResult columns without row materialization");
+        assertEq((90.0, 220.0, 180.0, 125.0), removed_columns.getColumn("amount").toList(),
+            "remove-fields processor keeps dense retained columns");
+
+        QoreRecordLimitProcessor limiter({"limit": 2});
+        auto limited_columns = limiter.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(limited_columns),
+            "record-limit processor preserves ColumnarResult BufferColumns shape");
+        assertEq((1, 2), limited_columns.getColumn("id").toList(),
+            "record-limit processor slices ColumnarResult rows directly");
 
         hash<DataProviderExpression> or_expr = <DataProviderExpression>{
             "exp": "||",
