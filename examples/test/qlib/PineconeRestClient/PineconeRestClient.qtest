@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/PineconeRestClient.qm
+
+%exec-class PineconeRestClientTest
+
+public class PineconeRestClientTest inherits QUnit::Test {
+    constructor() : Test("PineconeRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",     \connectionSchemeTest());
+        addTestCase("vector-store factory registered",  \factoryTest());
+        addTestCase("constructor validates required config",
+            \constructorValidationTest());
+        addTestCase("Api-Key header injected (not Bearer)",
+            \apikeyMappingTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("pinecone");
+        assertEq("Pinecone Vector DB Connection", info.display_name);
+        assertTrue(info.schemes.pinecone);
+        assertEq("apikey", info.required_options);
+    }
+
+    private factoryTest() {
+        QoreRagUtils::AbstractVectorStoreFactory f =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx("pinecone");
+        assertEq("pinecone", f.getType());
+        assertEq("Pinecone vector database", f.getDisplayName());
+    }
+
+    private constructorValidationTest() {
+        # missing collection
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::PineconeVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "pinecone",
+                "options": {"api_key": "k"},
+            });
+        });
+        # missing api_key
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::PineconeVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "pinecone",
+                "collection": "my-index",
+            });
+        });
+        # valid config — constructor doesn't make network calls
+        QoreRagUtils::PineconeVectorStore store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pinecone",
+            "collection": "my-index",
+            "options": {
+                "api_key": "k",
+                "namespace": "ns1",
+                "dimension": 1536,
+                "index_host": "my-index-abc.svc.pinecone.io",
+            },
+        });
+        assertEq("my-index", store.getCollection());
+        assertEq(1536, store.getDimension());
+    }
+
+    private apikeyMappingTest() {
+        # Pinecone uses Api-Key header, NOT Authorization: Bearer
+        hash<auto> opts = PineconeRestClient::PineconeRestClientBase::getOptions({
+            "apikey": "my-pinecone-key",
+        });
+        # 'token' should NOT be set (no Bearer mapping)
+        assertEq(NOTHING, opts.token);
+        # 'apikey' was consumed
+        assertEq(NOTHING, opts.apikey);
+        # Api-Key header injected via default_headers
+        assertEq("my-pinecone-key", opts.default_headers."Api-Key");
+    }
+}

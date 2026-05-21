@@ -236,6 +236,7 @@ public class DataProvider {
             "cohere": "CohereDataProvider",
             "mistral": "MistralDataProvider",
             "chroma": "ChromaDataProvider",
+            "pinecone": "PineconeDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",
