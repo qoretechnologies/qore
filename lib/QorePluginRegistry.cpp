@@ -2864,3 +2864,18 @@ extern "C" uint64_t qore_rt_plugin_dense_buffer_binary_values(uint32_t global_op
     return dispatchResolvedDenseBufferBinary(op, result.mutable_data, result.size, lhs.const_data, lhs.size,
         lhs.stride, rhs.const_data, rhs.size, rhs.stride, xsink);
 }
+
+extern "C" int64_t qore_rt_guard_plugin_type_profiled(uint64_t value_bits, const QoreTypeInfo* type_info,
+        const char* module_name, uint32_t local_type_id) {
+    QoreValue value = valueFromBits(value_bits);
+    if (value.getType() == NT_PLUGIN_VALUE && module_name) {
+        const QorePluginValueNode* plugin_value = static_cast<const QorePluginValueNode*>(value.getInternalNode());
+        const QorePluginResolvedTypeInfo& plugin_type = plugin_value->getPluginType();
+        if (plugin_type.local_type_id == local_type_id
+                && plugin_type.type_info == type_info
+                && plugin_type.module_name == module_name) {
+            return 1;
+        }
+    }
+    return QoreTypeInfo::runtimeAcceptsValue(type_info, value) != QTI_NOT_EQUAL ? 1 : 0;
+}

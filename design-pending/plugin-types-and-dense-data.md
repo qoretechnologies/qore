@@ -2721,7 +2721,14 @@ End-to-end zero-conversion typed pipelines for analytics workloads.
 
 ### Phase 7 — declarative-metadata-driven optimizations (ongoing)
 
-- Profile-guided specialization for plugin types.
+- [x] Profile-guided specialization for plugin types. Guard profiles now
+  retain stable `(module_name, local_type_id, type_info)` keys for
+  `NT_PLUGIN_VALUE` observations and `GuardType` LLVM lowering consumes a
+  plugin-dominant profile by emitting `qore_rt_guard_plugin_type_profiled()`.
+  The profiled helper exact-matches the hot plugin value descriptor on the
+  fast path and falls back to the normal `runtimeAcceptsValue()` semantics
+  for all non-matching or non-plugin values, so broad guards such as `auto`
+  and ordinary deopt behavior remain type-safe.
 - [x] Row-mask predicate composition as the first lazy-expression fusion
   surface. Descriptor-registered `bit_and`, `bit_or`, `bit_xor`, and
   `bit_not` operations are now routed through Qore's `&`, `|`, `^`, and `~`

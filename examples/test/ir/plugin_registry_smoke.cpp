@@ -22,11 +22,14 @@
 #include <qore/QorePluginType.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreIRLowering.h>
+#include <qore/intern/QoreIRToLLVM.h>
 #include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QorePluginRegistry.h>
 #include <qore/intern/QoreParseHashNode.h>
 #include <qore/intern/QorePlusOperatorNode.h>
 #include <qore/intern/QoreSerializable.h>
+
+#include <llvm/Support/raw_ostream.h>
 
 static void smokeIncref(uint64_t) noexcept {
 }
@@ -413,6 +416,49 @@ static bool checkLoweringCallbacks() {
     return true;
 }
 
+static bool checkProfiledPluginGuardLowering() {
+    QoreIRFunction func("plugin-profiled-guard-smoke");
+    QoreIRBuilder builder(&func);
+    QoreIRBasicBlock* entry = func.createBlock("entry");
+    QoreIRBasicBlock* deopt = func.createBlock("deopt");
+    builder.setBlock(entry);
+    auto* value = builder.createConstInt(7);
+    QoreIRGuardInstruction* guard = builder.createGuardType(value->result, autoTypeInfo, deopt);
+    builder.createReturn(value->result);
+    builder.setBlock(deopt);
+    builder.createReturnNothing();
+
+    func.initGuardProfiles();
+    for (int i = 0; i < 64; ++i) {
+        func.guard_profiles[guard->guard_id].recordPluginTypeInfo("plugin-smoke", 0, autoTypeInfo);
+    }
+
+    std::string verify_error;
+    if (!QoreIRVerifier::verify(func, verify_error)) {
+        std::cerr << "profiled plugin guard IR verify failed: " << verify_error << "\n";
+        return false;
+    }
+
+    llvm::LLVMContext llvm_context;
+    llvm::Module module("plugin-profiled-guard-smoke-module", llvm_context);
+    QoreIRToLLVM lowering(llvm_context);
+    std::string lowering_error;
+    if (!lowering.lowerFunction(func, module, lowering_error)) {
+        std::cerr << "profiled plugin guard LLVM lowering failed: " << lowering_error << "\n";
+        return false;
+    }
+
+    std::string ir;
+    llvm::raw_string_ostream os(ir);
+    module.print(os, nullptr);
+    os.flush();
+    if (ir.find("qore_rt_guard_plugin_type_profiled") == std::string::npos) {
+        std::cerr << "profiled plugin guard helper was not emitted\n";
+        return false;
+    }
+    return true;
+}
+
 static bool checkRegistrationAndIntrospection() {
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
@@ -439,6 +485,9 @@ static bool checkRegistrationAndIntrospection() {
     }
 
     if (!checkLoweringCallbacks()) {
+        return false;
+    }
+    if (!checkProfiledPluginGuardLowering()) {
         return false;
     }
 
@@ -718,6 +767,14 @@ static bool checkRegistrationAndIntrospection() {
             || plugin_profile.getPluginTypeCount("plugin-smoke", 0) != 64
             || plugin_profile.dominantType() != NT_ALL) {
         std::cerr << "plugin value TypeProfile smoke checks failed\n";
+        return false;
+    }
+    const uint64_t plugin_value_qore_bits = smokeBitsFromValue(*plugin_value);
+    if (qore_rt_guard_plugin_type_profiled(plugin_value_qore_bits, autoTypeInfo, "plugin-smoke", 0) != 1
+            || qore_rt_guard_plugin_type_profiled(plugin_value_qore_bits, bigIntTypeInfo, "plugin-smoke", 0) != 0
+            || qore_rt_guard_plugin_type_profiled(smokeBitsFromValue(QoreValue(static_cast<int64>(7))),
+                autoTypeInfo, "plugin-smoke", 0) != 1) {
+        std::cerr << "profiled plugin guard smoke checks failed\n";
         return false;
     }
 

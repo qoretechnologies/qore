@@ -373,6 +373,9 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // Guard type helper: (i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_guard_type",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    // Profile-guided plugin guard helper: (i64, ptr, ptr, i32) -> i64
+    module.getOrInsertFunction("qore_rt_guard_plugin_type_profiled",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, i32_type}, false));
 
     // InstanceOf helper: (i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_instanceof",
@@ -15242,15 +15245,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                     reinterpret_cast<uint64_t>(ginst->type_info));
             llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_guard_type",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            llvm::Value* guard_result = builder->CreateCall(helper, {boxed, ti_as_ptr});
+            bool profile_hot = false;
+            llvm::Value* guard_result = nullptr;
+            if (current_ir_func && ginst->guard_id < current_ir_func->guard_profile_count) {
+                const TypeProfile& prof = current_ir_func->guard_profiles[ginst->guard_id];
+                if (prof.total() >= 50) {
+                    QoreIRTypeProfileKey key = prof.dominantKey();
+                    if (key.kind == QoreIRTypeProfileKind::PluginType
+                            && !key.plugin_module_name.empty()
+                            && key.type_info) {
+                        profile_hot = true;
+                        llvm::Value* module_name = builder->CreateGlobalStringPtr(key.plugin_module_name);
+                        llvm::Value* local_type_id = llvm::ConstantInt::get(i32_type,
+                            static_cast<uint32_t>(key.plugin_local_type_id));
+                        auto helper = module.getOrInsertFunction("qore_rt_guard_plugin_type_profiled",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type}, false));
+                        guard_result = builder->CreateCall(helper,
+                            {boxed, ti_as_ptr, module_name, local_type_id});
+                    }
+                }
+            }
+            if (!guard_result) {
+                auto helper = module.getOrInsertFunction("qore_rt_guard_type",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                guard_result = builder->CreateCall(helper, {boxed, ti_as_ptr});
+            }
             llvm::Value* guard_pass = builder->CreateICmpNE(guard_result,
                     llvm::ConstantInt::get(i64_type, 0));
             if (ginst->deopt_target) {
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
                 llvm::BasicBlock* deopt = getOrCreateJitDeoptBlock(module, llvm_func);
-                builder->CreateCondBr(guard_pass, cont, deopt);
+                if (profile_hot) {
+                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
+                    builder->CreateCondBr(guard_pass, cont, deopt, weights);
+                } else {
+                    builder->CreateCondBr(guard_pass, cont, deopt);
+                }
                 builder->SetInsertPoint(cont);
             }
             if (inst->result.isValid()) {

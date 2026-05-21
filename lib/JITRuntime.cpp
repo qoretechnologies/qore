@@ -175,6 +175,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_plugin_construct_args", reinterpret_cast<void*>(&qore_rt_plugin_construct_args) },
     { "qore_rt_plugin_dense_buffer_unary", reinterpret_cast<void*>(&qore_rt_plugin_dense_buffer_unary) },
     { "qore_rt_plugin_dense_buffer_binary", reinterpret_cast<void*>(&qore_rt_plugin_dense_buffer_binary) },
+    { "qore_rt_guard_plugin_type_profiled", reinterpret_cast<void*>(&qore_rt_guard_plugin_type_profiled) },
     { "qore_rt_expr_op", reinterpret_cast<void*>(&qore_rt_expr_op) },
     { "qore_rt_comparison_op", reinterpret_cast<void*>(&qore_rt_comparison_op) },
     { "qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op) },

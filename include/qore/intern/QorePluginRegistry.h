@@ -200,6 +200,8 @@ DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_unary_values(uint32_t global_oper
     uint64_t result_buffer_bits, uint64_t value_bits, ExceptionSink* xsink);
 DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_binary_values(uint32_t global_operation_id,
     uint64_t result_buffer_bits, uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
+DLLEXPORT int64_t qore_rt_guard_plugin_type_profiled(uint64_t value_bits, const QoreTypeInfo* type_info,
+    const char* module_name, uint32_t local_type_id);
 }
 
 #endif
