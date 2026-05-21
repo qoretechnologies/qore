@@ -614,6 +614,29 @@ public class AbstractVectorStoreFactory {
     }
 }
 
+#! Abstract factory for a chunker
+public class AbstractChunkerFactory {
+    #! Returns the strategy identifier (e.g. \c "structured", \c "llama-parse")
+    /** Matches @ref ChunkerConfig::strategy for registry lookup.
+    */
+    abstract string getStrategy();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a chunker instance from a @ref ChunkerConfig
+    abstract AbstractChunker create(hash<ChunkerConfig> config);
+
+    #! Returns static information about the chunker this factory creates
+    hash<RagProviderInfo> getInfo() {
+        return <RagProviderInfo>{
+            "type": getStrategy(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
 #! Central registry of RAG provider factories (embedders, rerankers, vector stores)
 /** Mirrors the FactoryMap pattern from
     @ref DataProvider::DataProvider::registerFactory() and the LLM-side
@@ -668,12 +691,23 @@ public class RagProviderRegistry {
             "weaviate":    "WeaviateRestClient",
             "milvus":      "MilvusRestClient",
         };
+
+        #! Map of chunker strategy names to providing modules
+        /** Each entry maps a strategy string to the Qore module that
+            supplies the matching factory.  Additional chunkers can be
+            registered at runtime via @ref registerChunkerFactory().
+        */
+        const ChunkerModuleMap = {
+            "structured": "QoreRagUtils",
+            "fixed":      "QoreRagUtils",
+        };
     }
 
     private {
         static hash<string, AbstractEmbedderFactory> embedder_cache = {};
         static hash<string, AbstractRerankerFactory> reranker_cache = {};
         static hash<string, AbstractVectorStoreFactory> vector_store_cache = {};
+        static hash<string, AbstractChunkerFactory> chunker_cache = {};
         static Mutex registry_lock();
     }
 
@@ -720,6 +754,23 @@ public class RagProviderRegistry {
         vector_store_cache{type} = factory;
     }
 
+    #! Registers a chunker factory
+    /** @param factory the new chunker factory
+
+        @throw RAG-CONFIG-ERROR a factory for the same strategy is already registered
+    */
+    static registerChunkerFactory(AbstractChunkerFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string type = factory.getStrategy();
+        if (chunker_cache{type}) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("chunker factory for %y has already been registered",
+                    type);
+        }
+        chunker_cache{type} = factory;
+    }
+
     #! Removes an embedder factory (intended for tests)
     static deregisterEmbedderFactory(string type) {
         registry_lock.lock();
@@ -739,6 +790,13 @@ public class RagProviderRegistry {
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove vector_store_cache{type};
+    }
+
+    #! Removes a chunker factory (intended for tests)
+    static deregisterChunkerFactory(string type) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove chunker_cache{type};
     }
 
     #! Returns the embedder factory for the given backend, lazy-loading its module if needed
@@ -798,6 +856,25 @@ public class RagProviderRegistry {
         return vector_store_cache{type};
     }
 
+    #! Returns the chunker factory for the given strategy, lazy-loading its module if needed
+    static *AbstractChunkerFactory getChunkerFactory(string type) {
+        if (chunker_cache{type}) {
+            return chunker_cache{type};
+        }
+        *string module_name = ChunkerModuleMap{type};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for chunker %y: %s",
+                    module_name, type, ex.desc), ex;
+        }
+        return chunker_cache{type};
+    }
+
     #! Returns the embedder factory or throws an exception
     static AbstractEmbedderFactory getEmbedderFactoryEx(string type) {
         *AbstractEmbedderFactory f = getEmbedderFactory(type);
@@ -829,6 +906,19 @@ public class RagProviderRegistry {
             throw "RAG-CONFIG-ERROR",
                 sprintf("vector-store backend %y is unknown; registered "
                     "backends: %y", type, keys vector_store_cache);
+        }
+        return f;
+    }
+
+    #! Returns the chunker factory or throws an exception
+    static AbstractChunkerFactory getChunkerFactoryEx(string type) {
+        *AbstractChunkerFactory f = getChunkerFactory(type);
+        if (!f) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("chunker strategy %y is unknown; registered "
+                    "strategies: %y; strategies available via lazy module "
+                    "load: %y",
+                    type, keys chunker_cache, keys ChunkerModuleMap);
         }
         return f;
     }
@@ -870,6 +960,25 @@ public class RagProviderRegistry {
         return getVectorStoreFactoryEx(config.backend).create(config);
     }
 
+    #! Constructs a chunker for the given @ref ChunkerConfig
+    /** Convenience wrapper that resolves the strategy via
+        @ref ChunkerConfig::strategy, looks up the factory (lazy-loading
+        its module if needed), and calls its \c create() method.
+
+        @param config the chunker configuration
+
+        @return a concrete @ref AbstractChunker
+
+        @throw RAG-CONFIG-ERROR @ref ChunkerConfig::strategy is missing or unknown
+    */
+    static AbstractChunker createChunker(hash<ChunkerConfig> config) {
+        if (!config.strategy.val()) {
+            throw "RAG-CONFIG-ERROR",
+                "ChunkerConfig.strategy is required for factory lookup";
+        }
+        return getChunkerFactoryEx(config.strategy).create(config);
+    }
+
     #! Returns the list of currently-registered embedder backend strings
     static list<string> knownEmbedderBackends() {
         return keys embedder_cache;
@@ -883,6 +992,11 @@ public class RagProviderRegistry {
     #! Returns the list of currently-registered vector-store backend strings
     static list<string> knownVectorStoreBackends() {
         return keys vector_store_cache;
+    }
+
+    #! Returns the list of currently-registered chunker strategy strings
+    static list<string> knownChunkerStrategies() {
+        return keys chunker_cache;
     }
 }
 

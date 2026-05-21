@@ -55,6 +55,10 @@ module QoreRagUtils {
             new HttpGatewayRerankerFactory());
         RagProviderRegistry::registerVectorStoreFactory(
             new PgVectorRagProviderFactory());
+        RagProviderRegistry::registerChunkerFactory(
+            new StructuredChunkerFactory());
+        RagProviderRegistry::registerChunkerFactory(
+            new FixedChunkerFactory());
     };
 }
 

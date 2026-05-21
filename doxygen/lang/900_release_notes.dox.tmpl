@@ -2366,6 +2366,7 @@ cargo install tree-sitter-cli@0.26.5
       - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
       - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c BgeM3FastApiEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
       - adds \c PgVectorRagProvider — vector-store backend `pgvector` wrapping any \c AbstractDatasource pointing at a PostgreSQL database with the [pgvector](https://github.com/pgvector/pgvector) extension; supports cosine, L2, and inner-product distance operators with pass-through SQL filtering
+      - adds the chunker factory registry: \c AbstractChunkerFactory + \c ChunkerModuleMap + \c registerChunkerFactory() / \c getChunkerFactoryEx() / \c createChunker() / \c knownChunkerStrategies() on \c RagProviderRegistry, parallel to the existing embedder/reranker/vector-store registries; built-in \c StructuredChunkerFactory and \c FixedChunkerFactory registered automatically by \c QoreRagUtils so chunkers are now constructible via \c ChunkerConfig.strategy lookup (enables lazy-loaded ingestion chunkers shipped by other modules)
 
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore

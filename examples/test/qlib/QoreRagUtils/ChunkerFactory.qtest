@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+
+%exec-class ChunkerFactoryTest
+
+#! Stub chunker used to exercise the factory registry without depending on
+#! the live chunker implementations.
+class FakeChunker inherits QoreRagUtils::AbstractChunker {
+    public {
+        string strategy_name;
+    }
+
+    constructor(string s) {
+        strategy_name = s;
+    }
+
+    string getStrategy() {
+        return strategy_name;
+    }
+
+    list<hash<QoreRagUtils::ChunkInfo>> chunk(string content, *hash<auto> metadata) {
+        return (<QoreRagUtils::ChunkInfo>{
+            "index": 0,
+            "content": content,
+            "token_count": approximateTokens(content),
+            "metadata": metadata,
+        },);
+    }
+}
+
+class FakeChunkerFactory inherits QoreRagUtils::AbstractChunkerFactory {
+    public {
+        string s;
+    }
+
+    constructor(string s) {
+        self.s = s;
+    }
+
+    string getStrategy() {
+        return s;
+    }
+
+    string getDisplayName() {
+        return sprintf("Fake chunker %s", s);
+    }
+
+    QoreRagUtils::AbstractChunker create(hash<QoreRagUtils::ChunkerConfig> config) {
+        return new FakeChunker(s);
+    }
+}
+
+public class ChunkerFactoryTest inherits QUnit::Test {
+    constructor() : Test("ChunkerFactory Test", "1.0") {
+        addTestCase("built-in factories registered", \builtInFactoriesTest());
+        addTestCase("getChunkerFactoryEx throws on unknown",
+            \unknownStrategyTest());
+        addTestCase("createChunker resolves + constructs", \createChunkerTest());
+        addTestCase("register / deregister round-trip", \roundTripTest());
+        addTestCase("duplicate registration throws",   \duplicateRegistrationTest());
+        addTestCase("createChunker requires strategy", \missingStrategyTest());
+        addTestCase("factory getInfo reports module_name",
+            \factoryInfoTest());
+        set_return_value(main());
+    }
+
+    private builtInFactoriesTest() {
+        list<string> known =
+            QoreRagUtils::RagProviderRegistry::knownChunkerStrategies();
+        assertTrue(inlist("structured", known));
+        assertTrue(inlist("fixed", known));
+
+        QoreRagUtils::AbstractChunkerFactory s =
+            QoreRagUtils::RagProviderRegistry::getChunkerFactoryEx("structured");
+        assertEq("structured", s.getStrategy());
+        assertEq("Paragraph-aware structured chunker", s.getDisplayName());
+
+        QoreRagUtils::AbstractChunkerFactory f =
+            QoreRagUtils::RagProviderRegistry::getChunkerFactoryEx("fixed");
+        assertEq("fixed", f.getStrategy());
+    }
+
+    private unknownStrategyTest() {
+        assertThrows("RAG-CONFIG-ERROR", sub () {
+            QoreRagUtils::RagProviderRegistry::getChunkerFactoryEx("bogus-strategy");
+        });
+        # non-throwing form returns NOTHING
+        assertEq(NOTHING,
+            QoreRagUtils::RagProviderRegistry::getChunkerFactory("bogus-strategy"));
+    }
+
+    private createChunkerTest() {
+        QoreRagUtils::AbstractChunker c =
+            QoreRagUtils::RagProviderRegistry::createChunker(
+                <QoreRagUtils::ChunkerConfig>{
+                    "strategy": "structured",
+                    "target_tokens": 64,
+                });
+        assertEq("structured", c.getStrategy());
+
+        # The constructed chunker actually works
+        list<hash<QoreRagUtils::ChunkInfo>> chunks = c.chunk(
+            "First paragraph.\n\nSecond paragraph here.\n\nThird.");
+        assertTrue(chunks.size() >= 1);
+        # Indices are 0-based ascending
+        foreach int i in (xrange(chunks.size())) {
+            assertEq(i, chunks[i].index);
+        }
+    }
+
+    private roundTripTest() {
+        FakeChunkerFactory ff("test-strategy-xyz");
+        QoreRagUtils::RagProviderRegistry::registerChunkerFactory(ff);
+        on_exit {
+            QoreRagUtils::RagProviderRegistry::deregisterChunkerFactory(
+                "test-strategy-xyz");
+        }
+
+        # Now resolvable
+        QoreRagUtils::AbstractChunkerFactory f =
+            QoreRagUtils::RagProviderRegistry::getChunkerFactoryEx("test-strategy-xyz");
+        assertEq("test-strategy-xyz", f.getStrategy());
+        assertEq("Fake chunker test-strategy-xyz", f.getDisplayName());
+
+        # createChunker dispatches to it
+        QoreRagUtils::AbstractChunker c =
+            QoreRagUtils::RagProviderRegistry::createChunker(
+                <QoreRagUtils::ChunkerConfig>{"strategy": "test-strategy-xyz"});
+        assertEq("test-strategy-xyz", c.getStrategy());
+    }
+
+    private duplicateRegistrationTest() {
+        FakeChunkerFactory ff("dup-test");
+        QoreRagUtils::RagProviderRegistry::registerChunkerFactory(ff);
+        on_exit {
+            QoreRagUtils::RagProviderRegistry::deregisterChunkerFactory("dup-test");
+        }
+
+        assertThrows("RAG-CONFIG-ERROR", sub () {
+            QoreRagUtils::RagProviderRegistry::registerChunkerFactory(
+                new FakeChunkerFactory("dup-test"));
+        });
+    }
+
+    private missingStrategyTest() {
+        assertThrows("RAG-CONFIG-ERROR", sub () {
+            QoreRagUtils::RagProviderRegistry::createChunker(
+                <QoreRagUtils::ChunkerConfig>{"strategy": ""});
+        });
+    }
+
+    private factoryInfoTest() {
+        QoreRagUtils::AbstractChunkerFactory f =
+            QoreRagUtils::RagProviderRegistry::getChunkerFactoryEx("structured");
+        hash<QoreRagUtils::RagProviderInfo> info = f.getInfo();
+        assertEq("structured", info.type);
+        assertEq("Paragraph-aware structured chunker", info.display_name);
+        assertEq("QoreRagUtils", info.module_name);
+    }
+}
