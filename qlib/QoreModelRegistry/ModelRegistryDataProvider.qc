@@ -142,68 +142,22 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
     */
     constructor(*hash<auto> options) {
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        AbstractModelRegistryBackend backend = createBackend(copts);
-        registry = new ModelRegistry({"backend": backend});
+        # qorus#244: backend dispatch now lives on ModelRegistry itself so
+        # every registry consumer (this provider, QoreRegistryModelProcessor,
+        # direct callers) builds backends through one code path.
+        try {
+            registry = new ModelRegistry(copts);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ML-REGISTRY-ERROR") {
+                throw "CONSTRUCTOR-ERROR", ex.desc;
+            }
+            rethrow;
+        }
     }
 
     #! Creates from an existing registry
     constructor(ModelRegistry registry) {
         self.registry = registry;
-    }
-
-    #! Private: creates a backend from validated constructor options
-    private static AbstractModelRegistryBackend createBackend(hash<auto> copts) {
-        # Pre-constructed backend takes priority
-        if (copts.backend instanceof AbstractModelRegistryBackend) {
-            return copts.backend;
-        }
-
-        string backend_type = copts.backend_type ?? "filesystem";
-
-        switch (backend_type) {
-            case "filesystem": {
-                if (!copts.path.val()) {
-                    throw "CONSTRUCTOR-ERROR",
-                        "option 'path' is required when backend_type is 'filesystem'";
-                }
-                return new FilesystemBackend(copts.path, copts.tenant_id);
-            }
-
-%ifndef NoSqlUtil
-            case "database": {
-                if (!exists copts.datasource) {
-                    throw "CONSTRUCTOR-ERROR",
-                        "option 'datasource' is required when backend_type is 'database'";
-                }
-                hash<auto> db_opts;
-                if (copts.table_prefix.val()) {
-                    db_opts.table_prefix = copts.table_prefix;
-                }
-                if (copts.tenant_id.val()) {
-                    db_opts.tenant_id = copts.tenant_id;
-                }
-                return new DatabaseBackend(copts.datasource, db_opts);
-            }
-%endif
-
-            case "rest": {
-                if (!exists copts.rest_client) {
-                    throw "CONSTRUCTOR-ERROR",
-                        "option 'rest_client' is required when backend_type is 'rest'";
-                }
-                if (!copts.rest_base_path.val()) {
-                    throw "CONSTRUCTOR-ERROR",
-                        "option 'rest_base_path' is required when backend_type is 'rest'";
-                }
-                return new RestBackend(copts.rest_client, copts.rest_base_path,
-                    copts.tenant_id, copts.rest_options);
-            }
-
-            default:
-                throw "CONSTRUCTOR-ERROR",
-                    sprintf("unsupported backend_type '%s'; valid values: %y",
-                        backend_type, BackendTypes);
-        }
     }
 
     string getName() {
