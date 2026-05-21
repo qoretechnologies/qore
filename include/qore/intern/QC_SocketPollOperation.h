@@ -867,12 +867,7 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
     DLLLOCAL virtual QoreValue getOutput() const override;
 
-    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        // Clear buffers to prevent memory accumulation on abort
-        send_data.discard();
-        header_output = nullptr;
-        SocketPollSocketOperationBase::abort(xsink);
-    }
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override;
 
 private:
     enum class Phase { Sending, Idle, ReadingHeader, Complete, Timeout, Closed, Error };
