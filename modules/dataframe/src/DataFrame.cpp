@@ -107,6 +107,26 @@ static QoreBufferElementType bufferTypeFromDataFrameType(ColumnType type) {
     }
 }
 
+static ColumnType dataFrameTypeFromColumnarType(QoreColumnarColumnType type) {
+    switch (type) {
+        case QoreColumnarColumnType::Bool:
+            return ColumnType::BOOL;
+        case QoreColumnarColumnType::Int:
+            return ColumnType::INT64;
+        case QoreColumnarColumnType::Float:
+        case QoreColumnarColumnType::Number:
+            return ColumnType::FLOAT64;
+        case QoreColumnarColumnType::Date:
+            return ColumnType::DATE;
+        case QoreColumnarColumnType::String:
+        case QoreColumnarColumnType::Binary:
+            return ColumnType::STRING;
+        case QoreColumnarColumnType::Auto:
+        default:
+            return ColumnType::AUTO;
+    }
+}
+
 }
 
 QoreDataFrame::QoreDataFrame() {
@@ -286,6 +306,68 @@ QoreDataFrame* QoreDataFrame::fromColumns(const QoreHashNode* columns,
     }
 
     df->n_rows = expected_rows >= 0 ? expected_rows : 0;
+    return df;
+}
+
+QoreDataFrame* QoreDataFrame::fromColumnarResult(const QoreColumnarResult* result,
+        ExceptionSink* xsink) {
+    if (qore_check_cancel(xsink, "building DataFrame from columnar result")) {
+        return nullptr;
+    }
+    if (!result) {
+        return new QoreDataFrame();
+    }
+
+    auto* df = new QoreDataFrame();
+    df->n_rows = static_cast<int64_t>(result->numRows());
+
+    for (size_t i = 0; i < result->numColumns(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame from columnar result")) {
+            delete df;
+            return nullptr;
+        }
+
+        const QoreColumnarResult::Column* src = result->getColumn(i);
+        assert(src);
+
+        Column col;
+        col.name = src->name;
+
+        switch (src->data.getType()) {
+            case NT_LIST: {
+                const QoreListNode* values = src->data.get<const QoreListNode>();
+                ColumnType type = dataFrameTypeFromColumnarType(src->column_type);
+                col.data = type == ColumnType::AUTO
+                    ? buildColumnDataAuto(values, xsink) : buildColumnData(values, type, xsink);
+                break;
+            }
+            case NT_BUFFER:
+                col.data = buildColumnDataFromBuffer(src->data.get<const QoreBufferNode>(), xsink);
+                break;
+            default:
+                xsink->raiseException("DATAFRAME-ERROR",
+                    "ColumnarResult column '%s' has unsupported storage type '%s'; expected list or buffer",
+                    src->name.c_str(), src->data.getTypeName());
+                delete df;
+                return nullptr;
+        }
+
+        if (*xsink) {
+            delete df;
+            return nullptr;
+        }
+        if (col.data && col.data->n_rows != df->n_rows) {
+            xsink->raiseException("DATAFRAME-ERROR",
+                "ColumnarResult column '%s' has " QLLD " rows, expected " QLLD,
+                src->name.c_str(), col.data->n_rows, df->n_rows);
+            delete df;
+            return nullptr;
+        }
+
+        df->col_index[col.name] = df->columns.size();
+        df->columns.push_back(std::move(col));
+    }
+
     return df;
 }
 

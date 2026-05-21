@@ -13,6 +13,7 @@
 #include "QC_GroupedDataFrame.h"
 #include "df_csv.h"
 
+#include <qore/DBI.h>
 #include <qore/QoreColumnarResult.h>
 
 #include <algorithm>
@@ -907,9 +908,10 @@ auto DataFrame::toColumnarResult() [flags=RET_VALUE_ONLY] {
 }
 
 //! Creates a DataFrame from a SQL ColumnarResult
-/** This method preserves dense \c buffer<T> columns returned by
-    ColumnarResult::toColumnHash(), so SQL-to-DataFrame flows can avoid
-    materializing primitive columns as lists.
+/** This method preserves dense \c buffer<T> columns stored in native
+    ColumnarResult objects, so SQL-to-DataFrame flows can avoid materializing
+    primitive columns as lists. ColumnarResult-compatible objects are still
+    accepted through their \c toColumnHash() method.
 
     @param result a \c Qore::SQL::ColumnarResult object
     @return a new DataFrame
@@ -929,25 +931,35 @@ static DataFrame DataFrame::fromColumnarResult(auto result) [flags=RET_VALUE_ONL
     }
 
     QoreObject* result_obj = result.get<QoreObject>();
-    if (!qdfHasMethod(result_obj, "toColumnHash")) {
-        xsink->raiseException("DATAFRAME-ERROR",
-            "DataFrame::fromColumnarResult() expects a ColumnarResult-compatible object, got class '%s'",
-            result_obj->getClassName());
-        return QoreValue();
-    }
-
-    ValueHolder columns(result_obj->evalMethod("toColumnHash", nullptr, xsink), xsink);
+    ReferenceHolder<QoreColumnarResult> result_data(qore_columnar_result_try_from_object(result_obj, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
-    if (columns->getType() != NT_HASH) {
-        xsink->raiseException("DATAFRAME-ERROR",
-            "ColumnarResult::toColumnHash() returned type '%s'; expected 'hash'",
-            columns->getTypeName());
-        return QoreValue();
-    }
 
-    QoreDataFrame* dataframe = QoreDataFrame::fromColumns(columns->get<const QoreHashNode>(), xsink);
+    QoreDataFrame* dataframe = nullptr;
+    if (result_data) {
+        dataframe = QoreDataFrame::fromColumnarResult(*result_data, xsink);
+    } else {
+        if (!qdfHasMethod(result_obj, "toColumnHash")) {
+            xsink->raiseException("DATAFRAME-ERROR",
+                "DataFrame::fromColumnarResult() expects a ColumnarResult-compatible object, got class '%s'",
+                result_obj->getClassName());
+            return QoreValue();
+        }
+
+        ValueHolder columns(result_obj->evalMethod("toColumnHash", nullptr, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (columns->getType() != NT_HASH) {
+            xsink->raiseException("DATAFRAME-ERROR",
+                "ColumnarResult::toColumnHash() returned type '%s'; expected 'hash'",
+                columns->getTypeName());
+            return QoreValue();
+        }
+
+        dataframe = QoreDataFrame::fromColumns(columns->get<const QoreHashNode>(), xsink);
+    }
     if (!dataframe) {
         return QoreValue();
     }
@@ -1050,9 +1062,10 @@ nothing DataFrame::writeCSV(string path, *hash<CsvOptions> options) [dom=FILESYS
     @param sql the SQL SELECT query to execute
     @param bind_args optional bind arguments for the query
 
-    Calls the datasource's \c selectColumnar() method when available, otherwise
-    falls back to \c select(). ColumnarResult objects, column-oriented hashes,
-    and row-oriented lists are accepted.
+    Calls the datasource's \c selectColumnar() method when the driver advertises
+    \c DBI_CAP_HAS_COLUMNAR_SELECT, otherwise uses \c select() directly to avoid
+    a compatibility conversion through ColumnarResult. ColumnarResult objects,
+    column-oriented hashes, and row-oriented lists are accepted.
 
     @return new DataFrame object with query results
 
@@ -1090,8 +1103,29 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
         }
     }
 
-    QoreValue result = ds->evalMethod(qdfHasMethod(ds, "selectColumnar") ? "selectColumnar" : "select",
-        *call_args, xsink);
+    const char* query_method = nullptr;
+    if (qdfHasMethod(ds, "selectColumnar")) {
+        query_method = "selectColumnar";
+        if (qdfHasMethod(ds, "getCapabilities") && qdfHasMethod(ds, "select")) {
+            ValueHolder caps(ds->evalMethod("getCapabilities", nullptr, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (caps->getType() == NT_INT
+                    && !(caps->getAsBigInt() & DBI_CAP_HAS_COLUMNAR_SELECT)) {
+                query_method = "select";
+            }
+        }
+    } else if (qdfHasMethod(ds, "select")) {
+        query_method = "select";
+    } else {
+        xsink->raiseException("DATAFRAME-DB-ERROR",
+            "DataFrame::fromQuery() expects an object with select() or selectColumnar(); got class '%s'",
+            ds->getClassName());
+        return QoreValue();
+    }
+
+    QoreValue result = ds->evalMethod(query_method, *call_args, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1099,19 +1133,30 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
     QoreDataFrame* df_result = nullptr;
     if (result.getType() == NT_OBJECT) {
         QoreObject* result_obj = result.get<QoreObject>();
-        if (!qdfHasMethod(result_obj, "toColumnHash")) {
-            xsink->raiseException("DATAFRAME-DB-ERROR",
-                "unexpected query result object class '%s'; expected a ColumnarResult object with toColumnHash()",
-                result_obj->getClassName());
+        ReferenceHolder<QoreColumnarResult> result_data(qore_columnar_result_try_from_object(result_obj, xsink),
+            xsink);
+        if (*xsink) {
+            result.discard(xsink);
+            return QoreValue();
+        }
+
+        if (result_data) {
+            df_result = QoreDataFrame::fromColumnarResult(*result_data, xsink);
         } else {
-            ValueHolder columns(result_obj->evalMethod("toColumnHash", nullptr, xsink), xsink);
-            if (!*xsink) {
-                if (columns->getType() != NT_HASH) {
-                    xsink->raiseException("DATAFRAME-DB-ERROR",
-                        "ColumnarResult::toColumnHash() returned type '%s'; expected 'hash'",
-                        columns->getTypeName());
-                } else {
-                    df_result = QoreDataFrame::fromColumns(columns->get<const QoreHashNode>(), xsink);
+            if (!qdfHasMethod(result_obj, "toColumnHash")) {
+                xsink->raiseException("DATAFRAME-DB-ERROR",
+                    "unexpected query result object class '%s'; expected a ColumnarResult object with toColumnHash()",
+                    result_obj->getClassName());
+            } else {
+                ValueHolder columns(result_obj->evalMethod("toColumnHash", nullptr, xsink), xsink);
+                if (!*xsink) {
+                    if (columns->getType() != NT_HASH) {
+                        xsink->raiseException("DATAFRAME-DB-ERROR",
+                            "ColumnarResult::toColumnHash() returned type '%s'; expected 'hash'",
+                            columns->getTypeName());
+                    } else {
+                        df_result = QoreDataFrame::fromColumns(columns->get<const QoreHashNode>(), xsink);
+                    }
                 }
             }
         }

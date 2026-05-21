@@ -1046,6 +1046,11 @@ QoreObject* qore_columnar_result_to_object(QoreColumnarResult* result, Exception
     return obj.release();
 }
 
+QoreColumnarResult* qore_columnar_result_try_from_object(const QoreObject* obj, ExceptionSink* xsink) {
+    return obj ? static_cast<QoreColumnarResult*>(obj->tryGetReferencedPrivateData(CID_COLUMNARRESULT, xsink))
+        : nullptr;
+}
+
 QoreColumnarResult* qore_columnar_result_from_value(const QoreValue& value, const QoreHashNode* desc,
         const char* context, ExceptionSink* xsink) {
     assert(xsink);

@@ -20,6 +20,45 @@
 
 %exec-class DataFrameTest
 
+class MockDataFrameDatasource {
+    private {
+        bool native_columnar;
+        int select_calls;
+        int select_columnar_calls;
+    }
+
+    constructor(bool native_columnar) {
+        self.native_columnar = native_columnar;
+        select_calls = 0;
+        select_columnar_calls = 0;
+    }
+
+    int getCapabilities() {
+        return native_columnar ? DBI_CAP_HAS_COLUMNAR_SELECT : 0;
+    }
+
+    auto select(string sql, ...) {
+        ++select_calls;
+        return {"id": (1, 2), "name": ("Ada", "Bo")};
+    }
+
+    auto selectColumnar(string sql, ...) {
+        ++select_columnar_calls;
+        return ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "name": ("Ada", "Bo"),
+        });
+    }
+
+    int selectCalls() {
+        return select_calls;
+    }
+
+    int selectColumnarCalls() {
+        return select_columnar_calls;
+    }
+}
+
 class DataFrameTest inherits QUnit::Test {
     constructor() : Test("DataFrameTest", "1.0") {
         addTestCase("constructionTest", \constructionTest());
@@ -44,6 +83,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("csvReadTest", \csvReadTest());
         addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
+        addTestCase("dbQueryDispatchTest", \dbQueryDispatchTest());
         addTestCase("dbQueryTest", \dbQueryTest());
         addTestCase("mlIntegrationTest", \mlIntegrationTest());
         addTestCase("parquetTest", \parquetTest());
@@ -1457,6 +1497,26 @@ sub invalid_dataframe_api() {
         assertEq(3, df2.numRows(), "toTable round-trip rows");
         assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
             "toTable round-trip names");
+    }
+
+    dbQueryDispatchTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        MockDataFrameDatasource fallback(False);
+        DataFrame::DataFrame fallback_df = DataFrame::DataFrame::fromQuery(fallback, "select test");
+        assertEq(1, fallback.selectCalls(), "fromQuery uses select() when native columnar support is absent");
+        assertEq(0, fallback.selectColumnarCalls(),
+            "fromQuery avoids selectColumnar() compatibility fallback when native columnar support is absent");
+        assertEq(("Ada", "Bo"), fallback_df.getColumn("name"), "fromQuery select() fallback returns rows");
+
+        MockDataFrameDatasource native(True);
+        DataFrame::DataFrame native_df = DataFrame::DataFrame::fromQuery(native, "select test");
+        assertEq(0, native.selectCalls(), "fromQuery avoids select() when native columnar support is present");
+        assertEq(1, native.selectColumnarCalls(),
+            "fromQuery uses selectColumnar() when native columnar support is present");
+        assertEq((1, 2), native_df.getColumnBuffer("id").toList(),
+            "fromQuery preserves dense native columnar columns");
     }
 
     csvMissingValuesTest() {

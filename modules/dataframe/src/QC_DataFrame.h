@@ -50,6 +50,10 @@ public:
     DLLLOCAL static QoreDataFrame* fromColumns(const QoreHashNode* columns,
         ExceptionSink* xsink);
 
+    //! Construct from a native ColumnarResult without materializing an intermediate hash
+    DLLLOCAL static QoreDataFrame* fromColumnarResult(const QoreColumnarResult* result,
+        ExceptionSink* xsink);
+
     // --- Metadata ---
 
     DLLLOCAL int64_t numRows() const;

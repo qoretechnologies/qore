@@ -155,6 +155,11 @@ private:
 //! Creates a Qore SQL::ColumnarResult object taking ownership of @a result.
 DLLEXPORT QoreObject* qore_columnar_result_to_object(QoreColumnarResult* result, ExceptionSink* xsink);
 
+//! Returns referenced ColumnarResult private data from @a obj, or nullptr if @a obj is not a ColumnarResult.
+/** The caller owns the returned reference. Exceptions are only raised when the object is no longer valid.
+ */
+DLLEXPORT QoreColumnarResult* qore_columnar_result_try_from_object(const QoreObject* obj, ExceptionSink* xsink);
+
 //! Creates a columnar result from a hash-of-columns, list-of-rows, or empty value.
 DLLEXPORT QoreColumnarResult* qore_columnar_result_from_value(const QoreValue& value, const QoreHashNode* desc,
     const char* context, ExceptionSink* xsink);
