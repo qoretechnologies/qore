@@ -34,7 +34,7 @@
 
     @since ml 1.0
 */
-qclass SelectKBest [arg=QoreSelectKBest* skb; ns=Qore::ML; flags=final];
+qclass SelectKBest [arg=QoreSelectKBest* skb; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a SelectKBest selector
 /** @param options optional hash with:

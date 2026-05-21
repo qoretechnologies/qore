@@ -65,7 +65,7 @@ printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
     @endcode
 
 */
-qclass ElasticNet [arg=QoreElasticNet* enet; ns=Qore::ML; flags=final];
+qclass ElasticNet [arg=QoreElasticNet* enet; ns=Qore::ML; vparent=AbstractMLRegressor];
 
 //! Creates an ElasticNet regression with the given options
 /** @param options a hash with the following optional keys:

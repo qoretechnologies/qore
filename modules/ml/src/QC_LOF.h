@@ -30,6 +30,7 @@
 
 #include "ml_common.h"
 #include "QoreMLModel.h"
+#include "QC_AbstractMLAnomalyDetector.h"
 
 #include <mutex>
 #include <vector>

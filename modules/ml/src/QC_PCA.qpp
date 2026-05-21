@@ -42,7 +42,7 @@ hash<PCAResult> result = pca.transform({"x": 1.0, "y": 2.0, "z": 3.0});
     @endcode
 
 */
-qclass PCA [arg=QorePCA* pca; ns=Qore::ML; flags=final];
+qclass PCA [arg=QorePCA* pca; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a PCA instance with the given options
 /** @param options a hash with the following optional keys:

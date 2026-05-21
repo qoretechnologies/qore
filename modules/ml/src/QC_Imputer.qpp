@@ -42,7 +42,7 @@ list<auto> filled = imp.transformMatrix(data_with_missing);
     @endcode
 
 */
-qclass Imputer [arg=QoreImputer* imputer; ns=Qore::ML; flags=final];
+qclass Imputer [arg=QoreImputer* imputer; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates an Imputer instance
 /** @param options a hash with the following optional keys:

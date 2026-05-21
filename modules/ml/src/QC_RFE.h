@@ -13,6 +13,7 @@
 
 #include "ml_common.h"
 #include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 #include "FlatTree.h"
 
 #include <mutex>

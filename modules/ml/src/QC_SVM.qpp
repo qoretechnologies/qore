@@ -31,7 +31,7 @@ extern const TypedHashDecl* hashdeclSVMResult;
 
     @since ml 1.0
 */
-qclass SVM [arg=QoreSVM* svm; ns=Qore::ML; flags=final];
+qclass SVM [arg=QoreSVM* svm; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates an SVM with the given options
 /** @param options a hash with:

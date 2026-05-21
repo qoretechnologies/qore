@@ -43,7 +43,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
 
     @since ml 1.0
 */
-qclass DecisionTree [arg=QoreDecisionTree* dt; ns=Qore::ML; flags=final];
+qclass DecisionTree [arg=QoreDecisionTree* dt; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a DecisionTree with the given options
 /** @param options a hash with:

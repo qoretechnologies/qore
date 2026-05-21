@@ -35,7 +35,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
 
     @since ml 1.0
 */
-qclass GradientBoostedTrees [arg=QoreGradientBoostedTrees* gbt; ns=Qore::ML; flags=final];
+qclass GradientBoostedTrees [arg=QoreGradientBoostedTrees* gbt; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a GradientBoostedTrees with the given options
 /** @param options a hash with:

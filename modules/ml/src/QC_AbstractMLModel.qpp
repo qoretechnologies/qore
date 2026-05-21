@@ -1,0 +1,95 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_AbstractMLModel.qpp
+
+    AbstractMLModel class definition - abstract base for all serializable
+    Qore::ML model classes.
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "QC_AbstractMLModel.h"
+
+//! Abstract base class for all serializable ML model classes in Qore::ML.
+/** This class cannot be instantiated directly; concrete subclasses (KMeans,
+    LinearRegression, Ridge, ...) inherit from one of the category abstracts
+    (AbstractMLRegressor, AbstractMLClassifier, AbstractMLClusterer,
+    AbstractMLAnomalyDetector, AbstractMLTransformer, AbstractMLTimeSeries),
+    which in turn inherit from this class.
+
+    Provides the four virtual methods that ml_serialize() / ml_deserialize() /
+    ml_save_model() / ml_load_model() dispatch on.
+*/
+qclass AbstractMLModel [ns=Qore::ML; arg=QoreMLModel* m];
+
+//! Throws an exception; this class is abstract and cannot be instantiated directly
+/** @throw ABSTRACT-MLMODEL-ERROR the AbstractMLModel class is abstract; instantiate a
+    concrete ML model subclass instead (e.g. KMeans, LinearRegression)
+*/
+AbstractMLModel::constructor() {
+    xsink->raiseException("ABSTRACT-MLMODEL-ERROR", "the AbstractMLModel class is abstract "
+        "and cannot be instantiated directly; instantiate a concrete ML model subclass instead");
+}
+
+//! Returns @ref Qore::True "True" if the model has been fitted and is ready for prediction or transformation
+/** @return @ref Qore::True "True" if the model has been fitted, @ref Qore::False "False" otherwise
+
+    @par Example:
+    @code{.py}
+if (model.isFitted()) {
+    binary blob = ml_serialize(model);
+}
+    @endcode
+*/
+bool AbstractMLModel::isFitted() [flags=CONSTANT] {
+    return m->isFitted();
+}
+
+//! Returns the algorithm name used as the serialization tag (e.g. \c "KMeans", \c "Ridge")
+/** @return the algorithm name string used as the serialization tag
+
+    @par Example:
+    @code{.py}
+string algo = model.getAlgorithmName();
+    @endcode
+*/
+string AbstractMLModel::getAlgorithmName() [flags=CONSTANT] {
+    return new QoreStringNode(m->getAlgorithmName());
+}
+
+//! Returns the field names used as columns for hash-record input
+/** Models without a hash-record API (e.g. HoltWinters) return an empty list.
+
+    @return the list of field names; empty if not applicable to this model
+
+    @par Example:
+    @code{.py}
+list<string> fields = model.getFieldNames();
+    @endcode
+*/
+list<string> AbstractMLModel::getFieldNames() [flags=CONSTANT] {
+    std::vector<std::string> names = m->getFieldNames();
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (const std::string& n : names) {
+        rv->push(new QoreStringNode(n), xsink);
+    }
+    return rv.release();
+}

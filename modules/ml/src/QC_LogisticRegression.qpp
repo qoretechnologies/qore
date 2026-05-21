@@ -59,7 +59,7 @@ printf("Predicted class: %f, Probability: %f\n", result.predicted_class, result.
     @endcode
 
 */
-qclass LogisticRegression [arg=QoreLogisticRegression* lr; ns=Qore::ML; flags=final];
+qclass LogisticRegression [arg=QoreLogisticRegression* lr; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a LogisticRegression with the given options
 /** @param options a hash with the following optional keys:

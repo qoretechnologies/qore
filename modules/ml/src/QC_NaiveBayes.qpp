@@ -35,7 +35,7 @@ extern const TypedHashDecl* hashdeclNaiveBayesResult;
 
     @since ml 1.0
 */
-qclass NaiveBayes [arg=QoreNaiveBayes* nb; ns=Qore::ML; flags=final];
+qclass NaiveBayes [arg=QoreNaiveBayes* nb; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a NaiveBayes classifier
 /** @param options optional hash with:

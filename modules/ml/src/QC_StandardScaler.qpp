@@ -43,7 +43,7 @@ list<list<float>> scaled = scaler.transformMatrix(new_data);
     @endcode
 
 */
-qclass StandardScaler [arg=QoreStandardScaler* scaler; ns=Qore::ML; flags=final];
+qclass StandardScaler [arg=QoreStandardScaler* scaler; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a StandardScaler instance
 /** @param options a hash with the following optional keys:

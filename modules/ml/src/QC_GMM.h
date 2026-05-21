@@ -30,6 +30,7 @@
 
 #include "ml_common.h"
 #include "QoreMLModel.h"
+#include "QC_AbstractMLClusterer.h"
 
 #include <mutex>
 #include <random>

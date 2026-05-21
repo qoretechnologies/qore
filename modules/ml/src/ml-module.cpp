@@ -28,6 +28,14 @@
 #include "qore/Qore.h"
 
 #include "ml_serialization.h"
+#include "QC_AbstractMLModel.h"
+#include "QC_AbstractMLEstimator.h"
+#include "QC_AbstractMLRegressor.h"
+#include "QC_AbstractMLClassifier.h"
+#include "QC_AbstractMLClusterer.h"
+#include "QC_AbstractMLAnomalyDetector.h"
+#include "QC_AbstractMLTransformer.h"
+#include "QC_AbstractMLTimeSeries.h"
 #include "QC_IsolationForest.h"
 #include "QC_DBSCAN.h"
 #include "QC_KMeans.h"
@@ -179,6 +187,14 @@ DLLLOCAL void init_ml_functions(QoreNamespace& ns);
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // Pre-initialize all classes first (creates class objects without methods)
+    preinitAbstractMLModelClass();
+    preinitAbstractMLEstimatorClass();
+    preinitAbstractMLRegressorClass();
+    preinitAbstractMLClassifierClass();
+    preinitAbstractMLClustererClass();
+    preinitAbstractMLAnomalyDetectorClass();
+    preinitAbstractMLTransformerClass();
+    preinitAbstractMLTimeSeriesClass();
     preinitIsolationForestClass();
     preinitDBSCANClass();
     preinitKMeansClass();
@@ -260,7 +276,17 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclHypothesisTestResult = init_hashdecl_HypothesisTestResult(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
-    // Add classes to namespace (adds methods that may reference other classes)
+    // Add classes to namespace (adds methods that may reference other classes).
+    // Abstract base classes must be registered before any concrete subclass that
+    // uses vparent= references them.
+    MLNS.addSystemClass(initAbstractMLModelClass(MLNS));
+    MLNS.addSystemClass(initAbstractMLEstimatorClass(MLNS));
+    MLNS.addSystemClass(initAbstractMLRegressorClass(MLNS));
+    MLNS.addSystemClass(initAbstractMLClassifierClass(MLNS));
+    MLNS.addSystemClass(initAbstractMLClustererClass(MLNS));
+    MLNS.addSystemClass(initAbstractMLAnomalyDetectorClass(MLNS));
+    MLNS.addSystemClass(initAbstractMLTransformerClass(MLNS));
+    MLNS.addSystemClass(initAbstractMLTimeSeriesClass(MLNS));
     MLNS.addSystemClass(initIsolationForestClass(MLNS));
     MLNS.addSystemClass(initDBSCANClass(MLNS));
     MLNS.addSystemClass(initKMeansClass(MLNS));

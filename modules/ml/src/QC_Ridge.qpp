@@ -59,7 +59,7 @@ printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
     @endcode
 
 */
-qclass Ridge [arg=QoreRidge* ridge; ns=Qore::ML; flags=final];
+qclass Ridge [arg=QoreRidge* ridge; ns=Qore::ML; vparent=AbstractMLRegressor];
 
 //! Creates a Ridge regression with the given options
 /** @param options a hash with the following optional keys:

@@ -43,7 +43,7 @@ hash<KMeansResult> result = km.predict({"x": 1.0, "y": 2.0});
     @endcode
 
 */
-qclass KMeans [arg=QoreKMeans* kmeans; ns=Qore::ML; flags=final];
+qclass KMeans [arg=QoreKMeans* kmeans; ns=Qore::ML; vparent=AbstractMLClusterer];
 
 //! Creates a KMeans instance with the given options
 /** @param options a hash with the following keys:

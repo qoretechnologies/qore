@@ -32,7 +32,7 @@
 
     @since ml 1.0
 */
-qclass TextFeatures [arg=QoreTextFeatures* tf; ns=Qore::ML; flags=final];
+qclass TextFeatures [arg=QoreTextFeatures* tf; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a TextFeatures transformer
 /** @param options optional hash with:

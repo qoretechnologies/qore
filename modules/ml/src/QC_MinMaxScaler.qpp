@@ -43,7 +43,7 @@ list<auto> scaled = scaler.transformMatrix(new_data);
     @endcode
 
 */
-qclass MinMaxScaler [arg=QoreMinMaxScaler* scaler; ns=Qore::ML; flags=final];
+qclass MinMaxScaler [arg=QoreMinMaxScaler* scaler; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a MinMaxScaler instance
 /** @param options a hash with the following optional keys:

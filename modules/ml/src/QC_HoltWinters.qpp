@@ -42,7 +42,7 @@ list<float> next_year = hw.forecast(12);
     @endcode
 
 */
-qclass HoltWinters [arg=QoreHoltWinters* hw; ns=Qore::ML; flags=final];
+qclass HoltWinters [arg=QoreHoltWinters* hw; ns=Qore::ML; vparent=AbstractMLTimeSeries];
 
 //! Creates a HoltWinters instance with the given options
 /** @param options a hash with the following keys:

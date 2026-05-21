@@ -56,7 +56,7 @@ printf("Predicted price: %.2f\n", result.prediction);
     @endcode
 
 */
-qclass KNN [arg=QoreKNN* knn; ns=Qore::ML; flags=final];
+qclass KNN [arg=QoreKNN* knn; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a KNN instance with the given options
 /** @param options a hash with the following keys:

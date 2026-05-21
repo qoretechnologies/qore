@@ -29,7 +29,7 @@
 
     @since ml 1.0
 */
-qclass OneHotEncoder [arg=QoreOneHotEncoder* enc; ns=Qore::ML; flags=final];
+qclass OneHotEncoder [arg=QoreOneHotEncoder* enc; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a OneHotEncoder
 /** @param options optional hash with:

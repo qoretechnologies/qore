@@ -33,7 +33,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
 
     @since ml 1.0
 */
-qclass RandomForest [arg=QoreRandomForest* rf; ns=Qore::ML; flags=final];
+qclass RandomForest [arg=QoreRandomForest* rf; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a RandomForest with the given options
 /** @param options a hash with:
