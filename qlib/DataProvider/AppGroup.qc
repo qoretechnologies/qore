@@ -89,6 +89,8 @@ public namespace DataProvider {
         ProjectManagement = "Project & Task Management",
         #! Social Media Management
         SocialMedia = "Social Media Management",
+        #! Speech & Voice (ASR, TTS, voice AI)
+        Speech = "Speech & Voice",
         #! Spreadsheets & Data Tables
         Spreadsheets = "Spreadsheets & Data Tables",
         #! Version Control & Code Repositories

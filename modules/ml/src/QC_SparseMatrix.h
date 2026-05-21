@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_SPARSEMATRIX_H
 
 #include "ml_sparse.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLModel.h"
 
 DLLEXPORT extern qore_classid_t CID_SPARSEMATRIX;
 DLLLOCAL extern QoreClass* QC_SPARSEMATRIX;
@@ -42,7 +44,7 @@ DLLLOCAL QoreClass* initSparseMatrixClass(QoreNamespace& ns);
 
     Thread-safe: immutable after construction. All operations create new matrices.
 */
-class QoreSparseMatrix : public AbstractPrivateData {
+class QoreSparseMatrix : public QoreMLModel {
 public:
     //! Construct from triplets (row, col, value)
     DLLLOCAL QoreSparseMatrix(int rows, int cols, const QoreListNode* triplets,
@@ -75,8 +77,14 @@ public:
     //! Access the underlying sparse matrix
     DLLLOCAL const SparseMatrixXd& getMatrix() const { return matrix; }
 
+    //! SparseMatrix is immutable after construction — always reports fitted
+    DLLLOCAL bool isFitted() const override { return true; }
+
+    //! Algorithm tag used by the serialization framework
+    DLLLOCAL std::string getAlgorithmName() const override { return "SparseMatrix"; }
+
     //! Serialize to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize from binary
     DLLLOCAL static QoreSparseMatrix* deserializeState(const uint8_t* data, size_t len,

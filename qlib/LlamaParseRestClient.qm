@@ -30,6 +30,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires QoreRagTypes
+%requires QoreAsyncJobUtils
 
 module LlamaParseRestClient {
     version = "1.0";
@@ -61,10 +62,10 @@ module LlamaParseRestClient {
     LlamaParse is asynchronous: every parse goes through an
     upload → poll job → fetch result lifecycle.  The
     @ref LlamaParseRestClient::LlamaParseRestClientIo::parseDocument()
-    method encapsulates all three phases.  The polling logic lives in a
-    discrete @ref LlamaParseRestClient::LlamaParseRestClientIo::pollUntilDone()
-    method so future Phase 5 modules with similar async patterns can
-    extract it into a shared helper.
+    method encapsulates all three phases.  The polling loop is delegated
+    to @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"' \c AsyncJobPoller
+    so the same machinery is shared with other async-REST providers
+    (async OCR batches, image/video generation, etc.).
 
     @par URL-only document submission (v1)
 
@@ -135,11 +136,15 @@ public class LlamaParseRestClient inherits RestClient::RestClient, LlamaParseRes
 #! REST client for LlamaParse using multiplexed HTTP connections (async)
 /** Provides high-level @ref parseDocument() that owns the
     upload → poll → fetch lifecycle internally.
+
+    The polling loop is delegated to
+    @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" so the same
+    machinery can be reused by other async-REST modules.
 */
 public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaParseRestClientBase {
     private {
-        #! Injectable sleeper closure (for deterministic test polling)
-        code<nothing(timeout)> sleeper;
+        #! Shared async-job poller (owns the polling loop + injectable sleeper)
+        QoreAsyncJobUtils::AsyncJobPoller poller;
     }
 
     #! Creates the object
@@ -148,7 +153,16 @@ public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaPa
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(LlamaParseRestClientBase::getOptions(opts), shared_mgr) {
-        sleeper = code<nothing(timeout)> sub (timeout to) { Qore::usleep(to); };
+        poller = new QoreAsyncJobUtils::AsyncJobPoller(
+            hash<auto> sub (string job_id) {
+                return restGet(sprintf("/job/%s", job_id)).body;
+            },
+            bool sub (hash<auto> status) {
+                return status.status && inlist(status.status, TerminalStatuses);
+            },
+            "LlamaParse job",
+            "LLAMAPARSE-ERROR",
+        );
     }
 
     #! Injects a custom sleeper closure (test seam)
@@ -159,7 +173,7 @@ public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaPa
             duration that would otherwise be passed to \c usleep()
     */
     setSleeper(code<nothing(timeout)> s) {
-        sleeper = s;
+        poller.setSleeper(s);
     }
 
     #! Parses a document end-to-end: upload → poll job → fetch result
@@ -239,7 +253,12 @@ public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaPa
     }
 
     #! Polls a LlamaParse job until it reaches a terminal state
-    /** @param job_id the LlamaParse job id from a prior \c /upload
+    /** Thin wrapper around
+        @ref QoreAsyncJobUtils::AsyncJobPoller::poll() — preserved for
+        backwards compatibility with callers that previously used this
+        method directly.
+
+        @param job_id the LlamaParse job id from a prior \c /upload
         @param to overall timeout for the wait
         @param poll_interval_ms how long to wait between polls
 
@@ -249,25 +268,8 @@ public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaPa
         @throw LLAMAPARSE-ERROR overall timeout exceeded
     */
     hash<auto> pollUntilDone(string job_id, *timeout to, *timeout poll_interval_ms) {
-        timeout overall = to ?? DefaultJobTimeout;
-        timeout interval = poll_interval_ms ?? DefaultPollIntervalMs;
-        # timeout is in ms; int(timeout) gives the ms count
-        int overall_ms = overall;
-        date start = now_us();
-        while (True) {
-            hash<auto> resp = restGet(sprintf("/job/%s", job_id));
-            *string status = resp.body.status;
-            if (status && inlist(status, TerminalStatuses)) {
-                return resp.body;
-            }
-            int elapsed_ms = get_duration_milliseconds(now_us() - start);
-            if (elapsed_ms >= overall_ms) {
-                throw "LLAMAPARSE-ERROR",
-                    sprintf("LlamaParse job %y did not reach a terminal state "
-                        "within %y; last status: %y", job_id, overall, status);
-            }
-            sleeper(interval);
-        }
+        return poller.poll(job_id, to ?? DefaultJobTimeout,
+            poll_interval_ms ?? DefaultPollIntervalMs);
     }
 }
 

@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_STANDARDSCALER_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <mutex>
 
@@ -39,7 +41,7 @@ DLLLOCAL void preinitStandardScalerClass();
 DLLLOCAL QoreClass* initStandardScalerClass(QoreNamespace& ns);
 
 //! StandardScaler implementation — transforms features to zero mean and unit variance
-class QoreStandardScaler : public AbstractPrivateData {
+class QoreStandardScaler : public QoreMLModel {
 public:
     DLLLOCAL QoreStandardScaler(bool with_mean, bool with_std)
         : with_mean(with_mean), with_std(with_std) {
@@ -58,14 +60,16 @@ public:
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& data, ExceptionSink* xsink);
 
     //! Whether the scaler has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "StandardScaler"; }
 
     //! Get model info as a Qore hash
     DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink) const;
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Transform a single row (hash API helper, no lock, no fitted check)
     DLLLOCAL RowVectorXd transformRow(const RowVectorXd& row, ExceptionSink* xsink) const;
@@ -89,7 +93,7 @@ public:
     DLLLOCAL QoreListNode* getStdAsList(ExceptionSink* xsink) const;
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreStandardScaler* deserializeState(const uint8_t* data, size_t len,

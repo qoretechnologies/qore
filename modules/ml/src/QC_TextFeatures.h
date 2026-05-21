@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_TEXTFEATURES_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <map>
 #include <mutex>
@@ -29,7 +31,7 @@ DLLLOCAL QoreClass* initTextFeaturesClass(QoreNamespace& ns);
     transform() converts documents into numeric vectors using the learned vocabulary.
     Supports two modes: "tfidf" (TF-IDF weighting) and "count" (raw term counts).
 */
-class QoreTextFeatures : public AbstractPrivateData {
+class QoreTextFeatures : public QoreMLModel {
 public:
     DLLLOCAL QoreTextFeatures(const std::string& mode, int max_features, int min_df,
         const std::string& tokenizer_mode = "whitespace", void* tokenizer_handle = nullptr);
@@ -47,13 +49,15 @@ public:
     //! Get the vocabulary terms in index order
     DLLLOCAL QoreListNode* getVocabulary(ExceptionSink* xsink) const;
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
 
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::string getAlgorithmName() const override { return "TextFeatures"; }
+
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreTextFeatures* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

@@ -28,11 +28,12 @@
 %requires Logger
 %requires FileLocationHandler
 %requires(reexport) HttpUtil
+%requires json
 
 %modern
 
 module HttpServerUtil {
-    version = "1.5";
+    version = "1.6";
     desc = "HttpServerUtil class definition";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1290,12 +1291,76 @@ public class AbstractAuthenticator {
         return getAuthHeaderIntern(getNegotiateAuthHeader(cx));
     }
 
+    #! returns the default Content-Type for a 401 response based on the request's Accept header
+    /** Default behaviour: returns @ref Mime::MimeTypeHtml "MimeTypeHtml" when
+        the request's \c Accept header explicitly includes \c text/html
+        (browsers always do); otherwise returns
+        @ref Mime::MimeTypeJson "MimeTypeJson". This covers the common cases
+        without forcing API clients to opt in:
+        - browser request (\c text/html , \c application/xhtml+xml , ...) - HTML
+        - explicit API request (\c application/json) - JSON
+        - default curl / fetch without an \c Accept header - JSON
+        - default curl / fetch with the any-media-type wildcard - JSON
+        - explicit \c application/yaml or other non-HTML type - JSON
+          (closer-to-JSON envelope is more useful than text/html for
+          machine consumers)
+
+        Subclasses can override this method to force a specific content type
+        for their auth surface.
+
+        @param cx the call context hash; see @ref httpserverutil_request_context
+                  for information about this value
+        @return the Content-Type value to use in the 401 response
+
+        @since HttpServerUtil 1.6
+    */
+    string getDefault401ContentType(*hash<auto> cx) {
+        *string accept = cx.hdr.accept ?? cx.hdr.Accept;
+        if (accept && accept =~ /text\/html/i) {
+            return MimeTypeHtml;
+        }
+        return MimeTypeJson;
+    }
+
+    #! returns the response body for a 401 response with the given message and content type
+    /** Default behaviour: returns \a msg as-is for
+        @ref Mime::MimeTypeHtml "MimeTypeHtml"; returns a JSON envelope
+        \c {"err": "AUTH-REQUIRED", "desc": <msg>} when the content type is
+        @ref Mime::MimeTypeJson "MimeTypeJson", so API clients that expect
+        JSON deserialisation get a parseable response.
+
+        Subclasses can override this method to customise the envelope shape.
+
+        @param msg the message to include in the body
+        @param content_type the Content-Type of the response
+        @return the response body, encoded appropriately for the content type
+
+        @since HttpServerUtil 1.6
+    */
+    string format401Body(string msg, string content_type) {
+        if (content_type == MimeTypeJson
+                || content_type =~ /^application\/json($|;)/i) {
+            return make_json({
+                "err": "AUTH-REQUIRED",
+                "desc": msg,
+            });
+        }
+        return msg;
+    }
+
     #! returns a 401 response with the given string argument as the message body
-    /** @param msg message body to return
+    /** The response body and \c Content-Type are negotiated from the request's
+        \c Accept header via @ref getDefault401ContentType() and
+        @ref format401Body(); API clients that accept JSON receive a JSON
+        envelope, while browser/HTML clients receive the bare-string body for
+        back-compat.
+
+        @param msg message body to return
         @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
     */
     hash<HttpResponseInfo> do401(string msg = "Authentication is required to access this server", *hash<auto> cx) {
-        return do401(msg, NOTHING, NOTHING, cx);
+        string content_type = getDefault401ContentType(cx);
+        return do401(format401Body(msg, content_type), content_type, NOTHING, cx);
     }
 
     #! returns a 401 response with the given string argument as the message body

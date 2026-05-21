@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/GoogleDocumentAiRestClient.qm
+%requires ../../../../qlib/GoogleDocumentAiDataProvider
+
+%exec-class GoogleDocumentAiDataProviderTest
+
+public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
+    constructor() : Test("GoogleDocumentAiDataProvider Test", "1.0") {
+        addTestCase("factory + app + process-document registered",
+            \registrationTest());
+        addTestCase("app declares Documents AppGroup",
+            \documentsAppGroupTest());
+        addTestCase("app declares GoogleWorkspace AppGroup",
+            \workspaceAppGroupTest());
+        addTestCase("request type fields are typed correctly",
+            \requestFieldsTest());
+        addTestCase("constructor rejects missing gcp_project_id",
+            \missingProjectTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("google-documentai");
+        assertEq("google-documentai", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("GoogleDocumentAi");
+        assertEq("GoogleDocumentAi", app.name);
+        assertEq("google-documentai", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("GoogleDocumentAi");
+        assertEq(1, actions.size());
+        assertEq("process-document", actions[0].action);
+    }
+
+    private documentsAppGroupTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("GoogleDocumentAi");
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm,     app.groups));
+        assertTrue(inlist(DataProvider::AppGroup::Documents, app.groups));
+    }
+
+    private workspaceAppGroupTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("GoogleDocumentAi");
+        # Google services belong in the GoogleWorkspace group too
+        assertTrue(inlist(DataProvider::AppGroup::GoogleWorkspace, app.groups));
+    }
+
+    private requestFieldsTest() {
+        # processor_id is required + string
+        *hash<auto> fld = GoogleDocumentAiDataProvider::GoogleDocumentAiProcessDocumentRequestDataType::Fields.processor_id;
+        assertEq(True, fld.required);
+
+        # mime_type has allowed_values with display_name
+        *hash<auto> mt = GoogleDocumentAiDataProvider::GoogleDocumentAiProcessDocumentRequestDataType::Fields.mime_type;
+        assertEq("application/pdf", mt.default_value);
+        assertTrue(mt.allowed_values.size() >= 4);
+        # First allowed value has both value + display_name
+        assertEq("application/pdf", mt.allowed_values[0].value);
+        assertEq("PDF",             mt.allowed_values[0].display_name);
+    }
+
+    private missingProjectTest() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            GoogleDocumentAiDataProvider::GoogleDocumentAiDataProvider p({});
+        });
+    }
+}

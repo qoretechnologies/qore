@@ -1,0 +1,466 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DeepgramRestClient.qm Qore user module for calling Deepgram REST services
+
+/*  DeepgramRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreSpeechUtils
+
+module DeepgramRestClient {
+    version = "1.0";
+    desc = "user module for calling Deepgram speech (ASR + TTS) REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("deepgram",
+            DeepgramRestConnection::ConnectionScheme);
+        QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
+            new DeepgramTranscriberFactory());
+        QoreSpeechUtils::SpeechProviderRegistry::registerSynthesizerFactory(
+            new DeepgramSynthesizerFactory());
+    };
+}
+
+/** @mainpage DeepgramRestClient Module
+
+    @tableofcontents
+
+    @section deepgramrestclientintro DeepgramRestClient Introduction
+
+    The %DeepgramRestClient module provides an API for calling
+    [Deepgram](https://deepgram.com) speech REST services — automatic
+    speech recognition (ASR) via `/v1/listen` and text-to-speech (TTS)
+    via `/v1/speak`.
+
+    To use this module, use \c "%requires DeepgramRestClient" in your code.
+
+    All the public symbols in the module are defined in the
+    DeepgramRestClient namespace.
+
+    The main classes are:
+    - @ref DeepgramRestClient::DeepgramRestClient "DeepgramRestClient": sync REST client
+    - @ref DeepgramRestClient::DeepgramRestClientIo "DeepgramRestClientIo": async REST client
+    - @ref DeepgramRestClient::DeepgramRestConnection "DeepgramRestConnection": connection
+
+    @par Authentication
+
+    Deepgram uses a non-standard auth header format —
+    \c "Authorization: Token <api_key>" rather than the more common
+    \c "Authorization: Bearer <api_key>".  The module handles this by
+    injecting the right header via the \c default_headers connection
+    option; callers just supply \c apikey.
+
+    @par Example: file transcription (URL-based)
+    @code{.py}
+%modern
+%requires DeepgramRestClient
+
+DeepgramRestClient::DeepgramRestClient rest({"apikey": api_key});
+hash<auto> resp = rest.post("/v1/listen?model=nova-3&smart_format=true", {
+    "url": "https://example.com/audio.wav",
+});
+printf("transcript: %s\n",
+    resp.body.results.channels[0].alternatives[0].transcript);
+    @endcode
+
+    @par Example: text-to-speech
+    @code{.py}
+hash<auto> resp = rest.post("/v1/speak?model=aura-asteria-en", {
+    "text": "Hello from Qore!",
+});
+File f();
+f.open2("/tmp/out.mp3", O_CREAT | O_WRONLY | O_TRUNC);
+f.write(resp.body);
+    @endcode
+
+    @section DeepgramRestClientRelnotes Release Notes
+
+    @subsection DeepgramRestClientv1_0 DeepgramRestClient v1.0
+    - the initial version of the %DeepgramRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+#! the DeepgramRestClient namespace contains all the objects in the DeepgramRestClient module
+public namespace DeepgramRestClient {
+#! Common base class for Deepgram REST client functionality
+public class DeepgramRestClientBase {
+    public {
+        #! Default Deepgram REST API URL
+        const DefaultUrl = "https://api.deepgram.com";
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns options for the DeepgramRestClient constructors
+    /** Maps the \c apikey option into a \c default_headers entry that
+        sends \c "Authorization: Token <key>" on every request — Deepgram's
+        non-Bearer auth format.
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv;
+        rv += DefaultOptions + opts;
+        if (rv.apikey) {
+            hash<auto!> dh;
+            if (rv.default_headers) {
+                dh += rv.default_headers;
+            }
+            dh.Authorization = "Token " + rv.apikey;
+            rv.default_headers = dh;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! Sync REST client for Deepgram
+/** Pass an API key via the \c apikey option; the module rewrites it to a
+    \c "Authorization: Token <key>" header injected on every request.
+*/
+public class DeepgramRestClient inherits RestClient::RestClient, DeepgramRestClientBase {
+    #! Creates the object with the given options
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(DeepgramRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! Async (multiplexed) REST client for Deepgram
+public class DeepgramRestClientIo inherits RestClientIo::RestClientIo, DeepgramRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(DeepgramRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Connection class for Deepgram REST endpoints
+public class DeepgramRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Deepgram REST API URL (with deepgram:// scheme)
+        const DefaultUrl = "deepgram://api.deepgram.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Deepgram REST Connection",
+            "short_desc": "A connection to the Deepgram speech (ASR + TTS) REST API",
+            "desc": "A connection to the [Deepgram](https://deepgram.com) speech API.\n\n"
+                "Deepgram provides automatic speech recognition (ASR) via `/v1/listen` "
+                "and text-to-speech (TTS) via `/v1/speak`, plus realtime WebSocket "
+                "streaming for both directions.\n\n"
+                "Requires an API key for `Authorization: Token` authentication "
+                "(note: Deepgram uses `Token`, NOT `Bearer`).  Get your API key "
+                "from the [Deepgram console](https://console.deepgram.com).",
+            "cls": Class::forName("DeepgramRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "deepgram": True,
+            },
+            "base_scheme_map": {
+                "https": "deepgram",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Deepgram API key (sent as `Authorization: Token` header)",
+                    "type": "string",
+                    "desc": "The Deepgram API key — sent as the `Authorization: Token <key>` "
+                        "header (NOT `Authorization: Bearer`).",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method
+                    + <ConnectionOptionInfo>{"default_value": DefaultPingMethod},
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path
+                    + <ConnectionOptionInfo>{"default_value": DefaultPingPath},
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers
+                    + <ConnectionOptionInfo>{"default_value": DefaultPingHeaders},
+            },
+            "required_options": "apikey",
+        };
+
+        #! Default ping method (GET against /v1/projects)
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (relative)
+        const DefaultPingPath = "v1/projects";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+    }
+
+    #! Creates the DeepgramRestConnection object
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, DefaultUrl, attributes, options) {
+    }
+
+    #! Creates the DeepgramRestConnection object from a configuration hash
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(DeepgramRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the config hash with the canonical URL forced
+    /** Deepgram has a single fixed API endpoint; the URL is always overridden
+        to prevent the framework's \c auto_url machinery from falling back to
+        \c "deepgram://localhost" when no source option exists to build a URL
+        from.  See data-provider-development-guide.md pitfall #17.
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        config.url = DefaultUrl;
+        return config;
+    }
+
+    #! Returns \c "deepgram"
+    string getType() {
+        return "deepgram";
+    }
+
+    #! Returns @ref True as this connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("DeepgramDataProvider");
+        return create_object("DeepgramDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! Returns a sync REST client object
+    private DeepgramRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new DeepgramRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable REST client object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new DeepgramRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    #! Returns connection options with apikey -> Authorization: Token header
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return DeepgramRestClientBase::getOptions(rv);
+    }
+
+    #! Sets update options code for auto_url connections + ping-path correction
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != DeepgramRestClientBase::DefaultUrl && url != DefaultUrl) {
+                update.url = DefaultUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+}
+
+#! @ref QoreSpeechUtils::AbstractTranscriber "AbstractTranscriber" backed by
+#! Deepgram's `/v1/listen` endpoint
+public class DeepgramTranscriber inherits QoreSpeechUtils::AbstractTranscriber {
+    private {
+        DeepgramRestClientIo rest;
+        *string model;
+    }
+
+    constructor(hash<QoreSpeechUtils::TranscriberConfig> config) {
+        if (!config.api_key.val()) {
+            throw "SPEECH-CONFIG-ERROR",
+                "TranscriberConfig.api_key is required for the Deepgram backend";
+        }
+        rest = new DeepgramRestClientIo({
+            "apikey": config.api_key,
+            "url": config.url ?? DeepgramRestClientBase::DefaultUrl,
+        });
+        model = config.model;
+    }
+
+    string getMode() { return "deepgram"; }
+    *string getModel() { return model; }
+
+    hash<QoreSpeechUtils::TranscriptionResult> transcribe(string audio_url,
+            *hash<auto> opts) {
+        hash<auto!> query;
+        if (model) {
+            query.model = model;
+        }
+        # Merge in user-supplied per-call options (model overrides, language, etc.)
+        if (opts) {
+            foreach hash<auto> p in (opts.pairIterator()) {
+                query{p.key} = p.value;
+            }
+        }
+        string path = "/v1/listen";
+        if (query) {
+            list<string> parts = ();
+            foreach hash<auto> p in (query.pairIterator()) {
+                push parts, sprintf("%s=%s", p.key,
+                    p.value.typeCode() == NT_BOOLEAN
+                        ? (p.value ? "true" : "false")
+                        : encode_url(string(p.value)));
+            }
+            path += "?" + (foldl $1 + "&" + $2, parts);
+        }
+        hash<auto> resp = rest.restPost(path, {"url": audio_url}).body;
+        # Deepgram top-1 transcript shape:
+        # resp.results.channels[0].alternatives[0].{transcript, confidence, words}
+        *string text = resp.results.channels[0].alternatives[0].transcript;
+        *float conf  = resp.results.channels[0].alternatives[0].confidence;
+        *list<auto> words = resp.results.channels[0].alternatives[0].words;
+        return <QoreSpeechUtils::TranscriptionResult>{
+            "text": text ?? "",
+            "language": resp.results.channels[0].detected_language
+                ?? resp.metadata.detected_language,
+            "confidence": conf,
+            "audio_duration": resp.metadata.duration,
+            "words": words,
+            "summary": resp.results.summary.short
+                ?? resp.results.summary.result,
+            "raw": resp,
+        };
+    }
+}
+
+#! @ref QoreSpeechUtils::AbstractSpeechSynthesizer "AbstractSpeechSynthesizer"
+#! backed by Deepgram's `/v1/speak` endpoint
+public class DeepgramSynthesizer inherits QoreSpeechUtils::AbstractSpeechSynthesizer {
+    private {
+        DeepgramRestClientIo rest;
+        *string voice;
+        *string encoding;
+        *int sample_rate;
+    }
+
+    constructor(hash<QoreSpeechUtils::SynthesizerConfig> config) {
+        if (!config.api_key.val()) {
+            throw "SPEECH-CONFIG-ERROR",
+                "SynthesizerConfig.api_key is required for the Deepgram backend";
+        }
+        rest = new DeepgramRestClientIo({
+            "apikey": config.api_key,
+            "url": config.url ?? DeepgramRestClientBase::DefaultUrl,
+        });
+        voice = config.voice;
+        encoding = config.encoding;
+        sample_rate = config.sample_rate;
+    }
+
+    string getMode() { return "deepgram"; }
+    *string getVoice() { return voice; }
+
+    hash<QoreSpeechUtils::SynthesisResult> synthesize(string text,
+            *hash<auto> opts) {
+        hash<auto!> query;
+        if (voice) {
+            query.model = voice;
+        }
+        if (encoding) {
+            query.encoding = encoding;
+        }
+        if (sample_rate) {
+            query.sample_rate = sample_rate;
+        }
+        if (opts) {
+            foreach hash<auto> p in (opts.pairIterator()) {
+                query{p.key} = p.value;
+            }
+        }
+        string path = "/v1/speak";
+        if (query) {
+            list<string> parts = ();
+            foreach hash<auto> p in (query.pairIterator()) {
+                push parts, sprintf("%s=%s", p.key,
+                    p.value.typeCode() == NT_BOOLEAN
+                        ? (p.value ? "true" : "false")
+                        : encode_url(string(p.value)));
+            }
+            path += "?" + (foldl $1 + "&" + $2, parts);
+        }
+        hash<auto> resp = rest.restPost(path, {"text": text});
+        return <QoreSpeechUtils::SynthesisResult>{
+            "audio": resp.body,
+            "content_type": resp.headers."content-type" ?? "audio/mpeg",
+            "voice": voice,
+            "metadata": {"request_id": resp.headers."dg-request-id"},
+        };
+    }
+}
+
+#! Factory for @ref DeepgramTranscriber
+public class DeepgramTranscriberFactory inherits QoreSpeechUtils::AbstractTranscriberFactory {
+    string getMode() {
+        return "deepgram";
+    }
+    string getDisplayName() {
+        return "Deepgram ASR (Nova model family)";
+    }
+    QoreSpeechUtils::AbstractTranscriber create(
+            hash<QoreSpeechUtils::TranscriberConfig> config) {
+        return new DeepgramTranscriber(config);
+    }
+}
+
+#! Factory for @ref DeepgramSynthesizer
+public class DeepgramSynthesizerFactory inherits QoreSpeechUtils::AbstractSpeechSynthesizerFactory {
+    string getMode() {
+        return "deepgram";
+    }
+    string getDisplayName() {
+        return "Deepgram TTS (Aura voice models)";
+    }
+    QoreSpeechUtils::AbstractSpeechSynthesizer create(
+            hash<QoreSpeechUtils::SynthesizerConfig> config) {
+        return new DeepgramSynthesizer(config);
+    }
+}
+}

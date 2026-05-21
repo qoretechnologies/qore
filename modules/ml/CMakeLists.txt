@@ -71,6 +71,14 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # QPP source files
 set(ML_QPP_SRC
+    src/QC_AbstractMLModel.qpp
+    src/QC_AbstractMLEstimator.qpp
+    src/QC_AbstractMLRegressor.qpp
+    src/QC_AbstractMLClassifier.qpp
+    src/QC_AbstractMLClusterer.qpp
+    src/QC_AbstractMLAnomalyDetector.qpp
+    src/QC_AbstractMLTransformer.qpp
+    src/QC_AbstractMLTimeSeries.qpp
     src/QC_IsolationForest.qpp
     src/QC_DBSCAN.qpp
     src/QC_KMeans.qpp

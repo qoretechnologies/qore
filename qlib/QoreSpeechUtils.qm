@@ -1,0 +1,434 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreSpeechUtils.qm provider-neutral abstraction layer for speech (ASR + TTS) backends
+
+/*  QoreSpeechUtils.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires reflection
+
+module QoreSpeechUtils {
+    version = "1.0";
+    desc = "user module providing the provider-neutral abstraction layer for "
+        "automatic speech recognition (ASR) and text-to-speech (TTS) backends";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreSpeechUtils Module
+
+    @tableofcontents
+
+    @section qorespeechutilsintro QoreSpeechUtils Module Introduction
+
+    The %QoreSpeechUtils module provides the provider-neutral abstraction
+    layer for speech AI backends — parallel to @ref qoreragutilsintro
+    "QoreRagUtils" for retrieval-augmented generation.
+
+    Two abstract building blocks:
+    - @ref QoreSpeechUtils::AbstractTranscriber — automatic speech
+      recognition (ASR): submit an audio source, receive a transcript
+    - @ref QoreSpeechUtils::AbstractSpeechSynthesizer — text-to-speech
+      (TTS): submit text, receive audio bytes
+
+    Two corresponding factory + registry pairs:
+    - @ref QoreSpeechUtils::AbstractTranscriberFactory + the
+      transcriber side of
+      @ref QoreSpeechUtils::SpeechProviderRegistry
+    - @ref QoreSpeechUtils::AbstractSpeechSynthesizerFactory + the
+      synthesizer side of @ref SpeechProviderRegistry
+
+    Each provider module (Deepgram, AssemblyAI, ...) registers its
+    factories on module load; callers select a backend by name via
+    @ref TranscriberConfig::backend and
+    @ref SynthesizerConfig::backend.  The registry lazy-loads the
+    providing module on first lookup, so callers do not need to
+    `%requires` every provider module up front.
+
+    @par Example: transcribe via Deepgram, synthesize via Deepgram
+
+    @code{.py}
+%modern
+%requires QoreSpeechUtils
+%requires DeepgramRestClient
+
+QoreSpeechUtils::AbstractTranscriber tr =
+    QoreSpeechUtils::SpeechProviderRegistry::createTranscriber(
+        <QoreSpeechUtils::TranscriberConfig>{
+            "backend": "deepgram",
+            "api_key": api_key,
+            "model": "nova-3",
+        });
+hash<QoreSpeechUtils::TranscriptionResult> r =
+    tr.transcribe("https://example.com/audio.wav");
+printf("Transcript: %s\n", r.text);
+
+QoreSpeechUtils::AbstractSpeechSynthesizer tts =
+    QoreSpeechUtils::SpeechProviderRegistry::createSynthesizer(
+        <QoreSpeechUtils::SynthesizerConfig>{
+            "backend": "deepgram",
+            "api_key": api_key,
+            "voice": "aura-asteria-en",
+        });
+hash<QoreSpeechUtils::SynthesisResult> s = tts.synthesize("Hello, world!");
+    @endcode
+
+    @section qorespeechutilsrelnotes Release Notes
+
+    @subsection qorespeechutils_1_0 QoreSpeechUtils v1.0
+    - initial version
+*/
+
+#! contains all public symbols of the %QoreSpeechUtils module
+public namespace QoreSpeechUtils {
+
+#! Configuration for a transcriber backend
+public hashdecl TranscriberConfig {
+    #! Backend identifier (e.g. \c "deepgram", \c "assemblyai")
+    *string backend;
+    #! API key for the backend
+    *string api_key;
+    #! Model name (e.g. \c "nova-3" for Deepgram, \c "universal" for AssemblyAI)
+    *string model;
+    #! Default request URL (overrides the backend's hardcoded default)
+    *string url;
+    #! Free-form backend-specific options forwarded to the underlying call
+    *hash<auto> provider_options;
+}
+
+#! Configuration for a speech-synthesizer backend
+public hashdecl SynthesizerConfig {
+    #! Backend identifier (e.g. \c "deepgram")
+    *string backend;
+    #! API key for the backend
+    *string api_key;
+    #! Voice / model name (e.g. \c "aura-asteria-en" for Deepgram)
+    *string voice;
+    #! Audio encoding (e.g. \c "mp3", \c "linear16", \c "flac", \c "opus")
+    *string encoding;
+    #! Sample rate (encoding-specific)
+    *int sample_rate;
+    #! Default request URL (overrides the backend's hardcoded default)
+    *string url;
+    #! Free-form backend-specific options forwarded to the underlying call
+    *hash<auto> provider_options;
+}
+
+#! Result of a transcription call
+public hashdecl TranscriptionResult {
+    #! The full transcribed text
+    string text;
+    #! Detected (or supplied) BCP-47 language code, when available
+    *string language;
+    #! Overall transcript confidence (0.0 – 1.0), when reported
+    *float confidence;
+    #! Audio duration in seconds, when reported
+    *float audio_duration;
+    #! Per-word objects with timing + speaker info, when available
+    *list<hash<auto>> words;
+    #! Per-utterance objects (when diarization / speaker labels were enabled)
+    *list<hash<auto>> utterances;
+    #! Generated summary (when summarization was enabled)
+    *string summary;
+    #! Provider-specific full response (escape hatch for backend-only fields)
+    *hash<auto> raw;
+}
+
+#! Result of a speech-synthesis call
+public hashdecl SynthesisResult {
+    #! Raw audio bytes in the requested encoding
+    binary audio;
+    #! MIME type of the returned audio
+    *string content_type;
+    #! Voice model used for synthesis
+    *string voice;
+    #! Provider-specific metadata (e.g. dg-request-id)
+    *hash<auto> metadata;
+}
+
+#! Static info describing what a speech-provider factory produces
+public hashdecl SpeechProviderInfo {
+    #! Provider mode (e.g. \c "deepgram", \c "assemblyai")
+    string mode;
+    #! Human-readable display name
+    string display_name;
+    #! The Qore module providing the factory
+    *string module_name;
+}
+
+#! Abstract base for an ASR provider
+/** Concrete subclasses are produced by an
+    @ref AbstractTranscriberFactory and held in
+    @ref SpeechProviderRegistry; callers receive them via
+    @ref SpeechProviderRegistry::createTranscriber().
+*/
+public class AbstractTranscriber {
+    #! Submits an audio source and returns the transcript
+    /** @param audio_url public URL of the audio to transcribe
+        @param opts optional per-call options forwarded to the backend
+
+        @return a @ref TranscriptionResult hashdecl with the transcript
+            and any analytics fields the backend produced
+    */
+    abstract hash<TranscriptionResult> transcribe(string audio_url, *hash<auto> opts);
+
+    #! Returns the backend mode (e.g. \c "deepgram", \c "assemblyai")
+    abstract string getMode();
+
+    #! Returns the model name in use, when set (informational)
+    *string getModel() {
+        return NOTHING;
+    }
+}
+
+#! Abstract base for a TTS provider
+public class AbstractSpeechSynthesizer {
+    #! Synthesizes speech from text
+    /** @param text the text to synthesize
+        @param opts optional per-call options forwarded to the backend
+
+        @return a @ref SynthesisResult hashdecl with the audio bytes
+            and any provider-specific metadata
+    */
+    abstract hash<SynthesisResult> synthesize(string text, *hash<auto> opts);
+
+    #! Returns the backend mode (e.g. \c "deepgram")
+    abstract string getMode();
+
+    #! Returns the voice / model name in use, when set (informational)
+    *string getVoice() {
+        return NOTHING;
+    }
+}
+
+#! Abstract factory for a transcriber
+public class AbstractTranscriberFactory {
+    #! Returns the backend mode (e.g. \c "deepgram")
+    abstract string getMode();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a transcriber instance from a @ref TranscriberConfig
+    abstract AbstractTranscriber create(hash<TranscriberConfig> config);
+
+    #! Returns static info about the transcriber this factory creates
+    hash<SpeechProviderInfo> getInfo() {
+        return <SpeechProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Abstract factory for a speech synthesizer
+public class AbstractSpeechSynthesizerFactory {
+    #! Returns the backend mode (e.g. \c "deepgram")
+    abstract string getMode();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a synthesizer instance from a @ref SynthesizerConfig
+    abstract AbstractSpeechSynthesizer create(hash<SynthesizerConfig> config);
+
+    #! Returns static info about the synthesizer this factory creates
+    hash<SpeechProviderInfo> getInfo() {
+        return <SpeechProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Central registry of speech-provider factories with lazy module loading
+/** Each entry in @ref TranscriberModuleMap / @ref SynthesizerModuleMap
+    maps a backend name to the Qore module that ships the matching
+    factory; the module is lazy-loaded on first lookup.
+
+    Additional providers register their factories at runtime via
+    @ref registerTranscriberFactory() /
+    @ref registerSynthesizerFactory() in their module's \c init block.
+*/
+public class SpeechProviderRegistry {
+    public {
+        #! Map of transcriber backend names to providing modules
+        const TranscriberModuleMap = {
+            "deepgram":   "DeepgramRestClient",
+            "assemblyai": "AssemblyAiRestClient",
+        };
+
+        #! Map of synthesizer backend names to providing modules
+        const SynthesizerModuleMap = {
+            "deepgram":   "DeepgramRestClient",
+        };
+    }
+
+    private {
+        static hash<string, AbstractTranscriberFactory> transcriber_cache = {};
+        static hash<string, AbstractSpeechSynthesizerFactory> synthesizer_cache = {};
+        static Mutex registry_lock();
+    }
+
+    #! Registers a transcriber factory
+    /** @throw SPEECH-CONFIG-ERROR a factory for the same mode is already registered
+    */
+    static registerTranscriberFactory(AbstractTranscriberFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string mode = factory.getMode();
+        if (transcriber_cache{mode}) {
+            throw "SPEECH-CONFIG-ERROR",
+                sprintf("transcriber factory for %y has already been registered",
+                    mode);
+        }
+        transcriber_cache{mode} = factory;
+    }
+
+    #! Registers a speech-synthesizer factory
+    /** @throw SPEECH-CONFIG-ERROR a factory for the same mode is already registered
+    */
+    static registerSynthesizerFactory(AbstractSpeechSynthesizerFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string mode = factory.getMode();
+        if (synthesizer_cache{mode}) {
+            throw "SPEECH-CONFIG-ERROR",
+                sprintf("synthesizer factory for %y has already been registered",
+                    mode);
+        }
+        synthesizer_cache{mode} = factory;
+    }
+
+    #! Removes a transcriber factory (intended for tests)
+    static deregisterTranscriberFactory(string mode) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove transcriber_cache{mode};
+    }
+
+    #! Removes a synthesizer factory (intended for tests)
+    static deregisterSynthesizerFactory(string mode) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove synthesizer_cache{mode};
+    }
+
+    #! Returns the transcriber factory for the given mode, lazy-loading if needed
+    static *AbstractTranscriberFactory getTranscriberFactory(string mode) {
+        if (transcriber_cache{mode}) {
+            return transcriber_cache{mode};
+        }
+        *string module_name = TranscriberModuleMap{mode};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "SPEECH-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for transcriber %y: %s",
+                    module_name, mode, ex.desc), ex;
+        }
+        return transcriber_cache{mode};
+    }
+
+    #! Returns the transcriber factory for the given mode, or throws
+    static AbstractTranscriberFactory getTranscriberFactoryEx(string mode) {
+        *AbstractTranscriberFactory f = getTranscriberFactory(mode);
+        if (!f) {
+            throw "SPEECH-CONFIG-ERROR",
+                sprintf("transcriber backend %y is unknown; registered "
+                    "backends: %y; backends available via lazy module load: %y",
+                    mode, keys transcriber_cache, keys TranscriberModuleMap);
+        }
+        return f;
+    }
+
+    #! Returns the synthesizer factory for the given mode, lazy-loading if needed
+    static *AbstractSpeechSynthesizerFactory getSynthesizerFactory(string mode) {
+        if (synthesizer_cache{mode}) {
+            return synthesizer_cache{mode};
+        }
+        *string module_name = SynthesizerModuleMap{mode};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "SPEECH-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for synthesizer %y: %s",
+                    module_name, mode, ex.desc), ex;
+        }
+        return synthesizer_cache{mode};
+    }
+
+    #! Returns the synthesizer factory for the given mode, or throws
+    static AbstractSpeechSynthesizerFactory getSynthesizerFactoryEx(string mode) {
+        *AbstractSpeechSynthesizerFactory f = getSynthesizerFactory(mode);
+        if (!f) {
+            throw "SPEECH-CONFIG-ERROR",
+                sprintf("synthesizer backend %y is unknown; registered "
+                    "backends: %y; backends available via lazy module load: %y",
+                    mode, keys synthesizer_cache, keys SynthesizerModuleMap);
+        }
+        return f;
+    }
+
+    #! Constructs a transcriber for the given @ref TranscriberConfig
+    /** @throw SPEECH-CONFIG-ERROR @ref TranscriberConfig::backend is missing or unknown
+    */
+    static AbstractTranscriber createTranscriber(hash<TranscriberConfig> config) {
+        if (!config.backend.val()) {
+            throw "SPEECH-CONFIG-ERROR",
+                "TranscriberConfig.backend is required for factory lookup";
+        }
+        return getTranscriberFactoryEx(config.backend).create(config);
+    }
+
+    #! Constructs a speech synthesizer for the given @ref SynthesizerConfig
+    /** @throw SPEECH-CONFIG-ERROR @ref SynthesizerConfig::backend is missing or unknown
+    */
+    static AbstractSpeechSynthesizer createSynthesizer(hash<SynthesizerConfig> config) {
+        if (!config.backend.val()) {
+            throw "SPEECH-CONFIG-ERROR",
+                "SynthesizerConfig.backend is required for factory lookup";
+        }
+        return getSynthesizerFactoryEx(config.backend).create(config);
+    }
+
+    #! Returns the set of known transcriber backends (registered + lazy-loadable)
+    static list<string> knownTranscriberBackends() {
+        return sort(keys (transcriber_cache + TranscriberModuleMap));
+    }
+
+    #! Returns the set of known synthesizer backends (registered + lazy-loadable)
+    static list<string> knownSynthesizerBackends() {
+        return sort(keys (synthesizer_cache + SynthesizerModuleMap));
+    }
+}
+}

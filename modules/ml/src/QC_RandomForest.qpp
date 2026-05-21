@@ -33,7 +33,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
 
     @since ml 1.0
 */
-qclass RandomForest [arg=QoreRandomForest* rf; ns=Qore::ML; flags=final];
+qclass RandomForest [arg=QoreRandomForest* rf; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a RandomForest with the given options
 /** @param options a hash with:
@@ -137,7 +137,7 @@ RandomForest::copy() {
 /** @param data list of hash records
     @param target_field the target column name
 */
-nothing RandomForest::fit(list<auto> data, string target_field) {
+nothing RandomForest::fit(list<hash<auto>> data, string target_field) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) { return QoreValue(); }

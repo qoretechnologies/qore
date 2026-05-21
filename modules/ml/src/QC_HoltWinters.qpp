@@ -42,7 +42,7 @@ list<float> next_year = hw.forecast(12);
     @endcode
 
 */
-qclass HoltWinters [arg=QoreHoltWinters* hw; ns=Qore::ML; flags=final];
+qclass HoltWinters [arg=QoreHoltWinters* hw; ns=Qore::ML; vparent=AbstractMLTimeSeries];
 
 //! Creates a HoltWinters instance with the given options
 /** @param options a hash with the following keys:
@@ -144,7 +144,7 @@ hw.fit(monthly_sales_data);
 
     @throw ML-HOLTWINTERS-ERROR not enough data (< 2 * period values)
 */
-nothing HoltWinters::fit(list<auto> series) {
+nothing HoltWinters::fit(list<float> series) {
     VectorXd vec = qoreListToVector(series, xsink);
     if (*xsink) {
         return QoreValue();

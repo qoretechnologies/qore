@@ -1,0 +1,43 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_AbstractMLTransformer.qpp
+
+    AbstractMLTransformer class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "QC_AbstractMLTransformer.h"
+
+//! Abstract base class for data transformers that fit on training data and transform new data (e.g. StandardScaler, MinMaxScaler, Imputer, OneHotEncoder, LabelEncoder, PCA, VarianceThreshold, PolynomialFeatures, SelectKBest, RFE, DateTimeFeatures, TextFeatures).
+/** This class cannot be instantiated directly; it serves as a typed parent for
+    concrete ML model subclasses. See @ref AbstractMLModel for the full hierarchy.
+*/
+qclass AbstractMLTransformer [ns=Qore::ML; arg=QoreMLModel* m; vparent=AbstractMLModel];
+
+//! Throws an exception; this class is abstract and cannot be instantiated directly
+/** @throw ABSTRACT-MLMODEL-ERROR the AbstractMLTransformer class is abstract; instantiate a
+    concrete ML model subclass instead
+*/
+AbstractMLTransformer::constructor() {
+    xsink->raiseException("ABSTRACT-MLMODEL-ERROR", "the AbstractMLTransformer class is abstract "
+        "and cannot be instantiated directly; instantiate a concrete ML model subclass instead");
+}

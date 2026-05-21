@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_GRADIENTBOOSTEDTREES_H
 
 #include "FlatTree.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLClassifier.h"
 
 #include <mutex>
 #include <random>
@@ -23,7 +25,7 @@ DLLLOCAL void preinitGradientBoostedTreesClass();
 DLLLOCAL QoreClass* initGradientBoostedTreesClass(QoreNamespace& ns);
 
 //! Gradient Boosted Trees for classification and regression
-class QoreGradientBoostedTrees : public AbstractPrivateData {
+class QoreGradientBoostedTrees : public QoreMLModel {
 public:
     DLLLOCAL QoreGradientBoostedTrees(int n_estimators, double learning_rate,
         int max_depth, int min_samples_split, int min_samples_leaf,
@@ -49,12 +51,14 @@ public:
 
     DLLLOCAL QoreHashNode* getFeatureImportances(ExceptionSink* xsink) const;
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "GradientBoostedTrees"; }
     DLLLOCAL int getActualEstimators() const { return actual_n_estimators; }
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
     DLLLOCAL void setTargetField(const std::string& name) {
@@ -88,7 +92,7 @@ public:
     //! Get class labels
     DLLLOCAL QoreListNode* getClasses(ExceptionSink* xsink) const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreGradientBoostedTrees* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

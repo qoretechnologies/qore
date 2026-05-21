@@ -29,7 +29,7 @@
 
     @since ml 1.0
 */
-qclass OneHotEncoder [arg=QoreOneHotEncoder* enc; ns=Qore::ML; flags=final];
+qclass OneHotEncoder [arg=QoreOneHotEncoder* enc; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a OneHotEncoder
 /** @param options optional hash with:
@@ -56,7 +56,7 @@ OneHotEncoder::copy() {
 //! Fits the encoder on a numeric matrix (learns unique categories per column)
 /** @param matrix list of row lists with integer-encoded categorical values
 */
-nothing OneHotEncoder::fitMatrix(list<auto> matrix) {
+nothing OneHotEncoder::fitMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     enc->fit(X, xsink);
@@ -66,7 +66,7 @@ nothing OneHotEncoder::fitMatrix(list<auto> matrix) {
 /** @param matrix list of row lists
     @return list of row lists with binary columns
 */
-list<auto> OneHotEncoder::transformMatrix(list<auto> matrix) {
+list<auto> OneHotEncoder::transformMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd result = enc->transform(X, xsink);
@@ -87,7 +87,7 @@ list<auto> OneHotEncoder::transformMatrix(list<auto> matrix) {
 /** @param matrix list of row lists
     @return list of row lists with binary columns
 */
-list<auto> OneHotEncoder::fitTransformMatrix(list<auto> matrix) {
+list<auto> OneHotEncoder::fitTransformMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd result = enc->fitTransform(X, xsink);

@@ -26,6 +26,164 @@
 */
 
 #include "QC_MLPipeline.h"
+#include "ml_serialization.h"
+
+#include <cassert>
+
+namespace {
+
+//! Algorithm tag corresponding to each PipelineStepType.
+const char* algorithmForType(PipelineStepType t) {
+    switch (t) {
+        case PipelineStepType::STANDARD_SCALER:     return "StandardScaler";
+        case PipelineStepType::MINMAX_SCALER:       return "MinMaxScaler";
+        case PipelineStepType::IMPUTER:             return "Imputer";
+        case PipelineStepType::PCA:                 return "PCA";
+        case PipelineStepType::LINEAR_REGRESSION:   return "LinearRegression";
+        case PipelineStepType::KMEANS:              return "KMeans";
+        case PipelineStepType::ISOLATION_FOREST:    return "IsolationForest";
+        case PipelineStepType::LOF:                 return "LOF";
+        case PipelineStepType::GMM:                 return "GMM";
+        case PipelineStepType::LOGISTIC_REGRESSION: return "LogisticRegression";
+        case PipelineStepType::KNN_CLASSIFICATION:  return "KNN";
+    }
+    return "";
+}
+
+//! Maps the on-the-wire algorithm tag back to its PipelineStepType and the QoreClass +
+//! classid needed to construct the wrapper QoreObject. Returns false if the algorithm
+//! is not a valid pipeline step type.
+bool resolvePipelineStep(const std::string& algorithm, PipelineStepType& type_out,
+        QoreClass*& cls_out, qore_classid_t& cid_out) {
+    struct Entry {
+        const char* name;
+        PipelineStepType type;
+        QoreClass** cls;
+        qore_classid_t* cid;
+    };
+    static const Entry table[] = {
+        {"StandardScaler",     PipelineStepType::STANDARD_SCALER,     &QC_STANDARDSCALER,     &CID_STANDARDSCALER},
+        {"MinMaxScaler",       PipelineStepType::MINMAX_SCALER,       &QC_MINMAXSCALER,       &CID_MINMAXSCALER},
+        {"Imputer",            PipelineStepType::IMPUTER,             &QC_IMPUTER,            &CID_IMPUTER},
+        {"PCA",                PipelineStepType::PCA,                 &QC_PCA,                &CID_PCA},
+        {"LinearRegression",   PipelineStepType::LINEAR_REGRESSION,   &QC_LINEARREGRESSION,   &CID_LINEARREGRESSION},
+        {"KMeans",             PipelineStepType::KMEANS,              &QC_KMEANS,             &CID_KMEANS},
+        {"IsolationForest",    PipelineStepType::ISOLATION_FOREST,    &QC_ISOLATIONFOREST,    &CID_ISOLATIONFOREST},
+        {"LOF",                PipelineStepType::LOF,                 &QC_LOF,                &CID_LOF},
+        {"GMM",                PipelineStepType::GMM,                 &QC_GMM,                &CID_GMM},
+        {"LogisticRegression", PipelineStepType::LOGISTIC_REGRESSION, &QC_LOGISTICREGRESSION, &CID_LOGISTICREGRESSION},
+        {"KNN",                PipelineStepType::KNN_CLASSIFICATION,  &QC_KNN,                &CID_KNN},
+    };
+    for (const Entry& e : table) {
+        if (algorithm == e.name) {
+            type_out = e.type;
+            cls_out = *e.cls;
+            cid_out = *e.cid;
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+std::vector<uint8_t> QoreMLPipeline::serializeState() const {
+    std::vector<uint8_t> buf;
+    MLSerialization::writeBool(buf, fitted);
+    MLSerialization::writeUint32(buf, static_cast<uint32_t>(steps.size()));
+    ExceptionSink xs;
+    for (const PipelineStep& step : steps) {
+        MLSerialization::writeString(buf, step.name);
+        const char* algo = algorithmForType(step.type);
+        MLSerialization::writeString(buf, std::string(algo));
+
+        // Reach the priv via the QoreMLModel base CID; vparent guarantees each step's
+        // qclass derives from AbstractMLModel, so this is an internal invariant.
+        QoreMLModel* m = static_cast<QoreMLModel*>(
+            step.obj->getReferencedPrivateData(CID_ABSTRACTMLMODEL, &xs));
+        assert(m && !xs);
+        std::vector<uint8_t> state = m->serializeState();
+        m->deref(&xs);
+
+        MLSerialization::writeUint32(buf, static_cast<uint32_t>(state.size()));
+        buf.insert(buf.end(), state.begin(), state.end());
+    }
+    return buf;
+}
+
+QoreMLPipeline* QoreMLPipeline::deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    bool fitted_ = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    uint32_t nsteps = MLSerialization::readUint32(ptr, remaining, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::unique_ptr<QoreMLPipeline> p(new QoreMLPipeline);
+    QoreProgram* pgm = getProgram();
+    for (uint32_t i = 0; i < nsteps; ++i) {
+        std::string step_name = MLSerialization::readString(ptr, remaining, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string algorithm = MLSerialization::readString(ptr, remaining, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        uint32_t state_len = MLSerialization::readUint32(ptr, remaining, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (remaining < state_len) {
+            xsink->raiseException("ML-DESERIALIZE-ERROR",
+                "MLPipeline step '%s': declared state length %u exceeds %zu remaining bytes",
+                step_name.c_str(), state_len, remaining);
+            return nullptr;
+        }
+
+        PipelineStepType step_type;
+        QoreClass* step_cls;
+        qore_classid_t step_cid;
+        if (!resolvePipelineStep(algorithm, step_type, step_cls, step_cid)) {
+            xsink->raiseException("ML-DESERIALIZE-ERROR",
+                "MLPipeline step '%s' has algorithm '%s' which is not a supported pipeline step type",
+                step_name.c_str(), algorithm.c_str());
+            return nullptr;
+        }
+
+        auto deserializer = MLSerialization::getDeserializer(algorithm);
+        if (!deserializer) {
+            xsink->raiseException("ML-DESERIALIZE-ERROR",
+                "MLPipeline step '%s': no registered deserializer for algorithm '%s'",
+                step_name.c_str(), algorithm.c_str());
+            return nullptr;
+        }
+        AbstractPrivateData* priv = deserializer(ptr, state_len, xsink);
+        if (*xsink || !priv) {
+            return nullptr;
+        }
+        ptr += state_len;
+        remaining -= state_len;
+
+        QoreObject* step_obj = new QoreObject(step_cls, pgm);
+        step_obj->setPrivate(step_cid, priv);
+
+        // addStep refs the object; release our local one after.
+        p->addStep(step_name, step_type, step_obj);
+        step_obj->deref(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    p->fitted = fitted_;
+    return p.release();
+}
 
 void QoreMLPipeline::addStep(const std::string& name, PipelineStepType type, QoreObject* obj) {
     obj->ref();

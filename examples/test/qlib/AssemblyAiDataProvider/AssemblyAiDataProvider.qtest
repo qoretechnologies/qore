@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/QoreAsyncJobUtils.qm
+%requires ../../../../qlib/AssemblyAiRestClient.qm
+%requires ../../../../qlib/AssemblyAiDataProvider
+
+%exec-class AssemblyAiDataProviderTest
+
+#! Same shape as the test in AssemblyAiRestClient.qtest, repeated here
+#! so the DataProvider can be exercised without re-running RestClient tests.
+class FakeAssemblyAiClient inherits AssemblyAiRestClient::AssemblyAiRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor() : AssemblyAiRestClient::AssemblyAiRestClientIo(
+            {"url": "https://api.assemblyai.com", "apikey": "x"}) {
+        setSleeper(nothing sub (timeout to) {});
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"method": "POST", "path": path, "body": body};
+        if (path == "/v2/transcript") {
+            return <RestClient::RestResponseInfo>{
+                "body": {"id": "t9", "status": "queued"},
+            };
+        }
+        throw "FAKE-ERROR", sprintf("unexpected POST %y", path);
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push calls, {"method": "GET", "path": path};
+        if (path == "/v2/transcript/t9") {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "id": "t9",
+                    "status": "completed",
+                    "text": "Sample transcript.",
+                    "audio_url": "https://example.com/a.mp3",
+                    "audio_duration": 12,
+                    "confidence": 0.95,
+                    "language_code": "en_us",
+                },
+            };
+        }
+        throw "FAKE-ERROR", sprintf("unexpected GET %y", path);
+    }
+
+    string getSafeUrl() { return "https://api.assemblyai.com"; }
+}
+
+public class AssemblyAiDataProviderTest inherits QUnit::Test {
+    constructor() : Test("AssemblyAiDataProvider Test", "1.0") {
+        addTestCase("factory + app + transcribe action registered",
+            \registrationTest());
+        addTestCase("transcribe action runs the lifecycle and surfaces transcript",
+            \transcribeActionTest());
+        addTestCase("app declares Speech AppGroup",       \speechAppGroupTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("assemblyai");
+        assertEq("assemblyai", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("AssemblyAI");
+        assertEq("AssemblyAI", app.name);
+        assertEq("assemblyai", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("AssemblyAI");
+        assertEq(1, actions.size());
+        assertEq("transcribe", actions[0].action);
+    }
+
+    private transcribeActionTest() {
+        FakeAssemblyAiClient fake();
+        AssemblyAiDataProvider::AssemblyAiTranscribeDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "audio_url": "https://example.com/a.mp3",
+            "speech_model": "universal",
+            "speaker_labels": True,
+            "poll_interval": 1ms,
+        });
+
+        # Submit was made
+        assertEq("POST", fake.calls[0].method);
+        assertEq("/v2/transcript", fake.calls[0].path);
+        # audio_url forwarded into the submit body
+        assertEq("https://example.com/a.mp3", fake.calls[0].body.audio_url);
+        # opts forwarded
+        assertEq("universal", fake.calls[0].body.speech_model);
+        assertEq(True, fake.calls[0].body.speaker_labels);
+
+        # Response surfaces through
+        assertEq("Sample transcript.", resp.text);
+        assertEq("completed", resp.status);
+        assertEq("en_us", resp.language_code);
+    }
+
+    private speechAppGroupTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("AssemblyAI");
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm,  app.groups));
+        assertTrue(inlist(DataProvider::AppGroup::Speech, app.groups));
+    }
+}

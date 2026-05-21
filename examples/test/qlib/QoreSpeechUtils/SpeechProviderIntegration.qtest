@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Integration test verifying the lazy-load wiring between QoreSpeechUtils
+#! and the real DeepgramRestClient + AssemblyAiRestClient factories.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreSpeechUtils.qm
+# DeepgramRestClient + AssemblyAiRestClient are loaded VIA SpeechProviderRegistry
+# (lazy-load through TranscriberModuleMap / SynthesizerModuleMap) — NOT via direct
+# %requires here.  This verifies the lazy-load wiring works end-to-end.
+
+%exec-class SpeechProviderIntegrationTest
+
+public class SpeechProviderIntegrationTest inherits QUnit::Test {
+    constructor() : Test("QoreSpeechUtils Integration Test", "1.0") {
+        addTestCase("deepgram transcriber loads via lazy module map",
+            \deepgramTranscriberLoadTest());
+        addTestCase("deepgram synthesizer loads via lazy module map",
+            \deepgramSynthesizerLoadTest());
+        addTestCase("assemblyai transcriber loads via lazy module map",
+            \assemblyAiTranscriberLoadTest());
+        addTestCase("synthesizer lookup for assemblyai (no synthesizer) returns nothing",
+            \assemblyAiNoSynthesizerTest());
+        set_return_value(main());
+    }
+
+    private deepgramTranscriberLoadTest() {
+        QoreSpeechUtils::AbstractTranscriberFactory f =
+            QoreSpeechUtils::SpeechProviderRegistry::getTranscriberFactoryEx("deepgram");
+        assertEq("deepgram", f.getMode());
+        assertEq("DeepgramRestClient", f.getInfo().module_name);
+        # Factory must be able to construct an instance with valid config
+        QoreSpeechUtils::AbstractTranscriber tr = f.create(
+            <QoreSpeechUtils::TranscriberConfig>{
+                "backend": "deepgram",
+                "api_key": "fake-key",
+                "model": "nova-3",
+            });
+        assertEq("deepgram", tr.getMode());
+        assertEq("nova-3", tr.getModel());
+    }
+
+    private deepgramSynthesizerLoadTest() {
+        QoreSpeechUtils::AbstractSpeechSynthesizerFactory f =
+            QoreSpeechUtils::SpeechProviderRegistry::getSynthesizerFactoryEx("deepgram");
+        assertEq("deepgram", f.getMode());
+        assertEq("DeepgramRestClient", f.getInfo().module_name);
+        QoreSpeechUtils::AbstractSpeechSynthesizer s = f.create(
+            <QoreSpeechUtils::SynthesizerConfig>{
+                "backend": "deepgram",
+                "api_key": "fake-key",
+                "voice": "aura-asteria-en",
+            });
+        assertEq("deepgram", s.getMode());
+        assertEq("aura-asteria-en", s.getVoice());
+    }
+
+    private assemblyAiTranscriberLoadTest() {
+        QoreSpeechUtils::AbstractTranscriberFactory f =
+            QoreSpeechUtils::SpeechProviderRegistry::getTranscriberFactoryEx("assemblyai");
+        assertEq("assemblyai", f.getMode());
+        assertEq("AssemblyAiRestClient", f.getInfo().module_name);
+        QoreSpeechUtils::AbstractTranscriber tr = f.create(
+            <QoreSpeechUtils::TranscriberConfig>{
+                "backend": "assemblyai",
+                "api_key": "fake-key",
+                "model": "universal",
+            });
+        assertEq("assemblyai", tr.getMode());
+        assertEq("universal", tr.getModel());
+    }
+
+    private assemblyAiNoSynthesizerTest() {
+        # AssemblyAI provides only ASR — getSynthesizerFactory should return nothing
+        assertEq(NOTHING,
+            QoreSpeechUtils::SpeechProviderRegistry::getSynthesizerFactory("assemblyai"));
+        # And the Ex variant must throw
+        assertThrows("SPEECH-CONFIG-ERROR", sub () {
+            QoreSpeechUtils::SpeechProviderRegistry::getSynthesizerFactoryEx("assemblyai");
+        });
+    }
+}

@@ -1,0 +1,145 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AzureDocumentIntelligenceDataProvider module definition
+
+/*  AzureDocumentIntelligenceDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) AzureDocumentIntelligenceRestClient
+%requires RestClientIo
+
+module AzureDocumentIntelligenceDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Azure Document Intelligence";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new AzureDocumentIntelligenceDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AzureDocumentIntelligenceDataProvider::AppName,
+            "display_name": "Azure Document Intelligence",
+            "short_desc": "Azure Document Intelligence (formerly Form Recognizer)",
+            "desc": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) "
+                "(formerly Form Recognizer) — Microsoft's managed document "
+                "extraction service.\n\n"
+                "**Prebuilt models**:\n"
+                "- `prebuilt-document` — general key/value extraction\n"
+                "- `prebuilt-layout` — layout, tables, paragraphs\n"
+                "- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / "
+                "receipt entities\n"
+                "- `prebuilt-idDocument` — driver's licenses, passports, "
+                "national IDs\n"
+                "- `prebuilt-businessCard` — business card extraction\n"
+                "- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n"
+                "- `prebuilt-contract` — contract clauses + parties\n\n"
+                "**Custom models** trained in the Azure portal are referenced "
+                "by their GUID identifier.",
+            "scheme": "azure-documentintelligence",
+            "logo": AzureDocumentIntelligenceLogo,
+            "logo_file_name": "azure-document-intelligence-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (
+                DataProvider::AppGroup::AiLlm,
+                DataProvider::AppGroup::Documents,
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AzureDocumentIntelligenceDataProvider::AppName,
+            "path": "/analyze-document",
+            "action": "analyze-document",
+            "display_name": "Analyze Document",
+            "short_desc": "Run a Document Intelligence model over a document (async)",
+            "desc": "Submits a document to a Document Intelligence model and "
+                "waits for the analysis to complete.  The lifecycle is "
+                "internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" "
+                "via `AsyncJobPoller`: POST submit → poll the "
+                "`Operation-Location` URL → return the parsed `analyzeResult`.\n\n"
+                "Pass the document via one of:\n"
+                "- `document_url` — public URL (Azure fetches the document)\n"
+                "- `document_bytes` — raw bytes (base64-encoded automatically)\n"
+                "- `document_path` — local file path (read and base64-encoded)",
+            "action_code": DPAT_API,
+            "groups": ("Document Extraction",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
+                    "model_id",
+                }, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
+                    "document_url", "document_bytes", "document_path",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
+                    "api_version", "poll_interval", "analysis_timeout",
+                }
+            ),
+            "output_type": AzureDocumentIntelligenceAnalyzeDocumentDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage AzureDocumentIntelligenceDataProvider Module
+
+    @tableofcontents
+
+    @section azuredocumentintelligencedataproviderintro AzureDocumentIntelligenceDataProvider Introduction
+
+    The %AzureDocumentIntelligenceDataProvider module provides a data
+    provider API for [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence).
+    A single DPAT_API action is registered:
+
+    - `analyze-document` — submit a document to a prebuilt or custom
+      Document Intelligence model, drive the async poll-until-complete
+      loop, and return the parsed `analyzeResult` with text, layout,
+      tables, key/value pairs, and typed entities
+
+    @par Async lifecycle
+
+    Document Intelligence's `analyze` API is asynchronous: POST returns
+    an `Operation-Location` header pointing to a polling URL.  This
+    module's high-level action drives the loop internally via
+    @ref qoreasyncjobutilsintro "QoreAsyncJobUtils".
+
+    @section AzureDocumentIntelligenceDataProviderRelnotes Release Notes
+
+    @subsection AzureDocumentIntelligenceDataProviderv1_0 AzureDocumentIntelligenceDataProvider v1.0
+    - the initial version of the %AzureDocumentIntelligenceDataProvider module
+*/
+
+#! contains all public definitions in the AzureDocumentIntelligenceDataProvider module
+public namespace AzureDocumentIntelligenceDataProvider {
+#! Azure Document Intelligence application name
+public const AppName = "AzureDocumentIntelligence";
+}
+
+#! App logo loaded from file
+public const AzureDocumentIntelligenceLogo =
+    File::readTextFile(get_script_dir() + "/azure-document-intelligence-logo.svg");

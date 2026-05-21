@@ -59,7 +59,7 @@ printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
     @endcode
 
 */
-qclass LinearRegression [arg=QoreLinearRegression* lr; ns=Qore::ML; flags=final];
+qclass LinearRegression [arg=QoreLinearRegression* lr; ns=Qore::ML; vparent=AbstractMLRegressor];
 
 //! Creates a LinearRegression with the given options
 /** @param options a hash with the following optional keys:
@@ -112,7 +112,7 @@ lr.fit(data_records, "price");
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-LINEAR-REGRESSION-ERROR if fitting fails
 */
-nothing LinearRegression::fit(list<auto> data, string target_field) {
+nothing LinearRegression::fit(list<hash<auto>> data, string target_field) {
     // Extract field names from first record, excluding target
     if (!data || data->empty()) {
         xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
@@ -184,7 +184,7 @@ lr.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)), (5.0, 11.0, 17.0));
     @throw ML-DATA-ERROR if the matrix is empty or malformed
     @throw ML-LINEAR-REGRESSION-ERROR if fitting fails
 */
-nothing LinearRegression::fitMatrix(list<auto> X, list<auto> y) {
+nothing LinearRegression::fitMatrix(list<list<float>> X, list<float> y) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -211,7 +211,7 @@ lr.update(new_batch, 0.01);
     @throw ML-LINEAR-REGRESSION-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing LinearRegression::update(list<auto> data, float learning_rate) {
+nothing LinearRegression::update(list<hash<auto>> data, float learning_rate) {
     const std::vector<std::string>& feat_names = lr->getFieldNames();
     const std::string& target_name = lr->getTargetField();
     if (feat_names.empty() || target_name.empty()) {
@@ -261,7 +261,7 @@ lr.updateMatrix(((1.0,), (2.0,), (3.0,)), (3.1, 5.2, 6.8), 0.01);
     @throw ML-LINEAR-REGRESSION-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing LinearRegression::updateMatrix(list<auto> matrix, list<auto> target, float learning_rate) {
+nothing LinearRegression::updateMatrix(list<list<float>> matrix, list<float> target, float learning_rate) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -311,7 +311,7 @@ list<hash<LinearRegressionResult>> results = lr.predictMatrix(((4.0, 5.0), (6.0,
 
     @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<LinearRegressionResult>> LinearRegression::predictMatrix(list<auto> X) {
+list<hash<LinearRegressionResult>> LinearRegression::predictMatrix(list<list<float>> X) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -430,7 +430,7 @@ list<float> LinearRegression::getFeatureStds() {
     @throw ML-LINEAR-REGRESSION-ERROR if fitting fails or dimensions mismatch
     @throw ML-DATA-ERROR if the target vector is malformed
 */
-nothing LinearRegression::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+nothing LinearRegression::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<float> y) {
     VectorXd target = qoreListToVector(y, xsink);
     if (*xsink) {
         return QoreValue();

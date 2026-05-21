@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_PCA_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <mutex>
 
@@ -39,7 +41,7 @@ DLLLOCAL void preinitPCAClass();
 DLLLOCAL QoreClass* initPCAClass(QoreNamespace& ns);
 
 //! PCA implementation class
-class QorePCA : public AbstractPrivateData {
+class QorePCA : public QoreMLModel {
 public:
     DLLLOCAL QorePCA(int n_components, double variance_threshold, bool center, bool scale)
         : n_components(n_components), variance_threshold(variance_threshold),
@@ -47,7 +49,9 @@ public:
     }
 
     DLLLOCAL int getNumComponents() const { return actual_n_components; }
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "PCA"; }
 
     //! Fit the model on data
     DLLLOCAL void fitInternal(const MatrixXd& data, ExceptionSink* xsink);
@@ -75,10 +79,10 @@ public:
 
     //! Store field names
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QorePCA* deserializeState(const uint8_t* data, size_t len,

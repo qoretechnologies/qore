@@ -53,7 +53,7 @@ SparseMatrix sm(((1.0, 0.0, 0.0), (0.0, 2.0, 0.0), (0.0, 0.0, 3.0)), 0.01);
 printf("NNZ: %d (out of %d)\n", sm.nnz(), sm.rows() * sm.cols());
     @endcode
 */
-qclass SparseMatrix [arg=QoreSparseMatrix* sm; ns=Qore::ML; flags=final];
+qclass SparseMatrix [arg=QoreSparseMatrix* sm; ns=Qore::ML; vparent=AbstractMLModel];
 
 //! Creates a SparseMatrix from triplet entries
 /** @param rows number of rows
@@ -137,7 +137,7 @@ list<list<float>> dense = sm.toDense();
 
     @note For very large sparse matrices, this may consume significant memory.
 */
-list<auto> SparseMatrix::toDense() [flags=RET_VALUE_ONLY] {
+list<list<float>> SparseMatrix::toDense() [flags=RET_VALUE_ONLY] {
     return sm->toDense(xsink);
 }
 

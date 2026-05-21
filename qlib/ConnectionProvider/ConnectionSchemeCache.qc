@@ -78,7 +78,13 @@ public class ConnectionSchemeCache {
 
             "anthropic": "AnthropicRestClient",
 
+            "assemblyai": "AssemblyAiRestClient",
+
             "awsrests": "AwsRestClient",
+
+            "aws-textract": "AwsTextractRestClient",
+
+            "azure-documentintelligence": "AzureDocumentIntelligenceRestClient",
 
             "baselinkerrest": "BaseLinkerRestClient",
 
@@ -88,6 +94,8 @@ public class ConnectionSchemeCache {
             "huggingface": "HuggingFaceRestClient",
 
             "bigcommerceres": "BigCommerceRestClient",
+
+            "bfl": "BflRestClient",
 
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
@@ -124,6 +132,8 @@ public class ConnectionSchemeCache {
             "db": "DbDataProvider",
 
             "deel": "DeelRestClient",
+
+            "deepgram": "DeepgramRestClient",
 
             "deepseek": "DeepSeekRestClient",
 
@@ -168,6 +178,8 @@ public class ConnectionSchemeCache {
             "gcal": "GoogleRestClient",
             "gmail": "GoogleRestClient",
             "grests": "GoogleRestClient",
+
+            "google-documentai": "GoogleDocumentAiRestClient",
 
             "hue": "HueRestClient",
 
@@ -227,6 +239,8 @@ public class ConnectionSchemeCache {
             "pinecone": "PineconeRestClient",
 
             "segment": "SegmentRestClient",
+
+            "stability-ai": "StabilityAiRestClient",
 
             "pop3": "Pop3Client",
             "pop3s": "Pop3Client",

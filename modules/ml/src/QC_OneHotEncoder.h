@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_ONEHOTENCODER_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <mutex>
 #include <unordered_map>
@@ -27,7 +29,7 @@ DLLLOCAL QoreClass* initOneHotEncoderClass(QoreNamespace& ns);
     transform() outputs a matrix where each category gets its own column.
     Follows the StandardScaler pattern for MLPipeline compatibility.
 */
-class QoreOneHotEncoder : public AbstractPrivateData {
+class QoreOneHotEncoder : public QoreMLModel {
 public:
     DLLLOCAL QoreOneHotEncoder(bool drop_first);
 
@@ -40,18 +42,20 @@ public:
     //! Fit and transform in one step
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& X, ExceptionSink* xsink);
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "OneHotEncoder"; }
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
 
     //! Get the output feature names (one per category per input feature)
     DLLLOCAL QoreListNode* getOutputFeatureNames(ExceptionSink* xsink) const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreOneHotEncoder* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_HOLTWINTERS_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTimeSeries.h"
 
 #include <mutex>
 
@@ -39,7 +41,7 @@ DLLLOCAL void preinitHoltWintersClass();
 DLLLOCAL QoreClass* initHoltWintersClass(QoreNamespace& ns);
 
 //! Holt-Winters triple exponential smoothing implementation class
-class QoreHoltWinters : public AbstractPrivateData {
+class QoreHoltWinters : public QoreMLModel {
 public:
     DLLLOCAL QoreHoltWinters(int period, double alpha, double beta, double gamma,
         const char* seasonal_type, bool damped, double phi)
@@ -48,7 +50,9 @@ public:
     }
 
     DLLLOCAL int getPeriod() const { return period; }
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "HoltWinters"; }
 
     //! Initialize model from historical data
     DLLLOCAL void fit(const VectorXd& series, ExceptionSink* xsink);
@@ -65,7 +69,7 @@ public:
     DLLLOCAL QoreListNode* getSeasonal(ExceptionSink* xsink);
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreHoltWinters* deserializeState(const uint8_t* data, size_t len,

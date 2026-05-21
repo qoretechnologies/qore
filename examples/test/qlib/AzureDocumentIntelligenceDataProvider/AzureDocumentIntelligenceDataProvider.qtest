@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/QoreAsyncJobUtils.qm
+%requires ../../../../qlib/AzureDocumentIntelligenceRestClient.qm
+%requires ../../../../qlib/AzureDocumentIntelligenceDataProvider
+
+%exec-class AzureDocumentIntelligenceDataProviderTest
+
+class FakeAzureDocIntelClient
+        inherits AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+    }
+    constructor() : AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo(
+            {"url": "https://x.cognitiveservices.azure.com", "apikey": "k"}) {
+        setSleeper(nothing sub (timeout to) {});
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"method": "POST", "path": path, "body": body};
+        return <RestClient::RestResponseInfo>{
+            "headers": {"operation-location": "/poll-url"},
+            "body": "",
+        };
+    }
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push calls, {"method": "GET", "path": path};
+        return <RestClient::RestResponseInfo>{
+            "body": {
+                "status": "succeeded",
+                "analyzeResult": {"content": "OK", "modelId": "prebuilt-invoice"},
+            },
+        };
+    }
+    string getSafeUrl() { return "https://x.cognitiveservices.azure.com"; }
+}
+
+public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
+    constructor() : Test("AzureDocumentIntelligenceDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered",  \registrationTest());
+        addTestCase("analyze-document with URL source",   \urlSourceTest());
+        addTestCase("analyze-document with bytes encodes base64",
+            \base64SourceTest());
+        addTestCase("analyze-document raises when no source given",
+            \noSourceTest());
+        addTestCase("app declares Documents AppGroup",    \documentsAppGroupTest());
+        addTestCase("model_id allowed_values has display_name",
+            \allowedValuesTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("azure-documentintelligence");
+        assertEq("azure-documentintelligence", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("AzureDocumentIntelligence");
+        assertEq("AzureDocumentIntelligence", app.name);
+        assertEq("azure-documentintelligence", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("AzureDocumentIntelligence");
+        assertEq(1, actions.size());
+        assertEq("analyze-document", actions[0].action);
+    }
+
+    private urlSourceTest() {
+        FakeAzureDocIntelClient fake();
+        AzureDocumentIntelligenceDataProvider::AzureDocumentIntelligenceAnalyzeDocumentDataProvider
+            prov(fake);
+        auto r = prov.doRequest({
+            "model_id":     "prebuilt-invoice",
+            "document_url": "https://example.com/invoice.pdf",
+            "poll_interval": 1ms,
+        });
+        assertEq("OK", r.content);
+        # POST body uses urlSource
+        assertEq("https://example.com/invoice.pdf", fake.calls[0].body.urlSource);
+        # Not base64Source
+        assertEq(NOTHING, fake.calls[0].body.base64Source);
+    }
+
+    private base64SourceTest() {
+        FakeAzureDocIntelClient fake();
+        AzureDocumentIntelligenceDataProvider::AzureDocumentIntelligenceAnalyzeDocumentDataProvider
+            prov(fake);
+        prov.doRequest({
+            "model_id":       "prebuilt-invoice",
+            "document_bytes": binary("PDF-BYTES-HERE"),
+            "poll_interval":  1ms,
+        });
+        # base64-encoded
+        assertTrue(fake.calls[0].body.base64Source.val());
+        assertEq(NOTHING, fake.calls[0].body.urlSource);
+    }
+
+    private noSourceTest() {
+        FakeAzureDocIntelClient fake();
+        AzureDocumentIntelligenceDataProvider::AzureDocumentIntelligenceAnalyzeDocumentDataProvider
+            prov(fake);
+        assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", sub () {
+            prov.doRequest({"model_id": "prebuilt-invoice", "poll_interval": 1ms});
+        });
+    }
+
+    private documentsAppGroupTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("AzureDocumentIntelligence");
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm,     app.groups));
+        assertTrue(inlist(DataProvider::AppGroup::Documents, app.groups));
+    }
+
+    private allowedValuesTest() {
+        *hash<auto> fld =
+            AzureDocumentIntelligenceDataProvider::AzureDocumentIntelligenceAnalyzeRequestDataType::Fields.model_id;
+        assertTrue(fld.allowed_values.size() >= 5);
+        # Every allowed value has a display_name
+        foreach hash<auto> av in (fld.allowed_values) {
+            assertTrue(av.value.val());
+            assertTrue(av.display_name.val());
+        }
+    }
+}

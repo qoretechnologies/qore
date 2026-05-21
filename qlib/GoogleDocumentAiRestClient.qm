@@ -1,0 +1,246 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GoogleDocumentAiRestClient.qm Qore user module for Google Document AI
+
+/*  GoogleDocumentAiRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires GcpAuth
+
+module GoogleDocumentAiRestClient {
+    version = "1.0";
+    desc = "user module for calling Google Document AI REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("google-documentai",
+            GoogleDocumentAiRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage GoogleDocumentAiRestClient Module
+
+    @tableofcontents
+
+    @section googledocumentairestclientintro GoogleDocumentAiRestClient Introduction
+
+    The %GoogleDocumentAiRestClient module provides a REST client for
+    [Google Document AI](https://cloud.google.com/document-ai) —
+    Google's managed document-extraction service with prebuilt processors
+    for invoices, receipts, forms, IDs, contracts, and custom-trained
+    processors for domain-specific schemas.
+
+    Authentication uses @ref gcpauthintro "GcpAuth" — either an
+    explicit service-account JSON file or Application Default Credentials.
+
+    The main classes are:
+    - @ref GoogleDocumentAiRestClient::GoogleDocumentAiRestClient — sync client
+    - @ref GoogleDocumentAiRestClient::GoogleDocumentAiRestClientIo — async client
+    - @ref GoogleDocumentAiRestClient::GoogleDocumentAiRestConnection — connection
+
+    @par Example: process a document
+
+    @code{.py}
+%modern
+%requires GoogleDocumentAiRestClient
+%requires GcpAuth
+
+string token = GcpAuth::getAccessToken("/etc/gcp/sa.json");
+GoogleDocumentAiRestClient::GoogleDocumentAiRestClient rest({
+    "url": "https://us-documentai.googleapis.com",
+});
+hash<auto> resp = rest.post(
+    sprintf("/v1/projects/%s/locations/us/processors/%s:process",
+        project_id, processor_id),
+    {"rawDocument": {"content": base64_pdf, "mimeType": "application/pdf"}},
+    NOTHING,
+    {"Authorization": "Bearer " + token});
+printf("Text: %s\n", resp.body.document.text);
+    @endcode
+
+    @section GoogleDocumentAiRestClientRelnotes Release Notes
+
+    @subsection GoogleDocumentAiRestClientv1_0 GoogleDocumentAiRestClient v1.0
+    - the initial version of the %GoogleDocumentAiRestClient module
+*/
+
+#! contains all public symbols of the GoogleDocumentAiRestClient module
+public namespace GoogleDocumentAiRestClient {
+#! Default region (US — for the multi-region endpoint)
+public const DefaultRegion = "us";
+
+#! Default OAuth2 scopes required for Document AI
+public const DefaultScopes = ("https://www.googleapis.com/auth/cloud-platform",);
+
+#! Common base class for GoogleDocumentAiRestClient functionality
+public class GoogleDocumentAiRestClientBase {
+    public {
+        const DefaultUrlPattern = "https://%s-documentai.googleapis.com";
+
+        const DefaultOptions = {
+            "data": "json",
+        };
+    }
+
+    #! Builds the per-region Document AI URL
+    static string buildUrl(*string region) {
+        return sprintf(DefaultUrlPattern, region ?? DefaultRegion);
+    }
+
+    #! Returns options for the REST client constructors
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv;
+        rv += DefaultOptions + opts;
+        if (!rv.url.val()) {
+            rv.url = buildUrl(rv.gcp_region);
+        }
+        # GcpAuth-managed auth — no inline apikey / token mapping;
+        # callers inject Authorization: Bearer <gcp_access_token> per request.
+        return rv;
+    }
+}
+
+#! Sync REST client for Google Document AI
+public class GoogleDocumentAiRestClient inherits RestClient::RestClient,
+        GoogleDocumentAiRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(GoogleDocumentAiRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! Async REST client for Google Document AI
+public class GoogleDocumentAiRestClientIo inherits RestClientIo::RestClientIo,
+        GoogleDocumentAiRestClientBase {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(GoogleDocumentAiRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Connection class for Google Document AI
+public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "google-documentai://us-documentai.googleapis.com";
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Google Document AI Connection",
+            "short_desc": "A connection to Google Document AI",
+            "desc": "A connection to [Google Document AI](https://cloud.google.com/document-ai) "
+                "— a managed document-extraction service.  Authentication is "
+                "via @ref gcpauthintro \"GcpAuth\" using Application Default "
+                "Credentials or an explicit service-account JSON file.",
+            "cls": Class::forName("GoogleDocumentAiRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "google-documentai": True,
+            },
+            "base_scheme_map": {
+                "https": "google-documentai",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "gcp_project_id": <ConnectionOptionInfo>{
+                    "display_name": "GCP Project ID",
+                    "short_desc": "GCP project that owns the Document AI processors",
+                    "type": "string",
+                    "desc": "GCP project ID (required for the process URL).",
+                },
+                "gcp_region": <ConnectionOptionInfo>{
+                    "display_name": "GCP Region",
+                    "short_desc": "Document AI processor region",
+                    "type": "string",
+                    "desc": "Document AI region (e.g. `us`, `eu`).  Determines the "
+                        "regional endpoint hostname.",
+                    "default_value": DefaultRegion,
+                },
+                "gcp_sa_json_path": <ConnectionOptionInfo>{
+                    "display_name": "Service-Account JSON Path",
+                    "short_desc": "Path to a service-account JSON key file",
+                    "type": "string",
+                    "desc": "Explicit path to a GCP service-account JSON file "
+                        "for JWT-bearer auth.  When omitted, Application Default "
+                        "Credentials are used.",
+                },
+            },
+            "required_options": "gcp_project_id",
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    string getType() {
+        return "google-documentai";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("GoogleDocumentAiDataProvider");
+        return create_object("GoogleDocumentAiDataProvider",
+            (constructor_options ?? {}) + getConnectionOptions());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private GoogleDocumentAiRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GoogleDocumentAiRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GoogleDocumentAiRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            *string region = opts.gcp_region ?? DefaultRegion;
+            string canonical = "google-documentai://" + region + "-documentai.googleapis.com";
+            if (url != canonical) {
+                update.url = canonical;
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+}
+}

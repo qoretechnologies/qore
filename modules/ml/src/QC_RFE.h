@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_RFE_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 #include "FlatTree.h"
 
 #include <mutex>
@@ -24,7 +26,7 @@ DLLLOCAL extern QoreClass* QC_RFE;
 DLLLOCAL void preinitRFEClass();
 DLLLOCAL QoreClass* initRFEClass(QoreNamespace& ns);
 
-class QoreRFE : public AbstractPrivateData {
+class QoreRFE : public QoreMLModel {
 public:
     DLLLOCAL QoreRFE(int n_features_to_select, int step);
 
@@ -38,12 +40,14 @@ public:
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& X, const VectorXd& y,
         ExceptionSink* xsink);
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "RFE"; }
 
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
 
@@ -53,7 +57,7 @@ public:
     //! Get feature ranking (1 = selected, 2+ = elimination round)
     DLLLOCAL QoreListNode* getRanking(ExceptionSink* xsink) const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreRFE* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

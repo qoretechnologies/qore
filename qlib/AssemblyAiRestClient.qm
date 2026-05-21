@@ -1,0 +1,455 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AssemblyAiRestClient.qm Qore user module for calling AssemblyAI REST services
+
+/*  AssemblyAiRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreAsyncJobUtils
+%requires QoreSpeechUtils
+
+module AssemblyAiRestClient {
+    version = "1.0";
+    desc = "user module for calling AssemblyAI speech-to-text REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("assemblyai",
+            AssemblyAiRestConnection::ConnectionScheme);
+        QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
+            new AssemblyAiTranscriberFactory());
+    };
+}
+
+/** @mainpage AssemblyAiRestClient Module
+
+    @tableofcontents
+
+    @section assemblyairestclientintro AssemblyAiRestClient Introduction
+
+    The %AssemblyAiRestClient module provides an API for calling
+    [AssemblyAI](https://www.assemblyai.com) speech-to-text REST services.
+
+    AssemblyAI is a speech AI platform offering high-accuracy transcription
+    with the Universal-2 and Slam-1 model families, plus optional analytics
+    (sentiment, summarization, entity detection, content safety, topic
+    detection).  The transcription API is asynchronous: callers submit an
+    audio URL and poll a job until completion.
+
+    To use this module, use \c "%requires AssemblyAiRestClient" in your code.
+
+    The main classes are:
+    - @ref AssemblyAiRestClient::AssemblyAiRestClient — sync REST client
+    - @ref AssemblyAiRestClient::AssemblyAiRestClientIo — async REST client
+      with high-level @ref AssemblyAiRestClientIo::transcribe() helper
+    - @ref AssemblyAiRestClient::AssemblyAiRestConnection — connection
+
+    @par Authentication
+
+    AssemblyAI uses a bare-key auth header — the API key value is sent
+    directly in the \c Authorization header (no \c "Bearer" or \c "Token"
+    prefix).  The module handles this via the \c default_headers connection
+    option; callers just supply \c apikey.
+
+    @par Example: end-to-end transcription via the async helper
+
+    @code{.py}
+%modern
+%requires AssemblyAiRestClient
+
+AssemblyAiRestClient::AssemblyAiRestClientIo rest({"apikey": api_key});
+hash<auto> result = rest.transcribe("https://example.com/audio.mp3", {
+    "speaker_labels": True,
+    "summarization": True,
+});
+printf("Transcript: %s\nSummary: %s\n", result.text, result.summary);
+    @endcode
+
+    @section AssemblyAiRestClientRelnotes Release Notes
+
+    @subsection AssemblyAiRestClientv1_0 AssemblyAiRestClient v1.0
+    - the initial version of the %AssemblyAiRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+#! the AssemblyAiRestClient namespace contains all the objects in the AssemblyAiRestClient module
+public namespace AssemblyAiRestClient {
+#! Common base class for AssemblyAiRestClient functionality
+public class AssemblyAiRestClientBase {
+    public {
+        #! Default AssemblyAI REST API URL
+        const DefaultUrl = "https://api.assemblyai.com";
+
+        #! Terminal AssemblyAI transcript statuses
+        const StatusCompleted = "completed";
+
+        #! Terminal AssemblyAI transcript statuses
+        const StatusError = "error";
+
+        #! All terminal statuses for the transcript polling loop
+        const TerminalStatuses = (StatusCompleted, StatusError);
+
+        #! Default polling interval between transcript status checks (ms)
+        const DefaultPollInterval = 3000ms;
+
+        #! Default overall transcription timeout
+        const DefaultTranscriptionTimeout = 30m;
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns options for the AssemblyAiRestClient constructors
+    /** Maps the \c apikey option into a \c default_headers entry that
+        sends the bare API key in the \c Authorization header (AssemblyAI's
+        non-prefixed auth format).
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv;
+        rv += DefaultOptions + opts;
+        if (rv.apikey) {
+            hash<auto!> dh;
+            if (rv.default_headers) {
+                dh += rv.default_headers;
+            }
+            dh.Authorization = rv.apikey;
+            rv.default_headers = dh;
+            delete rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! Sync REST client for AssemblyAI
+/** Pass an API key via the \c apikey option; the module rewrites it to a
+    bare-key \c Authorization header injected on every request.
+*/
+public class AssemblyAiRestClient inherits RestClient::RestClient, AssemblyAiRestClientBase {
+    #! Creates the object with the given options
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(AssemblyAiRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! Async (multiplexed) REST client for AssemblyAI
+/** In addition to the standard REST surface, this class owns a
+    @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" that drives
+    the async-transcription lifecycle (submit → poll job → fetch result)
+    via the high-level @ref transcribe() helper method.
+*/
+public class AssemblyAiRestClientIo inherits RestClientIo::RestClientIo, AssemblyAiRestClientBase {
+    private {
+        #! Shared async-job poller (owns the polling loop + injectable sleeper)
+        QoreAsyncJobUtils::AsyncJobPoller poller;
+    }
+
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(AssemblyAiRestClientBase::getOptions(opts), shared_mgr) {
+        poller = new QoreAsyncJobUtils::AsyncJobPoller(
+            hash<auto> sub (string job_id) {
+                return restGet(sprintf("/v2/transcript/%s", job_id)).body;
+            },
+            bool sub (hash<auto> status) {
+                return status.status && inlist(status.status, TerminalStatuses);
+            },
+            "AssemblyAI transcript",
+            "ASSEMBLYAI-ERROR",
+        );
+    }
+
+    #! Injects a custom sleeper closure (test seam)
+    /** Forwarded to the underlying
+        @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller".
+    */
+    setSleeper(code<nothing(timeout)> s) {
+        poller.setSleeper(s);
+    }
+
+    #! Submits a transcription job and waits for completion
+    /** Posts \c audio_url to \c /v2/transcript, then polls the job until
+        it reaches a terminal status (\c completed or \c error).
+
+        @param audio_url public URL of the audio file to transcribe
+        @param options optional AssemblyAI parameters merged into the
+            \c /v2/transcript request body (e.g. \c speech_model,
+            \c language_code, \c punctuate, \c speaker_labels,
+            \c summarization, \c sentiment_analysis); also accepts two
+            polling-control fields stripped before submission:
+            \c poll_interval (defaults to 3s) and \c transcription_timeout
+            (defaults to 30m)
+
+        @return the completed transcript hash from
+            \c GET /v2/transcript/{id} — includes \c text, \c words,
+            \c utterances, \c summary, and any opt-in analytics fields
+
+        @throw ASSEMBLYAI-ERROR job timeout or AssemblyAI returned an
+            \c error status; the exception's \c arg.last_status carries
+            the last observed job hash including any \c error message
+    */
+    hash<auto> transcribe(string audio_url, *hash<auto> options) {
+        timeout overall_to = options.transcription_timeout
+            ?? DefaultTranscriptionTimeout;
+        timeout poll_interval = options.poll_interval ?? DefaultPollInterval;
+
+        hash<auto> submit_body = (options - ("transcription_timeout", "poll_interval"))
+            + {"audio_url": audio_url};
+
+        hash<auto> submit_resp = restPost("/v2/transcript", submit_body);
+        *string job_id = submit_resp.body.id;
+        if (!job_id) {
+            throw "ASSEMBLYAI-ERROR",
+                "AssemblyAI /v2/transcript did not return a job id",
+                {"body": submit_resp.body};
+        }
+
+        hash<auto> final_status = poller.poll(job_id, overall_to, poll_interval);
+
+        if (final_status.status == StatusError) {
+            throw "ASSEMBLYAI-ERROR",
+                sprintf("AssemblyAI transcript %y ended in error: %s",
+                    job_id, final_status.error ?? "unknown"),
+                {"job_id": job_id, "last_status": final_status};
+        }
+        return final_status;
+    }
+}
+
+#! Connection class for AssemblyAI REST endpoints
+public class AssemblyAiRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default AssemblyAI REST API URL (with assemblyai:// scheme)
+        const DefaultUrl = "assemblyai://api.assemblyai.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "AssemblyAI REST Connection",
+            "short_desc": "A connection to the AssemblyAI speech-to-text REST API",
+            "desc": "A connection to the [AssemblyAI](https://www.assemblyai.com) "
+                "speech-to-text REST API.\n\n"
+                "AssemblyAI offers async transcription with the Universal-2 and "
+                "Slam-1 model families plus a rich analytics layer "
+                "(summarization, sentiment, entity detection, content safety, "
+                "topic detection).\n\n"
+                "Requires an API key for `Authorization` header authentication "
+                "(note: AssemblyAI sends the bare key with no `Bearer` / `Token` "
+                "prefix).  Get your API key from the "
+                "[AssemblyAI dashboard](https://www.assemblyai.com/app).",
+            "cls": Class::forName("AssemblyAiRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "assemblyai": True,
+            },
+            "base_scheme_map": {
+                "https": "assemblyai",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "AssemblyAI API key (sent as bare `Authorization` header)",
+                    "type": "string",
+                    "desc": "The AssemblyAI API key — sent as the bare `Authorization` "
+                        "header value with no `Bearer` / `Token` prefix.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method
+                    + <ConnectionOptionInfo>{"default_value": DefaultPingMethod},
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path
+                    + <ConnectionOptionInfo>{"default_value": DefaultPingPath},
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers
+                    + <ConnectionOptionInfo>{"default_value": DefaultPingHeaders},
+            },
+            "required_options": "apikey",
+        };
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        const DefaultPingPath = "v2/transcript?limit=1";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+    }
+
+    #! Creates the AssemblyAiRestConnection object
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, DefaultUrl, attributes, options) {
+    }
+
+    #! Creates the AssemblyAiRestConnection object from a configuration hash
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(AssemblyAiRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the config hash with the canonical URL forced
+    /** AssemblyAI has a single fixed API endpoint; the URL is always
+        overridden to prevent the framework's \c auto_url machinery from
+        falling back to \c "assemblyai://localhost" when no source option
+        exists to build a URL from.  See
+        data-provider-development-guide.md pitfall #17.
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        config.url = DefaultUrl;
+        return config;
+    }
+
+    #! Returns \c "assemblyai"
+    string getType() {
+        return "assemblyai";
+    }
+
+    #! Returns @ref True as this connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("AssemblyAiDataProvider");
+        return create_object("AssemblyAiDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! Returns a sync REST client object
+    private AssemblyAiRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AssemblyAiRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable REST client object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AssemblyAiRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    #! Returns connection options with apikey -> bare Authorization header
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return AssemblyAiRestClientBase::getOptions(rv);
+    }
+
+    #! Sets update options code for auto_url connections + ping-path correction
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != AssemblyAiRestClientBase::DefaultUrl && url != DefaultUrl) {
+                update.url = DefaultUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+}
+
+#! @ref QoreSpeechUtils::AbstractTranscriber "AbstractTranscriber" backed by
+#! AssemblyAI's `/v2/transcript` endpoint
+public class AssemblyAiTranscriber inherits QoreSpeechUtils::AbstractTranscriber {
+    private {
+        AssemblyAiRestClientIo rest;
+        *string model;
+    }
+
+    constructor(hash<QoreSpeechUtils::TranscriberConfig> config) {
+        if (!config.api_key.val()) {
+            throw "SPEECH-CONFIG-ERROR",
+                "TranscriberConfig.api_key is required for the AssemblyAI backend";
+        }
+        rest = new AssemblyAiRestClientIo({
+            "apikey": config.api_key,
+            "url": config.url ?? AssemblyAiRestClientBase::DefaultUrl,
+        });
+        model = config.model;
+    }
+
+    string getMode() { return "assemblyai"; }
+    *string getModel() { return model; }
+
+    hash<QoreSpeechUtils::TranscriptionResult> transcribe(string audio_url,
+            *hash<auto> opts) {
+        hash<auto!> submit_opts;
+        if (model) {
+            submit_opts.speech_model = model;
+        }
+        if (opts) {
+            foreach hash<auto> p in (opts.pairIterator()) {
+                submit_opts{p.key} = p.value;
+            }
+        }
+        hash<auto> resp = rest.transcribe(audio_url, submit_opts);
+        return <QoreSpeechUtils::TranscriptionResult>{
+            "text": resp.text ?? "",
+            "language": resp.language_code,
+            "confidence": resp.confidence,
+            "audio_duration": resp.audio_duration,
+            "words": resp.words,
+            "utterances": resp.utterances,
+            "summary": resp.summary,
+            "raw": resp,
+        };
+    }
+}
+
+#! Factory for @ref AssemblyAiTranscriber
+public class AssemblyAiTranscriberFactory inherits QoreSpeechUtils::AbstractTranscriberFactory {
+    string getMode() {
+        return "assemblyai";
+    }
+    string getDisplayName() {
+        return "AssemblyAI ASR (Universal / Slam / Nano model families)";
+    }
+    QoreSpeechUtils::AbstractTranscriber create(
+            hash<QoreSpeechUtils::TranscriberConfig> config) {
+        return new AssemblyAiTranscriber(config);
+    }
+}
+}

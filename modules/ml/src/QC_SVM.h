@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_SVM_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLClassifier.h"
 
 #include <mutex>
 
@@ -26,7 +28,7 @@ DLLLOCAL QoreClass* initSVMClass(QoreNamespace& ns);
     Supports linear and RBF (Gaussian) kernels.
     Multiclass via one-vs-one decomposition.
 */
-class QoreSVM : public AbstractPrivateData {
+class QoreSVM : public QoreMLModel {
 public:
     DLLLOCAL QoreSVM(double C, const std::string& kernel, double gamma,
         int degree, double tol, int max_iter, int64_t seed);
@@ -35,17 +37,19 @@ public:
     DLLLOCAL QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
     DLLLOCAL QoreListNode* predictMatrix(const MatrixXd& X, ExceptionSink* xsink) const;
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "SVM"; }
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
     DLLLOCAL void setTargetField(const std::string& name) { target_field = name; }
     DLLLOCAL const std::string& getTargetField() const { return target_field; }
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreSVM* deserializeState(const uint8_t* data, size_t len,
         ExceptionSink* xsink);
 

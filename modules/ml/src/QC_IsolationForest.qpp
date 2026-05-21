@@ -60,7 +60,7 @@ printf("Anomaly score: %f, is anomaly: %y\n", result.anomaly_score, result.is_an
     @endcode
 
 */
-qclass IsolationForest [arg=QoreIsolationForest* iforest; ns=Qore::ML; flags=final];
+qclass IsolationForest [arg=QoreIsolationForest* iforest; ns=Qore::ML; vparent=AbstractMLAnomalyDetector];
 
 //! Creates an IsolationForest with the given options
 /** @param options a hash with the following optional keys:
@@ -150,7 +150,7 @@ iforest.fit(data_records);
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-ISOLATION-FOREST-ERROR if fitting fails
 */
-nothing IsolationForest::fit(list<auto> data) {
+nothing IsolationForest::fit(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -170,7 +170,7 @@ iforest.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
 
     @throw ML-DATA-ERROR if the matrix is empty or malformed
 */
-nothing IsolationForest::fitMatrix(list<auto> matrix) {
+nothing IsolationForest::fitMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -220,7 +220,7 @@ list<hash<IsolationForestResult>> results = iforest.scoreMatrix(test_data);
 
     @throw ML-ISOLATION-FOREST-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<IsolationForestResult>> IsolationForest::scoreMatrix(list<auto> matrix) {
+list<hash<IsolationForestResult>> IsolationForest::scoreMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

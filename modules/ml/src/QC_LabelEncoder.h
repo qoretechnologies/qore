@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_LABELENCODER_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <mutex>
 #include <unordered_map>
@@ -27,7 +29,7 @@ DLLLOCAL QoreClass* initLabelEncoderClass(QoreNamespace& ns);
     transform() applies the mapping.
     inverseTransform() converts back to original values.
 */
-class QoreLabelEncoder : public AbstractPrivateData {
+class QoreLabelEncoder : public QoreMLModel {
 public:
     DLLLOCAL QoreLabelEncoder();
 
@@ -44,8 +46,10 @@ public:
     //! Fit and transform in one step
     DLLLOCAL QoreListNode* fitTransform(const QoreListNode* values, ExceptionSink* xsink);
 
-    DLLLOCAL bool isFitted() const { return fitted; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "LabelEncoder"; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
@@ -55,7 +59,7 @@ public:
     //! Get the learned classes (in order of their integer encoding)
     DLLLOCAL QoreListNode* getClasses(ExceptionSink* xsink) const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreLabelEncoder* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

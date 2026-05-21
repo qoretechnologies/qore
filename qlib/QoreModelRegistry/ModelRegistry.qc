@@ -29,14 +29,25 @@ public namespace QoreModelRegistry {
     It delegates storage to a pluggable backend — filesystem, database, or REST.
 
     The backend is selected automatically based on constructor options:
-    - \c path → @ref FilesystemBackend
     - \c backend → use a pre-constructed @ref AbstractModelRegistryBackend
+    - \c backend_type = \c "filesystem" (or no \c backend_type with \c path set)
+       → @ref FilesystemBackend (default; needs \c path)
+    - \c backend_type = \c "database" → @ref DatabaseBackend (needs \c datasource)
+    - \c backend_type = \c "rest" → @ref RestBackend (needs \c rest_client + \c rest_base_path)
 
     @par Example (filesystem):
     @code{.py}
     auto reg = new ModelRegistry({"path": "/var/models"});
     string vid = reg.register(model, {"name": "fraud-detector"});
     auto loaded = reg.load("fraud-detector");
+    @endcode
+
+    @par Example (database):
+    @code{.py}
+    auto reg = new ModelRegistry({
+        "backend_type": "database",
+        "datasource": ds,
+    });
     @endcode
 
     @par Example (custom backend):
@@ -47,6 +58,7 @@ public namespace QoreModelRegistry {
 
     @since QoreModelRegistry 1.0 (filesystem-only)
     @since QoreModelRegistry 2.0 (pluggable backends)
+    @since QoreModelRegistry 2.1 (\c backend_type dispatch on constructor)
 */
 public class ModelRegistry {
     private {
@@ -56,25 +68,90 @@ public class ModelRegistry {
 
     #! Creates a new model registry
     /** @param options a hash with the following keys:
-        - \c path (string): base directory path for filesystem storage
-        - \c tenant_id (string, optional): tenant identifier for multi-tenant deployments
         - \c backend (@ref AbstractModelRegistryBackend, optional): pre-constructed backend;
-          when provided, \c path and \c tenant_id are ignored
+          when provided, all other options except \c tenant_id are ignored
+        - \c backend_type (string, optional): \c "filesystem" (default), \c "database", \c "rest"
+        - \c path (string): base directory path; required when \c backend_type is \c "filesystem"
+        - \c datasource (AbstractDatasource): required when \c backend_type is \c "database"
+        - \c table_prefix (string, optional): table name prefix for \c "database"
+        - \c rest_client (object, optional): required when \c backend_type is \c "rest"
+        - \c rest_base_path (string, optional): required when \c backend_type is \c "rest"
+        - \c rest_options (hash, optional): additional REST backend options
+        - \c tenant_id (string, optional): tenant identifier for multi-tenant deployments
 
-        @throw ML-REGISTRY-ERROR if required options are missing
+        @throw ML-REGISTRY-ERROR if required options are missing for the chosen backend
+
+        @since QoreModelRegistry 2.1 (\c backend_type dispatch)
     */
     constructor(hash<auto> options) {
 %ifdef NoJson
         throw "ML-REGISTRY-ERROR", "the QoreModelRegistry module requires the json "
             "module (module-json) to be installed; install it and try again";
 %endif
+        backend = ModelRegistry::createBackend(options);
+    }
+
+    #! Construct the backend implied by an options hash
+    /** Centralises the \c backend / \c backend_type dispatch so processors
+        and data providers can build backends without duplicating the
+        switch. Called by the constructor; subclasses needing a different
+        dispatch can override this method.
+
+        @param options the constructor option hash (see @ref constructor)
+
+        @return the selected backend
+
+        @throw ML-REGISTRY-ERROR if required backend-specific options are missing
+
+        @since QoreModelRegistry 2.1
+    */
+    static AbstractModelRegistryBackend createBackend(hash<auto> options) {
         if (options.backend instanceof AbstractModelRegistryBackend) {
-            backend = options.backend;
-        } else if (options.path.val()) {
-            backend = new FilesystemBackend(options.path, options.tenant_id);
-        } else {
-            throw "ML-REGISTRY-ERROR",
-                "required option 'path' or 'backend' not provided";
+            return options.backend;
+        }
+        string backend_type = options.backend_type.val()
+            ? options.backend_type
+            : "filesystem";
+        switch (backend_type) {
+            case "filesystem": {
+                if (!options.path.val()) {
+                    throw "ML-REGISTRY-ERROR",
+                        "option 'path' is required when backend_type is 'filesystem'";
+                }
+                return new FilesystemBackend(options.path, options.tenant_id);
+            }
+%ifndef NoSqlUtil
+            case "database": {
+                if (!exists options.datasource) {
+                    throw "ML-REGISTRY-ERROR",
+                        "option 'datasource' is required when backend_type is 'database'";
+                }
+                hash<auto> db_opts;
+                if (options.table_prefix.val()) {
+                    db_opts.table_prefix = options.table_prefix;
+                }
+                if (options.tenant_id.val()) {
+                    db_opts.tenant_id = options.tenant_id;
+                }
+                return new DatabaseBackend(options.datasource, db_opts);
+            }
+%endif
+            case "rest": {
+                if (!exists options.rest_client) {
+                    throw "ML-REGISTRY-ERROR",
+                        "option 'rest_client' is required when backend_type is 'rest'";
+                }
+                if (!options.rest_base_path.val()) {
+                    throw "ML-REGISTRY-ERROR",
+                        "option 'rest_base_path' is required when backend_type is 'rest'";
+                }
+                return new RestBackend(options.rest_client, options.rest_base_path,
+                    options.tenant_id, options.rest_options);
+            }
+            default:
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("unsupported backend_type %y; valid values: "
+                        "'filesystem', 'database', 'rest'", backend_type);
         }
     }
 

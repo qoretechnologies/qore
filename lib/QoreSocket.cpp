@@ -5303,6 +5303,10 @@ int sock_get_raw_error() {
     return WSAGetLastError();
 }
 
+void sock_set_raw_error(int rc) {
+    qore_socket_set_raw_error(rc);
+}
+
 static int qore_windows_set_errno(int rc) {
     switch (rc) {
         case 0:
@@ -5449,6 +5453,10 @@ int sock_get_raw_error() {
 
 int sock_get_error() {
     return errno;
+}
+
+void sock_set_raw_error(int rc) {
+    errno = rc;
 }
 
 void qore_socket_error_intern(int rc, ExceptionSink* xsink, const char* err, const char* cdesc, const char* mname,

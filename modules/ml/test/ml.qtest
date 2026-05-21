@@ -28,6 +28,7 @@
 %modern
 
 %requires QUnit
+%requires FsUtil
 %requires ml
 
 %exec-class MlTest
@@ -327,6 +328,13 @@ public class MlTest inherits QUnit::Test {
         addTestCase("LogisticRegression sparse fit", \logregSparseFitTest());
         addTestCase("Lasso sparse fit", \lassoSparseFitTest());
         addTestCase("ElasticNet sparse fit", \elasticNetSparseFitTest());
+        # Phase: AbstractMLModel hierarchy
+        addTestCase("AbstractMLModel polymorphism + virtual dispatch",
+            \abstractMLModelPolyTest());
+        addTestCase("MLPipeline serialize / deserialize round-trip",
+            \pipelineSerializeTest());
+        addTestCase("MLPipeline file save / load round-trip",
+            \pipelineFileRoundTripTest());
         set_return_value(main());
     }
 
@@ -7086,5 +7094,106 @@ public class MlTest inherits QUnit::Test {
             assertTrue(abs(sparse_coefs[j]) > 0.01,
                 sprintf("ElasticNet sparse coef[%d]=%f should be non-zero", j, sparse_coefs[j]));
         }
+    }
+
+    abstractMLModelPolyTest() {
+        # A concrete model is assignable to an AbstractMLModel-typed variable;
+        # the abstract methods virtual-dispatch through to the concrete subclass.
+        ML::KMeans km({"k": 3, "seed": 42});
+        list<list<float>> data = (
+            (0.0, 0.0), (0.1, 0.0), (10.0, 10.0), (10.0, 10.1),
+            (20.0, 20.0), (20.0, 20.1),
+        );
+        km.fitMatrix(data);
+
+        # Assign through the abstract base
+        ML::AbstractMLModel m = km;
+        assertEq("KMeans", m.getAlgorithmName());
+        assertTrue(m.isFitted());
+        # KMeans was fitted from matrix (no field-record API), so field-names is empty
+        assertEq((), m.getFieldNames());
+
+        # Same routing through each category sub-abstract
+        ML::AbstractMLEstimator est = km;
+        assertEq("KMeans", est.getAlgorithmName());
+        ML::AbstractMLClusterer cl = km;
+        assertEq("KMeans", cl.getAlgorithmName());
+
+        # The hierarchy works across categories
+        ML::StandardScaler scaler();
+        scaler.fitMatrix(data);
+        ML::AbstractMLTransformer tr = scaler;
+        assertEq("StandardScaler", tr.getAlgorithmName());
+        assertTrue(tr.isFitted());
+
+        # AbstractMLModel cannot be instantiated directly
+        assertThrows("ABSTRACT-MLMODEL-ERROR",
+            sub() { ML::AbstractMLModel x(); });
+        assertThrows("ABSTRACT-MLMODEL-ERROR",
+            sub() { ML::AbstractMLEstimator x(); });
+        assertThrows("ABSTRACT-MLMODEL-ERROR",
+            sub() { ML::AbstractMLTransformer x(); });
+    }
+
+    pipelineSerializeTest() {
+        # MLPipeline round-trips through ml_serialize / ml_deserialize.
+        # Pipeline composition is preserved: the deserialized pipeline replays
+        # the same StandardScaler + LinearRegression steps and produces the
+        # same predictions as the original.
+        ML::MLPipeline p();
+        ML::StandardScaler scaler();
+        ML::LinearRegression lr({"fit_intercept": True});
+        p.addStandardScaler("scaler", scaler);
+        p.addLinearRegression("model", lr);
+
+        # y = 2*x + 1, exactly solvable
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+        p.fitMatrixWithTarget(X, y);
+        assertTrue(p.isFitted());
+        assertEq("MLPipeline", p.getAlgorithmName());
+        assertEq(("scaler", "model"), p.getStepNames());
+
+        binary blob = ML::ml_serialize(p);
+        assertTrue(blob.size() > 0);
+
+        ML::AbstractMLModel restored = ML::ml_deserialize(blob);
+        assertEq("MLPipeline", restored.className());
+        assertEq("MLPipeline", restored.getAlgorithmName());
+
+        ML::MLPipeline rp = cast<ML::MLPipeline>(restored);
+        assertTrue(rp.isFitted());
+        assertEq(("scaler", "model"), rp.getStepNames());
+
+        # Predictions must match
+        list<hash<auto>> orig_pred = p.predictMatrix(((3.0,),));
+        list<hash<auto>> rest_pred = rp.predictMatrix(((3.0,),));
+        assertFloat(orig_pred[0].prediction, rest_pred[0].prediction, 1e-10);
+    }
+
+    pipelineFileRoundTripTest() {
+        # ml_save_model / ml_load_model also handle MLPipeline.
+        ML::MLPipeline p();
+        ML::StandardScaler scaler();
+        ML::LinearRegression lr({"fit_intercept": True});
+        p.addStandardScaler("scaler", scaler);
+        p.addLinearRegression("model", lr);
+
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+        p.fitMatrixWithTarget(X, y);
+
+        # TmpFile auto-deletes when it goes out of scope at end of method.
+        FsUtil::TmpFile tf("ml-pipeline-", ".qml");
+        ML::ml_save_model(p, tf.path);
+
+        ML::AbstractMLModel restored = ML::ml_load_model(tf.path);
+        ML::MLPipeline rp = cast<ML::MLPipeline>(restored);
+        assertTrue(rp.isFitted());
+        assertEq(("scaler", "model"), rp.getStepNames());
+
+        list<hash<auto>> orig_pred = p.predictMatrix(((3.0,),));
+        list<hash<auto>> rest_pred = rp.predictMatrix(((3.0,),));
+        assertFloat(orig_pred[0].prediction, rest_pred[0].prediction, 1e-10);
     }
 }
