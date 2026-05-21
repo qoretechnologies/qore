@@ -29,6 +29,7 @@
 #define _QORE_MODULE_ML_QC_MINMAXSCALER_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 
@@ -39,7 +40,7 @@ DLLLOCAL void preinitMinMaxScalerClass();
 DLLLOCAL QoreClass* initMinMaxScalerClass(QoreNamespace& ns);
 
 //! MinMaxScaler — scales features to a configurable range [feature_min, feature_max]
-class QoreMinMaxScaler : public AbstractPrivateData {
+class QoreMinMaxScaler : public QoreMLModel {
 public:
     DLLLOCAL QoreMinMaxScaler(double feature_min, double feature_max)
         : feature_min(feature_min), feature_max(feature_max) {
@@ -58,14 +59,16 @@ public:
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& data, ExceptionSink* xsink);
 
     //! Whether the scaler has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "MinMaxScaler"; }
 
     //! Get scaler info
     DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink) const;
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Transform a single row (no lock, no fitted check)
     DLLLOCAL RowVectorXd transformRow(const RowVectorXd& row, ExceptionSink* xsink) const;
@@ -85,7 +88,7 @@ public:
     DLLLOCAL QoreListNode* getDataMaxList(ExceptionSink* xsink) const;
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreMinMaxScaler* deserializeState(const uint8_t* data, size_t len,

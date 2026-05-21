@@ -12,6 +12,7 @@
 #define _QORE_MODULE_ML_QC_NAIVEBAYES_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 
@@ -25,7 +26,7 @@ DLLLOCAL QoreClass* initNaiveBayesClass(QoreNamespace& ns);
 /** Assumes features are independent and follow a Gaussian distribution within
     each class. Very fast to train and predict. Supports online updates.
 */
-class QoreNaiveBayes : public AbstractPrivateData {
+class QoreNaiveBayes : public QoreMLModel {
 public:
     DLLLOCAL QoreNaiveBayes(double var_smoothing);
 
@@ -34,17 +35,19 @@ public:
     DLLLOCAL QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
     DLLLOCAL QoreListNode* predictMatrix(const MatrixXd& X, ExceptionSink* xsink) const;
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "NaiveBayes"; }
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
     DLLLOCAL void setTargetField(const std::string& name) { target_field = name; }
     DLLLOCAL const std::string& getTargetField() const { return target_field; }
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreNaiveBayes* deserializeState(const uint8_t* data, size_t len,
         ExceptionSink* xsink);
 

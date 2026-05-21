@@ -29,6 +29,7 @@
 #define _QORE_MODULE_ML_QC_IMPUTER_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 #include <string>
@@ -40,7 +41,7 @@ DLLLOCAL void preinitImputerClass();
 DLLLOCAL QoreClass* initImputerClass(QoreNamespace& ns);
 
 //! Imputer — fills missing values (NaN) using a configurable strategy
-class QoreImputer : public AbstractPrivateData {
+class QoreImputer : public QoreMLModel {
 public:
     DLLLOCAL QoreImputer(const std::string& strategy, double constant_value)
         : strategy(strategy), constant_value(constant_value) {
@@ -56,14 +57,16 @@ public:
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& data, ExceptionSink* xsink);
 
     //! Whether the imputer has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "Imputer"; }
 
     //! Get imputer info
     DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink) const;
 
     //! Store field names
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Transform a single row (no lock, no fitted check)
     DLLLOCAL RowVectorXd transformRow(const RowVectorXd& row, ExceptionSink* xsink) const;
@@ -76,7 +79,7 @@ public:
     DLLLOCAL QoreListNode* getFillValuesList(ExceptionSink* xsink) const;
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreImputer* deserializeState(const uint8_t* data, size_t len,

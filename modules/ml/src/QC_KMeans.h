@@ -29,6 +29,7 @@
 #define _QORE_MODULE_ML_QC_KMEANS_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 
@@ -39,7 +40,7 @@ DLLLOCAL void preinitKMeansClass();
 DLLLOCAL QoreClass* initKMeansClass(QoreNamespace& ns);
 
 //! K-Means clustering implementation class
-class QoreKMeans : public AbstractPrivateData {
+class QoreKMeans : public QoreMLModel {
 public:
     DLLLOCAL QoreKMeans(int k, int max_iterations, double tolerance, int64_t seed,
         const char* init_method)
@@ -54,7 +55,9 @@ public:
     }
 
     DLLLOCAL int getK() const { return k; }
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "KMeans"; }
 
     //! Full batch fit
     DLLLOCAL void fit(const MatrixXd& data, ExceptionSink* xsink);
@@ -76,10 +79,10 @@ public:
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreKMeans* deserializeState(const uint8_t* data, size_t len,

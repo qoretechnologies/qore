@@ -12,6 +12,7 @@
 #define _QORE_MODULE_ML_QC_RANDOMFOREST_H
 
 #include "FlatTree.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 #include <random>
@@ -24,7 +25,7 @@ DLLLOCAL void preinitRandomForestClass();
 DLLLOCAL QoreClass* initRandomForestClass(QoreNamespace& ns);
 
 //! Random Forest ensemble of CART decision trees
-class QoreRandomForest : public AbstractPrivateData {
+class QoreRandomForest : public QoreMLModel {
 public:
     DLLLOCAL QoreRandomForest(int n_trees, int max_depth, int min_samples_split,
         int min_samples_leaf, const std::string& max_features,
@@ -50,11 +51,13 @@ public:
 
     DLLLOCAL QoreHashNode* getFeatureImportances(ExceptionSink* xsink) const;
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "RandomForest"; }
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
     DLLLOCAL void setTargetField(const std::string& name) {
@@ -79,7 +82,7 @@ public:
     //! Get class labels
     DLLLOCAL QoreListNode* getClasses(ExceptionSink* xsink) const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreRandomForest* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

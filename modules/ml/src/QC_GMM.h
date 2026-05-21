@@ -29,6 +29,7 @@
 #define _QORE_MODULE_ML_QC_GMM_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 #include <random>
@@ -41,7 +42,7 @@ DLLLOCAL void preinitGMMClass();
 DLLLOCAL QoreClass* initGMMClass(QoreNamespace& ns);
 
 //! Gaussian Mixture Model implementation class using EM algorithm
-class QoreGMM : public AbstractPrivateData {
+class QoreGMM : public QoreMLModel {
 public:
     //! Constructor with options
     DLLLOCAL QoreGMM(int n_components, int max_iterations, double tolerance,
@@ -60,7 +61,9 @@ public:
     DLLLOCAL QoreListNode* predictMatrix(const MatrixXd& data, ExceptionSink* xsink) const;
 
     //! Whether the model has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "GMM"; }
 
     //! Get number of components
     DLLLOCAL int getNumComponents() const { return n_components; }
@@ -73,10 +76,10 @@ public:
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreGMM* deserializeState(const uint8_t* data, size_t len,

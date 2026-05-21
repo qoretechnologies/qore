@@ -12,6 +12,7 @@
 #define _QORE_MODULE_ML_QC_DATETIMEFEATURES_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 #include <string>
@@ -32,7 +33,7 @@ DLLLOCAL QoreClass* initDateTimeFeaturesClass(QoreNamespace& ns);
     "day_of_week" (0=Sunday..6=Saturday), "day_of_year", "quarter",
     "is_weekend" (0/1), "week_of_year".
 */
-class QoreDateTimeFeatures : public AbstractPrivateData {
+class QoreDateTimeFeatures : public QoreMLModel {
 public:
     DLLLOCAL QoreDateTimeFeatures(const std::vector<std::string>& features);
 
@@ -46,12 +47,14 @@ public:
     DLLLOCAL int getNumOutputFeatures() const { return (int)features.size(); }
 
     //! Always true (stateless transformer)
-    DLLLOCAL bool isFitted() const { return true; }
+    DLLLOCAL bool isFitted() const override { return true; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "DateTimeFeatures"; }
 
     //! Returns the feature names as a vector (for serialization)
     DLLLOCAL const std::vector<std::string>& getFeatures() const { return features; }
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreDateTimeFeatures* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

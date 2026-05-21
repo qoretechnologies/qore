@@ -29,6 +29,7 @@
 #define _QORE_MODULE_ML_QC_KNN_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
 
 #include <mutex>
 #include <vector>
@@ -40,7 +41,7 @@ DLLLOCAL void preinitKNNClass();
 DLLLOCAL QoreClass* initKNNClass(QoreNamespace& ns);
 
 //! K-Nearest Neighbors implementation class
-class QoreKNN : public AbstractPrivateData {
+class QoreKNN : public QoreMLModel {
 public:
     //! Constructor with options
     DLLLOCAL QoreKNN(int k, const std::string& metric, const std::string& task,
@@ -65,21 +66,23 @@ public:
     DLLLOCAL const std::string& getTask() const { return task; }
 
     //! Whether the model has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "KNN"; }
 
     //! Get k parameter
     DLLLOCAL int getK() const { return k; }
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Store the target field name
     DLLLOCAL void setTargetField(const std::string& name) { target_field = name; }
     DLLLOCAL const std::string& getTargetField() const { return target_field; }
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreKNN* deserializeState(const uint8_t* data, size_t len,
