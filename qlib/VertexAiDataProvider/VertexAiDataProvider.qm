@@ -1,0 +1,177 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore VertexAiDataProvider module definition
+
+/*  VertexAiDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) VertexAiRestClient
+%requires(reexport) GcpAuth
+%requires(reexport) GeminiBodyShape
+%requires RestClientIo
+
+module VertexAiDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Google Vertex AI — "
+        "Gemini :generateContent + Gecko :predict embeddings via regional "
+        "endpoints with Application Default Credentials / service-account "
+        "JWT-bearer authentication";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new VertexAiDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": VertexAiDataProvider::AppName,
+            "display_name": "Google Vertex AI",
+            "short_desc": "Google Vertex AI generative-model platform",
+            "desc": "**Google Vertex AI** is Google Cloud's managed platform "
+                "for generative model access, exposing the Gemini family + "
+                "publisher partner models (Claude on Vertex, Llama on "
+                "Vertex) and Google's Gecko text-embedding models through a "
+                "single regional REST API.\n\n"
+                "- **Gemini :generateContent** — same body shape as the "
+                "native Gemini REST API but routed through "
+                "`{region}-aiplatform.googleapis.com` with GCP auth\n"
+                "- **Gecko :predict embeddings** — `text-embedding-005`, "
+                "`text-multilingual-embedding-002`, `textembedding-gecko@003` "
+                "via the batch-capable `:predict` endpoint\n"
+                "- **Vertex Context Caching** — major cost reduction for "
+                "repeated system prompts (referenced via `cachedContent`)\n"
+                "- **Application Default Credentials** — explicit "
+                "service-account JSON, `GOOGLE_APPLICATION_CREDENTIALS`, "
+                "`gcloud` user creds, or the GCE/GKE/Cloud-Run metadata "
+                "server are all honored\n"
+                "- **Per-region endpoints** — pick `us-central1`, "
+                "`europe-west4`, `asia-east1`, etc. for data residency\n\n"
+                "Tokens are cached and refreshed transparently by `GcpAuth`.\n\n"
+                "Project: <https://cloud.google.com/vertex-ai>",
+            "scheme": "vertex-ai",
+            "logo": VertexAiLogo,
+            "logo_file_name": "vertex-ai-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VertexAiDataProvider::AppName,
+            "path": "/generate-content",
+            "action": "generate-content",
+            "display_name": "Generate Content",
+            "short_desc": "Generate a Gemini response via Vertex AI",
+            "desc": "Generate a Gemini response via Vertex AI's regional "
+                "`:generateContent` endpoint. The model name in the request "
+                "is resolved into the URL path "
+                "(`/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`); "
+                "the body is otherwise identical to the native Gemini "
+                "`:generateContent` shape — `contents`, `systemInstruction`, "
+                "`generationConfig`, `tools`, `safetySettings`, "
+                "`cachedContent`.",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VertexAiGenerateContentRequestDataType::Fields{"model", "contents"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                VertexAiGenerateContentRequestDataType::Fields - ("model", "contents")
+            ),
+            "output_type": VertexAiGenerateContentDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VertexAiDataProvider::AppName,
+            "path": "/embed",
+            "action": "embed",
+            "display_name": "Embed Text",
+            "short_desc": "Generate text embeddings via Vertex AI :predict",
+            "desc": "Generate dense vector embeddings via Vertex AI's regional "
+                "`:predict` endpoint on a Gecko / Text-Embedding publisher "
+                "model. Accepts a batch of `{content: \"...\"}` instances in "
+                "a single request; supports the `outputDimensionality` "
+                "parameter on `text-embedding-005` for shorter vectors.",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VertexAiEmbedRequestDataType::Fields{"model", "instances"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                VertexAiEmbedRequestDataType::Fields - ("model", "instances")
+            ),
+            "output_type": VertexAiEmbedDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage VertexAiDataProvider Module
+
+    @tableofcontents
+
+    @section vertexaidataproviderintro Introduction to the VertexAiDataProvider Module
+
+    The %VertexAiDataProvider module provides a
+    @ref dataproviderintro "data provider" API for Google Vertex AI so
+    Gemini chat completions and Gecko embeddings are discoverable from
+    `qctl`, the Qorus action catalog, and DPQL expressions.
+
+    @par Provided children
+
+    - `/generate-content` — @ref VertexAiDataProvider::VertexAiGenerateContentDataProvider
+    - `/embed` — @ref VertexAiDataProvider::VertexAiEmbedDataProvider
+
+    @par Factory
+
+    The factory name is <b><tt>vertex-ai</tt></b>; resolve a connected
+    provider via:
+    @code{.py}
+AbstractDataProvider p = DataProvider::getFactoryObjectFromString(
+    "vertex-ai{gcp_project_id=my-project,gcp_region=us-central1,gcp_sa_json_path=/etc/gcp/sa.json}");
+    @endcode
+
+    @section vertexaidataproviderrelnotes Release Notes
+
+    @subsection vertexaidataprovider_v1_0 VertexAiDataProvider v1.0
+    - initial release: GenerateContent + Embed actions registered under
+      the \c vertex-ai app + scheme
+*/
+
+#! Contains all public definitions in the VertexAiDataProvider module
+public namespace VertexAiDataProvider {
+#! Vertex AI app name
+public const AppName = "VertexAI";
+}
+
+#! Module-level constants in a private namespace per the audit-changes design rule
+namespace Priv {
+    #! Vertex AI logo loaded from the SVG file shipped with the module
+    public const VertexAiLogo = File::readTextFile(get_script_dir() + "/vertex-ai-logo.svg");
+}
+public namespace VertexAiDataProvider {
+    #! Re-export the logo into the module's public namespace
+    public const VertexAiLogo = Priv::VertexAiLogo;
+}

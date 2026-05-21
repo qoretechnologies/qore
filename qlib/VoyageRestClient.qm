@@ -547,7 +547,8 @@ public class VoyageReranker inherits AbstractReranker {
         model_name = config.model ?? DefaultModel;
     }
 
-    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k) {
+    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
+            *hash<auto> opts) {
         if (!documents) {
             return ();
         }
@@ -560,6 +561,20 @@ public class VoyageReranker inherits AbstractReranker {
             "top_k": top_k,
             "return_documents": True,
         };
+        if (opts) {
+            # forward Voyage-recognized per-call knobs verbatim; reserved
+            # body keys above always win so callers can't accidentally
+            # override the wire-level fields
+            if (exists opts.truncation) {
+                body."truncation" = opts.truncation;
+            }
+            if (exists opts.max_chunks_per_doc) {
+                body."max_chunks_per_doc" = opts.max_chunks_per_doc;
+            }
+            if (exists opts.return_documents) {
+                body."return_documents" = opts.return_documents;
+            }
+        }
 
         hash<auto> resp = rest_client.restPost("/rerank", body);
 

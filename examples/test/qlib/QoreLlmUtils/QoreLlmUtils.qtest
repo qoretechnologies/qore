@@ -131,6 +131,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \requestOptionsOverrideModelTest());
         addTestCase("LlmStructuredRepair parses repaired JSON text",
             \structuredRepairJsonTextTest());
+        addTestCase("LlmStructuredRepair normalizes Python JSON literals",
+            \structuredRepairPythonLiteralJsonTest());
         addTestCase("LlmStructuredRepair completes truncated JSON text",
             \structuredRepairBalancedCompletionTest());
         addTestCase("LlmStructuredRepair coerces nested schema JSON strings",
@@ -141,6 +143,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiToolCallResponseTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
+        addTestCase("LlmBackend Gemini schema sanitizer flattens "
+            "composition", \geminiSchemaCompositionSanitizerTest());
         addTestCase("LlmBackend OpenAI chat facade schema-coerces tool "
             "arguments", \geminiOpenAiToolArgumentSchemaCoercionTest());
         addTestCase("LlmBackend OpenAI chat facade maps abstract Gemini "
@@ -444,6 +448,27 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "parse errors have a stable code");
         assertTrue(invalid.failure_fingerprint.find("invalid-json:") == 0,
             "parse errors have a stable fingerprint prefix");
+    }
+
+    structuredRepairPythonLiteralJsonTest() {
+        checkGeminiModule();
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::parseJsonObject(
+                "{\"ok\": True, \"skip\": False, \"value\": None, "
+                "\"text\": \"True False None\"}");
+
+        assertTrue(repaired.valid,
+            "Python-style JSON literals are normalized outside strings");
+        assertTrue(repaired.repaired,
+            "literal normalization is reported as a repair");
+        assertEq("json-python-literals", repaired.repair_kind,
+            "repair kind identifies Python literal normalization");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq(True, value.ok, "True became JSON true");
+        assertEq(False, value.skip, "False became JSON false");
+        assertEq(NOTHING, value.value, "None became JSON null");
+        assertEq("True False None", value.text,
+            "string contents are not rewritten");
     }
 
     structuredRepairBalancedCompletionTest() {
@@ -805,6 +830,213 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("lookup",
             gemini_handler.requests[0].body.toolConfig.functionCallingConfig.allowedFunctionNames[0],
             "named tool choice limits the allowed function");
+    }
+
+    geminiSchemaCompositionSanitizerTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({
+                                "functionCall": {
+                                    "name": "design_propose_plan",
+                                    "args": {"steps": ()},
+                                },
+                            },),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 11},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": ({"role": "user", "content": "make a plan"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "design_propose_plan",
+                    "description": "Create a plan",
+                    "parameters": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "steps": {
+                                "type": "array",
+                                "maxItems": 8,
+                                "items": {
+                                    "type": "object",
+                                    "anyOf": (
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": False,
+                                            "properties": {
+                                                "operation": {
+                                                    "type": "string",
+                                                    "enum": ("set_business",),
+                                                },
+                                                "payload": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "business": {
+                                                            "type": "object",
+                                                            "additionalProperties": False,
+                                                            "properties": {
+                                                                "business_category": {
+                                                                    "type": "string",
+                                                                    "minLength": 3,
+                                                                },
+                                                            },
+                                                            "required": ("business_category",),
+                                                        },
+                                                    },
+                                                    "required": ("business",),
+                                                },
+                                                "rationale": {
+                                                    "type": "string",
+                                                    "minLength": 12,
+                                                },
+                                                "target_summary": {"type": "string"},
+                                            },
+                                            "required": ("operation", "payload",
+                                                "rationale", "target_summary"),
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": False,
+                                            "properties": {
+                                                "operation": {
+                                                    "type": "string",
+                                                    "enum": ("add_interface",),
+                                                },
+                                                "payload": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "interface": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "key": {"type": "string"},
+                                                            },
+                                                            "required": ("key",),
+                                                        },
+                                                    },
+                                                    "required": ("interface",),
+                                                },
+                                                "rationale": {
+                                                    "type": "string",
+                                                    "minLength": 12,
+                                                },
+                                                "target_summary": {"type": "string"},
+                                            },
+                                            "required": ("operation", "payload",
+                                                "rationale", "target_summary"),
+                                        },
+                                    ),
+                                },
+                            },
+                        },
+                        "required": ("steps",),
+                    },
+                },
+            }, {
+                    "type": "function",
+                    "function": {
+                        "name": "qonsole_design_agent_turn",
+                        "description": "Apply one design action",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "operation": {
+                                    "type": "string",
+                                    "description": "operation to apply",
+                                    "enum": ("add_interface",
+                                        "revise_interface"),
+                                },
+                                "payload": {
+                                    "type": "object",
+                                    "description": "operation payload",
+                                    "properties": {
+                                        "interface": {
+                                            "type": "object",
+                                            "properties": {
+                                                "key": {"type": "string"},
+                                                "config": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "definition": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "tables": {
+                                                                    "type": "object",
+                                                                },
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                            "required": ("key",),
+                                        },
+                                        "test": {
+                                            "type": "object",
+                                            "properties": {
+                                                "key": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                                "rationale": {
+                                    "type": "string",
+                                    "description": "reason for the operation",
+                                },
+                            },
+                            "required": ("operation", "payload",
+                                "rationale"),
+                        },
+                    },
+                },
+            ),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "design_propose_plan"},
+            },
+        });
+
+        hash<auto> params = gemini_handler.requests[0].body.tools[0]
+            .functionDeclarations[0].parameters;
+        hash<auto> steps = params.properties.steps;
+        assertFalse(params.hasKey("additionalProperties"),
+            "Gemini root tool schema strips additionalProperties");
+        assertFalse(steps.hasKey("maxItems"),
+            "Gemini tool schema strips array length constraints");
+        hash<auto> item = steps.items;
+        assertFalse(item.hasKey("anyOf"),
+            "Gemini tool schema flattens anyOf alternatives");
+        assertFalse(item.hasKey("properties"),
+            "Gemini compact tool schema flattens nested array item "
+            "object detail");
+
+        hash<auto> turn_params = gemini_handler.requests[0].body.tools[0]
+            .functionDeclarations[1].parameters;
+        assertTrue(turn_params.properties.hasKey("payload"),
+            "single-dispatch payload argument name is preserved");
+        assertFalse(turn_params.properties.payload.hasKey("properties"),
+            "single-dispatch payload detail is flattened");
+        assertEq("operation payload",
+            turn_params.properties.payload.description,
+            "Gemini compact tool schema preserves payload guidance");
+        assertEq(("operation", "payload", "rationale"),
+            turn_params.required,
+            "Gemini compact tool schema preserves required payload field");
+        assertTrue(turn_params.properties.hasKey("operation"),
+            "single-dispatch operation argument name is preserved");
+        assertFalse(turn_params.properties.operation.hasKey("enum"),
+            "Gemini compact tool schema strips enum constraints");
     }
 
     geminiOpenAiToolArgumentSchemaCoercionTest() {
@@ -1581,6 +1813,24 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         hash<LlmProviderInfo> info = cb.getInfo();
         assertEq("callback", info.mode);
         assertTrue(info.supports_tools);
+        assertFalse(info.prefers_narrow_tool_catalogue,
+            "callback provider has no narrow-tool preference by default");
+        assertEq(0, info.preferred_max_tool_count,
+            "callback provider has no tool-count cap by default");
+        assertFalse(info.prefers_single_tool_dispatch,
+            "callback provider has no single-dispatch preference by default");
+
+        AbstractLlmProviderFactory gemini =
+            LlmProviderRegistry::getFactoryEx("gemini");
+        hash<LlmProviderInfo> gemini_info = gemini.getInfo();
+        assertTrue(gemini_info.prefers_narrow_tool_catalogue,
+            "Gemini provider advertises narrow tool-catalogue preference");
+        assertEq(8, gemini_info.preferred_max_tool_count,
+            "Gemini provider advertises a conservative tool-count cap");
+        assertTrue(gemini_info.prefers_single_tool_dispatch,
+            "Gemini provider advertises single dispatch tool preference");
+        assertTrue(gemini_info.prefers_stringified_tool_payloads,
+            "Gemini provider advertises stringified payload preference");
     }
 
     registryRegisterDeregisterTest() {

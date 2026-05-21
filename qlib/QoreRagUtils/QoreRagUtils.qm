@@ -494,16 +494,20 @@ RagPipeline pipe(
     /** @param query the query text
         @param documents the candidate documents to score
         @param k optional top-K (defaults to the configured \c top_k)
+        @param opts optional per-call reranker options forwarded verbatim
+            to the configured reranker; see
+            @ref AbstractReranker::rerank() for the recognized keys
 
         @return reranked results in descending score order
 
         @throw RAG-PIPELINE-ERROR if no reranker is configured
     */
-    list<hash<RerankResult>> rerank(string query, list<string> documents, *int k) {
+    list<hash<RerankResult>> rerank(string query, list<string> documents, *int k,
+            *hash<auto> opts) {
         if (!exists reranker) {
             throw "RAG-PIPELINE-ERROR", "no reranker is configured on this pipeline";
         }
-        return reranker.rerank(query, documents, k ?? top_k);
+        return reranker.rerank(query, documents, k ?? top_k, opts);
     }
 
     #! Returns the embedder

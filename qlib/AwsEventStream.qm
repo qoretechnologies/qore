@@ -1,0 +1,394 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AwsEventStream.qm decoder for the AWS event-stream binary framing format
+
+/*  AwsEventStream.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+module AwsEventStream {
+    version = "1.0";
+    desc = "AWS event-stream binary frame decoder for Bedrock InvokeModelWithResponseStream, "
+        "Kinesis, S3 Select, and Transcribe streaming";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage AwsEventStream Module
+
+    @tableofcontents
+
+    @section awseventstreamintro Introduction to the AwsEventStream Module
+
+    The %AwsEventStream module decodes the **AWS event-stream binary framing
+    format** used by Bedrock's \c InvokeModelWithResponseStream, Kinesis
+    SubscribeToShard, S3 Select, and Transcribe streaming endpoints.
+
+    Each message is framed as:
+    @verbatim
++-------------------------+
+|  Prelude (12 bytes)     |
+|    Total length   (4)   | big-endian uint32, includes prelude + headers + payload + 4-byte CRC
+|    Headers length (4)   | big-endian uint32, length of the headers block
+|    Prelude CRC32  (4)   | big-endian CRC32 over the first 8 bytes
++-------------------------+
+|  Headers (variable)     | sequence of (1B name-len, name UTF-8, 1B type, value)
++-------------------------+
+|  Payload (variable)     | size = total_length - 16 - headers_length
++-------------------------+
+|  Message CRC32 (4)      | big-endian CRC32 over the entire message excluding this final CRC
++-------------------------+
+    @endverbatim
+
+    Header value types are decoded for the families used by Bedrock + Kinesis:
+    bool true/false, byte, short, integer, long, byte-array, string, timestamp
+    (epoch ms), and UUID.
+
+    @par Streaming usage
+
+    @code{.py}
+%requires AwsEventStream
+
+AwsEventStreamDecoder dec();
+
+while (binary chunk = read_next_http_chunk()) {
+    dec.feed(chunk);
+    while (*hash<AwsEventStreamFrame> f = dec.nextFrame()) {
+        # f.headers — hash of header name -> typed value
+        # f.payload — raw binary payload (typically UTF-8 JSON)
+        on_frame(f);
+    }
+}
+    @endcode
+
+    @section awseventstreamrelnotes Release Notes
+
+    @subsection awseventstream_v1_0 AwsEventStream v1.0
+    - initial release: prelude + header + payload + CRC32 validation
+*/
+
+#! Contains all public definitions in the AwsEventStream module
+public namespace AwsEventStream {
+#! A single AWS event-stream frame
+public hashdecl AwsEventStreamFrame {
+    #! Header name to decoded value (per AWS header type encoding)
+    hash<string, auto> headers;
+    #! Frame payload (caller's responsibility to interpret per the headers)
+    binary payload;
+}
+
+#! Streaming decoder for the AWS event-stream binary framing format
+/** Instances buffer partial bytes between @ref feed() calls so HTTP chunks
+    don't have to align on frame boundaries.  Each successful
+    @ref nextFrame() returns one frame and removes its bytes from the
+    internal buffer.
+
+    This class is **not** thread-safe — drive it from a single decoder
+    thread per HTTP response stream.
+
+    @par CRC validation
+
+    Both the prelude CRC (over the first 8 bytes) and the message CRC (over
+    the entire frame except the final 4 bytes) are validated on every
+    frame.  Mismatches throw \c AWS-EVENT-STREAM-CRC-ERROR with the
+    expected vs computed values.
+*/
+public class AwsEventStreamDecoder {
+    public {
+        #! Size of the fixed prelude (total-len + headers-len + prelude CRC)
+        const PreludeSize = 12;
+        #! Trailing message CRC32 size
+        const MessageCrcSize = 4;
+    }
+
+    private {
+        #! Internal buffer of bytes received but not yet emitted as a frame
+        binary buf = binary();
+    }
+
+    private:internal {
+        #! CRC-32 lookup table (lazily populated by @ref buildCrcTable())
+        static list<int> crc_table = ();
+        #! Has the CRC-32 table been built yet?
+        static bool crc_table_built = False;
+        #! Serializes lazy CRC table construction
+        static Mutex crc_lock();
+    }
+
+    #! Appends bytes to the internal buffer
+    /** @param chunk the next chunk of bytes from the HTTP response body
+    */
+    feed(binary chunk) {
+        if (chunk && chunk.size()) {
+            buf += chunk;
+        }
+    }
+
+    #! Returns the next decoded frame, or NOTHING if the buffer is incomplete
+    /** @return a populated @ref AwsEventStreamFrame, or @ref nothing if the
+            buffer doesn't yet contain a full frame; the caller should
+            @ref feed() more bytes and try again
+
+        @throw AWS-EVENT-STREAM-CRC-ERROR the prelude or message CRC failed
+        @throw AWS-EVENT-STREAM-FORMAT-ERROR a header could not be decoded
+            or the total length is implausible
+    */
+    *hash<AwsEventStreamFrame> nextFrame() {
+        if (buf.size() < PreludeSize) {
+            return NOTHING;
+        }
+        int total_len    = AwsEventStreamDecoder::readU32BE(buf, 0);
+        int headers_len  = AwsEventStreamDecoder::readU32BE(buf, 4);
+        int prelude_crc  = AwsEventStreamDecoder::readU32BE(buf, 8);
+        if (total_len < PreludeSize + MessageCrcSize) {
+            throw "AWS-EVENT-STREAM-FORMAT-ERROR",
+                sprintf("invalid total length %d (must be at least %d)",
+                    total_len, PreludeSize + MessageCrcSize);
+        }
+        if (headers_len < 0
+                || headers_len > total_len - PreludeSize - MessageCrcSize) {
+            throw "AWS-EVENT-STREAM-FORMAT-ERROR",
+                sprintf("invalid headers length %d for total %d",
+                    headers_len, total_len);
+        }
+        int computed_prelude_crc = AwsEventStreamDecoder::crc32(buf[0..7]);
+        if (computed_prelude_crc != prelude_crc) {
+            throw "AWS-EVENT-STREAM-CRC-ERROR",
+                sprintf("prelude CRC mismatch: expected 0x%08x got 0x%08x",
+                    prelude_crc, computed_prelude_crc);
+        }
+        if (buf.size() < total_len) {
+            return NOTHING;
+        }
+
+        int msg_crc = AwsEventStreamDecoder::readU32BE(buf, total_len - 4);
+        int computed_msg_crc =
+            AwsEventStreamDecoder::crc32(buf[0..total_len - 5]);
+        if (computed_msg_crc != msg_crc) {
+            throw "AWS-EVENT-STREAM-CRC-ERROR",
+                sprintf("message CRC mismatch: expected 0x%08x got 0x%08x",
+                    msg_crc, computed_msg_crc);
+        }
+
+        hash<string, auto> headers = {};
+        int hpos = PreludeSize;
+        int hend = PreludeSize + headers_len;
+        while (hpos < hend) {
+            int name_len = get_byte(buf, hpos);
+            hpos += 1;
+            if (hpos + name_len > hend) {
+                throw "AWS-EVENT-STREAM-FORMAT-ERROR",
+                    "header name extends past headers block";
+            }
+            string name = AwsEventStreamDecoder::bytesToString(
+                buf[hpos..hpos + name_len - 1]);
+            hpos += name_len;
+            int type_tag = get_byte(buf, hpos);
+            hpos += 1;
+            auto value;
+            (value, hpos) = AwsEventStreamDecoder::readHeaderValue(buf,
+                hpos, type_tag, hend);
+            headers{name} = value;
+        }
+
+        int payload_start = hend;
+        int payload_end = total_len - MessageCrcSize - 1;
+        binary payload = payload_end >= payload_start
+            ? buf[payload_start..payload_end]
+            : binary();
+
+        buf = buf.size() > total_len ? buf[total_len..buf.size() - 1] : binary();
+        return <AwsEventStreamFrame>{
+            "headers": headers,
+            "payload": payload,
+        };
+    }
+
+    #! Returns the current internal buffer size (for diagnostics / tests)
+    int getBufferSize() {
+        return buf.size();
+    }
+
+    #! Reads a big-endian unsigned 32-bit int from \a b at offset \a off
+    private:internal static int readU32BE(binary b, int off) {
+        return (get_byte(b, off) << 24)
+            | (get_byte(b, off + 1) << 16)
+            | (get_byte(b, off + 2) << 8)
+            | get_byte(b, off + 3);
+    }
+
+    #! Reads a big-endian signed 32-bit int from \a b at offset \a off
+    private:internal static int readI32BE(binary b, int off) {
+        int v = AwsEventStreamDecoder::readU32BE(b, off);
+        return v >= 0x80000000 ? v - 0x100000000 : v;
+    }
+
+    #! Reads a big-endian unsigned 16-bit int from \a b at offset \a off
+    private:internal static int readU16BE(binary b, int off) {
+        return (get_byte(b, off) << 8) | get_byte(b, off + 1);
+    }
+
+    #! Reads a big-endian signed 16-bit int from \a b at offset \a off
+    private:internal static int readI16BE(binary b, int off) {
+        int v = AwsEventStreamDecoder::readU16BE(b, off);
+        return v >= 0x8000 ? v - 0x10000 : v;
+    }
+
+    #! Reads a big-endian signed 64-bit int from \a b at offset \a off
+    private:internal static int readI64BE(binary b, int off) {
+        # qore int is 64-bit signed, so the assembled value already carries
+        # the correct sign for two's-complement input
+        int hi = AwsEventStreamDecoder::readU32BE(b, off);
+        int lo = AwsEventStreamDecoder::readU32BE(b, off + 4);
+        return (hi << 32) | lo;
+    }
+
+    #! Decodes a single header value at \a off; returns (value, new_off)
+    private:internal static list<auto> readHeaderValue(binary b, int off,
+            int type_tag, int hend) {
+        switch (type_tag) {
+            case 0: # bool true
+                return (True, off);
+            case 1: # bool false
+                return (False, off);
+            case 2: { # int8
+                int v = get_byte(b, off);
+                if (v >= 0x80) {
+                    v -= 0x100;
+                }
+                return (v, off + 1);
+            }
+            case 3: # int16
+                return (AwsEventStreamDecoder::readI16BE(b, off), off + 2);
+            case 4: # int32
+                return (AwsEventStreamDecoder::readI32BE(b, off), off + 4);
+            case 5: # int64
+                return (AwsEventStreamDecoder::readI64BE(b, off), off + 8);
+            case 6: { # byte array (uint16 BE length + N bytes)
+                int len = AwsEventStreamDecoder::readU16BE(b, off);
+                off += 2;
+                if (off + len > hend) {
+                    throw "AWS-EVENT-STREAM-FORMAT-ERROR",
+                        "byte-array header extends past headers block";
+                }
+                binary v = len > 0 ? b[off..off + len - 1] : binary();
+                return (v, off + len);
+            }
+            case 7: { # string (uint16 BE length + N bytes UTF-8)
+                int len = AwsEventStreamDecoder::readU16BE(b, off);
+                off += 2;
+                if (off + len > hend) {
+                    throw "AWS-EVENT-STREAM-FORMAT-ERROR",
+                        "string header extends past headers block";
+                }
+                string v = len > 0
+                    ? AwsEventStreamDecoder::bytesToString(b[off..off + len - 1])
+                    : "";
+                return (v, off + len);
+            }
+            case 8: { # timestamp (int64 ms since epoch)
+                int ms = AwsEventStreamDecoder::readI64BE(b, off);
+                # qore date constructor accepts milliseconds via 1970-01-01 + Nms
+                date v = 1970-01-01Z + milliseconds(ms);
+                return (v, off + 8);
+            }
+            case 9: { # uuid (16 bytes)
+                if (off + 16 > hend) {
+                    throw "AWS-EVENT-STREAM-FORMAT-ERROR",
+                        "uuid header extends past headers block";
+                }
+                # render as canonical 8-4-4-4-12 lowercase hex form
+                binary raw = b[off..off + 15];
+                string hex = AwsEventStreamDecoder::binToHex(raw);
+                string v = sprintf("%s-%s-%s-%s-%s",
+                    hex[0..7], hex[8..11], hex[12..15], hex[16..19], hex[20..31]);
+                return (v, off + 16);
+            }
+            default:
+                throw "AWS-EVENT-STREAM-FORMAT-ERROR",
+                    sprintf("unknown header value type %d at offset %d",
+                        type_tag, off - 1);
+        }
+    }
+
+    #! Returns the lowercase hex string for the given binary blob
+    private:internal static string binToHex(binary b) {
+        string s = "";
+        for (int i = 0; i < b.size(); ++i) {
+            s += sprintf("%02x", get_byte(b, i));
+        }
+        return s;
+    }
+
+    #! Decodes a UTF-8 string from a binary blob
+    private:internal static string bytesToString(binary b) {
+        return b.toString("UTF-8");
+    }
+
+    #! Computes the CRC-32 (reflected, polynomial 0xEDB88320) of \a b
+    /** Public so external tests can verify fixture round-tripping and other
+        AWS-services callers (Kinesis, S3 Select) can sign frames they emit.
+        Cached internal lookup table is built on first call.
+    */
+    static int crc32(binary b) {
+        list<int> table = AwsEventStreamDecoder::getCrcTable();
+        int crc = 0xFFFFFFFF;
+        for (int i = 0; i < b.size(); ++i) {
+            int idx = (crc ^ get_byte(b, i)) & 0xFF;
+            crc = ((crc >> 8) & 0xFFFFFFFF) ^ table[idx];
+        }
+        return (crc ^ 0xFFFFFFFF) & 0xFFFFFFFF;
+    }
+
+    #! Returns the lazily-built CRC-32 lookup table (one entry per byte value)
+    private:internal static list<int> getCrcTable() {
+        if (!crc_table_built) {
+            AwsEventStreamDecoder::buildCrcTable();
+        }
+        return crc_table;
+    }
+
+    #! Builds the CRC-32 lookup table (called once)
+    private:internal static buildCrcTable() {
+        crc_lock.lock();
+        on_exit crc_lock.unlock();
+        if (crc_table_built) {
+            return;
+        }
+        list<int> tbl = ();
+        for (int n = 0; n < 256; ++n) {
+            int c = n;
+            for (int k = 0; k < 8; ++k) {
+                if (c & 1) {
+                    c = ((c >> 1) & 0xFFFFFFFF) ^ 0xEDB88320;
+                } else {
+                    c = (c >> 1) & 0xFFFFFFFF;
+                }
+            }
+            push tbl, c;
+        }
+        crc_table = tbl;
+        crc_table_built = True;
+    }
+}
+}

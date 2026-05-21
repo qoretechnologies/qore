@@ -884,6 +884,19 @@ int HttpClientConnectionManagerBase::getPoolSize() const {
     return total;
 }
 
+int HttpClientConnectionManagerBase::getOpenPoolSize() const {
+    std::shared_lock<std::shared_mutex> rl(pool_lock_);
+    int total = 0;
+    for (const auto& kv : pool_) {
+        for (const HttpClientConnectionBase* conn : kv.second) {
+            if (conn && !conn->isClosed()) {
+                ++total;
+            }
+        }
+    }
+    return total;
+}
+
 int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int port) const {
     std::string key = poolKey(host, port);
     std::shared_lock<std::shared_mutex> rl(pool_lock_);

@@ -31,6 +31,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) RestClient
 %requires(reexport) RestClientIo
+%requires(reexport) QoreRagTypes
 
 module QdrantDataProvider {
     version = "1.0";
@@ -45,6 +46,10 @@ module QdrantDataProvider {
 
         # register the data provider factory
         DataProvider::registerFactory(new QdrantDataProviderFactory());
+
+        # register the RAG vector-store factory
+        QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
+            new QdrantDataProvider::QdrantVectorStoreFactory());
 
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
@@ -371,6 +376,16 @@ module QdrantDataProvider {
     @section qdrantdataprovider_factory Qdrant Data Provider Factory
 
     The name of the Qdrant data provider factory is <b><tt>qdrant</tt></b>.
+
+    @section qdrantdataprovider_vectorstore Qdrant Vector Store
+
+    The module also registers a
+    @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore"
+    implementation (@ref QdrantDataProvider::QdrantVectorStore) with the RAG
+    provider registry under the backend identifier <b><tt>qdrant</tt></b>,
+    so @ref QoreRagUtils::RagProviderRegistry::createVectorStore() resolves
+    Qdrant collections as drop-in vector stores for
+    @ref QoreRagUtils::RagPipeline ingest and retrieval.
 
     @section qdrantdataprovider_examples Qdrant Data Provider Examples
 

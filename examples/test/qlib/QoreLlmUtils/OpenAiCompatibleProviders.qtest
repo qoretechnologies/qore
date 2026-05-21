@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/PerplexityRestClient.qm
+%requires ../../../../qlib/GrokRestClient.qm
+%requires ../../../../qlib/SGLangRestClient.qm
+
+%exec-class OpenAiCompatibleProvidersTest
+
+# Verifies that the OpenAI-compat reusable base (OpenAiLlmProvider) hosts the
+# Grok, Perplexity, and SGLang LLM providers through ProviderModuleMap lazy
+# loading and the @ref getChatCompletionsPath() subclass-override hook.
+public class OpenAiCompatibleProvidersTest inherits QUnit::Test {
+    constructor() : Test("OpenAiCompatibleProviders Test", "1.0") {
+        addTestCase("ProviderModuleMap has openai-compat modes", \moduleMapTest());
+        addTestCase("lazy-load: grok",       \lazyLoadGrokTest());
+        addTestCase("lazy-load: perplexity", \lazyLoadPerplexityTest());
+        addTestCase("lazy-load: sglang",     \lazyLoadSGLangTest());
+        addTestCase("path override: perplexity uses /chat/completions",
+            \perplexityPathOverrideTest());
+        addTestCase("path default: grok uses /v1/chat/completions",
+            \grokPathDefaultTest());
+        set_return_value(main());
+    }
+
+    private moduleMapTest() {
+        hash<auto> m = QoreLlmUtils::LlmProviderRegistry::ProviderModuleMap;
+        assertEq("OpenAiRestClient",     m."http");
+        assertEq("GrokRestClient",       m.grok);
+        assertEq("PerplexityRestClient", m.perplexity);
+        assertEq("SGLangRestClient",     m.sglang);
+    }
+
+    private lazyLoadGrokTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("grok");
+        assertEq("grok", f.getMode());
+        hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
+        assertEq("GrokRestClient", info.module_name);
+        assertTrue(info.supports_streaming);
+        assertTrue(info.supports_tools);
+        assertTrue(info.supports_structured_output);
+    }
+
+    private lazyLoadPerplexityTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("perplexity");
+        assertEq("perplexity", f.getMode());
+        hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
+        assertEq("PerplexityRestClient", info.module_name);
+        assertTrue(info.supports_streaming);
+        assertTrue(info.supports_tools);
+    }
+
+    private lazyLoadSGLangTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("sglang");
+        assertEq("sglang", f.getMode());
+        assertEq("SGLangRestClient", f.getInfo().module_name);
+    }
+
+    private perplexityPathOverrideTest() {
+        QoreLlmUtils::AbstractLlmProvider p =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("perplexity").create(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "api_key": "test", "model": "sonar"});
+        assertEq("perplexity", p.getMode());
+        # the override must surface via dynamic dispatch
+        # cast away from AbstractLlmProvider so the method is statically known
+        PerplexityRestClient::PerplexityLlmProvider pp =
+            cast<PerplexityRestClient::PerplexityLlmProvider>(p);
+        assertEq("/chat/completions", pp.getChatCompletionsPath());
+        # default URL was applied
+        assertEq("https://api.perplexity.ai", p.getConfig().url);
+    }
+
+    private grokPathDefaultTest() {
+        QoreLlmUtils::AbstractLlmProvider p =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("grok").create(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "api_key": "test", "model": "grok-3"});
+        assertEq("grok", p.getMode());
+        # default URL was applied
+        assertEq("https://api.x.ai", p.getConfig().url);
+        # Grok uses the inherited /v1/chat/completions
+        OpenAiRestClient::OpenAiLlmProvider op =
+            cast<OpenAiRestClient::OpenAiLlmProvider>(p);
+        assertEq("/v1/chat/completions", op.getChatCompletionsPath());
+    }
+}

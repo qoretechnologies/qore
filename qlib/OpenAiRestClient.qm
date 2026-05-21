@@ -707,6 +707,25 @@ public class OpenAiResponseSseStreamIo {
     deltas.
 
     Thread-safe: the REST client is lazy-initialized behind a mutex.
+
+    @par Reuse as the OpenAI-compatible base class
+
+    This class is the reusable base for **any** OpenAI-compatible chat
+    backend that speaks the OpenAI wire shape (\c messages, \c tools,
+    \c response_format, \c usage, SSE \c data: deltas with \c [DONE]
+    terminator) with \c Authorization: \c Bearer authentication.  Concrete
+    subclasses register a distinct
+    @ref QoreLlmUtils::AbstractLlmProviderFactory under a vendor-specific
+    mode string and either inherit the default \c /v1/chat/completions
+    endpoint or override @ref getChatCompletionsPath() to point at a
+    vendor-specific URL.
+
+    Existing in-repo subclasses:
+    - @ref SGLangRestClient::SGLangLlmProvider — mode \c "sglang"
+    - @ref GrokRestClient::GrokLlmProvider — mode \c "grok"
+    - @ref PerplexityRestClient::PerplexityLlmProvider — mode \c "perplexity"
+      (overrides @ref getChatCompletionsPath() since Perplexity's path is
+      \c /chat/completions, not \c /v1/chat/completions)
 */
 public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     private {
@@ -737,6 +756,18 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
     string getMode() {
         return "http";
+    }
+
+    #! Returns the chat-completions endpoint path (subclass override hook)
+    /** The default \c /v1/chat/completions matches OpenAI, xAI Grok,
+        Together, Fireworks, Groq, DeepSeek, Mistral, Ollama, vLLM, and
+        SGLang.  Backends that publish at a different path (e.g. Perplexity
+        at \c /chat/completions) override this method.
+
+        @return the URL path for chat-completions POST requests
+    */
+    string getChatCompletionsPath() {
+        return "/v1/chat/completions";
     }
 
     hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
@@ -771,7 +802,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost("/v1/chat/completions", body,
+                return rest_client.restPost(getChatCompletionsPath(), body,
                     buildAuthHeader());
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -796,7 +827,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost("/v1/chat/completions", body,
+                return rest_client.restPost(getChatCompletionsPath(), body,
                     buildAuthHeader());
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -828,7 +859,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             mgr.acquireStream(getConfig().url);
 
         string json_body = make_json(body);
-        stream.startStreaming("POST", "/v1/chat/completions", hdr, False,
+        stream.startStreaming("POST", getChatCompletionsPath(), hdr, False,
             json_body);
 
         HttpClientStreamingIo::SseStreamReader reader(stream);

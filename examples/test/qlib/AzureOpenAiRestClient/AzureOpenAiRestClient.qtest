@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/AzureAuth.qm
+%requires ../../../../qlib/AzureOpenAiRestClient.qm
+
+%exec-class AzureOpenAiTest
+
+public class AzureOpenAiTest inherits QUnit::Test {
+    constructor() : Test("AzureOpenAi Test", "1.0") {
+        addTestCase("factory registered + lazy-loadable", \factoryTest());
+        addTestCase("api_key mode constructs",            \apiKeyModeTest());
+        addTestCase("entra_client_credentials requires fields",
+            \entraClientCredentialsValidationTest());
+        addTestCase("entra_managed_identity constructs without secret",
+            \managedIdentityModeTest());
+        addTestCase("getChatCompletionsPath uses deployment + api-version",
+            \chatPathTest());
+        addTestCase("unknown auth mode is rejected", \unknownAuthModeTest());
+        addTestCase("missing api_key with api_key mode throws",
+            \missingApiKeyTest());
+        addTestCase("missing deployment throws", \missingDeploymentTest());
+        addTestCase("factory getInfo advertises capabilities",
+            \getInfoTest());
+        set_return_value(main());
+    }
+
+    private factoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("azure-openai");
+        assertEq("azure-openai", f.getMode());
+        assertEq("Azure OpenAI Service", f.getDisplayName());
+        assertEq("AzureOpenAiRestClient", f.getInfo().module_name);
+    }
+
+    private apiKeyModeTest() {
+        AzureOpenAiRestClient::AzureOpenAiLlmProvider p(<QoreLlmUtils::LlmBackendConfig>{
+            "url": "https://my-resource.openai.azure.com",
+            "model": "gpt-4o",
+            "api_key": "test-key",
+            "provider_options": {
+                "azure_deployment": "gpt-4o",
+                "azure_api_version": "2024-10-21",
+            },
+        });
+        assertEq("azure-openai", p.getMode());
+        assertEq("gpt-4o", p.getDeployment());
+        assertEq("2024-10-21", p.getApiVersion());
+        assertEq("api_key", p.getAuthMode());
+    }
+
+    private entraClientCredentialsValidationTest() {
+        # missing tenant should throw
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new AzureOpenAiRestClient::AzureOpenAiLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "url": "https://x.openai.azure.com",
+                    "provider_options": {
+                        "azure_deployment": "dep",
+                        "azure_auth_mode": "entra_client_credentials",
+                        "azure_client_id": "c", "azure_client_secret": "s",
+                    },
+                });
+        });
+        # missing secret should throw
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new AzureOpenAiRestClient::AzureOpenAiLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "url": "https://x.openai.azure.com",
+                    "provider_options": {
+                        "azure_deployment": "dep",
+                        "azure_auth_mode": "entra_client_credentials",
+                        "azure_tenant_id": "t", "azure_client_id": "c",
+                    },
+                });
+        });
+        # all fields present — succeeds
+        AzureOpenAiRestClient::AzureOpenAiLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "url": "https://x.openai.azure.com",
+                "provider_options": {
+                    "azure_deployment": "dep",
+                    "azure_auth_mode": "entra_client_credentials",
+                    "azure_tenant_id": "t", "azure_client_id": "c",
+                    "azure_client_secret": "s",
+                },
+            });
+        assertEq("entra_client_credentials", p.getAuthMode());
+    }
+
+    private managedIdentityModeTest() {
+        # no secret needed; system-assigned identity needs no client_id either
+        AzureOpenAiRestClient::AzureOpenAiLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "url": "https://x.openai.azure.com",
+                "provider_options": {
+                    "azure_deployment": "dep",
+                    "azure_auth_mode": "entra_managed_identity",
+                },
+            });
+        assertEq("entra_managed_identity", p.getAuthMode());
+
+        # user-assigned identity: pass azure_client_id
+        AzureOpenAiRestClient::AzureOpenAiLlmProvider p2(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "url": "https://x.openai.azure.com",
+                "provider_options": {
+                    "azure_deployment": "dep",
+                    "azure_auth_mode": "entra_managed_identity",
+                    "azure_client_id": "user-assigned-uuid",
+                },
+            });
+        assertEq("entra_managed_identity", p2.getAuthMode());
+    }
+
+    private chatPathTest() {
+        AzureOpenAiRestClient::AzureOpenAiLlmProvider p(<QoreLlmUtils::LlmBackendConfig>{
+            "url": "https://x.openai.azure.com",
+            "api_key": "k",
+            "provider_options": {
+                "azure_deployment": "my-deployment-2024",
+                "azure_api_version": "2024-12-01-preview",
+            },
+        });
+        assertEq("/openai/deployments/my-deployment-2024/chat/completions?api-version=2024-12-01-preview",
+            p.getChatCompletionsPath());
+
+        # default api version is applied when omitted
+        AzureOpenAiRestClient::AzureOpenAiLlmProvider p2(<QoreLlmUtils::LlmBackendConfig>{
+            "url": "https://x.openai.azure.com",
+            "api_key": "k",
+            "provider_options": {"azure_deployment": "dep"},
+        });
+        assertEq(AzureOpenAiRestClient::DefaultAzureApiVersion, p2.getApiVersion());
+    }
+
+    private unknownAuthModeTest() {
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new AzureOpenAiRestClient::AzureOpenAiLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "url": "https://x.openai.azure.com",
+                    "provider_options": {
+                        "azure_deployment": "dep",
+                        "azure_auth_mode": "bogus-mode",
+                    },
+                });
+        });
+    }
+
+    private missingApiKeyTest() {
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new AzureOpenAiRestClient::AzureOpenAiLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "url": "https://x.openai.azure.com",
+                    "provider_options": {"azure_deployment": "dep"},
+                });
+        });
+    }
+
+    private missingDeploymentTest() {
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new AzureOpenAiRestClient::AzureOpenAiLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "url": "https://x.openai.azure.com",
+                    "api_key": "k",
+                });
+        });
+    }
+
+    private getInfoTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("azure-openai");
+        hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
+        assertTrue(info.supports_streaming);
+        assertTrue(info.supports_tools);
+        assertTrue(info.supports_structured_output);
+        assertTrue(info.supports_multimodal);
+    }
+}

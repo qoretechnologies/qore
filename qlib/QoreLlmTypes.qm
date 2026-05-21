@@ -130,6 +130,18 @@ public hashdecl LlmBackendConfig {
     #! Maximum retry attempts for transient errors (429, 5xx); default 3;
     #! set to 0 to disable retries
     int max_retries = 3;
+    #! Free-form per-provider configuration not otherwise expressible in this hashdecl
+    /** Allows provider subclasses to accept vendor-specific knobs without
+        forcing every key into this shared hashdecl.  Examples:
+        - Azure OpenAI: \c azure_deployment, \c azure_api_version,
+          \c azure_auth_mode, \c azure_tenant_id, \c azure_client_id,
+          \c azure_client_secret
+        - Vertex AI: \c gcp_project_id, \c gcp_region, \c gcp_sa_json_path,
+          \c gcp_model_publisher
+        - AWS Bedrock: \c aws_region, \c aws_service overrides,
+          \c bedrock_invoke_fallback table
+    */
+    *hash<auto> provider_options;
     #! Callback mode: a callable that performs the API call and returns
     #! the response hash in OpenAI-compatible format
     *code<hash<auto>(string, string, hash<auto>)> api_callback;
@@ -298,6 +310,33 @@ public hashdecl LlmProviderInfo {
     bool supports_multimodal = False;
     #! True when the provider maps @ref LlmRequestOptions::reasoning_token_budget
     bool supports_reasoning_token_budget = False;
+    #! True when callers should avoid sending large unused tool catalogues
+    /** Some providers use constrained decoding over the full tool/function
+        declaration set; for those providers, a large stable catalogue can be
+        rejected or can slow decoding even when only a few tools are relevant
+        to the current turn.  Callers with a naturally ordered set of
+        currently relevant tools should narrow to that set when this flag is
+        @ref True. */
+    bool prefers_narrow_tool_catalogue = False;
+    #! Soft maximum number of tool definitions to send when narrowing
+    /** \c 0 means no provider-specific soft cap is advertised.  When
+        @ref prefers_narrow_tool_catalogue is @ref True, callers should use
+        this as a target cap while preserving mandatory tools and local
+        validation. */
+    int preferred_max_tool_count = 0;
+    #! True when callers should prefer one generic dispatch tool
+    /** Some providers have trouble reliably producing one of many structured
+        function calls even after the catalogue is narrowed.  Callers that
+        can validate operation names and payloads locally should expose a
+        single dispatch function with \c operation + payload fields when this
+        flag is @ref True. */
+    bool prefers_single_tool_dispatch = False;
+    #! True when generic nested tool payloads should be encoded as JSON text
+    /** Some providers can select the right tool but tend to emit empty
+        objects for generic nested payload slots.  Callers that validate and
+        decode locally should expose these free-form payload slots as JSON
+        string fields when this flag is @ref True. */
+    bool prefers_stringified_tool_payloads = False;
 }
 
 #! Abstract factory for an LLM provider
@@ -363,10 +402,15 @@ public class LlmProviderRegistry {
     public {
         #! Map of mode names to the module that supplies the matching provider
         const ProviderModuleMap = {
-            "http":      "OpenAiRestClient",
-            "anthropic": "AnthropicRestClient",
-            "sglang":    "SGLangRestClient",
-            "gemini":    "GeminiRestClient",
+            "http":          "OpenAiRestClient",
+            "anthropic":     "AnthropicRestClient",
+            "sglang":        "SGLangRestClient",
+            "gemini":        "GeminiRestClient",
+            "grok":          "GrokRestClient",
+            "perplexity":    "PerplexityRestClient",
+            "azure-openai":  "AzureOpenAiRestClient",
+            "bedrock":       "BedrockRestClient",
+            "vertex-ai":     "VertexAiRestClient",
         };
     }
 

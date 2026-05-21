@@ -302,6 +302,17 @@ public:
     //! Returns the total number of pooled connections across all keys.
     DLLEXPORT int getPoolSize() const;
 
+    //! Returns the number of pooled connections across all keys whose
+    //! @c isClosed() returns false.
+    /** Unlike @ref getPoolSize, this excludes connections that have already
+        been closed (typically by the remote peer) but have not yet been
+        evicted by the asynchronous @c onConnectionClosed hook or the next
+        @c acquireConnection-time @c evictDeadLocked sweep.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int getOpenPoolSize() const;
+
     //! Returns the number of connections currently pooled for @a host : @a port.
     DLLEXPORT int getConnectionCount(const char* host, int port) const;
 
