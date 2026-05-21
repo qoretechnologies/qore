@@ -20,6 +20,8 @@ class BenchDataFramePipelineFilterGroup {
 
         int rows = DataFrameBench::defaultRows();
         DataFrame::DataFrame df;
+        *DataProviderPipeline pipe;
+        list<auto> rows_out;
         hash<DataProviderExpression> expr = <DataProviderExpression>{
             "exp": "&&",
             "args": (
@@ -37,12 +39,9 @@ class BenchDataFramePipelineFilterGroup {
         r.setup = sub () {
             df = DataFrameBench::makeFrame(rows);
             r.bytes_processed = DataFrameBench::approxBytes(rows);
-        };
-
-        r.measure = sub () {
-            list<auto> rows_out;
-            DataProviderPipeline pipe(<PipelineOptionInfo>{
+            pipe = new DataProviderPipeline(<PipelineOptionInfo>{
                 "name": "dataframe-benchmark-pipeline",
+                "synchronous": True,
                 "output_callback": sub (auto row) {
                     push rows_out, row;
                 },
@@ -52,6 +51,10 @@ class BenchDataFramePipelineFilterGroup {
                 "group_by": "region",
                 "aggregates": "orders=count(),total=sum(amount)",
             }));
+        };
+
+        r.measure = sub () {
+            rows_out = ();
             pipe.submit(df);
             pipe.waitDone();
             if (!rows_out.size()) {

@@ -1284,6 +1284,8 @@ if (errors) {
       internally via
       @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
       @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()"
+    - added the \c synchronous option to @ref DataProvider::PipelineOptionInfo "PipelineOptionInfo" for
+      low-latency single-queue processor pipelines that submit data and wait for results on the caller's thread
     - added methods to return data provider types in the context of option dataprovider_message_support
     - @ref DataProvider::BaseOptionInfo "BaseOptionInfo": added @c required, @c readonly, @c disabled,
       @c preselected, @c has_dependents, @c depends_on, and @c on_change fields; these fields were previously

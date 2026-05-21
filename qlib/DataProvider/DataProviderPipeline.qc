@@ -283,6 +283,15 @@ public hashdecl PipelineOptionInfo {
         @since DataProvider 3.4
     */
     *code<nothing(auto)> output_callback;
+
+    #! Process eligible single-queue pipelines on the caller's thread
+    /** When @ref True, a pipeline with one queue and only processor elements processes submitted
+        data synchronously in DataProviderPipeline::submit() and flushes in DataProviderPipeline::waitDone().
+        Pipelines with metrics collectors, thread callbacks, or fan-out queues continue using worker threads.
+
+        @since DataProvider 3.4
+    */
+    *bool synchronous;
 }
 
 #! Pipeline element
@@ -396,7 +405,7 @@ class PipelineQueue {
     }
 
     #! Creates the object
-    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size) {
+    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size, bool start_thread = True) {
         self.size = size;
         self.parent := parent;
         self.lck = lck;
@@ -404,6 +413,16 @@ class PipelineQueue {
 
         self.id = id;
         self.id_str = id.toString();
+        if (start_thread) {
+            startThreadIfNeeded();
+        }
+    }
+
+    #! Starts the worker thread if it has not already been started
+    startThreadIfNeeded() {
+        if (tid) {
+            return;
+        }
         WaitGroup run_cnt();
         run_cnt.add();
         # cnt is added/decremented inside run() so its scope coincides exactly with the
@@ -418,6 +437,75 @@ class PipelineQueue {
     #! Returns the pipeline ID
     int getId() {
         return id;
+    }
+
+    #! Returns True when this queue can be processed synchronously
+    bool canProcessSynchronously() {
+        if (!elems || elems.last().typeCode() == NT_LIST) {
+            return False;
+        }
+        foreach auto elem in (elems) {
+            if (!(elem instanceof AbstractDataProcessor)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Processes data on the caller's thread for synchronous single-queue pipelines
+    processSynchronously(auto qdata) {
+        if (queue_abort) {
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+        }
+        if (queue_stop) {
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
+                "down", parent.getName());
+        }
+
+        processing = True;
+        on_exit {
+            processing = False;
+            if (queue_waiting) {
+                cond.broadcast();
+            }
+        }
+
+        softlist<auto> data_recs;
+        push data_recs, qdata;
+
+        try {
+            int elem_count = elems.size();
+            int elem_index = 0;
+            foreach auto elem in (elems) {
+                AbstractDataProcessor processor = cast<AbstractDataProcessor>(elem);
+                softlist<auto> new_recs;
+                foreach auto data_elem in (data_recs) {
+                    softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
+                    new_recs += new_elem_recs;
+                    parent.logDebug("queue %d data processor %y output: %y", id, elem.className(), new_elem_recs);
+                }
+
+                if (output_callback && elem_index == elem_count - 1) {
+                    emitOutputRecords(new_recs);
+                }
+                data_recs = new_recs;
+                ++elem_index;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            parent.reportError(self, ex);
+        }
+    }
+
+    #! Flushes synchronous single-queue pipelines on the caller's thread
+    flushSynchronously() {
+        processing = True;
+        on_exit {
+            processing = False;
+            if (queue_waiting) {
+                cond.broadcast();
+            }
+        }
+        flushIntern();
     }
 
     #! Submits data for processing
@@ -1848,6 +1936,12 @@ public class DataProviderPipeline {
         /** @since DataProvider 3.4
         */
         *code<nothing(auto)> output_callback;
+
+        #! True if eligible pipelines should run on the caller's thread
+        bool synchronous = False;
+
+        #! True when the current run has used synchronous processing and needs synchronous flush
+        bool synchronous_processing = False;
     }
 
     #! Creates the object with the given options
@@ -1861,6 +1955,7 @@ public class DataProviderPipeline {
         debug_log = opts.debug_log;
         thread_callback = opts.thread_callback;
         output_callback = opts.output_callback;
+        synchronous = opts.synchronous ?? False;
         name = opts.name ?? sprintf("unnamed pipeline %y", self.uniqueHash());
 
         # Initialize metrics collector if provided
@@ -1871,7 +1966,7 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
-        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1);
+        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1, !synchronous);
     }
 
     #! Copy constructor; creates an empty pipeline with the same configuration as the original
@@ -2125,7 +2220,12 @@ public class DataProviderPipeline {
         }
 
         # wait for primary queue to complete processing
-        pmap."0".waitDone();
+        if (synchronous_processing) {
+            pmap."0".flushSynchronously();
+            synchronous_processing = False;
+        } else {
+            pmap."0".waitDone();
+        }
 
         # set the stop time
         stop_time = now_us();
@@ -2328,7 +2428,7 @@ public class DataProviderPipeline {
     private:internal PipelineQueue copyPipeline(PipelineQueue old_queue) {
         *PipelineQueue queue = pmap{old_queue.id};
         if (!queue) {
-            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size);
+            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size, !synchronous);
             pmap{old_queue.id} = queue;
         }
 
@@ -2345,6 +2445,19 @@ public class DataProviderPipeline {
     */
     private:internal submitIntern(auto _data) {
         DataProviderShape shape = AbstractDataProcessor::detectShape(_data);
+        if (canProcessSynchronouslyIntern()) {
+            int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
+            if (shape == DataProviderShape::DataFrameBlock) {
+                logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
+            } else if (shape == DataProviderShape::HashOfLists && rec_cnt > 1) {
+                logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
+            }
+            record_count += rec_cnt;
+            synchronous_processing = True;
+            pmap."0".processSynchronously(_data);
+            return;
+        }
+
         if (shape == DataProviderShape::DataFrameBlock) {
             int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
             logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
@@ -2412,10 +2525,20 @@ public class DataProviderPipeline {
             }
         }
 
+        if (synchronous_processing) {
+            synchronous_processing = False;
+        }
+
         # Reset metrics collector for reuse (clears counters and shut_down flag)
         if (metrics_collector) {
             metrics_collector.reset();
         }
+    }
+
+    #! Returns True when the current pipeline run can avoid worker-thread dispatch
+    private:internal bool canProcessSynchronouslyIntern() {
+        return synchronous && !metrics_collector && !thread_callback && pmap.size() == 1
+            && pmap."0".canProcessSynchronously();
     }
 
     #! Throws an exception if the pipeline cannot be used; locks the pipeline for changes otherwise
@@ -2451,6 +2574,12 @@ public class DataProviderPipeline {
                     if (q.elems && q.elems.last() instanceof AbstractDataProcessor) {
                         q.output_callback = output_callback;
                     }
+                }
+            }
+
+            if (!canProcessSynchronouslyIntern()) {
+                foreach PipelineQueue q in (pmap.iterator()) {
+                    q.startThreadIfNeeded();
                 }
             }
 
