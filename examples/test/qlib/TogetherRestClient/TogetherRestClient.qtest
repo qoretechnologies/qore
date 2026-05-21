@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/TogetherRestClient.qm
+
+%exec-class TogetherRestClientTest
+
+public class TogetherRestClientTest inherits QUnit::Test {
+    constructor() : Test("TogetherRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",       \connectionSchemeTest());
+        addTestCase("LLM factory registered + lazy-loadable",
+            \llmFactoryTest());
+        addTestCase("Embedder factory registered",        \embedderFactoryTest());
+        addTestCase("LLM provider applies default URL",   \defaultUrlTest());
+        addTestCase("default chat path is OpenAI shape",  \chatPathTest());
+        addTestCase("REST client options apply Bearer mapping",
+            \restOptionsTest());
+        addTestCase("embedder requires api_key",          \embedderConfigTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("together");
+        assertEq("Together AI REST Connection", info.display_name);
+        assertTrue(info.schemes.together);
+        assertEq("apikey", info.required_options);
+    }
+
+    private llmFactoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("together");
+        assertEq("together", f.getMode());
+        assertEq("Together AI chat completions", f.getDisplayName());
+        assertEq("TogetherRestClient", f.getInfo().module_name);
+    }
+
+    private embedderFactoryTest() {
+        QoreRagUtils::AbstractEmbedderFactory ef =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("together");
+        assertEq("together", ef.getType());
+        assertEq("Together AI embeddings", ef.getDisplayName());
+    }
+
+    private defaultUrlTest() {
+        TogetherRestClient::TogetherLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+                "api_key": "test-key",
+            });
+        assertEq("together", p.getMode());
+        assertEq(TogetherRestClient::TogetherLlmProvider::DefaultUrl,
+            p.getConfig().url);
+    }
+
+    private chatPathTest() {
+        TogetherRestClient::TogetherLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+                "api_key": "k",
+            });
+        assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = TogetherRestClient::TogetherRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("https://api.together.xyz", opts.url);
+        assertEq("v1", opts.api);
+        assertEq("/v1", opts.default_path);
+    }
+
+    private embedderConfigTest() {
+        # missing api_key should throw
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::TogetherEmbedder(<QoreRagUtils::EmbedderConfig>{
+                "backend": "together",
+                "model": "BAAI/bge-base-en-v1.5",
+            });
+        });
+        # with api_key — succeeds; default model applied
+        QoreRagUtils::TogetherEmbedder e(<QoreRagUtils::EmbedderConfig>{
+            "backend": "together",
+            "api_key": "k",
+        });
+        assertEq("BAAI/bge-base-en-v1.5", e.getModel());
+    }
+}

@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/TavilyDataProvider
+
+%exec-class TavilyDataProviderTest
+
+class FakeTavilyRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.tavily.com", "token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+    string getSafeUrl() {
+        return "https://api.tavily.com";
+    }
+}
+
+public class TavilyDataProviderTest inherits QUnit::Test {
+    constructor() : Test("TavilyDataProvider Test", "1.0") {
+        addTestCase("factory + app + 4 actions registered", \registrationTest());
+        addTestCase("root provider lists 4 children",        \rootProviderTest());
+        addTestCase("search action POSTs to /search",        \searchTest());
+        addTestCase("extract action POSTs to /extract",      \extractTest());
+        addTestCase("crawl action POSTs to /crawl",          \crawlTest());
+        addTestCase("map action POSTs to /map",              \mapTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("tavily");
+        assertEq("tavily", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Tavily");
+        assertEq("Tavily", app.name);
+        assertEq("tavily", app.scheme);
+        assertEq("tavily-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.size() > 0);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Tavily");
+        assertEq(4, actions.size());
+        list<string> action_names = sort(map $1.action, actions);
+        assertEq(("crawl", "extract", "map", "search"), action_names);
+    }
+
+    private rootProviderTest() {
+        FakeTavilyRestClientIo fake();
+        TavilyDataProvider::TavilyDataProvider prov(fake);
+        assertEq("tavily", prov.getName());
+        list<string> children = sort(prov.getChildProviderNames());
+        assertEq(("crawl", "extract", "map", "search"), children);
+        AbstractDataProvider s = prov.getChildProvider("search");
+        assertTrue(s instanceof TavilyDataProvider::TavilySearchDataProvider);
+    }
+
+    private searchTest() {
+        FakeTavilyRestClientIo fake();
+        fake.response_body = {
+            "query": "test",
+            "results": (
+                {"title": "T", "url": "https://t/", "content": "x", "score": 0.9},
+            ),
+        };
+
+        TavilyDataProvider::TavilySearchDataProvider prov(fake);
+        auto resp = prov.doRequest({"query": "test", "max_results": 5});
+
+        assertEq("POST", fake.last_method);
+        assertEq("search", fake.last_path);
+        assertEq("test", fake.last_request.query);
+        assertEq(5, fake.last_request.max_results);
+        assertEq(1, resp.results.size());
+        assertEq("https://t/", resp.results[0].url);
+    }
+
+    private extractTest() {
+        FakeTavilyRestClientIo fake();
+        fake.response_body = {
+            "results": ({"url": "https://q/", "raw_content": "..."},),
+        };
+
+        TavilyDataProvider::TavilyExtractDataProvider prov(fake);
+        prov.doRequest({"urls": ("https://q/",)});
+
+        assertEq("POST", fake.last_method);
+        assertEq("extract", fake.last_path);
+        assertEq("https://q/", fake.last_request.urls[0]);
+    }
+
+    private crawlTest() {
+        FakeTavilyRestClientIo fake();
+        fake.response_body = {
+            "base_url": "https://docs.qore.org/",
+            "results": ({"url": "https://docs.qore.org/x", "raw_content": "..."},),
+        };
+
+        TavilyDataProvider::TavilyCrawlDataProvider prov(fake);
+        prov.doRequest({
+            "url": "https://docs.qore.org/",
+            "max_depth": 2,
+            "limit": 50,
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("crawl", fake.last_path);
+        assertEq("https://docs.qore.org/", fake.last_request.url);
+        assertEq(2, fake.last_request.max_depth);
+    }
+
+    private mapTest() {
+        FakeTavilyRestClientIo fake();
+        fake.response_body = {
+            "base_url": "https://docs.qore.org/",
+            "results": ("https://docs.qore.org/a", "https://docs.qore.org/b"),
+        };
+
+        TavilyDataProvider::TavilyMapDataProvider prov(fake);
+        auto resp = prov.doRequest({"url": "https://docs.qore.org/"});
+
+        assertEq("POST", fake.last_method);
+        assertEq("map", fake.last_path);
+        assertEq(2, resp.results.size());
+    }
+}

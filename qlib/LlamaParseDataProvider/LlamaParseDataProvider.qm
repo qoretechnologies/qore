@@ -1,0 +1,119 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore LlamaParseDataProvider module definition
+
+/*  LlamaParseDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) LlamaParseRestClient
+%requires RestClientIo
+
+module LlamaParseDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for LlamaParse extraction";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new LlamaParseDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": LlamaParseDataProvider::AppName,
+            "display_name": "LlamaParse",
+            "short_desc": "LlamaParse document extraction (PDF / docx / HTML to markdown)",
+            "desc": "Provides access to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started) "
+                "— a document extraction service from LlamaIndex that converts PDFs, "
+                "docx, HTML, and image documents into structured markdown.\n\n"
+                "Use the @ref QoreRagUtils::LlamaParseChunker \"LlamaParseChunker\" "
+                "backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported "
+                "RAG ingestion path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+            "scheme": "llamaparse",
+            "logo": LlamaParseLogo,
+            "logo_file_name": "llamaparse-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LlamaParseDataProvider::AppName,
+            "path": "/parse-document",
+            "action": "parse-document",
+            "display_name": "Parse Document",
+            "short_desc": "Extract structured markdown from a document URL",
+            "desc": "Submits a document URL to LlamaParse and waits for extraction to "
+                "complete (upload → poll job → fetch result lifecycle).  Returns the "
+                "extracted content as markdown, plain text, or structured JSON.\n\n"
+                "**Note**: v1 supports URL-based document submission only; local file "
+                "upload via multipart/form-data is planned for a follow-up release.",
+            "action_code": DPAT_API,
+            "groups": ("Document Extraction",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LlamaParseRequestDataType::Fields{"url",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LlamaParseRequestDataType::Fields{
+                    "result_type", "parsing_instruction", "language",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LlamaParseRequestDataType::Fields - (
+                    "url", "result_type", "parsing_instruction", "language",
+                )
+            ),
+            "output_type": LlamaParseDocumentDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage LlamaParseDataProvider Module
+
+    @tableofcontents
+
+    @section llamaparsedataproviderintro LlamaParseDataProvider Introduction
+
+    Data-provider integration for
+    [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started).
+    Exposes a single `parse-document` DPAT_API action that handles the
+    full async upload → poll → fetch lifecycle internally.
+
+    For RAG-pipeline integration, prefer the
+    @ref QoreRagUtils::LlamaParseChunker "LlamaParseChunker" backend
+    (lazy-loaded via the @c "llama-parse" chunker strategy).
+
+    @section LlamaParseDataProviderRelnotes Release Notes
+
+    @subsection LlamaParseDataProviderv1_0 LlamaParseDataProvider v1.0
+    - the initial version of the %LlamaParseDataProvider module
+*/
+
+#! contains all public definitions in the LlamaParseDataProvider module
+public namespace LlamaParseDataProvider {
+#! LlamaParse application name
+public const AppName = "LlamaParse";
+}
+
+#! App logo loaded from file
+public const LlamaParseLogo = File::readTextFile(get_script_dir() + "/llamaparse-logo.svg");

@@ -68,4 +68,34 @@ public class HttpGatewayRerankerFactory inherits AbstractRerankerFactory {
     }
 }
 
+#! Factory for @ref StructuredChunker
+public class StructuredChunkerFactory inherits AbstractChunkerFactory {
+    string getStrategy() {
+        return "structured";
+    }
+
+    string getDisplayName() {
+        return "Paragraph-aware structured chunker";
+    }
+
+    AbstractChunker create(hash<ChunkerConfig> config) {
+        return new StructuredChunker(config);
+    }
+}
+
+#! Factory for @ref FixedChunker
+public class FixedChunkerFactory inherits AbstractChunkerFactory {
+    string getStrategy() {
+        return "fixed";
+    }
+
+    string getDisplayName() {
+        return "Fixed-size chunker with overlap";
+    }
+
+    AbstractChunker create(hash<ChunkerConfig> config) {
+        return new FixedChunker(config);
+    }
+}
+
 } # namespace QoreRagUtils

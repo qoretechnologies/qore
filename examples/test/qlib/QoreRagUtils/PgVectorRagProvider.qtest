@@ -1,0 +1,314 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+
+%exec-class PgVectorRagProviderTest
+
+#! Mock AbstractDatasource — records SQL + canned-response select results
+class FakePgsqlDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        *list<hash<auto>> exec_calls;
+        *list<hash<auto>> select_calls;
+        *hash<auto> select_response;
+        *hash<auto> selectRow_response;
+        int commit_count = 0;
+        int rollback_count = 0;
+    }
+
+    private {
+        list<hash<auto>> exec_log = ();
+        list<hash<auto>> select_log = ();
+    }
+
+    auto exec(string sql, ...) {
+        push exec_log, {"sql": sql, "args": argv};
+        return 1;
+    }
+
+    auto execRaw(string sql) {
+        push exec_log, {"sql": sql, "args": ()};
+        return 1;
+    }
+
+    auto vexec(string sql, *softlist args) {
+        push exec_log, {"sql": sql, "args": args ?? ()};
+        return 1;
+    }
+
+    *hash<auto> select(string sql, ...) {
+        push select_log, {"sql": sql, "args": argv};
+        return select_response;
+    }
+
+    *hash<auto> vselect(string sql, *softlist args) {
+        push select_log, {"sql": sql, "args": args ?? ()};
+        return select_response;
+    }
+
+    *hash<auto> selectRow(string sql, ...) {
+        push select_log, {"sql": sql, "args": argv};
+        return selectRow_response;
+    }
+
+    *hash<auto> vselectRow(string sql, *softlist args) {
+        push select_log, {"sql": sql, "args": args ?? ()};
+        return selectRow_response;
+    }
+
+    list<auto> selectRows(string sql, ...) {
+        return ();
+    }
+
+    list<auto> vselectRows(string sql, *softlist args) {
+        return ();
+    }
+
+    nothing commit() { ++commit_count; }
+    nothing rollback() { ++rollback_count; }
+    nothing beginTransaction() {}
+    nothing close() {}
+    auto getOption(string opt) {}
+    *hash<auto> getOptionHash() {}
+    nothing setOption(string opt, auto value) {}
+    *hash<auto> getCapabilities() {}
+    string getOSCharset() { return "UTF-8"; }
+    string getDriverName() { return "pgsql"; }
+    string getDriverRealName() { return "pgsql"; }
+    *string getServerVersion() { return "16"; }
+    *string getClientVersion() { return "16"; }
+    bool currentThreadInTransaction() { return False; }
+    *string getDBEncoding() { return "UTF8"; }
+    *string getOSEncoding() { return "UTF-8"; }
+    *string getHostName() { return "localhost"; }
+    *int getPort() { return 5432; }
+    *string getUserName() { return "test"; }
+    *string getPassword() { return; }
+    *string getDBName() { return "test"; }
+    bool inTransaction() { return False; }
+    string getConfigString() { return "pgsql:test/@test%localhost"; }
+    hash<auto> getConfigHash() { return {}; }
+
+    list<hash<auto>> getExecCalls() { return exec_log; }
+    list<hash<auto>> getSelectCalls() { return select_log; }
+}
+
+public class PgVectorRagProviderTest inherits QUnit::Test {
+    constructor() : Test("PgVectorRagProvider Test", "1.0") {
+        addTestCase("factory registered + lazy-loadable",   \factoryTest());
+        addTestCase("constructor requires collection + datasource",
+            \constructorValidationTest());
+        addTestCase("constructor accepts distance variants",
+            \distanceModesTest());
+        addTestCase("upsert issues ON CONFLICT INSERT per record",
+            \upsertTest());
+        addTestCase("deleteByIds issues DELETE WHERE id = ANY(...)",
+            \deleteTest());
+        addTestCase("search produces ORDER BY embedding <=> ? LIMIT k",
+            \searchTest());
+        addTestCase("search includes pass-through WHERE fragment",
+            \searchFilterTest());
+        addTestCase("getDimension probes vector_dims when not cached",
+            \dimensionProbeTest());
+        addTestCase("score conversion differs by distance metric",
+            \scoreConversionTest());
+        set_return_value(main());
+    }
+
+    private factoryTest() {
+        QoreRagUtils::AbstractVectorStoreFactory f =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx("pgvector");
+        assertEq("pgvector", f.getType());
+        assertEq("PostgreSQL pgvector vector store", f.getDisplayName());
+        assertEq("QoreRagUtils", f.getInfo().module_name);
+    }
+
+    private constructorValidationTest() {
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::PgVectorRagProvider(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "pgvector",
+            });
+        });
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::PgVectorRagProvider(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "pgvector",
+                "collection": "embeddings",
+            });
+        });
+    }
+
+    private distanceModesTest() {
+        FakePgsqlDatasource ds();
+
+        # default — cosine
+        QoreRagUtils::PgVectorRagProvider s_default(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        assertEq("embeddings", s_default.getCollection());
+
+        # l2
+        QoreRagUtils::PgVectorRagProvider s_l2(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "distance": "l2", "dimension": 3},
+        });
+        assertEq("embeddings", s_l2.getCollection());
+
+        # invalid distance throws
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::PgVectorRagProvider(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "pgvector",
+                "collection": "embeddings",
+                "options": {"datasource": ds, "distance": "bogus"},
+            });
+        });
+    }
+
+    private upsertTest() {
+        FakePgsqlDatasource ds();
+        QoreRagUtils::PgVectorRagProvider store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        store.upsert((
+            <QoreRagUtils::VectorRecord>{
+                "id": "doc1",
+                "vector": (0.1, 0.2, 0.3),
+                "payload": {"title": "Doc 1"},
+            },
+            <QoreRagUtils::VectorRecord>{
+                "id": "doc2",
+                "vector": (0.4, 0.5, 0.6),
+                "payload": {"title": "Doc 2"},
+            },
+        ));
+
+        list<hash<auto>> calls = ds.getExecCalls();
+        assertEq(2, calls.size());
+        # Each call references the embeddings table and ON CONFLICT clause
+        assertTrue(calls[0].sql =~ /INSERT INTO "embeddings"/);
+        assertTrue(calls[0].sql =~ /ON CONFLICT \(id\) DO UPDATE/);
+        # Bind args: id, vector literal '[a,b,c]', payload JSON
+        assertEq(3, calls[0].args.size());
+        assertEq("doc1", calls[0].args[0]);
+        assertTrue(calls[0].args[1] =~ /^\[/);  # vector literal starts with [
+        assertTrue(calls[0].args[2] =~ /title/);  # payload contains "title"
+        # commit() called on success
+        assertEq(1, ds.commit_count);
+    }
+
+    private deleteTest() {
+        FakePgsqlDatasource ds();
+        QoreRagUtils::PgVectorRagProvider store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        store.deleteByIds(("doc1", "doc2", "doc3"));
+
+        list<hash<auto>> calls = ds.getExecCalls();
+        assertEq(1, calls.size());
+        assertTrue(calls[0].sql =~ /DELETE FROM "embeddings" WHERE id = ANY/);
+        assertEq(("doc1", "doc2", "doc3"), calls[0].args[0]);
+    }
+
+    private searchTest() {
+        FakePgsqlDatasource ds();
+        ds.select_response = {
+            "id": ("doc1", "doc2"),
+            "payload": ('{"title":"A"}', '{"title":"B"}'),
+            "dist": (0.1, 0.3),
+        };
+        QoreRagUtils::PgVectorRagProvider store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        list<hash<QoreRagUtils::VectorSearchResult>> hits =
+            store.search((0.1, 0.2, 0.3), 5);
+
+        list<hash<auto>> calls = ds.getSelectCalls();
+        assertEq(1, calls.size());
+        # default cosine operator
+        assertTrue(calls[0].sql =~ /embedding <=>/);
+        assertTrue(calls[0].sql =~ /ORDER BY dist LIMIT 5/);
+        # payload was JSON; parsed into a hash
+        assertEq(2, hits.size());
+        assertEq("doc1", hits[0].id);
+        assertEq("A", hits[0].payload.title);
+        # score = 1 - dist for cosine
+        assertEq(0.9, hits[0].score);
+        assertEq(0.7, hits[1].score);
+    }
+
+    private searchFilterTest() {
+        FakePgsqlDatasource ds();
+        ds.select_response = {
+            "id": ("doc1",),
+            "payload": ('{"tag":"x"}',),
+            "dist": (0.05,),
+        };
+        QoreRagUtils::PgVectorRagProvider store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        store.search((0.1, 0.2, 0.3), 10, {
+            "where_sql": "payload->>'tag' = $2",
+            "where_args": ("x",),
+        });
+
+        list<hash<auto>> calls = ds.getSelectCalls();
+        # filter merged into query
+        assertTrue(calls[0].sql =~ /WHERE payload->>'tag' = \$2/);
+        # the vector literal is first bind arg, the filter arg follows
+        assertEq(2, calls[0].args[0].size());
+        assertEq("x", calls[0].args[0][1]);
+    }
+
+    private dimensionProbeTest() {
+        FakePgsqlDatasource ds();
+        ds.selectRow_response = {"dim": 1536};
+        QoreRagUtils::PgVectorRagProvider store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds},  # no dimension supplied
+        });
+        int dim = store.getDimension();
+        assertEq(1536, dim);
+        # second call uses cached value (no further select)
+        int dim2 = store.getDimension();
+        assertEq(1536, dim2);
+    }
+
+    private scoreConversionTest() {
+        FakePgsqlDatasource ds_cos();
+        ds_cos.select_response = {"id": ("a",), "payload": ('{}',), "dist": (0.25,)};
+        QoreRagUtils::PgVectorRagProvider cos_store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds_cos, "dimension": 3, "distance": "cosine"},
+        });
+        # cosine: 1 - dist = 0.75
+        assertEq(0.75, cos_store.search((0.0, 0.0, 0.0), 1)[0].score);
+
+        FakePgsqlDatasource ds_l2();
+        ds_l2.select_response = {"id": ("a",), "payload": ('{}',), "dist": (1.5,)};
+        QoreRagUtils::PgVectorRagProvider l2_store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds_l2, "dimension": 3, "distance": "l2"},
+        });
+        # l2: -dist = -1.5
+        assertEq(-1.5, l2_store.search((0.0, 0.0, 0.0), 1)[0].score);
+    }
+}

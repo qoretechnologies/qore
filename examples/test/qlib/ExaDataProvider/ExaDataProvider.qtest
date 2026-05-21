@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ExaDataProvider
+
+%exec-class ExaDataProviderTest
+
+class FakeExaRestClientIo inherits ExaRestClient::ExaRestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : ExaRestClient::ExaRestClientIo(
+            {"url": "https://api.exa.ai", "apikey": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+    string getSafeUrl() {
+        return "https://api.exa.ai";
+    }
+}
+
+public class ExaDataProviderTest inherits QUnit::Test {
+    constructor() : Test("ExaDataProvider Test", "1.0") {
+        addTestCase("factory + app + 3 actions registered", \registrationTest());
+        addTestCase("root provider lists 3 children",        \rootProviderTest());
+        addTestCase("search posts to /search",               \searchTest());
+        addTestCase("find-similar posts to /findSimilar",    \findSimilarTest());
+        addTestCase("contents posts to /contents",           \contentsTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("exa");
+        assertEq("exa", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Exa");
+        assertEq("Exa", app.name);
+        assertEq("exa", app.scheme);
+        assertEq("exa-logo.svg", app.logo_file_name);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Exa");
+        assertEq(3, actions.size());
+        list<string> action_names = sort(map $1.action, actions);
+        assertEq(("contents", "find-similar", "search"), action_names);
+    }
+
+    private rootProviderTest() {
+        FakeExaRestClientIo fake();
+        ExaDataProvider::ExaDataProvider prov(fake);
+        list<string> children = sort(prov.getChildProviderNames());
+        assertEq(("contents", "find-similar", "search"), children);
+    }
+
+    private searchTest() {
+        FakeExaRestClientIo fake();
+        fake.response_body = {
+            "results": ({"id": "abc", "url": "https://x/", "title": "X", "score": 0.9},),
+        };
+
+        ExaDataProvider::ExaSearchDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "query": "test",
+            "num_results": 5,
+            "type": "auto",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("/search", fake.last_path);
+        assertEq("test", fake.last_request.query);
+        assertEq("https://x/", resp.results[0].url);
+    }
+
+    private findSimilarTest() {
+        FakeExaRestClientIo fake();
+        fake.response_body = {"results": ()};
+
+        ExaDataProvider::ExaFindSimilarDataProvider prov(fake);
+        prov.doRequest({"url": "https://qore.org/"});
+
+        assertEq("POST", fake.last_method);
+        assertEq("/findSimilar", fake.last_path);
+        assertEq("https://qore.org/", fake.last_request.url);
+    }
+
+    private contentsTest() {
+        FakeExaRestClientIo fake();
+        fake.response_body = {"results": ()};
+
+        ExaDataProvider::ExaContentsDataProvider prov(fake);
+        prov.doRequest({"ids": ("abc",), "text": True});
+
+        assertEq("POST", fake.last_method);
+        assertEq("/contents", fake.last_path);
+        assertEq(("abc",), fake.last_request.ids);
+    }
+}

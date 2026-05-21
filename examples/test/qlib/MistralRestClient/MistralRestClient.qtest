@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/MistralRestClient.qm
+
+%exec-class MistralRestClientTest
+
+public class MistralRestClientTest inherits QUnit::Test {
+    constructor() : Test("MistralRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",       \connectionSchemeTest());
+        addTestCase("LLM factory registered",             \llmFactoryTest());
+        addTestCase("Embedder factory registered",        \embedderFactoryTest());
+        addTestCase("LLM provider applies default URL",   \defaultUrlTest());
+        addTestCase("default chat path is OpenAI shape",  \chatPathTest());
+        addTestCase("REST client options apply Bearer mapping",
+            \restOptionsTest());
+        addTestCase("embedder requires api_key",          \embedderConfigTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("mistral");
+        assertEq("Mistral AI REST Connection", info.display_name);
+        assertTrue(info.schemes.mistral);
+        assertEq("apikey", info.required_options);
+    }
+
+    private llmFactoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("mistral");
+        assertEq("mistral", f.getMode());
+        assertEq("Mistral AI chat completions", f.getDisplayName());
+        assertEq("MistralRestClient", f.getInfo().module_name);
+    }
+
+    private embedderFactoryTest() {
+        QoreRagUtils::AbstractEmbedderFactory ef =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("mistral");
+        assertEq("mistral", ef.getType());
+        assertEq("Mistral AI embeddings", ef.getDisplayName());
+    }
+
+    private defaultUrlTest() {
+        MistralRestClient::MistralLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "mistral-large-latest",
+                "api_key": "test-key",
+            });
+        assertEq("mistral", p.getMode());
+        assertEq(MistralRestClient::MistralLlmProvider::DefaultUrl,
+            p.getConfig().url);
+    }
+
+    private chatPathTest() {
+        MistralRestClient::MistralLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "mistral-large-latest",
+                "api_key": "k",
+            });
+        assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = MistralRestClient::MistralRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("https://api.mistral.ai", opts.url);
+        assertEq("v1", opts.api);
+        assertEq("/v1", opts.default_path);
+    }
+
+    private embedderConfigTest() {
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::MistralEmbedder(<QoreRagUtils::EmbedderConfig>{
+                "backend": "mistral",
+            });
+        });
+        QoreRagUtils::MistralEmbedder e(<QoreRagUtils::EmbedderConfig>{
+            "backend": "mistral",
+            "api_key": "k",
+        });
+        assertEq("mistral-embed", e.getModel());
+    }
+}

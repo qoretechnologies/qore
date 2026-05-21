@@ -2115,6 +2115,18 @@ cargo install tree-sitter-cli@0.26.5
       - supports OAuth2 authentication with automatic token refresh
       - provides CloseRestConnection for connection management with \c closerest:// URL scheme
 
+    - @ref coheredataproviderintro "CohereDataProvider" module
+      - new module providing a data provider API for <a href="https://cohere.com">Cohere</a> chat (Command R/R+), embeddings, reranking, and classification services
+      - exposes four actions: `chat` (`/v2/chat`), `embed` (`/v2/embed`), `rerank` (`/v2/rerank`), and `classify` (`/v1/classify`)
+      - action catalog integration with 4 actions under the \c cohere scheme
+
+    - @ref cohererestclientintro "CohereRestClient" module
+      - new module providing a REST client for <a href="https://cohere.com">Cohere</a>'s v2 REST API
+      - supports API key (Bearer token) authentication
+      - registers a `cohere` LlmProvider (Command R/R+ chat with tool calling), a `cohere` embedder backend (`embed-multilingual-v3.0`), and a `cohere` reranker backend (`rerank-v3.5`) — closes the cloud-reranker gap alongside Voyage and Jina
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c cohere
+      - provides CohereRestConnection for connection management with \c cohere:// URL scheme
+
     - @ref constantcontactdataproviderintro "ConstantContactDataProvider" module
       - new module providing a data provider API for <a href="https://www.constantcontact.com/">Constant Contact</a> email marketing
       - contact management (create, update, delete, list, find by ID)
@@ -2199,6 +2211,19 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key (Bearer token) authentication
       - provides DeelRestConnection for connection management with \c deel:// URL scheme
 
+    - @ref deepseekdataproviderintro "DeepSeekDataProvider" module
+      - new module providing a data provider API for <a href="https://platform.deepseek.com">DeepSeek</a> chat models
+      - exposes the OpenAI-compatible `/v1/chat/completions` endpoint as a `chat-completion` action
+      - response schema surfaces DeepSeek's `reasoning_content` (reasoner models) and prompt-cache hit/miss token counts
+      - action catalog integration with 1 action under the \c deepseek scheme
+
+    - @ref deepseekrestclientintro "DeepSeekRestClient" module
+      - new module providing a REST client for <a href="https://platform.deepseek.com">DeepSeek</a>'s OpenAI-compatible API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" — chat, tools, structured output, and SSE streaming work unchanged
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c deepseek
+      - provides DeepSeekRestConnection for connection management with \c deepseek:// URL scheme
+
     - @ref easypostdataproviderintro "EasyPostDataProvider" module
       - new module providing a data provider API for <a href="https://www.easypost.com/">EasyPost</a> multi-carrier shipping
       - address creation and verification, parcel definition, shipment lifecycle (create, buy, refund, label retrieval)
@@ -2232,6 +2257,17 @@ cargo install tree-sitter-cli@0.26.5
         buffer management
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
 
+    - @ref exadataproviderintro "ExaDataProvider" module
+      - new module providing a data provider API for <a href="https://exa.ai">Exa</a> (formerly Metaphor) neural web-search services
+      - exposes three actions: `search` (`/search`, neural/keyword/auto), `find-similar` (`/findSimilar`), and `contents` (`/contents`)
+      - action catalog integration with 3 actions under the \c exa scheme
+
+    - @ref exarestclientintro "ExaRestClient" module
+      - new module providing a REST client for <a href="https://exa.ai">Exa</a>'s neural-search API
+      - supports API key authentication via the \c x-api-key header (not Authorization: Bearer)
+      - exports `ExaAgentTools::makeSearchTool()` / `makeFindSimilarTool()` / `makeContentsTool()` factories and a `makeDispatcher()` callable for plugging Exa into @ref qoreagentstrategiesintro "QoreAgentStrategies" via `AgentContext.tools` + `AgentContext.tool_dispatch`
+      - provides ExaRestConnection for connection management with \c exa:// URL scheme
+
     - @ref firecrawldataproviderintro "FirecrawlDataProvider" module
       - new module providing a data provider API for <a href="https://www.firecrawl.dev/">Firecrawl</a> web scraping and crawling
       - web scraping (single page and batch), crawling (multi-page with status tracking)
@@ -2245,6 +2281,18 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.firecrawl.dev/">Firecrawl</a>'s web scraping API
       - supports API key authentication via Bearer token
       - provides FirecrawlRestConnection for connection management with \c firecrawlrest:// URL scheme
+
+    - @ref fireworksdataproviderintro "FireworksDataProvider" module
+      - new module providing a data provider API for <a href="https://fireworks.ai">Fireworks AI</a> hosted open-weight inference
+      - exposes two actions: `chat-completion` (OpenAI-compatible `/v1/chat/completions`) and `create-embeddings` (`/v1/embeddings`)
+      - action catalog integration with 2 actions under the \c fireworks scheme
+
+    - @ref fireworksrestclientintro "FireworksRestClient" module
+      - new module providing a REST client for <a href="https://fireworks.ai">Fireworks AI</a>'s OpenAI-compatible inference API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat; registers a `fireworks` embedder backend with @ref qorerragutilsintro "QoreRagUtils"
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c fireworks
+      - provides FireworksRestConnection for connection management with \c fireworks:// URL scheme
 
     - @ref freshbooksdataproviderintro "FreshBooksDataProvider" module
       - new module providing a data provider API for <a href="https://www.freshbooks.com/">FreshBooks</a> accounting and invoicing services
@@ -2314,6 +2362,20 @@ cargo install tree-sitter-cli@0.26.5
       - supports OAuth2 authentication with subdomain-based URL configuration
       - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
       - provides GorgiasRestConnection for connection management with \c gorgiasrest:// URL scheme
+
+    - @ref groqdataproviderintro "GroqDataProvider" module
+      - new module providing a data provider API for <a href="https://groq.com">Groq</a> LPU-accelerated open-weight LLM inference
+      - exposes the OpenAI-compatible `/v1/chat/completions` endpoint as a `chat-completion` action
+      - response schema surfaces Groq's LPU timing breakdown (`prompt_time`, `completion_time`, `queue_time`)
+      - action catalog integration with 1 action under the \c groq scheme
+
+    - @ref groqrestclientintro "GroqRestClient" module
+      - new module providing a REST client for <a href="https://groq.com">Groq</a>'s OpenAI-compatible LPU inference API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" — chat, tools, structured output, and SSE streaming work unchanged
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c groq
+      - provides GroqRestConnection for connection management with \c groq:// URL scheme
+      - distinct from @ref grokrestclientintro "GrokRestClient" (xAI Grok); note the spelling: Groq (LPU inference) vs. Grok (xAI)
 
     - @ref httpclientiointro "HttpClientIo" module
       - new unified module providing HTTP/2 and HTTP/3 multiplexed client I/O support
@@ -2391,6 +2453,18 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://instantly.ai/">Instantly</a>'s email outreach API v2
       - supports Bearer token (API key) authentication
       - provides InstantlyRestConnection for connection management with \c instantly:// URL scheme
+
+    - @ref jinadataproviderintro "JinaDataProvider" module
+      - new module providing a data provider API for <a href="https://jina.ai">Jina AI</a> embeddings and reranking services
+      - exposes two actions: `create-embeddings` (jina-embeddings-v3 task-aware multilingual) and `rerank` (jina-reranker-v2-base-multilingual)
+      - action catalog integration with 2 actions under the \c jina scheme
+
+    - @ref jinarestclientintro "JinaRestClient" module
+      - new module providing a REST client for <a href="https://jina.ai">Jina AI</a>'s embeddings + reranking API
+      - supports API key (Bearer token) authentication
+      - registers a `jina` embedder backend and a `jina` reranker backend with @ref qorerragutilsintro "QoreRagUtils"
+      - closes the cloud-reranker gap alongside Voyage; reranker supports both cross-encoder and late-interaction (ColBERT) models
+      - provides JinaRestConnection for connection management with \c jina:// URL scheme
 
     - @ref jotformdataproviderintro "JotformDataProvider" module
       - new module providing a data provider API for <a href="https://www.jotform.com/">JotForm</a> form and submission management
@@ -2478,6 +2552,20 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key and OAuth2 authentication
       - provides LinearRestConnection for connection management with \c linear:// URL scheme
 
+    - @ref llamaparsedataproviderintro "LlamaParseDataProvider" module
+      - new module providing a data provider API for <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a> document extraction
+      - exposes one action: `parse-document` (encapsulates the async upload → poll → fetch lifecycle internally)
+      - action catalog integration with 1 action under the \c llamaparse scheme
+      - v1 supports URL-based document submission only; local-file upload via multipart/form-data is planned
+
+    - @ref llamaparserestclientintro "LlamaParseRestClient" module
+      - new module providing a REST client for <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a>'s document-extraction API
+      - supports API key (Bearer token) authentication
+      - `LlamaParseRestClientIo::parseDocument()` handles the full upload → poll job → fetch result lifecycle in a single call
+      - polling logic isolated in a discrete `pollUntilDone()` method with an injectable sleeper closure for deterministic test-time polling
+      - registers a `llama-parse` chunker strategy in @ref qoreragutilsintro "QoreRagUtils" via `LlamaParseChunker` — split-at-section-boundary markdown chunker that either extracts the source via LlamaParse (when given a URL) or splits inline markdown directly
+      - provides LlamaParseRestConnection for connection management with \c llamaparse:// URL scheme
+
     - @ref mailgundataproviderintro "MailgunDataProvider" module
       - new module providing a data provider API for <a href="https://www.mailgun.com/">Mailgun</a> email services
       - send emails, validate addresses, manage domains, routes, and mailing lists
@@ -2499,6 +2587,19 @@ cargo install tree-sitter-cli@0.26.5
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
 
+    - @ref mistraldataproviderintro "MistralDataProvider" module
+      - new module providing a data provider API for <a href="https://mistral.ai">Mistral AI</a> chat, embeddings, and document OCR
+      - exposes three actions: `chat-completion` (OpenAI-compatible `/v1/chat/completions`), `create-embeddings` (`/v1/embeddings`), and `ocr` (`/v1/ocr` — extracts structured markdown from PDFs/images)
+      - action catalog integration with 3 actions under the \c mistral scheme
+
+    - @ref mistralrestclientintro "MistralRestClient" module
+      - new module providing a REST client for <a href="https://mistral.ai">Mistral AI</a>'s OpenAI-compatible API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat; registers a `mistral` embedder backend with @ref qorerragutilsintro "QoreRagUtils"
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c mistral
+      - provides MistralRestConnection for connection management with \c mistral:// URL scheme
+      - OCR is exposed via @ref mistraldataproviderintro "MistralDataProvider" — direct integration with the @ref qoreocrutilsintro "QoreOcrUtils" engine abstraction is planned for a follow-up release
+
     - @ref mongodbdataproviderintro "MongoDbDataProvider" module
       - new module providing a data provider API for <a href="https://www.mongodb.com/">MongoDB</a> servers
       - hierarchical data provider structure: databases -> collections -> operations
@@ -2519,6 +2620,18 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> via Microsoft Graph API
       - provides OneDriveRestConnection for connection management with \c onedrive:// URL scheme
       - supports OAuth2 with tenant-aware authentication and RestClientIo async pattern
+
+    - @ref ollamadataproviderintro "OllamaDataProvider" module
+      - new module providing a data provider API for <a href="https://ollama.com">Ollama</a> local-first LLM runtimes
+      - exposes three actions: `chat-completion` (OpenAI-compatible), `create-embeddings` (Ollama's native `/api/embed`), and `list-models` (`/api/tags`)
+      - action catalog integration with 3 actions under the \c ollama scheme
+
+    - @ref ollamarestclientintro "OllamaRestClient" module
+      - new module providing a REST client for <a href="https://ollama.com">Ollama</a> local-first LLM runtimes
+      - no authentication required for local deployments; supports optional Bearer token for Ollama Cloud / proxied deployments
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat (uses Ollama's OpenAI-compat surface); registers an `ollama` embedder backend that uses Ollama's native `/api/embed` for richer response detail
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c ollama
+      - provides OllamaRestConnection for connection management with \c ollama:// URL scheme
 
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
@@ -2702,6 +2815,8 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a composable abstraction layer for retrieval-augmented generation (RAG)
       - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
       - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c BgeM3FastApiEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
+      - adds \c PgVectorRagProvider — vector-store backend `pgvector` wrapping any \c AbstractDatasource pointing at a PostgreSQL database with the [pgvector](https://github.com/pgvector/pgvector) extension; supports cosine, L2, and inner-product distance operators with pass-through SQL filtering
+      - adds the chunker factory registry: \c AbstractChunkerFactory + \c ChunkerModuleMap + \c registerChunkerFactory() / \c getChunkerFactoryEx() / \c createChunker() / \c knownChunkerStrategies() on \c RagProviderRegistry, parallel to the existing embedder/reranker/vector-store registries; built-in \c StructuredChunkerFactory and \c FixedChunkerFactory registered automatically by \c QoreRagUtils so chunkers are now constructible via \c ChunkerConfig.strategy lookup (enables lazy-loaded ingestion chunkers shipped by other modules)
 
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
@@ -2879,10 +2994,46 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://tally.so/">Tally.so</a>'s form management API
       - provides TallyRestConnection for connection management with \c tally:// URL scheme
 
+    - @ref tavilydataproviderintro "TavilyDataProvider" module
+      - new module providing a data provider API for <a href="https://www.tavily.com">Tavily</a> agentic web-search services
+      - exposes four actions: `search` (`/search`), `extract` (`/extract`), `crawl` (`/crawl`), and `map` (`/map`)
+      - action catalog integration with 4 actions under the \c tavily scheme
+
+    - @ref tavilyrestclientintro "TavilyRestClient" module
+      - new module providing a REST client for <a href="https://www.tavily.com">Tavily</a>'s agentic web-search API
+      - supports API key (Bearer token) authentication
+      - exports `TavilyAgentTools::makeSearchTool()` / `makeExtractTool()` factories and a `makeDispatcher()` callable for plugging Tavily directly into @ref qoreagentstrategiesintro "QoreAgentStrategies" via `AgentContext.tools` + `AgentContext.tool_dispatch`
+      - provides TavilyRestConnection for connection management with \c tavily:// URL scheme
+
     - @ref terminalformatintro "TerminalFormat" module
       - new module for rendering markdown and rich text to ANSI terminals
       - TerminalMarkdownRenderer: converts markdown (headings, bold, italic, code, tables, lists, blockquotes) to ANSI escape sequences
       - TerminalTableRenderer: formats tabular data with Unicode box-drawing characters and column alignment
+
+    - @ref togetherdataproviderintro "TogetherDataProvider" module
+      - new module providing a data provider API for <a href="https://www.together.ai">Together AI</a> hosted open-weight inference
+      - exposes three actions: `chat-completion` (OpenAI-compatible `/v1/chat/completions`), `create-embeddings` (`/v1/embeddings`), and `generate-image` (`/v1/images/generations` for FLUX/SDXL)
+      - action catalog integration with 3 actions under the \c together scheme
+
+    - @ref togetherrestclientintro "TogetherRestClient" module
+      - new module providing a REST client for <a href="https://www.together.ai">Together AI</a>'s OpenAI-compatible inference API
+      - supports API key (Bearer token) authentication
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat; registers a `together` embedder backend with @ref qorerragutilsintro "QoreRagUtils"
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c together
+      - provides TogetherRestConnection for connection management with \c together:// URL scheme
+
+    - @ref unstructureddataproviderintro "UnstructuredDataProvider" module
+      - new module providing a data provider API for <a href="https://unstructured.io">Unstructured.io</a> document partitioning
+      - exposes one action: `partition-text` (synthesizes a `text/plain` multipart upload from a string and returns the typed element tree)
+      - action catalog integration with 1 action under the \c unstructured scheme
+
+    - @ref unstructuredrestclientintro "UnstructuredRestClient" module
+      - new module providing a REST client for <a href="https://unstructured.io">Unstructured.io</a>'s document-partitioning API
+      - supports API key authentication via the \c unstructured-api-key header
+      - works against the Serverless API and self-hosted Unstructured deployments (same module, different URL)
+      - provides `partition()` (multipart-aware), `partitionFile()` (reads a local file), and `partitionText()` (synthesizes a `text/plain` multipart upload) methods
+      - registers an `unstructured` chunker strategy in @ref qoreragutilsintro "QoreRagUtils" via `UnstructuredChunker` — collapses Unstructured's typed element tree (Title / NarrativeText / ListItem / Table / ...) into flat `ChunkInfo` records by grouping under the most recent Title with target-token soft caps
+      - provides UnstructuredRestConnection for connection management with \c unstructured:// URL scheme
 
     - @ref unbouncedataproviderintro "UnbounceDataProvider" module
       - new module providing a data provider API for <a href="https://unbounce.com/">Unbounce</a> landing page services

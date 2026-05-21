@@ -1,0 +1,170 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore MistralDataProvider module definition
+
+/*  MistralDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) MistralRestClient
+%requires RestClientIo
+
+module MistralDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Mistral AI services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new MistralDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": MistralDataProvider::AppName,
+            "display_name": "Mistral AI",
+            "short_desc": "Mistral AI chat, embeddings, and document OCR",
+            "desc": "Provides access to [Mistral AI](https://mistral.ai) — frontier and "
+                "open-weight chat models, embeddings, and best-in-class document OCR.\n\n"
+                "**Common use cases**:\n"
+                "- **Frontier chat** with mistral-large-latest, mistral-small-latest\n"
+                "- **Code-tuned chat** with codestral-latest\n"
+                "- **RAG embeddings** with mistral-embed\n"
+                "- **Document OCR** — extract structured markdown from PDFs and images "
+                "using `mistral-ocr-latest`",
+            "scheme": "mistral",
+            "logo": MistralLogo,
+            "logo_file_name": "mistral-ai-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MistralDataProvider::AppName,
+            "path": "/chat-completion",
+            "action": "chat-completion",
+            "display_name": "Chat Completion",
+            "short_desc": "Generate a chat completion from a Mistral AI model",
+            "desc": "Sends a list of chat messages to a Mistral AI model via "
+                "the OpenAI-compatible `/v1/chat/completions` endpoint.",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                MistralChatCompletionRequestDataType::Fields{"messages", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MistralChatCompletionRequestDataType::Fields{"temperature", "max_tokens",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MistralChatCompletionRequestDataType::Fields - (
+                    "messages", "model", "temperature", "max_tokens",
+                )
+            ),
+            "output_type": MistralChatCompletionDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MistralDataProvider::AppName,
+            "path": "/create-embeddings",
+            "action": "create-embeddings",
+            "display_name": "Create Embeddings",
+            "short_desc": "Generate embedding vectors from a Mistral AI embedding model",
+            "desc": "Converts text inputs into embedding vectors via the OpenAI-compatible "
+                "`/v1/embeddings` endpoint using `mistral-embed`.",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                MistralEmbeddingRequestDataType::Fields{"input", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MistralEmbeddingRequestDataType::Fields - ("input", "model")
+            ),
+            "output_type": MistralEmbeddingDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MistralDataProvider::AppName,
+            "path": "/ocr",
+            "action": "ocr",
+            "display_name": "Document OCR",
+            "short_desc": "Extract structured markdown from PDF or image documents",
+            "desc": "Converts a PDF or image document into structured markdown using "
+                "Mistral's `mistral-ocr-latest` model via `/v1/ocr`.  Returns per-page "
+                "markdown, layout-preserved tables, and inline image references.\n\n"
+                "Supply a document URL via `document.document_url` (preferred for large "
+                "PDFs) or inline base64-encoded bytes via `document.image_url` (data: URI) "
+                "for small inputs.\n\n"
+                "**Note**: integration with the @ref qoreocrutilsintro \"QoreOcrUtils\" "
+                "engine abstraction is planned for a follow-up release; this action is the "
+                "direct REST surface in the meantime.",
+            "action_code": DPAT_API,
+            "groups": ("OCR",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                MistralOcrRequestDataType::Fields{"document", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MistralOcrRequestDataType::Fields{"pages", "include_image_base64",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MistralOcrRequestDataType::Fields - (
+                    "document", "model", "pages", "include_image_base64",
+                )
+            ),
+            "output_type": MistralOcrDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage MistralDataProvider Module
+
+    @tableofcontents
+
+    @section mistraldataproviderintro MistralDataProvider Introduction
+
+    The %MistralDataProvider module provides a data provider API for
+    [Mistral AI](https://mistral.ai) chat, embedding, and document-OCR
+    services.
+
+    The following data providers are exposed:
+    - @ref MistralDataProvider::MistralDataProvider "MistralDataProvider" — root
+    - @ref MistralDataProvider::MistralChatCompletionDataProvider "MistralChatCompletionDataProvider" — chat
+    - @ref MistralDataProvider::MistralEmbeddingDataProvider "MistralEmbeddingDataProvider" — embeddings
+    - @ref MistralDataProvider::MistralOcrDataProvider "MistralOcrDataProvider" — document OCR
+
+    @section MistralDataProviderRelnotes Release Notes
+
+    @subsection MistralDataProviderv1_0 MistralDataProvider v1.0
+    - the initial version of the %MistralDataProvider module
+*/
+
+#! contains all public definitions in the MistralDataProvider module
+public namespace MistralDataProvider {
+#! Mistral AI application name
+public const AppName = "MistralAi";
+}
+
+#! App logo loaded from file
+public const MistralLogo = File::readTextFile(get_script_dir() + "/mistral-ai-logo.svg");

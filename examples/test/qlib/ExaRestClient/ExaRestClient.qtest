@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/ExaRestClient.qm
+
+%exec-class ExaRestClientTest
+
+class FakeExaRestClientIo inherits ExaRestClient::ExaRestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : ExaRestClient::ExaRestClientIo(
+            {"url": "https://api.exa.ai", "apikey": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+    string getSafeUrl() {
+        return "https://api.exa.ai";
+    }
+}
+
+public class ExaRestClientTest inherits QUnit::Test {
+    constructor() : Test("ExaRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",       \connectionSchemeTest());
+        addTestCase("x-api-key header (not Bearer)",      \apikeyMappingTest());
+        addTestCase("search tool factory",                \searchToolTest());
+        addTestCase("find-similar tool factory",          \findSimilarToolTest());
+        addTestCase("contents tool factory",              \contentsToolTest());
+        addTestCase("dispatcher routes exa_search to /search",
+            \dispatcherSearchTest());
+        addTestCase("dispatcher routes exa_find_similar to /findSimilar",
+            \dispatcherFindSimilarTest());
+        addTestCase("dispatcher routes exa_contents to /contents",
+            \dispatcherContentsTest());
+        addTestCase("dispatcher rejects unknown tools",   \dispatcherUnknownTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("exa");
+        assertEq("Exa Neural Search Connection", info.display_name);
+        assertTrue(info.schemes.exa);
+        assertEq("apikey", info.required_options);
+    }
+
+    private apikeyMappingTest() {
+        hash<auto> opts = ExaRestClient::ExaRestClientBase::getOptions({
+            "apikey": "my-exa-key",
+        });
+        # Exa uses x-api-key header, NOT Bearer
+        assertEq(NOTHING, opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("my-exa-key", opts.default_headers."x-api-key");
+    }
+
+    private searchToolTest() {
+        hash<QoreLlmUtils::ToolDefinition> t =
+            ExaRestClient::ExaAgentTools::makeSearchTool();
+        assertEq("exa_search", t.name);
+        assertEq(("query",), t.parameters.required);
+        assertTrue(exists t.parameters.properties.query);
+        assertTrue(exists t.parameters.properties."type");
+        assertTrue(exists t.parameters.properties.num_results);
+    }
+
+    private findSimilarToolTest() {
+        hash<QoreLlmUtils::ToolDefinition> t =
+            ExaRestClient::ExaAgentTools::makeFindSimilarTool();
+        assertEq("exa_find_similar", t.name);
+        assertEq(("url",), t.parameters.required);
+    }
+
+    private contentsToolTest() {
+        hash<QoreLlmUtils::ToolDefinition> t =
+            ExaRestClient::ExaAgentTools::makeContentsTool();
+        assertEq("exa_contents", t.name);
+        assertEq(("ids",), t.parameters.required);
+    }
+
+    private dispatcherSearchTest() {
+        FakeExaRestClientIo fake();
+        fake.response_body = {
+            "results": ({"id": "abc", "url": "https://x/", "score": 0.9},),
+        };
+
+        code dispatcher = ExaRestClient::ExaAgentTools::makeDispatcher(fake);
+        hash<auto> result = dispatcher("exa_search", {
+            "query": "Mamba state-space models",
+            "num_results": 10,
+            "type": "neural",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("/search", fake.last_path);
+        assertEq("Mamba state-space models", fake.last_request.query);
+        assertEq("neural", fake.last_request."type");
+        assertEq("https://x/", result.results[0].url);
+    }
+
+    private dispatcherFindSimilarTest() {
+        FakeExaRestClientIo fake();
+        fake.response_body = {"results": ()};
+
+        code dispatcher = ExaRestClient::ExaAgentTools::makeDispatcher(fake);
+        dispatcher("exa_find_similar", {
+            "url": "https://qore.org/",
+            "exclude_source_domain": True,
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("/findSimilar", fake.last_path);
+        assertEq("https://qore.org/", fake.last_request.url);
+        assertEq(True, fake.last_request.exclude_source_domain);
+    }
+
+    private dispatcherContentsTest() {
+        FakeExaRestClientIo fake();
+        fake.response_body = {"results": ()};
+
+        code dispatcher = ExaRestClient::ExaAgentTools::makeDispatcher(fake);
+        dispatcher("exa_contents", {
+            "ids": ("abc",),
+            "text": True,
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("/contents", fake.last_path);
+        assertEq(("abc",), fake.last_request.ids);
+    }
+
+    private dispatcherUnknownTest() {
+        FakeExaRestClientIo fake();
+        code dispatcher = ExaRestClient::ExaAgentTools::makeDispatcher(fake);
+        assertThrows("AGENT-TOOL-ERROR", sub () {
+            dispatcher("bogus_tool", {});
+        });
+    }
+}

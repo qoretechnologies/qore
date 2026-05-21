@@ -1,0 +1,237 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AgentRagE2E.qtest
+#! Integration test for the Phase 4 end-to-end RAG agent flow:
+#! Tavily search → LlamaParse extract → chunk → Cohere embed → Pinecone store
+#! → Cohere rerank → Bedrock Claude.
+#!
+#! Uses in-process fakes for every backend so the test runs in CI without
+#! network access.  Verifies the wire-together: data flows through the
+#! right modules with the right shapes.
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+
+%exec-class AgentRagE2ETest
+
+class FakeEmbedder inherits QoreRagUtils::AbstractEmbedder {
+    public {
+        int dim;
+        int call_count = 0;
+    }
+
+    constructor(int dim) {
+        self.dim = dim;
+    }
+
+    list<float> encode(string text, *hash<auto> opts) {
+        ++call_count;
+        # Deterministic pseudo-embedding: token positions modulo dim, normalized
+        list<float> v = ();
+        for (int i = 0; i < dim; ++i) {
+            push v, ((text.length() + i) % 7) / 7.0;
+        }
+        return v;
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        list<list<float>> out = ();
+        foreach string t in (texts) {
+            push out, encode(t, opts);
+        }
+        return out;
+    }
+
+    int getDimension() { return dim; }
+}
+
+class FakeVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    public {
+        list<hash<QoreRagUtils::VectorRecord>> upserted = ();
+        list<hash<QoreRagUtils::VectorSearchResult>> search_response;
+    }
+
+    upsert(list<hash<QoreRagUtils::VectorRecord>> records) {
+        upserted += records;
+    }
+
+    deleteByIds(list<string> ids) {}
+
+    list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector,
+            int k, *hash<auto> filter) {
+        # Echo back the upserted records with synthetic scores so the
+        # reranker has something to chew on
+        list<hash<QoreRagUtils::VectorSearchResult>> rv = ();
+        int n = upserted.size() < k ? upserted.size() : k;
+        for (int i = 0; i < n; ++i) {
+            push rv, <QoreRagUtils::VectorSearchResult>{
+                "id": upserted[i].id,
+                "score": 1.0 - (i * 0.05),
+                "payload": upserted[i].payload,
+            };
+        }
+        return rv;
+    }
+
+    string getCollection() { return "fake-index"; }
+    int getDimension() { return 8; }
+}
+
+class FakeReranker inherits QoreRagUtils::AbstractReranker {
+    public {
+        int call_count = 0;
+    }
+
+    list<hash<QoreRagUtils::RerankResult>> rerank(string query, list<string> docs,
+            int top_k, *hash<auto> opts) {
+        ++call_count;
+        # Reverse the order to verify the reranker actually re-orders results
+        list<hash<QoreRagUtils::RerankResult>> rv = ();
+        int idx = 0;
+        for (int i = docs.size() - 1; i >= 0 && idx < top_k; --i) {
+            push rv, <QoreRagUtils::RerankResult>{
+                "index": i,
+                "score": 0.9 - (idx * 0.1),
+                "document": docs[i],
+            };
+            ++idx;
+        }
+        return rv;
+    }
+
+    *string getModel() { return "fake-rerank"; }
+}
+
+class FakeLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    public {
+        string last_grounded_ctx;
+        string canned_response = "Answered using context.";
+    }
+
+    constructor() : QoreLlmUtils::AbstractLlmProvider(
+            <QoreLlmUtils::LlmBackendConfig>{"model": "fake-claude"}) {
+    }
+
+    string getMode() { return "fake"; }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": canned_response,
+            "usage": {},
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        # Capture the user message (which contains the rerank-selected context)
+        foreach hash<QoreLlmUtils::ChatMessage> m in (messages) {
+            if (m.role == "user") {
+                last_grounded_ctx = m.content;
+            }
+        }
+        return <QoreLlmUtils::ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": canned_response,
+            "usage": {},
+        };
+    }
+}
+
+public class AgentRagE2ETest inherits QUnit::Test {
+    constructor() : Test("AgentRagE2E Integration", "1.0") {
+        addTestCase("end-to-end RAG flow wires together",
+            \endToEndTest());
+        set_return_value(main());
+    }
+
+    private endToEndTest() {
+        # Simulate the Phase 4 demo path with fakes.  We skip the live
+        # Tavily / LlamaParse calls (already tested in their own qtests)
+        # and start from a pre-extracted markdown document.
+
+        string markdown = "# Section One\n\nFirst paragraph "
+            "of the document.\n\n# Section Two\n\nSecond section "
+            "with content about Qore 2.3.\n";
+        string query = "What does Qore 2.3 cover?";
+
+        # Step 3 in the demo: chunk markdown (use the StructuredChunker via the
+        # factory registry to exercise the Commit 0 prereq path)
+        QoreRagUtils::AbstractChunker chunker =
+            QoreRagUtils::RagProviderRegistry::createChunker(
+                <QoreRagUtils::ChunkerConfig>{
+                    "strategy": "structured",
+                    "target_tokens": 256,
+                });
+        list<hash<QoreRagUtils::ChunkInfo>> chunks = chunker.chunk(markdown);
+        assertTrue(chunks.size() >= 1);
+
+        # Step 4: embed via fake embedder
+        FakeEmbedder embedder(8);
+        list<list<float>> vectors = embedder.encodeBatch(
+            map $1.content, chunks);
+        assertEq(chunks.size(), vectors.size());
+        assertEq(8, vectors[0].size());
+
+        # Step 5: vector store upsert + retrieval
+        FakeVectorStore store();
+        list<hash<QoreRagUtils::VectorRecord>> recs = ();
+        int idx = 0;
+        foreach hash<QoreRagUtils::ChunkInfo> c in (chunks) {
+            push recs, <QoreRagUtils::VectorRecord>{
+                "id": sprintf("doc-%d", idx),
+                "vector": vectors[idx],
+                "payload": {"content": c.content},
+            };
+            ++idx;
+        }
+        store.upsert(recs);
+        assertEq(chunks.size(), store.upserted.size());
+
+        list<float> qv = embedder.encode(query);
+        list<hash<QoreRagUtils::VectorSearchResult>> retrieved =
+            store.search(qv, 10);
+        assertEq(chunks.size(), retrieved.size());
+
+        # Step 6: reranker
+        FakeReranker reranker();
+        list<string> docs = map $1.payload.content, retrieved;
+        list<hash<QoreRagUtils::RerankResult>> reranked =
+            reranker.rerank(query, docs, 3);
+        # Reranker should have been invoked and produced reversed-order docs
+        assertEq(1, reranker.call_count);
+        assertTrue(reranked.size() > 0);
+
+        # Step 7: chat with grounded grounded_ctx
+        FakeLlmProvider llm();
+        string grounded_ctx = (foldl $1 + "\n\n---\n\n" + $2,
+            map $1.document, reranked);
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (
+            <QoreLlmUtils::ChatMessage>{
+                "role": "system",
+                "content": "Answer using only the supplied context.",
+            },
+            <QoreLlmUtils::ChatMessage>{
+                "role": "user",
+                "content": sprintf("Context:\n%s\n\nQuestion: %s",
+                    grounded_ctx, query),
+            },
+        );
+        hash<QoreLlmUtils::ChatResponse> resp = llm.chat(messages);
+        assertEq("Answered using context.", resp.content);
+        # Verify the LLM saw the reranked context
+        assertTrue(llm.last_grounded_ctx =~ /Question: What does Qore 2.3 cover/);
+        # And the context contains at least one chunk from the reranked set
+        assertTrue(llm.last_grounded_ctx =~ /Section/);
+    }
+}

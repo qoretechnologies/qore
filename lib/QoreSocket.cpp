@@ -11835,6 +11835,11 @@ void SocketPollSocketOperationBase::abort(ExceptionSink* xsink) {
     // object's `sock` member reads back as a malloc poison value (e.g. crash
     // at sock->ssl with sock = small integer on macOS arm64).
     AutoLocker al(sock->priv->m);
+    abortLocked(xsink);
+}
+
+void SocketPollSocketOperationBase::abortLocked(ExceptionSink* xsink) {
+    assert(sock->priv->m.trylock());
     poll_state.reset();
     if (set_non_block) {
         sock->priv->clearNonBlock(non_block_direction);
@@ -11914,8 +11919,17 @@ void SocketRecvPollOperationBase::deref(ExceptionSink* xsink) {
 }
 
 void SocketRecvPollOperationBase::abort(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+    abortLocked(xsink);
+}
+
+void SocketRecvPollOperationBase::abortLocked(ExceptionSink* xsink) {
+    assert(sock->priv->m.trylock());
+    // Clear receive buffer while serialized against continuePoll(); the I/O
+    // thread writes `data` under priv->m, so discard must happen under the
+    // same lock to avoid racing the producer.
     data.discard();
-    SocketPollSocketOperationBase::abort(xsink);
+    SocketPollSocketOperationBase::abortLocked(xsink);
 }
 
 bool SocketRecvPollOperationBase::goalReached() const {
@@ -11986,9 +12000,21 @@ QoreValue SocketUpgradeClientSslPollOperation::getOutput() const {
     return qore_socket_get_ssl_upgrade_output(sock->priv);
 }
 
+void SocketSendAndReadHeaderPollOperation::abort(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+    // Clear buffers while serialized against continuePoll(); continuePoll()
+    // can otherwise finish sending and discard send_data concurrently.
+    send_data.discard();
+    header_output = nullptr;
+    SocketPollSocketOperationBase::abortLocked(xsink);
+}
+
 void SocketReadHttpHeaderPollOperation::abort(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+    // Clear output under priv->m so we don't race continuePoll(), which
+    // writes `out` while holding the lock.
     out = nullptr;
-    SocketRecvPollOperationBase::abort(xsink);
+    SocketRecvPollOperationBase::abortLocked(xsink);
 }
 
 // --- Factory functions for public API (AsyncCompletionAction.h) ---
@@ -14895,8 +14921,12 @@ QoreValue SocketReadServerSentEventPollOperation::getOutput() const {
 }
 
 void SocketReadServerSentEventPollOperation::abort(ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
+    // Clear output under priv->m so we don't race continuePoll(), which
+    // writes `out` while holding the lock.
     out = nullptr;
-    SocketRecvPollOperationBase::abort(xsink);
+    SocketRecvPollOperationBase::abortLocked(xsink);
 }
 
 const char* SocketReadServerSentEventPollOperation::getStateImpl() const {
@@ -15229,18 +15259,26 @@ QoreHashNode* SocketReadHttpChunkedBodyPollOperation::continuePoll(ExceptionSink
 }
 
 void SocketReadHttpChunkedBodyPollOperation::abort(ExceptionSink* xsink) {
-    bool needs_close = abortNeedsClose();
     my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-    {
-        AutoLocker al(priv->m);
-        poll_state.reset();
-        if (set_non_block) {
-            priv->clearNonBlock(NB_RECV);
-            set_non_block = false;
-        }
-        if (needs_close) {
-            qore_socket_close_from_controller(priv->socket);
-        }
+    AutoLocker al(priv->m);
+    // All shared-state mutation must happen under priv->m: continuePoll()
+    // touches every one of these fields while holding the lock, so
+    // unsynchronized clears would race with in-flight I/O on the
+    // controller thread.
+    //
+    // abortNeedsClose() must be evaluated BEFORE poll_state.reset(): for
+    // this class it inspects poll_state->getBytesReceived() to decide
+    // whether a partially-read chunk leaves the connection unusable.
+    // Resetting poll_state first would lose that signal and risk
+    // returning a desynced connection to the pool.
+    bool needs_close = abortNeedsClose();
+    poll_state.reset();
+    if (set_non_block) {
+        priv->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+    if (needs_close) {
+        qore_socket_close_from_controller(priv->socket);
     }
     out = nullptr;
     data.discard();
@@ -17992,12 +18030,19 @@ void SocketSendToPollOperation::cleanup(ExceptionSink* xsink) {
 }
 
 void SocketSendToPollOperation::abort(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+    // Clear send buffer + resolver under priv->m to serialize against the
+    // locked section of continuePoll() (which drives poll_state under the
+    // same lock).  Note: the pre-lock section of continuePoll() (resolver
+    // creation + DNS poll + startSendToPollState) is not yet locked; the
+    // residual race there is covered by the follow-up continuePoll
+    // writer-side audit.
     if (data) {
         data->deref();
         data = nullptr;
     }
     resolver.reset();
-    SocketPollSocketOperationBase::abort(xsink);
+    SocketPollSocketOperationBase::abortLocked(xsink);
 }
 
 QoreHashNode* SocketSendToPollOperation::getResolverPollInfo(ExceptionSink* xsink) const {

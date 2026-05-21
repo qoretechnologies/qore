@@ -411,6 +411,13 @@ public class LlmProviderRegistry {
             "azure-openai":  "AzureOpenAiRestClient",
             "bedrock":       "BedrockRestClient",
             "vertex-ai":     "VertexAiRestClient",
+            "deepseek":      "DeepSeekRestClient",
+            "groq":          "GroqRestClient",
+            "together":      "TogetherRestClient",
+            "fireworks":     "FireworksRestClient",
+            "ollama":        "OllamaRestClient",
+            "cohere":        "CohereRestClient",
+            "mistral":       "MistralRestClient",
         };
     }
 

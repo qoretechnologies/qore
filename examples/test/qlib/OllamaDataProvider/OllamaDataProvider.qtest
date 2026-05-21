@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/OllamaDataProvider
+
+%exec-class OllamaDataProviderTest
+
+class FakeOllamaRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "http://localhost:11434"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    string getSafeUrl() {
+        return "http://localhost:11434";
+    }
+}
+
+public class OllamaDataProviderTest inherits QUnit::Test {
+    constructor() : Test("OllamaDataProvider Test", "1.0") {
+        addTestCase("factory + app + 3 actions registered", \registrationTest());
+        addTestCase("root provider lists 3 children",       \rootProviderTest());
+        addTestCase("chat-completion uses OpenAI-compat path",
+            \chatPathTest());
+        addTestCase("create-embeddings uses native /api/embed",
+            \embeddingPathTest());
+        addTestCase("list-models uses /api/tags",           \listModelsTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("ollama");
+        assertEq("ollama", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Ollama");
+        assertEq("Ollama", app.name);
+        assertEq("Ollama", app.display_name);
+        assertEq("ollama", app.scheme);
+        assertEq("ollama-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.size() > 0);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Ollama");
+        assertEq(3, actions.size());
+        list<string> action_names = sort(map $1.action, actions);
+        assertEq(("chat-completion", "create-embeddings", "list-models"),
+            action_names);
+    }
+
+    private rootProviderTest() {
+        FakeOllamaRestClientIo fake();
+        OllamaDataProvider::OllamaDataProvider prov(fake);
+        assertEq("ollama", prov.getName());
+        list<string> children = sort(prov.getChildProviderNames());
+        assertEq(("chat-completion", "create-embeddings", "list-models"), children);
+    }
+
+    private chatPathTest() {
+        FakeOllamaRestClientIo fake();
+        fake.response_body = {
+            "id": "ollama-id",
+            "created": 1700000000,
+            "model": "llama3.3",
+            "choices": (
+                {"index": 0, "message": {"role": "assistant", "content": "Hi"},
+                 "finish_reason": "stop"},
+            ),
+        };
+
+        OllamaDataProvider::OllamaChatCompletionDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "llama3.3",
+            "messages": ({"role": "user", "content": "Hi"},),
+        });
+
+        # Uses ABSOLUTE path to address OpenAI-compat endpoint
+        assertEq("POST", fake.last_method);
+        assertEq("/v1/chat/completions", fake.last_path);
+        assertEq("Hi", resp.choices[0].message.content);
+        assertEq(NT_DATE, resp.created.typeCode());
+    }
+
+    private embeddingPathTest() {
+        FakeOllamaRestClientIo fake();
+        fake.response_body = {
+            "model": "nomic-embed-text",
+            "embeddings": ((0.1, 0.2, 0.3),),
+            "total_duration": 1234567,
+            "prompt_eval_count": 3,
+        };
+
+        OllamaDataProvider::OllamaEmbedDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "nomic-embed-text",
+            "input": ("hello",),
+        });
+
+        # Uses ABSOLUTE path to address NATIVE Ollama embed endpoint
+        assertEq("POST", fake.last_method);
+        assertEq("/api/embed", fake.last_path);
+        # Native shape preserved
+        assertEq(3, resp.embeddings[0].size());
+        assertEq(1234567, resp.total_duration);
+    }
+
+    private listModelsTest() {
+        FakeOllamaRestClientIo fake();
+        fake.response_body = {
+            "models": (
+                {"name": "llama3.3:latest", "size": 4661211520,
+                 "digest": "abc123",
+                 "details": {"family": "llama", "parameter_size": "8B"}},
+            ),
+        };
+
+        OllamaDataProvider::OllamaListModelsDataProvider prov(fake);
+        auto resp = prov.doRequest(NOTHING);
+
+        assertEq("GET", fake.last_method);
+        assertEq("/api/tags", fake.last_path);
+        assertEq("llama3.3:latest", resp.models[0].name);
+        assertEq("llama", resp.models[0].details.family);
+    }
+}

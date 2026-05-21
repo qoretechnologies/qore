@@ -1,0 +1,174 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ExaDataProvider module definition
+
+/*  ExaDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) ExaRestClient
+%requires RestClientIo
+
+module ExaDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Exa neural-search services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new ExaDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ExaDataProvider::AppName,
+            "display_name": "Exa",
+            "short_desc": "Exa (Metaphor) neural web search for semantic retrieval",
+            "desc": "Provides access to [Exa](https://exa.ai) (formerly Metaphor) — "
+                "a neural web-search API that complements keyword search with "
+                "embedding-based semantic retrieval.\n\n"
+                "**Common use cases**:\n"
+                "- **Semantic search** where keyword matching fails (e.g. \"companies "
+                "similar to X\", \"papers about Y\")\n"
+                "- **Discovery** via `find-similar` from a known seed URL\n"
+                "- **Agent tools**: register `exa_search` / `exa_find_similar` / "
+                "`exa_contents` as tools an LLM can invoke (see @ref exarestclientintro "
+                "\"ExaRestClient\" docs)",
+            "scheme": "exa",
+            "logo": ExaLogo,
+            "logo_file_name": "exa-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ExaDataProvider::AppName,
+            "path": "/search",
+            "action": "search",
+            "display_name": "Neural Search",
+            "short_desc": "Neural / keyword / auto web search via Exa",
+            "desc": "Performs a neural, keyword, or auto-routed web search via Exa's "
+                "`/search` endpoint and returns ranked results with title, url, and "
+                "optional text content / highlights.",
+            "action_code": DPAT_API,
+            "groups": ("Search",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ExaSearchRequestDataType::Fields{"query",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExaSearchRequestDataType::Fields{
+                    "type", "num_results", "category",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExaSearchRequestDataType::Fields - (
+                    "query", "type", "num_results", "category",
+                )
+            ),
+            "output_type": ExaSearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ExaDataProvider::AppName,
+            "path": "/find-similar",
+            "action": "find-similar",
+            "display_name": "Find Similar Pages",
+            "short_desc": "Find pages similar to a seed URL using Exa's neural search",
+            "desc": "Finds pages similar to a seed URL via Exa's `/findSimilar` "
+                "endpoint.",
+            "action_code": DPAT_API,
+            "groups": ("Search",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ExaFindSimilarRequestDataType::Fields{"url",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExaFindSimilarRequestDataType::Fields{
+                    "num_results", "exclude_source_domain",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExaFindSimilarRequestDataType::Fields - (
+                    "url", "num_results", "exclude_source_domain",
+                )
+            ),
+            "output_type": ExaSearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ExaDataProvider::AppName,
+            "path": "/contents",
+            "action": "contents",
+            "display_name": "Fetch Page Contents",
+            "short_desc": "Fetch text / highlights / summaries for URLs",
+            "desc": "Fetches text content, highlight extracts, and AI-summarized "
+                "snippets for one or more URLs via Exa's `/contents` endpoint.",
+            "action_code": DPAT_API,
+            "groups": ("Extract",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ExaContentsRequestDataType::Fields{"ids",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExaContentsRequestDataType::Fields{"text", "highlights", "summary",}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": ExaContentsDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage ExaDataProvider Module
+
+    @tableofcontents
+
+    @section exadataproviderintro ExaDataProvider Introduction
+
+    The %ExaDataProvider module provides a data provider API for
+    [Exa](https://exa.ai) (formerly Metaphor) neural search.
+
+    The following data providers are exposed:
+    - @ref ExaDataProvider::ExaDataProvider "ExaDataProvider" — root
+    - @ref ExaDataProvider::ExaSearchDataProvider "ExaSearchDataProvider"
+    - @ref ExaDataProvider::ExaFindSimilarDataProvider "ExaFindSimilarDataProvider"
+    - @ref ExaDataProvider::ExaContentsDataProvider "ExaContentsDataProvider"
+
+    For agent-tool wiring see the @ref exarestclientintro "ExaRestClient"
+    module's `ExaAgentTools` namespace.
+
+    @section ExaDataProviderRelnotes Release Notes
+
+    @subsection ExaDataProviderv1_0 ExaDataProvider v1.0
+    - the initial version of the %ExaDataProvider module
+*/
+
+#! contains all public definitions in the ExaDataProvider module
+public namespace ExaDataProvider {
+#! Exa application name
+public const AppName = "Exa";
+}
+
+#! App logo loaded from file
+public const ExaLogo = File::readTextFile(get_script_dir() + "/exa-logo.svg");

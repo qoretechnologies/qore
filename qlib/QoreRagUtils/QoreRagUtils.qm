@@ -33,6 +33,13 @@
 %requires(reexport) QoreTokenizerUtils
 %requires(reexport) QoreRagTypes
 
+# json is used by PgVectorRagProvider for jsonb payload marshalling; declare
+# as a try-module so the rest of QoreRagUtils still loads when json is
+# unavailable (PgVectorRagProvider will throw at construction time then)
+%try-module json
+%define NoJson
+%endtry
+
 module QoreRagUtils {
     version = "1.0.1";
     desc = "user module providing a composable RAG abstraction layer";
@@ -46,6 +53,12 @@ module QoreRagUtils {
             new LocalOnnxRerankerFactory());
         RagProviderRegistry::registerRerankerFactory(
             new HttpGatewayRerankerFactory());
+        RagProviderRegistry::registerVectorStoreFactory(
+            new PgVectorRagProviderFactory());
+        RagProviderRegistry::registerChunkerFactory(
+            new StructuredChunkerFactory());
+        RagProviderRegistry::registerChunkerFactory(
+            new FixedChunkerFactory());
     };
 }
 

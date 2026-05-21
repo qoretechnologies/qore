@@ -4857,6 +4857,33 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         save_thread_data("uctx", get_thread_data("uctx") + uctx);
     }
 
+    #! Force-closes the persistent session for the given connection
+    /** Override of @ref HttpServer::HttpListenerInterface::signalPersistentSessionClose();
+        delegates to the underlying async-I/O controller's
+        @ref HttpServerAsyncIo::HttpAsyncSocketIoController::signalPersistentQueuesForConnection(),
+        which pushes a \c "close" marker into the dedicated persistent
+        handler queue identified by @c uh, unblocking the dedicated thread
+        if it is parked in @c Queue::get().  The dedicated thread's
+        persistent loop then exits and its @c on_exit runs the normal
+        cleanup path (@c removeUserThreadContext() + @c persistentClosed()),
+        releasing any handler-attached user thread context on the correct
+        (listener) thread.
+
+        Safe to call from any thread; idempotent (no-op if no queue is
+        registered under @c uh, e.g. when the dedicated thread has already
+        exited).
+
+        @param uh the connection unique hash identifying the persistent
+            session to close
+    */
+    signalPersistentSessionClose(softstring uh) {
+        *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = serv
+            ? serv.getHttpAsyncIo() : NOTHING;
+        if (ctrl) {
+            ctrl.signalPersistentQueuesForConnection(uh);
+        }
+    }
+
     stopNoWait() {
         background stop();
     }

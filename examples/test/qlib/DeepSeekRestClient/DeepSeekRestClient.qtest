@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/DeepSeekRestClient.qm
+
+%exec-class DeepSeekRestClientTest
+
+public class DeepSeekRestClientTest inherits QUnit::Test {
+    constructor() : Test("DeepSeekRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",      \connectionSchemeTest());
+        addTestCase("factory registered + lazy-loadable", \factoryTest());
+        addTestCase("provider applies default URL",       \defaultUrlTest());
+        addTestCase("provider preserves explicit URL",    \explicitUrlTest());
+        addTestCase("factory getInfo advertises capabilities",
+            \getInfoTest());
+        addTestCase("default chat-completions path is OpenAI shape",
+            \chatPathTest());
+        addTestCase("REST client options apply Bearer mapping",
+            \restOptionsTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("deepseek");
+        assertEq("DeepSeek REST Connection", info.display_name);
+        assertTrue(info.schemes.deepseek);
+        assertEq("apikey", info.required_options);
+    }
+
+    private factoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("deepseek");
+        assertEq("deepseek", f.getMode());
+        assertEq("DeepSeek chat completions", f.getDisplayName());
+        assertEq("DeepSeekRestClient", f.getInfo().module_name);
+    }
+
+    private defaultUrlTest() {
+        DeepSeekRestClient::DeepSeekLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "deepseek-chat",
+                "api_key": "test-key",
+            });
+        assertEq("deepseek", p.getMode());
+        assertEq(DeepSeekRestClient::DeepSeekLlmProvider::DefaultUrl,
+            p.getConfig().url);
+    }
+
+    private explicitUrlTest() {
+        DeepSeekRestClient::DeepSeekLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "url": "https://custom.example.com",
+                "model": "deepseek-chat",
+                "api_key": "k",
+            });
+        assertEq("https://custom.example.com", p.getConfig().url);
+    }
+
+    private getInfoTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("deepseek");
+        hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
+        assertTrue(info.supports_streaming);
+        assertTrue(info.supports_tools);
+        assertTrue(info.supports_structured_output);
+        assertFalse(info.supports_multimodal);
+    }
+
+    private chatPathTest() {
+        DeepSeekRestClient::DeepSeekLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "deepseek-chat",
+                "api_key": "k",
+            });
+        # OpenAI-compatible default — DeepSeek does NOT override the path
+        assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = DeepSeekRestClient::DeepSeekRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        # apikey is remapped to token for Bearer header
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        # URL + api defaults applied
+        assertEq("https://api.deepseek.com", opts.url);
+        assertEq("v1", opts.api);
+        assertEq("/v1", opts.default_path);
+    }
+}
