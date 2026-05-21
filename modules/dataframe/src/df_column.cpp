@@ -10,9 +10,108 @@
 
 #include "df_column.h"
 
+#include <cassert>
 #include <cstring>
+#include <limits>
+#include <utility>
 
 namespace QoreDataFrameNS {
+
+ColumnData::ColumnData(const ColumnData& old)
+        : type(old.type), n_rows(old.n_rows), dense_buffer(old.dense_buffer),
+        dense_buffer_type(old.dense_buffer_type), float_data(old.float_data), int_data(old.int_data),
+        str_data(old.str_data), bool_data(old.bool_data), date_data(old.date_data), null_mask(old.null_mask) {
+    if (dense_buffer) {
+        dense_buffer->ref();
+    }
+}
+
+ColumnData::ColumnData(ColumnData&& old) noexcept
+        : type(old.type), n_rows(old.n_rows), dense_buffer(old.dense_buffer),
+        dense_buffer_type(old.dense_buffer_type), float_data(std::move(old.float_data)),
+        int_data(std::move(old.int_data)), str_data(std::move(old.str_data)),
+        bool_data(std::move(old.bool_data)), date_data(std::move(old.date_data)),
+        null_mask(std::move(old.null_mask)) {
+    old.dense_buffer = nullptr;
+    old.dense_buffer_type = QoreBufferElementType::Invalid;
+}
+
+ColumnData& ColumnData::operator=(const ColumnData& old) {
+    if (this != &old) {
+        if (old.dense_buffer) {
+            old.dense_buffer->ref();
+        }
+        if (dense_buffer) {
+            ExceptionSink xsink;
+            dense_buffer->deref(&xsink);
+        }
+
+        type = old.type;
+        n_rows = old.n_rows;
+        dense_buffer = old.dense_buffer;
+        dense_buffer_type = old.dense_buffer_type;
+        float_data = old.float_data;
+        int_data = old.int_data;
+        str_data = old.str_data;
+        bool_data = old.bool_data;
+        date_data = old.date_data;
+        null_mask = old.null_mask;
+    }
+    return *this;
+}
+
+ColumnData& ColumnData::operator=(ColumnData&& old) noexcept {
+    if (this != &old) {
+        if (dense_buffer) {
+            ExceptionSink xsink;
+            dense_buffer->deref(&xsink);
+        }
+
+        type = old.type;
+        n_rows = old.n_rows;
+        dense_buffer = old.dense_buffer;
+        dense_buffer_type = old.dense_buffer_type;
+        float_data = std::move(old.float_data);
+        int_data = std::move(old.int_data);
+        str_data = std::move(old.str_data);
+        bool_data = std::move(old.bool_data);
+        date_data = std::move(old.date_data);
+        null_mask = std::move(old.null_mask);
+
+        old.dense_buffer = nullptr;
+        old.dense_buffer_type = QoreBufferElementType::Invalid;
+    }
+    return *this;
+}
+
+ColumnData::~ColumnData() {
+    if (dense_buffer) {
+        ExceptionSink xsink;
+        dense_buffer->deref(&xsink);
+    }
+}
+
+void ColumnData::setDenseBufferRef(const QoreBufferNode* buffer) {
+    if (dense_buffer) {
+        ExceptionSink xsink;
+        dense_buffer->deref(&xsink);
+        dense_buffer = nullptr;
+        dense_buffer_type = QoreBufferElementType::Invalid;
+    }
+    if (buffer) {
+        dense_buffer = const_cast<QoreBufferNode*>(buffer);
+        dense_buffer->ref();
+        dense_buffer_type = buffer->getElementType();
+    }
+}
+
+QoreBufferNode* ColumnData::refDenseBuffer() const {
+    if (!dense_buffer) {
+        return nullptr;
+    }
+    dense_buffer->ref();
+    return dense_buffer;
+}
 
 const char* columnTypeName(ColumnType type) {
     switch (type) {
@@ -244,6 +343,7 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
     int64_t n = values ? (int64_t)values->size() : 0;
     col->n_rows = n;
     col->null_mask.resize(n, 0);
+    col->setDenseBufferRef(values);
 
     switch (values->getElementType()) {
         case QoreBufferElementType::Int8:
@@ -371,6 +471,10 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
 }
 
 QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
+    if (col.hasDenseBuffer()) {
+        return col.dense_buffer->toList(xsink);
+    }
+
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
     for (int64_t i = 0; i < col.n_rows; ++i) {
@@ -416,6 +520,15 @@ QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
 
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
+    if (col.hasDenseBuffer()) {
+        ReferenceHolder<QoreBufferNode> buffer(col.dense_buffer->slice(
+            static_cast<size_t>(start), static_cast<size_t>(count), xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return buffer->toList(xsink);
+    }
+
     for (int64_t i = start; i < start + count; ++i) {
         if (i != start && !((i - start) % 100)
                 && qore_check_cancel(xsink, "converting DataFrame column range to list")) {
@@ -450,6 +563,66 @@ QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
     }
 
     return list.release();
+}
+
+QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) {
+    if (col.hasDenseBuffer()) {
+        return col.refDenseBuffer();
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    switch (col.type) {
+        case ColumnType::FLOAT64:
+            element_type = QoreBufferElementType::Float64;
+            break;
+        case ColumnType::INT64:
+            element_type = QoreBufferElementType::Int64;
+            break;
+        case ColumnType::BOOL:
+            element_type = QoreBufferElementType::Bool;
+            break;
+        default:
+            xsink->raiseException("DATAFRAME-COLUMN-ERROR",
+                "column type '%s' cannot be represented as a dense buffer",
+                columnTypeName(col.type));
+            return nullptr;
+    }
+
+    ReferenceHolder<QoreBufferNode> buffer(
+        new QoreBufferNode(element_type, col.countNull() > 0, static_cast<size_t>(col.n_rows)), xsink);
+
+    for (int64_t i = 0; i < col.n_rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building dense DataFrame column buffer")) {
+            return nullptr;
+        }
+        if (col.isNull(i)) {
+            if (buffer->setEntry(static_cast<size_t>(i), QoreValue(), xsink)) {
+                return nullptr;
+            }
+            continue;
+        }
+
+        QoreValue value;
+        switch (col.type) {
+            case ColumnType::FLOAT64:
+                value = QoreValue(col.float_data(i));
+                break;
+            case ColumnType::INT64:
+                value = QoreValue(col.int_data[i]);
+                break;
+            case ColumnType::BOOL:
+                value = QoreValue(static_cast<bool>(col.bool_data[i]));
+                break;
+            default:
+                assert(false);
+                break;
+        }
+        if (buffer->setEntry(static_cast<size_t>(i), value, xsink)) {
+            return nullptr;
+        }
+    }
+
+    return buffer.release();
 }
 
 } // namespace QoreDataFrameNS

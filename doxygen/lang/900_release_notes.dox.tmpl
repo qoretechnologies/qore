@@ -125,7 +125,9 @@
       @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" APIs expose
       query results as ordered typed columns for DataFrame and analytics workloads; drivers without
       native support use a libqore compatibility fallback, and DataFrame::fromQuery() uses the
-      columnar API automatically when available
+      columnar API automatically when available; ColumnarResult values can now be filtered with
+      dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
+      columns
     - new experimental @ref plugin_types "plugin-type" registration ABI
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper
@@ -1277,6 +1279,24 @@ list<*string> names = result.customer_name;      # string buffers are deferred, 
     metadata that was not present in the values; for example unannotated integers become \c buffer<int64>.
     Drivers can advertise native support with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT
     "DBI_CAP_HAS_TYPED_SELECT".
+
+    ColumnarResult blocks also support dense mask filtering and native mask composition:
+    @code{.py}
+ColumnarResult result = db.selectColumnar(
+    "select id, score, active from customer_scores");
+
+buffer<bool> high = result.getColumn("score") >= 90.0;
+buffer<bool> active = result.getColumn("active") == True;
+ColumnarResult selected = result.filter(result.combineMasks(high, active, "&&"));
+    @endcode
+
+    The dataframe module can consume these blocks directly and preserve primitive
+    buffer-backed columns for dense access and columnar export:
+    @code{.py}
+DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
+buffer<int64> ids = df.getColumnBuffer("id");
+ColumnarResult again = df.toColumnarResult();
+    @endcode
     @endparblock
 
     @par Experimental Plugin-Type ABI
@@ -1794,6 +1814,17 @@ foreach string module_name in (registry.getProcessModules()) {
         \c df.filter(mask); row masks can be composed with \c &, \c |, \c ^,
         and \c ~ or with the named \c intersect(), \c unionWith(),
         \c symmetricDifference(), and \c invert() methods before filtering
+      - dense columnar interop: DataFrames can be constructed from \c buffer<T>
+        columns, expose primitive columns with \c getColumnBuffer(), round-trip
+        through \c ColumnarResult with \c toColumnarResult() and
+        \c fromColumnarResult(), and preserve buffer-backed columns under Qore
+        copy-on-write semantics where possible
+      - \c ColumnarResult::filter(), \c ColumnarResult::combineMasks(), and
+        \c ColumnarResult::invertMask() provide dense boolean-mask filtering for
+        SQL/DataFrame analytics flows
+      - \c DataFrame::concat(axis:1) implements horizontal concat with row-count
+        validation, duplicate-column diagnostics, and shared column storage
+        where possible
       - streaming CSV reader with type inference from first 100 rows
       - Parquet I/O via Apache Arrow (\c #ifdef \c HAVE_ARROW gated, \c MISSING-FEATURE-ERROR fallback)
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
@@ -2148,6 +2179,13 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing DataProvider integration for the dataframe binary module
       - wraps DataFrame as a record-oriented DataProvider for Qorus data pipeline integration
       - supports searchRecords with hash-based where conditions (equality and comparison operators)
+      - DataProvider pipelines recognize \c ColumnarResult values as
+        \c BufferColumns shape and can convert between BufferColumns,
+        DataFrameBlock, HashOfLists, and RowRecords
+      - QoreFilterRecordsProcessor compiles supported DataProvider/DPQL filters
+        over DataFrameBlock and BufferColumns values to vectorized DataFrame
+        row masks or dense ColumnarResult boolean masks; unsupported expressions
+        fall back to generic row semantics
       - record type reflects DataFrame column schema (int, float, string, bool, date)
       - record iterator APIs declare
         <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt>

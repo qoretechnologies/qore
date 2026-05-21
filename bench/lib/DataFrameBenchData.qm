@@ -112,6 +112,36 @@ public namespace DataFrameBench {
         };
     }
 
+    public hash<auto> sub makeBufferColumns(int rows) {
+        buffer<int64> ids = buffer<int64>::sized(rows);
+        buffer<int64> customer_ids = buffer<int64>::sized(rows);
+        list<string> statuses;
+        buffer<float64> amounts = buffer<float64>::sized(rows);
+        buffer<float64> scores = buffer<float64>::sized(rows);
+        list<string> regions;
+        buffer<bool> flags = buffer<bool>::sized(rows);
+
+        for (int i = 0; i < rows; ++i) {
+            ids[i] = i;
+            customer_ids[i] = i % 10000;
+            push statuses, statusFor(i);
+            amounts[i] = amountFor(i);
+            scores[i] = scoreFor(i);
+            push regions, regionFor(i);
+            flags[i] = (i % 7) == 0;
+        }
+
+        return {
+            "id": ids,
+            "customer_id": customer_ids,
+            "status": statuses,
+            "amount": amounts,
+            "score": scores,
+            "region": regions,
+            "flag": flags,
+        };
+    }
+
     public list<hash<auto>> sub makeRecords(int rows) {
         list<hash<auto>> records;
         for (int i = 0; i < rows; ++i) {
@@ -153,6 +183,14 @@ public namespace DataFrameBench {
         return new DataFrame::DataFrame(makeColumns(rows));
     }
 
+    public DataFrame::DataFrame sub makeBufferFrame(int rows) {
+        return new DataFrame::DataFrame(makeBufferColumns(rows));
+    }
+
+    public ColumnarResult sub makeColumnarResult(int rows) {
+        return makeBufferFrame(rows).toColumnarResult();
+    }
+
     public DataFrame::DataFrame sub makeCustomerFrame(int rows) {
         return new DataFrame::DataFrame(makeCustomerColumns(rows));
     }
@@ -161,6 +199,13 @@ public namespace DataFrameBench {
         if (df.numRows() < min_rows) {
             throw "BENCHMARK-ERROR", sprintf("%s produced %d rows, expected at least %d",
                 name, df.numRows(), min_rows);
+        }
+    }
+
+    public nothing sub verifyColumnarRows(string name, ColumnarResult result, int min_rows) {
+        if (result.numRows() < min_rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s produced %d rows, expected at least %d",
+                name, result.numRows(), min_rows);
         }
     }
 }

@@ -158,8 +158,16 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         switch (shape) {
             case DataProviderShape::DataFrameBlock:
                 return filterDataFrame(records);
-            case DataProviderShape::HashOfLists:
             case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return filterBufferColumns(records);
+                }
+                if (AbstractDataProcessor::isHashOfBuffers(records)) {
+                    auto df = AbstractDataProcessor::getDataFrameClass().newObject(records);
+                    return filterBufferColumns(df.toColumnarResult());
+                }
+                return filterBulk(records);
+            case DataProviderShape::HashOfLists:
                 return filterBulk(records);
             case DataProviderShape::RowRecords:
                 return AbstractDataProvider::evalGenericExpression(records, where_expr) ? records : NOTHING;
@@ -217,6 +225,11 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
 
     #! Filters a DataFrame block by one expression
     private auto filterDataFrameExpression(auto df, hash<DataProviderExpression> expr) {
+        *auto mask = buildDataFrameMask(df, expr);
+        if (exists mask) {
+            return df.filter(mask);
+        }
+
         string op = OperatorAliasMap{expr.exp} ?? expr.exp;
         if (op == DP_OP_AND || expr.exp == "AND") {
             auto filtered = df;
@@ -234,6 +247,129 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
             return filterDataFrameViaRows(df);
         }
         return applyDataFrameComparison(df, comparison.field, comparison.op, comparison.value);
+    }
+
+    #! Builds a vectorized DataFrame row mask, if the expression is supported
+    private *auto buildDataFrameMask(auto df, hash<DataProviderExpression> expr) {
+        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
+        if (op == DP_OP_AND || op == DP_OP_OR) {
+            *auto combined;
+            foreach auto arg in (expr.args) {
+                if (!(arg instanceof hash<DataProviderExpression>)) {
+                    return;
+                }
+                *auto mask = buildDataFrameMask(df, arg);
+                if (!exists mask) {
+                    return;
+                }
+                combined = !exists combined
+                    ? mask
+                    : (op == DP_OP_AND ? combined.intersect(mask) : combined.unionWith(mask));
+            }
+            return combined;
+        }
+
+        if (op == DP_SEARCH_OP_NOT) {
+            if (expr.args.size() != 1 || !(expr.args[0] instanceof hash<DataProviderExpression>)) {
+                return;
+            }
+            *auto mask = buildDataFrameMask(df, expr.args[0]);
+            if (exists mask) {
+                return mask.invert();
+            }
+            return;
+        }
+
+        *hash<auto> comparison = getDataFrameComparison(expr, op);
+        if (!comparison) {
+            return;
+        }
+        return buildDataFrameComparisonMask(df, comparison.field, comparison.op, comparison.value);
+    }
+
+    #! Builds a DataFrame row mask for one scalar comparison, if supported
+    private *auto buildDataFrameComparisonMask(auto df, string field, string op, auto value) {
+        switch (op) {
+            case DP_SEARCH_OP_EQ:
+            case DP_SEARCH_OP_NE:
+            case DP_SEARCH_OP_GT:
+            case DP_SEARCH_OP_GE:
+            case DP_SEARCH_OP_LT:
+            case DP_SEARCH_OP_LE:
+                return df.column(field).compare(op, value);
+        }
+        return;
+    }
+
+    #! Filters a ColumnarResult block with a compiled buffer mask when possible
+    private auto filterBufferColumns(auto records) {
+        *auto mask = buildBufferMask(records, where_expr);
+        if (exists mask) {
+            return records.filter(mask);
+        }
+
+        auto df = AbstractDataProcessor::getDataFrameClass().newObject(records.toColumnHash());
+        return filterDataFrameExpression(df, where_expr).toColumnarResult();
+    }
+
+    #! Builds a boolean buffer/list mask for a ColumnarResult, if supported
+    private *auto buildBufferMask(auto records, hash<DataProviderExpression> expr) {
+        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
+        if (op == DP_OP_AND || op == DP_OP_OR) {
+            *auto combined;
+            foreach auto arg in (expr.args) {
+                if (!(arg instanceof hash<DataProviderExpression>)) {
+                    return;
+                }
+                *auto mask = buildBufferMask(records, arg);
+                if (!exists mask) {
+                    return;
+                }
+                combined = !exists combined ? mask : records.combineMasks(combined, mask, op);
+            }
+            return combined;
+        }
+
+        if (op == DP_SEARCH_OP_NOT) {
+            if (expr.args.size() != 1 || !(expr.args[0] instanceof hash<DataProviderExpression>)) {
+                return;
+            }
+            *auto mask = buildBufferMask(records, expr.args[0]);
+            if (exists mask) {
+                return records.invertMask(mask);
+            }
+            return;
+        }
+
+        *hash<auto> comparison = getDataFrameComparison(expr, op);
+        if (!comparison || !exists comparison.value || comparison.value.typeCode() == NT_NULL) {
+            return;
+        }
+        return buildBufferComparisonMask(records, comparison.field, comparison.op, comparison.value);
+    }
+
+    #! Builds a boolean buffer mask for one dense column comparison
+    private *auto buildBufferComparisonMask(auto records, string field, string op, auto value) {
+        auto column = records.getColumn(field);
+        if (column.typeCode() != NT_BUFFER) {
+            return;
+        }
+
+        switch (op) {
+            case DP_SEARCH_OP_EQ:
+                return column == value;
+            case DP_SEARCH_OP_NE:
+                return column != value;
+            case DP_SEARCH_OP_GT:
+                return column > value;
+            case DP_SEARCH_OP_GE:
+                return column >= value;
+            case DP_SEARCH_OP_LT:
+                return column < value;
+            case DP_SEARCH_OP_LE:
+                return column <= value;
+        }
+        return;
     }
 
     #! Returns vectorizable DataFrame comparison information, if supported
@@ -330,7 +466,8 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     /** @since DataProvider 3.5
     */
     private list<DataProviderShape> supportedInputShapesImpl() {
-        return (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns supported output shapes

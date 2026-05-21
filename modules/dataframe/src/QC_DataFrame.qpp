@@ -13,6 +13,8 @@
 #include "QC_GroupedDataFrame.h"
 #include "df_csv.h"
 
+#include <qore/QoreColumnarResult.h>
+
 #include <algorithm>
 #include <sstream>
 
@@ -480,6 +482,27 @@ list<auto> DataFrame::getColumn(string name) [flags=RET_VALUE_ONLY] {
     return df->getColumn(name->c_str(), xsink);
 }
 
+//! Returns a column's values as a dense buffer
+/** Numeric and boolean columns are returned as \c buffer<T> values. When the
+    DataFrame was constructed from a buffer-backed column, the returned value
+    shares the same dense storage under Qore's normal copy-on-write rules.
+
+    @param name the column name
+    @return a dense buffer containing the column values
+
+    @par Example:
+    @code{.py}
+    DataFrame df({"id": new buffer<int64>((1001, 1002, 1003))});
+    buffer<int64> ids = df.getColumnBuffer("id");
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if the column is not found or cannot be
+    represented as a dense buffer
+*/
+auto DataFrame::getColumnBuffer(string name) [flags=RET_VALUE_ONLY] {
+    return df->getColumnBuffer(name->c_str(), xsink);
+}
+
 //! Returns a row as a hash
 /** @param index the zero-based row index
     @throw DATAFRAME-INDEX-ERROR if index out of range
@@ -787,6 +810,32 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
     return obj.release();
 }
 
+//! Concatenates DataFrames vertically or horizontally
+/** @param dataframes list of DataFrame objects to concatenate
+    @param axis 0 for vertical row stacking, 1 for horizontal column concat
+
+    @return a new DataFrame
+
+    Horizontal concat requires all inputs to have the same row count and rejects
+    duplicate column names.
+
+    @par Example:
+    @code{.py}
+    DataFrame left({"id": (1, 2)});
+    DataFrame right({"score": (10.0, 20.0)});
+    DataFrame combined = DataFrame::concat((left, right), axis: 1);
+    @endcode
+*/
+static DataFrame DataFrame::concat(list<DataFrame> dataframes, *int axis) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreDataFrame* result = QoreDataFrame::concat(dataframes, axis ? static_cast<int>(axis) : 0, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
 //! Returns a new DataFrame with null values replaced by the given value
 /** @param value the replacement value (converted to each column's type)
     @return new DataFrame object with nulls filled
@@ -838,6 +887,73 @@ list<hash<auto>> DataFrame::toRecords() [flags=RET_VALUE_ONLY] {
 */
 hash<auto> DataFrame::toColumnHash() [flags=RET_VALUE_ONLY] {
     return df->toColumnHash(xsink);
+}
+
+//! Converts the DataFrame to a SQL ColumnarResult
+/** Dense numeric and boolean columns are returned as \c buffer<T> values.
+    Existing buffer-backed DataFrame columns are passed through without copying
+    under Qore's normal copy-on-write semantics.
+
+    @return a \c Qore::SQL::ColumnarResult object
+
+    @par Example:
+    @code{.py}
+    ColumnarResult result = df.toColumnarResult();
+    buffer<int64> ids = result.getColumn("id");
+    @endcode
+*/
+auto DataFrame::toColumnarResult() [flags=RET_VALUE_ONLY] {
+    return qore_columnar_result_to_object(df->toColumnarResult(xsink), xsink);
+}
+
+//! Creates a DataFrame from a SQL ColumnarResult
+/** This method preserves dense \c buffer<T> columns returned by
+    ColumnarResult::toColumnHash(), so SQL-to-DataFrame flows can avoid
+    materializing primitive columns as lists.
+
+    @param result a \c Qore::SQL::ColumnarResult object
+    @return a new DataFrame
+
+    @par Example:
+    @code{.py}
+    ColumnarResult result = ds.selectColumnar("select id, total from orders");
+    DataFrame df = DataFrame::fromColumnarResult(result);
+    @endcode
+*/
+static DataFrame DataFrame::fromColumnarResult(auto result) [flags=RET_VALUE_ONLY] {
+    if (result.getType() != NT_OBJECT) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "DataFrame::fromColumnarResult() expects a ColumnarResult-compatible object, got '%s'",
+            result.getTypeName());
+        return QoreValue();
+    }
+
+    QoreObject* result_obj = result.get<QoreObject>();
+    if (!qdfHasMethod(result_obj, "toColumnHash")) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "DataFrame::fromColumnarResult() expects a ColumnarResult-compatible object, got class '%s'",
+            result_obj->getClassName());
+        return QoreValue();
+    }
+
+    ValueHolder columns(result_obj->evalMethod("toColumnHash", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (columns->getType() != NT_HASH) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "ColumnarResult::toColumnHash() returned type '%s'; expected 'hash'",
+            columns->getTypeName());
+        return QoreValue();
+    }
+
+    QoreDataFrame* dataframe = QoreDataFrame::fromColumns(columns->get<const QoreHashNode>(), xsink);
+    if (!dataframe) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, dataframe);
+    return obj.release();
 }
 
 //! Returns per-column descriptive statistics

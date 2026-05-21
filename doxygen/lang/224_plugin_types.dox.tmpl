@@ -264,6 +264,57 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     the module name, operation name, field name, expected type, actual type,
     subreason, and design-section reference in the diagnostic text.
 
+    @section plugin_types_dataframe_dense DataFrame And Dense Data Pipelines
+
+    The dataframe module is the first production consumer of the dense-data
+    pieces exposed by this release. DataFrame columns can be constructed from
+    \c buffer<T> values, exported to
+    @ref Qore::SQL::ColumnarResult "ColumnarResult", imported back from
+    ColumnarResult, and passed through DataProvider pipelines as
+    \c DataProviderShape::BufferColumns. This lets SQL, DataFrame, and
+    DataProvider code share primitive numeric and boolean columns without
+    converting every cell to a row hash.
+
+    @code{.py}
+%requires dataframe
+
+DataFrame df({
+    "id": new buffer<int64>((1, 2, 3, 4)),
+    "score": new buffer<float64>((95.0, 88.0, 92.0, 75.0)),
+    "active": new buffer<bool>((True, False, True, True)),
+});
+
+ColumnarResult columns = df.toColumnarResult();
+buffer<bool> selected = columns.combineMasks(
+    columns.getColumn("score") >= 90.0,
+    columns.getColumn("active") == True,
+    "&&");
+DataFrame filtered = DataFrame::fromColumnarResult(columns.filter(selected));
+    @endcode
+
+    DataProvider filter processors compile supported DPQL/DataProvider
+    expressions over ColumnarResult blocks to dense boolean masks. Supported
+    compiled predicates include \c &&, \c ||, \c !, and scalar comparison
+    operators over dense buffer columns; unsupported expressions fall back to
+    the normal row semantics:
+
+    @code{.py}
+%requires DataProviderDataFrame
+
+hash<DataProviderExpression> expr = DataProvider::parseDpqlExpression(
+    "@score >= 90.0 && @active == true");
+
+QoreFilterRecordsProcessor filter({"where_cond": expr});
+ColumnarResult filtered_columns = filter.processRecordsShape(
+    columns, DataProviderShape::BufferColumns);
+    @endcode
+
+    This is not a promise that every DataFrame operation is zero-copy. Existing
+    DataFrame kernels still keep their vector-oriented internal representation
+    for joins, groupby, windows, and ML conversion. Dense source buffers are
+    preserved for columnar export and direct dense column access, while
+    filtering, ordering, aggregation, and reshaping can allocate new storage.
+
     @section plugin_types_lowering Lowering Pattern Hooks
 
     Operations can register an optional \c QorePluginLoweringCallback in

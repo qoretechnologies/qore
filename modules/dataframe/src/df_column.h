@@ -48,8 +48,12 @@ static inline bool getDataFrameString(QoreValue v, std::string& out) {
 
 //! Column data — immutable after construction (shared across DataFrames via shared_ptr)
 struct ColumnData {
-    ColumnType type;
+    ColumnType type = ColumnType::AUTO;
     int64_t n_rows = 0;
+
+    //! Optional dense source buffer preserved for zero-copy columnar APIs
+    QoreBufferNode* dense_buffer = nullptr;
+    QoreBufferElementType dense_buffer_type = QoreBufferElementType::Invalid;
 
     // Type-specific storage (only one is populated based on type)
     Eigen::VectorXd float_data;
@@ -60,6 +64,24 @@ struct ColumnData {
 
     //! Null/missing mask: 1 = null, 0 = present
     std::vector<uint8_t> null_mask;
+
+    DLLLOCAL ColumnData() = default;
+    DLLLOCAL ColumnData(const ColumnData& old);
+    DLLLOCAL ColumnData(ColumnData&& old) noexcept;
+    DLLLOCAL ColumnData& operator=(const ColumnData& old);
+    DLLLOCAL ColumnData& operator=(ColumnData&& old) noexcept;
+    DLLLOCAL ~ColumnData();
+
+    //! Preserves a referenced dense buffer for zero-copy columnar APIs
+    DLLLOCAL void setDenseBufferRef(const QoreBufferNode* buffer);
+
+    //! Returns true if this column has a preserved dense buffer
+    bool hasDenseBuffer() const {
+        return dense_buffer;
+    }
+
+    //! Returns a referenced dense buffer, or nullptr when not available
+    DLLLOCAL QoreBufferNode* refDenseBuffer() const;
 
     //! Returns true if the value at index i is null
     bool isNull(int64_t i) const {
@@ -103,6 +125,9 @@ DLLLOCAL QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xs
 //! Convert a range of column values to a QoreListNode
 DLLLOCAL QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
     int64_t count, ExceptionSink* xsink);
+
+//! Convert a dense-compatible column to a Qore buffer
+DLLLOCAL QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink);
 
 } // namespace QoreDataFrameNS
 

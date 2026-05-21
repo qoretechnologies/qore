@@ -72,7 +72,7 @@ public enum DataProviderShape {
     RowRecords = 1,
     #! A hash whose values are lists, one list entry per row
     HashOfLists = 2,
-    #! A hash whose values are typed buffers; reserved for dense typed-column support
+    #! A dense column block; currently a Qore::SQL::ColumnarResult object or a hash whose values are typed buffers
     BufferColumns = 3,
     #! A DataFrame block object
     DataFrameBlock = 4
@@ -432,6 +432,54 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return data.typeCode() == NT_OBJECT && data.fullType() == "object<DataFrame>";
     }
 
+    #! Returns True if the value is a dense ColumnarResult object
+    /** @param data the value to test
+
+        @since %DataProvider 3.5
+    */
+    static bool isColumnarResult(auto data) {
+        return data.typeCode() == NT_OBJECT && data.className() == "ColumnarResult";
+    }
+
+    #! Returns True if the value is a hash of dense typed buffers
+    /** @param data the value to test
+
+        @since %DataProvider 3.5
+    */
+    static bool isHashOfBuffers(auto data) {
+        return data.typeCode() == NT_HASH && data && data.firstValue().typeCode() == NT_BUFFER;
+    }
+
+    #! Returns True if the value is a dense column block
+    /** @param data the value to test
+
+        @since %DataProvider 3.5
+    */
+    static bool isBufferColumns(auto data) {
+        return AbstractDataProcessor::isColumnarResult(data) || AbstractDataProcessor::isHashOfBuffers(data);
+    }
+
+    #! Returns the DataFrame class, loading the module into this program if needed
+    /** @since %DataProvider 3.5
+    */
+    static auto getDataFrameClass() {
+        load_module("dataframe");
+        return Class::forName("DataFrame::DataFrame");
+    }
+
+    #! Converts a hash of dense typed buffers to a hash-of-lists block
+    /** @param data a hash whose values are dense buffers
+
+        @since %DataProvider 3.5
+    */
+    static hash<auto> bufferColumnsToHashList(hash<auto> data) {
+        hash<auto> result;
+        foreach hash<auto> i in (data.pairIterator()) {
+            result{i.key} = i.value.typeCode() == NT_BUFFER ? i.value.toList() : i.value;
+        }
+        return result;
+    }
+
     #! Detects the pipeline shape for a runtime value
     /** @param data the value to inspect
 
@@ -442,6 +490,9 @@ public class AbstractDataProcessor inherits Qore::Serializable {
     static DataProviderShape detectShape(auto data) {
         if (AbstractDataProcessor::isDataFrameBlock(data)) {
             return DataProviderShape::DataFrameBlock;
+        }
+        if (AbstractDataProcessor::isBufferColumns(data)) {
+            return DataProviderShape::BufferColumns;
         }
         if (AbstractDataProcessor::isHashOfLists(data)) {
             return DataProviderShape::HashOfLists;
@@ -479,8 +530,12 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         switch (s) {
             case DataProviderShape::DataFrameBlock:
                 return data.numRows();
-            case DataProviderShape::HashOfLists:
             case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(data)) {
+                    return data.numRows();
+                }
+                return data ? data.firstValue().lsize() : 0;
+            case DataProviderShape::HashOfLists:
                 return data ? data.firstValue().lsize() : 0;
             case DataProviderShape::RowRecords:
                 return 1;
@@ -507,6 +562,9 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         if (from_shape == DataProviderShape::DataFrameBlock && to_shape == DataProviderShape::HashOfLists) {
             return (data.toColumnHash(),);
         }
+        if (from_shape == DataProviderShape::DataFrameBlock && to_shape == DataProviderShape::BufferColumns) {
+            return (data.toColumnarResult(),);
+        }
         if (from_shape == DataProviderShape::DataFrameBlock && to_shape == DataProviderShape::RowRecords) {
             return data.toRecords();
         }
@@ -517,16 +575,40 @@ public class AbstractDataProcessor inherits Qore::Serializable {
             return (AbstractDataProcessor::recordsToHashList((data,)),);
         }
         if (from_shape == DataProviderShape::HashOfLists && to_shape == DataProviderShape::DataFrameBlock) {
-            return (Class::forName("DataFrame").newObject(data),);
-        }
-        if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::DataFrameBlock) {
-            return (Class::forName("DataFrame").newObject((data,)),);
-        }
-        if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::HashOfLists) {
-            return (data,);
+            return (AbstractDataProcessor::getDataFrameClass().newObject(data),);
         }
         if (from_shape == DataProviderShape::HashOfLists && to_shape == DataProviderShape::BufferColumns) {
+            return (AbstractDataProcessor::getDataFrameClass().newObject(data).toColumnarResult(),);
+        }
+        if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::DataFrameBlock) {
+            return (AbstractDataProcessor::getDataFrameClass().newObject((data,)),);
+        }
+        if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::BufferColumns) {
+            return (AbstractDataProcessor::getDataFrameClass().newObject((data,)).toColumnarResult(),);
+        }
+        if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::HashOfLists) {
+            if (AbstractDataProcessor::isColumnarResult(data)) {
+                return (AbstractDataProcessor::recordsToHashList(data.toRows()),);
+            }
+            if (AbstractDataProcessor::isHashOfBuffers(data)) {
+                return (AbstractDataProcessor::bufferColumnsToHashList(data),);
+            }
             return (data,);
+        }
+        if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::DataFrameBlock) {
+            if (AbstractDataProcessor::isColumnarResult(data)) {
+                return (AbstractDataProcessor::getDataFrameClass().newObject(data.toColumnHash()),);
+            }
+            return (AbstractDataProcessor::getDataFrameClass().newObject(data),);
+        }
+        if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::RowRecords) {
+            if (AbstractDataProcessor::isColumnarResult(data)) {
+                return data.toRows();
+            }
+            if (AbstractDataProcessor::isHashOfBuffers(data)) {
+                return AbstractDataProcessor::hashListToRecords(AbstractDataProcessor::bufferColumnsToHashList(data));
+            }
+            return AbstractDataProcessor::hashListToRecords(data);
         }
 
         throw "PROCESSOR-SHAPE-ERROR", sprintf("cannot convert DataProvider pipeline data from %s to %s",

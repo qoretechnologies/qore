@@ -13,6 +13,8 @@
 
 #include "df_column.h"
 
+#include <qore/QoreColumnarResult.h>
+
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -61,6 +63,9 @@ public:
     //! Get a column's values as a Qore list
     DLLLOCAL QoreListNode* getColumn(const std::string& name, ExceptionSink* xsink) const;
 
+    //! Get a column's values as a dense Qore buffer
+    DLLLOCAL QoreBufferNode* getColumnBuffer(const std::string& name, ExceptionSink* xsink) const;
+
     //! Get a row as a hash
     DLLLOCAL QoreHashNode* getRow(int64_t index, ExceptionSink* xsink) const;
 
@@ -84,6 +89,9 @@ public:
 
     //! Convert to hash of lists (column-oriented)
     DLLLOCAL QoreHashNode* toColumnHash(ExceptionSink* xsink) const;
+
+    //! Convert to a columnar result, preserving dense buffers when available
+    DLLLOCAL QoreColumnarResult* toColumnarResult(ExceptionSink* xsink) const;
 
     // --- Statistics ---
 

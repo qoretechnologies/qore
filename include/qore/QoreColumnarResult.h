@@ -124,6 +124,15 @@ public:
     //! Returns a list of row hashes.
     DLLEXPORT QoreListNode* toRows(ExceptionSink* xsink) const;
 
+    //! Returns a new result with rows selected by a boolean list or buffer mask.
+    DLLEXPORT QoreColumnarResult* filter(QoreValue mask, ExceptionSink* xsink) const;
+
+    //! Combines two boolean row masks with && or || and returns a dense buffer<bool> mask.
+    DLLEXPORT static QoreValue combineMasks(QoreValue lhs, QoreValue rhs, const char* op, ExceptionSink* xsink);
+
+    //! Inverts a boolean row mask and returns a dense buffer<bool> mask.
+    DLLEXPORT static QoreValue invertMask(QoreValue mask, ExceptionSink* xsink);
+
     //! Returns a referenced column container by name.
     DLLEXPORT QoreValue getColumnValue(const char* name, ExceptionSink* xsink) const;
 

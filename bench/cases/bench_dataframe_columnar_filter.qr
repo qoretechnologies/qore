@@ -1,0 +1,42 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameColumnarFilter
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameColumnarFilter {
+    constructor() {
+        Bench::BenchRunner r("dataframe_columnar_filter");
+        r.iterations = 12;
+        r.warmup = 3;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columnar;
+
+        r.setup = sub () {
+            columnar = DataFrameBench::makeColumnarResult(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            buffer<float64> score = columnar.getColumn("score");
+            buffer<float64> amount = columnar.getColumn("amount");
+            buffer<bool> flag = columnar.getColumn("flag");
+            buffer<bool> high_score = score >= 90.0;
+            buffer<bool> high_amount = amount > 1000.0;
+            buffer<bool> not_flagged = flag == False;
+            buffer<bool> score_amount = columnar.combineMasks(high_score, high_amount, "&&");
+            ColumnarResult filtered = columnar.filter(columnar.combineMasks(score_amount, not_flagged, "&&"));
+            DataFrameBench::verifyColumnarRows("dataframe_columnar_filter", filtered, 1);
+        };
+
+        exit(r.run());
+    }
+}

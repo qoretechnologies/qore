@@ -28,6 +28,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("metadataTest", \metadataTest());
         addTestCase("accessTest", \accessTest());
         addTestCase("pluginOperatorTest", \pluginOperatorTest());
+        addTestCase("denseBufferColumnTest", \denseBufferColumnTest());
         addTestCase("roundTripTest", \roundTripTest());
         addTestCase("mutationTest", \mutationTest());
         addTestCase("describeTest", \describeTest());
@@ -37,6 +38,8 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("selectTest", \selectTest());
         addTestCase("filterTest", \filterTest());
         addTestCase("sortByTest", \sortByTest());
+        addTestCase("horizontalConcatTest", \horizontalConcatTest());
+        addTestCase("columnarResultFilterTest", \columnarResultFilterTest());
         addTestCase("fillnaDropnaTest", \fillnaDropnaTest());
         addTestCase("csvReadTest", \csvReadTest());
         addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
@@ -46,6 +49,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("parquetTest", \parquetTest());
         addTestCase("dataProviderTest", \dataProviderTest());
         addTestCase("dataProviderPipelineShapeTest", \dataProviderPipelineShapeTest());
+        addTestCase("bufferColumnsPipelineShapeTest", \bufferColumnsPipelineShapeTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
@@ -97,6 +101,10 @@ sub typed_dataframe_api() {
     DataFrame::DataFrame filled = df.fillna(0);
     DataFrame::DataFrame clean = df.dropna();
     DataFrame::DataFrame with_col = df.withColumn(\"b\", (3, 4));
+    buffer<int64> dense = df.getColumnBuffer(\"a\");
+    auto columnar = df.toColumnarResult();
+    DataFrame::DataFrame from_columnar = DataFrame::DataFrame::fromColumnarResult(columnar);
+    DataFrame::DataFrame concatenated = DataFrame::DataFrame::concat((df, from_columnar));
     DataFrame::RowMask positive = df.column(\"a\") > 0;
     DataFrame::RowMask selected_mask = positive & (df.column(\"a\") != 2);
     DataFrame::RowMask either_mask = selected_mask | (df.column(\"a\") == 2);
@@ -263,6 +271,39 @@ sub invalid_dataframe_api() {
              {"id": 3, "value": 20}));
         assertEq((2,), missing[missing.column("value") == NOTHING]["id"], "NOTHING equality matches null rows");
         assertEq((1, 3), missing[missing.column("value") != NOTHING]["id"], "NOTHING inequality excludes null rows");
+    }
+
+    denseBufferColumnTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        buffer<int64> ids = new buffer<int64>((1001, 1002, 1003));
+        buffer<float64> scores = new buffer<float64>((95.5, 88.0, 92.0));
+        DataFrame::DataFrame df({"id": ids, "score": scores, "name": ("Alice", "Bob", "Carol")});
+
+        assertEq((1001, 1002, 1003), df.getColumn("id"), "buffer constructor preserves column values");
+        assertEq((1001, 1002, 1003), df.getColumnBuffer("id").toList(),
+            "getColumnBuffer returns dense integer values");
+        assertEq((95.5, 88.0, 92.0), df.getColumnBuffer("score").toList(),
+            "getColumnBuffer returns dense float values");
+        ids[0] = 9999;
+        assertEq((1001, 1002, 1003), df.getColumnBuffer("id").toList(),
+            "buffer-backed DataFrame columns follow buffer copy-on-write semantics");
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.getColumnBuffer(), ("name",),
+            "string columns are not exposed as dense buffers");
+
+        auto result = df.toColumnarResult();
+        assertEq("ColumnarResult", result.className(), "toColumnarResult returns a ColumnarResult");
+        assertEq((1001, 1002, 1003), result.getColumn("id").toList(),
+            "ColumnarResult preserves dense integer column");
+        assertEq(("Alice", "Bob", "Carol"), result.getColumn("name"),
+            "ColumnarResult keeps non-dense string column as a list");
+
+        DataFrame::DataFrame roundtrip = DataFrame::DataFrame::fromColumnarResult(result);
+        assertEq((1001, 1002, 1003), roundtrip.getColumnBuffer("id").toList(),
+            "fromColumnarResult preserves dense columns");
+        assertEq(("Alice", "Bob", "Carol"), roundtrip.getColumn("name"),
+            "fromColumnarResult preserves list columns");
     }
 
     roundTripTest() {
@@ -475,6 +516,64 @@ sub invalid_dataframe_api() {
         # Sort by string
         auto alpha = df.sortBy(("name",));
         assertEq(("Alice", "Bob", "Carol"), alpha.getColumn("name"), "sort string");
+    }
+
+    horizontalConcatTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame left({"id": new buffer<int64>((1, 2, 3)), "name": ("Ada", "Bo", "Cy")});
+        DataFrame::DataFrame right({"score": new buffer<float64>((90.0, 80.0, 70.0)), "active": (True, False, True)});
+
+        DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), 1);
+        assertEq(3, combined.numRows(), "horizontal concat preserves row count");
+        assertEq(("id", "name", "score", "active"), combined.columnNames(),
+            "horizontal concat preserves column order");
+        assertEq((1, 2, 3), combined.getColumnBuffer("id").toList(),
+            "horizontal concat preserves dense left columns");
+        assertEq((90.0, 80.0, 70.0), combined.getColumnBuffer("score").toList(),
+            "horizontal concat preserves dense right columns");
+
+        DataFrame::DataFrame short({"other": (1, 2)});
+        assertThrows("DATAFRAME-ERROR", sub () {
+            auto ignored = DataFrame::DataFrame::concat((left, short), 1);
+        }, NOTHING,
+            "horizontal concat rejects row-count mismatch");
+
+        DataFrame::DataFrame duplicate({"id": (4, 5, 6)});
+        assertThrows("DATAFRAME-COLUMN-ERROR", sub () {
+            auto ignored = DataFrame::DataFrame::concat((left, duplicate), 1);
+        }, NOTHING,
+            "horizontal concat rejects duplicate column names");
+    }
+
+    columnarResultFilterTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+        });
+
+        auto result = df.toColumnarResult();
+        auto filtered = result.filter(result.getColumn("amount") >= 125.0);
+        assertEq((2, 3, 4), filtered.getColumn("id").toList(),
+            "ColumnarResult::filter accepts dense boolean masks");
+        assertEq(("Bob", "Carol", "Dave"), filtered.getColumn("name"),
+            "ColumnarResult::filter preserves list columns");
+
+        auto amount_mask = result.getColumn("amount") >= 125.0;
+        auto not_carol = result.getColumn("id") != 3;
+        auto combined = result.combineMasks(amount_mask, not_carol, "&&");
+        assertEq("buffer<bool>", combined.fullType(), "ColumnarResult::combineMasks returns a dense mask");
+        assertEq((2, 4), result.filter(combined).getColumn("id").toList(),
+            "ColumnarResult::combineMasks intersects dense masks");
+        assertEq((1,), result.filter(result.invertMask(amount_mask)).getColumn("id").toList(),
+            "ColumnarResult::invertMask inverts dense masks");
+        assertThrows("COLUMNAR-RESULT-ERROR", \result.filter(), (new buffer<int64>((1, 0, 1, 0)),),
+            "ColumnarResult::filter rejects non-boolean buffers as masks");
     }
 
     fillnaDropnaTest() {
@@ -941,6 +1040,121 @@ sub invalid_dataframe_api() {
         assertEq({"name": ("Alice", "Carol", "Dave"), "status": ("active", "active", "active"),
             "amount": (90, 180, 125)}, active_bulk.getValue(), "DataFrame provider filters bulk blocks");
         assertNothing(active_bulk.getValue(), "filtered DataFrame bulk iterator ends after matching rows");
+    }
+
+    bufferColumnsPipelineShapeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+        });
+        auto columns = df.toColumnarResult();
+
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(columns),
+            "ColumnarResult values are detected as BufferColumns shape");
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(columns, DataProviderShape::BufferColumns),
+            "BufferColumns record count uses ColumnarResult rows");
+
+        hash<auto> raw_buffers = {
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "active": new buffer<bool>((True, False, True, True)),
+        };
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(raw_buffers),
+            "hashes of typed buffers are detected as BufferColumns shape");
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(raw_buffers, DataProviderShape::BufferColumns),
+            "BufferColumns record count supports hash-of-buffers blocks");
+        list<auto> raw_rows = AbstractDataProcessor::convertShape(
+            raw_buffers, DataProviderShape::BufferColumns, DataProviderShape::RowRecords);
+        assertEq(4, raw_rows.size(), "hash-of-buffers conversion emits row records");
+        assertEq(220.0, raw_rows[1].amount, "hash-of-buffers conversion preserves dense values");
+
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": ">=",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 125.0),
+                },
+                <DataProviderExpression>{
+                    "exp": "!=",
+                    "args": (<DataProviderFieldReference>{"field": "id"}, 2),
+                },
+            ),
+        };
+
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+        assertTrue(proc.supportsInputShape(DataProviderShape::BufferColumns),
+            "filter processor supports BufferColumns input");
+
+        auto filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(filtered),
+            "BufferColumns filter preserves BufferColumns shape");
+        assertEq((3, 4), filtered.getColumn("id").toList(),
+            "BufferColumns vectorized filter keeps matching dense rows");
+        assertEq(("Carol", "Dave"), filtered.getColumn("name"),
+            "BufferColumns vectorized filter preserves list columns");
+
+        auto raw_filtered = proc.processRecordsShape(raw_buffers, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(raw_filtered),
+            "hash-of-buffers filter returns BufferColumns shape");
+        assertEq((3, 4), raw_filtered.getColumn("id").toList(),
+            "hash-of-buffers filter uses dense BufferColumns path");
+
+        hash<DataProviderExpression> or_expr = <DataProviderExpression>{
+            "exp": "||",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "id"}, 1),
+                },
+                <DataProviderExpression>{
+                    "exp": ">=",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 220.0),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor or_proc({"where_cond": or_expr});
+        assertEq((1, 2), or_proc.processRecordsShape(columns, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports OR masks");
+
+        hash<DataProviderExpression> not_expr = <DataProviderExpression>{
+            "exp": "!",
+            "args": (<DataProviderExpression>{
+                "exp": "<",
+                "args": (<DataProviderFieldReference>{"field": "amount"}, 125.0),
+            },),
+        };
+        QoreFilterRecordsProcessor not_proc({"where_cond": not_expr});
+        assertEq((2, 3, 4), not_proc.processRecordsShape(columns, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports NOT masks");
+
+        DataFrame::DataFrame filtered_df = AbstractDataProcessor::convertShape(
+            filtered, DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0];
+        assertEq((3, 4), filtered_df.getColumnBuffer("id").toList(),
+            "BufferColumns -> DataFrameBlock preserves dense columns");
+
+        list<auto> callback_rows;
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "buffer-columns-shape-pipeline-test",
+            "output_callback": sub (auto row) {
+                push callback_rows, row;
+            },
+        });
+        pipe.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+        pipe.submit(columns);
+        pipe.waitDone();
+
+        assertEq(2, callback_rows.size(), "pipeline callback emits BufferColumns rows");
+        assertEq("Carol", callback_rows[0].name, "BufferColumns pipeline preserves first row");
+        assertEq("Dave", callback_rows[1].name, "BufferColumns pipeline preserves second row");
+        assertTrue(pipe.getInfo().bulk, "BufferColumns input keeps pipeline in bulk mode");
     }
 
     parquetTest() {

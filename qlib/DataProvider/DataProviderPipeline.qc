@@ -736,8 +736,17 @@ class PipelineQueue {
     private emitOutputValue(auto value) {
         DataProviderShape shape = AbstractDataProcessor::detectShape(value);
         switch (shape) {
-            case DataProviderShape::HashOfLists:
             case DataProviderShape::BufferColumns: {
+                if (AbstractDataProcessor::isColumnarResult(value)) {
+                    map output_callback($1), value.toRows();
+                    return;
+                }
+                HashListIterator hli(AbstractDataProcessor::isHashOfBuffers(value)
+                    ? AbstractDataProcessor::bufferColumnsToHashList(value) : value);
+                map output_callback($1), hli;
+                return;
+            }
+            case DataProviderShape::HashOfLists: {
                 HashListIterator hli(value);
                 map output_callback($1), hli;
                 return;

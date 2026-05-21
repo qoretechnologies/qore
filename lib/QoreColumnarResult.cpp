@@ -15,6 +15,7 @@
 #include <cctype>
 #include <cstring>
 #include <initializer_list>
+#include <strings.h>
 #include <utility>
 
 namespace {
@@ -401,6 +402,114 @@ static QoreValue columnar_value_at(QoreValue value, size_t index) {
     }
 }
 
+static size_t columnar_mask_size(QoreValue mask, ExceptionSink* xsink) {
+    switch (mask.getType()) {
+        case NT_LIST:
+            return mask.get<const QoreListNode>()->size();
+        case NT_BUFFER: {
+            const QoreBufferNode* buffer = mask.get<const QoreBufferNode>();
+            if (buffer->getElementType() != QoreBufferElementType::Bool) {
+                xsink->raiseException("COLUMNAR-RESULT-ERROR",
+                    "row mask buffer has element type '%s'; expected buffer<bool>",
+                    qore_buffer_element_type_name(buffer->getElementType()));
+                return 0;
+            }
+            return mask.get<const QoreBufferNode>()->size();
+        }
+        default:
+            xsink->raiseException("COLUMNAR-RESULT-ERROR",
+                "row mask has type '%s'; expected list<bool> or buffer<bool>", mask.getTypeName());
+            return 0;
+    }
+}
+
+static bool columnar_mask_at(QoreValue mask, size_t index) {
+    switch (mask.getType()) {
+        case NT_LIST:
+            return mask.get<const QoreListNode>()->retrieveEntry(index).getAsBool();
+        case NT_BUFFER: {
+            QoreValue value = mask.get<const QoreBufferNode>()->getReferencedEntry(index);
+            return !value.isNullOrNothing() && value.getAsBool();
+        }
+        default:
+            return false;
+    }
+}
+
+static size_t columnar_mask_count(QoreValue mask, ExceptionSink* xsink) {
+    size_t count = 0;
+    size_t size = columnar_mask_size(mask, xsink);
+    if (*xsink) {
+        return 0;
+    }
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "counting columnar row mask")) {
+            return 0;
+        }
+        if (columnar_mask_at(mask, i)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t selected, ExceptionSink* xsink) {
+    if (value.getType() == NT_LIST) {
+        const QoreListNode* source = value.get<const QoreListNode>();
+        ReferenceHolder<QoreListNode> rv(new QoreListNode(source->getValueTypeInfo()), xsink);
+        for (size_t i = 0; i < source->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar list column")) {
+                return QoreValue();
+            }
+            if (columnar_mask_at(mask, i)) {
+                rv->push(source->retrieveEntry(i).refSelf(), xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+            }
+        }
+        return rv.release();
+    }
+
+    if (value.getType() == NT_BUFFER) {
+        const QoreBufferNode* source = value.get<const QoreBufferNode>();
+        ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
+            source->hasNullableElements(), selected), xsink);
+        size_t out = 0;
+        for (size_t i = 0; i < source->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
+                return QoreValue();
+            }
+            if (columnar_mask_at(mask, i)) {
+                if (rv->setEntry(out++, source->getReferencedEntry(i), xsink)) {
+                    return QoreValue();
+                }
+            }
+        }
+        return rv.release();
+    }
+
+    assert(false);
+    return QoreValue();
+}
+
+static bool columnar_mask_op_is_and(const char* op, ExceptionSink* xsink) {
+    if (!op) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR",
+            "unsupported row-mask operator '<null>'; expected '&&' or '||'");
+        return false;
+    }
+    if (!strcmp(op, "&&") || !strcasecmp(op, "AND")) {
+        return true;
+    }
+    if (!strcmp(op, "||") || !strcasecmp(op, "OR")) {
+        return false;
+    }
+    xsink->raiseException("COLUMNAR-RESULT-ERROR",
+        "unsupported row-mask operator '%s'; expected '&&' or '||'", op);
+    return false;
+}
+
 static QoreColumnarColumnType columnar_type_from_buffer(QoreBufferElementType buffer_type) {
     if (qore_buffer_element_type_is_integer(buffer_type)) {
         return QoreColumnarColumnType::Int;
@@ -733,6 +842,98 @@ QoreListNode* QoreColumnarResult::toRows(ExceptionSink* xsink) const {
         rv->push(row.release(), xsink);
         if (*xsink) {
             return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+QoreColumnarResult* QoreColumnarResult::filter(QoreValue mask, ExceptionSink* xsink) const {
+    assert(xsink);
+    size_t mask_size = columnar_mask_size(mask, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (mask_size != row_count) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR",
+            "row mask length " QLLD " does not match columnar result row count " QLLD,
+            static_cast<int64>(mask_size), static_cast<int64>(row_count));
+        return nullptr;
+    }
+
+    size_t selected = columnar_mask_count(mask, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreColumnarResult> rv(new QoreColumnarResult, xsink);
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar result")) {
+            return nullptr;
+        }
+        const Column& column = columns[i];
+        ValueHolder data(columnar_filter_value(column.data, mask, selected, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->addColumn(column.name.c_str(), data.release(), column.column_type, column.buffer_type,
+                column.nullable, column.native_type.c_str(), xsink)) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+QoreValue QoreColumnarResult::combineMasks(QoreValue lhs, QoreValue rhs, const char* op, ExceptionSink* xsink) {
+    assert(xsink);
+    bool is_and = columnar_mask_op_is_and(op, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    size_t lhs_size = columnar_mask_size(lhs, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    size_t rhs_size = columnar_mask_size(rhs, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (lhs_size != rhs_size) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR",
+            "cannot combine row masks of different lengths: " QLLD " and " QLLD,
+            static_cast<int64>(lhs_size), static_cast<int64>(rhs_size));
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(QoreBufferElementType::Bool, false, lhs_size), xsink);
+    for (size_t i = 0; i < lhs_size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "combining columnar row masks")) {
+            return QoreValue();
+        }
+        bool selected = is_and
+            ? (columnar_mask_at(lhs, i) && columnar_mask_at(rhs, i))
+            : (columnar_mask_at(lhs, i) || columnar_mask_at(rhs, i));
+        if (rv->setEntry(i, QoreValue(selected), xsink)) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+QoreValue QoreColumnarResult::invertMask(QoreValue mask, ExceptionSink* xsink) {
+    assert(xsink);
+    size_t mask_size = columnar_mask_size(mask, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(QoreBufferElementType::Bool, false, mask_size), xsink);
+    for (size_t i = 0; i < mask_size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "inverting columnar row mask")) {
+            return QoreValue();
+        }
+        if (rv->setEntry(i, QoreValue(!columnar_mask_at(mask, i)), xsink)) {
+            return QoreValue();
         }
     }
     return rv.release();

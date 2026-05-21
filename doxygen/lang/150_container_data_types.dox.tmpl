@@ -269,6 +269,9 @@ ColumnarResult result = ds.selectColumnar(
 buffer<int64> order_ids = result.getColumn("order_id");
 buffer<float64> scores = result.getColumn("score");
 buffer<bool> active = result.getColumn("active");
+
+buffer<bool> high_active = result.combineMasks(scores >= 90.0, active == True, "&&");
+ColumnarResult selected = result.filter(high_active);
     @endcode
 
     Prepared statements can be fetched in blocks without materializing row hashes:
@@ -294,6 +297,17 @@ while (True) {
     @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" through libqore's compatibility
     fallback. The fallback preserves query behavior and converts existing hash-of-list or row-list results into a
     ColumnarResult.
+
+    The dataframe module can consume and produce ColumnarResult values directly.
+    Buffer-backed DataFrame columns are preserved for dense column access and
+    columnar export under normal Qore copy-on-write semantics:
+    @code{.py}
+%requires dataframe
+
+DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(result);
+buffer<int64> ids = df.getColumnBuffer("order_id");
+ColumnarResult again = df.toColumnarResult();
+    @endcode
 
     @note \c int8, \c int16, \c int32, \c float32, and \c float64 are storage element names for \c buffer<T>; they
     are not general scalar local-variable types.

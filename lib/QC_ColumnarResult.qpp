@@ -147,3 +147,50 @@ hash<auto> ColumnarResult::toColumnHash() [flags=RET_VALUE_ONLY] {
 list<hash<auto>> ColumnarResult::toRows() [flags=RET_VALUE_ONLY] {
     return result->toRows(xsink);
 }
+
+//! Returns a new ColumnarResult selected by a boolean row mask
+/** @param mask a \c list<bool> or \c buffer<bool> with one entry per row
+
+    @return a new ColumnarResult with only rows whose mask entry is @ref True
+
+    @par Example:
+    @code{.py}
+ColumnarResult active = result.filter(result.getColumn("status_id") == 1);
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if the mask type or length is invalid
+*/
+ColumnarResult ColumnarResult::filter(auto mask) [flags=RET_VALUE_ONLY] {
+    return qore_columnar_result_to_object(result->filter(mask, xsink), xsink);
+}
+
+//! Combines two boolean row masks and returns a dense boolean mask
+/** @param lhs first \c list<bool> or \c buffer<bool> mask
+    @param rhs second \c list<bool> or \c buffer<bool> mask
+    @param op \c "&&" for intersection or \c "||" for union
+
+    @return a \c buffer<bool> row mask
+
+    @par Example:
+    @code{.py}
+buffer<bool> active = result.getColumn("status_id") == 1;
+buffer<bool> large = result.getColumn("amount") >= 1000.0;
+ColumnarResult selected = result.filter(result.combineMasks(active, large, "&&"));
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if either mask type or length is invalid
+*/
+auto ColumnarResult::combineMasks(auto lhs, auto rhs, string op) [flags=RET_VALUE_ONLY] {
+    return QoreColumnarResult::combineMasks(lhs, rhs, op->c_str(), xsink);
+}
+
+//! Inverts a boolean row mask and returns a dense boolean mask
+/** @param mask a \c list<bool> or \c buffer<bool> row mask
+
+    @return a \c buffer<bool> row mask with each element inverted
+
+    @throw COLUMNAR-RESULT-ERROR if the mask type is invalid
+*/
+auto ColumnarResult::invertMask(auto mask) [flags=RET_VALUE_ONLY] {
+    return QoreColumnarResult::invertMask(mask, xsink);
+}

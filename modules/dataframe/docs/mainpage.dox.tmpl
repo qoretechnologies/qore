@@ -12,6 +12,8 @@
     - Typed columns: \c float64 (Eigen3-backed), \c int64, \c string, \c bool, \c date
     - Null/missing value support with per-column null masks
     - SQL-like operations: select, filter, sort, groupby, join, pivot, melt, window functions
+    - Dense column interop with \c buffer<T> and @ref Qore::SQL::ColumnarResult "ColumnarResult"
+      for SQL and pipeline workloads
     - Native plugin-operator support: \c frame["column"] for columns,
       \c frame[row] for row hashes, \c frame[start..stop] for row slices, and
       \c frame[mask] for predicate masks
@@ -103,14 +105,77 @@ printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
     rows; \c NOTHING inequality selects non-null rows. Ordered comparisons with
     \c NOTHING do not select rows.
 
+    @section dataframe_dense_columnar Dense Buffers And Columnar Results
+
+    DataFrames can be constructed from dense \c buffer<T> values for primitive
+    numeric and boolean columns. Buffer-backed columns keep a reference to the
+    original dense storage, so \c getColumnBuffer(), \c toColumnarResult(), and
+    \c fromColumnarResult() can move primitive columns between DataFrame,
+    @ref buffer "buffer<T>", and
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" without first boxing every
+    cell into a list. String and date columns currently remain list-backed.
+
+    @code{.py}
+%requires dataframe
+
+DataFrame::DataFrame scores({
+    "id": new buffer<int64>((1001, 1002, 1003, 1004)),
+    "score": new buffer<float64>((95.5, 88.0, 92.0, 81.5)),
+    "active": new buffer<bool>((True, False, True, True)),
+    "name": ("Alice", "Bob", "Carol", "Dave"),
+});
+
+buffer<int64> ids = scores.getColumnBuffer("id");
+ColumnarResult columns = scores.toColumnarResult();
+buffer<float64> dense_scores = columns.getColumn("score");
+list<string> names = columns.getColumn("name");
+
+buffer<bool> high_score = dense_scores >= 90.0;
+ColumnarResult selected_columns = columns.filter(high_score);
+DataFrame::DataFrame selected = DataFrame::DataFrame::fromColumnarResult(selected_columns);
+    @endcode
+
+    ColumnarResult masks can be composed in native code with
+    @ref Qore::SQL::ColumnarResult::combineMasks() "combineMasks()" and
+    @ref Qore::SQL::ColumnarResult::invertMask() "invertMask()". This is useful
+    when code receives typed columns dynamically and cannot rely on parse-time
+    vectorized operator resolution for a column variable:
+
+    @code{.py}
+buffer<bool> high = columns.getColumn("score") >= 90.0;
+buffer<bool> active = columns.getColumn("active") == True;
+buffer<bool> selected_mask = columns.combineMasks(high, active, "&&");
+ColumnarResult high_active = columns.filter(selected_mask);
+    @endcode
+
+    Use @ref DataFrame::DataFrame::concat() "DataFrame::concat()" with
+    \c axis:1 for horizontal concat. This shares existing column data when
+    possible and rejects mismatched row counts or duplicate output column names:
+
+    @code{.py}
+DataFrame::DataFrame left({"id": new buffer<int64>((1, 2, 3))});
+DataFrame::DataFrame right({"score": new buffer<float64>((90.0, 80.0, 70.0))});
+DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), axis: 1);
+    @endcode
+
+    DataFrame kernels still maintain the module's existing internal vectors for
+    compatibility with groupby, joins, window functions, and ML conversion.
+    Therefore source buffers are preserved for columnar export and dense column
+    access, while operations that filter, reorder, aggregate, or reshape rows
+    may allocate new column storage.
+
     @section dataframe_dataprovider_pipelines DataProvider Pipeline Integration
 
     The companion \c DataProviderDataFrame user module wraps a DataFrame as a
     DataProvider and lets DataFrames flow through
     @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in
     @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock" shape.
-    DataFrame-aware processors can keep the typed column representation; other
-    bulk-aware processors receive a hash-of-lists conversion.
+    DataFrames can also be submitted as ColumnarResult values, which the
+    pipeline treats as
+    @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" shape.
+    DataFrame-aware processors can keep DataFrameBlock representation,
+    dense-column processors can keep BufferColumns representation, and other
+    bulk-aware processors receive a hash-of-lists or row conversion.
 
     @code{.py}
 %requires DataProviderDataFrame
@@ -131,6 +196,30 @@ DataProviderPipeline pipeline(<PipelineOptionInfo>{
 pipeline.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
 pipeline.submit(employees);
 pipeline.waitDone();
+    @endcode
+
+    QoreFilterRecordsProcessor compiles simple DPQL/DataProvider scalar
+    comparisons to DataFrame row masks or dense ColumnarResult boolean masks
+    when possible. Supported compiled forms include \c &&, \c ||, \c !, and
+    scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons. Predicates
+    that use string operators, field-to-field comparisons, null literal
+    handling, or unsupported column containers fall back to the generic row
+    semantics to preserve behavior.
+
+    @code{.py}
+ColumnarResult dense_columns = employees.toColumnarResult();
+hash<DataProviderExpression> high_value = DataProvider::parseDpqlExpression(
+    "@salary >= 90000.0 && @active == true");
+
+DataProviderPipeline dense_pipeline(<PipelineOptionInfo>{
+    "name": "dense-filter",
+    "output_callback": sub (auto row) {
+        printf("%y\n", row);
+    },
+});
+dense_pipeline.append(new QoreFilterRecordsProcessor({"where_cond": high_value}));
+dense_pipeline.submit(dense_columns);
+dense_pipeline.waitDone();
     @endcode
 
     CSV option hashes can also be typed explicitly:
@@ -159,8 +248,16 @@ tsv.writeCSV("employees-copy.tsv", options);
     - native plugin-operator access with column, row, and inclusive row-range
       subscripts, plus ColumnRef comparison predicates returning RowMask
       objects accepted by \c df[mask] and \c df.filter(mask)
+    - dense \c buffer<T> column interop through DataFrame construction,
+      \c getColumnBuffer(), \c toColumnarResult(), and
+      \c fromColumnarResult(), preserving buffer-backed primitive columns under
+      Qore copy-on-write semantics where possible
+    - ColumnarResult filtering with dense boolean masks and horizontal
+      DataFrame concat with \c DataFrame::concat(axis:1)
     - integration with DataProvider pipelines through the \c DataProviderDataFrame
-      module, including DataFrame bulk reads and DataFrameBlock propagation
+      module, including DataFrame bulk reads, DataFrameBlock propagation,
+      BufferColumns propagation for ColumnarResult values, and vectorized
+      DPQL/DataProvider filter masks for supported comparisons
     - API metadata and generated Doxygen signatures identify DataFrame-returning
       operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
       @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result

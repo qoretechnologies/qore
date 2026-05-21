@@ -77,6 +77,36 @@ static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
     return ColumnType::FLOAT64;
 }
 
+static QoreColumnarColumnType columnarTypeFromDataFrameType(ColumnType type) {
+    switch (type) {
+        case ColumnType::FLOAT64:
+            return QoreColumnarColumnType::Float;
+        case ColumnType::INT64:
+            return QoreColumnarColumnType::Int;
+        case ColumnType::BOOL:
+            return QoreColumnarColumnType::Bool;
+        case ColumnType::DATE:
+            return QoreColumnarColumnType::Date;
+        case ColumnType::STRING:
+        case ColumnType::AUTO:
+        default:
+            return QoreColumnarColumnType::String;
+    }
+}
+
+static QoreBufferElementType bufferTypeFromDataFrameType(ColumnType type) {
+    switch (type) {
+        case ColumnType::FLOAT64:
+            return QoreBufferElementType::Float64;
+        case ColumnType::INT64:
+            return QoreBufferElementType::Int64;
+        case ColumnType::BOOL:
+            return QoreBufferElementType::Bool;
+        default:
+            return QoreBufferElementType::Invalid;
+    }
+}
+
 }
 
 QoreDataFrame::QoreDataFrame() {
@@ -315,6 +345,16 @@ QoreListNode* QoreDataFrame::getColumn(const std::string& name,
     return columnToQoreList(*columns[idx].data, xsink);
 }
 
+QoreBufferNode* QoreDataFrame::getColumnBuffer(const std::string& name,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    int idx = getColIdx(name, xsink);
+    if (idx < 0) {
+        return nullptr;
+    }
+    return columnToQoreBuffer(*columns[idx].data, xsink);
+}
+
 QoreHashNode* QoreDataFrame::getRow(int64_t index, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
     if (n_rows == 0) {
@@ -513,6 +553,49 @@ QoreHashNode* QoreDataFrame::toColumnHash(ExceptionSink* xsink) const {
     }
 
     return h.release();
+}
+
+QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "converting DataFrame to columnar result")) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lk(mtx);
+    ReferenceHolder<QoreColumnarResult> result(new QoreColumnarResult, xsink);
+
+    for (const auto& col : columns) {
+        if (result->numColumns() && !(result->numColumns() % 100)
+                && qore_check_cancel(xsink, "converting DataFrame to columnar result")) {
+            return nullptr;
+        }
+
+        const ColumnData& cd = *col.data;
+        QoreColumnarColumnType columnar_type = columnarTypeFromDataFrameType(cd.type);
+        QoreBufferElementType buffer_type = cd.hasDenseBuffer()
+            ? cd.dense_buffer_type : bufferTypeFromDataFrameType(cd.type);
+        bool nullable = cd.countNull() > 0;
+
+        if (buffer_type != QoreBufferElementType::Invalid) {
+            ReferenceHolder<QoreBufferNode> buffer(columnToQoreBuffer(cd, xsink), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (result->addColumn(col.name.c_str(), QoreValue(buffer.release()), columnar_type, buffer_type,
+                    nullable, "", xsink)) {
+                return nullptr;
+            }
+        } else {
+            ReferenceHolder<QoreListNode> values(columnToQoreList(cd, xsink), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (result->addColumn(col.name.c_str(), QoreValue(values.release()), columnar_type,
+                    QoreBufferElementType::Invalid, nullable, "", xsink)) {
+                return nullptr;
+            }
+        }
+    }
+
+    return result.release();
 }
 
 QoreListNode* QoreDataFrame::describe(ExceptionSink* xsink) const {
@@ -1198,6 +1281,11 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
     if (!dataframes || dataframes->empty()) {
         return new QoreDataFrame();
     }
+    if (axis != 0 && axis != 1) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "concat axis must be 0 (vertical) or 1 (horizontal), got %d", axis);
+        return nullptr;
+    }
 
     if (axis == 0) {
         // Vertical concat: stack rows, columns must match
@@ -1218,19 +1306,33 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
         size_t num_cols = first_df->columns.size();
         std::vector<std::string> col_names;
         std::vector<ColumnType> col_types;
-        for (const auto& c : first_df->columns) {
-            col_names.push_back(c.name);
-            col_types.push_back(c.data->type);
+        for (size_t c = 0; c < first_df->columns.size(); ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "preparing DataFrame concat columns")) {
+                first_df->deref(xsink);
+                return nullptr;
+            }
+            col_names.push_back(first_df->columns[c].name);
+            col_types.push_back(first_df->columns[c].data->type);
         }
 
         // Collect total rows and build column value lists
         int64_t total_rows = 0;
         std::vector<QoreListNode*> col_values(num_cols);
         for (size_t c = 0; c < num_cols; ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "initializing DataFrame concat columns")) {
+                for (size_t j = 0; j < c; ++j) { col_values[j]->deref(xsink); }
+                first_df->deref(xsink);
+                return nullptr;
+            }
             col_values[c] = new QoreListNode(autoTypeInfo);
         }
 
         for (size_t d = 0; d < dataframes->size(); ++d) {
+            if (d && !(d % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrames")) {
+                for (size_t c = 0; c < num_cols; ++c) { col_values[c]->deref(xsink); }
+                first_df->deref(xsink);
+                return nullptr;
+            }
             QoreObject* df_obj = dataframes->retrieveEntry(d).get<QoreObject>();
             if (!df_obj) {
                 for (size_t c = 0; c < num_cols; ++c) { col_values[c]->deref(xsink); }
@@ -1262,7 +1364,19 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
             }
 
             for (int64_t r = 0; r < cur_df->n_rows; ++r) {
+                if (r && !(r % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame rows")) {
+                    for (size_t j = 0; j < num_cols; ++j) { col_values[j]->deref(xsink); }
+                    if (d != 0) { cur_df->deref(xsink); }
+                    first_df->deref(xsink);
+                    return nullptr;
+                }
                 for (size_t c = 0; c < num_cols; ++c) {
+                    if (c && !(c % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame columns")) {
+                        for (size_t j = 0; j < num_cols; ++j) { col_values[j]->deref(xsink); }
+                        if (d != 0) { cur_df->deref(xsink); }
+                        first_df->deref(xsink);
+                        return nullptr;
+                    }
                     auto it = cur_df->col_index.find(col_names[c]);
                     if (it != cur_df->col_index.end()) {
                         QoreValue v = cur_df->columns[it->second].data->getValueAt(r, xsink);
@@ -1290,6 +1404,11 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
         auto* result = new QoreDataFrame();
         result->n_rows = total_rows;
         for (size_t c = 0; c < num_cols; ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "building vertically concatenated DataFrame")) {
+                for (size_t j = c; j < num_cols; ++j) { col_values[j]->deref(xsink); }
+                delete result;
+                return nullptr;
+            }
             Column col;
             col.name = col_names[c];
             col.data = buildColumnData(col_values[c], col_types[c], xsink);
@@ -1305,9 +1424,73 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
         return result;
     }
 
-    // axis == 1: horizontal concat (not yet implemented)
-    xsink->raiseException("DATAFRAME-ERROR", "horizontal concat (axis=1) not yet implemented");
-    return nullptr;
+    auto* result = new QoreDataFrame();
+    int64_t expected_rows = -1;
+
+    for (size_t d = 0; d < dataframes->size(); ++d) {
+        if (d && !(d % 100) && qore_check_cancel(xsink, "horizontally concatenating DataFrames")) {
+            delete result;
+            return nullptr;
+        }
+
+        QoreObject* df_obj = dataframes->retrieveEntry(d).get<QoreObject>();
+        if (!df_obj) {
+            delete result;
+            xsink->raiseException("DATAFRAME-ERROR",
+                "concat list element %zu is not a DataFrame", d);
+            return nullptr;
+        }
+
+        ReferenceHolder<QoreDataFrame> cur_df(static_cast<QoreDataFrame*>(
+            df_obj->getReferencedPrivateData(CID_DATAFRAME, xsink)), xsink);
+        if (!cur_df) {
+            delete result;
+            xsink->raiseException("DATAFRAME-ERROR",
+                "concat list element %zu is not a DataFrame", d);
+            return nullptr;
+        }
+
+        std::lock_guard<std::mutex> lk(cur_df->mtx);
+        if (expected_rows < 0) {
+            expected_rows = cur_df->n_rows;
+            result->n_rows = expected_rows;
+        } else if (cur_df->n_rows != expected_rows) {
+            delete result;
+            xsink->raiseException("DATAFRAME-ERROR",
+                "concat list element %zu has " QLLD " rows, expected " QLLD,
+                d, cur_df->n_rows, expected_rows);
+            return nullptr;
+        }
+
+        size_t local_col_count = 0;
+        for (const Column& src_col : cur_df->columns) {
+            if (local_col_count && !(local_col_count % 100)
+                && qore_check_cancel(xsink, "horizontally concatenating DataFrame columns")) {
+                delete result;
+                return nullptr;
+            }
+
+            if (result->col_index.count(src_col.name)) {
+                delete result;
+                xsink->raiseException("DATAFRAME-COLUMN-ERROR",
+                    "horizontal concat would create duplicate column '%s'; rename or select columns before "
+                    "concatenating", src_col.name.c_str());
+                return nullptr;
+            }
+
+            Column col;
+            col.name = src_col.name;
+            col.data = src_col.data;
+            result->col_index[col.name] = result->columns.size();
+            result->columns.push_back(std::move(col));
+            ++local_col_count;
+        }
+    }
+
+    if (expected_rows < 0) {
+        result->n_rows = 0;
+    }
+    return result;
 }
 
 QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) const {

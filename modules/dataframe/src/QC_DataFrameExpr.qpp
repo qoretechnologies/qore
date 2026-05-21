@@ -60,6 +60,24 @@ list<auto> ColumnRef::values() [flags=RET_VALUE_ONLY] {
     return col->values(xsink);
 }
 
+//! Compares the referenced column with a scalar value
+/** @param op the comparison operator: \c ==, \c !=, \c <, \c <=, \c >, or \c >=
+    @param value the scalar value to compare against
+
+    @return a RowMask selecting matching rows
+
+    This method is equivalent to using the comparison operators directly, but
+    is useful when the operator is selected dynamically.
+
+    @par Example:
+    @code{.py}
+    RowMask selected = df.column("amount").compare(">=", 100.0);
+    @endcode
+*/
+RowMask ColumnRef::compare(string op, auto value) [flags=RET_VALUE_ONLY] {
+    return makeRowMaskObject(col->compare(op->c_str(), value, xsink), getProgram(), xsink);
+}
+
 //! A bitmap mask selecting DataFrame rows
 /** Row masks are normally produced by comparing @ref ColumnRef values:
 
