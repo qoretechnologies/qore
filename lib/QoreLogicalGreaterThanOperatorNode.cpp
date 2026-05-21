@@ -145,7 +145,8 @@ int QoreLogicalGreaterThanOperatorNode::parseInitIntern(const char* name, QoreVa
 
     // check for optimizations based on type; but only if types are known on both sides, although the highest priority
     // (float) can be assigned if either side is a float
-    if (!QoreTypeInfo::isType(lti, NT_NUMBER) && !QoreTypeInfo::isType(rti, NT_NUMBER)) {
+    if (!QoreTypeInfo::parseReturns(lti, NT_BUFFER) && !QoreTypeInfo::parseReturns(rti, NT_BUFFER)
+            && !QoreTypeInfo::isType(lti, NT_NUMBER) && !QoreTypeInfo::isType(rti, NT_NUMBER)) {
         if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT))
             pfunc = &QoreLogicalGreaterThanOperatorNode::floatGreaterThan;
         else if (QoreTypeInfo::hasType(lti) && QoreTypeInfo::hasType(rti)) {
