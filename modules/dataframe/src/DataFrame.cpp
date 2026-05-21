@@ -911,55 +911,120 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
     int64_t count = (int64_t)indices.size();
     df->n_rows = count;
 
-    for (const auto& src_col : columns) {
-        auto new_data = std::make_shared<ColumnData>();
-        new_data->type = src_col.data->type;
-        new_data->n_rows = count;
-        new_data->null_mask.resize(count);
+    bool identity_selection = count == n_rows;
+    if (identity_selection) {
+        for (int64_t i = 0; i < count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame row selection")) {
+                delete df;
+                return nullptr;
+            }
+            if (indices[i] != i) {
+                identity_selection = false;
+                break;
+            }
+        }
+    }
 
-        switch (src_col.data->type) {
-            case ColumnType::FLOAT64: {
-                new_data->float_data.resize(count);
-                for (int64_t i = 0; i < count; ++i) {
-                    new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
-                    new_data->float_data(i) = src_col.data->float_data(indices[i]);
+    for (const auto& src_col : columns) {
+        if (df->columns.size() && !(df->columns.size() % 100)
+                && qore_check_cancel(xsink, "selecting DataFrame rows")) {
+            delete df;
+            return nullptr;
+        }
+
+        std::shared_ptr<ColumnData> new_data;
+        if (identity_selection) {
+            new_data = src_col.data;
+        } else if (src_col.data->hasDenseBuffer()) {
+            ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(src_col.data->dense_buffer_type,
+                src_col.data->dense_buffer->hasNullableElements(), static_cast<size_t>(count)), xsink);
+            for (int64_t i = 0; i < count; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
+                    delete df;
+                    return nullptr;
                 }
-                break;
-            }
-            case ColumnType::INT64: {
-                new_data->int_data.resize(count);
-                for (int64_t i = 0; i < count; ++i) {
-                    new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
-                    new_data->int_data[i] = src_col.data->int_data[indices[i]];
+                QoreValue value = src_col.data->dense_buffer->getReferencedEntry(static_cast<size_t>(indices[i]));
+                if (buffer->setEntry(static_cast<size_t>(i), value, xsink)) {
+                    delete df;
+                    return nullptr;
                 }
-                break;
             }
-            case ColumnType::STRING: {
-                new_data->str_data.resize(count);
-                for (int64_t i = 0; i < count; ++i) {
-                    new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
-                    new_data->str_data[i] = src_col.data->str_data[indices[i]];
+
+            new_data = buildColumnDataFromBuffer(*buffer, xsink);
+            if (*xsink) {
+                delete df;
+                return nullptr;
+            }
+        } else {
+            new_data = std::make_shared<ColumnData>();
+            new_data->type = src_col.data->type;
+            new_data->n_rows = count;
+            new_data->null_mask.resize(count);
+
+            switch (src_col.data->type) {
+                case ColumnType::FLOAT64: {
+                    new_data->float_data.resize(count);
+                    for (int64_t i = 0; i < count; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "selecting float DataFrame rows")) {
+                            delete df;
+                            return nullptr;
+                        }
+                        new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
+                        new_data->float_data(i) = src_col.data->float_data(indices[i]);
+                    }
+                    break;
                 }
-                break;
-            }
-            case ColumnType::BOOL: {
-                new_data->bool_data.resize(count);
-                for (int64_t i = 0; i < count; ++i) {
-                    new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
-                    new_data->bool_data[i] = src_col.data->bool_data[indices[i]];
+                case ColumnType::INT64: {
+                    new_data->int_data.resize(count);
+                    for (int64_t i = 0; i < count; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "selecting int DataFrame rows")) {
+                            delete df;
+                            return nullptr;
+                        }
+                        new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
+                        new_data->int_data[i] = src_col.data->int_data[indices[i]];
+                    }
+                    break;
                 }
-                break;
-            }
-            case ColumnType::DATE: {
-                new_data->date_data.resize(count);
-                for (int64_t i = 0; i < count; ++i) {
-                    new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
-                    new_data->date_data[i] = src_col.data->date_data[indices[i]];
+                case ColumnType::STRING: {
+                    new_data->str_data.resize(count);
+                    for (int64_t i = 0; i < count; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "selecting string DataFrame rows")) {
+                            delete df;
+                            return nullptr;
+                        }
+                        new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
+                        new_data->str_data[i] = src_col.data->str_data[indices[i]];
+                    }
+                    break;
                 }
-                break;
+                case ColumnType::BOOL: {
+                    new_data->bool_data.resize(count);
+                    for (int64_t i = 0; i < count; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "selecting bool DataFrame rows")) {
+                            delete df;
+                            return nullptr;
+                        }
+                        new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
+                        new_data->bool_data[i] = src_col.data->bool_data[indices[i]];
+                    }
+                    break;
+                }
+                case ColumnType::DATE: {
+                    new_data->date_data.resize(count);
+                    for (int64_t i = 0; i < count; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "selecting date DataFrame rows")) {
+                            delete df;
+                            return nullptr;
+                        }
+                        new_data->null_mask[i] = src_col.data->null_mask[indices[i]];
+                        new_data->date_data[i] = src_col.data->date_data[indices[i]];
+                    }
+                    break;
+                }
+                default:
+                    break;
             }
-            default:
-                break;
         }
 
         Column col;

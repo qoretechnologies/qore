@@ -281,6 +281,7 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
 DataFrame df({
     "id": new buffer<int64>((1, 2, 3, 4)),
     "score": new buffer<float64>((95.0, 88.0, 92.0, 75.0)),
+    "completed_at": new buffer<*int64>((1710000000, NOTHING, 1710001200, NOTHING)),
     "active": new buffer<bool>((True, False, True, True)),
 });
 
@@ -290,13 +291,14 @@ buffer<bool> selected = columns.combineMasks(
     columns.getColumn("active") == True,
     "&&");
 DataFrame filtered = DataFrame::fromColumnarResult(columns.filter(selected));
+ColumnarResult incomplete = columns.filter(columns.nullMask("completed_at"));
     @endcode
 
     DataProvider filter processors compile supported DPQL/DataProvider
     expressions over ColumnarResult blocks to dense boolean masks. Supported
     compiled predicates include \c &&, \c ||, \c !, and scalar comparison
-    operators over dense buffer columns; unsupported expressions fall back to
-    the normal row semantics:
+    operators over dense buffer columns, plus \c isNull and \c isNotNull checks;
+    unsupported expressions fall back to the normal row semantics:
 
     @code{.py}
 %requires DataProviderDataFrame
@@ -312,8 +314,9 @@ ColumnarResult filtered_columns = filter.processRecordsShape(
     This is not a promise that every DataFrame operation is zero-copy. Existing
     DataFrame kernels still keep their vector-oriented internal representation
     for joins, groupby, windows, and ML conversion. Dense source buffers are
-    preserved for columnar export and direct dense column access, while
-    filtering, ordering, aggregation, and reshaping can allocate new storage.
+    preserved for columnar export and direct dense column access. Row filtering
+    preserves primitive dense columns by creating filtered dense buffers, while
+    ordering, aggregation, and reshaping can allocate new storage.
 
     @section plugin_types_lowering Lowering Pattern Hooks
 

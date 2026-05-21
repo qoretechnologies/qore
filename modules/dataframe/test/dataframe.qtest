@@ -289,6 +289,9 @@ sub invalid_dataframe_api() {
         ids[0] = 9999;
         assertEq((1001, 1002, 1003), df.getColumnBuffer("id").toList(),
             "buffer-backed DataFrame columns follow buffer copy-on-write semantics");
+        DataFrame::DataFrame filtered_df = df.filter(df.column("id").compare(">=", 1002));
+        assertEq((1002, 1003), filtered_df.getColumnBuffer("id").toList(),
+            "filtered buffer-backed DataFrame columns remain dense");
         assertThrows("DATAFRAME-COLUMN-ERROR", \df.getColumnBuffer(), ("name",),
             "string columns are not exposed as dense buffers");
 
@@ -553,6 +556,7 @@ sub invalid_dataframe_api() {
 %endif
         DataFrame::DataFrame df({
             "id": new buffer<int64>((1, 2, 3, 4)),
+            "segment": new buffer<int64>((1, 1, 2, 2)),
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
             "name": ("Alice", "Bob", "Carol", "Dave"),
         });
@@ -572,6 +576,17 @@ sub invalid_dataframe_api() {
             "ColumnarResult::combineMasks intersects dense masks");
         assertEq((1,), result.filter(result.invertMask(amount_mask)).getColumn("id").toList(),
             "ColumnarResult::invertMask inverts dense masks");
+
+        DataFrame::DataFrame nullable_df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "optional_id": new buffer<*int64>((10, NOTHING, 30, NOTHING)),
+        });
+        auto nullable_result = nullable_df.toColumnarResult();
+        assertEq((2, 4), nullable_result.filter(nullable_result.nullMask("optional_id")).getColumn("id").toList(),
+            "ColumnarResult::nullMask selects null dense-buffer rows");
+        assertEq((1, 3), nullable_result.filter(nullable_result.nullMask("optional_id", True)).getColumn("id").toList(),
+            "ColumnarResult::nullMask can select non-null dense-buffer rows");
+
         assertThrows("COLUMNAR-RESULT-ERROR", \result.filter(), (new buffer<int64>((1, 0, 1, 0)),),
             "ColumnarResult::filter rejects non-boolean buffers as masks");
     }
@@ -1051,6 +1066,8 @@ sub invalid_dataframe_api() {
 %endif
         DataFrame::DataFrame df({
             "id": new buffer<int64>((1, 2, 3, 4)),
+            "segment": new buffer<int64>((1, 1, 2, 2)),
+            "optional_id": new buffer<*int64>((10, NOTHING, 30, NOTHING)),
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
             "name": ("Alice", "Bob", "Carol", "Dave"),
         });
@@ -1063,6 +1080,8 @@ sub invalid_dataframe_api() {
 
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),
+            "segment": new buffer<int64>((1, 1, 2, 2)),
+            "optional_id": new buffer<*int64>((10, NOTHING, 30, NOTHING)),
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
             "active": new buffer<bool>((True, False, True, True)),
         };
@@ -1106,6 +1125,48 @@ sub invalid_dataframe_api() {
             "hash-of-buffers filter returns BufferColumns shape");
         assertEq((3, 4), raw_filtered.getColumn("id").toList(),
             "hash-of-buffers filter uses dense BufferColumns path");
+
+        hash<DataProviderExpression> null_expr = <DataProviderExpression>{
+            "exp": DP_OP_IS_NULL,
+            "args": (<DataProviderFieldReference>{"field": "optional_id"},),
+        };
+        QoreFilterRecordsProcessor null_proc({"where_cond": null_expr});
+        assertEq((2, 4), null_proc.processRecordsShape(columns, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports isNull masks");
+
+        hash<DataProviderExpression> not_null_expr = <DataProviderExpression>{
+            "exp": DP_OP_IS_NOT_NULL,
+            "args": (<DataProviderFieldReference>{"field": "optional_id"},),
+        };
+        QoreFilterRecordsProcessor not_null_proc({"where_cond": not_null_expr});
+        assertEq((1, 3), not_null_proc.processRecordsShape(raw_buffers, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "hash-of-buffers vectorized filter supports isNotNull masks");
+
+        QoreGroupByProcessor grouper({
+            "group_by": "segment",
+            "aggregates": "orders=count(),total=sum(amount),first_name=first(name)",
+        });
+        assertTrue(grouper.supportsInputShape(DataProviderShape::BufferColumns),
+            "group-by processor supports BufferColumns input");
+        *auto group_result = grouper.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertNothing(group_result, "BufferColumns group-by accumulates without immediate output");
+        list<auto> grouped_blocks;
+        grouper.flush(sub (auto block) {
+            push grouped_blocks, block;
+        });
+        assertEq(1, grouped_blocks.size(), "BufferColumns group-by flush emits one block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(grouped_blocks[0]),
+            "BufferColumns group-by preserves BufferColumns shape");
+        DataFrame::DataFrame grouped_df = AbstractDataProcessor::convertShape(
+            grouped_blocks[0], DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0].sortBy(("segment",));
+        assertEq((1, 2), grouped_df.getColumnBuffer("segment").toList(),
+            "BufferColumns group-by keeps dense group keys");
+        assertEq((2, 2), grouped_df.getColumnBuffer("orders").toList(),
+            "BufferColumns group-by computes dense counts");
+        assertEq((310.0, 305.0), grouped_df.getColumnBuffer("total").toList(),
+            "BufferColumns group-by computes dense sums");
+        assertEq(("Alice", "Carol"), grouped_df.getColumn("first_name"),
+            "BufferColumns group-by reads list columns without row materialization");
 
         hash<DataProviderExpression> or_expr = <DataProviderExpression>{
             "exp": "||",

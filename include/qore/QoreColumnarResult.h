@@ -133,6 +133,9 @@ public:
     //! Inverts a boolean row mask and returns a dense buffer<bool> mask.
     DLLEXPORT static QoreValue invertMask(QoreValue mask, ExceptionSink* xsink);
 
+    //! Returns a dense buffer<bool> mask selecting null or non-null values in a column.
+    DLLEXPORT QoreValue nullMask(const char* name, bool invert, ExceptionSink* xsink) const;
+
     //! Returns a referenced column container by name.
     DLLEXPORT QoreValue getColumnValue(const char* name, ExceptionSink* xsink) const;
 

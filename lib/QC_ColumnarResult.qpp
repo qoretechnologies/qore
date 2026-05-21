@@ -194,3 +194,21 @@ auto ColumnarResult::combineMasks(auto lhs, auto rhs, string op) [flags=RET_VALU
 auto ColumnarResult::invertMask(auto mask) [flags=RET_VALUE_ONLY] {
     return QoreColumnarResult::invertMask(mask, xsink);
 }
+
+//! Returns a dense boolean mask for null or non-null values in a column
+/** @param name column name
+    @param invert when @ref True, selects non-null values instead of null values
+
+    @return a \c buffer<bool> row mask
+
+    @par Example:
+    @code{.py}
+ColumnarResult incomplete = result.filter(result.nullMask("completed_at"));
+ColumnarResult complete = result.filter(result.nullMask("completed_at", True));
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if the column does not exist
+*/
+auto ColumnarResult::nullMask(string name, *bool invert) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return result->nullMask(name->c_str(), invert ? static_cast<bool>(invert) : false, xsink);
+}

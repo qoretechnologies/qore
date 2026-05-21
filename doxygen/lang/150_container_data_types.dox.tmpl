@@ -272,7 +272,12 @@ buffer<bool> active = result.getColumn("active");
 
 buffer<bool> high_active = result.combineMasks(scores >= 90.0, active == True, "&&");
 ColumnarResult selected = result.filter(high_active);
+ColumnarResult missing_scores = result.filter(result.nullMask("score"));
     @endcode
+
+    @ref Qore::SQL::ColumnarResult::nullMask() "ColumnarResult::nullMask()" returns a dense
+    \c buffer<bool> mask for null or non-null values, so nullable dense columns can be filtered without
+    materializing rows.
 
     Prepared statements can be fetched in blocks without materializing row hashes:
     @code{.py}

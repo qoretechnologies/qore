@@ -737,8 +737,9 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     Supported shapes are:
     - @ref DataProvider::DataProviderShape::RowRecords "RowRecords": one logical row at a time
     - @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists": bulk record blocks in hash-of-lists form
-    - @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns": reserved for future dense typed-column
-      blocks
+    - @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns": dense column blocks represented by
+      @ref Qore::SQL::ColumnarResult "ColumnarResult" objects or hashes whose values are typed \c buffer<T>
+      columns
     - @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock": a \c DataFrame object block from the
       \c dataframe module
 
@@ -750,8 +751,9 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     supports it; otherwise they convert with
     @ref DataProvider::AbstractDataProcessor::convertShape() "AbstractDataProcessor::convertShape()".
     \c DataFrameBlock values convert to \c HashOfLists with \c df.toColumnHash() and to row records with
-    \c df.toRecords().  \c BufferColumns currently uses the same carrier as \c HashOfLists until dense buffers are
-    implemented.
+    \c df.toRecords().  \c DataFrameBlock values convert to \c BufferColumns with \c df.toColumnarResult().
+    \c BufferColumns values convert back to rows or hash-of-lists for processors that do not yet support dense
+    columns directly.
 
     @par DataFrame Pipeline Example
     @code{.py}
@@ -792,11 +794,13 @@ pipeline.waitDone();
 
     @note
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
-    \c DataFrameBlock directly and evaluates simple comparison and conjunction filters through DataFrame filtering.
-    More complex expressions fall back to row-record evaluation while preserving the resulting DataFrame shape.
+    \c DataFrameBlock and \c BufferColumns directly.  Supported comparisons, null checks, and boolean
+    combinations compile to DataFrame row masks or dense ColumnarResult \c buffer<bool> masks.  More complex
+    expressions fall back to row-record evaluation while preserving the negotiated shape when possible.
     @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" supports \c DataFrameBlock and
-    \c HashOfLists input as well; it accumulates logical rows from the block and, when used through pipeline
-    \c flush(), preserves a DataFrame or hash-of-lists aggregate block for downstream shape-aware processors.
+    \c BufferColumns input as well; it accumulates logical rows from the block and, when used through pipeline
+    \c flush(), preserves a DataFrame, ColumnarResult, or hash-of-lists aggregate block for downstream
+    shape-aware processors.
     Direct calls to \c flushRecords() still return ordinary row records for compatibility.
 
     @section dataprovider_debugging Debugging Data Providers
@@ -1110,13 +1114,14 @@ if (errors) {
     @subsection dataprovider_v3_5 DataProvider v3.5
     - added @ref DataProvider::DataProviderShape "DataProviderShape" and shape-aware pipeline APIs on
       @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" for row records, hash-of-lists bulk blocks,
-      reserved buffer-column blocks, and DataFrame blocks
+      dense buffer-column blocks, and DataFrame blocks
     - added automatic DataProvider pipeline shape routing and conversion with row-record boundary preservation for
       legacy \c submitImpl() processors
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
-      \c DataFrameBlock input directly for simple comparison and conjunction predicates
-    - updated @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to process hash-of-lists and
-      DataFrame blocks directly and preserve shaped aggregate blocks on pipeline flush
+      \c DataFrameBlock and \c BufferColumns input directly for supported comparisons, boolean combinations, and
+      null checks
+    - updated @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to process hash-of-lists,
+      \c BufferColumns, and DataFrame blocks directly and preserve shaped aggregate blocks on pipeline flush
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and

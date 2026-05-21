@@ -280,6 +280,11 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
             return;
         }
 
+        *string null_field = getNullCheckField(expr, op);
+        if (null_field) {
+            return df.column(null_field).compare(op == DP_OP_IS_NULL ? "==" : "!=", NOTHING);
+        }
+
         *hash<auto> comparison = getDataFrameComparison(expr, op);
         if (!comparison) {
             return;
@@ -341,6 +346,11 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
             return;
         }
 
+        *string null_field = getNullCheckField(expr, op);
+        if (null_field) {
+            return records.nullMask(null_field, op == DP_OP_IS_NOT_NULL);
+        }
+
         *hash<auto> comparison = getDataFrameComparison(expr, op);
         if (!comparison || !exists comparison.value || comparison.value.typeCode() == NT_NULL) {
             return;
@@ -370,6 +380,18 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
                 return column <= value;
         }
         return;
+    }
+
+    #! Returns the field name for a unary null-check expression, if supported
+    private *string getNullCheckField(hash<DataProviderExpression> expr, string op) {
+        if (op != DP_OP_IS_NULL && op != DP_OP_IS_NOT_NULL) {
+            return;
+        }
+        if (expr.args.size() != 1 || !(expr.args[0] instanceof hash<DataProviderFieldReference>)) {
+            return;
+        }
+        string field = expr.args[0].field;
+        return field.find(".") < 0 ? field : NOTHING;
     }
 
     #! Returns vectorizable DataFrame comparison information, if supported

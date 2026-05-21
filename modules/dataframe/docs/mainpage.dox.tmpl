@@ -137,7 +137,9 @@ DataFrame::DataFrame selected = DataFrame::DataFrame::fromColumnarResult(selecte
 
     ColumnarResult masks can be composed in native code with
     @ref Qore::SQL::ColumnarResult::combineMasks() "combineMasks()" and
-    @ref Qore::SQL::ColumnarResult::invertMask() "invertMask()". This is useful
+    @ref Qore::SQL::ColumnarResult::invertMask() "invertMask()". Nullable columns can use
+    @ref Qore::SQL::ColumnarResult::nullMask() "nullMask()" to build dense masks without row
+    materialization. This is useful
     when code receives typed columns dynamically and cannot rely on parse-time
     vectorized operator resolution for a column variable:
 
@@ -146,6 +148,7 @@ buffer<bool> high = columns.getColumn("score") >= 90.0;
 buffer<bool> active = columns.getColumn("active") == True;
 buffer<bool> selected_mask = columns.combineMasks(high, active, "&&");
 ColumnarResult high_active = columns.filter(selected_mask);
+ColumnarResult missing_scores = columns.filter(columns.nullMask("score"));
     @endcode
 
     Use @ref DataFrame::DataFrame::concat() "DataFrame::concat()" with
@@ -161,8 +164,9 @@ DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), axis
     DataFrame kernels still maintain the module's existing internal vectors for
     compatibility with groupby, joins, window functions, and ML conversion.
     Therefore source buffers are preserved for columnar export and dense column
-    access, while operations that filter, reorder, aggregate, or reshape rows
-    may allocate new column storage.
+    access. Row filtering preserves primitive buffer-backed columns by creating
+    filtered dense buffers, while operations that reorder, aggregate, or reshape
+    rows may allocate new column storage.
 
     @section dataframe_dataprovider_pipelines DataProvider Pipeline Integration
 
@@ -201,10 +205,10 @@ pipeline.waitDone();
     QoreFilterRecordsProcessor compiles simple DPQL/DataProvider scalar
     comparisons to DataFrame row masks or dense ColumnarResult boolean masks
     when possible. Supported compiled forms include \c &&, \c ||, \c !, and
-    scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons. Predicates
-    that use string operators, field-to-field comparisons, null literal
-    handling, or unsupported column containers fall back to the generic row
-    semantics to preserve behavior.
+    scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, plus
+    \c isNull and \c isNotNull checks. Predicates that use string operators,
+    field-to-field comparisons, null literal comparisons, or unsupported column
+    containers fall back to the generic row semantics to preserve behavior.
 
     @code{.py}
 ColumnarResult dense_columns = employees.toColumnarResult();

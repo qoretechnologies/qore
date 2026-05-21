@@ -284,6 +284,124 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         }
     }
 
+    #! Returns True if a field can be read from a column block without row materialization
+    private bool isColumnBlockField(string field) {
+        return field.find(".") < 0;
+    }
+
+    #! Returns True if all configured group and aggregate fields can use column-block accumulation
+    private bool canUseColumnBlockAccumulator() {
+        foreach string field in (group_by_fields) {
+            if (!isColumnBlockField(field)) {
+                return False;
+            }
+        }
+        foreach hash<GroupByAggSpec> spec in (agg_specs) {
+            if (spec.field && !isColumnBlockField(spec.field)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Returns the value at a logical row from a list, buffer, or scalar column
+    static *auto getColumnBlockValue(auto column, int index) {
+        switch (column.typeCode()) {
+            case NT_LIST:
+            case NT_BUFFER:
+                return column[index];
+        }
+        return column;
+    }
+
+    #! Accumulates a hash of list/buffer/scalar columns directly by row index
+    private bool accumulateColumnBlock(hash<auto> columns) {
+        if (!canUseColumnBlockAccumulator()) {
+            return False;
+        }
+
+        int row_count = AbstractDataProcessor::shapeRecordCount(columns);
+        for (int i = 0; i < row_count; ++i) {
+            hash<auto> gv;
+            bool skip_row = False;
+            foreach string field in (group_by_fields) {
+                if (!columns.hasKey(field)) {
+                    skip_row = True;
+                    break;
+                }
+                gv{field} = getColumnBlockValue(columns{field}, i);
+            }
+            if (skip_row) {
+                continue;
+            }
+
+            string key = group_by_fields ? sprintf("%y", gv) : "";
+            if (!groups.hasKey(key)) {
+                groups{key} = {
+                    "group_values": gv,
+                    "record_count": 0,
+                    "agg": initAccumulators(),
+                };
+            }
+
+            hash<auto!> grp = groups{key};
+            grp.record_count++;
+            hash<auto!> agg = grp.agg;
+
+            foreach hash<GroupByAggSpec> spec in (agg_specs) {
+                if (spec.op == "count") {
+                    continue;
+                }
+                if (!columns.hasKey(spec.field)) {
+                    continue;
+                }
+
+                string agg_key = spec.output_name;
+                hash<auto!> acc = agg{agg_key};
+                auto value = getColumnBlockValue(columns{spec.field}, i);
+                if (spec.op == "first") {
+                    if (!acc.set) {
+                        acc.value = value;
+                        acc.set = True;
+                    }
+                } else if (spec.op == "last") {
+                    acc.value = value;
+                    acc.set = True;
+                } else {
+                    *float fval = coerceNumeric(value);
+                    if (!exists fval) {
+                        continue;
+                    }
+                    if (spec.op == "sum" || spec.op == "avg") {
+                        acc.sum = acc.sum.toFloat() + fval;
+                        acc.count = acc.count.toInt() + 1;
+                    } else if (spec.op == "min") {
+                        if (!acc.initialized || fval < acc.val.toFloat()) {
+                            acc.val = fval;
+                            acc.initialized = True;
+                        }
+                    } else if (spec.op == "max") {
+                        if (!acc.initialized || fval > acc.val.toFloat()) {
+                            acc.val = fval;
+                            acc.initialized = True;
+                        }
+                    }
+                }
+                agg{agg_key} = acc;
+            }
+
+            grp.agg = agg;
+            groups{key} = grp;
+        }
+
+        return True;
+    }
+
+    #! Accumulates a dense ColumnarResult directly by row index
+    private bool accumulateColumnarResult(auto records) {
+        return accumulateColumnBlock(records.toColumnHash());
+    }
+
     #! Builds one result record per group with computed aggregates
     private *list<auto> buildFlushRows() {
         if (!configured || !groups) {
@@ -358,8 +476,10 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                 case DataProviderShape::DataFrameBlock:
                     enqueue(result);
                     return;
-                case DataProviderShape::HashOfLists:
                 case DataProviderShape::BufferColumns:
+                    enqueue(result.toColumnarResult());
+                    return;
+                case DataProviderShape::HashOfLists:
                     enqueue(result.toColumnHash());
                     return;
                 case DataProviderShape::RowRecords:
@@ -382,8 +502,10 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             case DataProviderShape::DataFrameBlock:
                 enqueue(dataframe_class.newObject(results));
                 return;
-            case DataProviderShape::HashOfLists:
             case DataProviderShape::BufferColumns:
+                enqueue(AbstractDataProcessor::getDataFrameClass().newObject(results).toColumnarResult());
+                return;
+            case DataProviderShape::HashOfLists:
                 enqueue(AbstractDataProcessor::recordsToHashList(results));
                 return;
             case DataProviderShape::RowRecords:
@@ -423,9 +545,28 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                 accumulateHashOfLists(records.toColumnHash());
                 return;
             case DataProviderShape::HashOfLists:
-            case DataProviderShape::BufferColumns:
                 updatePendingOutputShape(DataProviderShape::HashOfLists);
-                accumulateHashOfLists(records);
+                if (!accumulateColumnBlock(records)) {
+                    accumulateHashOfLists(records);
+                }
+                return;
+            case DataProviderShape::BufferColumns:
+                updatePendingOutputShape(DataProviderShape::BufferColumns);
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    if (!groups.size() && !exists pending_dataframe_native_result) {
+                        auto df = AbstractDataProcessor::getDataFrameClass().newObject(records.toColumnHash());
+                        *auto native_result = tryNativeDataFrameAggregate(df);
+                        if (exists native_result) {
+                            pending_dataframe_native_result = native_result;
+                            return;
+                        }
+                    }
+                    if (!accumulateColumnarResult(records)) {
+                        accumulateHashOfLists(AbstractDataProcessor::recordsToHashList(records.toRows()));
+                    }
+                } else if (!accumulateColumnBlock(records)) {
+                    accumulateHashOfLists(AbstractDataProcessor::bufferColumnsToHashList(records));
+                }
                 return;
             case DataProviderShape::RowRecords:
                 return processRecordImpl(records);
@@ -443,7 +584,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
     /** @since DataProvider 3.5
     */
     private list<DataProviderShape> supportedInputShapesImpl() {
-        return (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns supported output shapes
@@ -454,7 +596,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         @since DataProvider 3.5
     */
     private list<DataProviderShape> supportedOutputShapesImpl() {
-        return (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns True when a field name can be evaluated directly by DataFrame native methods

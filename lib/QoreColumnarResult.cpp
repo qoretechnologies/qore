@@ -493,6 +493,18 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
     return QoreValue();
 }
 
+static bool columnar_value_is_null(QoreValue value, size_t index) {
+    switch (value.getType()) {
+        case NT_LIST:
+            return value.get<const QoreListNode>()->retrieveEntry(index).isNullOrNothing();
+        case NT_BUFFER:
+            return value.get<const QoreBufferNode>()->getReferencedEntry(index).isNullOrNothing();
+        default:
+            assert(false);
+            return true;
+    }
+}
+
 static bool columnar_mask_op_is_and(const char* op, ExceptionSink* xsink) {
     if (!op) {
         xsink->raiseException("COLUMNAR-RESULT-ERROR",
@@ -933,6 +945,30 @@ QoreValue QoreColumnarResult::invertMask(QoreValue mask, ExceptionSink* xsink) {
             return QoreValue();
         }
         if (rv->setEntry(i, QoreValue(!columnar_mask_at(mask, i)), xsink)) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+QoreValue QoreColumnarResult::nullMask(const char* name, bool invert, ExceptionSink* xsink) const {
+    assert(xsink);
+    const Column* column = findColumn(name);
+    if (!column) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR", "column '%s' does not exist", name);
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(QoreBufferElementType::Bool, false, row_count), xsink);
+    for (size_t i = 0; i < row_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building columnar null mask")) {
+            return QoreValue();
+        }
+        bool selected = columnar_value_is_null(column->data, i);
+        if (invert) {
+            selected = !selected;
+        }
+        if (rv->setEntry(i, QoreValue(selected), xsink)) {
             return QoreValue();
         }
     }
