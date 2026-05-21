@@ -1161,6 +1161,35 @@ public class HttpListenerInterface inherits AbstractLogger {
         context hash is removed entirely
     */
     abstract auto removeUserThreadContext(*string k);
+
+    #! Force-closes the persistent session for the given connection
+    /** Pushes a \c "close" entry into the dedicated persistent-handler
+        queue identified by \c uh, unblocking the dedicated handler thread
+        if it is currently waiting in @c Queue::get().  The dedicated thread
+        then exits the persistent loop and its @c on_exit block runs the
+        normal cleanup path (@c removeUserThreadContext() +
+        @c persistentClosed()), releasing any handler-attached user thread
+        context on the correct (listener) thread.
+
+        Intended for handlers that need to terminate a specific persistent
+        session immediately from outside the dedicated thread — e.g. a
+        cooperative-abort path that has released a per-session resource
+        and wants the framework to tear down the dedicated thread now
+        rather than wait for socket close or idle TTL.
+
+        The default implementation is a no-op so listener subclasses that
+        do not support dedicated persistent sessions can leave it
+        unchanged; concrete subclasses backed by a persistent-queue
+        controller override this and delegate to the controller's
+        per-connection close signal.
+
+        @param uh the connection unique hash (e.g. @c cx.id) identifying
+            the persistent session to close
+    */
+    signalPersistentSessionClose(softstring uh) {
+        # no implementation in the base class — listeners that support
+        # dedicated persistent sessions override this
+    }
 }
 
 # for backwared compatibility, calls to deprecated methods are made below

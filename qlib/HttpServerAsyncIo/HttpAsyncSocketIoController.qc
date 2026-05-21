@@ -605,9 +605,17 @@ public class HttpAsyncSocketIoController {
     /** Called when a connection closes so that dedicated handler pool
         threads blocked on Queue::get() are unblocked and can exit cleanly.
 
+        Also callable from outside the framework (e.g. from
+        @ref HttpServer::HttpListener::signalPersistentSessionClose())
+        when a cooperative-abort path needs to terminate a specific
+        persistent session immediately rather than wait for socket close
+        or idle TTL.  Safe to call from any thread and idempotent: a
+        no-op if no queue is registered under @c uh (e.g. the dedicated
+        thread has already exited).
+
         @param uh the connection unique hash
     */
-    private signalPersistentQueuesForConnection(string uh) {
+    signalPersistentQueuesForConnection(string uh) {
         persistent_queue_mutex.lock();
         on_exit persistent_queue_mutex.unlock();
         if (persistent_queues{uh}) {
