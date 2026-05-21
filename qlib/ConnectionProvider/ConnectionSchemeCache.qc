@@ -125,6 +125,8 @@ public class ConnectionSchemeCache {
 
             "deel": "DeelRestClient",
 
+            "deepgram": "DeepgramRestClient",
+
             "deepseek": "DeepSeekRestClient",
 
             "discord": "DiscordRestClient",

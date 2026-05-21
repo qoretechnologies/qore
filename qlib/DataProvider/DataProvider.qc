@@ -116,6 +116,7 @@ public class DataProvider {
             "dataframe": "DataProviderDataFrame",
             "db": "DbDataProvider",
             "deel": "DeelDataProvider",
+            "deepgram": "DeepgramDataProvider",
             "deepseek": "DeepSeekDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",

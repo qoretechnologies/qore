@@ -1,0 +1,168 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore DeepgramDataProvider module definition
+
+/*  DeepgramDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) DeepgramRestClient
+%requires RestClientIo
+
+module DeepgramDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Deepgram speech services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new DeepgramDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": DeepgramDataProvider::AppName,
+            "display_name": "Deepgram",
+            "short_desc": "Deepgram speech (ASR + TTS) services",
+            "desc": "Provides access to [Deepgram](https://deepgram.com) — a "
+                "speech AI platform offering automatic speech recognition (ASR) "
+                "and text-to-speech (TTS) APIs.\n\n"
+                "**Common use cases**:\n"
+                "- **Transcription**: convert recorded audio (PSTN calls, meeting "
+                "recordings, podcasts) into searchable text with the Nova model "
+                "family\n"
+                "- **Voice synthesis**: generate natural-sounding speech from "
+                "text via the Aura voice models — for voice agents, IVR, and "
+                "accessibility\n"
+                "- **Conversational AI**: pair Deepgram TTS with any LLM to "
+                "build end-to-end voice conversation pipelines",
+            "scheme": "deepgram",
+            "logo": DeepgramLogo,
+            "logo_file_name": "deepgram-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (
+                DataProvider::AppGroup::AiLlm,
+                DataProvider::AppGroup::Speech,
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeepgramDataProvider::AppName,
+            "path": "/transcribe-file",
+            "action": "transcribe-file",
+            "display_name": "Transcribe File",
+            "short_desc": "Transcribe an audio file by URL via Deepgram ASR",
+            "desc": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint "
+                "and returns the JSON transcript.  Supports the Nova model family "
+                "with smart formatting, diarization, summarization, and "
+                "language detection.\n\n"
+                "**Note**: this action submits via URL only.  For raw-audio uploads "
+                "and realtime WebSocket streaming, use "
+                "@ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" "
+                "directly.",
+            "action_code": DPAT_API,
+            "groups": ("Speech Recognition",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DeepgramTranscribeFileRequestDataType::Fields{"url",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DeepgramTranscribeFileRequestDataType::Fields{
+                    "model", "language", "smart_format", "diarize",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DeepgramTranscribeFileRequestDataType::Fields - (
+                    "url", "model", "language", "smart_format", "diarize",
+                )
+            ),
+            "output_type": DeepgramTranscribeFileDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeepgramDataProvider::AppName,
+            "path": "/synthesize-speech",
+            "action": "synthesize-speech",
+            "display_name": "Synthesize Speech",
+            "short_desc": "Synthesize speech from text via Deepgram TTS (Aura models)",
+            "desc": "Posts text to Deepgram's `/v1/speak` endpoint and returns the "
+                "audio bytes in the requested encoding.  Uses the Aura voice model "
+                "family (12+ voices in English plus other languages).",
+            "action_code": DPAT_API,
+            "groups": ("Speech Synthesis",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DeepgramSynthesizeSpeechRequestDataType::Fields{"text",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DeepgramSynthesizeSpeechRequestDataType::Fields{
+                    "model", "encoding",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DeepgramSynthesizeSpeechRequestDataType::Fields - (
+                    "text", "model", "encoding",
+                )
+            ),
+            "output_type": DeepgramSynthesizeSpeechDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage DeepgramDataProvider Module
+
+    @tableofcontents
+
+    @section deepgramdataproviderintro DeepgramDataProvider Introduction
+
+    The %DeepgramDataProvider module provides a data provider API for
+    [Deepgram](https://deepgram.com) speech services.
+
+    Two DPAT_API actions are registered:
+    - `transcribe-file` — submit an audio URL to `/v1/listen` and receive
+      a JSON transcript (Nova model family, smart format, diarization,
+      summarization, language detection)
+    - `synthesize-speech` — submit text to `/v1/speak` and receive audio
+      bytes (Aura voice models, MP3/WAV/Opus/FLAC encodings)
+
+    @par WebSocket streaming
+
+    Deepgram's realtime streaming endpoints (live transcription and live
+    TTS) are not exposed via this data provider; they require WebSocket
+    connectivity rather than request/response REST.  See
+    @ref deepgramrestclientintro "DeepgramRestClient" for direct API access.
+
+    @section DeepgramDataProviderRelnotes Release Notes
+
+    @subsection DeepgramDataProviderv1_0 DeepgramDataProvider v1.0
+    - the initial version of the %DeepgramDataProvider module
+*/
+
+#! contains all public definitions in the DeepgramDataProvider module
+public namespace DeepgramDataProvider {
+#! Deepgram application name
+public const AppName = "Deepgram";
+}
+
+#! App logo loaded from file
+public const DeepgramLogo = File::readTextFile(get_script_dir() + "/deepgram-logo.svg");

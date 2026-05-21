@@ -1785,6 +1785,17 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key (Bearer token) authentication
       - provides DeelRestConnection for connection management with \c deel:// URL scheme
 
+    - @ref deepgramdataproviderintro "DeepgramDataProvider" module
+      - new module providing a data provider API for <a href="https://deepgram.com">Deepgram</a> speech services
+      - exposes two actions: `transcribe-file` (POST URL to `/v1/listen` and return JSON transcript with the Nova model family) and `synthesize-speech` (POST text to `/v1/speak` and return audio bytes from the Aura voice models)
+      - action catalog integration with 2 actions under the \c deepgram scheme; registered with the new `Speech & Voice` AppGroup
+      - WebSocket streaming (live ASR + live TTS) is deferred to a follow-up release
+
+    - @ref deepgramrestclientintro "DeepgramRestClient" module
+      - new module providing a REST client for <a href="https://deepgram.com">Deepgram</a> speech services
+      - supports API key authentication via the `Authorization: Token` header (Deepgram's non-Bearer auth format)
+      - provides DeepgramRestConnection for connection management with \c deepgram:// URL scheme
+
     - @ref deepseekdataproviderintro "DeepSeekDataProvider" module
       - new module providing a data provider API for <a href="https://platform.deepseek.com">DeepSeek</a> chat models
       - exposes the OpenAI-compatible `/v1/chat/completions` endpoint as a `chat-completion` action
