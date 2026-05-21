@@ -415,6 +415,7 @@ public class LlmProviderRegistry {
             "groq":          "GroqRestClient",
             "together":      "TogetherRestClient",
             "fireworks":     "FireworksRestClient",
+            "ollama":        "OllamaRestClient",
         };
     }
 

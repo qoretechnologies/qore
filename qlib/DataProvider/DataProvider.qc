@@ -231,6 +231,7 @@ public class DataProvider {
             "groq": "GroqDataProvider",
             "together": "TogetherDataProvider",
             "fireworks": "FireworksDataProvider",
+            "ollama": "OllamaDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",

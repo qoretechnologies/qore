@@ -639,6 +639,7 @@ public class RagProviderRegistry {
             "vertex-ai":  "VertexAiRestClient",
             "together":   "TogetherRestClient",
             "fireworks":  "FireworksRestClient",
+            "ollama":     "OllamaRestClient",
         };
 
         #! Map of reranker backend names to providing modules

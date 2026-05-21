@@ -2141,6 +2141,18 @@ cargo install tree-sitter-cli@0.26.5
       - provides OneDriveRestConnection for connection management with \c onedrive:// URL scheme
       - supports OAuth2 with tenant-aware authentication and RestClientIo async pattern
 
+    - @ref ollamadataproviderintro "OllamaDataProvider" module
+      - new module providing a data provider API for <a href="https://ollama.com">Ollama</a> local-first LLM runtimes
+      - exposes three actions: `chat-completion` (OpenAI-compatible), `create-embeddings` (Ollama's native `/api/embed`), and `list-models` (`/api/tags`)
+      - action catalog integration with 3 actions under the \c ollama scheme
+
+    - @ref ollamarestclientintro "OllamaRestClient" module
+      - new module providing a REST client for <a href="https://ollama.com">Ollama</a> local-first LLM runtimes
+      - no authentication required for local deployments; supports optional Bearer token for Ollama Cloud / proxied deployments
+      - subclasses @ref openairestclientintro "OpenAiLlmProvider" for chat (uses Ollama's OpenAI-compat surface); registers an `ollama` embedder backend that uses Ollama's native `/api/embed` for richer response detail
+      - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c ollama
+      - provides OllamaRestConnection for connection management with \c ollama:// URL scheme
+
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
       - new @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator" class for generating OpenAPI 3.0.3 schemas from Qore source code

@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/OllamaRestClient.qm
+
+%exec-class OllamaRestClientTest
+
+public class OllamaRestClientTest inherits QUnit::Test {
+    constructor() : Test("OllamaRestClient Test", "1.0") {
+        addTestCase("connection scheme registered + no required apikey",
+            \connectionSchemeTest());
+        addTestCase("LLM factory registered + lazy-loadable",
+            \llmFactoryTest());
+        addTestCase("Embedder factory registered (no api_key required)",
+            \embedderFactoryTest());
+        addTestCase("LLM provider applies localhost default URL",
+            \defaultUrlTest());
+        addTestCase("default chat path is OpenAI shape",  \chatPathTest());
+        addTestCase("REST client options DON'T default to /v1 path",
+            \restOptionsTest());
+        addTestCase("apikey is optional (local Ollama needs no auth)",
+            \optionalApiKeyTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("ollama");
+        assertEq("Ollama Local LLM Connection", info.display_name);
+        assertTrue(info.schemes.ollama);
+        # apikey is NOT required for Ollama (local runtime needs no auth)
+        assertEq(NOTHING, info.required_options);
+    }
+
+    private llmFactoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("ollama");
+        assertEq("ollama", f.getMode());
+        assertEq("Ollama local-first chat completions", f.getDisplayName());
+        assertEq("OllamaRestClient", f.getInfo().module_name);
+    }
+
+    private embedderFactoryTest() {
+        QoreRagUtils::AbstractEmbedderFactory ef =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("ollama");
+        assertEq("ollama", ef.getType());
+        assertEq("Ollama local embeddings", ef.getDisplayName());
+    }
+
+    private defaultUrlTest() {
+        OllamaRestClient::OllamaLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "llama3.3",
+            });
+        assertEq("ollama", p.getMode());
+        assertEq(OllamaRestClient::OllamaLlmProvider::DefaultUrl,
+            p.getConfig().url);
+        assertEq("http://localhost:11434", p.getConfig().url);
+    }
+
+    private chatPathTest() {
+        OllamaRestClient::OllamaLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "llama3.3",
+            });
+        assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = OllamaRestClient::OllamaRestClientBase::getOptions({
+            "apikey": "k",
+        });
+        # Bearer mapping still applies for hosted / proxied deployments
+        assertEq("k", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        # Ollama does NOT default to /v1 path — must address both native
+        # (/api/embed, /api/tags) and OpenAI-compat (/v1/chat/completions)
+        # endpoints with absolute paths from a single client
+        assertEq(NOTHING, opts.default_path);
+        # URL defaults to localhost
+        assertEq("http://localhost:11434", opts.url);
+    }
+
+    private optionalApiKeyTest() {
+        # embedder works WITHOUT api_key (local Ollama)
+        QoreRagUtils::OllamaEmbedder e(<QoreRagUtils::EmbedderConfig>{
+            "backend": "ollama",
+        });
+        assertEq("nomic-embed-text", e.getModel());
+    }
+}
