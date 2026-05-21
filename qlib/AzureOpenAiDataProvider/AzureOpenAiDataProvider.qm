@@ -1,0 +1,172 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AzureOpenAiDataProvider module definition
+
+/*  AzureOpenAiDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) AzureOpenAiRestClient
+%requires(reexport) AzureAuth
+%requires RestClientIo
+
+module AzureOpenAiDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Azure OpenAI Service — "
+        "deployment-routed chat completions and embeddings with three "
+        "authentication modes (api-key, Entra client credentials, Entra "
+        "managed identity)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new AzureOpenAiDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AzureOpenAiDataProvider::AppName,
+            "display_name": "Azure OpenAI",
+            "short_desc": "Microsoft Azure OpenAI Service",
+            "desc": "**Azure OpenAI Service** is Microsoft's enterprise-hosted "
+                "offering of the OpenAI models (GPT-4o, GPT-4o-mini, o3, "
+                "text-embedding-3) with Azure-grade compliance, networking, "
+                "and identity:\n\n"
+                "- **Chat completions** — same wire shape as the public OpenAI "
+                "API, accessed through deployment-routed URLs\n"
+                "- **Embeddings** — `text-embedding-3-small` / `-large` / "
+                "`ada-002` deployments\n"
+                "- **Three authentication modes** — api-key header, Entra ID "
+                "(Azure AD) client credentials, or managed-identity (system "
+                "or user-assigned)\n"
+                "- **Azure Content Safety** annotations on the prompt and "
+                "completion side returned alongside the OpenAI-shape response\n"
+                "- **Per-deployment routing** — one connection can target any "
+                "deployment defined in the resource without re-authentication\n\n"
+                "Tokens for Entra modes are cached and refreshed transparently "
+                "by `AzureAuth` so callers pay the token-exchange cost once "
+                "per refresh window.\n\n"
+                "Project: <https://azure.microsoft.com/en-us/products/ai-services/openai-service/>",
+            "scheme": "azure-openai",
+            "logo": AzureLogo,
+            "logo_file_name": "azure-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AzureOpenAiDataProvider::AppName,
+            "path": "/chat-completion",
+            "action": "chat-completion",
+            "display_name": "Chat Completion",
+            "short_desc": "Generate a chat completion via an Azure OpenAI deployment",
+            "desc": "Generate a chat completion via an Azure OpenAI Service "
+                "deployment. The deployment name in the request body is "
+                "resolved into the URL "
+                "(`/openai/deployments/{deployment}/chat/completions?api-version=...`); "
+                "the body is otherwise identical to the public OpenAI "
+                "chat-completions API.",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AzureOpenAiChatCompletionRequestDataType::Fields{"deployment", "messages"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AzureOpenAiChatCompletionRequestDataType::Fields - ("deployment", "messages")
+            ),
+            "output_type": AzureOpenAiChatCompletionDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AzureOpenAiDataProvider::AppName,
+            "path": "/embedding",
+            "action": "embedding",
+            "display_name": "Embedding",
+            "short_desc": "Generate text embeddings via an Azure OpenAI deployment",
+            "desc": "Generate dense vector embeddings via an Azure OpenAI Service "
+                "deployment bound to a `text-embedding-*` model. Accepts either "
+                "a single string or a list of strings as `input` for batch "
+                "embedding; supports the `dimensions` knob on "
+                "`text-embedding-3-*` models for shorter (cheaper) vectors.",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AzureOpenAiEmbeddingRequestDataType::Fields{"deployment", "input"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AzureOpenAiEmbeddingRequestDataType::Fields - ("deployment", "input")
+            ),
+            "output_type": AzureOpenAiEmbeddingDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage AzureOpenAiDataProvider Module
+
+    @tableofcontents
+
+    @section azureopenaidataproviderintro Introduction to the AzureOpenAiDataProvider Module
+
+    The %AzureOpenAiDataProvider module provides a
+    @ref dataproviderintro "data provider" API for Azure OpenAI Service so
+    deployment-routed chat completions and embeddings are discoverable
+    from `qctl`, the Qorus action catalog, and DPQL expressions.
+
+    @par Provided children
+
+    - `/chat-completion` — @ref AzureOpenAiDataProvider::AzureOpenAiChatCompletionDataProvider
+    - `/embedding` — @ref AzureOpenAiDataProvider::AzureOpenAiEmbeddingDataProvider
+
+    @par Factory
+
+    The factory name is <b><tt>azure-openai</tt></b>; resolve a connected
+    provider via:
+    @code{.py}
+AbstractDataProvider p = DataProvider::getFactoryObjectFromString(
+    "azure-openai{url=https://my-resource.openai.azure.com,api_key=...}");
+    @endcode
+
+    @section azureopenaidataproviderrelnotes Release Notes
+
+    @subsection azureopenaidataprovider_v1_0 AzureOpenAiDataProvider v1.0
+    - initial release: ChatCompletion + Embedding actions registered under
+      the \c azure-openai app + scheme
+*/
+
+#! Contains all public definitions in the AzureOpenAiDataProvider module
+public namespace AzureOpenAiDataProvider {
+#! Azure OpenAI app name
+public const AppName = "AzureOpenAI";
+}
+
+#! Module-level constants in a private namespace per the audit-changes design rule
+namespace Priv {
+    #! Azure logo loaded from the SVG file shipped with the module
+    public const AzureLogo = File::readTextFile(get_script_dir() + "/azure-logo.svg");
+}
+public namespace AzureOpenAiDataProvider {
+    #! Re-export the logo into the module's public namespace
+    public const AzureLogo = Priv::AzureLogo;
+}
