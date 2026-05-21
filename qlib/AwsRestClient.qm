@@ -202,6 +202,171 @@ public class AwsRestClientBase {
         }
         return opts;
     }
+
+    #! Performs an AWS STS AssumeRole call and returns temporary credentials
+    /** Builds a one-shot @ref AwsRestClient bound to the STS service with
+        the supplied base credentials, posts the AssumeRole action, parses
+        the XML response, and returns the temporary credentials in a hash.
+        Auto-refresh is the caller's responsibility — credentials carry an
+        \c expires date so callers can re-call when within a safety window.
+
+        @param opts hash containing:
+        - \c aws_keyid (required): base access key ID
+        - \c aws_secret (required): base secret access key
+        - \c aws_token (optional): session token if the base creds are
+          themselves temporary
+        - \c aws_role_arn (required): ARN of the role to assume
+        - \c aws_role_session_name (optional): RoleSessionName (default
+          \c "qore-sdk-session")
+        - \c aws_external_id (optional): external ID for cross-account assume
+        - \c aws_sts_region (optional): STS region (default \c "us-east-1")
+        - \c aws_sts_endpoint (optional): STS endpoint override (default
+          <tt>https://sts.{region}.amazonaws.com</tt>; useful for testing
+          against a fake endpoint)
+        - \c aws_duration_seconds (optional): session lifetime, 900–43200
+          (default per AWS — 3600)
+
+        @return hash with keys:
+        - \c aws_keyid, \c aws_secret, \c aws_token: the temporary credentials
+        - \c expires: absolute date when the credentials expire
+
+        @throw AWSRESTCLIENT-STS-ERROR the AssumeRole call failed or the
+        response could not be parsed
+    */
+    static hash<auto> assumeRole(hash<auto> opts) {
+        foreach string field in (("aws_keyid", "aws_secret", "aws_role_arn")) {
+            if (!opts{field}.val()) {
+                throw "AWSRESTCLIENT-STS-ERROR",
+                    sprintf("assumeRole requires %y in opts", field);
+            }
+        }
+        string region = opts.aws_sts_region ?? "us-east-1";
+        string url = opts.aws_sts_endpoint
+            ?? sprintf("https://sts.%s.amazonaws.com", region);
+        string session_name = opts.aws_role_session_name ?? "qore-sdk-session";
+        int duration = opts.aws_duration_seconds ?? 3600;
+
+        # Build the form-encoded body for the Query API
+        list<string> params = (
+            "Action=AssumeRole",
+            "Version=2011-06-15",
+            "RoleArn=" + encode_url(opts.aws_role_arn, True),
+            "RoleSessionName=" + encode_url(session_name, True),
+            "DurationSeconds=" + duration,
+        );
+        if (opts.aws_external_id.val()) {
+            push params, "ExternalId=" + encode_url(opts.aws_external_id, True);
+        }
+        string body = params.join("&");
+
+        # Use a one-shot AwsRestClient bound to the STS service; explicitly
+        # drop aws_role_arn so we don't recurse into another AssumeRole call.
+        hash<auto> sts_opts = {
+            "url": url,
+            "aws_keyid": opts.aws_keyid,
+            "aws_secret": opts.aws_secret,
+            "aws_region": region,
+            "aws_service": "sts",
+        };
+        if (opts.aws_token.val()) {
+            sts_opts.aws_token = opts.aws_token;
+        }
+        AwsRestClient sts(sts_opts, True);
+        hash<auto> resp;
+        try {
+            # switch serialization to "text" so RestClient sends our
+            # already-form-encoded body verbatim instead of JSON-wrapping it
+            # (AwsRestClient hardcodes data="json" on its parent at
+            # construction; we restore it after the call)
+            string saved_ds = sts.getSerialization();
+            on_exit sts.setSerialization(saved_ds);
+            sts.setSerialization("text");
+            resp = sts.post("/", body, NOTHING,
+                {"Content-Type": "application/x-www-form-urlencoded"});
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AWSRESTCLIENT-STS-ERROR",
+                sprintf("AssumeRole call to %y failed: %s", url, ex.desc), ex;
+        }
+        return AwsRestClientBase::parseAssumeRoleResponse(resp.body);
+    }
+
+    #! Parses an STS AssumeRole response body
+    /** Accepts either a string/binary XML body (e.g. captured from a test
+        fixture) or a hash already deserialized by RestClient's XML parser
+        when the response Content-Type is \c text/xml.  No external XML
+        module dependency is required.
+
+        @param raw the response body (hash, binary, or string)
+
+        @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
+    */
+    static hash<auto> parseAssumeRoleResponse(auto raw) {
+        *hash<auto> creds_hash;
+        if (raw.typeCode() == NT_HASH) {
+            creds_hash = raw.AssumeRoleResponse.AssumeRoleResult.Credentials;
+        } else {
+            string body;
+            if (raw.typeCode() == NT_BINARY) {
+                body = raw.toString("UTF-8");
+            } else if (raw.typeCode() == NT_STRING) {
+                body = raw;
+            } else {
+                throw "AWSRESTCLIENT-STS-ERROR",
+                    sprintf("AssumeRole response body has unexpected type %s",
+                        raw.type());
+            }
+            *string key = (body =~ x/<AccessKeyId>([^<]+)<\/AccessKeyId>/)[0];
+            *string secret = (body =~ x/<SecretAccessKey>([^<]+)<\/SecretAccessKey>/)[0];
+            *string token = (body =~ x/<SessionToken>([^<]+)<\/SessionToken>/)[0];
+            *string expires_str = (body =~ x/<Expiration>([^<]+)<\/Expiration>/)[0];
+            creds_hash = {
+                "AccessKeyId": key,
+                "SecretAccessKey": secret,
+                "SessionToken": token,
+                "Expiration": expires_str,
+            };
+        }
+        if (!creds_hash.AccessKeyId.val() || !creds_hash.SecretAccessKey.val()) {
+            throw "AWSRESTCLIENT-STS-ERROR",
+                sprintf("AssumeRole response missing required fields: %y",
+                    creds_hash);
+        }
+        date expires = creds_hash.Expiration.val()
+            ? date(creds_hash.Expiration)
+            : now_us() + 1h;
+        hash<auto> rv = {
+            "aws_keyid": creds_hash.AccessKeyId,
+            "aws_secret": creds_hash.SecretAccessKey,
+            "expires": expires,
+        };
+        if (creds_hash.SessionToken.val()) {
+            rv.aws_token = creds_hash.SessionToken;
+        }
+        return rv;
+    }
+
+    #! If \a opts requests STS AssumeRole, performs it and overlays the temp credentials
+    /** Honored when \c aws_role_arn is present in \a opts.  The original
+        base credentials are replaced with the temporary ones returned by
+        STS.  Refresh-on-expiry is a follow-up; v1 is a one-shot at
+        construction time so the client must be recreated when the
+        temporary session expires (default 1h).
+    */
+    static hash<auto> applyAssumeRole(hash<auto> opts) {
+        if (!opts.aws_role_arn.val()) {
+            return opts;
+        }
+        hash<auto> creds = AwsRestClientBase::assumeRole(opts);
+        opts.aws_keyid = creds.aws_keyid;
+        opts.aws_secret = creds.aws_secret;
+        if (creds.aws_token.val()) {
+            opts.aws_token = creds.aws_token;
+        }
+        # leave aws_role_arn / aws_role_session_name / aws_external_id in
+        # the option hash for diagnostic purposes; AwsOptions strips them
+        # from any subset forwarded to the RestClient base
+        return opts;
+    }
 }
 
 #! this class provides the REST client API for communication with AWS
@@ -318,6 +483,9 @@ AwsRestClient rest({
 
         # fill missing credential/region keys from standard AWS environment variables
         opts = AwsRestClientBase::applyEnvCredentials(opts);
+        # if aws_role_arn is set, perform a one-shot STS AssumeRole and
+        # overlay the temporary credentials onto opts
+        opts = AwsRestClientBase::applyAssumeRole(opts);
 
         # check required options
         foreach string key in (RequiredOptions) {
@@ -760,6 +928,9 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
 
         # fill missing credential/region keys from standard AWS environment variables
         opts = AwsRestClientBase::applyEnvCredentials(opts);
+        # if aws_role_arn is set, perform a one-shot STS AssumeRole and
+        # overlay the temporary credentials onto opts
+        opts = AwsRestClientBase::applyAssumeRole(opts);
 
         # check required options
         foreach string key in (AwsRestClientBase::RequiredOptions) {

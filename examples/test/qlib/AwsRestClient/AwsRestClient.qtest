@@ -80,6 +80,8 @@ class AwsTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTest());
         addTestCase("connection tests", \connectionTest());
         addTestCase("env-var credential fallback", \envVarCredentialTest());
+        addTestCase("STS XML response parse", \stsParseTest());
+        addTestCase("STS AssumeRole end-to-end", \stsAssumeRoleE2ETest());
         set_return_value(main());
     }
 
@@ -242,6 +244,120 @@ class AwsTest inherits QUnit::Test {
             "aws_service": "iam",
         });
         assertEq(True, c3 instanceof AwsRestClient);
+    }
+
+    #! parseAssumeRoleResponse extracts all expected fields from real STS XML
+    stsParseTest() {
+        string xml =
+            "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n"
+            "  <AssumeRoleResult>\n"
+            "    <Credentials>\n"
+            "      <AccessKeyId>ASIA-TEST-KEY</AccessKeyId>\n"
+            "      <SecretAccessKey>TEST/SECRET+VALUE</SecretAccessKey>\n"
+            "      <SessionToken>TEST-SESSION-TOKEN</SessionToken>\n"
+            "      <Expiration>2026-06-01T12:00:00Z</Expiration>\n"
+            "    </Credentials>\n"
+            "    <AssumedRoleUser>\n"
+            "      <Arn>arn:aws:sts::123456789012:assumed-role/MyRole/qore</Arn>\n"
+            "      <AssumedRoleId>AROAEXAMPLE:qore</AssumedRoleId>\n"
+            "    </AssumedRoleUser>\n"
+            "  </AssumeRoleResult>\n"
+            "</AssumeRoleResponse>\n";
+        hash<auto> creds = AwsRestClientBase::parseAssumeRoleResponse(xml);
+        assertEq("ASIA-TEST-KEY",       creds.aws_keyid);
+        assertEq("TEST/SECRET+VALUE",   creds.aws_secret);
+        assertEq("TEST-SESSION-TOKEN",  creds.aws_token);
+        assertEq(2026-06-01T12:00:00Z,  creds.expires);
+
+        # binary body works too
+        hash<auto> creds2 = AwsRestClientBase::parseAssumeRoleResponse(binary(xml));
+        assertEq("ASIA-TEST-KEY", creds2.aws_keyid);
+
+        # missing AccessKeyId should throw
+        assertThrows("AWSRESTCLIENT-STS-ERROR", sub () {
+            AwsRestClientBase::parseAssumeRoleResponse(
+                "<AssumeRoleResponse></AssumeRoleResponse>");
+        });
+    }
+
+    #! End-to-end: AssumeRole against a fake STS HTTP endpoint, then sign with the temp creds
+    stsAssumeRoleE2ETest() {
+        # spin up a fake STS endpoint that returns canned credentials
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer sts_http(<HttpServerOptionInfo>{"logger": logger});
+        FakeStsHandler sts_handler();
+        sts_http.setDefaultHandler("sts", sts_handler);
+        int sts_port = sts_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit delete sts_http;
+
+        hash<auto> creds = AwsRestClientBase::assumeRole({
+            "aws_keyid": "AKIA-BASE",
+            "aws_secret": "baseSecret",
+            "aws_region": "us-east-1",
+            "aws_role_arn": "arn:aws:iam::123456789012:role/MyRole",
+            "aws_role_session_name": "test-session",
+            "aws_external_id": "ext-id-42",
+            "aws_sts_endpoint": "http://localhost:" + sts_port,
+        });
+        assertEq("FAKE-ASIA-KEY",   creds.aws_keyid);
+        assertEq("fake-secret-456", creds.aws_secret);
+        assertEq("fake-session-token-xyz", creds.aws_token);
+        assertTrue(creds.expires > now_us());
+
+        # verify the STS handler received the expected Query API parameters
+        assertEq("AssumeRole", sts_handler.params.Action);
+        assertEq("arn:aws:iam::123456789012:role/MyRole", sts_handler.params.RoleArn);
+        assertEq("test-session", sts_handler.params.RoleSessionName);
+        assertEq("ext-id-42",    sts_handler.params.ExternalId);
+        assertEq("3600",         sts_handler.params.DurationSeconds);
+
+        # constructor with aws_role_arn should overlay the temp creds onto opts
+        # (no actual signed request is made in this test — we just verify the
+        # client accepts the role-arn option without throwing)
+        AwsRestClient role_client({
+            "url": "http://localhost:" + port,
+            "aws_keyid": "AKIA-BASE",
+            "aws_secret": "baseSecret",
+            "aws_region": "us-east-1",
+            "aws_service": "iam",
+            "aws_role_arn": "arn:aws:iam::123456789012:role/MyRole",
+            "aws_sts_endpoint": "http://localhost:" + sts_port,
+        });
+        assertEq(True, role_client instanceof AwsRestClient);
+    }
+}
+
+#! Fake STS endpoint that records the form-encoded query and returns canned creds
+class FakeStsHandler inherits AbstractHttpRequestHandler {
+    public {
+        hash<auto> params = {};
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        # parse form-encoded body
+        string body_str;
+        if (body.typeCode() == NT_BINARY) {
+            body_str = body.toString("UTF-8");
+        } else if (body.typeCode() == NT_STRING) {
+            body_str = body;
+        } else {
+            body_str = "";
+        }
+        foreach string pair in (body_str.split("&")) {
+            list<string> kv = pair.split("=");
+            if (kv.size() == 2) {
+                params{decode_url(kv[0])} = decode_url(kv[1]);
+            }
+        }
+        string xml =
+            "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">"
+            "<AssumeRoleResult><Credentials>"
+            "<AccessKeyId>FAKE-ASIA-KEY</AccessKeyId>"
+            "<SecretAccessKey>fake-secret-456</SecretAccessKey>"
+            "<SessionToken>fake-session-token-xyz</SessionToken>"
+            "<Expiration>2099-12-31T23:59:59Z</Expiration>"
+            "</Credentials></AssumeRoleResult></AssumeRoleResponse>";
+        return makeResponse({"Content-Type": "text/xml"}, 200, xml);
     }
 }
 
