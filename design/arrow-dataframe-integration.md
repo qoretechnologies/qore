@@ -139,13 +139,22 @@ where an API exposes conversion details.
 ### module-jni
 
 - Add native JDBC `select_columnar` and statement `fetch_columnar` methods.
-- Map `ResultSetMetaData` to `ColumnarResult` schema v2.
-- Fill typed buffers with JDBC typed getters and `wasNull()`.
-- Add a Java helper path using primitive arrays or direct buffers to reduce
-  per-cell JNI overhead.
-- Wrap direct buffers zero-copy when supported, otherwise copy into Qore
-  buffers.
-- Map `BigDecimal` to decimal128 when precision and scale fit.
+  Implemented in module-jni with conditional CMake probes so the module still
+  builds against qore versions without `QORE_HAVE_COLUMNAR_RESULT_V2`.
+- Map `ResultSetMetaData` to `ColumnarResult` schema v2.  Implemented for JDBC
+  type names, precision, scale, and nullability.
+- Fill typed buffers with JDBC typed getters and `wasNull()`.  Implemented for
+  fixed-width integer, floating-point, boolean, and safe integer decimal
+  columns using C++ external buffer owners.
+- Map `BigDecimal` to decimal128 schema metadata when precision and scale fit.
+  Dense decimal128 buffers remain unavailable until
+  `QORE_HAVE_DECIMAL128_BUFFER` is implemented; decimal values that cannot be
+  represented as fixed-width integers use list storage with recursive schema
+  metadata.
+- Java-side primitive-array/direct-buffer batch extraction is not part of the
+  current compatibility contract.  The implemented JDBC path already preserves
+  packed Qore buffers for supported fixed-width columns, but still calls JDBC
+  typed getters per cell.
 
 ## Verification Checklist
 
@@ -154,7 +163,9 @@ where an API exposes conversion details.
   round trips.
 - module-grpc Arrow IPC and Arrow Flight qtests.
 - module-jni JDBC tests with at least one PostgreSQL JDBC path and one simple
-  embedded/local driver path when available.
+  embedded/local driver path when available.  PostgreSQL JDBC verification has
+  been run for `selectColumnar()` and statement `fetchColumnar()`; embedded
+  local-driver coverage remains dependent on an available driver fixture.
 - docs fast targets for qore, dataframe, grpc, and jni.
 - valgrind DataFrame/Parquet/Arrow tests with `ARROW_DEFAULT_MEMORY_POOL=system`
   when the packaged Arrow build uses mimalloc.
