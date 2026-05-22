@@ -98,6 +98,9 @@ where an API exposes conversion details.
 ### dataframe
 
 - Route Parquet read/write through the shared Arrow/ColumnarResult bridge.
+  Decimal and nested Arrow/Parquet columns now map through lossless DataFrame
+  `auto` storage with recursive schema metadata instead of scalar string
+  fallbacks.
 - Add DataFrame Arrow IPC import/export APIs.  Implemented as
   `DataFrame::fromArrowIpc(binary)` and `DataFrame::toArrowIpc()`;
   fixed-width Arrow columns are imported through dense DataFrame buffers when

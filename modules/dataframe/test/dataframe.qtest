@@ -1540,6 +1540,47 @@ sub invalid_dataframe_api() {
         list<hash<auto>> schema = columns.schemaV2();
         assertTrue(schema[0].nullable,
             "Parquet nullable Arrow schema metadata is preserved in ColumnarResult");
+
+        ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
+            "total": (12.34n, NOTHING),
+        }, {
+            "total": {"native_type": "decimal(18, 2)", "nullable": True},
+        });
+        DataFrame::DataFrame decimal_df = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
+        decimal_df.writeParquet(tmp_path);
+        DataFrame::DataFrame decimal_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((12.34n, NOTHING), decimal_parquet_df.getColumn("total"),
+            "Parquet preserves decimal Qore number values");
+        list<hash<auto>> decimal_parquet_schema = decimal_parquet_df.toColumnarResult().schemaV2();
+        assertEq("decimal128", decimal_parquet_schema[0].kind,
+            "Parquet preserves decimal logical type");
+        assertEq(18, decimal_parquet_schema[0].precision,
+            "Parquet preserves decimal precision");
+        assertEq(2, decimal_parquet_schema[0].scale,
+            "Parquet preserves decimal scale");
+
+        ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
+            "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
+        }, {
+            "customer": {"schema": {
+                "kind": "struct",
+                "nullable": False,
+                "children": (
+                    {"name": "id", "kind": "int", "nullable": False},
+                    {"name": "name", "kind": "string", "nullable": True}
+                ),
+            }},
+        });
+        DataFrame::DataFrame nested_df = DataFrame::DataFrame::fromColumnarResult(nested_columns);
+        nested_df.writeParquet(tmp_path);
+        DataFrame::DataFrame nested_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(1, nested_parquet_df.getColumn("customer")[0].id,
+            "Parquet preserves nested struct values");
+        list<hash<auto>> nested_parquet_schema = nested_parquet_df.toColumnarResult().schemaV2();
+        assertEq("struct", nested_parquet_schema[0].kind,
+            "Parquet preserves nested logical type");
+        assertEq("name", nested_parquet_schema[0].children[1].name,
+            "Parquet preserves nested child metadata");
     }
 
     arrowIpcTest() {
@@ -1579,6 +1620,45 @@ sub invalid_dataframe_api() {
             "Arrow IPC schema metadata preserves dense int storage");
         assertTrue(schema[0].nullable,
             "Arrow IPC nullable Arrow schema metadata is preserved in ColumnarResult");
+
+        ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
+            "total": (12.34n, NOTHING),
+        }, {
+            "total": {"native_type": "decimal(18, 2)", "nullable": True},
+        });
+        DataFrame::DataFrame decimal_df = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
+        DataFrame::DataFrame decimal_ipc_df = DataFrame::DataFrame::fromArrowIpc(decimal_df.toArrowIpc());
+        assertEq((12.34n, NOTHING), decimal_ipc_df.getColumn("total"),
+            "Arrow IPC preserves decimal Qore number values");
+        list<hash<auto>> decimal_ipc_schema = decimal_ipc_df.toColumnarResult().schemaV2();
+        assertEq("decimal128", decimal_ipc_schema[0].kind,
+            "Arrow IPC preserves decimal logical type");
+        assertEq(18, decimal_ipc_schema[0].precision,
+            "Arrow IPC preserves decimal precision");
+        assertEq(2, decimal_ipc_schema[0].scale,
+            "Arrow IPC preserves decimal scale");
+
+        ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
+            "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
+        }, {
+            "customer": {"schema": {
+                "kind": "struct",
+                "nullable": False,
+                "children": (
+                    {"name": "id", "kind": "int", "nullable": False},
+                    {"name": "name", "kind": "string", "nullable": True}
+                ),
+            }},
+        });
+        DataFrame::DataFrame nested_df = DataFrame::DataFrame::fromColumnarResult(nested_columns);
+        DataFrame::DataFrame nested_ipc_df = DataFrame::DataFrame::fromArrowIpc(nested_df.toArrowIpc());
+        assertEq(1, nested_ipc_df.getColumn("customer")[0].id,
+            "Arrow IPC preserves nested struct values");
+        list<hash<auto>> nested_ipc_schema = nested_ipc_df.toColumnarResult().schemaV2();
+        assertEq("struct", nested_ipc_schema[0].kind,
+            "Arrow IPC preserves nested logical type");
+        assertEq("name", nested_ipc_schema[0].children[1].name,
+            "Arrow IPC preserves nested child metadata");
     }
 
     mlIntegrationTest() {
