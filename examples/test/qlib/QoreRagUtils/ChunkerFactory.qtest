@@ -57,6 +57,70 @@ class FakeChunkerFactory inherits QoreRagUtils::AbstractChunkerFactory {
     }
 }
 
+class FakeEmbedder inherits QoreRagUtils::AbstractEmbedder {
+    list<float> encode(string text, *hash<auto> opts) {
+        return (text.length().toFloat(), 1.0);
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        list<list<float>> rv = ();
+        foreach string text in (texts) {
+            push rv, encode(text);
+        }
+        return rv;
+    }
+
+    int getDimension() {
+        return 2;
+    }
+
+    *string getModel() {
+        return "fake-embed";
+    }
+}
+
+class FakeVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    public {
+        list<hash<QoreRagUtils::VectorRecord>> rows = ();
+    }
+
+    upsert(list<hash<QoreRagUtils::VectorRecord>> records) {
+        rows += records;
+    }
+
+    deleteByIds(list<string> ids) {
+        list<hash<QoreRagUtils::VectorRecord>> kept = ();
+        foreach hash<QoreRagUtils::VectorRecord> row in (rows) {
+            if (!inlist(row.id, ids)) {
+                push kept, row;
+            }
+        }
+        rows = kept;
+    }
+
+    list<hash<QoreRagUtils::VectorSearchResult>> search(
+            list<float> query_vector, int k, *hash<auto> filter) {
+        list<hash<QoreRagUtils::VectorSearchResult>> rv = ();
+        int upper = rows.size() < k ? rows.size() : k;
+        for (int i = 0; i < upper; ++i) {
+            push rv, <QoreRagUtils::VectorSearchResult>{
+                "id": rows[i].id,
+                "score": 1.0 - (i.toFloat() / 100.0),
+                "payload": rows[i].payload,
+            };
+        }
+        return rv;
+    }
+
+    string getCollection() {
+        return "fake-collection";
+    }
+
+    int getDimension() {
+        return 2;
+    }
+}
+
 public class ChunkerFactoryTest inherits QUnit::Test {
     constructor() : Test("ChunkerFactory Test", "1.0") {
         addTestCase("built-in factories registered", \builtInFactoriesTest());
@@ -68,6 +132,8 @@ public class ChunkerFactoryTest inherits QUnit::Test {
         addTestCase("createChunker requires strategy", \missingStrategyTest());
         addTestCase("factory getInfo reports module_name",
             \factoryInfoTest());
+        addTestCase("RagPipeline emits telemetry for ingest and retrieve",
+            \pipelineTelemetryTest());
         set_return_value(main());
     }
 
@@ -163,5 +229,49 @@ public class ChunkerFactoryTest inherits QUnit::Test {
         assertEq("structured", info.type);
         assertEq("Paragraph-aware structured chunker", info.display_name);
         assertEq("QoreRagUtils", info.module_name);
+    }
+
+    private pipelineTelemetryTest() {
+        list<hash<QoreRagUtils::RagTelemetryEvent>> events = ();
+        FakeVectorStore store();
+        QoreRagUtils::RagPipeline pipeline(
+            new FakeEmbedder(),
+            store,
+            NOTHING,
+            new FakeChunker("fake"),
+            2,
+            5,
+            <QoreRagUtils::RagPipelineOptions>{
+                "telemetry_context": {"trace_id": "rag-trace-1"},
+                "telemetry_observer": <QoreRagUtils::RagTelemetryObserver>{
+                    "event_callback": sub (hash<QoreRagUtils::RagTelemetryEvent> event) {
+                        push events, event;
+                    },
+                },
+            });
+
+        list<string> ids = pipeline.ingest("doc-1", "alpha beta", NOTHING);
+        assertEq(1, ids.size());
+        list<hash<QoreRagUtils::RetrievalHit>> hits =
+            pipeline.retrieve("alpha", 1, NOTHING);
+        assertEq(1, hits.size());
+
+        assertEq(4, events.size());
+        assertEq("start", events[0].type);
+        assertEq("ingest", events[0].operation);
+        assertEq("rag-trace-1", events[0].telemetry_context.trace_id);
+        assertEq("end", events[1].type);
+        assertEq("ingest", events[1].operation);
+        assertEq(1, events[1].metrics.chunk_count);
+        assertEq(1, events[1].metrics.vector_count);
+        assertEq("fake-collection", events[1].collection);
+
+        assertEq("start", events[2].type);
+        assertEq("retrieve", events[2].operation);
+        assertEq("end", events[3].type);
+        assertEq("retrieve", events[3].operation);
+        assertEq(1, events[3].metrics.returned_count);
+        assertEq(1, events[3].metrics.vector_store_attempts);
+        assertEq(0, events[3].metrics.vector_store_failures);
     }
 }
