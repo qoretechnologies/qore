@@ -33,6 +33,10 @@
 %requires QoreModelRegistry
 %requires DataProviderML
 
+%try-module dataframe
+%define NoDataFrame
+%endtry
+
 %exec-class DataProviderMLProcessorsTest
 
 class DataProviderMLProcessorsTest inherits QUnit::Test {
@@ -106,6 +110,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("standard-scaler - basic window", \stdScalerBasicWindow());
         addTestCase("standard-scaler - subsequent windows", \stdScalerSubsequentWindows());
         addTestCase("standard-scaler - capabilities", \stdScalerCapabilities());
+        addTestCase("standard-scaler - DataFrameBlock shape", \stdScalerDataFrameShape());
+        addTestCase("standard-scaler - BufferColumns shape", \stdScalerBufferColumnsShape());
 
         # MinMaxScaler tests
         addTestCase("min-max-scaler - basic window", \mmScalerBasicWindow());
@@ -1293,6 +1299,49 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         hash<DataProviderInfo> info = proc.getInfo();
         assertEq("QoreStandardScalerProcessor", info.type);
         assertTrue(info.supports_pipeline_processor);
+        assertTrue(proc.supportsBulkApi());
+        assertTrue(proc.supportsInputShape(DataProviderShape::DataFrameBlock));
+        assertTrue(proc.supportsInputShape(DataProviderShape::BufferColumns));
+        assertTrue(proc.supportsOutputShape(DataProviderShape::HashOfLists));
+    }
+
+    stdScalerDataFrameShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataProviderML::QoreStandardScalerProcessor proc({
+            "fields": "x,y",
+            "window_size": 3,
+        });
+
+        DataFrame::DataFrame df({
+            "x": (1.0, 2.0, 3.0),
+            "y": (10.0, 20.0, 30.0),
+        });
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(result));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::HashOfLists));
+        assertEq(("standard-scaler", "standard-scaler", "standard-scaler"), result{"event_type"});
+        assertFloat(0.0, result{"scaled_values"}[1].x, 0.01);
+        assertFloat(0.0, result{"scaled_values"}[1].y, 0.01);
+    }
+
+    stdScalerBufferColumnsShape() {
+        DataProviderML::QoreStandardScalerProcessor proc({
+            "fields": "x,y",
+            "window_size": 3,
+        });
+
+        auto columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((1.0, 2.0, 3.0)),
+            "y": new buffer<float64>((10.0, 20.0, 30.0)),
+        });
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(result));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::HashOfLists));
+        assertEq((1.0, 2.0, 3.0), map $1.x, result{"record_values"});
+        assertFloat(0.0, result{"scaled_values"}[1].x, 0.01);
     }
 
     # ===================== MinMaxScaler Tests =====================

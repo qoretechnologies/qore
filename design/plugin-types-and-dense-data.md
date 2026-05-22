@@ -108,8 +108,9 @@ DataProvider shape negotiation is implemented in `qlib/DataProvider`:
 
 Implemented shape-aware processors include filter, group-by, select-fields,
 remove-fields, record-limit, set-fields, search-replace, running analytics,
-correlation, and cross-correlation. Analytics processors currently emit
-hash-of-lists event blocks after evaluating shaped input.
+correlation, cross-correlation, and DataProviderML processors.
+Analytics and DataProviderML processors currently emit hash-of-lists event
+blocks after evaluating shaped input.
 
 `QoreFilterRecordsProcessor` compiles supported expressions directly to
 DataFrame RowMask or dense `ColumnarResult` masks:

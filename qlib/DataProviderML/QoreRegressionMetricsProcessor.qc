@@ -33,7 +33,7 @@ public namespace DataProviderML {
     RegressionMetricsEventInfo event summarizing the batch.
 
 */
-public class QoreRegressionMetricsProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreRegressionMetricsProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -186,9 +186,9 @@ public class QoreRegressionMetricsProcessor inherits DataProvider::AbstractDataP
         },);
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

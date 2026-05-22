@@ -43,7 +43,7 @@ QoreRerankerProcessor proc({
     @endcode
 
 */
-public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -291,9 +291,9 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
         return results;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

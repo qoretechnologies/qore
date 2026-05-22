@@ -29,7 +29,7 @@ public namespace DataProviderML {
     cluster records when the window is full or on flush.
 
 */
-public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreDBSCANClusteringProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -253,9 +253,9 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

@@ -45,7 +45,7 @@ public namespace DataProviderML;
 
     @since DataProviderML 1.2
 */
-public class QoreRegistryModelProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -253,7 +253,7 @@ public class QoreRegistryModelProcessor inherits DataProvider::AbstractDataProvi
     }
 
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     private int getProcessorCapabilitiesImpl() {

@@ -45,7 +45,7 @@ QoreSemanticChunkProcessor proc({
     @endcode
 
 */
-public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -288,9 +288,9 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
         return results;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

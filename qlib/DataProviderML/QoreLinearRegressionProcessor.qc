@@ -29,7 +29,7 @@ public namespace DataProviderML {
     fit a model and predict target values for each record.
 
 */
-public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreLinearRegressionProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -270,9 +270,9 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

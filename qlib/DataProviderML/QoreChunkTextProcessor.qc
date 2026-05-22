@@ -44,7 +44,7 @@ QoreChunkTextProcessor proc({
     @endcode
 
 */
-public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreChunkTextProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -260,9 +260,9 @@ public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider 
         }
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

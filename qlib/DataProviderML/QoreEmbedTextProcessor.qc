@@ -48,7 +48,7 @@ QoreEmbedTextProcessor proc({
     @endcode
 
 */
-public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -267,9 +267,9 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
         }
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

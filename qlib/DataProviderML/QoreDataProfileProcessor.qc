@@ -30,7 +30,7 @@ public namespace DataProviderML {
     On flush (or when the batch is full), emits one DataProfileFieldInfo event per field.
 
 */
-public class QoreDataProfileProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreDataProfileProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -267,9 +267,9 @@ public class QoreDataProfileProcessor inherits DataProvider::AbstractDataProvide
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

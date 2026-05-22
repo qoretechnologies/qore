@@ -30,7 +30,7 @@ public namespace DataProviderML {
     decision trees.
 
 */
-public class QoreRandomForestRegressionProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreRandomForestRegressionProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -278,9 +278,9 @@ public class QoreRandomForestRegressionProcessor inherits DataProvider::Abstract
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

@@ -2447,6 +2447,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - guardrail-transform pipeline processor (DPC_TRANSFORM) for annotating and redacting records
       - ocr pipeline processor for text extraction from images via Tesseract or HTTP
       - vision-extraction pipeline processor for multimodal LLM image analysis
+      - processors accept \c DataFrameBlock, \c BufferColumns, and
+        \c HashOfLists input shapes through the DataProvider pipeline shape API
+        and emit hash-of-lists event blocks for bulk outputs
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module

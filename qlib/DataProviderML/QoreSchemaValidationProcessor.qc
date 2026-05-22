@@ -30,7 +30,7 @@ public namespace DataProviderML {
     records are either enriched with validation error details, silently dropped, or cause an exception.
 
 */
-public class QoreSchemaValidationProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreSchemaValidationProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -281,9 +281,9 @@ public class QoreSchemaValidationProcessor inherits DataProvider::AbstractDataPr
         return record;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

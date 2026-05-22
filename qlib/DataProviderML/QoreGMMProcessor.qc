@@ -29,7 +29,7 @@ public namespace DataProviderML {
     assign each record to a cluster with probability scores.
 
 */
-public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreGMMProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -277,9 +277,9 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

@@ -30,7 +30,7 @@ public namespace DataProviderML {
     smoothing out noise. Each input record is passed through enriched with EWMA fields.
 
 */
-public class QoreEWMAProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreEWMAProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -190,9 +190,9 @@ public class QoreEWMAProcessor inherits DataProvider::AbstractDataProvider {
         return result;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

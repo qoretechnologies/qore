@@ -30,7 +30,7 @@ public namespace DataProviderML {
     the first window fits the model, subsequent windows update it incrementally.
 
 */
-public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -234,9 +234,9 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

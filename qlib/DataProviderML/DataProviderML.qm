@@ -1610,7 +1610,73 @@ module DataProviderML {
     logic can combine anomaly scores, cluster assignments, and forecasts for comprehensive
     decision-making.
 
+    @section dataproviderml_columnar Columnar and DataFrame Input
+
+    DataProviderML processors accept the standard DataProvider pipeline shapes:
+    \c RowRecords, \c HashOfLists, \c BufferColumns, and \c DataFrameBlock.  This
+    allows SQL columnar results, dense buffer columns, and DataFrame blocks to
+    flow into ML processors without requiring the %DataProviderML module itself
+    to depend on the \c dataframe module.
+
+    Shape-aware input is converted through the DataProvider shape API and the
+    processor emits hash-of-lists event blocks when multiple records are
+    produced.  This keeps downstream shape-aware processors in bulk mode while
+    preserving the existing row-oriented processor behavior.
+
+    @par DataFrameBlock example:
+    @code{.py}
+%requires dataframe
+%requires DataProviderML
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10, 11, 3, 10),
+});
+
+DataProviderML::QoreIsolationForestProcessor proc({
+    "fields": "amount,hour",
+    "window_size": 4,
+});
+
+hash<auto> events = proc.processRecordsShape(
+    df, DataProviderShape::DataFrameBlock);
+
+# events is a HashOfLists block:
+# {
+#     "event_type": ("isolation-forest", ...),
+#     "anomaly_score": (...),
+#     "is_anomaly": (...),
+#     ...
+# }
+    @endcode
+
+    @par BufferColumns example:
+    @code{.py}
+%requires DataProviderML
+
+auto columns = ColumnarResult::fromColumnHash({
+    "x": new buffer<float64>((1.0, 2.0, 3.0)),
+    "y": new buffer<float64>((10.0, 20.0, 30.0)),
+});
+
+DataProviderML::QoreStandardScalerProcessor scaler({
+    "fields": "x,y",
+    "window_size": 3,
+});
+
+hash<auto> scaled = scaler.processRecordsShape(
+    columns, DataProviderShape::BufferColumns);
+assert scaled{"event_type"} == ("standard-scaler", "standard-scaler", "standard-scaler");
+    @endcode
+
     @section dataproviderml_relnotes Release Notes
+
+    @subsection dataproviderml_v1_3 DataProviderML v1.3
+    - DataProviderML processors now accept \c DataFrameBlock,
+      \c BufferColumns, and \c HashOfLists input shapes through the DataProvider
+      shape API and emit \c HashOfLists event blocks for bulk outputs
+    - added \c AbstractDataProviderMLProcessor as the common shape-aware base
+      for DataProviderML processors
 
     @subsection dataproviderml_v1_1 DataProviderML v1.1
     - changed \c fields option type from \c string to \c softlist<string> for multi-select UI

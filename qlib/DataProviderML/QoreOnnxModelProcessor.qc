@@ -50,7 +50,7 @@ QoreOnnxModelProcessor gpu_proc({
     @endcode
 
 */
-public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -354,9 +354,9 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

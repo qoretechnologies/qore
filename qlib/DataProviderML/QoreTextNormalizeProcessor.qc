@@ -39,7 +39,7 @@ QoreTextNormalizeProcessor proc({
     @endcode
 
 */
-public class QoreTextNormalizeProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreTextNormalizeProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -221,9 +221,9 @@ public class QoreTextNormalizeProcessor inherits DataProvider::AbstractDataProvi
         return text;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

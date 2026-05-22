@@ -39,7 +39,7 @@ QoreTokenizeProcessor proc({
     @endcode
 
 */
-public class QoreTokenizeProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -168,9 +168,9 @@ public class QoreTokenizeProcessor inherits DataProvider::AbstractDataProvider {
         }
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

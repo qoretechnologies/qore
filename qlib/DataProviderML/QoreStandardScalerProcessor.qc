@@ -31,7 +31,7 @@ public namespace DataProviderML {
     apply the already-fitted scaler.
 
 */
-public class QoreStandardScalerProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -194,9 +194,9 @@ public class QoreStandardScalerProcessor inherits DataProvider::AbstractDataProv
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield
