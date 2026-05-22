@@ -102,27 +102,32 @@ std::map<uint32_t, GlobalPluginOperationRef> global_plugin_operations;
 uint32_t next_global_plugin_operation_id = 1;
 
 bool pluginRegisterTrace() {
-    return std::getenv("QORE_PLUGIN_REGISTER_TRACE") != nullptr;
+    static const bool enabled = std::getenv("QORE_PLUGIN_REGISTER_TRACE") != nullptr;
+    return enabled;
 }
 
 bool pluginDispatchTrace() {
-    return std::getenv("QORE_PLUGIN_DISPATCH_TRACE") != nullptr;
+    static const bool enabled = std::getenv("QORE_PLUGIN_DISPATCH_TRACE") != nullptr;
+    return enabled;
 }
 
 bool pluginVerifyEnabled() {
 #ifndef NDEBUG
     return true;
 #else
-    return std::getenv("QORE_PLUGIN_VERIFY") != nullptr;
+    static const bool enabled = std::getenv("QORE_PLUGIN_VERIFY") != nullptr;
+    return enabled;
 #endif
 }
 
 bool pluginVerifyTrace() {
-    return std::getenv("QORE_PLUGIN_VERIFY_TRACE") != nullptr;
+    static const bool enabled = std::getenv("QORE_PLUGIN_VERIFY_TRACE") != nullptr;
+    return enabled;
 }
 
 bool pluginCrossTypeTrace() {
-    return std::getenv("QORE_PLUGIN_CROSS_TYPE_TRACE") != nullptr;
+    static const bool enabled = std::getenv("QORE_PLUGIN_CROSS_TYPE_TRACE") != nullptr;
+    return enabled;
 }
 
 void traceRegister(const std::string& msg) {
@@ -593,9 +598,11 @@ bool validateDenseBufferSameElementType(const ResolvedPluginOperation& op, const
 uint64_t dispatchResolvedDenseBufferUnary(const ResolvedPluginOperation& op, void* result_buffer_data,
         int64_t result_size, const void* value_data, int64_t value_size, int64_t value_stride,
         ExceptionSink* xsink) {
-    traceDispatch("dense-buffer-unary id=" + std::to_string(op.global_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    if (pluginDispatchTrace()) {
+        traceDispatch("dense-buffer-unary id=" + std::to_string(op.global_id) + " module='" + op.module_name
+            + "' operation='" + op.operation_name + "' helper="
+            + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    }
     auto helper = reinterpret_cast<PluginDenseBufferUnaryHelper>(op.runtime_helper);
     uint64_t rv = helper(result_buffer_data, result_size, value_data, value_size, value_stride, xsink);
     if (xsink && *xsink) {
@@ -607,9 +614,11 @@ uint64_t dispatchResolvedDenseBufferUnary(const ResolvedPluginOperation& op, voi
 uint64_t dispatchResolvedDenseBufferBinary(const ResolvedPluginOperation& op, void* result_buffer_data,
         int64_t result_size, const void* lhs_data, int64_t lhs_size, int64_t lhs_stride, const void* rhs_data,
         int64_t rhs_size, int64_t rhs_stride, ExceptionSink* xsink) {
-    traceDispatch("dense-buffer-binary id=" + std::to_string(op.global_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    if (pluginDispatchTrace()) {
+        traceDispatch("dense-buffer-binary id=" + std::to_string(op.global_id) + " module='" + op.module_name
+            + "' operation='" + op.operation_name + "' helper="
+            + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    }
     auto helper = reinterpret_cast<PluginDenseBufferBinaryHelper>(op.runtime_helper);
     uint64_t rv = helper(result_buffer_data, result_size, lhs_data, lhs_size, lhs_stride, rhs_data, rhs_size,
         rhs_stride, xsink);
@@ -2683,9 +2692,11 @@ extern "C" uint64_t qore_rt_plugin_unary(uint32_t global_operation_id, uint64_t 
     if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::UnaryValue, op, xsink)) {
         return nothingBits();
     }
-    traceDispatch("unary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    if (pluginDispatchTrace()) {
+        traceDispatch("unary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+            + "' operation='" + op.operation_name + "' helper="
+            + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    }
     auto helper = reinterpret_cast<PluginUnaryHelper>(op.runtime_helper);
     uint64_t rv = helper(value_bits, xsink);
     if (xsink && *xsink) {
@@ -2700,9 +2711,11 @@ extern "C" uint64_t qore_rt_plugin_binary(uint32_t global_operation_id, uint64_t
     if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::BinaryValue, op, xsink)) {
         return nothingBits();
     }
-    traceDispatch("binary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    if (pluginDispatchTrace()) {
+        traceDispatch("binary id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+            + "' operation='" + op.operation_name + "' helper="
+            + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    }
     auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
     uint64_t rv = helper(lhs_bits, rhs_bits, xsink);
     if (xsink && *xsink) {
@@ -2717,9 +2730,11 @@ extern "C" uint64_t qore_rt_plugin_call(uint32_t global_operation_id, uint64_t s
     if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::CallValueList, op, xsink)) {
         return nothingBits();
     }
-    traceDispatch("call id=" + std::to_string(global_operation_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    if (pluginDispatchTrace()) {
+        traceDispatch("call id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+            + "' operation='" + op.operation_name + "' helper="
+            + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    }
     auto helper = reinterpret_cast<PluginCallHelper>(op.runtime_helper);
     uint64_t rv = helper(self_bits, args_list_bits, xsink);
     if (xsink && *xsink) {
@@ -2746,9 +2761,11 @@ extern "C" uint64_t qore_rt_plugin_subscript(uint32_t global_operation_id, uint6
     if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::SubscriptValue, op, xsink)) {
         return nothingBits();
     }
-    traceDispatch("subscript id=" + std::to_string(global_operation_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    if (pluginDispatchTrace()) {
+        traceDispatch("subscript id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+            + "' operation='" + op.operation_name + "' helper="
+            + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    }
     auto helper = reinterpret_cast<PluginBinaryHelper>(op.runtime_helper);
     uint64_t rv = helper(container_bits, key_bits, xsink);
     if (xsink && *xsink) {
@@ -2764,9 +2781,11 @@ extern "C" uint64_t qore_rt_plugin_construct(uint32_t global_operation_id, uint6
     if (resolvePluginOperation(global_operation_id, QorePluginHelperAbi::Construct, op, xsink)) {
         return nothingBits();
     }
-    traceDispatch("construct id=" + std::to_string(global_operation_id) + " module='" + op.module_name
-        + "' operation='" + op.operation_name + "' helper="
-        + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    if (pluginDispatchTrace()) {
+        traceDispatch("construct id=" + std::to_string(global_operation_id) + " module='" + op.module_name
+            + "' operation='" + op.operation_name + "' helper="
+            + std::to_string(reinterpret_cast<uintptr_t>(op.runtime_helper)));
+    }
     auto helper = reinterpret_cast<PluginConstructHelper>(op.runtime_helper);
     uint64_t rv = helper(args_list_bits, xsink);
     if (xsink && *xsink) {

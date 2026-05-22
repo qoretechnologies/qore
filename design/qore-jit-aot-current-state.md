@@ -10,10 +10,10 @@ Qore AST -> Qore IR -> LLVM IR -> native code
 
 Runtime modes:
 
-- `--exec-mode=ast`: AST interpreter.
+- `--exec-mode=ast`: AST interpreter and default execution mode.
 - `--exec-mode=ir`: eager IR lowering and IR interpreter execution.
 - `--exec-mode=jit`: eager IR lowering and LLVM JIT compilation.
-- `--exec-mode=tiered`: default adaptive execution, promoting hot functions
+- `--exec-mode=tiered`: explicit adaptive execution, promoting hot functions
   AST -> IR -> JIT.
 - `qcc`: ahead-of-time compiler and artifact inspection tool for executables,
   `.qmod`, `.qo`, and `.qoa` artifacts.

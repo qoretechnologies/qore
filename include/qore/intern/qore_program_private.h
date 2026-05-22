@@ -528,7 +528,7 @@ public:
         parsing_stub_declarations : 1
         ;
 
-    qore_exec_mode_t exec_mode = QEM_TIERED;
+    qore_exec_mode_t exec_mode = QEM_AST;
     bool user_requested_exec_mode = false;
     bool ir_dump = false;
     bool ir_fallback_warn = false;

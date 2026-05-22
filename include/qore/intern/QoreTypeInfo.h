@@ -38,6 +38,7 @@
 #include <vector>
 #include <utility>
 #include <functional>
+#include <atomic>
 
 #include "qore/intern/QoreTypeSpec.h"
 
@@ -78,6 +79,14 @@ public:
 
     DLLLOCAL virtual ~QoreTypeInfo() = default;
 
+    DLLLOCAL signed char getContainsTypeParameterCache() const {
+        return contains_type_parameter_cache.load(std::memory_order_relaxed);
+    }
+
+    DLLLOCAL void setContainsTypeParameterCache(bool contains_type_parameter) const {
+        contains_type_parameter_cache.store(contains_type_parameter ? 1 : 0, std::memory_order_relaxed);
+    }
+
     // Accessors for accept_vec encapsulation
     DLLLOCAL bool isAcceptVecEmpty() const {
         return accept_vec.empty();
@@ -89,6 +98,24 @@ public:
 
     DLLLOCAL bool hasOneAcceptSpec() const {
         return accept_vec.size() == 1;
+    }
+
+    DLLLOCAL bool acceptsRuntimeValueWithoutFilter(const QoreValue& n) const {
+        if (n.isEnum()) {
+            return false;
+        }
+
+        qore_type_t t = n.getType();
+        if (t == NT_OBJECT) {
+            return false;
+        }
+
+        for (const QoreAcceptSpec& as : accept_vec) {
+            if (!as.map && as.spec.isRuntimeBaseType(t)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
@@ -471,6 +498,9 @@ public:
     DLLLOCAL static void acceptInputParam(const QoreTypeInfo* ti, int param_num, const char* param_name, QoreValue& n,
             ExceptionSink* xsink) {
         if (hasType(ti)) {
+            if (ti->acceptsRuntimeValueWithoutFilter(n)) {
+                return;
+            }
             ti->acceptInputIntern(xsink, "parameter", false, param_num, param_name, n);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink);
@@ -903,6 +933,7 @@ protected:
 
 private:
     const q_accept_vec_t accept_vec;
+    mutable std::atomic<signed char> contains_type_parameter_cache {-1};
 };
 
 class QoreAnyTypeInfo : public QoreTypeInfo {

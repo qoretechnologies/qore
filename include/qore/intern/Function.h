@@ -172,6 +172,12 @@ public:
         return num >= typeList.size() ? 0 : typeList[num];
     }
 
+    DLLLOCAL bool needsTypeParameterSubstitution() const;
+
+    DLLLOCAL void clearTypeParameterSubstitutionCache() const {
+        type_param_substitution_cache.store(-1, std::memory_order_relaxed);
+    }
+
     DLLLOCAL bool hasDefaultArg(unsigned i) const {
         return i >= defaultArgList.size() || !defaultArgList[i] ? false : true;
     }
@@ -203,6 +209,8 @@ protected:
 
     // varargs flag
     bool varargs = false;
+
+    mutable std::atomic<signed char> type_param_substitution_cache {-1};
 };
 
 struct QoreNamedArgBinding {
@@ -317,6 +325,7 @@ public:
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
         typeList[0] = typeInfo;
+        clearTypeParameterSubstitutionCache();
     }
 
     DLLLOCAL void setSelfId(LocalVar* n_selfid) {
@@ -577,6 +586,7 @@ protected:
     QoreTypeParamInstantiation type_param_instantiation;
     const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
     q_rt_flags_t old_rtflags = 0;
+    bool variant_needs_type_param_substitution = false;
     bool restore_stack = false;
     bool restore_runtime_ctx = false;
     bool restore_receiver_type_info = false;

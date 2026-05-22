@@ -332,11 +332,13 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     if (*xsink)
         return QoreValue();
 
-    bool plugin_matched = false;
-    QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "subscript",
-        QorePluginHelperAbi::SubscriptValue, *lh, *rh, plugin_matched, xsink);
-    if (*xsink || plugin_matched) {
-        return plugin_result;
+    if (qore_plugin_value_may_have_operation(*lh)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "subscript",
+            QorePluginHelperAbi::SubscriptValue, *lh, *rh, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
     }
 
     return doSquareBrackets(*lh, *rh, true, xsink);

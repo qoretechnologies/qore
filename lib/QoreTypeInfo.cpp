@@ -1259,21 +1259,31 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         return false;
     }
 
+    signed char cached = ti->getContainsTypeParameterCache();
+    if (cached != -1) {
+        return cached != 0;
+    }
+
     if (qore_get_type_parameter_type_info(ti)) {
+        ti->setContainsTypeParameterCache(true);
         return true;
     }
 
     if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
         for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
             if (qore_type_contains_type_parameter(arg)) {
+                ti->setContainsTypeParameterCache(true);
                 return true;
             }
         }
+        ti->setContainsTypeParameterCache(false);
         return false;
     }
 
     if (const QoreWildcardTypeInfo* wti = QoreTypeInfo::getWildcardType(ti)) {
-        return qore_type_contains_type_parameter(wti->getBound());
+        bool rv = qore_type_contains_type_parameter(wti->getBound());
+        ti->setContainsTypeParameterCache(rv);
+        return rv;
     }
 
     if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
@@ -1281,22 +1291,27 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         if (hp->isParameterizedHashDecl()) {
             for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
                 if (qore_type_contains_type_parameter(arg)) {
+                    ti->setContainsTypeParameterCache(true);
                     return true;
                 }
             }
         }
+        ti->setContainsTypeParameterCache(false);
         return false;
     }
 
     if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
         if (qore_type_contains_type_parameter(cti->getReturnType())) {
+            ti->setContainsTypeParameterCache(true);
             return true;
         }
         for (const QoreTypeInfo* param : cti->getParamTypes()) {
             if (qore_type_contains_type_parameter(param)) {
+                ti->setContainsTypeParameterCache(true);
                 return true;
             }
         }
+        ti->setContainsTypeParameterCache(false);
         return false;
     }
 
@@ -1304,24 +1319,30 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         for (const QoreReturnSpec& rt : ti->return_vec) {
             const QoreTypeInfo* member = rt.spec.getTypeInfo();
             if (member && member != nothingTypeInfo && qore_type_contains_type_parameter(member)) {
+                ti->setContainsTypeParameterCache(true);
                 return true;
             }
         }
+        ti->setContainsTypeParameterCache(false);
         return false;
     }
 
     const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
     if (subtype && qore_type_contains_type_parameter(subtype)) {
+        ti->setContainsTypeParameterCache(true);
         return true;
     }
 
     subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
     if (subtype && qore_type_contains_type_parameter(subtype)) {
+        ti->setContainsTypeParameterCache(true);
         return true;
     }
 
     subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
-    return subtype && qore_type_contains_type_parameter(subtype);
+    bool rv = subtype && qore_type_contains_type_parameter(subtype);
+    ti->setContainsTypeParameterCache(rv);
+    return rv;
 }
 
 const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {

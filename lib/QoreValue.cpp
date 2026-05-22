@@ -269,7 +269,6 @@ double QoreValue::getAsFloat() const {
 }
 
 bool QoreValue::getAsBool() const {
-    int type = getType();
     if (isBool()) {
         return getBool();
     }

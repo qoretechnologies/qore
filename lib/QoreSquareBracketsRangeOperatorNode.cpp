@@ -189,17 +189,19 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     if (*xsink)
         return QoreValue();
 
-    ReferenceHolder<QoreListNode> plugin_args(new QoreListNode(autoTypeInfo), xsink);
-    plugin_args->push(start_index->refSelf(), xsink);
-    plugin_args->push(stop_index->refSelf(), xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    bool plugin_matched = false;
-    QoreValue plugin_result = qore_plugin_try_dispatch_call(getProgram(), "slice", *seq, *plugin_args,
-        plugin_matched, xsink);
-    if (*xsink || plugin_matched) {
-        return plugin_result;
+    if (qore_plugin_value_may_have_operation(*seq)) {
+        ReferenceHolder<QoreListNode> plugin_args(new QoreListNode(autoTypeInfo), xsink);
+        plugin_args->push(start_index->refSelf(), xsink);
+        plugin_args->push(stop_index->refSelf(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_call(getProgram(), "slice", *seq, *plugin_args,
+            plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
     }
 
     bool empty = !getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink);

@@ -114,6 +114,10 @@ public:
         return typespec;
     }
 
+    DLLLOCAL bool isRuntimeBaseType(qore_type_t t) const {
+        return typespec == QTS_TYPE && u.t == t;
+    }
+
     DLLLOCAL const char* getName() const;
 
     DLLLOCAL const char* getTypeName() const;

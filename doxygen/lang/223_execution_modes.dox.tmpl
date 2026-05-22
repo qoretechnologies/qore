@@ -12,10 +12,10 @@
     @section exec_mode_overview Execution Mode Overview
 
     |!Mode|!How to select|!Primary use
-    |@ref exec_mode_ast "AST"|<tt>--exec-mode=ast</tt>|Legacy code and maximum compatibility
+    |@ref exec_mode_ast "AST"|Default or <tt>--exec-mode=ast</tt>|Legacy code, maximum compatibility, and predictable baseline performance
     |@ref exec_mode_ir "IR"|<tt>--exec-mode=ir</tt>|Predictable bytecode execution for modern code
     |@ref exec_mode_jit "JIT"|<tt>--exec-mode=jit</tt>|Eager native compilation for long-running code
-    |@ref exec_mode_tiered "Tiered"|<tt>--exec-mode=tiered</tt> or default|Adaptive production execution
+    |@ref exec_mode_tiered "Tiered"|<tt>--exec-mode=tiered</tt>|Adaptive production execution for workloads that benefit from promotion
     |@ref exec_mode_aot "AOT"|<tt>qcc</tt>|Precompiled executables, modules, and objects
 
     @section exec_mode_ast AST Execution Mode
@@ -78,8 +78,8 @@ $ gdb --args qore --exec-mode=jit script.qr
 
     @section exec_mode_tiered Tiered Execution Mode
 
-    Tiered mode is the default. Functions begin on the AST interpreter and are
-    promoted by call count:
+    Tiered mode is selected explicitly with <tt>--exec-mode=tiered</tt>. Functions begin on the
+    AST interpreter and are promoted by call count:
 
     - AST -> IR after <tt>--jit-ir-threshold=N</tt> calls, default \c 100
     - IR -> JIT after <tt>--jit-jit-threshold=N</tt> calls, default \c 1000
