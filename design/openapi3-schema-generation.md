@@ -25,8 +25,8 @@ Document REST endpoints using the `@SCHEMA` block format within Qore comments:
     - email (string): Email address
     - created_at (date): Account creation date
 
-    @error 404 User not found
-    @error 401 Unauthorized
+    @error (404): User not found
+    @error (401): Unauthorized
 
     @perms READ_USER
     @since 1.0.0
@@ -156,6 +156,27 @@ If the return value is a primitive, the same format applies:
 @return (*hash<Response>): optional response (may be NOTHING)
 @return (list<hash<UserInfo>>): list of users
 ```
+
+### Error Response Definitions
+
+Error responses are declared with `@error` using the format:
+```
+@error (NNN): description
+```
+
+The status code **must** be parenthesized and followed by a colon. A bare
+`@error NNN description` declaration matches nothing in the parser and is
+**silently dropped** — the error response never reaches the generated OpenAPI /
+REST spec (and therefore never reaches REST clients or MCP tool gateways).
+Whitespace around the code and colon is flexible:
+
+```
+@error (404): User not found
+@error ( 409 ) : Email already in use
+```
+
+Multiple `@error` lines accumulate; each maps a status code to its description
+in the operation's `responses` section.
 
 ## Command-Line Tool
 
@@ -309,7 +330,7 @@ class UserHandler inherits AbstractRestHandler {
         - total (int): Total number of users matching filter
         - has_more (bool): Whether more results are available
 
-        @error 401 Authentication required
+        @error (401): Authentication required
         @perms LIST_USERS
         @since 1.0.0
         @ENDSCHEMA
@@ -336,8 +357,8 @@ class UserHandler inherits AbstractRestHandler {
         - role (string): Assigned role
         - created_at (date): Creation timestamp
 
-        @error 400 Invalid input data
-        @error 409 Username or email already exists
+        @error (400): Invalid input data
+        @error (409): Username or email already exists
         @perms CREATE_USER
         @since 1.0.0
         @ENDSCHEMA
@@ -362,8 +383,8 @@ class UserHandler inherits AbstractRestHandler {
         - created_at (date): Creation timestamp
         - last_login (*date): Last login timestamp
 
-        @error 404 User not found
-        @error 401 Authentication required
+        @error (404): User not found
+        @error (401): Authentication required
         @perms READ_USER
         @since 1.0.0
         @ENDSCHEMA
@@ -389,9 +410,9 @@ class UserHandler inherits AbstractRestHandler {
         - role (string): Updated role
         - updated_at (date): Update timestamp
 
-        @error 404 User not found
-        @error 400 Invalid input
-        @error 409 Email already in use
+        @error (404): User not found
+        @error (400): Invalid input
+        @error (409): Email already in use
         @perms UPDATE_USER
         @since 1.0.0
         @ENDSCHEMA
@@ -412,8 +433,8 @@ class UserHandler inherits AbstractRestHandler {
         - success (bool): Whether deletion succeeded
         - message (string): Status message
 
-        @error 404 User not found
-        @error 403 Cannot delete admin users
+        @error (404): User not found
+        @error (403): Cannot delete admin users
         @perms DELETE_USER
         @since 1.0.0
         @ENDSCHEMA

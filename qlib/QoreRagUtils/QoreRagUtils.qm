@@ -232,6 +232,12 @@ public class RagPipeline {
 
         #! Optional explicit over-retrieval K before reranking
         *int pre_rerank_top_k;
+
+        #! Optional observer for pipeline-level RAG telemetry
+        *hash<RagTelemetryObserver> telemetry_observer;
+
+        #! Optional caller-owned telemetry correlation context
+        *hash<auto> telemetry_context;
     }
 
     #! Derives a deterministic UUIDv5-style chunk id from \a doc_id and \a chunk_index
@@ -331,6 +337,8 @@ RagPipeline pipe(
         self.query_transformer = opts.query_transformer;
         self.embedding_cache = opts.embedding_cache;
         self.pre_rerank_top_k = opts.pre_rerank_top_k;
+        self.telemetry_observer = opts.telemetry_observer;
+        self.telemetry_context = opts.telemetry_context;
     }
 
     #! Ingests a document — chunks, embeds, and stores it
@@ -341,39 +349,78 @@ RagPipeline pipe(
         @return list of chunk ids that were stored
     */
     list<string> ingest(string doc_id, string content, *hash<auto> metadata) {
-        list<hash<ChunkInfo>> chunks = chunker.chunk(content, metadata);
-        if (!chunks) {
-            return ();
-        }
-        list<string> texts = map $1.content, chunks;
-        list<list<float>> vectors = embedder.encodeBatch(texts);
-        list<hash<VectorRecord>> records = ();
-        list<string> ids = ();
-        for (int i = 0; i < chunks.size(); ++i) {
-            # deterministic UUIDv5-style id derived from doc_id + index;
-            # accepted by every AbstractVectorStore backend (Qdrant
-            # requires UUIDs/uints; pgvector accepts any string).  The
-            # original doc_id / chunk_index stay in the payload for
-            # retrieval-time access.
-            string id = deriveChunkId(doc_id, chunks[i].index);
-            push ids, id;
-            hash<auto> payload = {
-                "doc_id": doc_id,
-                "chunk_index": chunks[i].index,
-                "content": chunks[i].content,
-                "token_count": chunks[i].token_count,
-            };
-            if (chunks[i].metadata) {
-                payload += chunks[i].metadata;
+        date started = now_us();
+        hash<auto> request = RagTelemetry::ingestRequestSummary(doc_id,
+            content, metadata);
+        notifyTelemetry("start", "ingest", {
+            "request": request,
+        });
+        try {
+            list<hash<ChunkInfo>> chunks = chunker.chunk(content, metadata);
+            if (!chunks) {
+                notifyTelemetry("end", "ingest", {
+                    "request": request,
+                    "response": {"chunk_id_count": 0},
+                    "metrics": <RagUsageMetrics>{"document_count": 1},
+                    "status": "ok",
+                    "latency_ms": elapsedMs(started),
+                });
+                return ();
             }
-            push records, <VectorRecord>{
-                "id": id,
-                "vector": vectors[i],
-                "payload": payload,
-            };
+            list<string> texts = map $1.content, chunks;
+            list<list<float>> vectors = embedder.encodeBatch(texts);
+            list<hash<VectorRecord>> records = ();
+            list<string> ids = ();
+            for (int i = 0; i < chunks.size(); ++i) {
+                # deterministic UUIDv5-style id derived from doc_id + index;
+                # accepted by every AbstractVectorStore backend (Qdrant
+                # requires UUIDs/uints; pgvector accepts any string).  The
+                # original doc_id / chunk_index stay in the payload for
+                # retrieval-time access.
+                string id = deriveChunkId(doc_id, chunks[i].index);
+                push ids, id;
+                hash<auto> payload = {
+                    "doc_id": doc_id,
+                    "chunk_index": chunks[i].index,
+                    "content": chunks[i].content,
+                    "token_count": chunks[i].token_count,
+                };
+                if (chunks[i].metadata) {
+                    payload += chunks[i].metadata;
+                }
+                push records, <VectorRecord>{
+                    "id": id,
+                    "vector": vectors[i],
+                    "payload": payload,
+                };
+            }
+            vector_store.upsert(records);
+            notifyTelemetry("end", "ingest", {
+                "request": request,
+                "response": {"chunk_id_count": ids.size()},
+                "metrics": <RagUsageMetrics>{
+                    "document_count": 1,
+                    "chunk_count": chunks.size(),
+                    "token_count": RagTelemetry::chunkTokenCount(chunks),
+                    "embedding_input_count": texts.size(),
+                    "vector_count": vectors.size(),
+                    "vector_dimensions": vectors ? vectors[0].size() : 0,
+                    "storage_bytes": content.length(),
+                },
+                "collection": vector_store.getCollection(),
+                "status": "ok",
+                "latency_ms": elapsedMs(started),
+            });
+            return ids;
+        } catch (hash<ExceptionInfo> ex) {
+            notifyTelemetry("error", "ingest", {
+                "request": request,
+                "status": "error",
+                "latency_ms": elapsedMs(started),
+                "error": RagTelemetry::errorInfo(ex),
+            });
+            rethrow;
         }
-        vector_store.upsert(records);
-        return ids;
     }
 
     #! Retrieves the top-K most relevant chunks for a query
@@ -406,6 +453,7 @@ RagPipeline pipe(
            output, to keep score semantics stable.
     */
     list<hash<RetrievalHit>> retrieve(string query, *int k, *hash<auto> filter) {
+        date started = now_us();
         int final_k = k ?? top_k;
         int search_k;
         if (exists reranker) {
@@ -413,46 +461,104 @@ RagPipeline pipe(
         } else {
             search_k = final_k;
         }
+        hash<auto> request = RagTelemetry::retrieveRequestSummary(query,
+            final_k, search_k, exists reranker, filter);
+        notifyTelemetry("start", "retrieve", {
+            "request": request,
+        });
 
-        # Step 1: optional HyDE-style query transformation — the reranker
-        # still sees the *original* query for stable scoring
-        string embed_query = query_transformer ? query_transformer(query) : query;
+        int cache_hits = 0;
+        int cache_misses = 0;
+        int store_attempts = 0;
+        int store_failures = 0;
+        try {
+            # Step 1: optional HyDE-style query transformation — the reranker
+            # still sees the *original* query for stable scoring
+            string embed_query = query_transformer ? query_transformer(query)
+                : query;
 
-        # Step 2: embedding cache lookup + encode-on-miss
-        list<float> query_vec;
-        if (embedding_cache) {
-            *list<float> cached = embedding_cache.get(embed_query);
-            if (exists cached) {
-                query_vec = cached;
+            # Step 2: embedding cache lookup + encode-on-miss
+            list<float> query_vec;
+            if (embedding_cache) {
+                *list<float> cached = embedding_cache.get(embed_query);
+                if (exists cached) {
+                    ++cache_hits;
+                    query_vec = cached;
+                } else {
+                    ++cache_misses;
+                    query_vec = embedder.encode(embed_query);
+                    embedding_cache.put(embed_query, query_vec);
+                }
             } else {
                 query_vec = embedder.encode(embed_query);
-                embedding_cache.put(embed_query, query_vec);
             }
-        } else {
-            query_vec = embedder.encode(embed_query);
-        }
 
-        # Step 3: fallback vector-store chain
-        list<hash<VectorSearchResult>> hits = searchWithFallback(query_vec,
-            search_k, filter);
+            # Step 3: fallback vector-store chain
+            list<hash<VectorSearchResult>> hits = searchWithFallback(query_vec,
+                search_k, filter, \store_attempts, \store_failures);
 
-        if (!exists reranker || hits.size() <= 1) {
             list<hash<RetrievalHit>> rv = ();
-            int upper = hits.size() < final_k ? hits.size() : final_k;
-            for (int i = 0; i < upper; ++i) {
-                push rv, <RetrievalHit>{
-                    "id": hits[i].id,
-                    "score": hits[i].score,
-                    "content": hits[i].payload.content,
-                    "payload": hits[i].payload,
-                };
+            if (!exists reranker || hits.size() <= 1) {
+                rv = hitsToRetrievalHits(hits, final_k);
+            } else {
+                # Step 4: rerank phase — uses the original query
+                rv = rerankHits(query, hits, final_k);
             }
+            notifyTelemetry("end", "retrieve", {
+                "request": request,
+                "response": {"hit_count": rv.size()},
+                "metrics": <RagUsageMetrics>{
+                    "requested_top_k": search_k,
+                    "candidate_count": hits.size(),
+                    "returned_count": rv.size(),
+                    "embedding_cache_hits": cache_hits,
+                    "embedding_cache_misses": cache_misses,
+                    "vector_dimensions": query_vec.size(),
+                    "vector_store_attempts": store_attempts,
+                    "vector_store_failures": store_failures,
+                },
+                "status": "ok",
+                "latency_ms": elapsedMs(started),
+            });
             return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            notifyTelemetry("error", "retrieve", {
+                "request": request,
+                "metrics": <RagUsageMetrics>{
+                    "requested_top_k": search_k,
+                    "embedding_cache_hits": cache_hits,
+                    "embedding_cache_misses": cache_misses,
+                    "vector_store_attempts": store_attempts,
+                    "vector_store_failures": store_failures,
+                },
+                "status": "error",
+                "latency_ms": elapsedMs(started),
+                "error": RagTelemetry::errorInfo(ex),
+            });
+            rethrow;
         }
+    }
 
-        # Step 4: rerank phase — uses the original query
+    private list<hash<RetrievalHit>> hitsToRetrievalHits(
+            list<hash<VectorSearchResult>> hits, int final_k) {
+        list<hash<RetrievalHit>> rv = ();
+        int upper = hits.size() < final_k ? hits.size() : final_k;
+        for (int i = 0; i < upper; ++i) {
+            push rv, <RetrievalHit>{
+                "id": hits[i].id,
+                "score": hits[i].score,
+                "content": hits[i].payload.content,
+                "payload": hits[i].payload,
+            };
+        }
+        return rv;
+    }
+
+    private list<hash<RetrievalHit>> rerankHits(string query,
+            list<hash<VectorSearchResult>> hits, int final_k) {
         list<string> docs = map $1.payload.content, hits;
-        list<hash<RerankResult>> reranked = reranker.rerank(query, docs, final_k);
+        list<hash<RerankResult>> reranked = reranker.rerank(query, docs,
+            final_k);
         list<hash<RetrievalHit>> rv = ();
         foreach hash<RerankResult> r in (reranked) {
             hash<VectorSearchResult> vh = hits[r.index];
@@ -477,14 +583,18 @@ RagPipeline pipe(
         @param query_vector the pre-computed query embedding
         @param k how many results the store should return
         @param filter optional backend-specific filter, forwarded verbatim
+        @param attempts receives the number of vector stores tried
+        @param failures receives the number of vector stores that raised
 
         @return hits from the first store that succeeded with a non-empty
             result, or () if every store returned empty cleanly
     */
     private list<hash<VectorSearchResult>> searchWithFallback(
-            list<float> query_vector, int k, *hash<auto> filter) {
+            list<float> query_vector, int k, *hash<auto> filter,
+            reference<int> attempts, reference<int> failures) {
         *hash<ExceptionInfo> last_err;
         foreach AbstractVectorStore store in (vector_stores) {
+            ++attempts;
             try {
                 list<hash<VectorSearchResult>> hits = store.search(query_vector,
                     k, filter);
@@ -492,6 +602,7 @@ RagPipeline pipe(
                     return hits;
                 }
             } catch (hash<ExceptionInfo> ex) {
+                ++failures;
                 last_err = ex;
             }
         }
@@ -501,6 +612,32 @@ RagPipeline pipe(
             throw last_err.err, last_err.desc, last_err.arg;
         }
         return ();
+    }
+
+    private notifyTelemetry(string type, string operation, hash<auto> fields) {
+        if (!telemetry_observer) {
+            return;
+        }
+        hash<RagTelemetryEvent> event = <RagTelemetryEvent>{
+            "type": type,
+            "operation": operation,
+            "timestamp": now_us(),
+        };
+        if (telemetry_context) {
+            event.telemetry_context = telemetry_context;
+        }
+        foreach string key in (("backend", "model", "collection", "request",
+                "response", "metrics", "status", "latency_ms", "error",
+                "attributes")) {
+            if (exists fields{key}) {
+                event{key} = fields{key};
+            }
+        }
+        RagTelemetry::notify(telemetry_observer, event);
+    }
+
+    private static int elapsedMs(date started) {
+        return (now_us() - started).durationMicroseconds() / 1000;
     }
 
     #! Re-rank an arbitrary list of documents using the configured reranker
@@ -517,10 +654,47 @@ RagPipeline pipe(
     */
     list<hash<RerankResult>> rerank(string query, list<string> documents, *int k,
             *hash<auto> opts) {
-        if (!exists reranker) {
-            throw "RAG-PIPELINE-ERROR", "no reranker is configured on this pipeline";
+        date started = now_us();
+        int final_k = k ?? top_k;
+        hash<auto> request = RagTelemetry::rerankRequestSummary(query,
+            documents, final_k);
+        notifyTelemetry("start", "rerank", {
+            "request": request,
+        });
+        try {
+            if (!exists reranker) {
+                throw "RAG-PIPELINE-ERROR",
+                    "no reranker is configured on this pipeline";
+            }
+            list<hash<RerankResult>> rv = reranker.rerank(query, documents,
+                final_k, opts);
+            notifyTelemetry("end", "rerank", {
+                "request": request,
+                "response": {"result_count": rv.size()},
+                "metrics": <RagUsageMetrics>{
+                    "document_count": documents.size(),
+                    "requested_top_k": final_k,
+                    "returned_count": rv.size(),
+                },
+                "model": reranker.getModel(),
+                "status": "ok",
+                "latency_ms": elapsedMs(started),
+            });
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            notifyTelemetry("error", "rerank", {
+                "request": request,
+                "metrics": <RagUsageMetrics>{
+                    "document_count": documents.size(),
+                    "requested_top_k": final_k,
+                },
+                "model": exists reranker ? reranker.getModel() : NOTHING,
+                "status": "error",
+                "latency_ms": elapsedMs(started),
+                "error": RagTelemetry::errorInfo(ex),
+            });
+            rethrow;
         }
-        return reranker.rerank(query, documents, k ?? top_k, opts);
     }
 
     #! Returns the embedder

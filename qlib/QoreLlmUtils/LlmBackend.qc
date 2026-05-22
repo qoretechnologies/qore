@@ -607,6 +607,8 @@ public class LlmBackend {
     private {
         #! The backend mode string (matches @ref LlmBackendConfig::mode)
         string mode;
+        #! Backend configuration, retained for telemetry observer defaults
+        hash<LlmBackendConfig> config_h;
         #! The provider implementation looked up from @ref LlmProviderRegistry
         AbstractLlmProvider provider;
     }
@@ -625,6 +627,7 @@ public class LlmBackend {
     */
     constructor(hash<LlmBackendConfig> config) {
         mode = config.mode;
+        config_h = config;
         provider = LlmProviderRegistry::getFactoryEx(mode).create(config);
     }
 
@@ -658,8 +661,34 @@ public class LlmBackend {
     */
     hash<LlmCompletionResult> complete(string system_prompt, string user_prompt,
             *hash<auto> output_schema, *hash<LlmRequestOptions> opts) {
-        return provider.complete(system_prompt, user_prompt, output_schema,
-            opts);
+        date started = now_us();
+        *hash<LlmTelemetryObserver> observer = getTelemetryObserver(opts);
+        hash<auto> request = LlmTelemetry::completionRequestSummary(
+            system_prompt, user_prompt, output_schema, opts);
+        notifyTelemetry(observer, "start", "complete", opts, {
+            "request": request,
+        });
+        try {
+            hash<LlmCompletionResult> response = provider.complete(system_prompt,
+                user_prompt, output_schema, opts);
+            notifyTelemetry(observer, "end", "complete", opts, {
+                "request": request,
+                "response": LlmTelemetry::completionResponseSummary(response),
+                "usage": LlmTelemetry::normalizeUsage(response.usage),
+                "raw_usage": response.usage,
+                "status": "ok",
+                "latency_ms": elapsedMs(started),
+            });
+            return response;
+        } catch (hash<ExceptionInfo> ex) {
+            notifyTelemetry(observer, "error", "complete", opts, {
+                "request": request,
+                "status": "error",
+                "latency_ms": elapsedMs(started),
+                "error": LlmTelemetry::errorInfo(ex),
+            });
+            rethrow;
+        }
     }
 
     #! Multi-turn chat with optional tool calling
@@ -677,7 +706,36 @@ public class LlmBackend {
     */
     hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
-        return provider.chat(messages, tools, opts);
+        date started = now_us();
+        *hash<LlmTelemetryObserver> observer = getTelemetryObserver(opts);
+        hash<auto> request = LlmTelemetry::chatRequestSummary(messages, tools,
+            opts, False);
+        notifyTelemetry(observer, "start", "chat", opts, {
+            "request": request,
+        });
+        try {
+            hash<ChatResponse> response = provider.chat(messages, tools, opts);
+            notifyTelemetry(observer, "end", "chat", opts, {
+                "request": request,
+                "response": LlmTelemetry::chatResponseSummary(response),
+                "usage": LlmTelemetry::normalizeUsage(response.usage),
+                "raw_usage": response.usage,
+                "status": "ok",
+                "stop_reason": response.stop_reason,
+                "response_id": response.id,
+                "model": response.model,
+                "latency_ms": elapsedMs(started),
+            });
+            return response;
+        } catch (hash<ExceptionInfo> ex) {
+            notifyTelemetry(observer, "error", "chat", opts, {
+                "request": request,
+                "status": "error",
+                "latency_ms": elapsedMs(started),
+                "error": LlmTelemetry::errorInfo(ex),
+            });
+            rethrow;
+        }
     }
 
     #! Streams a chat completion via Server-Sent Events (SSE)
@@ -718,7 +776,87 @@ llm.chatStream(
     chatStream(list<hash<ChatMessage>> messages,
             code<nothing(hash<ChatStreamEvent>)> callback,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
-        provider.chatStream(messages, callback, tools, opts);
+        date started = now_us();
+        *date first_delta;
+        int delta_count = 0;
+        *hash<auto> last_usage;
+        *string stop_reason;
+        *string response_id;
+        *string response_model;
+        *hash<LlmTelemetryObserver> observer = getTelemetryObserver(opts);
+        hash<auto> request = LlmTelemetry::chatRequestSummary(messages, tools,
+            opts, True);
+        notifyTelemetry(observer, "start", "chat_stream", opts, {
+            "request": request,
+        });
+        try {
+            provider.chatStream(messages, sub (hash<ChatStreamEvent> event) {
+                ++delta_count;
+                if (!first_delta) {
+                    first_delta = now_us();
+                }
+                if (event.raw.typeCode() == NT_HASH) {
+                    hash<auto> raw = cast<hash<auto>>(event.raw);
+                    if (raw.usage.typeCode() == NT_HASH) {
+                        last_usage = cast<hash<auto>>(raw.usage);
+                    }
+                    if (raw.id.val()) {
+                        response_id = raw.id;
+                    }
+                    if (raw.model.val()) {
+                        response_model = raw.model;
+                    }
+                    *string finish_reason =
+                        getStreamFinishReason(cast<hash<auto>>(raw));
+                    if (finish_reason.val()) {
+                        stop_reason = finish_reason;
+                    }
+                }
+                notifyTelemetry(observer, "stream_delta", "chat_stream", opts, {
+                    "request": request,
+                    "stream_delta": LlmTelemetry::streamDeltaSummary(event,
+                        delta_count),
+                    "usage": last_usage
+                        ? LlmTelemetry::normalizeUsage(last_usage) : NOTHING,
+                    "raw_usage": last_usage,
+                    "response_id": response_id,
+                    "model": response_model,
+                    "time_to_first_delta_ms": first_delta
+                        ? (first_delta - started).durationMicroseconds()
+                            / 1000
+                        : NOTHING,
+                });
+                callback(event);
+            }, tools, opts);
+            notifyTelemetry(observer, "end", "chat_stream", opts, {
+                "request": request,
+                "response": {
+                    "stream_delta_count": delta_count,
+                },
+                "usage": last_usage
+                    ? LlmTelemetry::normalizeUsage(last_usage) : NOTHING,
+                "raw_usage": last_usage,
+                "status": "ok",
+                "stop_reason": stop_reason,
+                "response_id": response_id,
+                "model": response_model,
+                "latency_ms": elapsedMs(started),
+                "time_to_first_delta_ms": first_delta
+                    ? (first_delta - started).durationMicroseconds() / 1000
+                    : NOTHING,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            notifyTelemetry(observer, "error", "chat_stream", opts, {
+                "request": request,
+                "status": "error",
+                "latency_ms": elapsedMs(started),
+                "time_to_first_delta_ms": first_delta
+                    ? (first_delta - started).durationMicroseconds() / 1000
+                    : NOTHING,
+                "error": LlmTelemetry::errorInfo(ex),
+            });
+            rethrow;
+        }
     }
 
     #! OpenAI-compatible chat-completions facade
@@ -812,6 +950,71 @@ llm.chatStream(
             }
         }
         return rv;
+    }
+
+    private *hash<LlmTelemetryObserver> getTelemetryObserver(
+            *hash<LlmRequestOptions> opts) {
+        return opts.telemetry_observer ?? config_h.telemetry_observer;
+    }
+
+    private *hash<auto> getTelemetryContext(*hash<LlmRequestOptions> opts) {
+        return opts.telemetry_context ?? config_h.telemetry_context;
+    }
+
+    private *string getTelemetryModel(*hash<LlmRequestOptions> opts,
+            *string event_model) {
+        return event_model ?? opts.model ?? provider.getModel();
+    }
+
+    private notifyTelemetry(*hash<LlmTelemetryObserver> observer,
+            string type, string operation, *hash<LlmRequestOptions> opts,
+            hash<auto> fields) {
+        hash<LlmTelemetryEvent> event = <LlmTelemetryEvent>{
+            "type": type,
+            "operation": operation,
+            "provider_mode": mode,
+            "timestamp": now_us(),
+        };
+        *string model = getTelemetryModel(opts, fields.model);
+        if (model.val()) {
+            event.model = model;
+        }
+        *hash<auto> telemetry_context = getTelemetryContext(opts);
+        if (telemetry_context) {
+            event.telemetry_context = telemetry_context;
+        }
+        foreach string key in (("request", "response", "stream_delta",
+                "usage", "raw_usage", "status", "stop_reason",
+                "response_id", "latency_ms", "time_to_first_delta_ms",
+                "error", "attributes")) {
+            if (exists fields{key}) {
+                event{key} = fields{key};
+            }
+        }
+        LlmTelemetry::notify(observer, event);
+    }
+
+    private static int elapsedMs(date started) {
+        return (now_us() - started).durationMicroseconds() / 1000;
+    }
+
+    private static *string getStreamFinishReason(hash<auto> raw) {
+        if (raw.choices.typeCode() == NT_LIST && raw.choices.size()) {
+            auto choice = raw.choices[0];
+            if (choice.typeCode() == NT_HASH) {
+                hash<auto> choice_h = cast<hash<auto>>(choice);
+                if (choice_h.finish_reason.val()) {
+                    return choice_h.finish_reason;
+                }
+            }
+        }
+        if (raw.finish_reason.val()) {
+            return raw.finish_reason;
+        }
+        if (raw.finishReason.val()) {
+            return raw.finishReason;
+        }
+        return NOTHING;
     }
 
     #! Estimates the token count for a text string
