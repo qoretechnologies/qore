@@ -161,11 +161,13 @@ public class QoreClassificationMetricsProcessor inherits DataProvider::AbstractD
 
     #! Processes a window of records through classification metrics
     private list<auto> processWindow(list<hash<auto>> records) {
-        list<auto> y_true;
-        list<auto> y_pred;
+        list<float> y_true;
+        list<float> y_pred;
         foreach hash<auto> rec in (records) {
-            push y_true, DataProvider::AbstractDataProvider::getFieldValue(rec, true_field);
-            push y_pred, DataProvider::AbstractDataProvider::getFieldValue(rec, predicted_field);
+            push y_true,
+                DataProvider::AbstractDataProvider::getFieldValue(rec, true_field).toFloat();
+            push y_pred,
+                DataProvider::AbstractDataProvider::getFieldValue(rec, predicted_field).toFloat();
         }
 
         hash<ML::ClassificationReport> report = ML::ml_classification_report(y_true, y_pred);

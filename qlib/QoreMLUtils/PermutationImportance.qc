@@ -89,7 +89,7 @@ public class PermutationImportance {
 
         @throw PERMUTATION-IMPORTANCE-ERROR if data is empty or dimensions mismatch
     */
-    hash<auto> compute(code<list<auto> (list<auto>)> predictor, list<auto> X, list<auto> y,
+    hash<auto> compute(code<list<auto> (list<auto>)> predictor, list<list<float>> X, list<float> y,
             code<float (list<auto>, list<auto>)> scorer, *list<string> feature_names) {
         if (!X.size()) {
             throw "PERMUTATION-IMPORTANCE-ERROR", "empty feature matrix";
@@ -121,7 +121,7 @@ public class PermutationImportance {
 
             for (int r = 0; r < n_repeats; ++r) {
                 # Create shuffled copy of X with column j permuted
-                list<auto> X_perm = shuffleColumn(X, j, n_samples);
+                list<list<float>> X_perm = shuffleColumn(X, j, n_samples);
                 list<auto> y_pred_perm = predictor(X_perm);
                 float perm_score = scorer(y, y_pred_perm);
                 push score_drops, baseline_score - perm_score;
@@ -140,24 +140,27 @@ public class PermutationImportance {
     }
 
     #! Shuffles column j of matrix X using Fisher-Yates
-    private static list<auto> shuffleColumn(list<auto> X, int j, int n_samples) {
+    private static list<list<float>> shuffleColumn(list<list<float>> X, int j, int n_samples) {
         # Deep copy the column values
-        list<auto> col_values = map $1[j], X;
+        list<float> col_values = map $1[j], X;
 
         # Fisher-Yates shuffle using Qore's built-in RNG
         for (int i = n_samples - 1; i > 0; --i) {
             int swap_idx = rand() % (i + 1);
             if (swap_idx != i) {
-                auto tmp = col_values[i];
+                float tmp = col_values[i];
                 col_values[i] = col_values[swap_idx];
                 col_values[swap_idx] = tmp;
             }
         }
 
         # Build new matrix with shuffled column
-        list<auto> X_perm();
+        list<list<float>> X_perm();
         for (int i = 0; i < n_samples; ++i) {
-            list<auto> row = X[i] + ();  # shallow copy of row
+            list<float> row;
+            foreach float v in (X[i]) {
+                push row, v;
+            }
             row[j] = col_values[i];
             push X_perm, row;
         }
