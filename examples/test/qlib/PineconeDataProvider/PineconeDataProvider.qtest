@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/PineconeDataProvider
 
@@ -29,11 +30,46 @@ class FakePineconeRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class PineconeDataProviderTest inherits QUnit::Test {
-    constructor() : Test("PineconeDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("PineconeDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.PINECONE_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("list-indexes hits the right control-plane endpoint",
             \listIndexesTest());
+
+        # Live test requires a real Pinecone connection AND a
+        # `PINECONE_INDEX` env var naming an existing index in the
+        # account.  The PineconeDataProvider currently exposes a
+        # control-plane `list-indexes` action; the live test verifies
+        # that the named index actually shows up in the response.
+        # Cost: Pinecone serverless: 1 query — free-tier eligible.
+        if (conn_name) {
+            addTestCase("live: ping + list-indexes (verifies existing index)",
+                \livePineconeTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Pinecone connection name; without it (and without the "
+            "PINECONE_CONNECTION env var) the live test is skipped.  Also "
+            "requires PINECONE_INDEX naming an existing index in the "
+            "account.",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -67,5 +103,42 @@ public class PineconeDataProviderTest inherits QUnit::Test {
         assertEq(2, resp.indexes.size());
         assertEq("demo-1", resp.indexes[0].name);
         assertEq(1024, resp.indexes[0].dimension);
+    }
+
+    #! Exercises Pinecone's live `/indexes` control-plane endpoint
+    /** Verifies the actual wire format against Pinecone's control-plane
+        API.  Requires both a connection name AND a `PINECONE_INDEX` env
+        var naming an existing index; the test asserts that the named
+        index appears in the list.
+
+        Cost: Pinecone serverless: 1 query — free-tier eligible.
+    */
+    private livePineconeTest() {
+        *string index_name = ENV.PINECONE_INDEX;
+        if (!index_name.val()) {
+            testSkip("PINECONE_INDEX env var must name an existing Pinecone "
+                "index in the account");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Pinecone connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider li = prov.getChildProvider("list-indexes");
+        auto resp = li.doRequest(NOTHING);
+        assertTrue(exists resp.indexes,
+            "Pinecone list-indexes returned an indexes field");
+        # Find the named index in the response — wire-format check
+        bool found = False;
+        foreach hash<auto> idx in (resp.indexes ?? ()) {
+            if (idx.name == index_name) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, sprintf("PINECONE_INDEX %y was found in the "
+            "account's list-indexes response", index_name));
     }
 }

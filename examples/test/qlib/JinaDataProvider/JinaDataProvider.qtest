@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/JinaDataProvider
 
@@ -51,14 +52,43 @@ class FakeJinaRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class JinaDataProviderTest inherits QUnit::Test {
-    constructor() : Test("JinaDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("JinaDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.JINA_CONNECTION;
+
         addTestCase("factory + app + 2 actions registered", \registrationTest());
         addTestCase("root provider lists 2 children",       \rootProviderTest());
         addTestCase("create-embeddings forwards body unchanged",
             \embeddingRequestTest());
         addTestCase("rerank parses 'results' (Jina format)",
             \rerankRequestTest());
+
+        # Live test requires a real Jina AI connection.
+        # Cost: 1 embedding token (free tier eligible).
+        if (conn_name) {
+            addTestCase("live: ping + create-embeddings (jina-embeddings-v3)",
+                \liveJinaTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Jina AI connection name; without it (and "
+            "without the JINA_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -138,5 +168,27 @@ public class JinaDataProviderTest inherits QUnit::Test {
         assertEq(2, resp.results.size());
         assertEq(0.95, resp.results[0].relevance_score);
         assertEq(2, resp.results[0]."index");
+    }
+
+    #! Exercises Jina AI's live create-embeddings endpoint
+    /** Verifies the actual wire format against Jina AI's production endpoint
+        with a single-token embedding request on `jina-embeddings-v3`. Cost:
+        1 embedding token (free tier eligible).
+    */
+    private liveJinaTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Jina connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
+        auto resp = emb.doRequest({
+            "model": "jina-embeddings-v3",
+            "input": ("hello",),
+            "task": "retrieval.query",
+        });
+        assertTrue(resp.data[0].embedding.size() > 0,
+            "Jina returned non-empty embedding vector");
     }
 }

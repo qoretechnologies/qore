@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/TavilyDataProvider
 
@@ -45,14 +46,43 @@ class FakeTavilyRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class TavilyDataProviderTest inherits QUnit::Test {
-    constructor() : Test("TavilyDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("TavilyDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.TAVILY_CONNECTION;
+
         addTestCase("factory + app + 4 actions registered", \registrationTest());
         addTestCase("root provider lists 4 children",        \rootProviderTest());
         addTestCase("search action POSTs to /search",        \searchTest());
         addTestCase("extract action POSTs to /extract",      \extractTest());
         addTestCase("crawl action POSTs to /crawl",          \crawlTest());
         addTestCase("map action POSTs to /map",              \mapTest());
+
+        # Live test requires a real Tavily connection.
+        # Tavily free tier: 1000 search queries/month. ~$0 per run when within
+        # free tier.
+        if (conn_name) {
+            addTestCase("live: ping + search", \liveTavilyTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Tavily connection name; without it (and without the "
+            "TAVILY_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -151,5 +181,28 @@ public class TavilyDataProviderTest inherits QUnit::Test {
         assertEq("POST", fake.last_method);
         assertEq("map", fake.last_path);
         assertEq(2, resp.results.size());
+    }
+
+    #! Exercises Tavily's live `/search` endpoint
+    /** Verifies the actual wire format against Tavily's production API.
+        Tavily free tier: 1000 search queries/month.  ~$0 per run when
+        within free tier.
+    */
+    private liveTavilyTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Tavily connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider s = prov.getChildProvider("search");
+        auto resp = s.doRequest({
+            "query":       "hello world",
+            "max_results": 1,
+        });
+        assertTrue(resp.results.size() >= 1,
+            "Tavily search returned at least one result");
+        assertTrue(resp.results[0].url.val(),
+            "Tavily search result has a URL");
     }
 }
