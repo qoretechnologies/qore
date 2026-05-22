@@ -131,6 +131,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \requestOptionsOverrideModelTest());
         addTestCase("LlmStructuredRepair parses repaired JSON text",
             \structuredRepairJsonTextTest());
+        addTestCase("LlmStructuredRepair extracts prose-wrapped JSON text",
+            \structuredRepairEmbeddedJsonTextTest());
         addTestCase("LlmStructuredRepair normalizes Python JSON literals",
             \structuredRepairPythonLiteralJsonTest());
         addTestCase("LlmStructuredRepair completes truncated JSON text",
@@ -448,6 +450,38 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "parse errors have a stable code");
         assertTrue(invalid.failure_fingerprint.find("invalid-json:") == 0,
             "parse errors have a stable fingerprint prefix");
+    }
+
+    structuredRepairEmbeddedJsonTextTest() {
+        checkGeminiModule();
+        hash<LlmStructuredRepairResult> repaired =
+            LlmStructuredRepair::parseJsonObject(
+                "Here is the corrected tool payload:\n"
+                "{\"ok\": True, \"items\": [1]}\n"
+                "Use this exact JSON.");
+
+        assertTrue(repaired.valid,
+            "prose-wrapped JSON object is extracted and parsed");
+        assertTrue(repaired.repaired,
+            "embedded object extraction is reported as a repair");
+        assertEq("json-python-literals-embedded", repaired.repair_kind,
+            "repair kind identifies literal normalization plus extraction");
+        hash<auto> value = cast<hash<auto>>(repaired.value);
+        assertEq(True, value.ok,
+            "Python literal is normalized inside embedded JSON");
+        assertEq(1, value.items[0],
+            "embedded array member is preserved");
+
+        hash<LlmStructuredRepairResult> array_repaired =
+            LlmStructuredRepair::parseJsonArray(
+                "Candidates:\n[{\"key\":\"a\"}]\nDone.");
+        assertTrue(array_repaired.valid,
+            "prose-wrapped JSON array is extracted and parsed");
+        assertEq("json-balanced-embedded", array_repaired.repair_kind,
+            "array extraction exposes the generic embedded repair kind");
+        list<auto> array_value = cast<list<auto>>(array_repaired.value);
+        assertEq("a", array_value[0].key,
+            "embedded array object is preserved");
     }
 
     structuredRepairPythonLiteralJsonTest() {

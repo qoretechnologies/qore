@@ -89,6 +89,15 @@ public class LlmStructuredRepair {
                     return validateParsed(parsed, expected_type, True,
                         "json-python-literals");
                 } catch (hash<ExceptionInfo> ex_lit) {
+                    if (!startsWithJsonContainer(json_literal_repair)) {
+                        hash<LlmStructuredRepairResult> embedded =
+                            parseEmbeddedBalancedJsonSpan(
+                                json_literal_repair, expected_type,
+                                "json-python-literals-embedded");
+                        if (embedded.valid) {
+                            return embedded;
+                        }
+                    }
                     # Keep the original parse path below so balanced-prefix /
                     # balanced-completion repair still gets a chance.  The
                     # Python-literal error is included if all repair paths fail.
@@ -119,6 +128,14 @@ public class LlmStructuredRepair {
                     return makeInvalid("invalid-json",
                         sprintf("%s; balanced prefix also failed: %s",
                             ex.desc, ex2.desc));
+                }
+            }
+            if (!startsWithJsonContainer(cleaned)) {
+                hash<LlmStructuredRepairResult> embedded =
+                    parseEmbeddedBalancedJsonSpan(cleaned, expected_type,
+                        "json-balanced-embedded");
+                if (embedded.valid) {
+                    return embedded;
                 }
             }
             *string completed = completeBalancedJsonText(cleaned);
@@ -350,6 +367,40 @@ public class LlmStructuredRepair {
             }
         }
         return NOTHING;
+    }
+
+    private static bool startsWithJsonContainer(string text) {
+        string trimmed = trim(text);
+        return trimmed.val() && (trimmed[0] == "{" || trimmed[0] == "[");
+    }
+
+    private static hash<LlmStructuredRepairResult> parseEmbeddedBalancedJsonSpan(
+            string text, *string expected_type, string repair_kind) {
+        string trimmed = trim(text);
+        for (int i = 0; i < trimmed.length(); ++i) {
+            string c = trimmed[i];
+            if (c != "{" && c != "[") {
+                continue;
+            }
+            *string span = extractBalancedJsonPrefix(trimmed.substr(i));
+            if (!span.val()) {
+                continue;
+            }
+            try {
+                auto parsed = parse_json(span);
+                hash<LlmStructuredRepairResult> rv =
+                    validateParsed(parsed, expected_type, True,
+                        repair_kind);
+                if (rv.valid) {
+                    return rv;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # Keep scanning: prose can contain non-JSON brace pairs
+                # before the actual structured payload.
+            }
+        }
+        return makeInvalid("json-embedded-not-found",
+            "no balanced JSON object or array was found in the text");
     }
 
     private static *string completeBalancedJsonText(string text) {
