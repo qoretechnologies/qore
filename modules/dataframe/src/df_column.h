@@ -12,6 +12,7 @@
 #define _QORE_DATAFRAME_DF_COLUMN_H
 
 #include "qore/Qore.h"
+#include "qore/QoreColumnarResult.h"
 
 #include <Eigen/Dense>
 
@@ -61,6 +62,11 @@ struct ColumnData {
     std::vector<std::string> str_data;
     std::vector<uint8_t> bool_data;
     std::vector<int64_t> date_data;     //!< microsecond epoch UTC
+    std::vector<QoreValue> auto_data;    //!< referenced heterogeneous Qore values
+
+    //! Optional recursive columnar schema metadata preserved from ColumnarResult / Arrow
+    QoreColumnarTypeDescriptor columnar_schema;
+    bool has_columnar_schema = false;
 
     //! Null/missing mask: 1 = null, 0 = present
     std::vector<uint8_t> null_mask;
@@ -74,6 +80,12 @@ struct ColumnData {
 
     //! Preserves a referenced dense buffer for zero-copy columnar APIs
     DLLLOCAL void setDenseBufferRef(const QoreBufferNode* buffer);
+
+    //! Stores a referenced Qore value in an AUTO column slot
+    DLLLOCAL void setAutoValue(int64_t i, QoreValue value, ExceptionSink* xsink);
+
+    //! Appends a referenced Qore value to an AUTO column
+    DLLLOCAL void appendAutoValue(QoreValue value);
 
     //! Returns true if this column has a preserved dense buffer
     bool hasDenseBuffer() const {

@@ -1195,6 +1195,20 @@ sub invalid_dataframe_api() {
             "ColumnarResult::schemaV2 preserves decimal precision");
         assertEq(2, decimal_schema[0].scale,
             "ColumnarResult::schemaV2 preserves decimal scale");
+        DataFrame::DataFrame decimal_df = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
+        assertEq("auto", decimal_df.dtypes()[0],
+            "DataFrame preserves decimal columns as lossless auto values");
+        assertEq((12.34n, NOTHING), decimal_df.getColumn("total"),
+            "DataFrame preserves decimal Qore number values");
+        ColumnarResult decimal_roundtrip = decimal_df.toColumnarResult();
+        list<hash<auto>> decimal_roundtrip_schema = decimal_roundtrip.schemaV2();
+        assertEq("decimal128", decimal_roundtrip_schema[0].kind,
+            "DataFrame ColumnarResult round-trip preserves decimal logical type");
+        assertEq(18, decimal_roundtrip_schema[0].precision,
+            "DataFrame ColumnarResult round-trip preserves decimal precision");
+        assertEq(2, decimal_roundtrip_schema[0].scale,
+            "DataFrame ColumnarResult round-trip preserves decimal scale");
+
         ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
             "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
         }, {
@@ -1212,6 +1226,17 @@ sub invalid_dataframe_api() {
             "ColumnarResult::schemaV2 preserves nested logical type");
         assertEq("id", nested_schema[0].children[0].name,
             "ColumnarResult::schemaV2 preserves nested child names");
+        DataFrame::DataFrame nested_df = DataFrame::DataFrame::fromColumnarResult(nested_columns);
+        assertEq("auto", nested_df.dtypes()[0],
+            "DataFrame preserves nested columns as lossless auto values");
+        assertEq(1, nested_df.getColumn("customer")[0].id,
+            "DataFrame preserves nested hash values");
+        ColumnarResult nested_roundtrip = nested_df.toColumnarResult();
+        list<hash<auto>> nested_roundtrip_schema = nested_roundtrip.schemaV2();
+        assertEq("struct", nested_roundtrip_schema[0].kind,
+            "DataFrame ColumnarResult round-trip preserves nested logical type");
+        assertEq("name", nested_roundtrip_schema[0].children[1].name,
+            "DataFrame ColumnarResult round-trip preserves nested child metadata");
 
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),

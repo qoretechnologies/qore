@@ -73,6 +73,11 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
                     case ColumnType::DATE:
                         val = std::to_string(cd.date_data[r]);
                         break;
+                    case ColumnType::AUTO: {
+                        QoreStringValueHelper sh(cd.auto_data[r]);
+                        val = sh->c_str();
+                        break;
+                    }
                     default:
                         break;
                 }
@@ -212,6 +217,32 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
                     int64_t r = groups[g].row_indices[0];
                     cd->null_mask[g] = src_cd.null_mask[r];
                     cd->bool_data[g] = src_cd.bool_data[r];
+                }
+                break;
+            case ColumnType::DATE:
+                cd->date_data.resize(n_groups);
+                for (int64_t g = 0; g < n_groups; ++g) {
+                    if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame keys")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    int64_t r = groups[g].row_indices[0];
+                    cd->null_mask[g] = src_cd.null_mask[r];
+                    cd->date_data[g] = src_cd.date_data[r];
+                }
+                break;
+            case ColumnType::AUTO:
+                cd->auto_data.resize(n_groups);
+                for (int64_t g = 0; g < n_groups; ++g) {
+                    if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame keys")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    int64_t r = groups[g].row_indices[0];
+                    cd->null_mask[g] = src_cd.null_mask[r];
+                    if (!cd->null_mask[g]) {
+                        cd->setAutoValue(g, src_cd.auto_data[r], xsink);
+                    }
                 }
                 break;
             default:
@@ -365,6 +396,44 @@ QoreDataFrame* QoreGroupedDataFrame::count(ExceptionSink* xsink) const {
                     int64_t r = groups[g].row_indices[0];
                     cd->null_mask[g] = src_cd.null_mask[r];
                     cd->int_data[g] = src_cd.int_data[r];
+                }
+                break;
+            case ColumnType::BOOL:
+                cd->bool_data.resize(n_groups);
+                for (int64_t g = 0; g < n_groups; ++g) {
+                    if (g && !(g % 100) && qore_check_cancel(xsink, "counting grouped DataFrame keys")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    int64_t r = groups[g].row_indices[0];
+                    cd->null_mask[g] = src_cd.null_mask[r];
+                    cd->bool_data[g] = src_cd.bool_data[r];
+                }
+                break;
+            case ColumnType::DATE:
+                cd->date_data.resize(n_groups);
+                for (int64_t g = 0; g < n_groups; ++g) {
+                    if (g && !(g % 100) && qore_check_cancel(xsink, "counting grouped DataFrame keys")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    int64_t r = groups[g].row_indices[0];
+                    cd->null_mask[g] = src_cd.null_mask[r];
+                    cd->date_data[g] = src_cd.date_data[r];
+                }
+                break;
+            case ColumnType::AUTO:
+                cd->auto_data.resize(n_groups);
+                for (int64_t g = 0; g < n_groups; ++g) {
+                    if (g && !(g % 100) && qore_check_cancel(xsink, "counting grouped DataFrame keys")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    int64_t r = groups[g].row_indices[0];
+                    cd->null_mask[g] = src_cd.null_mask[r];
+                    if (!cd->null_mask[g]) {
+                        cd->setAutoValue(g, src_cd.auto_data[r], xsink);
+                    }
                 }
                 break;
             default:

@@ -25,6 +25,7 @@ struct RecordColumnInference {
     bool has_string = false;
     bool has_bool = false;
     bool has_date = false;
+    bool has_auto = false;
 };
 
 static void mergeRecordColumnType(RecordColumnInference& inf, QoreValue value) {
@@ -50,12 +51,15 @@ static void mergeRecordColumnType(RecordColumnInference& inf, QoreValue value) {
             inf.has_date = true;
             break;
         default:
-            inf.has_string = true;
+            inf.has_auto = true;
             break;
     }
 }
 
 static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
+    if (inf.has_auto) {
+        return ColumnType::AUTO;
+    }
     if (inf.has_string) {
         return ColumnType::STRING;
     }
@@ -95,7 +99,7 @@ static ColumnType fastRecordColumnType(QoreValue value) {
         case NT_DATE:
             return ColumnType::DATE;
         default:
-            return ColumnType::STRING;
+            return ColumnType::AUTO;
     }
 }
 
@@ -115,6 +119,8 @@ static bool fastRecordValueCompatible(ColumnType type, QoreValue value) {
             return value.getType() == NT_BOOLEAN;
         case ColumnType::DATE:
             return value.getType() == NT_DATE;
+        case ColumnType::AUTO:
+            return true;
         default:
             return false;
     }
@@ -139,6 +145,9 @@ static void initializeRecordColumnData(ColumnData& data, ColumnType type, int64_
             break;
         case ColumnType::DATE:
             data.date_data.resize(n);
+            break;
+        case ColumnType::AUTO:
+            data.auto_data.resize(n);
             break;
         default:
             break;
@@ -176,6 +185,9 @@ static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
                 data.null_mask[i] = 1;
             }
             break;
+        case ColumnType::AUTO:
+            data.setAutoValue(i, value, nullptr);
+            break;
         default:
             break;
     }
@@ -192,9 +204,10 @@ static QoreColumnarColumnType columnarTypeFromDataFrameType(ColumnType type) {
         case ColumnType::DATE:
             return QoreColumnarColumnType::Date;
         case ColumnType::STRING:
+            return QoreColumnarColumnType::String;
         case ColumnType::AUTO:
         default:
-            return QoreColumnarColumnType::String;
+            return QoreColumnarColumnType::Auto;
     }
 }
 
@@ -220,17 +233,57 @@ static ColumnType dataFrameTypeFromColumnarType(QoreColumnarColumnType type) {
         case QoreColumnarColumnType::Int:
             return ColumnType::INT64;
         case QoreColumnarColumnType::Float:
-        case QoreColumnarColumnType::Number:
             return ColumnType::FLOAT64;
+        case QoreColumnarColumnType::Number:
+            return ColumnType::AUTO;
         case QoreColumnarColumnType::Date:
             return ColumnType::DATE;
         case QoreColumnarColumnType::String:
-        case QoreColumnarColumnType::Binary:
             return ColumnType::STRING;
+        case QoreColumnarColumnType::Binary:
+            return ColumnType::AUTO;
         case QoreColumnarColumnType::Auto:
         default:
             return ColumnType::AUTO;
     }
+}
+
+static ColumnType dataFrameTypeFromColumnarSchema(const QoreColumnarTypeDescriptor& schema,
+        QoreColumnarColumnType fallback) {
+    switch (schema.kind) {
+        case QoreColumnarTypeKind::Bool:
+            return ColumnType::BOOL;
+        case QoreColumnarTypeKind::Int:
+            return ColumnType::INT64;
+        case QoreColumnarTypeKind::Float:
+            return ColumnType::FLOAT64;
+        case QoreColumnarTypeKind::String:
+            return ColumnType::STRING;
+        case QoreColumnarTypeKind::Date:
+        case QoreColumnarTypeKind::Timestamp:
+            return ColumnType::DATE;
+        case QoreColumnarTypeKind::Number:
+        case QoreColumnarTypeKind::Binary:
+        case QoreColumnarTypeKind::Duration:
+        case QoreColumnarTypeKind::Decimal128:
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList:
+        case QoreColumnarTypeKind::Struct:
+        case QoreColumnarTypeKind::Map:
+        case QoreColumnarTypeKind::Dictionary:
+        case QoreColumnarTypeKind::Auto:
+            return ColumnType::AUTO;
+        default:
+            return dataFrameTypeFromColumnarType(fallback);
+    }
+}
+
+static void preserveColumnarSchema(ColumnData& data, const std::string& name,
+        const QoreColumnarTypeDescriptor& schema) {
+    data.columnar_schema = schema;
+    data.columnar_schema.name = name;
+    data.has_columnar_schema = true;
 }
 
 }
@@ -458,9 +511,9 @@ QoreDataFrame* QoreDataFrame::fromColumnarResult(const QoreColumnarResult* resul
         switch (src->data.getType()) {
             case NT_LIST: {
                 const QoreListNode* values = src->data.get<const QoreListNode>();
-                ColumnType type = dataFrameTypeFromColumnarType(src->column_type);
+                ColumnType type = dataFrameTypeFromColumnarSchema(src->schema, src->column_type);
                 col.data = type == ColumnType::AUTO
-                    ? buildColumnDataAuto(values, xsink) : buildColumnData(values, type, xsink);
+                    ? buildColumnData(values, ColumnType::AUTO, xsink) : buildColumnData(values, type, xsink);
                 break;
             }
             case NT_BUFFER:
@@ -477,6 +530,9 @@ QoreDataFrame* QoreDataFrame::fromColumnarResult(const QoreColumnarResult* resul
         if (*xsink) {
             delete df;
             return nullptr;
+        }
+        if (col.data) {
+            preserveColumnarSchema(*col.data, col.name, src->schema);
         }
         if (col.data && col.data->n_rows != df->n_rows) {
             xsink->raiseException("DATAFRAME-ERROR",
@@ -637,9 +693,24 @@ QoreDataFrame* QoreDataFrame::sliceRows(int64_t start, int64_t count,
                         src_col.data->date_data.begin() + start,
                         src_col.data->date_data.begin() + start + count);
                     break;
+                case ColumnType::AUTO:
+                    new_data->auto_data.resize(count);
+                    for (int64_t i = 0; i < count; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "slicing auto DataFrame rows")) {
+                            delete df;
+                            return nullptr;
+                        }
+                        if (!new_data->null_mask[i]) {
+                            new_data->setAutoValue(i, src_col.data->auto_data[start + i], xsink);
+                        }
+                    }
+                    break;
                 default:
                     break;
             }
+        }
+        if (new_data && src_col.data->has_columnar_schema) {
+            preserveColumnarSchema(*new_data, src_col.name, src_col.data->columnar_schema);
         }
 
         Column col;
@@ -794,14 +865,31 @@ QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const 
         QoreBufferElementType buffer_type = cd.hasDenseBuffer()
             ? cd.dense_buffer_type : bufferTypeFromDataFrameType(cd.type);
         bool nullable = cd.hasDenseBuffer() ? cd.dense_buffer->hasNullableElements() : cd.countNull() > 0;
+        QoreColumnarTypeDescriptor schema;
+        bool use_schema = cd.has_columnar_schema;
+        if (use_schema) {
+            schema = cd.columnar_schema;
+            schema.name = col.name;
+            schema.nullable = schema.nullable || nullable;
+            if (schema.buffer_type == QoreBufferElementType::Invalid
+                    && buffer_type != QoreBufferElementType::Invalid) {
+                schema.buffer_type = buffer_type;
+            }
+            if (schema.column_type == QoreColumnarColumnType::Auto) {
+                schema.column_type = columnar_type;
+            }
+        }
 
         if (buffer_type != QoreBufferElementType::Invalid) {
             ReferenceHolder<QoreBufferNode> buffer(columnToQoreBuffer(cd, xsink), xsink);
             if (*xsink) {
                 return nullptr;
             }
-            if (result->addColumn(col.name.c_str(), QoreValue(buffer.release()), columnar_type, buffer_type,
-                    nullable, "", xsink)) {
+            int rc = use_schema
+                ? result->addColumn(col.name.c_str(), QoreValue(buffer.release()), schema, xsink)
+                : result->addColumn(col.name.c_str(), QoreValue(buffer.release()), columnar_type, buffer_type,
+                    nullable, "", xsink);
+            if (rc) {
                 return nullptr;
             }
         } else {
@@ -809,8 +897,11 @@ QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const 
             if (*xsink) {
                 return nullptr;
             }
-            if (result->addColumn(col.name.c_str(), QoreValue(values.release()), columnar_type,
-                    QoreBufferElementType::Invalid, nullable, "", xsink)) {
+            int rc = use_schema
+                ? result->addColumn(col.name.c_str(), QoreValue(values.release()), schema, xsink)
+                : result->addColumn(col.name.c_str(), QoreValue(values.release()), columnar_type,
+                    QoreBufferElementType::Invalid, nullable, "", xsink);
+            if (rc) {
                 return nullptr;
             }
         }
@@ -947,6 +1038,11 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
                     case ColumnType::DATE:
                         oss << cd.date_data[i];
                         break;
+                    case ColumnType::AUTO: {
+                        QoreStringValueHelper sh(cd.auto_data[i]);
+                        oss << sh->c_str();
+                        break;
+                    }
                     default:
                         oss << "?";
                         break;
@@ -1243,9 +1339,27 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
                     }
                     break;
                 }
+                case ColumnType::AUTO: {
+                    new_data->auto_data.resize(count);
+                    for (int64_t i = 0; i < count; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "selecting auto DataFrame rows")) {
+                            delete df;
+                            return nullptr;
+                        }
+                        int64_t src_index = indices[i];
+                        new_data->null_mask[i] = src_col.data->null_mask[src_index];
+                        if (!new_data->null_mask[i]) {
+                            new_data->setAutoValue(i, src_col.data->auto_data[src_index], xsink);
+                        }
+                    }
+                    break;
+                }
                 default:
                     break;
             }
+        }
+        if (new_data && src_col.data->has_columnar_schema) {
+            preserveColumnarSchema(*new_data, src_col.name, src_col.data->columnar_schema);
         }
 
         Column col;
@@ -1819,6 +1933,9 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                     }
                     case ColumnType::BOOL:
                         new_data->bool_data[i] = value.getAsBool() ? 1 : 0;
+                        break;
+                    case ColumnType::AUTO:
+                        new_data->setAutoValue(i, value, xsink);
                         break;
                     default:
                         break;

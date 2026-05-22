@@ -17,10 +17,32 @@
 
 namespace QoreDataFrameNS {
 
+namespace {
+
+static std::vector<QoreValue> refAutoData(const std::vector<QoreValue>& old) {
+    std::vector<QoreValue> rv;
+    rv.reserve(old.size());
+    for (const QoreValue& v : old) {
+        rv.push_back(v.refSelf());
+    }
+    return rv;
+}
+
+static void discardAutoData(std::vector<QoreValue>& values, ExceptionSink* xsink) {
+    for (QoreValue& v : values) {
+        v.discard(xsink);
+    }
+    values.clear();
+}
+
+}
+
 ColumnData::ColumnData(const ColumnData& old)
         : type(old.type), n_rows(old.n_rows), dense_buffer(old.dense_buffer),
         dense_buffer_type(old.dense_buffer_type), float_data(old.float_data), int_data(old.int_data),
-        str_data(old.str_data), bool_data(old.bool_data), date_data(old.date_data), null_mask(old.null_mask) {
+        str_data(old.str_data), bool_data(old.bool_data), date_data(old.date_data),
+        auto_data(refAutoData(old.auto_data)), columnar_schema(old.columnar_schema),
+        has_columnar_schema(old.has_columnar_schema), null_mask(old.null_mask) {
     if (dense_buffer) {
         dense_buffer->ref();
     }
@@ -31,20 +53,24 @@ ColumnData::ColumnData(ColumnData&& old) noexcept
         dense_buffer_type(old.dense_buffer_type), float_data(std::move(old.float_data)),
         int_data(std::move(old.int_data)), str_data(std::move(old.str_data)),
         bool_data(std::move(old.bool_data)), date_data(std::move(old.date_data)),
-        null_mask(std::move(old.null_mask)) {
+        auto_data(std::move(old.auto_data)), columnar_schema(std::move(old.columnar_schema)),
+        has_columnar_schema(old.has_columnar_schema), null_mask(std::move(old.null_mask)) {
     old.dense_buffer = nullptr;
     old.dense_buffer_type = QoreBufferElementType::Invalid;
+    old.has_columnar_schema = false;
 }
 
 ColumnData& ColumnData::operator=(const ColumnData& old) {
     if (this != &old) {
+        std::vector<QoreValue> new_auto_data = refAutoData(old.auto_data);
         if (old.dense_buffer) {
             old.dense_buffer->ref();
         }
+        ExceptionSink xsink;
         if (dense_buffer) {
-            ExceptionSink xsink;
             dense_buffer->deref(&xsink);
         }
+        discardAutoData(auto_data, &xsink);
 
         type = old.type;
         n_rows = old.n_rows;
@@ -55,6 +81,9 @@ ColumnData& ColumnData::operator=(const ColumnData& old) {
         str_data = old.str_data;
         bool_data = old.bool_data;
         date_data = old.date_data;
+        auto_data = std::move(new_auto_data);
+        columnar_schema = old.columnar_schema;
+        has_columnar_schema = old.has_columnar_schema;
         null_mask = old.null_mask;
     }
     return *this;
@@ -62,10 +91,11 @@ ColumnData& ColumnData::operator=(const ColumnData& old) {
 
 ColumnData& ColumnData::operator=(ColumnData&& old) noexcept {
     if (this != &old) {
+        ExceptionSink xsink;
         if (dense_buffer) {
-            ExceptionSink xsink;
             dense_buffer->deref(&xsink);
         }
+        discardAutoData(auto_data, &xsink);
 
         type = old.type;
         n_rows = old.n_rows;
@@ -76,19 +106,24 @@ ColumnData& ColumnData::operator=(ColumnData&& old) noexcept {
         str_data = std::move(old.str_data);
         bool_data = std::move(old.bool_data);
         date_data = std::move(old.date_data);
+        auto_data = std::move(old.auto_data);
+        columnar_schema = std::move(old.columnar_schema);
+        has_columnar_schema = old.has_columnar_schema;
         null_mask = std::move(old.null_mask);
 
         old.dense_buffer = nullptr;
         old.dense_buffer_type = QoreBufferElementType::Invalid;
+        old.has_columnar_schema = false;
     }
     return *this;
 }
 
 ColumnData::~ColumnData() {
+    ExceptionSink xsink;
     if (dense_buffer) {
-        ExceptionSink xsink;
         dense_buffer->deref(&xsink);
     }
+    discardAutoData(auto_data, &xsink);
 }
 
 void ColumnData::setDenseBufferRef(const QoreBufferNode* buffer) {
@@ -111,6 +146,16 @@ QoreBufferNode* ColumnData::refDenseBuffer() const {
     }
     dense_buffer->ref();
     return dense_buffer;
+}
+
+void ColumnData::setAutoValue(int64_t i, QoreValue value, ExceptionSink* xsink) {
+    assert(i >= 0 && i < static_cast<int64_t>(auto_data.size()));
+    auto_data[i].discard(xsink);
+    auto_data[i] = value.refSelf();
+}
+
+void ColumnData::appendAutoValue(QoreValue value) {
+    auto_data.push_back(value.refSelf());
 }
 
 const char* columnTypeName(ColumnType type) {
@@ -162,9 +207,8 @@ QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
             return QoreValue(DateTimeNode::makeAbsolute(currentTZ(),
                 date_data[i] / 1000000, (int)(date_data[i] % 1000000)));
         case ColumnType::AUTO:
-            // AUTO columns are not yet supported; inferColumnType() never
-            // returns AUTO — it resolves to a concrete type or STRING
-            return QoreValue();
+            assert(i < static_cast<int64_t>(auto_data.size()));
+            return auto_data[i].refSelf();
         default:
             return QoreValue();
     }
@@ -180,6 +224,7 @@ ColumnType inferColumnType(const QoreListNode* values) {
     bool has_string = false;
     bool has_bool = false;
     bool has_date = false;
+    bool has_auto = false;
 
     for (size_t i = 0; i < values->size(); ++i) {
         QoreValue v = values->retrieveEntry(i);
@@ -206,12 +251,14 @@ ColumnType inferColumnType(const QoreListNode* values) {
                 has_date = true;
                 break;
             default:
-                // Unknown type → string fallback
-                has_string = true;
+                has_auto = true;
                 break;
         }
     }
 
+    if (has_auto) {
+        return ColumnType::AUTO;
+    }
     // Priority: if mixed numeric, widen to float64
     if (has_string) {
         return ColumnType::STRING;
@@ -231,7 +278,7 @@ ColumnType inferColumnType(const QoreListNode* values) {
     if (has_date && !has_int && !has_float && !has_bool) {
         return ColumnType::DATE;
     }
-    // Mixed types → string
+    // Mixed primitive types → string
     if (has_int || has_float || has_bool || has_date) {
         return ColumnType::STRING;
     }
@@ -320,6 +367,21 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
             }
             break;
         }
+        case ColumnType::AUTO: {
+            col->auto_data.resize(n);
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame auto column")) {
+                    return nullptr;
+                }
+                QoreValue v = values->retrieveEntry(i);
+                if (v.isNullOrNothing()) {
+                    col->null_mask[i] = 1;
+                } else {
+                    col->setAutoValue(i, v, xsink);
+                }
+            }
+            break;
+        }
         default:
             break;
     }
@@ -368,6 +430,9 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                 break;
             case ColumnType::DATE:
                 col->date_data.resize(n);
+                break;
+            case ColumnType::AUTO:
+                col->auto_data.resize(n);
                 break;
             default:
                 break;
@@ -472,7 +537,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                 break;
 
             default:
-                return buildColumnData(values, ColumnType::STRING, xsink);
+                return buildColumnData(values, ColumnType::AUTO, xsink);
         }
     }
 
@@ -668,6 +733,10 @@ QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
                         col.date_data[i] / 1000000,
                         (int)(col.date_data[i] % 1000000)), xsink);
                     break;
+                case ColumnType::AUTO:
+                    assert(i < static_cast<int64_t>(col.auto_data.size()));
+                    list->push(col.auto_data[i].refSelf(), xsink);
+                    break;
                 default:
                     list->push(QoreValue(), xsink);
                     break;
@@ -723,6 +792,10 @@ QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
                     list->push(DateTimeNode::makeAbsolute(currentTZ(),
                         col.date_data[i] / 1000000,
                         (int)(col.date_data[i] % 1000000)), xsink);
+                    break;
+                case ColumnType::AUTO:
+                    assert(i < static_cast<int64_t>(col.auto_data.size()));
+                    list->push(col.auto_data[i].refSelf(), xsink);
                     break;
                 default:
                     list->push(QoreValue(), xsink);

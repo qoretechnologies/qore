@@ -103,7 +103,9 @@ where an API exposes conversion details.
   fixed-width Arrow columns are imported through dense DataFrame buffers when
   possible.
 - Preserve decimal and nested schema in `fromColumnarResult()` and
-  `toColumnarResult()`.
+  `toColumnarResult()`.  Implemented with lossless DataFrame `auto` column
+  storage for recursive `ColumnarResult` schemas, including decimal, binary,
+  list, struct, map, and dictionary-compatible values.
 - Keep row/hash/list materialization explicit.
 - Document copy vs zero-copy behavior.
 

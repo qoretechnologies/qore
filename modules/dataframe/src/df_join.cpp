@@ -50,6 +50,9 @@ static void reserveAppendCapacity(QoreDataFrameNS::ColumnData& col, int64_t rows
         case QoreDataFrameNS::ColumnType::DATE:
             col.date_data.reserve(rows);
             break;
+        case QoreDataFrameNS::ColumnType::AUTO:
+            col.auto_data.reserve(rows);
+            break;
         default:
             break;
     }
@@ -85,6 +88,11 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
                 case ColumnType::DATE:
                     key += std::to_string(cd.date_data[row]);
                     break;
+                case ColumnType::AUTO: {
+                    QoreStringValueHelper sh(cd.auto_data[row]);
+                    key += sh->c_str();
+                    break;
+                }
                 default:
                     break;
             }
@@ -122,6 +130,9 @@ static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
                 case ColumnType::DATE:
                     dest.date_data.push_back(0);
                     break;
+                case ColumnType::AUTO:
+                    dest.appendAutoValue(QoreValue());
+                    break;
                 default:
                     break;
             }
@@ -143,6 +154,9 @@ static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
                     break;
                 case ColumnType::DATE:
                     dest.date_data.push_back(src.date_data[row_idx]);
+                    break;
+                case ColumnType::AUTO:
+                    dest.appendAutoValue(src.auto_data[row_idx]);
                     break;
                 default:
                     break;
@@ -448,6 +462,21 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                                 cd->date_data[l] = 0;
                             } else {
                                 cd->date_data[l] = src.date_data[r];
+                            }
+                        }
+                        break;
+                    case ColumnType::AUTO:
+                        cd->auto_data.resize(n_rows);
+                        for (int64_t l = 0; l < n_rows; ++l) {
+                            if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                                delete fast_df;
+                                return nullptr;
+                            }
+                            int64_t r = right_row_for_left[l];
+                            if (r < 0 || src.isNull(r)) {
+                                cd->null_mask[l] = 1;
+                            } else {
+                                cd->setAutoValue(l, src.auto_data[r], xsink);
                             }
                         }
                         break;
