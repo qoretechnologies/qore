@@ -1974,6 +1974,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - Holt-Winters triple exponential smoothing for time series forecasting
       - Seasonal Decomposition for decomposing time series into trend, seasonal, and residual components
       - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
+      - OnnxModel automatic provider selection falls back to CPU when an advertised
+        GPU provider cannot create a session, for example when CUDA libraries are
+        not installed; explicit provider configurations still report provider errors
       - StandardScaler for zero-mean unit-variance feature normalization
       - MinMaxScaler for configurable-range feature scaling
       - Imputer for missing value replacement (mean, median, most_frequent, constant strategies)
@@ -2013,6 +2016,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
         Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation
+      - DataFrame and columnar workflows are supported through DataFrame::toMatrix()
+        for direct model APIs and through shape-aware DataProviderML processors for
+        DataProvider pipelines
 
     - @ref mongodbintro "mongodb" module
       - new builtin module providing <a href="https://www.mongodb.com/">MongoDB</a> client connectivity using libmongoc

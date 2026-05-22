@@ -13,6 +13,56 @@
     implementations of common ML algorithms. Optional ONNX Runtime support allows running
     pre-trained models from frameworks like PyTorch, scikit-learn, and TensorFlow.
 
+    @section mldata Matrix, DataFrame, and Pipeline Data
+
+    The core \c ml module is intentionally matrix-oriented and does not depend on
+    the \c dataframe module.  This keeps the binary module small and usable in
+    installations that do not need DataFrame APIs.  Use row matrices
+    (\c list<list<float>>) or list-of-record hashes for direct model APIs, and
+    use DataFrame conversion or DataProviderML processors when the source data is
+    columnar.
+
+    @par DataFrame to matrix example:
+    @code{.py}
+%requires dataframe
+%requires ml
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10.0, 11.0, 3.0, 10.0),
+});
+
+list<auto> matrix = df.toMatrix(("amount", "hour"));
+
+Qore::ML::StandardScaler scaler();
+scaler.fitMatrix(matrix);
+list<auto> scaled = scaler.transformMatrix(matrix);
+    @endcode
+
+    @par Shape-aware pipeline example:
+    @code{.py}
+%requires dataframe
+%requires DataProviderML
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10.0, 11.0, 3.0, 10.0),
+});
+
+DataProviderML::QoreIsolationForestProcessor proc({
+    "fields": "amount,hour",
+    "window_size": 4,
+});
+
+hash<auto> events = proc.processRecordsShape(
+    df, DataProviderShape::DataFrameBlock);
+    @endcode
+
+    \c DataProviderML processors also accept \c BufferColumns input,
+    including @ref Qore::SQL::ColumnarResult "ColumnarResult" values
+    produced by SQL queries.  They emit \c HashOfLists event blocks for bulk
+    outputs so downstream shape-aware processors can continue in bulk mode.
+
     @section mlalgorithms Available Algorithms
 
     @subsection mlalgo_table Algorithm Overview
@@ -675,6 +725,15 @@ if (!caps.has_onnx) {
     @endcode
 
     @section mlreleasenotes ml Module Release Notes
+
+    @subsection ml_1_1 ml Module Version 1.1
+    - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now
+      falls back to CPU when an advertised GPU provider cannot create a session,
+      for example when CUDA libraries are not installed; explicit provider
+      configurations still report provider initialization errors to the caller
+    - DataFrame and columnar workflows are documented through
+      \c DataFrame::toMatrix() for direct model APIs and through shape-aware
+      \c DataProviderML processors for pipeline use
 
     @subsection ml_1_0 ml Module Version 1.0
     - Initial release with native ML algorithms, preprocessing tools, feature engineering,
