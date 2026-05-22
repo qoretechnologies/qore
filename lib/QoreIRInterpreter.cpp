@@ -3679,6 +3679,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
+    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink](uint32_t id) -> bool {
+        if (!block) {
+            return false;
+        }
+        size_t scan_count = 0;
+        for (size_t i = ip + 1; i < block->instructions.size(); ++i) {
+            if (((++scan_count % 100) == 0) && qore_check_cancel(xsink, "IR cleanup use scan")) {
+                return true;
+            }
+            const QoreIRInstruction* future = block->instructions[i].get();
+            if (!future) {
+                continue;
+            }
+            if (future->opcode == QoreIROpcode::Return) {
+                const auto* ret = static_cast<const QoreIRReturnInstruction*>(future);
+                if (ret->has_value && ret->value.id == id) {
+                    return true;
+                }
+            }
+            for (QoreIRValue op : future->operands) {
+                if (op.id == id) {
+                    return true;
+                }
+            }
+            if (isTerminator(future->opcode)) {
+                break;
+            }
+        }
+        return false;
+    };
+
     while (block) {
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -7067,6 +7098,13 @@ load_local_done:
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
                                             if (values[vi].hasNode()
                                                 && values[vi].getInternalNode() == node_ptr) {
+                                                bool used_later = valueUsedLaterInCurrentBlock(vi);
+                                                if (xsink && *xsink) {
+                                                    break;
+                                                }
+                                                if (used_later) {
+                                                    continue;
+                                                }
                                                 values[vi].discard(xsink);
                                                 values[vi] = QoreValue();
                                             }
@@ -7102,6 +7140,13 @@ load_local_done:
                                     for (size_t vi = 0; vi < values.size(); ++vi) {
                                         if (values[vi].hasNode()
                                             && values[vi].getInternalNode() == node_ptr) {
+                                            bool used_later = valueUsedLaterInCurrentBlock(vi);
+                                            if (xsink && *xsink) {
+                                                break;
+                                            }
+                                            if (used_later) {
+                                                continue;
+                                            }
                                             values[vi].discard(xsink);
                                             values[vi] = QoreValue();
                                         }
@@ -7176,6 +7221,13 @@ load_local_done:
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
                                             if (values[vi].hasNode()
                                                 && values[vi].getInternalNode() == node_ptr) {
+                                                bool used_later = valueUsedLaterInCurrentBlock(vi);
+                                                if (xsink && *xsink) {
+                                                    break;
+                                                }
+                                                if (used_later) {
+                                                    continue;
+                                                }
                                                 values[vi].discard(xsink);
                                                 values[vi] = QoreValue();
                                             }
