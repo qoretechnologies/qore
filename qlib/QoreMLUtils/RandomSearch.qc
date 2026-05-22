@@ -34,17 +34,18 @@ public namespace QoreMLUtils {
 %requires QoreMLUtils
 %requires ml
 
-code<object(hash<auto>, list<auto>, list<auto>)> model_factory =
-    object sub (hash<auto> params, list<auto> X_train, list<auto> y_train) {
+code<object(hash<auto>, list<list<float>>, list<float>)> model_factory =
+    object sub (hash<auto> params, list<list<float>> X_train, list<float> y_train) {
         ML::DecisionTree model(params);
         model.fitMatrix(X_train, y_train);
         return model;
     };
 
-code<list<auto>(object, list<auto>)> predictor =
-    list<auto> sub (object model, list<auto> X_test) {
-        return map $1.predicted_class,
+code<list<float>(object, list<list<float>>)> predictor =
+    list<float> sub (object model, list<list<float>> X_test) {
+        list<float> predictions = map $1.predicted_class,
             cast<ML::DecisionTree>(model).predictClassificationMatrix(X_test);
+        return predictions;
     };
 
 RandomSearch rs({
@@ -68,16 +69,16 @@ printf("Best params: %y\n", result.best_params);
 public class RandomSearch {
     private {
         #! Closure that creates and fits a model
-        code<object (hash<auto>, list<auto>, list<auto>)> model_factory;
+        code<object (hash<auto>, list<list<float>>, list<float>)> model_factory;
 
         #! Closure that extracts predictions
-        code<list<auto> (object, list<auto>)> predictor;
+        code<list<float> (object, list<list<float>>)> predictor;
 
         #! Hash mapping parameter names to lists of candidate values
         hash<auto> param_distributions;
 
         #! Closure that scores predictions
-        code<float (list<auto>, list<auto>)> scorer;
+        code<float (list<float>, list<float>)> scorer;
 
         #! Number of random combinations to evaluate
         int n_iter;
@@ -145,7 +146,7 @@ public class RandomSearch {
 
         @throw RANDOM-SEARCH-ERROR if data is empty
     */
-    hash<auto> fitMatrix(list<auto> X, list<auto> y) {
+    hash<auto> fitMatrix(list<list<float>> X, list<float> y) {
         if (!X.size() || !y.size()) {
             throw "RANDOM-SEARCH-ERROR", "empty training data";
         }
@@ -175,13 +176,13 @@ public class RandomSearch {
             list<float> fold_scores();
 
             foreach hash<auto> fold in (folds) {
-                list<auto> X_train = map X[$1], fold.train_indices;
-                list<auto> y_train = map y[$1], fold.train_indices;
-                list<auto> X_test = map X[$1], fold.test_indices;
-                list<auto> y_test = map y[$1], fold.test_indices;
+                list<list<float>> X_train = map X[$1], fold.train_indices;
+                list<float> y_train = map y[$1], fold.train_indices;
+                list<list<float>> X_test = map X[$1], fold.test_indices;
+                list<float> y_test = map y[$1], fold.test_indices;
 
                 object model = model_factory(params, X_train, y_train);
-                list<auto> y_pred = predictor(model, X_test);
+                list<float> y_pred = predictor(model, X_test);
                 float score = scorer(y_test, y_pred);
                 push fold_scores, score;
             }

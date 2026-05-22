@@ -36,7 +36,7 @@ class PollAcceptBugTest inherits QUnit::Test {
     #! Test with multiple listeners - connect then poll
     testMultiListenersSequential() {
         list<Socket> listeners = createListeners();
-        list<int> ports = getPorts(listeners);
+        list<hash<auto>> infos = getSocketInfos(listeners);
 
         int bug_count = 0;
         int total_tests = 0;
@@ -46,9 +46,10 @@ class PollAcceptBugTest inherits QUnit::Test {
                 ++total_tests;
 
                 # Connect client first
+                hash<auto> info = infos[target_idx];
                 Socket client();
                 client.setNoDelay(True);
-                client.connect("localhost:" + ports[target_idx]);
+                client.connectINET(info.address, info.port, 10s, info.family);
 
                 # Small delay to ensure connection is queued
                 usleep(1000);
@@ -101,7 +102,7 @@ class PollAcceptBugTest inherits QUnit::Test {
     #! Test where connection is established before poll starts
     testConnectBeforePoll() {
         list<Socket> listeners = createListeners();
-        list<int> ports = getPorts(listeners);
+        list<hash<auto>> infos = getSocketInfos(listeners);
 
         int bug_count = 0;
 
@@ -109,9 +110,10 @@ class PollAcceptBugTest inherits QUnit::Test {
             int target_idx = iter % NumListeners;
 
             # Connect client
+            hash<auto> info = infos[target_idx];
             Socket client();
             client.setNoDelay(True);
-            client.connect("localhost:" + ports[target_idx]);
+            client.connectINET(info.address, info.port, 10s, info.family);
 
             # Longer delay to ensure connection is fully queued
             usleep(10000);  # 10ms
@@ -154,15 +156,16 @@ class PollAcceptBugTest inherits QUnit::Test {
     #! Stress test with warmup phase to trigger socket state issues
     testStressWithWarmup() {
         list<Socket> listeners = createListeners();
-        list<int> ports = getPorts(listeners);
+        list<hash<auto>> infos = getSocketInfos(listeners);
 
         # Warmup: do many rapid connections to build up socket state
         for (int warmup = 0; warmup < 100; ++warmup) {
             int idx = warmup % NumListeners;
+            hash<auto> info = infos[idx];
             Socket client();
             client.setNoDelay(True);
             try {
-                client.connect("localhost:" + ports[idx]);
+                client.connectINET(info.address, info.port, 10s, info.family);
                 # Immediate poll and accept
                 list<hash<SocketPollInfo>> poll_list = (
                     cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": listeners[idx]}),
@@ -182,9 +185,10 @@ class PollAcceptBugTest inherits QUnit::Test {
         for (int iter = 0; iter < 20; ++iter) {
             int target_idx = iter % NumListeners;
 
+            hash<auto> info = infos[target_idx];
             Socket client();
             client.setNoDelay(True);
-            client.connect("localhost:" + ports[target_idx]);
+            client.connectINET(info.address, info.port, 10s, info.family);
 
             usleep(5000);  # 5ms
 
@@ -239,11 +243,11 @@ class PollAcceptBugTest inherits QUnit::Test {
         return listeners;
     }
 
-    private list<int> getPorts(list<Socket> listeners) {
-        list<int> ports = ();
+    private list<hash<auto>> getSocketInfos(list<Socket> listeners) {
+        list<hash<auto>> infos = ();
         foreach Socket l in (listeners) {
-            push ports, l.getSocketInfo().port;
+            push infos, l.getSocketInfo(False);
         }
-        return ports;
+        return infos;
     }
 }

@@ -178,8 +178,8 @@ public class AgentRagE2ETest inherits QUnit::Test {
 
         # Step 4: embed via fake embedder
         FakeEmbedder embedder(8);
-        list<list<float>> vectors = embedder.encodeBatch(
-            map $1.content, chunks);
+        list<string> texts = map $1.content, chunks;
+        list<list<float>> vectors = embedder.encodeBatch(texts);
         assertEq(chunks.size(), vectors.size());
         assertEq(8, vectors[0].size());
 

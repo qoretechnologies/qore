@@ -49,20 +49,22 @@ public class QoreMLUtilsTest inherits QUnit::Test {
     }
 
     #! Model factory for Ridge regression tests
-    static object ridgeFactory(hash<auto> params, list<auto> X_train, list<auto> y_train) {
+    static object ridgeFactory(hash<auto> params, list<list<float>> X_train, list<float> y_train) {
         ML::Ridge model(params);
         model.fitMatrix(X_train, y_train);
         return model;
     }
 
     #! Predictor that extracts Ridge predictions
-    static list<auto> ridgePredictor(object model, list<auto> X_test) {
-        return map $1.prediction, cast<ML::Ridge>(model).predictMatrix(X_test);
+    static list<float> ridgePredictor(object model, list<list<float>> X_test) {
+        list<float> predictions = map $1.prediction, cast<ML::Ridge>(model).predictMatrix(X_test);
+        return predictions;
     }
 
     #! Predictor for LinearRegression
-    static list<auto> lrPredictor(list<auto> X_data, object model) {
-        return map $1.prediction, cast<ML::LinearRegression>(model).predictMatrix(X_data);
+    static list<float> lrPredictor(list<list<float>> X_data, object model) {
+        list<float> predictions = map $1.prediction, cast<ML::LinearRegression>(model).predictMatrix(X_data);
+        return predictions;
     }
 
     # ===================== GridSearch Tests =====================
@@ -132,7 +134,7 @@ public class QoreMLUtilsTest inherits QUnit::Test {
     }
 
     gridSearchErrorTest() {
-        code<float(list<auto>, list<auto>)> scorer = \QoreMLUtils::MLScoringUtils::r2Scorer();
+        code<float(list<float>, list<float>)> scorer = \QoreMLUtils::MLScoringUtils::r2Scorer();
 
         # Missing model_factory
         assertThrows("GRID-SEARCH-ERROR", sub() {
@@ -219,7 +221,7 @@ public class QoreMLUtilsTest inherits QUnit::Test {
     }
 
     randomSearchErrorTest() {
-        code<float(list<auto>, list<auto>)> scorer = \QoreMLUtils::MLScoringUtils::r2Scorer();
+        code<float(list<float>, list<float>)> scorer = \QoreMLUtils::MLScoringUtils::r2Scorer();
 
         # Missing model_factory
         assertThrows("RANDOM-SEARCH-ERROR", sub() {
@@ -247,8 +249,9 @@ public class QoreMLUtilsTest inherits QUnit::Test {
         ML::LinearRegression lr({"fit_intercept": True});
         lr.fitMatrix(X_reg, y_reg);
 
-        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
-            return map $1.prediction, lr.predictMatrix(X_data);
+        code<list<float>(list<list<float>>)> predictor = list<float> sub (list<list<float>> X_data) {
+            list<float> predictions = map $1.prediction, lr.predictMatrix(X_data);
+            return predictions;
         };
 
         QoreMLUtils::PermutationImportance pi({"n_repeats": 5, "seed": 42});
@@ -284,8 +287,9 @@ public class QoreMLUtilsTest inherits QUnit::Test {
         ML::LinearRegression lr({"fit_intercept": True});
         lr.fitMatrix(X, y);
 
-        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
-            return map $1.prediction, lr.predictMatrix(X_data);
+        code<list<float>(list<list<float>>)> predictor = list<float> sub (list<list<float>> X_data) {
+            list<float> predictions = map $1.prediction, lr.predictMatrix(X_data);
+            return predictions;
         };
 
         QoreMLUtils::PermutationImportance pi({"n_repeats": 10, "seed": 42});
@@ -305,8 +309,9 @@ public class QoreMLUtilsTest inherits QUnit::Test {
         ML::LinearRegression lr({"fit_intercept": True});
         lr.fitMatrix(X_reg, y_reg);
 
-        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
-            return map $1.prediction, lr.predictMatrix(X_data);
+        code<list<float>(list<list<float>>)> predictor = list<float> sub (list<list<float>> X_data) {
+            list<float> predictions = map $1.prediction, lr.predictMatrix(X_data);
+            return predictions;
         };
 
         QoreMLUtils::PermutationImportance pi1({"n_repeats": 5, "seed": 99});
@@ -323,7 +328,7 @@ public class QoreMLUtilsTest inherits QUnit::Test {
     }
 
     permImpErrorTest() {
-        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
+        code<list<float>(list<list<float>>)> predictor = list<float> sub (list<list<float>> X_data) {
             return ();
         };
 
@@ -352,10 +357,10 @@ public class QoreMLUtilsTest inherits QUnit::Test {
     }
 
     scoringAccuracyTest() {
-        float acc = QoreMLUtils::MLScoringUtils::accuracyScorer((0, 1, 1, 0), (0, 1, 0, 0));
+        float acc = QoreMLUtils::MLScoringUtils::accuracyScorer((0.0, 1.0, 1.0, 0.0), (0.0, 1.0, 0.0, 0.0));
         assertTrue(abs(acc - 0.75) < 0.01, sprintf("accuracy should be 0.75; got %f", acc));
 
-        float perfect = QoreMLUtils::MLScoringUtils::accuracyScorer((1, 2, 3), (1, 2, 3));
+        float perfect = QoreMLUtils::MLScoringUtils::accuracyScorer((1.0, 2.0, 3.0), (1.0, 2.0, 3.0));
         assertTrue(abs(perfect - 1.0) < 1e-10, sprintf("perfect accuracy should be 1.0; got %f", perfect));
     }
 }

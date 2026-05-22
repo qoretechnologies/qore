@@ -45,13 +45,12 @@ class PollAcceptTest inherits QUnit::Test {
         Socket listener();
         listener.bind("localhost:0");
         listener.listen();
-        hash<auto> info = listener.getSocketInfo();
-        int port = info.port;
+        hash<auto> info = listener.getSocketInfo(False);
 
         # Connect client - this creates a pending connection
         Socket client();
         client.setNoDelay(True);
-        client.connect("localhost:" + port);
+        client.connectINET(info.address, info.port, 10s, info.family);
 
         # Small delay to ensure connection is in accept queue
         usleep(10000);  # 10ms
@@ -96,7 +95,7 @@ class PollAcceptTest inherits QUnit::Test {
     #! Test poll() with multiple listeners (mimics Qorus HTTP server scenario)
     testMultiListenerPollAccept() {
         list<Socket> listeners = ();
-        list<int> ports = ();
+        list<hash<auto>> infos = ();
 
         # Create multiple listeners
         for (int i = 0; i < NumListeners; ++i) {
@@ -104,14 +103,15 @@ class PollAcceptTest inherits QUnit::Test {
             listener.bind("localhost:0");
             listener.listen();
             push listeners, listener;
-            push ports, listener.getSocketInfo().port;
+            push infos, listener.getSocketInfo(False);
         }
 
         # Connect to a random listener
         int target_idx = rand() % NumListeners;
+        hash<auto> target_info = infos[target_idx];
         Socket client();
         client.setNoDelay(True);
-        client.connect("localhost:" + ports[target_idx]);
+        client.connectINET(target_info.address, target_info.port, 10s, target_info.family);
 
         # Small delay
         usleep(10000);
@@ -166,11 +166,11 @@ class PollAcceptTest inherits QUnit::Test {
             Socket listener();
             listener.bind("localhost:0");
             listener.listen();
-            int port = listener.getSocketInfo().port;
+            hash<auto> info = listener.getSocketInfo(False);
 
             Socket client();
             client.setNoDelay(True);
-            client.connect("localhost:" + port);
+            client.connectINET(info.address, info.port, 10s, info.family);
 
             usleep(5000);  # 5ms
 
@@ -214,7 +214,7 @@ class PollAcceptTest inherits QUnit::Test {
         Socket listener();
         listener.bind("localhost:0");
         listener.listen();
-        int port = listener.getSocketInfo().port;
+        hash<auto> info = listener.getSocketInfo(False);
 
         # Try accept before any connection with timeout=0
         # Should return NOTHING or timeout, not block
@@ -233,7 +233,7 @@ class PollAcceptTest inherits QUnit::Test {
         # Now connect a client
         Socket client();
         client.setNoDelay(True);
-        client.connect("localhost:" + port);
+        client.connectINET(info.address, info.port, 10s, info.family);
 
         usleep(10000);  # 10ms
 
