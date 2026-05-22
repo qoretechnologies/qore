@@ -1,6 +1,7 @@
 # Arrow/DataFrame Integration
 
-**Status:** implementation in progress on `feature/5164_jit`.
+**Status:** implemented on `feature/5164_jit`; verification uses targeted
+builds, qtests, docs-fast targets, Valgrind, and focused benchmarks.
 
 This document is the implementation checklist for complete Apache Arrow,
 Parquet, DataFrame, DataProvider, Arrow Flight, and JDBC dense-column
@@ -86,17 +87,23 @@ where an API exposes conversion details.
 
 ### qore / libqore
 
-- Extend `QoreColumnarResult` schema metadata.
-- Add v2 column insertion APIs while preserving existing APIs.
-- Add external immutable storage support to `QoreBufferNode`.
-- Add Arrow C Data import/export wrappers behind stable libqore APIs.
-- Add decimal128 dense storage or an equivalent fixed-width decimal column type.
-- Add nested column containers and row-materialization helpers.
-- Update `ColumnarResult` filter/slice/null-mask behavior for new column
-  shapes where meaningful.
-- Extend DataProvider bulk record iterators with a shaped accessor so native
-  columnar sources can pass `ColumnarResult` and other `BufferColumns` blocks
-  through pipelines without forcing the compatibility `hash<list>` view.
+- Implemented: `QoreColumnarResult` schema v2 metadata and v2 column insertion
+  APIs while preserving the flat compatibility schema.
+- Implemented: external immutable fixed-width storage support in
+  `QoreBufferNode`, with owner lifetime tracking and copy-on-write mutation.
+- Implemented: decimal and nested schema metadata through recursive
+  `ColumnarResult` descriptors; DataFrame and Arrow/Parquet interop preserve
+  the logical schema through lossless `auto` storage when dense physical storage
+  is not available.
+- Implemented: `ColumnarResult` filter, slice, null-mask, and mask-composition
+  behavior for dense fixed-width masks and compatible column blocks.
+- Implemented: DataProvider bulk record iterators expose a shaped accessor so
+  native columnar sources can pass `ColumnarResult` and other `BufferColumns`
+  blocks through pipelines without forcing the compatibility `hash<list>` view.
+- Not exported in the current feature contract: `QORE_HAVE_ARROW_C_DATA_INTEROP`
+  and `QORE_HAVE_DECIMAL128_BUFFER`.  These macros remain undefined because
+  stable libqore Arrow C Data ABI wrappers and dense `buffer<decimal128>` storage
+  are not implemented.
 
 ### dataframe
 
@@ -169,8 +176,12 @@ where an API exposes conversion details.
 - docs fast targets for qore, dataframe, grpc, and jni.
 - valgrind DataFrame/Parquet/Arrow tests with `ARROW_DEFAULT_MEMORY_POOL=system`
   when the packaged Arrow build uses mimalloc.
-- Benchmarks covering Parquet, Arrow IPC, Arrow Flight, DataFrame construction,
-  DataFrame export, and JDBC `selectColumnar()`.
+- Benchmarks cover DataFrame construction, DataFrame-to-ColumnarResult export,
+  Parquet round trips, Arrow IPC round trips, DataProvider columnar pipeline
+  paths, SQL read/write, and optional JDBC `selectColumnar()` when module-jni
+  and a JDBC connection string are available.  Arrow Flight throughput remains a
+  module-grpc benchmark follow-up; correctness and columnar preservation are
+  covered by module-grpc qtests.
 
 ## Commit Checklist
 

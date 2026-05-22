@@ -14,6 +14,7 @@ import math
 import os
 import re
 import statistics
+import tempfile
 import time
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -230,6 +231,39 @@ def add_sql_cases(results: dict[str, dict[str, object]]) -> None:
         engine.dispose()
 
 
+def add_arrow_cases(df: pd.DataFrame, rows: int, results: dict[str, dict[str, object]]) -> None:
+    try:
+        import pyarrow  # noqa: F401
+    except Exception as ex:
+        print(f"pandas_arrow_ipc_roundtrip: skipped (pyarrow not available: {ex})")
+        print(f"pandas_parquet_roundtrip: skipped (pyarrow not available: {ex})")
+        return
+
+    with tempfile.TemporaryDirectory(prefix="qore_df_pybench_") as tmpdir:
+        feather_path = Path(tmpdir) / "dataframe.feather"
+        parquet_path = Path(tmpdir) / "dataframe.parquet"
+
+        def arrow_ipc_roundtrip() -> None:
+            df.to_feather(feather_path)
+            copy = pd.read_feather(feather_path)
+            if len(copy) < rows:
+                raise RuntimeError("pandas_arrow_ipc_roundtrip returned too few rows")
+
+        results["pandas_arrow_ipc_roundtrip"] = run_case(
+            "pandas_arrow_ipc_roundtrip", 6, 2, approx_bytes(rows) * 2, arrow_ipc_roundtrip
+        )
+
+        def parquet_roundtrip() -> None:
+            df.to_parquet(parquet_path, index=False)
+            copy = pd.read_parquet(parquet_path)
+            if len(copy) < rows:
+                raise RuntimeError("pandas_parquet_roundtrip returned too few rows")
+
+        results["pandas_parquet_roundtrip"] = run_case(
+            "pandas_parquet_roundtrip", 5, 1, approx_bytes(rows) * 2, parquet_roundtrip
+        )
+
+
 def compare_to_qore(qore_path: Path, results: dict[str, dict[str, object]]) -> None:
     qore = json.loads(qore_path.read_text())
     qbench = qore["benchmarks"]
@@ -244,6 +278,8 @@ def compare_to_qore(qore_path: Path, results: dict[str, dict[str, object]]) -> N
         ("filter+group pipeline", "dataframe_pipeline_filter_group", "pandas_filter_group"),
         ("SQL read", "dataframe_sql_from_query", "pandas_sql_from_query"),
         ("SQL write", "dataframe_sql_to_table", "pandas_sql_to_table"),
+        ("Arrow IPC roundtrip", "dataframe_arrow_ipc_roundtrip", "pandas_arrow_ipc_roundtrip"),
+        ("Parquet roundtrip", "dataframe_parquet_roundtrip", "pandas_parquet_roundtrip"),
     )
 
     print("\ncomparison vs Qore benchmark JSON")
@@ -263,6 +299,7 @@ def main() -> int:
     parser.add_argument("--save", help="write pandas benchmark JSON")
     parser.add_argument("--qore-json", help="compare against a Qore benchmark JSON")
     parser.add_argument("--no-sql", action="store_true", help="skip SQL cases")
+    parser.add_argument("--no-arrow", action="store_true", help="skip Arrow IPC and Parquet cases")
     args = parser.parse_args()
 
     rows = default_rows()
@@ -338,6 +375,8 @@ def main() -> int:
 
     if not args.no_sql:
         add_sql_cases(results)
+    if not args.no_arrow:
+        add_arrow_cases(df, rows, results)
 
     suite = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
