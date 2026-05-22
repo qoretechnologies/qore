@@ -727,6 +727,14 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     iterated, and each record will be passed separately to the processor with a significant performance penalty when
     processing large volumes of data.
 
+    Native bulk readers can return their most efficient runtime representation with
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue()
+    "AbstractDataProviderBulkRecordInterface::getShapedValue()".  This preserves
+    \c BufferColumns and \c DataFrameBlock values for shape-aware pipelines.  The older
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue()
+    "getValue()" method remains the compatibility API and materializes a hash-of-lists view
+    when the native block is columnar.
+
     @subsection dataprovider_pipeline_shapes Data Provider Pipeline Shape Negotiation
 
     Pipelines can also negotiate explicit data shapes between processor stages with
@@ -1128,6 +1136,12 @@ if (errors) {
     - added @ref DataProvider::DataProviderShape "DataProviderShape" and shape-aware pipeline APIs on
       @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" for row records, hash-of-lists bulk blocks,
       dense buffer-column blocks, and DataFrame blocks
+    - added @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue()
+      "AbstractDataProviderBulkRecordInterface::getShapedValue()" and
+      @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValueShape()
+      "getValueShape()" so native bulk readers can preserve \c BufferColumns and \c DataFrameBlock values while
+      keeping @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue() "getValue()" as a
+      hash-of-lists compatibility API
     - added automatic DataProvider pipeline shape routing and conversion with row-record boundary preservation for
       legacy \c submitImpl() processors
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process

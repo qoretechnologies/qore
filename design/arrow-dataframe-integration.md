@@ -94,6 +94,9 @@ where an API exposes conversion details.
 - Add nested column containers and row-materialization helpers.
 - Update `ColumnarResult` filter/slice/null-mask behavior for new column
   shapes where meaningful.
+- Extend DataProvider bulk record iterators with a shaped accessor so native
+  columnar sources can pass `ColumnarResult` and other `BufferColumns` blocks
+  through pipelines without forcing the compatibility `hash<list>` view.
 
 ### dataframe
 
@@ -126,6 +129,11 @@ where an API exposes conversion details.
   and row records.  Implemented through shared record-batch coercion helpers.
 - Make ArrowFlightDataProvider advertise and preserve `BufferColumns`, with
   `DataFrameBlock` support when the dataframe module is available.
+  Implemented for DoGet bulk reads through `DataProvider` shaped bulk blocks;
+  request/event writers now accept `ColumnarResult`, DataFrame, hash-of-lists,
+  row lists, and `ArrowRecordBatch` values.  The request API remains row-list
+  compatible by default and accepts `output_shape: "columnar"` for explicit
+  ColumnarResult batch responses.
 - Compile the new path only when qore exposes the feature-detection contract.
 
 ### module-jni

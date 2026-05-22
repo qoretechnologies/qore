@@ -2472,9 +2472,9 @@ public class DataProviderPipeline {
             logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
             record_count += rec_cnt;
             pmap."0".submit(_data);
-        } else if (do_bulk && shape == DataProviderShape::HashOfLists
+        } else if (do_bulk && (shape == DataProviderShape::HashOfLists || shape == DataProviderShape::BufferColumns)
                 && ((int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape)) > 1)) {
-            logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
+            logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
             record_count += rec_cnt;
             pmap."0".submit(_data);
         } else {
@@ -2496,9 +2496,10 @@ public class DataProviderPipeline {
         @see @ref dataprovider_pipeline_bulk_processing
     */
     private:internal submitBulkIntern(AbstractDataProviderBulkRecordInterface i) {
-        while (*hash<auto> recs = i.getValue()) {
-            int rec_cnt = recs.firstValue().lsize();
-            logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
+        while (*auto recs = i.getShapedValue()) {
+            DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+            int rec_cnt = AbstractDataProcessor::shapeRecordCount(recs, shape);
+            logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
             record_count += rec_cnt;
             pmap."0".submit(recs);
         }
