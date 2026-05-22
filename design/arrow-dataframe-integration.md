@@ -177,11 +177,9 @@ where an API exposes conversion details.
 - valgrind DataFrame/Parquet/Arrow tests with `ARROW_DEFAULT_MEMORY_POOL=system`
   when the packaged Arrow build uses mimalloc.
 - Benchmarks cover DataFrame construction, DataFrame-to-ColumnarResult export,
-  Parquet round trips, Arrow IPC round trips, DataProvider columnar pipeline
-  paths, SQL read/write, and optional JDBC `selectColumnar()` when module-jni
-  and a JDBC connection string are available.  Arrow Flight throughput remains a
-  module-grpc benchmark follow-up; correctness and columnar preservation are
-  covered by module-grpc qtests.
+  Parquet round trips, Arrow IPC round trips, Arrow Flight columnar reads,
+  DataProvider columnar pipeline paths, SQL read/write, and optional JDBC
+  `selectColumnar()` when module-jni and a JDBC connection string are available.
 
 ## Commit Checklist
 
