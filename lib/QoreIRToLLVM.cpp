@@ -4384,7 +4384,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             for (const auto& op : inst_ptr->operands) {
                 operand_remaining_uses[op.id]++;
             }
-            if (inst_ptr->opcode == QoreIROpcode::StoreLocal) {
+            if (inst_ptr->opcode == QoreIROpcode::StoreLocal
+                    || inst_ptr->opcode == QoreIROpcode::StoreClosure) {
                 const auto* local_inst =
                     static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
                 if (local_inst->weak && local_inst->local) {
@@ -5601,7 +5602,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // qore_rt_load_local() returns a ref-counted value (refSelf'd).  This
             // is an independent reference — not aliased to the local alloca — so it
             // must be tracked for cleanup.  Without tracking, consumers like MakeList
-            // (which do their own refSelf) leave the LoadLocal ref leaked.
+            // (which do their own refSelf) leave the LoadLocal ref leaked.  For
+            // weak-assigned closure locals, also release the temp at last use; keeping
+            // it until function exit can run the referent's destructor before on_exit
+            // cleanup in the same frame.
             if (linst->local && linst->local->closureUse()) {
                 llvm::Value* result;
                 if (aot_mode) {
@@ -5626,6 +5630,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // until function exit.  This ensures timely object destruction at
                 // block scope exit (matching AST mode behavior).
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (weak_assigned_locals.count(key)) {
+                    weak_load_result_ids.insert(inst->result.id);
+                }
                 if (block_scoped_locals.count(key)) {
                     auto alloca_it = invoke_alloca_map.find(inst->result.id);
                     if (alloca_it != invoke_alloca_map.end()) {
@@ -11418,9 +11425,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::LoadClosure: {
             const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+            const void* key = reinterpret_cast<const void*>(linst->local);
             llvm::Value* result;
             if (aot_mode) {
-                const void* key = reinterpret_cast<const void*>(linst->local);
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                 if (linst->local && linst->local->closureUse()
                         && aot_body_locals.count(key)) {
@@ -11452,6 +11459,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (weak_assigned_locals.count(key)) {
+                weak_load_result_ids.insert(inst->result.id);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

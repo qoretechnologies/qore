@@ -257,7 +257,8 @@ public:
 
         if (val.getType() == NT_WEAKREF) {
             needs_deref = false;
-            return val.get<WeakReferenceNode>()->get();
+            QoreObject* obj = val.get<WeakReferenceNode>()->get();
+            return obj->isValid() ? QoreValue(obj) : QoreValue();
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
@@ -289,7 +290,8 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF) {
-            return val.get<WeakReferenceNode>()->get()->refSelf();
+            QoreObject* obj = val.get<WeakReferenceNode>()->get();
+            return obj->isValid() ? obj->refSelf() : QoreValue();
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
@@ -404,7 +406,8 @@ public:
 
         if (val.getType() == NT_WEAKREF) {
             needs_deref = false;
-            return val.get<WeakReferenceNode>()->get();
+            QoreObject* obj = val.get<WeakReferenceNode>()->get();
+            return obj->isValid() ? QoreValue(obj) : QoreValue();
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
@@ -438,7 +441,8 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF) {
-            return val.get<WeakReferenceNode>()->get()->refSelf();
+            QoreObject* obj = val.get<WeakReferenceNode>()->get();
+            return obj->isValid() ? obj->refSelf() : QoreValue();
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
