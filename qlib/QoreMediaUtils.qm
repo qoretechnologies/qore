@@ -1,0 +1,421 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreMediaUtils.qm provider-neutral abstraction layer for image + video generation
+
+/*  QoreMediaUtils.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires reflection
+
+module QoreMediaUtils {
+    version = "1.0";
+    desc = "user module providing the provider-neutral abstraction layer for "
+        "image and video generation backends";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreMediaUtils Module
+
+    @tableofcontents
+
+    @section qoremediautilsintro QoreMediaUtils Module Introduction
+
+    The %QoreMediaUtils module provides the provider-neutral abstraction
+    layer for generative media (image + video) — parallel to
+    @ref qoreragutilsintro "QoreRagUtils" for retrieval-augmented
+    generation and @ref qorespeechutilsintro "QoreSpeechUtils" for ASR + TTS.
+
+    Two abstract building blocks:
+    - @ref QoreMediaUtils::AbstractImageGenerator — text-to-image,
+      image-to-image, and image editing
+    - @ref QoreMediaUtils::AbstractVideoGenerator — text-to-video,
+      image-to-video, and video editing
+
+    Each comes with a factory + registry pair mirroring the
+    QoreRagUtils / QoreSpeechUtils pattern.  Provider modules register
+    their factories on module load; callers select a backend by name
+    via @ref ImageGeneratorConfig::backend and
+    @ref VideoGeneratorConfig::backend, and the registry lazy-loads
+    the providing module on first lookup.
+
+    @par Example: generate an image via Stability AI
+
+    @code{.py}
+%modern
+%requires QoreMediaUtils
+%requires StabilityAiRestClient
+
+QoreMediaUtils::AbstractImageGenerator gen =
+    QoreMediaUtils::MediaProviderRegistry::createImageGenerator(
+        <QoreMediaUtils::ImageGeneratorConfig>{
+            "backend": "stability-ai",
+            "api_key": api_key,
+            "model":   "ultra",
+        });
+hash<QoreMediaUtils::ImageResult> r =
+    gen.generateImage("a serene mountain landscape at sunrise");
+File f();
+f.open2("/tmp/out.png", O_CREAT | O_WRONLY | O_TRUNC);
+f.write(r.image);
+    @endcode
+
+    @section qoremediautilsrelnotes Release Notes
+
+    @subsection qoremediautils_1_0 QoreMediaUtils v1.0
+    - initial version
+*/
+
+#! contains all public symbols of the %QoreMediaUtils module
+public namespace QoreMediaUtils {
+
+#! Configuration for an image-generator backend
+public hashdecl ImageGeneratorConfig {
+    #! Backend identifier (e.g. \c "stability-ai", \c "bfl")
+    *string backend;
+    #! API key for the backend
+    *string api_key;
+    #! Default model / engine (provider-specific name)
+    *string model;
+    #! Default output format (\c "png", \c "jpeg", \c "webp")
+    *string output_format;
+    #! Default aspect ratio / size (provider-specific)
+    *string aspect_ratio;
+    #! Default request URL (overrides the backend's hardcoded default)
+    *string url;
+    #! Free-form backend-specific options forwarded to the underlying call
+    *hash<auto> provider_options;
+}
+
+#! Configuration for a video-generator backend
+public hashdecl VideoGeneratorConfig {
+    #! Backend identifier (e.g. \c "bfl", \c "runway", \c "luma")
+    *string backend;
+    #! API key for the backend
+    *string api_key;
+    #! Default model / engine (provider-specific name)
+    *string model;
+    #! Default duration in seconds (provider-specific support varies)
+    *int duration_seconds;
+    #! Default frames per second (provider-specific support varies)
+    *int fps;
+    #! Default aspect ratio (provider-specific)
+    *string aspect_ratio;
+    #! Default request URL (overrides the backend's hardcoded default)
+    *string url;
+    #! Free-form backend-specific options forwarded to the underlying call
+    *hash<auto> provider_options;
+}
+
+#! Result of an image-generation call
+public hashdecl ImageResult {
+    #! Raw image bytes (PNG / JPEG / WebP, per the requested format)
+    binary image;
+    #! MIME type of the returned image
+    *string content_type;
+    #! Provider-supplied seed used for this image (for reproducibility)
+    *int seed;
+    #! Model that produced the image
+    *string model;
+    #! Provider-specific metadata (request ID, finish reason, NSFW flags, ...)
+    *hash<auto> metadata;
+}
+
+#! Result of a video-generation call
+public hashdecl VideoResult {
+    #! Raw video bytes (typically MP4)
+    *binary video;
+    #! URL where the video can be downloaded (some backends return URLs rather than bytes)
+    *string video_url;
+    #! MIME type of the returned video
+    *string content_type;
+    #! Duration in seconds, when reported
+    *float duration_seconds;
+    #! Model that produced the video
+    *string model;
+    #! Provider-specific metadata (job ID, finish reason, ...)
+    *hash<auto> metadata;
+}
+
+#! Static info describing what a media-provider factory produces
+public hashdecl MediaProviderInfo {
+    #! Provider mode (e.g. \c "stability-ai", \c "bfl")
+    string mode;
+    #! Human-readable display name
+    string display_name;
+    #! The Qore module providing the factory
+    *string module_name;
+}
+
+#! Abstract base for an image-generation provider
+public class AbstractImageGenerator {
+    #! Generates an image from a text prompt
+    /** @param prompt the text prompt describing the desired image
+        @param opts optional per-call options forwarded to the backend
+            (e.g. \c negative_prompt, \c seed, \c steps, \c cfg_scale,
+            \c aspect_ratio, \c style_preset)
+
+        @return an @ref ImageResult with the raw image bytes
+    */
+    abstract hash<ImageResult> generateImage(string prompt, *hash<auto> opts);
+
+    #! Returns the backend mode (e.g. \c "stability-ai")
+    abstract string getMode();
+
+    #! Returns the model in use, when set (informational)
+    *string getModel() {
+        return NOTHING;
+    }
+}
+
+#! Abstract base for a video-generation provider
+public class AbstractVideoGenerator {
+    #! Generates a video from a text prompt
+    /** @param prompt the text prompt describing the desired video
+        @param opts optional per-call options forwarded to the backend
+            (e.g. \c image (text-to-video can become image-to-video with
+            a starting frame), \c duration_seconds, \c fps, \c seed,
+            \c aspect_ratio)
+
+        @return a @ref VideoResult with the raw video bytes or download URL
+    */
+    abstract hash<VideoResult> generateVideo(string prompt, *hash<auto> opts);
+
+    #! Returns the backend mode (e.g. \c "bfl")
+    abstract string getMode();
+
+    #! Returns the model in use, when set (informational)
+    *string getModel() {
+        return NOTHING;
+    }
+}
+
+#! Abstract factory for an image generator
+public class AbstractImageGeneratorFactory {
+    #! Returns the backend mode (e.g. \c "stability-ai")
+    abstract string getMode();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates an image generator instance from an @ref ImageGeneratorConfig
+    abstract AbstractImageGenerator create(hash<ImageGeneratorConfig> config);
+
+    #! Returns static info about the image generator this factory creates
+    hash<MediaProviderInfo> getInfo() {
+        return <MediaProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Abstract factory for a video generator
+public class AbstractVideoGeneratorFactory {
+    #! Returns the backend mode (e.g. \c "bfl")
+    abstract string getMode();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a video generator instance from a @ref VideoGeneratorConfig
+    abstract AbstractVideoGenerator create(hash<VideoGeneratorConfig> config);
+
+    #! Returns static info about the video generator this factory creates
+    hash<MediaProviderInfo> getInfo() {
+        return <MediaProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Central registry of media-provider factories with lazy module loading
+/** Each entry in @ref ImageGeneratorModuleMap / @ref VideoGeneratorModuleMap
+    maps a backend name to the Qore module that ships the matching
+    factory; the module is lazy-loaded on first lookup.
+*/
+public class MediaProviderRegistry {
+    public {
+        #! Map of image-generator backend names to providing modules
+        const ImageGeneratorModuleMap = {
+            "stability-ai": "StabilityAiRestClient",
+            "bfl":          "BflRestClient",
+        };
+
+        #! Map of video-generator backend names to providing modules
+        const VideoGeneratorModuleMap = {
+            "bfl":          "BflRestClient",
+        };
+    }
+
+    private {
+        static hash<string, AbstractImageGeneratorFactory> image_cache = {};
+        static hash<string, AbstractVideoGeneratorFactory> video_cache = {};
+        static Mutex registry_lock();
+    }
+
+    #! Registers an image-generator factory
+    /** @throw MEDIA-CONFIG-ERROR a factory for the same mode is already registered
+    */
+    static registerImageGeneratorFactory(AbstractImageGeneratorFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string mode = factory.getMode();
+        if (image_cache{mode}) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("image-generator factory for %y has already been "
+                    "registered", mode);
+        }
+        image_cache{mode} = factory;
+    }
+
+    #! Registers a video-generator factory
+    /** @throw MEDIA-CONFIG-ERROR a factory for the same mode is already registered
+    */
+    static registerVideoGeneratorFactory(AbstractVideoGeneratorFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string mode = factory.getMode();
+        if (video_cache{mode}) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("video-generator factory for %y has already been "
+                    "registered", mode);
+        }
+        video_cache{mode} = factory;
+    }
+
+    #! Removes an image-generator factory (intended for tests)
+    static deregisterImageGeneratorFactory(string mode) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove image_cache{mode};
+    }
+
+    #! Removes a video-generator factory (intended for tests)
+    static deregisterVideoGeneratorFactory(string mode) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove video_cache{mode};
+    }
+
+    #! Returns the image-generator factory for the given mode, lazy-loading if needed
+    static *AbstractImageGeneratorFactory getImageGeneratorFactory(string mode) {
+        if (image_cache{mode}) {
+            return image_cache{mode};
+        }
+        *string module_name = ImageGeneratorModuleMap{mode};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for image-generator %y: %s",
+                    module_name, mode, ex.desc), ex;
+        }
+        return image_cache{mode};
+    }
+
+    #! Returns the image-generator factory or throws
+    static AbstractImageGeneratorFactory getImageGeneratorFactoryEx(string mode) {
+        *AbstractImageGeneratorFactory f = getImageGeneratorFactory(mode);
+        if (!f) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("image-generator backend %y is unknown; registered "
+                    "backends: %y; backends available via lazy module load: %y",
+                    mode, keys image_cache, keys ImageGeneratorModuleMap);
+        }
+        return f;
+    }
+
+    #! Returns the video-generator factory for the given mode, lazy-loading if needed
+    static *AbstractVideoGeneratorFactory getVideoGeneratorFactory(string mode) {
+        if (video_cache{mode}) {
+            return video_cache{mode};
+        }
+        *string module_name = VideoGeneratorModuleMap{mode};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for video-generator %y: %s",
+                    module_name, mode, ex.desc), ex;
+        }
+        return video_cache{mode};
+    }
+
+    #! Returns the video-generator factory or throws
+    static AbstractVideoGeneratorFactory getVideoGeneratorFactoryEx(string mode) {
+        *AbstractVideoGeneratorFactory f = getVideoGeneratorFactory(mode);
+        if (!f) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("video-generator backend %y is unknown; registered "
+                    "backends: %y; backends available via lazy module load: %y",
+                    mode, keys video_cache, keys VideoGeneratorModuleMap);
+        }
+        return f;
+    }
+
+    #! Constructs an image generator for the given @ref ImageGeneratorConfig
+    /** @throw MEDIA-CONFIG-ERROR @ref ImageGeneratorConfig::backend is missing or unknown
+    */
+    static AbstractImageGenerator createImageGenerator(
+            hash<ImageGeneratorConfig> config) {
+        if (!config.backend.val()) {
+            throw "MEDIA-CONFIG-ERROR",
+                "ImageGeneratorConfig.backend is required for factory lookup";
+        }
+        return getImageGeneratorFactoryEx(config.backend).create(config);
+    }
+
+    #! Constructs a video generator for the given @ref VideoGeneratorConfig
+    /** @throw MEDIA-CONFIG-ERROR @ref VideoGeneratorConfig::backend is missing or unknown
+    */
+    static AbstractVideoGenerator createVideoGenerator(
+            hash<VideoGeneratorConfig> config) {
+        if (!config.backend.val()) {
+            throw "MEDIA-CONFIG-ERROR",
+                "VideoGeneratorConfig.backend is required for factory lookup";
+        }
+        return getVideoGeneratorFactoryEx(config.backend).create(config);
+    }
+
+    #! Returns known image-generator backends (registered + lazy-loadable)
+    static list<string> knownImageGeneratorBackends() {
+        return sort(keys (image_cache + ImageGeneratorModuleMap));
+    }
+
+    #! Returns known video-generator backends (registered + lazy-loadable)
+    static list<string> knownVideoGeneratorBackends() {
+        return sort(keys (video_cache + VideoGeneratorModuleMap));
+    }
+}
+}

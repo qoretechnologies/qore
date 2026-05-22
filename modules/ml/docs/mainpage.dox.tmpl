@@ -701,8 +701,18 @@ if (!caps.has_onnx) {
       - Clustering metrics: @ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()", @ref Qore::ML::ml_davies_bouldin_score() "ml_davies_bouldin_score()", @ref Qore::ML::ml_calinski_harabasz_score() "ml_calinski_harabasz_score()"
       - @ref Qore::ML::CrossValidator "CrossValidator" — k-fold cross-validation split utility
     - Optional @ref Qore::ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
+    - Typed model hierarchy under @ref Qore::ML::AbstractMLModel "AbstractMLModel":
+      - @ref Qore::ML::AbstractMLEstimator "AbstractMLEstimator" — fit/predict-style models (regressors, classifiers, clusterers, anomaly detectors)
+      - @ref Qore::ML::AbstractMLRegressor "AbstractMLRegressor", @ref Qore::ML::AbstractMLClassifier "AbstractMLClassifier",
+        @ref Qore::ML::AbstractMLClusterer "AbstractMLClusterer", @ref Qore::ML::AbstractMLAnomalyDetector "AbstractMLAnomalyDetector"
+      - @ref Qore::ML::AbstractMLTransformer "AbstractMLTransformer" — fit/transform-style preprocessors
+      - @ref Qore::ML::AbstractMLTimeSeries "AbstractMLTimeSeries" — time-series forecasting models
+      - All concrete model classes inherit from the appropriate base; ml_serialize / ml_deserialize / ml_save_model / ml_load_model
+        accept any @ref Qore::ML::AbstractMLModel "AbstractMLModel" and route via virtual dispatch
     - Model persistence: @ref Qore::ML::ml_serialize() "ml_serialize()" / @ref Qore::ML::ml_deserialize() "ml_deserialize()" for in-memory round-trip,
-      @ref Qore::ML::ml_save_model() "ml_save_model()" / @ref Qore::ML::ml_load_model() "ml_load_model()" for file-based persistence (.qml native format)
+      @ref Qore::ML::ml_save_model() "ml_save_model()" / @ref Qore::ML::ml_load_model() "ml_load_model()" for file-based persistence (.qml native format).
+      @ref Qore::ML::MLPipeline "MLPipeline" composes through serialization: each step's state is packed by algorithm tag so a pipeline
+      round-trips end-to-end and produces identical predictions after restore
     - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
     - All algorithms use Eigen3 for efficient matrix operations
     - All algorithms support cooperative cancellation for responsive interrupt handling

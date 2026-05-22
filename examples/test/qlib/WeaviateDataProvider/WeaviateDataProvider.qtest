@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/WeaviateDataProvider
+
+%exec-class WeaviateDataProviderTest
+
+class FakeWeaviateRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+    constructor() : RestClientIo({"url": "http://localhost:8080"}) {}
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        last_method = "GET";
+        last_path = path;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    string getSafeUrl() { return "http://localhost:8080"; }
+}
+
+public class WeaviateDataProviderTest inherits QUnit::Test {
+    constructor() : Test("WeaviateDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("list-classes hits /schema", \listClassesTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("weaviate");
+        assertEq("weaviate", f.getInfo().name);
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Weaviate");
+        assertEq("Weaviate", app.name);
+        assertEq("weaviate", app.scheme);
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Weaviate");
+        assertEq(1, actions.size());
+        assertEq("list-classes", actions[0].action);
+    }
+
+    private listClassesTest() {
+        FakeWeaviateRestClientIo fake();
+        fake.response_body = {
+            "classes": (
+                {"class": "Article", "vectorizer": "none"},
+                {"class": "Author", "vectorizer": "text2vec-openai"},
+            ),
+        };
+        WeaviateDataProvider::WeaviateListClassesDataProvider prov(fake);
+        auto resp = prov.doRequest(NOTHING);
+        assertEq("GET", fake.last_method);
+        assertEq("/schema", fake.last_path);
+        assertEq(2, resp.classes.size());
+        assertEq("Article", resp.classes[0]."class");
+        assertEq("none", resp.classes[0].vectorizer);
+    }
+}

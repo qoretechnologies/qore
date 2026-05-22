@@ -43,7 +43,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
 
     @since ml 1.0
 */
-qclass DecisionTree [arg=QoreDecisionTree* dt; ns=Qore::ML; flags=final];
+qclass DecisionTree [arg=QoreDecisionTree* dt; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a DecisionTree with the given options
 /** @param options a hash with:
@@ -148,7 +148,7 @@ DecisionTree::copy() {
     @throw ML-DECISION-TREE-ERROR if data is invalid
     @throw ML-DATA-ERROR if data cannot be converted to a matrix
 */
-nothing DecisionTree::fit(list<auto> data, string target_field) {
+nothing DecisionTree::fit(list<hash<auto>> data, string target_field) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {

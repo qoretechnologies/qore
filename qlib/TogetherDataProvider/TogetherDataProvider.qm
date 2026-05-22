@@ -1,0 +1,196 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore TogetherDataProvider module definition
+
+/*  TogetherDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) TogetherRestClient
+%requires RestClientIo
+
+module TogetherDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Together AI services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new TogetherDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": TogetherDataProvider::AppName,
+            "display_name": "Together AI",
+            "short_desc": "Together AI hosted open-weight LLMs, embeddings, and image generation",
+            "desc": "Provides access to [Together AI](https://www.together.ai) — a managed "
+                "inference platform for open-weight LLMs (Llama, Qwen, DeepSeek, Mixtral), "
+                "embedding models (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image "
+                "generation (FLUX, Stable Diffusion XL).\n\n"
+                "Together exposes an OpenAI-compatible chat-completions API plus its own "
+                "`/v1/images/generations` endpoint for text-to-image diffusion.\n\n"
+                "**Common use cases**:\n"
+                "- **OSS chat at production scale** without owning GPU infrastructure\n"
+                "- **RAG embeddings** with open-weight embedders for cost control\n"
+                "- **Text-to-image generation** via FLUX.1 (schnell + dev) and SDXL\n"
+                "- **Tool-calling and structured output** via the OpenAI-compatible surface",
+            "scheme": "together",
+            "logo": TogetherLogo,
+            "logo_file_name": "together-ai-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::DesignCreative,),
+        });
+
+        # chat-completion action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TogetherDataProvider::AppName,
+            "path": "/chat-completion",
+            "action": "chat-completion",
+            "display_name": "Chat Completion",
+            "short_desc": "Generate a chat completion from a Together AI hosted model",
+            "desc": "Sends a list of chat messages to a Together AI hosted model using the "
+                "OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated "
+                "response.",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherChatCompletionRequestDataType::Fields{"messages", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherChatCompletionRequestDataType::Fields{
+                    "temperature", "max_tokens",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherChatCompletionRequestDataType::Fields - (
+                    "messages", "model", "temperature", "max_tokens",
+                )
+            ),
+            "output_type": TogetherChatCompletionDataProvider::ResponseType,
+        });
+
+        # create-embeddings action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TogetherDataProvider::AppName,
+            "path": "/create-embeddings",
+            "action": "create-embeddings",
+            "display_name": "Create Embeddings",
+            "short_desc": "Generate embedding vectors from a Together AI hosted model",
+            "desc": "Converts text inputs into embedding vectors using a Together-hosted "
+                "embedding model (e.g. `BAAI/bge-base-en-v1.5`) via the OpenAI-compatible "
+                "`/v1/embeddings` endpoint.",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherEmbeddingRequestDataType::Fields{"input", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherEmbeddingRequestDataType::Fields - ("input", "model")
+            ),
+            "output_type": TogetherEmbeddingDataProvider::ResponseType,
+        });
+
+        # generate-image action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TogetherDataProvider::AppName,
+            "path": "/generate-image",
+            "action": "generate-image",
+            "display_name": "Generate Image",
+            "short_desc": "Generate an image from a text prompt using FLUX or Stable Diffusion",
+            "desc": "Generates one or more images from a text prompt using a Together-hosted "
+                "diffusion model (`black-forest-labs/FLUX.1-schnell-Free`, "
+                "`stabilityai/stable-diffusion-xl-base-1.0`, etc.) via the `/v1/images/generations` "
+                "endpoint.\n\n"
+                "Returns image URLs by default; set `response_format` to `b64_json` to receive "
+                "base64-encoded image bytes inline.",
+            "action_code": DPAT_API,
+            "groups": ("Image Generation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherImageGenerationRequestDataType::Fields{"prompt", "model",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherImageGenerationRequestDataType::Fields{
+                    "width", "height", "steps", "n", "response_format",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TogetherImageGenerationRequestDataType::Fields - (
+                    "prompt", "model", "width", "height", "steps", "n", "response_format",
+                )
+            ),
+            "output_type": TogetherImageGenerationDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage TogetherDataProvider Module
+
+    @tableofcontents
+
+    @section togetherdataproviderintro TogetherDataProvider Introduction
+
+    The %TogetherDataProvider module provides a data provider API for
+    [Together AI](https://www.together.ai) hosted model inference.
+
+    The following data providers are exposed:
+    - @ref TogetherDataProvider::TogetherDataProvider "TogetherDataProvider" — root
+    - @ref TogetherDataProvider::TogetherChatCompletionDataProvider "TogetherChatCompletionDataProvider" — chat
+    - @ref TogetherDataProvider::TogetherEmbeddingDataProvider "TogetherEmbeddingDataProvider" — embeddings
+    - @ref TogetherDataProvider::TogetherImageGenerationDataProvider "TogetherImageGenerationDataProvider" — image generation
+
+    @par Example:
+    @code{.py}
+%requires TogetherDataProvider
+
+TogetherRestConnection rc = get_connection("together");
+TogetherDataProvider::TogetherDataProvider prov(rc.getAsync());
+
+AbstractDataProvider img = prov.getChildProvider("generate-image");
+hash<auto> result = img.doRequest({
+    "model": "black-forest-labs/FLUX.1-schnell-Free",
+    "prompt": "A serene mountain lake at sunrise",
+    "width": 1024,
+    "height": 1024,
+    "steps": 4,
+});
+printf("Image URL: %s\n", result.data[0].url);
+    @endcode
+
+    @section TogetherDataProviderRelnotes Release Notes
+
+    @subsection TogetherDataProviderv1_0 TogetherDataProvider v1.0
+    - the initial version of the %TogetherDataProvider module
+*/
+
+#! contains all public definitions in the TogetherDataProvider module
+public namespace TogetherDataProvider {
+#! Together AI application name (used as the App key in the action catalog)
+public const AppName = "TogetherAi";
+}
+
+#! App logo loaded from file
+public const TogetherLogo = File::readTextFile(get_script_dir() + "/together-ai-logo.svg");

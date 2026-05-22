@@ -59,7 +59,7 @@ printf("Predicted class: %f, Probability: %f\n", result.predicted_class, result.
     @endcode
 
 */
-qclass LogisticRegression [arg=QoreLogisticRegression* lr; ns=Qore::ML; flags=final];
+qclass LogisticRegression [arg=QoreLogisticRegression* lr; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates a LogisticRegression with the given options
 /** @param options a hash with the following optional keys:
@@ -165,7 +165,7 @@ clf.fit(training_data, "species");
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-LOGISTIC-REGRESSION-ERROR if fitting fails
 */
-nothing LogisticRegression::fit(list<auto> data, string target_field) {
+nothing LogisticRegression::fit(list<hash<auto>> data, string target_field) {
     // Extract field names from first record, excluding target
     if (!data || data->empty()) {
         xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
@@ -262,7 +262,7 @@ clf.update(new_labeled_data, 0.01);  # refine with new examples
     @throw ML-LOGISTIC-REGRESSION-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing LogisticRegression::update(list<auto> data, float learning_rate) {
+nothing LogisticRegression::update(list<hash<auto>> data, float learning_rate) {
     const std::vector<std::string>& feat_names = lr->getFieldNames();
     const std::string& target_name = lr->getTargetField();
     if (feat_names.empty() || target_name.empty()) {
@@ -312,7 +312,7 @@ clf.updateMatrix(((5.1, 3.5), (6.2, 2.8)), (0, 1), 0.01);
     @throw ML-LOGISTIC-REGRESSION-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing LogisticRegression::updateMatrix(list<auto> matrix, list<auto> target, float learning_rate) {
+nothing LogisticRegression::updateMatrix(list<list<float>> matrix, list<float> target, float learning_rate) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -363,7 +363,7 @@ list<hash<LogisticRegressionResult>> results = clf.predictMatrix(((5.1, 3.5), (7
 
     @throw ML-LOGISTIC-REGRESSION-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<LogisticRegressionResult>> LogisticRegression::predictMatrix(list<auto> matrix) {
+list<hash<LogisticRegressionResult>> LogisticRegression::predictMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -432,7 +432,7 @@ bool LogisticRegression::isBinary() [flags=CONSTANT] {
     @throw ML-LOGISTIC-REGRESSION-ERROR if fitting fails
     @throw ML-DATA-ERROR if the target vector is malformed
 */
-nothing LogisticRegression::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+nothing LogisticRegression::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<float> y) {
     VectorXd target = qoreListToVector(y, xsink);
     if (*xsink) {
         return QoreValue();

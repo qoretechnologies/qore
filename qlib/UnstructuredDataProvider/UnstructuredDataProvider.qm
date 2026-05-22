@@ -1,0 +1,121 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore UnstructuredDataProvider module definition
+
+/*  UnstructuredDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) UnstructuredRestClient
+%requires RestClientIo
+
+module UnstructuredDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Unstructured.io services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new UnstructuredDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": UnstructuredDataProvider::AppName,
+            "display_name": "Unstructured.io",
+            "short_desc": "Unstructured.io document partitioning (element-tree extraction)",
+            "desc": "Provides access to [Unstructured.io](https://unstructured.io) — "
+                "a document partitioning service that breaks PDFs, docx, HTML, and "
+                "images into a typed element tree (Title / NarrativeText / ListItem "
+                "/ Table / ...).\n\n"
+                "Use the @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" "
+                "backend for the RAG ingestion path through "
+                "@ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+            "scheme": "unstructured",
+            "logo": UnstructuredLogo,
+            "logo_file_name": "unstructured-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::Documents,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnstructuredDataProvider::AppName,
+            "path": "/partition-text",
+            "action": "partition-text",
+            "display_name": "Partition Text",
+            "short_desc": "Partition raw text into a typed element tree",
+            "desc": "Submits raw text to Unstructured.io for partitioning.  Returns "
+                "the document as a list of typed elements (Title, NarrativeText, "
+                "ListItem, Table, etc.).\n\n"
+                "For PDFs and other binary formats, use the lower-level "
+                "@ref UnstructuredRestClient::UnstructuredRestClientIo::partitionFile() "
+                "method directly.",
+            "action_code": DPAT_API,
+            "groups": ("Document Extraction",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnstructuredPartitionTextRequestDataType::Fields{"text",}, {
+                    "preselected": True, "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                UnstructuredPartitionTextRequestDataType::Fields{
+                    "strategy", "chunking_strategy",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                UnstructuredPartitionTextRequestDataType::Fields - (
+                    "text", "strategy", "chunking_strategy",
+                )
+            ),
+            "output_type": UnstructuredPartitionTextDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage UnstructuredDataProvider Module
+
+    @tableofcontents
+
+    @section unstructureddataproviderintro UnstructuredDataProvider Introduction
+
+    Data-provider integration for
+    [Unstructured.io](https://unstructured.io).  Exposes a single
+    `partition-text` DPAT_API action that posts text to Unstructured's
+    `/general/v0/general` endpoint.
+
+    For RAG-pipeline integration, prefer the
+    @ref QoreRagUtils::UnstructuredChunker "UnstructuredChunker" backend
+    (lazy-loaded via the @c "unstructured" chunker strategy).
+
+    @section UnstructuredDataProviderRelnotes Release Notes
+
+    @subsection UnstructuredDataProviderv1_0 UnstructuredDataProvider v1.0
+    - the initial version of the %UnstructuredDataProvider module
+*/
+
+#! contains all public definitions in the UnstructuredDataProvider module
+public namespace UnstructuredDataProvider {
+#! Unstructured.io application name
+public const AppName = "UnstructuredIo";
+}
+
+#! App logo loaded from file
+public const UnstructuredLogo = File::readTextFile(get_script_dir() + "/unstructured-logo.svg");

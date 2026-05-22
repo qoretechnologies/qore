@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_SELECTKBEST_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <mutex>
 #include <vector>
@@ -23,7 +25,7 @@ DLLLOCAL extern QoreClass* QC_SELECTKBEST;
 DLLLOCAL void preinitSelectKBestClass();
 DLLLOCAL QoreClass* initSelectKBestClass(QoreNamespace& ns);
 
-class QoreSelectKBest : public AbstractPrivateData {
+class QoreSelectKBest : public QoreMLModel {
 public:
     //! score_func: "f_classif" (ANOVA F-test) or "mutual_info" (mutual information)
     DLLLOCAL QoreSelectKBest(int k, const std::string& score_func);
@@ -38,12 +40,14 @@ public:
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& X, const VectorXd& y,
         ExceptionSink* xsink);
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "SelectKBest"; }
 
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
 
@@ -56,7 +60,7 @@ public:
     //! Get indices of selected features
     DLLLOCAL QoreListNode* getSelectedIndices(ExceptionSink* xsink) const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreSelectKBest* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

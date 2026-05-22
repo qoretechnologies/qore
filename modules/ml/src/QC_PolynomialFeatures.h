@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_POLYNOMIALFEATURES_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <mutex>
 #include <vector>
@@ -23,7 +25,7 @@ DLLLOCAL extern QoreClass* QC_POLYNOMIALFEATURES;
 DLLLOCAL void preinitPolynomialFeaturesClass();
 DLLLOCAL QoreClass* initPolynomialFeaturesClass(QoreNamespace& ns);
 
-class QorePolynomialFeatures : public AbstractPrivateData {
+class QorePolynomialFeatures : public QoreMLModel {
 public:
     DLLLOCAL QorePolynomialFeatures(int degree, bool include_bias, bool interaction_only);
 
@@ -31,19 +33,21 @@ public:
     DLLLOCAL MatrixXd transform(const MatrixXd& X, ExceptionSink* xsink) const;
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& X, ExceptionSink* xsink);
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "PolynomialFeatures"; }
 
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
 
     DLLLOCAL QoreListNode* getOutputFeatureNames(ExceptionSink* xsink) const;
     DLLLOCAL int getNumOutputFeatures() const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QorePolynomialFeatures* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

@@ -118,6 +118,7 @@ public class MongoDbCollectionDataProvider inherits DataProvider::AbstractDataPr
             "delete": Class::forName("MongoDbDataProvider::MongoDbDeleteDataProvider"),
             "aggregate": Class::forName("MongoDbDataProvider::MongoDbAggregateDataProvider"),
             "bulk": Class::forName("MongoDbDataProvider::MongoDbBulkDataProvider"),
+            "vector-search": Class::forName("MongoDbDataProvider::MongoDbVectorSearchDataProvider"),
         };
     }
 

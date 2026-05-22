@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_LOF_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLAnomalyDetector.h"
 
 #include <mutex>
 #include <vector>
@@ -40,7 +42,7 @@ DLLLOCAL void preinitLOFClass();
 DLLLOCAL QoreClass* initLOFClass(QoreNamespace& ns);
 
 //! Local Outlier Factor implementation class
-class QoreLOF : public AbstractPrivateData {
+class QoreLOF : public QoreMLModel {
 public:
     //! Constructor with options
     DLLLOCAL QoreLOF(int k, double threshold);
@@ -55,17 +57,19 @@ public:
     DLLLOCAL QoreListNode* scoreMatrix(const MatrixXd& data, ExceptionSink* xsink) const;
 
     //! Whether the model has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "LOF"; }
 
     //! Get k parameter
     DLLLOCAL int getK() const { return k; }
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreLOF* deserializeState(const uint8_t* data, size_t len,

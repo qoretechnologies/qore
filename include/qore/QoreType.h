@@ -237,6 +237,23 @@ DLLEXPORT const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTy
 DLLEXPORT const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t index, const char* name,
     bool or_nothing = false);
 
+//! Creates or retrieves a cached union type for the given member types
+/** @param member_types vector of member types
+    @param or_nothing if true, the union type also accepts NOTHING (i.e. \c *union<...>)
+    @return the union type info, or nullptr on error (such as fewer than 2 member types)
+
+    @since %Qore 2.3
+*/
+DLLEXPORT const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types,
+    bool or_nothing = false);
+
+//! Creates or retrieves a cached \c *union<...> type for the given member types
+/** Convenience wrapper for qore_get_union_type() with \c or_nothing=true.
+
+    @since %Qore 2.3
+*/
+DLLEXPORT const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types);
+
 // @since %Qore 0.9.4
 DLLEXPORT const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xsink);
 

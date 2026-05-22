@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/MilvusRestClient.qm
+
+%exec-class MilvusRestClientTest
+
+public class MilvusRestClientTest inherits QUnit::Test {
+    constructor() : Test("MilvusRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",      \connectionSchemeTest());
+        addTestCase("vector-store factory registered",   \factoryTest());
+        addTestCase("constructor validates required config",
+            \constructorValidationTest());
+        addTestCase("collection + dimension preserved",  \constructorOkTest());
+        addTestCase("REST options apply Bearer mapping + v2 path",
+            \restOptionsTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("milvus");
+        assertEq("Milvus Vector DB Connection", info.display_name);
+        assertTrue(info.schemes.milvus);
+    }
+
+    private factoryTest() {
+        QoreRagUtils::AbstractVectorStoreFactory f =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx("milvus");
+        assertEq("milvus", f.getType());
+        assertEq("Milvus / Zilliz Cloud vector database", f.getDisplayName());
+    }
+
+    private constructorValidationTest() {
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::MilvusVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "milvus",
+                "options": {"api_key": "k"},
+            });
+        });
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::MilvusVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "milvus",
+                "collection": "my_coll",
+            });
+        });
+    }
+
+    private constructorOkTest() {
+        QoreRagUtils::MilvusVectorStore store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "milvus",
+            "collection": "my_coll",
+            "options": {"api_key": "k", "dimension": 1024},
+        });
+        assertEq("my_coll", store.getCollection());
+        assertEq(1024, store.getDimension());
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = MilvusRestClient::MilvusRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("http://localhost:19530", opts.url);
+        assertEq("v2/vectordb", opts.api);
+        assertEq("/v2/vectordb", opts.default_path);
+    }
+}

@@ -42,7 +42,7 @@ hash<PCAResult> result = pca.transform({"x": 1.0, "y": 2.0, "z": 3.0});
     @endcode
 
 */
-qclass PCA [arg=QorePCA* pca; ns=Qore::ML; flags=final];
+qclass PCA [arg=QorePCA* pca; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a PCA instance with the given options
 /** @param options a hash with the following optional keys:
@@ -101,7 +101,7 @@ pca.fit(data_records);
     @throw ML-PCA-ERROR fitting failed
     @throw ML-DATA-ERROR data format errors
 */
-nothing PCA::fit(list<auto> data) {
+nothing PCA::fit(list<hash<auto>> data) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) {
@@ -117,7 +117,7 @@ nothing PCA::fit(list<auto> data) {
     @throw ML-PCA-ERROR fitting failed
     @throw ML-DATA-ERROR data format errors
 */
-nothing PCA::fitMatrix(list<auto> matrix) {
+nothing PCA::fitMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -158,7 +158,7 @@ hash<PCAResult> PCA::transform(hash<auto> record) {
     @throw ML-PCA-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-list<hash<PCAResult>> PCA::transformMatrix(list<auto> matrix) {
+list<hash<PCAResult>> PCA::transformMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -190,7 +190,7 @@ list<hash<PCAResult>> PCA::fitTransform(list<auto> data) {
     @throw ML-PCA-ERROR fitting or transformation failed
     @throw ML-DATA-ERROR data format errors
 */
-list<hash<PCAResult>> PCA::fitTransformMatrix(list<auto> matrix) {
+list<hash<PCAResult>> PCA::fitTransformMatrix(list<list<float>> matrix) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();

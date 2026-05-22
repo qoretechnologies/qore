@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreSpeechUtils.qm
+
+%exec-class QoreSpeechUtilsTest
+
+class FakeTranscriber inherits QoreSpeechUtils::AbstractTranscriber {
+    public {
+        string mode;
+    }
+    constructor(string m) { mode = m; }
+    string getMode() { return mode; }
+    hash<QoreSpeechUtils::TranscriptionResult> transcribe(string audio_url,
+            *hash<auto> opts) {
+        return <QoreSpeechUtils::TranscriptionResult>{
+            "text": "fake transcript for " + audio_url,
+            "raw": {"audio_url": audio_url, "opts": opts},
+        };
+    }
+}
+
+class FakeTranscriberFactory inherits QoreSpeechUtils::AbstractTranscriberFactory {
+    public { string mode; string display; }
+    constructor(string m, string d) { mode = m; display = d; }
+    string getMode() { return mode; }
+    string getDisplayName() { return display; }
+    QoreSpeechUtils::AbstractTranscriber create(
+            hash<QoreSpeechUtils::TranscriberConfig> config) {
+        return new FakeTranscriber(mode);
+    }
+}
+
+class FakeSynthesizer inherits QoreSpeechUtils::AbstractSpeechSynthesizer {
+    public { string mode; }
+    constructor(string m) { mode = m; }
+    string getMode() { return mode; }
+    hash<QoreSpeechUtils::SynthesisResult> synthesize(string text,
+            *hash<auto> opts) {
+        return <QoreSpeechUtils::SynthesisResult>{
+            "audio": binary("FAKE-" + text),
+            "content_type": "audio/mpeg",
+        };
+    }
+}
+
+class FakeSynthesizerFactory inherits QoreSpeechUtils::AbstractSpeechSynthesizerFactory {
+    public { string mode; }
+    constructor(string m) { mode = m; }
+    string getMode() { return mode; }
+    string getDisplayName() { return mode + " (test fake)"; }
+    QoreSpeechUtils::AbstractSpeechSynthesizer create(
+            hash<QoreSpeechUtils::SynthesizerConfig> config) {
+        return new FakeSynthesizer(mode);
+    }
+}
+
+public class QoreSpeechUtilsTest inherits QUnit::Test {
+    constructor() : Test("QoreSpeechUtils Test", "1.0") {
+        addTestCase("registerTranscriberFactory + lookup roundtrip",
+            \registerTranscriberTest());
+        addTestCase("duplicate transcriber-factory register raises SPEECH-CONFIG-ERROR",
+            \duplicateTranscriberTest());
+        addTestCase("getTranscriberFactoryEx raises for unknown backend",
+            \unknownTranscriberTest());
+        addTestCase("deregisterTranscriberFactory removes the registration",
+            \deregisterTranscriberTest());
+        addTestCase("createTranscriber resolves backend and creates instance",
+            \createTranscriberTest());
+        addTestCase("createTranscriber raises when backend not set",
+            \missingBackendTest());
+        addTestCase("synthesizer factory register + create roundtrip",
+            \synthesizerRoundtripTest());
+        addTestCase("knownTranscriberBackends includes lazy-loadable modes",
+            \knownBackendsTest());
+        set_return_value(main());
+    }
+
+    private registerTranscriberTest() {
+        FakeTranscriberFactory f("test-tr-A", "Test Transcriber A");
+        QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(f);
+        on_exit QoreSpeechUtils::SpeechProviderRegistry::deregisterTranscriberFactory("test-tr-A");
+
+        QoreSpeechUtils::AbstractTranscriberFactory got =
+            QoreSpeechUtils::SpeechProviderRegistry::getTranscriberFactoryEx("test-tr-A");
+        assertEq("test-tr-A", got.getMode());
+        assertEq("Test Transcriber A", got.getDisplayName());
+        assertEq("test-tr-A", got.getInfo().mode);
+    }
+
+    private duplicateTranscriberTest() {
+        QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
+            new FakeTranscriberFactory("test-tr-D", "first"));
+        on_exit QoreSpeechUtils::SpeechProviderRegistry::deregisterTranscriberFactory("test-tr-D");
+
+        assertThrows("SPEECH-CONFIG-ERROR", sub () {
+            QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
+                new FakeTranscriberFactory("test-tr-D", "second"));
+        });
+    }
+
+    private unknownTranscriberTest() {
+        assertThrows("SPEECH-CONFIG-ERROR", sub () {
+            QoreSpeechUtils::SpeechProviderRegistry::getTranscriberFactoryEx(
+                "definitely-not-a-backend-xyz");
+        });
+    }
+
+    private deregisterTranscriberTest() {
+        QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
+            new FakeTranscriberFactory("test-tr-E", "E"));
+        QoreSpeechUtils::SpeechProviderRegistry::deregisterTranscriberFactory("test-tr-E");
+        # Lookup now returns NOTHING (non-Ex variant)
+        assertEq(NOTHING,
+            QoreSpeechUtils::SpeechProviderRegistry::getTranscriberFactory("test-tr-E"));
+    }
+
+    private createTranscriberTest() {
+        QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
+            new FakeTranscriberFactory("test-tr-C", "C"));
+        on_exit QoreSpeechUtils::SpeechProviderRegistry::deregisterTranscriberFactory("test-tr-C");
+
+        QoreSpeechUtils::AbstractTranscriber tr =
+            QoreSpeechUtils::SpeechProviderRegistry::createTranscriber(
+                <QoreSpeechUtils::TranscriberConfig>{
+                    "backend": "test-tr-C",
+                    "api_key": "x",
+                });
+        hash<QoreSpeechUtils::TranscriptionResult> r =
+            tr.transcribe("https://example.com/audio.wav");
+        assertEq("fake transcript for https://example.com/audio.wav", r.text);
+    }
+
+    private missingBackendTest() {
+        assertThrows("SPEECH-CONFIG-ERROR", sub () {
+            QoreSpeechUtils::SpeechProviderRegistry::createTranscriber(
+                <QoreSpeechUtils::TranscriberConfig>{});
+        });
+    }
+
+    private synthesizerRoundtripTest() {
+        QoreSpeechUtils::SpeechProviderRegistry::registerSynthesizerFactory(
+            new FakeSynthesizerFactory("test-syn-A"));
+        on_exit QoreSpeechUtils::SpeechProviderRegistry::deregisterSynthesizerFactory("test-syn-A");
+
+        QoreSpeechUtils::AbstractSpeechSynthesizer s =
+            QoreSpeechUtils::SpeechProviderRegistry::createSynthesizer(
+                <QoreSpeechUtils::SynthesizerConfig>{
+                    "backend": "test-syn-A",
+                });
+        hash<QoreSpeechUtils::SynthesisResult> r = s.synthesize("Hello");
+        assertEq(binary("FAKE-Hello"), r.audio);
+        assertEq("audio/mpeg", r.content_type);
+    }
+
+    private knownBackendsTest() {
+        list<string> tr = QoreSpeechUtils::SpeechProviderRegistry::knownTranscriberBackends();
+        # Deepgram + AssemblyAI both ship as lazy-loadable transcribers
+        assertTrue(inlist("deepgram",   tr));
+        assertTrue(inlist("assemblyai", tr));
+
+        list<string> syn = QoreSpeechUtils::SpeechProviderRegistry::knownSynthesizerBackends();
+        # Deepgram is the only lazy-loadable synthesizer that ships in this release
+        assertTrue(inlist("deepgram", syn));
+    }
+}

@@ -78,7 +78,13 @@ public class ConnectionSchemeCache {
 
             "anthropic": "AnthropicRestClient",
 
+            "assemblyai": "AssemblyAiRestClient",
+
             "awsrests": "AwsRestClient",
+
+            "aws-textract": "AwsTextractRestClient",
+
+            "azure-documentintelligence": "AzureDocumentIntelligenceRestClient",
 
             "baselinkerrest": "BaseLinkerRestClient",
 
@@ -89,12 +95,18 @@ public class ConnectionSchemeCache {
 
             "bigcommerceres": "BigCommerceRestClient",
 
+            "bfl": "BflRestClient",
+
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
 
             "bitlyrest": "BitlyRestClient",
 
             "circlerest": "CircleRestClient",
+
+            "chroma": "ChromaRestClient",
+
+            "cohere": "CohereRestClient",
 
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
@@ -121,6 +133,10 @@ public class ConnectionSchemeCache {
 
             "deel": "DeelRestClient",
 
+            "deepgram": "DeepgramRestClient",
+
+            "deepseek": "DeepSeekRestClient",
+
             "discord": "DiscordRestClient",
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
@@ -138,7 +154,11 @@ public class ConnectionSchemeCache {
             "esrest": "ElasticSearchDataProvider",
             "esrests": "ElasticSearchDataProvider",
 
+            "exa": "ExaRestClient",
+
             "firecrawlrest": "FirecrawlRestClient",
+
+            "fireworks": "FireworksRestClient",
 
             "freshbooks": "FreshBooksRestClient",
 
@@ -150,6 +170,8 @@ public class ConnectionSchemeCache {
 
             "gorgiasrest": "GorgiasRestClient",
 
+            "groq": "GroqRestClient",
+
             "qdrantrest": "QdrantDataProvider",
             "qdrantrests": "QdrantDataProvider",
 
@@ -157,10 +179,14 @@ public class ConnectionSchemeCache {
             "gmail": "GoogleRestClient",
             "grests": "GoogleRestClient",
 
+            "google-documentai": "GoogleDocumentAiRestClient",
+
             "hue": "HueRestClient",
 
             "insightlyrest": "InsightlyRestClient",
             "insightlyrests": "InsightlyRestClient",
+
+            "jina": "JinaRestClient",
 
             "jotform": "JotformRestClient",
 
@@ -178,12 +204,16 @@ public class ConnectionSchemeCache {
 
             "linear": "LinearRestClient",
 
+            "llamaparse": "LlamaParseRestClient",
+
             "mailgun": "MailgunRestClient",
 
             "mewsrest": "MewsRestClient",
 
             "memcached": "MemcachedDataProvider",
             "memcacheds": "MemcachedDataProvider",
+            "milvus": "MilvusRestClient",
+            "mistral": "MistralRestClient",
             "mongodb": "MongoDbDataProvider",
 
             # provided by the jni module
@@ -198,13 +228,19 @@ public class ConnectionSchemeCache {
 
             "netsuite": "NetSuiteRestClient",
 
+            "ollama": "OllamaRestClient",
+
             "openai": "OpenAiRestClient",
 
             "perplexity": "PerplexityRestClient",
 
             "pdfco": "PdfCoRestClient",
 
+            "pinecone": "PineconeRestClient",
+
             "segment": "SegmentRestClient",
+
+            "stability-ai": "StabilityAiRestClient",
 
             "pop3": "Pop3Client",
             "pop3s": "Pop3Client",
@@ -277,6 +313,10 @@ public class ConnectionSchemeCache {
             "tableaures": "TableauRestClient",
             "tally": "TallyRestClient",
 
+            "tavily": "TavilyRestClient",
+
+            "together": "TogetherRestClient",
+
             "onedrive": "OneDriveRestClient",
 
             "sse": "ServerSentEventClient",
@@ -302,9 +342,12 @@ public class ConnectionSchemeCache {
 
             "unleashed": "UnleashedRestClient",
 
+            "unstructured": "UnstructuredRestClient",
+
             "voyage": "VoyageRestClient",
 
             "wave": "WaveRestClient",
+            "weaviate": "WeaviateRestClient",
             "woocommerce": "WooCommerceRestClient",
             "woocommerces": "WooCommerceRestClient",
 

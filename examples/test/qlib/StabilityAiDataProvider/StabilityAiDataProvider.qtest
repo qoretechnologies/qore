@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/QoreMediaUtils.qm
+%requires ../../../../qlib/StabilityAiRestClient.qm
+%requires ../../../../qlib/StabilityAiDataProvider
+
+%exec-class StabilityAiDataProviderTest
+
+class FakeStabilityAiClient inherits StabilityAiRestClient::StabilityAiRestClientIo {
+    public {
+        string last_path;
+        hash<auto> last_body;
+        hash<auto> last_headers;
+    }
+    constructor() : StabilityAiRestClient::StabilityAiRestClientIo(
+            {"apikey": "k", "url": "https://api.stability.ai"}) {
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
+            *hash<auto> hdr) {
+        last_path = path;
+        last_body = body;
+        last_headers = hdr;
+        return <RestClient::RestResponseInfo>{
+            "body": binary("PNG-BYTES"),
+            "headers": {"finish-reason": "SUCCESS", "seed": "99"},
+        };
+    }
+    string getSafeUrl() { return "https://api.stability.ai"; }
+}
+
+public class StabilityAiDataProviderTest inherits QUnit::Test {
+    constructor() : Test("StabilityAiDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("generate-image hits the ultra endpoint by default",
+            \defaultEndpointTest());
+        addTestCase("model override selects sd3 endpoint",
+            \modelOverrideTest());
+        addTestCase("response surfaces image bytes + finish_reason + seed",
+            \responseTest());
+        addTestCase("app declares DesignCreative AppGroup",
+            \designCreativeGroupTest());
+        addTestCase("model allowed_values has display_name",
+            \allowedValuesTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("stability-ai");
+        assertEq("stability-ai", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("StabilityAi");
+        assertEq("StabilityAi", app.name);
+        assertEq("stability-ai", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("StabilityAi");
+        assertEq(1, actions.size());
+        assertEq("generate-image", actions[0].action);
+    }
+
+    private defaultEndpointTest() {
+        FakeStabilityAiClient fake();
+        StabilityAiDataProvider::StabilityAiGenerateImageDataProvider prov(fake);
+        prov.doRequest({"prompt": "a sunset over the ocean"});
+        # ultra is the default model
+        assertEq("/v2beta/stable-image/generate/ultra", fake.last_path);
+        assertEq("a sunset over the ocean", fake.last_body.prompt);
+    }
+
+    private modelOverrideTest() {
+        FakeStabilityAiClient fake();
+        StabilityAiDataProvider::StabilityAiGenerateImageDataProvider prov(fake);
+        prov.doRequest({
+            "prompt": "x",
+            "model":  "sd3",
+        });
+        assertEq("/v2beta/stable-image/generate/sd3", fake.last_path);
+    }
+
+    private responseTest() {
+        FakeStabilityAiClient fake();
+        StabilityAiDataProvider::StabilityAiGenerateImageDataProvider prov(fake);
+        auto r = prov.doRequest({
+            "prompt": "x",
+            "output_format": "jpeg",
+            "aspect_ratio": "16:9",
+        });
+        assertEq(binary("PNG-BYTES"), r.image);
+        assertEq("image/jpeg",        r.content_type);
+        assertEq("SUCCESS",           r.finish_reason);
+        assertEq("99",                r.seed);
+        # Confirm aspect_ratio + output_format were forwarded in the body
+        assertEq("jpeg",              fake.last_body.output_format);
+        assertEq("16:9",              fake.last_body.aspect_ratio);
+        # And Accept header matched output_format
+        assertEq("image/jpeg",        fake.last_headers.Accept);
+    }
+
+    private designCreativeGroupTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("StabilityAi");
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm,          app.groups));
+        assertTrue(inlist(DataProvider::AppGroup::DesignCreative, app.groups));
+    }
+
+    private allowedValuesTest() {
+        *hash<auto> fld =
+            StabilityAiDataProvider::StabilityAiGenerateImageRequestDataType::Fields.model;
+        assertEq(3, fld.allowed_values.size());
+        # Every allowed value has both value + display_name
+        foreach hash<auto> av in (fld.allowed_values) {
+            assertTrue(av.value.val());
+            assertTrue(av.display_name.val());
+        }
+    }
+}

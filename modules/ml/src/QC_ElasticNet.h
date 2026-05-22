@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_ELASTICNET_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLRegressor.h"
 #include "ml_sparse.h"
 
 #include <mutex>
@@ -48,7 +50,7 @@ DLLLOCAL QoreClass* initElasticNetClass(QoreNamespace& ns);
     Uses coordinate descent optimization with soft thresholding.
     Thread-safe for concurrent prediction after fitting.
 */
-class QoreElasticNet : public AbstractPrivateData {
+class QoreElasticNet : public QoreMLModel {
 public:
     //! Constructor with options
     DLLLOCAL QoreElasticNet(double alpha, double l1_ratio, bool fit_intercept, bool normalize,
@@ -67,7 +69,9 @@ public:
     DLLLOCAL QoreListNode* predictMatrix(const MatrixXd& X, ExceptionSink* xsink) const;
 
     //! Whether the model has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "ElasticNet"; }
 
     //! Get coefficients as a Qore list
     DLLLOCAL QoreListNode* getCoefficients(ExceptionSink* xsink) const;
@@ -110,14 +114,14 @@ public:
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Store the target field name
     DLLLOCAL void setTargetField(const std::string& name) { target_field = name; }
     DLLLOCAL const std::string& getTargetField() const { return target_field; }
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreElasticNet* deserializeState(const uint8_t* data, size_t len,

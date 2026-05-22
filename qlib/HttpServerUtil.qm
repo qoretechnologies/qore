@@ -28,11 +28,12 @@
 %requires Logger
 %requires FileLocationHandler
 %requires(reexport) HttpUtil
+%requires json
 
 %modern
 
 module HttpServerUtil {
-    version = "1.5";
+    version = "1.6";
     desc = "HttpServerUtil class definition";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1161,6 +1162,35 @@ public class HttpListenerInterface inherits AbstractLogger {
         context hash is removed entirely
     */
     abstract auto removeUserThreadContext(*string k);
+
+    #! Force-closes the persistent session for the given connection
+    /** Pushes a \c "close" entry into the dedicated persistent-handler
+        queue identified by \c uh, unblocking the dedicated handler thread
+        if it is currently waiting in @c Queue::get().  The dedicated thread
+        then exits the persistent loop and its @c on_exit block runs the
+        normal cleanup path (@c removeUserThreadContext() +
+        @c persistentClosed()), releasing any handler-attached user thread
+        context on the correct (listener) thread.
+
+        Intended for handlers that need to terminate a specific persistent
+        session immediately from outside the dedicated thread — e.g. a
+        cooperative-abort path that has released a per-session resource
+        and wants the framework to tear down the dedicated thread now
+        rather than wait for socket close or idle TTL.
+
+        The default implementation is a no-op so listener subclasses that
+        do not support dedicated persistent sessions can leave it
+        unchanged; concrete subclasses backed by a persistent-queue
+        controller override this and delegate to the controller's
+        per-connection close signal.
+
+        @param uh the connection unique hash (e.g. @c cx.id) identifying
+            the persistent session to close
+    */
+    signalPersistentSessionClose(softstring uh) {
+        # no implementation in the base class — listeners that support
+        # dedicated persistent sessions override this
+    }
 }
 
 # for backwared compatibility, calls to deprecated methods are made below
@@ -1261,12 +1291,76 @@ public class AbstractAuthenticator {
         return getAuthHeaderIntern(getNegotiateAuthHeader(cx));
     }
 
+    #! returns the default Content-Type for a 401 response based on the request's Accept header
+    /** Default behaviour: returns @ref Mime::MimeTypeHtml "MimeTypeHtml" when
+        the request's \c Accept header explicitly includes \c text/html
+        (browsers always do); otherwise returns
+        @ref Mime::MimeTypeJson "MimeTypeJson". This covers the common cases
+        without forcing API clients to opt in:
+        - browser request (\c text/html , \c application/xhtml+xml , ...) - HTML
+        - explicit API request (\c application/json) - JSON
+        - default curl / fetch without an \c Accept header - JSON
+        - default curl / fetch with the any-media-type wildcard - JSON
+        - explicit \c application/yaml or other non-HTML type - JSON
+          (closer-to-JSON envelope is more useful than text/html for
+          machine consumers)
+
+        Subclasses can override this method to force a specific content type
+        for their auth surface.
+
+        @param cx the call context hash; see @ref httpserverutil_request_context
+                  for information about this value
+        @return the Content-Type value to use in the 401 response
+
+        @since HttpServerUtil 1.6
+    */
+    string getDefault401ContentType(*hash<auto> cx) {
+        *string accept = cx.hdr.accept ?? cx.hdr.Accept;
+        if (accept && accept =~ /text\/html/i) {
+            return MimeTypeHtml;
+        }
+        return MimeTypeJson;
+    }
+
+    #! returns the response body for a 401 response with the given message and content type
+    /** Default behaviour: returns \a msg as-is for
+        @ref Mime::MimeTypeHtml "MimeTypeHtml"; returns a JSON envelope
+        \c {"err": "AUTH-REQUIRED", "desc": <msg>} when the content type is
+        @ref Mime::MimeTypeJson "MimeTypeJson", so API clients that expect
+        JSON deserialisation get a parseable response.
+
+        Subclasses can override this method to customise the envelope shape.
+
+        @param msg the message to include in the body
+        @param content_type the Content-Type of the response
+        @return the response body, encoded appropriately for the content type
+
+        @since HttpServerUtil 1.6
+    */
+    string format401Body(string msg, string content_type) {
+        if (content_type == MimeTypeJson
+                || content_type =~ /^application\/json($|;)/i) {
+            return make_json({
+                "err": "AUTH-REQUIRED",
+                "desc": msg,
+            });
+        }
+        return msg;
+    }
+
     #! returns a 401 response with the given string argument as the message body
-    /** @param msg message body to return
+    /** The response body and \c Content-Type are negotiated from the request's
+        \c Accept header via @ref getDefault401ContentType() and
+        @ref format401Body(); API clients that accept JSON receive a JSON
+        envelope, while browser/HTML clients receive the bare-string body for
+        back-compat.
+
+        @param msg message body to return
         @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
     */
     hash<HttpResponseInfo> do401(string msg = "Authentication is required to access this server", *hash<auto> cx) {
-        return do401(msg, NOTHING, NOTHING, cx);
+        string content_type = getDefault401ContentType(cx);
+        return do401(format401Body(msg, content_type), content_type, NOTHING, cx);
     }
 
     #! returns a 401 response with the given string argument as the message body
@@ -1585,6 +1679,28 @@ public class AbstractStreamRequest {
         return False;
     }
 
+    #! Notifies the request handler of a callback that can abort the in-flight inbound body read
+    /** Called from @ref handleRequest() just before entering the per-chunk read loop on HTTP/2
+        and HTTP/3 body-streaming requests; the closure unblocks the chunk-wait (e.g. by calling
+        @ref Qore::Thread::Queue::setError() on the body queue or
+        @ref Qore::Socket::cancelQuicStreamRead() on the QUIC stream) so a stop()/cancel decision
+        taken on another thread can interrupt a handler parked waiting for a chunk the client never
+        sends.
+
+        The default implementation is a no-op.  Subclasses that wrap a user-overridable stream
+        handler (e.g. @ref RestHandler::RestStreamRequest "RestStreamRequest") should override to
+        forward the callback to the stream handler so application code can register it (e.g. with
+        a service-stop hook).
+
+        The closure is cleared via @c setBodyCancel(NOTHING) when the read loop completes.
+
+        @param body_cancel the cancel closure, or @ref nothing to clear a previously-registered closure
+
+        @since HttpServerUtil 2.3
+    */
+    setBodyCancel(*code<nothing()> body_cancel) {
+    }
+
     #! handles the request
     hash<HttpHandlerResponseInfo> handleRequest() {
         bool chunked_recv_aborted = False;
@@ -1615,6 +1731,25 @@ public class AbstractStreamRequest {
             int sid = cx."header-info".stream_id;
             if (cx."header-info".http3) {
                 int session_id = cx."header-info".session_id;
+                # Locally-captured abort flag flipped by the body_cancel closure
+                # below; checked after each readQuicStreamDataBlock() returns so
+                # we can distinguish a clean EOF (body really ended) from a
+                # cancel-triggered EOF (Socket::cancelQuicStreamRead() was
+                # called from another thread).  Without this we'd silently
+                # accept an empty body and dispatch the handler on a truncated
+                # request, instead of throwing STREAM-ABORTED.
+                bool h3_body_aborted = False;
+                setBodyCancel(sub () {
+                    h3_body_aborted = True;
+                    # cancelQuicStreamRead flips QuicStreamInfo::stream_data_shutdown
+                    # for this single stream and wakes the pending read; subsequent
+                    # readQuicStreamDataBlock() returns clean EOF.  Best-effort: the
+                    # socket may already be closed in a race with handler unwind.
+                    try {
+                        s.cancelQuicStreamRead(session_id, sid);
+                    } catch () {}
+                });
+                on_exit setBodyCancel(NOTHING);
                 try {
                     while (True) {
                         *binary chunk;
@@ -1631,6 +1766,11 @@ public class AbstractStreamRequest {
                             rethrow;
                         }
                         if (!chunk) {
+                            if (h3_body_aborted) {
+                                throw "STREAM-ABORTED",
+                                    sprintf("inbound HTTP/3 body read cancelled on "
+                                        "stream %d", sid);
+                            }
                             break;
                         }
                         recv({"data": chunk});
@@ -1664,6 +1804,18 @@ public class AbstractStreamRequest {
                 }
                 Queue body_queue(-1);
                 register_body_queue(body_queue);
+                # Allow another thread to abort this body read by calling the
+                # registered cancel closure (e.g. a service stop deciding to
+                # interrupt an in-flight request).  Queue::setError() is
+                # thread-safe: the next body_queue.get() raises an exception
+                # with the supplied error name and any further pushes from the
+                # I/O thread silently no-op (see qore_queue_private), so the
+                # cancellation is race-free against the I/O thread.
+                setBodyCancel(sub () {
+                    body_queue.setError("STREAM-ABORTED",
+                        sprintf("inbound HTTP/2 body read cancelled on stream %d", sid));
+                });
+                on_exit setBodyCancel(NOTHING);
                 while (True) {
                     auto chunk;
                     try {

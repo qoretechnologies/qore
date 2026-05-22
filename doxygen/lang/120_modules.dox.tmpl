@@ -41,18 +41,64 @@ ModuleName/
 
     <b>Modules Provided With %Qore</b>
     |!Type|!Module|!Description
+    |user|<a href="../../modules/AftershipDataProvider/html/index.html#aftershipdataproviderintro">AftershipDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Aftership tracking and returns services
+    |user|<a href="../../modules/AftershipRestClient/html/index.html#aftershiprestclientintro">AftershipRestClient</a>|providing APIs for \
+        communicating with Aftership REST APIs
+    |user|<a href="../../modules/AnthropicDataProvider/html/index.html#anthropicdataproviderintro">AnthropicDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Anthropic Claude AI services
+    |user|<a href="../../modules/AnthropicRestClient/html/index.html#anthropicrestclientintro">AnthropicRestClient</a>|providing APIs for \
+        communicating with Anthropic Claude REST APIs
+    |user|<a href="../../modules/AssemblyAiDataProvider/html/index.html#assemblyaidataproviderintro">AssemblyAiDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text with rich analytics (diarization, summarization, sentiment, entities, topics, content safety)
+    |user|<a href="../../modules/AssemblyAiRestClient/html/index.html#assemblyairestclientintro">AssemblyAiRestClient</a>|providing APIs for \
+        communicating with <a href="https://www.assemblyai.com">AssemblyAI</a> REST APIs; bare-key `Authorization` auth and async transcription lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+    |user|<a href="../../modules/ApolloDataProvider/html/index.html#apollodataproviderintro">ApolloDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Apollo B2B sales \
+        intelligence including contacts, accounts, deals, tasks, enrichment, and search
+    |user|<a href="../../modules/ApolloRestClient/html/index.html#apollorestclientintro">ApolloRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.apollo.io">Apollo</a>'s REST API with OAuth2 and API key authentication
     |binary|<a href="../../modules/astparser/html/index.html#astparserintro">astparser</a>|Provides a language parser API to %Qore
-    |user|<a href="../../modules/AsyncSocketIo/html/index.html#asyncsocketiointro">AsyncSocketIo</a>|Provides an API for asynchronous \
-        (polling-based) socket I/O
     |user|<a href="../../modules/AsyncApi/html/index.html#asyncapiintro">AsyncApi</a>|Provides protocol-agnostic AsyncAPI 3.0 \
         schema validation for event-driven APIs (WebSocket, MQTT, Kafka, AMQP, etc.) and schema generation from \
         source code annotations; includes the \c qore-asyncapi-gen CLI tool
     |user|<a href="../../modules/AsyncApiDataProvider/html/index.html#asyncapidataproviderintro">AsyncApiDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for AsyncAPI schemas with \
         pluggable transport support
+    |user|<a href="../../modules/AsyncSocketIo/html/index.html#asyncsocketiointro">AsyncSocketIo</a>|Provides an API for asynchronous \
+        (polling-based) socket I/O
+    |user|<a href="../../modules/AwsEventStream/html/index.html#awseventstreamintro">AwsEventStream</a>|Decodes the AWS event-stream binary framing format used by Bedrock \
+        streaming, Kinesis, S3 Select, and Transcribe streaming
     |user|<a href="../../modules/AwsRestClient/html/index.html#awsrestclientintro">AwsRestClient</a>|Provides a REST API for AWS services
     |user|<a href="../../modules/AwsRestClientDataProvider/html/index.html#awsrestclientdataproviderintro">AwsRestClientDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for AWS REST servers
+    |user|<a href="../../modules/AwsTextractDataProvider/html/index.html#awstextractdataproviderintro">AwsTextractDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://aws.amazon.com/textract/">AWS Textract</a> document-AI services (text + tables + forms + signatures + layout + queries)
+    |user|<a href="../../modules/AwsTextractRestClient/html/index.html#awstextractrestclientintro">AwsTextractRestClient</a>|Provides a SigV4-signed REST client for \
+        <a href="https://aws.amazon.com/textract/">AWS Textract</a> (inherits credentials from @ref awsrestclientintro "AwsRestClient")
+    |user|<a href="../../modules/AzureAuth/html/index.html#azureauthintro">AzureAuth</a>|Microsoft Entra (Azure AD) OAuth2 token broker — \
+        client-credentials and managed-identity (IMDS-for-Azure) flows with caching
+    |user|<a href="../../modules/AzureDocumentIntelligenceDataProvider/html/index.html#azuredocumentintelligencedataproviderintro">AzureDocumentIntelligenceDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://azure.microsoft.com/products/ai-services/ai-document-intelligence">Azure Document Intelligence</a> (formerly Form Recognizer) — prebuilt + custom document extraction models
+    |user|<a href="../../modules/AzureDocumentIntelligenceRestClient/html/index.html#azuredocumentintelligencerestclientintro">AzureDocumentIntelligenceRestClient</a>|Provides a REST client for \
+        <a href="https://azure.microsoft.com/products/ai-services/ai-document-intelligence">Azure Document Intelligence</a> with subscription-key authentication and async analyze-then-poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+    |user|<a href="../../modules/AzureOpenAiDataProvider/html/index.html#azureopenaidataproviderintro">AzureOpenAiDataProvider</a>|Data \
+        provider API for Azure OpenAI — discoverable ChatCompletion + Embedding actions in the action catalog
+    |user|<a href="../../modules/AzureOpenAiRestClient/html/index.html#azureopenairestclientintro">AzureOpenAiRestClient</a>|REST client \
+        and LLM provider for Azure OpenAI Service with deployment-routed URLs and three auth modes
+    |user|<a href="../../modules/BaseLinkerDataProvider/html/index.html#baselinkerdataproviderintro">BaseLinkerDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for BaseLinker multichannel e-commerce \
+        integration including orders, order returns, inventory, shipping, and polling-based event triggers
+    |user|<a href="../../modules/BaseLinkerRestClient/html/index.html#baselinkerrestclientintro">BaseLinkerRestClient</a>|Provides APIs for \
+        communicating with <a href="https://baselinker.com">BaseLinker</a>'s RPC-over-HTTP API with X-BLToken authentication
+    |user|<a href="../../modules/BedrockDataProvider/html/index.html#bedrockdataproviderintro">BedrockDataProvider</a>|Data \
+        provider API for AWS Bedrock — discoverable Converse + Embed actions in the action catalog
+    |user|<a href="../../modules/BedrockRestClient/html/index.html#bedrockrestclientintro">BedrockRestClient</a>|REST client + LLM \
+        provider for AWS Bedrock — unified Converse API across Anthropic/Llama/Mistral/Cohere/AI21/Titan/DeepSeek + Titan/Cohere embeddings
+    |user|<a href="../../modules/BflDataProvider/html/index.html#bfldataproviderintro">BflDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image (+ video) generation
+    |user|<a href="../../modules/BflRestClient/html/index.html#bflrestclientintro">BflRestClient</a>|Provides a REST client for \
+        <a href="https://bfl.ai">Black Forest Labs</a>; async submit-then-poll lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"; registers `bfl` image + video generator backends in @ref qoremediautilsintro "QoreMediaUtils"
     |user|<a href="../../modules/BgeM3FastApiDataProvider/html/index.html#bgem3fastapidataproviderintro">BgeM3FastApiDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for BGE-M3 FastAPI sidecar embeddings, health, and metrics endpoints
     |user|<a href="../../modules/BgeM3RestClient/html/index.html#bgem3restclientintro">BgeM3RestClient</a>|providing APIs for \
@@ -69,21 +115,6 @@ ModuleName/
         branded links, QR codes, campaigns, and click analytics
     |user|<a href="../../modules/BitlyRestClient/html/index.html#bitlyrestclientintro">BitlyRestClient</a>|Provides APIs for \
         communicating with <a href="https://bitly.com">Bitly</a>'s REST API with Bearer token or OAuth2 authentication
-    |user|<a href="../../modules/CircleDataProvider/html/index.html#circledataproviderintro">CircleDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Circle community \
-        platform including posts, comments, members, spaces, and messaging
-    |user|<a href="../../modules/CircleRestClient/html/index.html#circlerestclientintro">CircleRestClient</a>|Provides APIs for \
-        communicating with <a href="https://circle.so">Circle</a>'s REST API with Bearer token authentication
-    |user|<a href="../../modules/SmartSheetDataProvider/html/index.html#smartsheetdataproviderintro">SmartSheetDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Smartsheet \
-        spreadsheet and work management, including sheets, rows, workspaces, folders, and groups
-    |user|<a href="../../modules/SmartSheetRestClient/html/index.html#smartsheetrestclientintro">SmartSheetRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.smartsheet.com">Smartsheet</a>'s REST API with OAuth2 authentication and regional endpoint support
-    |user|<a href="../../modules/GorgiasDataProvider/html/index.html#gorgiasdataproviderintro">GorgiasDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Gorgias customer \
-        support ticket management, customer data, and helpdesk operations
-    |user|<a href="../../modules/GorgiasRestClient/html/index.html#gorgiasrestclientintro">GorgiasRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.gorgias.com">Gorgias</a>'s REST API with OAuth2 authentication
     |user|<a href="../../modules/BulkSqlUtil/html/index.html#bulksqlutilintro">BulkSqlUtil</a>|Provides APIs based on \
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> for executing bulk DML operations
     |user|<a href="../../modules/CdsRestClient/html/index.html#cdsrestclientintro">CdsRestClient</a>|providing APIs for communicating \
@@ -96,107 +127,150 @@ ModuleName/
         billing services including customers, subscriptions, invoices, coupons, and webhook triggers
     |user|<a href="../../modules/ChargebeeRestClient/html/index.html#chargebeerestclientintro">ChargebeeRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.chargebee.com">Chargebee</a>'s REST API with API Key authentication
-    |user|<a href="../../modules/CloseDataProvider/html/index.html#closedataproviderintro">CloseDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Close CRM \
-        including leads, contacts, opportunities, tasks, calls, emails, notes, meetings, SMS, and event triggers
-    |user|<a href="../../modules/CloseRestClient/html/index.html#closerestclientintro">CloseRestClient</a>|Provides APIs for \
-        communicating with <a href="https://close.com">Close</a>'s REST API with OAuth2 authentication
+    |user|<a href="../../modules/ChromaDataProvider/html/index.html#chromadataproviderintro">ChromaDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://www.trychroma.com">Chroma</a> vector-database servers
+    |user|<a href="../../modules/ChromaRestClient/html/index.html#chromarestclientintro">ChromaRestClient</a>|providing APIs for \
+        communicating with <a href="https://www.trychroma.com">Chroma</a> REST APIs (registers a `chroma` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" and a `chroma://` connection scheme)
     |user|<a href="../../modules/Cin7CoreDataProvider/html/index.html#cin7coredataproviderintro">Cin7CoreDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Cin7Core (DEAR Inventory) \
         services including customers, suppliers, products, sales, payments, and polling triggers
     |user|<a href="../../modules/Cin7CoreRestClient/html/index.html#cin7corerestclientintro">Cin7CoreRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.cin7.com/products/cin7-core/">Cin7Core</a>'s REST API with Account ID and API Key authentication
+    |user|<a href="../../modules/CircleDataProvider/html/index.html#circledataproviderintro">CircleDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Circle community \
+        platform including posts, comments, members, spaces, and messaging
+    |user|<a href="../../modules/CircleRestClient/html/index.html#circlerestclientintro">CircleRestClient</a>|Provides APIs for \
+        communicating with <a href="https://circle.so">Circle</a>'s REST API with Bearer token authentication
     |user|<a href="../../modules/ClickFunnelsDataProvider/html/index.html#clickfunnelsdataproviderintro">ClickFunnelsDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for ClickFunnels 2.0 \
         services including contacts, orders, products, funnels, courses, enrollments, forms, fulfillments, and event triggers
     |user|<a href="../../modules/ClickFunnelsRestClient/html/index.html#clickfunnelsrestclientintro">ClickFunnelsRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.clickfunnels.com">ClickFunnels</a>'s REST API with Bearer token authentication
+    |user|<a href="../../modules/CloseDataProvider/html/index.html#closedataproviderintro">CloseDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Close CRM \
+        including leads, contacts, opportunities, tasks, calls, emails, notes, meetings, SMS, and event triggers
+    |user|<a href="../../modules/CloseRestClient/html/index.html#closerestclientintro">CloseRestClient</a>|Provides APIs for \
+        communicating with <a href="https://close.com">Close</a>'s REST API with OAuth2 authentication
+    |user|<a href="../../modules/CohereDataProvider/html/index.html#coheredataproviderintro">CohereDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Cohere chat (Command R/R+), embeddings, reranking, and classification
+    |user|<a href="../../modules/CohereRestClient/html/index.html#cohererestclientintro">CohereRestClient</a>|providing APIs for \
+        communicating with Cohere REST APIs (registers an LlmProvider for mode `cohere`, an embedder backend `cohere`, a reranker backend `cohere`, and a `cohere://` connection scheme)
     |user|<a href="../../modules/ConnectionProvider/html/index.html#connectionproviderintro">ConnectionProvider</a>|Provides an API for \
         pluggable connection and URL providers
+    |user|<a href="../../modules/ConstantContactDataProvider/html/index.html#constantcontactdataproviderintro">ConstantContactDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Constant Contact \
+        email marketing including contacts, lists, tags, segments, campaigns, and custom fields
+    |user|<a href="../../modules/ConstantContactRestClient/html/index.html#constantcontactrestclientintro">ConstantContactRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.constantcontact.com">Constant Contact</a>'s REST API with OAuth2 authentication
     |user|<a href="../../modules/CsvUtil/html/index.html#csvutilintro">CsvUtil</a>|Provides code to help parse CSV or other \
         structured text files and also to easily generate such files
+    |user|<a href="../../modules/CustomerIoDataProvider/html/index.html#customeriodataproviderintro">CustomerIoDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Customer.io marketing automation \
+        including customer management, campaigns, broadcasts, transactional messaging, and webhook events
+    |user|<a href="../../modules/CustomerIoRestClient/html/index.html#customeriorestclientintro">CustomerIoRestClient</a>|Provides APIs for \
+        communicating with <a href="https://customer.io">Customer.io</a>'s REST API
+    |binary|<a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a>|Provides a columnar \
+        DataFrame with typed columns, SQL-like query operations (select, filter, sort, groupby, join, pivot, \
+        melt, window functions), dense ColumnarResult interop, CSV/Parquet/database I/O, and ML integration
     |user|<a href="../../modules/DataProvider/html/index.html#dataproviderintro">DataProvider</a>|Provides a generic API for data \
         providers
-    |user|<a href="../../modules/DpqlWebSocket/html/index.html#dpqlwebsocketintro">DpqlWebSocket</a>|Provides DPQL WebSocket language \
-        services for DataProvider-aware clients
+    |user|<a href="../../modules/DataProviderDataFrame/html/index.html#dataproviderdataframeintro">DataProviderDataFrame</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
+        <a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a> columnar DataFrames \
+        with searchable record iteration, filtering, and pipeline shape preservation
+    |user|<a href="../../modules/DataProviderML/html/index.html#dataprovidermlintro">DataProviderML</a>|Provides \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> pipeline \
+        processors wrapping the <a href="../../modules/ml/html/index.html#mlintro">ml</a> module's machine \
+        learning algorithms for anomaly detection, clustering, forecasting, and dimensionality reduction
     |user|<a href="../../modules/DatasourceProvider/html/index.html#datasourceproviderintro">DatasourceProvider</a>|Provides an API to \
         translate datasource identifiers to datasource connection strings
     |user|<a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for databases
     |user|<a href="../../modules/DebugCmdLine/html/index.html#debugcmdlineintro">DebugCmdLine</a>|Provides an API to develop command \
         line debugger clients
+    |user|<a href="../../modules/DebugHandler/html/index.html#debughandlerintro">DebugHandler</a>|Provides a websocket for debug server
     |user|<a href="../../modules/DebugLinenoiseCmdLine/html/index.html#debuglinenoisecmdlineintro">DebugLinenoiseCmdLine</a>|Provides an API \
         for command line debugger clients based on the \
         <a href="../../modules/linenoise/html/index.html#linenoiseintro">linenoise</a> module
     |user|<a href="../../modules/DebugProgramControl/html/index.html#debugprogramcontrolintro">DebugProgramControl</a>|Provides an API to \
         develop debug server
-    |user|<a href="../../modules/DebugHandler/html/index.html#debughandlerintro">DebugHandler</a>|Provides a websocket for debug server
     |user|<a href="../../modules/DebugUtil/html/index.html#debugutilintro">DebugUtil</a>|Provides a general stuff for debugger
     |user|<a href="../../modules/DeelDataProvider/html/index.html#deeldataproviderintro">DeelDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Deel global workforce management \
         including contracts, timesheets, invoice adjustments, workers, time-off, legal entities, and invoices
     |user|<a href="../../modules/DeelRestClient/html/index.html#deelrestclientintro">DeelRestClient</a>|Provides APIs for \
         communicating with <a href="https://api.letsdeel.com">Deel</a>'s REST API
+    |user|<a href="../../modules/DeepgramDataProvider/html/index.html#deepgramdataproviderintro">DeepgramDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://deepgram.com">Deepgram</a> speech services (ASR via `/v1/listen`, TTS via `/v1/speak`)
+    |user|<a href="../../modules/DeepgramRestClient/html/index.html#deepgramrestclientintro">DeepgramRestClient</a>|providing APIs for \
+        communicating with <a href="https://deepgram.com">Deepgram</a> speech REST APIs (registers a `deepgram://` connection scheme; uses `Authorization: Token` auth header)
+    |user|<a href="../../modules/DeepSeekDataProvider/html/index.html#deepseekdataproviderintro">DeepSeekDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for DeepSeek AI services
+    |user|<a href="../../modules/DeepSeekRestClient/html/index.html#deepseekrestclientintro">DeepSeekRestClient</a>|providing APIs for \
+        communicating with DeepSeek REST APIs (registers an LlmProvider for mode `deepseek` and a `deepseek://` connection scheme)
     |user|<a href="../../modules/DiscordDataProvider/html/index.html#discorddataproviderintro">DiscordDataProvider</a>|provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for communicating with Discord APIs
     |user|<a href="../../modules/DiscordRestClient/html/index.html#discordrestclientintro">DiscordRestClient</a>|providing APIs for \
         communicating with Discord REST APIs
     |user|<a href="../../modules/DiscordWebSocketClient/html/index.html#discordwebsocketclientintro">DiscordWebSocketClient</a>|Provides an \
         event-driven client API for connecting with the Discord WebSocket API gateway
+    |user|<a href="../../modules/DpqlWebSocket/html/index.html#dpqlwebsocketintro">DpqlWebSocket</a>|Provides DPQL WebSocket language \
+        services for DataProvider-aware clients
     |user|<a href="../../modules/EasyPostDataProvider/html/index.html#easypostdataproviderintro">EasyPostDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for EasyPost multi-carrier \
         shipping including addresses, parcels, shipments, trackers, insurance, pickups, orders, customs, batches, \
         webhooks, refunds, carrier accounts, and webhook-based event triggers
     |user|<a href="../../modules/EasyPostRestClient/html/index.html#easypostrestclientintro">EasyPostRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.easypost.com">EasyPost</a>'s shipping REST API
+    |user|<a href="../../modules/EdifactUtil/html/index.html#edifactutilintro">EdifactUtil</a>|Provides functionality for parsing and \
+        generating UN/EDIFACT electronic data interchange messages
+    |user|<a href="../../modules/ElasticSearchDataProvider/html/index.html#elasticsearchdataproviderintro">ElasticSearchDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for ElasticSearch services
+    |user|<a href="../../modules/ElasticSearchLoggerAppender/html/index.html#elasticsearchloggerappenderintro">ElasticSearchLoggerAppender</a>|Provides \
+        a logger appender that sends log events to ElasticSearch using the Bulk API with batching support
     |user|<a href="../../modules/ElevenLabsDataProvider/html/index.html#elevenlabsdataproviderintro">ElevenLabsDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for ElevenLabs AI voice synthesis services
     |user|<a href="../../modules/ElevenLabsRestClient/html/index.html#elevenlabsrestclientintro">ElevenLabsRestClient</a>|Provides APIs for \
         communicating with ElevenLabs REST APIs
-    |user|<a href="../../modules/ElasticSearchDataProvider/html/index.html#elasticsearchdataproviderintro">ElasticSearchDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for ElasticSearch services
-    |user|<a href="../../modules/QdrantDataProvider/html/index.html#qdrantdataproviderintro">QdrantDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Qdrant vector database instances
-    |user|<a href="../../modules/ElasticSearchLoggerAppender/html/index.html#elasticsearchloggerappenderintro">ElasticSearchLoggerAppender</a>|Provides \
-        a logger appender that sends log events to ElasticSearch using the Bulk API with batching support
-    |user|<a href="../../modules/EdifactUtil/html/index.html#edifactutilintro">EdifactUtil</a>|Provides functionality for parsing and \
-        generating UN/EDIFACT electronic data interchange messages
     |user|<a href="../../modules/EmpathicBuildingDataProvider/html/index.html#empathicbuildingdataproviderintro">EmpathicBuildingDataProvider</a>|\
         Provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Haltian Empathic \
         Building servers
+    |user|<a href="../../modules/ExaDataProvider/html/index.html#exadataproviderintro">ExaDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Exa (Metaphor) neural-search services (search/find-similar/contents)
+    |user|<a href="../../modules/ExaRestClient/html/index.html#exarestclientintro">ExaRestClient</a>|providing APIs for \
+        communicating with Exa neural-search REST APIs (registers an `exa://` connection scheme and exports agent-tool helpers in `ExaAgentTools` for plugging into @ref qoreagentstrategiesintro "QoreAgentStrategies")
     |user|<a href="../../modules/FileDataProvider/html/index.html#filedataproviderintro">FileDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for the local filesystem
     |user|<a href="../../modules/FileLocationHandler/html/index.html#filelocationhandlerintro">FileLocationHandler</a>|Provides an API for \
         retrieving file data based on a URL-like location string
     |user|<a href="../../modules/FilePoller/html/index.html#filepollerintro">FilePoller</a>|Provides an API for polling files on the \
         filesystem
-    |user|<a href="../../modules/FirecrawlRestClient/html/index.html#firecrawlrestclientintro">FirecrawlRestClient</a>|Provides APIs for \
-        communicating with <a href="https://docs.firecrawl.dev">Firecrawl</a>'s REST API
     |user|<a href="../../modules/FirecrawlDataProvider/html/index.html#firecrawldataproviderintro">FirecrawlDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Firecrawl web scraping, \
         crawling, mapping, search, extraction, and AI agent tasks
+    |user|<a href="../../modules/FirecrawlRestClient/html/index.html#firecrawlrestclientintro">FirecrawlRestClient</a>|Provides APIs for \
+        communicating with <a href="https://docs.firecrawl.dev">Firecrawl</a>'s REST API
+    |user|<a href="../../modules/FireworksDataProvider/html/index.html#fireworksdataproviderintro">FireworksDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Fireworks AI chat and embedding services
+    |user|<a href="../../modules/FireworksRestClient/html/index.html#fireworksrestclientintro">FireworksRestClient</a>|providing APIs for \
+        communicating with Fireworks AI REST APIs (registers an LlmProvider for mode `fireworks`, an embedder backend `fireworks`, and a `fireworks://` connection scheme)
     |user|<a href="../../modules/FixedLengthUtil/html/index.html#fixedlengthutilintro">FixedLengthUtil</a>|Provides code to help parse \
         data in format of fixed length lines records
-    |user|<a href="../../modules/FreshBooksRestClient/html/index.html#freshbooksrestclientintro">FreshBooksRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.freshbooks.com">FreshBooks</a> REST APIs
-    |user|<a href="../../modules/FreshBooksDataProvider/html/index.html#freshbooksdataproviderintro">FreshBooksDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for FreshBooks \
-        accounting and invoicing services
-    |user|<a href="../../modules/FreshsalesRestClient/html/index.html#freshsalesrestclientintro">FreshsalesRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> REST APIs
-    |user|<a href="../../modules/FreshsalesDataProvider/html/index.html#freshsalesdataproviderintro">FreshsalesDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Freshsales \
-        CRM services
-    |user|<a href="../../modules/GeminiRestClient/html/index.html#geminirestclientintro">GeminiRestClient</a>|Provides APIs for \
-        communicating with <a href="https://ai.google.dev">Google Gemini</a> REST APIs
-    |user|<a href="../../modules/GeminiDataProvider/html/index.html#geminidataproviderintro">GeminiDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Google Gemini \
-        generative AI services
     |user|<a href="../../modules/FreetdsSqlUtil/html/index.html#freetdssqlutilintro">FreetdsSqlUtil</a>|Provides a high-level \
         DB-independent API for working with MS SQL Server and Sybase database objects; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with the \
         <a href="https://github.com/qoretechnologies/module-sybase">freetds DBI driver</a> for automated schema \
         management, programmatic DB access, schema and data synchronization, and more
+    |user|<a href="../../modules/FreshBooksDataProvider/html/index.html#freshbooksdataproviderintro">FreshBooksDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for FreshBooks \
+        accounting and invoicing services
+    |user|<a href="../../modules/FreshBooksRestClient/html/index.html#freshbooksrestclientintro">FreshBooksRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.freshbooks.com">FreshBooks</a> REST APIs
+    |user|<a href="../../modules/FreshsalesDataProvider/html/index.html#freshsalesdataproviderintro">FreshsalesDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Freshsales \
+        CRM services
+    |user|<a href="../../modules/FreshsalesRestClient/html/index.html#freshsalesrestclientintro">FreshsalesRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> REST APIs
     |user|<a href="../../modules/FsUtil/html/index.html#fsutilintro">FsUtil</a>|Provides a high level API for working with the \
         filesystem
     |user|<a href="../../modules/FtpClientDataProvider/html/index.html#ftpclientdataproviderintro">FtpClientDataProvider</a>|Provides a \
@@ -207,43 +281,83 @@ ModuleName/
         remote directory with the FTP protocol
     |user|<a href="../../modules/FtpPollerUtil/html/index.html#ftppollerutilintro">FtpPollerUtil</a>|Provides definitions for the \
         <a href="../../modules/FtpPoller/html/index.html#ftppollerintro">FtpPoller</a> module
+    |user|<a href="../../modules/GcpAuth/html/index.html#gcpauthintro">GcpAuth</a>|GCP service-account JWT-bearer and Application Default Credentials \
+        token broker for Vertex AI, GCP Vision, GCP Document AI, etc.
+    |user|<a href="../../modules/GeminiBodyShape/html/index.html#geminibodyshapeintro">GeminiBodyShape</a>|Pure-static \
+        request/response shapers for the Gemini generateContent wire format; shared between GeminiRestClient and Vertex AI
+    |user|<a href="../../modules/GeminiDataProvider/html/index.html#geminidataproviderintro">GeminiDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Google Gemini \
+        generative AI services
+    |user|<a href="../../modules/GeminiRestClient/html/index.html#geminirestclientintro">GeminiRestClient</a>|Provides APIs for \
+        communicating with <a href="https://ai.google.dev">Google Gemini</a> REST APIs
     |user|<a href="../../modules/GeneratorDataProvider/html/index.html#generatordataproviderintro">GeneratorDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for generating configurable test \
         record streams for data pipeline testing
     |user|<a href="../../modules/GmailDataProvider/html/index.html#gmaildataproviderintro">GmailDataProvider</a>|Provides \
         a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Gmail operations
-    |user|<a href="../../modules/GoogleCalendarDataProvider/html/index.html#googlecalendardataproviderintro">GoogleCalendarDataProvider</a>|Provides \
-        a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Google Calendar operations
-    |user|<a href="../../modules/GoogleDataProvider/html/index.html#googledataproviderintro">GoogleDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Google REST API cloud services
-    |user|<a href="../../modules/GoogleRestClient/html/index.html#googlerestclientintro">GoogleRestClient</a>|providing APIs for \
-        communicating with Google cloud REST APIs
     |user|<a href="../../modules/GoHighLevelDataProvider/html/index.html#gohighleveldataproviderintro">GoHighLevelDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for GoHighLevel CRM \
         including contacts, opportunities, tasks, notes, campaigns, and events
     |user|<a href="../../modules/GoHighLevelRestClient/html/index.html#gohighlevelrestclientintro">GoHighLevelRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.gohighlevel.com">GoHighLevel</a>'s REST API with OAuth2 authentication
+    |user|<a href="../../modules/GoogleCalendarDataProvider/html/index.html#googlecalendardataproviderintro">GoogleCalendarDataProvider</a>|Provides \
+        a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Google Calendar operations
+    |user|<a href="../../modules/GoogleDataProvider/html/index.html#googledataproviderintro">GoogleDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Google REST API cloud services
+    |user|<a href="../../modules/GoogleDocumentAiDataProvider/html/index.html#googledocumentaidataproviderintro">GoogleDocumentAiDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://cloud.google.com/document-ai">Google Document AI</a> — managed document extraction with prebuilt processors (invoices, receipts, IDs) and custom processors
+    |user|<a href="../../modules/GoogleDocumentAiRestClient/html/index.html#googledocumentairestclientintro">GoogleDocumentAiRestClient</a>|Provides a REST client for \
+        <a href="https://cloud.google.com/document-ai">Google Document AI</a> with @ref gcpauthintro "GcpAuth"-managed bearer-token authentication
+    |user|<a href="../../modules/GoogleRestClient/html/index.html#googlerestclientintro">GoogleRestClient</a>|providing APIs for \
+        communicating with Google cloud REST APIs
+    |user|<a href="../../modules/GorgiasDataProvider/html/index.html#gorgiasdataproviderintro">GorgiasDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Gorgias customer \
+        support ticket management, customer data, and helpdesk operations
+    |user|<a href="../../modules/GorgiasRestClient/html/index.html#gorgiasrestclientintro">GorgiasRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.gorgias.com">Gorgias</a>'s REST API with OAuth2 authentication
+    |user|<a href="../../modules/GrokDataProvider/html/index.html#grokdataproviderintro">GrokDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for xAI Grok AI services
+    |user|<a href="../../modules/GrokRestClient/html/index.html#grokrestclientintro">GrokRestClient</a>|providing APIs for \
+        communicating with xAI Grok REST APIs
+    |user|<a href="../../modules/GroqDataProvider/html/index.html#groqdataproviderintro">GroqDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Groq LPU inference services
+    |user|<a href="../../modules/GroqRestClient/html/index.html#groqrestclientintro">GroqRestClient</a>|providing APIs for \
+        communicating with Groq REST APIs (registers an LlmProvider for mode `groq` and a `groq://` connection scheme)
     |user|<a href="../../modules/HttpClientDataProvider/html/index.html#httpclientdataproviderintro">HttpClientDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for HTTP servers
+    |user|<a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a>|Provides unified HTTP/2 and \
+        HTTP/3 multiplexed client I/O with protocol auto-selection, connection pooling, and \
+        abstract base classes for both protocols
     |user|<a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a>|Provides a multi-threaded HTTP server \
         and request handler APIs; provides the infrastructure for server-side HTTP services
     |user|<a href="../../modules/HttpServerAsyncIo/html/index.html#httpserverasynciointro">HttpServerAsyncIo</a>|Provides async I/O support \
         classes for the <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module enabling \
         high-concurrency connection handling
-    |user|<a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a>|Provides unified HTTP/2 and \
-        HTTP/3 multiplexed client I/O with protocol auto-selection, connection pooling, and \
-        abstract base classes for both protocols
     |user|<a href="../../modules/HttpServerUtil/html/index.html#httpserverutilintro">HttpServerUtil</a>|Provides base definitions for \
         handler classes integrating with the <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
-    |user|<a href="../../modules/HttpUtil/html/index.html#httputilintro">HttpUtil</a>|Shared HTTP utility functions \
-        for RFC 6265 cookie handling used by both HttpServerUtil and HttpClientIo
     |user|<a href="../../modules/HttpStreamClient/html/index.html#httpstreamclientintro">HttpStreamClient</a>|Provides a convenience API \
         for reading HTTP streaming responses, including Server-Sent Events (SSE)
+    |user|<a href="../../modules/HttpUtil/html/index.html#httputilintro">HttpUtil</a>|Shared HTTP utility functions \
+        for RFC 6265 cookie handling used by both HttpServerUtil and HttpClientIo
     |user|<a href="../../modules/HueRestClient/html/index.html#huerestclientintro">HueRestClient</a>|providing APIs for \
         communicating with Philips Hue cloud REST APIs
+    |user|<a href="../../modules/HuggingFaceDataProvider/html/index.html#huggingfacedataproviderintro">HuggingFaceDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Hugging Face Hub and Inference API services
+    |user|<a href="../../modules/HuggingFaceRestClient/html/index.html#huggingfacerestclientintro">HuggingFaceRestClient</a>|providing APIs for \
+        communicating with Hugging Face REST APIs
     |binary|<a href="../../modules/i18n/html/index.html#i18nintro">i18n</a>|Provides ICU-backed internationalization \
         primitives including native message catalogs, CLDR plural selection, locale negotiation, explicit-locale \
         number/date/currency formatting, collation, and the \c qore-i18n catalog management tool
+    |user|<a href="../../modules/InsightlyDataProvider/html/index.html#insightlydataproviderintro">InsightlyDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Insightly CRM \
+        including contacts, organisations, leads, opportunities, projects, tasks, and events
+    |user|<a href="../../modules/InsightlyRestClient/html/index.html#insightlyrestclientintro">InsightlyRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.insightly.com">Insightly</a>'s REST API v3.1 with API key authentication
+    |user|<a href="../../modules/InstantlyDataProvider/html/index.html#instantlydataproviderintro">InstantlyDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Instantly email outreach and \
+        sales automation including campaigns, leads, email accounts, and webhook events
+    |user|<a href="../../modules/InstantlyRestClient/html/index.html#instantlyrestclientintro">InstantlyRestClient</a>|Provides APIs for \
+        communicating with <a href="https://instantly.ai">Instantly</a>'s REST API v2
     |user|<a href="../../modules/JdbcFirebirdSqlUtil/html/index.html#jdbcfirebirdsqlutilintro">JdbcFirebirdSqlUtil</a>|Provides a high-level \
         DB-independent API for working with Firebird database objects using \
         <a href="../../modules/XdbcFirebirdSqlUtilBase/html/index.html#xdbcfirebirdsqlutilbaseintro">XdbcFirebirdSqlUtilBase</a> and the binary \
@@ -265,72 +379,85 @@ ModuleName/
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with PostgreSQL databases \
         with the \c jdbc driver for automated schema management, programmatic DB access, schema and data \
         synchronization, and more
+    |user|<a href="../../modules/JinaDataProvider/html/index.html#jinadataproviderintro">JinaDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Jina AI embeddings and reranking
+    |user|<a href="../../modules/JinaRestClient/html/index.html#jinarestclientintro">JinaRestClient</a>|providing APIs for \
+        communicating with Jina AI REST APIs (registers an embedder backend `jina`, a reranker backend `jina`, and a `jina://` connection scheme)
     |user|<a href="../../modules/JotformDataProvider/html/index.html#jotformdataproviderintro">JotformDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for JotForm form and submission management
     |user|<a href="../../modules/JotformRestClient/html/index.html#jotformrestclientintro">JotformRestClient</a>|Provides APIs for \
         communicating with the JotForm REST API
+    |user|<a href="../../modules/KatanaDataProvider/html/index.html#katanadataproviderintro">KatanaDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Katana Manufacturing ERP \
+        including products, materials, variants, manufacturing orders, sales orders, purchase orders, customers, suppliers, \
+        locations, inventory, stock adjustments, tax rates, and webhook events
+    |user|<a href="../../modules/KatanaRestClient/html/index.html#katanarestclientintro">KatanaRestClient</a>|Provides APIs for \
+        communicating with <a href="https://katanamrp.com">Katana</a>'s REST API with API key authentication
+    |user|<a href="../../modules/KeapDataProvider/html/index.html#keapdataproviderintro">KeapDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Keap CRM and \
+        marketing automation including contacts, companies, opportunities, orders, tags, tasks, and events
+    |user|<a href="../../modules/KeapRestClient/html/index.html#keaprestclientintro">KeapRestClient</a>|Provides APIs for \
+        communicating with <a href="https://keap.com">Keap</a>'s REST API with OAuth2 authentication
+    |user|<a href="../../modules/KitDataProvider/html/index.html#kitdataproviderintro">KitDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Kit email \
+        marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases
+    |user|<a href="../../modules/KitRestClient/html/index.html#kitrestclientintro">KitRestClient</a>|Provides APIs for \
+        communicating with <a href="https://kit.com">Kit</a>'s REST API with OAuth2 and API key authentication
+    |user|<a href="../../modules/LemlistDataProvider/html/index.html#lemlistdataproviderintro">LemlistDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Lemlist sales outreach \
+        and email campaign management including campaigns, leads, activities, tasks, contacts, and webhooks
+    |user|<a href="../../modules/LemlistRestClient/html/index.html#lemlistrestclientintro">LemlistRestClient</a>|Provides APIs for \
+        communicating with <a href="https://lemlist.com">Lemlist</a>'s REST API
     |user|<a href="../../modules/LinearDataProvider/html/index.html#lineardataproviderintro">LinearDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Linear issue tracking services
     |user|<a href="../../modules/LinearRestClient/html/index.html#linearrestclientintro">LinearRestClient</a>|Provides APIs for \
         communicating with Linear's GraphQL API
-    |user|<a href="../../modules/WaveDataProvider/html/index.html#wavedataproviderintro">WaveDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Wave accounting and invoicing services
-    |user|<a href="../../modules/WaveRestClient/html/index.html#waverestclientintro">WaveRestClient</a>|Provides APIs for \
-        communicating with Wave's GraphQL API
-    |user|<a href="../../modules/WooCommerceDataProvider/html/index.html#woocommercedataproviderintro">WooCommerceDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for WooCommerce e-commerce services
-    |user|<a href="../../modules/WooCommerceRestClient/html/index.html#woocommercerestclientintro">WooCommerceRestClient</a>|Provides APIs for \
-        communicating with WooCommerce's REST API
-    |user|<a href="../../modules/Logger/html/index.html#loggerintro">Logger</a>|Provides a flexible logging API (aka "log4q")
-    |binary|<a href="../../modules/logger_bin/html/index.html#logger_binintro">logger_bin</a>|Provides a high-performance \
-        implementation for the <a href="../../modules/Logger/html/index.html#loggerintro">Logger</a> module
     |binary|<a href="../../modules/linenoise/html/index.html#linenoiseintro">linenoise</a>|Provides a readline-like API \
         to %Qore under a permissive license; used by \
         @ref qorereplintro "QoreRepl", @ref qorehistoryintro "QoreHistory", and \c qdp for interactive line editing
-    |user|<a href="../../modules/MailMessage/html/index.html#mailmessageintro">MailMessage</a>|Provides supporting classes for the \
-        <a href="../../modules/Pop3Client/html/index.html#pop3clientintro">Pop3Client</a> and \
-        <a href="../../modules/SmtpClient/html/index.html#smtpclientintro">SmtpClient</a> modules; mail message serialization and \
-        deserialization, attachment handling
+    |user|<a href="../../modules/LlamaParseDataProvider/html/index.html#llamaparsedataproviderintro">LlamaParseDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for LlamaParse document extraction (PDF / docx / HTML to structured markdown)
+    |user|<a href="../../modules/LlamaParseRestClient/html/index.html#llamaparserestclientintro">LlamaParseRestClient</a>|providing APIs for \
+        communicating with LlamaParse REST APIs (async upload/poll/fetch lifecycle); also registers a `llama-parse` chunker strategy in @ref qoreragutilsintro "QoreRagUtils"
+    |user|<a href="../../modules/Logger/html/index.html#loggerintro">Logger</a>|Provides a flexible logging API (aka "log4q")
+    |binary|<a href="../../modules/logger_bin/html/index.html#logger_binintro">logger_bin</a>|Provides a high-performance \
+        implementation for the <a href="../../modules/Logger/html/index.html#loggerintro">Logger</a> module
     |user|<a href="../../modules/MailgunDataProvider/html/index.html#mailgundataproviderintro">MailgunDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Mailgun email services
     |user|<a href="../../modules/MailgunRestClient/html/index.html#mailgunrestclientintro">MailgunRestClient</a>|Provides APIs for \
         communicating with Mailgun REST APIs
+    |user|<a href="../../modules/MailMessage/html/index.html#mailmessageintro">MailMessage</a>|Provides supporting classes for the \
+        <a href="../../modules/Pop3Client/html/index.html#pop3clientintro">Pop3Client</a> and \
+        <a href="../../modules/SmtpClient/html/index.html#smtpclientintro">SmtpClient</a> modules; mail message serialization and \
+        deserialization, attachment handling
     |user|<a href="../../modules/Mapper/html/index.html#mapperintro">Mapper</a>|Provides data mapping classes and iterators
     |user|<a href="../../modules/MapperUtil/html/index.html#mapperutilintro">MapperUtil</a>|Provides common definitions for data \
         mapping APIs
     |user|<a href="../../modules/MemcachedDataProvider/html/index.html#memcacheddataproviderintro">MemcachedDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Memcached caching servers
-    |binary|<a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a>|Provides a columnar \
-        DataFrame with typed columns, SQL-like query operations (select, filter, sort, groupby, join, pivot, \
-        melt, window functions), dense ColumnarResult interop, CSV/Parquet/database I/O, and ML integration
-    |user|<a href="../../modules/DataProviderDataFrame/html/index.html#dataproviderdataframeintro">DataProviderDataFrame</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
-        <a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a> columnar DataFrames \
-        with searchable record iteration, filtering, and pipeline shape preservation
+    |user|<a href="../../modules/MewsRestClient/html/index.html#mewsrestclientintro">MewsRestClient</a>|providing APIs for \
+        communicating with Mews cloud REST APIs
+    |user|<a href="../../modules/MewsRestDataProvider/html/index.html#mewsrestdataproviderintro">MewsRestDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Mews REST servers
+    |user|<a href="../../modules/MilvusDataProvider/html/index.html#milvusdataproviderintro">MilvusDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://milvus.io">Milvus</a> / Zilliz Cloud vector-database servers
+    |user|<a href="../../modules/MilvusRestClient/html/index.html#milvusrestclientintro">MilvusRestClient</a>|providing APIs for \
+        communicating with <a href="https://milvus.io">Milvus</a> / Zilliz Cloud REST APIs (registers a `milvus` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" and a `milvus://` connection scheme)
+    |user|<a href="../../modules/Mime/html/index.html#mimeintro">Mime</a>|Provides MIME definitions and functions; MIME type \
+        lookups, MIME encoding and decoding functions, MIME multipart handling, etc
+    |user|<a href="../../modules/MistralDataProvider/html/index.html#mistraldataproviderintro">MistralDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Mistral AI chat, embeddings, and document OCR
+    |user|<a href="../../modules/MistralRestClient/html/index.html#mistralrestclientintro">MistralRestClient</a>|providing APIs for \
+        communicating with Mistral AI REST APIs (registers an LlmProvider for mode `mistral`, an embedder backend `mistral`, and a `mistral://` connection scheme)
     |binary|<a href="../../modules/ml/html/index.html#mlintro">ml</a>|Provides 20 machine learning algorithms \
         including DecisionTree, RandomForest, GradientBoostedTrees, LogisticRegression, KNN, KMeans, GMM, \
         IsolationForest, LOF, PCA, LinearRegression, HoltWinters, and preprocessing/pipeline utilities \
         with metrics, serialization, online learning, and optional ONNX Runtime inference
-    |user|<a href="../../modules/DataProviderML/html/index.html#dataprovidermlintro">DataProviderML</a>|Provides \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> pipeline \
-        processors wrapping the <a href="../../modules/ml/html/index.html#mlintro">ml</a> module's machine \
-        learning algorithms for anomaly detection, clustering, forecasting, and dimensionality reduction
-    |binary|<a href="../../modules/ocr/html/index.html#ocrintro">ocr</a>|Provides text extraction from images \
-        using the Tesseract OCR engine with confidence scores and block-level bounding boxes
-    |binary|<a href="../../modules/tokenizer/html/index.html#tokenizerintro">tokenizer</a>|Provides \
-        HuggingFace-compatible text tokenization (BPE, WordPiece, Unigram) with word_ids, sliding window, \
-        pre-tokenized input, dynamic vocabulary, and full tokenizer.json support
     |binary|<a href="../../modules/mongodb/html/index.html#mongodbintro">mongodb</a>|Provides MongoDB client connectivity using \
         libmongoc with full CRUD, aggregation, and automatic BSON conversion
     |user|<a href="../../modules/MongoDbDataProvider/html/index.html#mongodbdataproviderintro">MongoDbDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for MongoDB servers with \
-        full CRUD, aggregation, and bulk operation support
-    |user|<a href="../../modules/MewsRestDataProvider/html/index.html#mewsrestdataproviderintro">MewsRestDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Mews REST servers
-    |user|<a href="../../modules/MewsRestClient/html/index.html#mewsrestclientintro">MewsRestClient</a>|providing APIs for \
-        communicating with Mews cloud REST APIs
-    |user|<a href="../../modules/Mime/html/index.html#mimeintro">Mime</a>|Provides MIME definitions and functions; MIME type \
-        lookups, MIME encoding and decoding functions, MIME multipart handling, etc
+        full CRUD, aggregation, and bulk operation support; includes Atlas Vector Search support via a `$vectorSearch` aggregation action and a `mongo-atlas` vector-store backend in @ref qoreragutilsintro "QoreRagUtils"
     |user|<a href="../../modules/MssqlSqlUtilBase/html/index.html#mssqlsqlutilbaseintro">MssqlSqlUtilBase</a>|Provides a \
         high-level DB-independent API for working with MS SQL Serfer database objects; this module supports \
         <a href="../../modules/FreetdsSqlUtil/html/index.html#freetdssqlutilintro">FreetdsSqlUtil</a> and \
@@ -344,55 +471,37 @@ ModuleName/
         automated schema management, programmatic DB access, schema and data synchronization, and more
     |user|<a href="../../modules/NetSuiteRestClient/html/index.html#netsuiterestclientintro">NetSuiteRestClient</a>|providing APIs for \
         communicating with Oracle NetSuite cloud REST APIs
+    |binary|<a href="../../modules/ocr/html/index.html#ocrintro">ocr</a>|Provides text extraction from images \
+        using the Tesseract OCR engine with confidence scores and block-level bounding boxes
     |user|<a href="../../modules/OdbcFirebirdSqlUtil/html/index.html#odbcfirebirdsqlutilintro">OdbcFirebirdSqlUtil</a>|Provides a high-level \
         DB-independent API for working with Firebird database objects using \
         <a href="../../modules/XdbcFirebirdSqlUtilBase/html/index.html#xdbcfirebirdsqlutilbaseintro">XdbcFirebirdSqlUtilBase</a> and the binary \
         <a href="https://github.com/qoretechnologies/module-odbc">odbc</a> module; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with Firebird databases \
         for automated schema management, programmatic DB access, schema and data synchronization, and more
-    |user|<a href="../../modules/AftershipDataProvider/html/index.html#aftershipdataproviderintro">AftershipDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Aftership tracking and returns services
-    |user|<a href="../../modules/AftershipRestClient/html/index.html#aftershiprestclientintro">AftershipRestClient</a>|providing APIs for \
-        communicating with Aftership REST APIs
-    |user|<a href="../../modules/BaseLinkerDataProvider/html/index.html#baselinkerdataproviderintro">BaseLinkerDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for BaseLinker multichannel e-commerce \
-        integration including orders, order returns, inventory, shipping, and polling-based event triggers
-    |user|<a href="../../modules/BaseLinkerRestClient/html/index.html#baselinkerrestclientintro">BaseLinkerRestClient</a>|Provides APIs for \
-        communicating with <a href="https://baselinker.com">BaseLinker</a>'s RPC-over-HTTP API with X-BLToken authentication
-    |user|<a href="../../modules/AnthropicDataProvider/html/index.html#anthropicdataproviderintro">AnthropicDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Anthropic Claude AI services
-    |user|<a href="../../modules/AnthropicRestClient/html/index.html#anthropicrestclientintro">AnthropicRestClient</a>|providing APIs for \
-        communicating with Anthropic Claude REST APIs
-    |user|<a href="../../modules/GrokDataProvider/html/index.html#grokdataproviderintro">GrokDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for xAI Grok AI services
-    |user|<a href="../../modules/GrokRestClient/html/index.html#grokrestclientintro">GrokRestClient</a>|providing APIs for \
-        communicating with xAI Grok REST APIs
-    |user|<a href="../../modules/HuggingFaceDataProvider/html/index.html#huggingfacedataproviderintro">HuggingFaceDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Hugging Face Hub and Inference API services
-    |user|<a href="../../modules/HuggingFaceRestClient/html/index.html#huggingfacerestclientintro">HuggingFaceRestClient</a>|providing APIs for \
-        communicating with Hugging Face REST APIs
+    |user|<a href="../../modules/OllamaDataProvider/html/index.html#ollamadataproviderintro">OllamaDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Ollama local-first LLM runtimes (chat, embeddings, model management)
+    |user|<a href="../../modules/OllamaRestClient/html/index.html#ollamarestclientintro">OllamaRestClient</a>|providing APIs for \
+        communicating with [Ollama](https://ollama.com) local LLM runtimes (registers an LlmProvider for mode `ollama`, an embedder backend `ollama`, and an `ollama://` connection scheme)
+    |user|<a href="../../modules/OneDriveDataProvider/html/index.html#onedrivedataproviderintro">OneDriveDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Microsoft OneDrive \
+        cloud file storage via Microsoft Graph
+    |user|<a href="../../modules/OneDriveRestClient/html/index.html#onedriverestclientintro">OneDriveRestClient</a>|Provides APIs for \
+        communicating with Microsoft OneDrive REST APIs via Microsoft Graph
     |user|<a href="../../modules/OpenAiDataProvider/html/index.html#openaidataproviderintro">OpenAiDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for OpenAI cloud services
     |user|<a href="../../modules/OpenAiRestClient/html/index.html#openairestclientintro">OpenAiRestClient</a>|providing APIs for \
         communicating with OpenAI cloud REST APIs
-    |user|<a href="../../modules/PerplexityDataProvider/html/index.html#perplexitydataproviderintro">PerplexityDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Perplexity AI services
-    |user|<a href="../../modules/PerplexityRestClient/html/index.html#perplexityrestclientintro">PerplexityRestClient</a>|providing APIs for \
-        communicating with Perplexity AI REST APIs
-    |user|<a href="../../modules/SegmentDataProvider/html/index.html#segmentdataproviderintro">SegmentDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Twilio Segment services
-    |user|<a href="../../modules/SegmentRestClient/html/index.html#segmentrestclientintro">SegmentRestClient</a>|providing APIs for \
-        communicating with Twilio Segment REST APIs
-    |user|<a href="../../modules/OracleSqlUtil/html/index.html#oraclesqlutilintro">OracleSqlUtil</a>|Provides a high-level \
-        DB-independent API for working with Oracle database objects; loaded automatically by the \
-        <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with Oracle databases for \
-        automated schema management, programmatic DB access, schema and data synchronization, and more
     |user|<a href="../../modules/OpenApi3/html/index.html#openapi3intro">OpenApi3</a>|Provides an \
         <a href="https://swagger.io/">OpenApi 3 REST API validation API</a> and schema generation from source code \
         annotations; includes the \c qore-openapi3-gen CLI tool
     |user|<a href="../../modules/OpenApi3DataProvider/html/index.html#openapi3dataproviderintro">OpenApi3DataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
         <a href="https://swagger.io/">OpenAPI 3.0 / 3.1</a> schemas
+    |user|<a href="../../modules/OracleSqlUtil/html/index.html#oraclesqlutilintro">OracleSqlUtil</a>|Provides a high-level \
+        DB-independent API for working with Oracle database objects; loaded automatically by the \
+        <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with Oracle databases for \
+        automated schema management, programmatic DB access, schema and data synchronization, and more
     |user|<a href="../../modules/OracleSqlUtilBase/html/index.html#oraclesqlutilbaseintro">OracleSqlUtilBase</a>|Provides a \
         high-level DB-independent API for working with Oracle database objects; this module supports \
         <a href="../../modules/OracleSqlUtil/html/index.html#oraclesqlutilintro">OracleSqlUtil</a> and \
@@ -405,10 +514,14 @@ ModuleName/
         including PDF conversion, manipulation, data extraction, barcode operations, and more
     |user|<a href="../../modules/PdfCoRestClient/html/index.html#pdfcorestclientintro">PdfCoRestClient</a>|Provides APIs for \
         communicating with <a href="https://api.pdf.co">PDF.co</a>'s REST API
-    |user|<a href="../../modules/Pop3Client/html/index.html#pop3clientintro">Pop3Client</a>|Provides POP3 client functionality; \
-        provides an API to retrieve email messages from a POP3 server
-    |user|<a href="../../modules/Pop3ClientDataProvider/html/index.html#pop3clientdataproviderintro">Pop3ClientDataProvider</a>|Provides \
-        a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for POP3 operations
+    |user|<a href="../../modules/PerplexityDataProvider/html/index.html#perplexitydataproviderintro">PerplexityDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Perplexity AI services
+    |user|<a href="../../modules/PerplexityRestClient/html/index.html#perplexityrestclientintro">PerplexityRestClient</a>|providing APIs for \
+        communicating with Perplexity AI REST APIs
+    |user|<a href="../../modules/PgsqlSqlUtil/html/index.html#pgsqlsqlutilintro">PgsqlSqlUtil</a>|Provides a high-level DB-independent \
+        API for working with PostgreSQL database objects; loaded automatically by the \
+        <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with PostgreSQL databases \
+        for automated schema management, programmatic DB access, schema and data synchronization, and more
     |user|<a href="../../modules/PgsqlSqlUtilBase/html/index.html#pgsqlsqlutilbaseintro">PgsqlSqlUtilBase</a>|Provides a \
         high-level DB-independent API for working with PostgreSQL database objects; this module supports \
         <a href="../../modules/PgsqlSqlUtil/html/index.html#pgsqlsqlutilintro">PgsqlSqlUtil</a> and \
@@ -416,62 +529,82 @@ ModuleName/
         automatically by the <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with \
         PostgreSQL databases for automated schema management, programmatic DB access, schema and data \
         synchronization, and more
-    |user|<a href="../../modules/PgsqlSqlUtil/html/index.html#pgsqlsqlutilintro">PgsqlSqlUtil</a>|Provides a high-level DB-independent \
-        API for working with PostgreSQL database objects; loaded automatically by the \
-        <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with PostgreSQL databases \
-        for automated schema management, programmatic DB access, schema and data synchronization, and more
+    |user|<a href="../../modules/PineconeDataProvider/html/index.html#pineconedataproviderintro">PineconeDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://www.pinecone.io">Pinecone</a> serverless vector-database control-plane endpoints
+    |user|<a href="../../modules/PineconeRestClient/html/index.html#pineconerestclientintro">PineconeRestClient</a>|providing APIs for \
+        communicating with <a href="https://www.pinecone.io">Pinecone</a> REST APIs with lazy control-plane/data-plane host resolution (registers a `pinecone` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" and a `pinecone://` connection scheme)
+    |user|<a href="../../modules/Pop3Client/html/index.html#pop3clientintro">Pop3Client</a>|Provides POP3 client functionality; \
+        provides an API to retrieve email messages from a POP3 server
+    |user|<a href="../../modules/Pop3ClientDataProvider/html/index.html#pop3clientdataproviderintro">Pop3ClientDataProvider</a>|Provides \
+        a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for POP3 operations
+    |binary|<a href="../../modules/protobuf/html/index.html#protobufintro">protobuf</a>|Provides dynamic Protocol Buffer \
+        schema loading and message encoding/decoding using libprotobuf
     |user|<a href="../../modules/ProviderIndex/html/index.html#providerindexintro">ProviderIndex</a>|Provides indexing APIs for data \
         providers
     |user|<a href="../../modules/ProviderIndexUtil/html/index.html#providerindexutilintro">ProviderIndexUtil</a>|Provides utility APIs for \
         indexing APIs for data providers
-    |binary|<a href="../../modules/protobuf/html/index.html#protobufintro">protobuf</a>|Provides dynamic Protocol Buffer \
-        schema loading and message encoding/decoding using libprotobuf
+    |user|<a href="../../modules/QdrantDataProvider/html/index.html#qdrantdataproviderintro">QdrantDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Qdrant vector database instances
     |user|<a href="../../modules/Qdx/html/index.html#qdxintro">Qdx</a>|Provides support for documentation generation with \
         doxygen from %Qore sources
-    |user|<a href="../../modules/Qorize/html/index.html#qorizeintro">Qorize</a>|Provides basic support for \
-        automatically-generating %Qore code from data
+    |user|<a href="../../modules/QLS/html/index.html#qlsintro">QLS</a>|Provides a Language Server Protocol \
+        (LSP) implementation for %Qore with 25+ features including hover, go-to-definition, \
+        code completion, rename, semantic tokens, type/call hierarchy, and formatting
+    |user|<a href="../../modules/QoreAgentStrategies/html/index.html#qoreagentstrategiesintro">QoreAgentStrategies</a>|Provides \
+        configurable agent execution strategies (planning, reflexion, parallel tool dispatch) for LLM agents
     |user|<a href="../../modules/QoreApiMetadata/html/index.html#qoreapimetadataintro">QoreApiMetadata</a>|Provides \
         structured API metadata extraction bridging astparser, reflection, and qpp documentation
+    |user|<a href="../../modules/QoreAsyncJobUtils/html/index.html#qoreasyncjobutilsintro">QoreAsyncJobUtils</a>|Provides a \
+        provider-neutral async-job polling helper (upload → poll → fetch) shared across LlamaParse, async OCR, and image/video generation modules
     |user|<a href="../../modules/QoreCodeCompletion/html/index.html#qorecodecompletionintro">QoreCodeCompletion</a>|Provides \
         a shared code completion engine with context detection, keyword filtering, and pluggable symbol backends
     |user|<a href="../../modules/QoreCodeFormat/html/index.html#qorecodeformatintro">QoreCodeFormat</a>|Provides \
         a canonical code formatter for %Qore source code (like gofmt for Go)
     |user|<a href="../../modules/QoreCrypto/html/index.html#qorecryptointro">QoreCrypto</a>|Provides \
         provider-neutral envelope encryption helpers for long-lived sensitive records
-    |user|<a href="../../modules/QoreHistory/html/index.html#qorehistoryintro">QoreHistory</a>|Provides \
-        shared history management with timestamps, deduplication, search, expansion, and persistence
-    |user|<a href="../../modules/QoreModelRegistry/html/index.html#qoremodelregistryintro">QoreModelRegistry</a>|Provides \
-        an ML model registry with pluggable storage backends (filesystem, database, REST) for versioning, \
-        tagging, pruning, and deployment management with multi-tenant support and DataProvider integration
-    |user|<a href="../../modules/QoreMLUtils/html/index.html#qoremlutilsintro">QoreMLUtils</a>|Provides \
-        hyperparameter optimization (GridSearch, RandomSearch) and model-agnostic feature importance \
-        (PermutationImportance) for ML model tuning and explainability
-    |user|<a href="../../modules/QoreOnnxExport/html/index.html#qoreonnxexportintro">QoreOnnxExport</a>|Provides \
-        ONNX model export for 11 trained ML algorithms including tree ensembles \
-        (DecisionTree, RandomForest, GradientBoostedTrees), linear models, preprocessing, and clustering
-    |user|<a href="../../modules/QoreAgentStrategies/html/index.html#qoreagentstrategiesintro">QoreAgentStrategies</a>|Provides \
-        configurable agent execution strategies (planning, reflexion, parallel tool dispatch) for LLM agents
     |user|<a href="../../modules/QoreGuardrails/html/index.html#qoreguardrailsintro">QoreGuardrails</a>|Provides \
         input and output guardrails for AI chat endpoints with PII detection/redaction, prompt \
         injection detection, topic restriction, and output format enforcement
-    |user|<a href="../../modules/QoreOcrUtils/html/index.html#qoreocrutilsintro">QoreOcrUtils</a>|Provides \
-        an OCR abstraction layer with native (Tesseract) and HTTP backends, plus scanned PDF detection
-    |user|<a href="../../modules/QoreVisionExtraction/html/index.html#qorevisionextractionintro">QoreVisionExtraction</a>|Provides \
-        multimodal LLM vision extraction for image description, table extraction, and text extraction
+    |user|<a href="../../modules/QoreHistory/html/index.html#qorehistoryintro">QoreHistory</a>|Provides \
+        shared history management with timestamps, deduplication, search, expansion, and persistence
+    |user|<a href="../../modules/QoreLlmTypes/html/index.html#qorellmtypesintro">QoreLlmTypes</a>|Provides \
+        the provider-neutral type and abstract-class layer shared by QoreLlmUtils \
+        and individual LLM REST client modules
     |user|<a href="../../modules/QoreLlmUtils/html/index.html#qorellmutilsintro">QoreLlmUtils</a>|Provides \
         a pluggable LLM backend abstraction for chat completions across HTTP/OpenAI-compatible, \
         Anthropic, Gemini, and callback API gateway endpoints
+    |user|<a href="../../modules/QoreMediaUtils/html/index.html#qoremediautilsintro">QoreMediaUtils</a>|Provides a \
+        provider-neutral abstraction layer for generative media: pluggable image-generator and video-generator backends with lazy-loaded factories
+    |user|<a href="../../modules/QoreMLUtils/html/index.html#qoremlutilsintro">QoreMLUtils</a>|Provides \
+        hyperparameter optimization (GridSearch, RandomSearch) and model-agnostic feature importance \
+        (PermutationImportance) for ML model tuning and explainability
+    |user|<a href="../../modules/QoreModelRegistry/html/index.html#qoremodelregistryintro">QoreModelRegistry</a>|Provides \
+        an ML model registry with pluggable storage backends (filesystem, database, REST) for versioning, \
+        tagging, pruning, and deployment management with multi-tenant support and DataProvider integration
+    |user|<a href="../../modules/QoreOcrUtils/html/index.html#qoreocrutilsintro">QoreOcrUtils</a>|Provides \
+        an OCR abstraction layer with native (Tesseract) and HTTP backends, plus scanned PDF detection
+    |user|<a href="../../modules/QoreOnnxExport/html/index.html#qoreonnxexportintro">QoreOnnxExport</a>|Provides \
+        ONNX model export for 11 trained ML algorithms including tree ensembles \
+        (DecisionTree, RandomForest, GradientBoostedTrees), linear models, preprocessing, and clustering
+    |user|<a href="../../modules/QoreRagTypes/html/index.html#qoreragtypesintro">QoreRagTypes</a>|Provides \
+        the provider-neutral type and abstract-class layer shared by QoreRagUtils \
+        and individual RAG REST client modules
+    |user|<a href="../../modules/QoreRagUtils/html/index.html#qoreragutilsintro">QoreRagUtils</a>|composable abstraction layer for \
+        retrieval-augmented generation (RAG) — pluggable embedder/vector-store/reranker/chunker with built-in backends (local ONNX, OpenAI, Voyage, SGLang, BGE-M3 FastAPI)
+    |user|<a href="../../modules/QoreRepl/html/index.html#qorereplintro">QoreRepl</a>|Provides a reusable REPL \
+        (Read-Eval-Print Loop) implementation for command-line and network-based Qore interpreters
+    |user|<a href="../../modules/QoreSpeechUtils/html/index.html#qorespeechutilsintro">QoreSpeechUtils</a>|Provides a \
+        provider-neutral abstraction layer for speech AI: pluggable transcriber (ASR) and synthesizer (TTS) backends with lazy-loaded factories — currently Deepgram (ASR + TTS) and AssemblyAI (ASR)
     |user|<a href="../../modules/QoreStructuredExtraction/html/index.html#qorestructuredextractionintro">QoreStructuredExtraction</a>|Provides \
         LLM-based structured information extraction with schema enforcement and built-in templates \
         for NER, invoice, contact, and sentiment analysis
     |user|<a href="../../modules/QoreTokenizerUtils/html/index.html#qoretokenizerutilsintro">QoreTokenizerUtils</a>|Provides \
         document chunking (DocumentChunker) and token counting (TokenCounter) for RAG text ingestion \
         pipelines using HuggingFace-compatible tokenizers
-    |user|<a href="../../modules/QLS/html/index.html#qlsintro">QLS</a>|Provides a Language Server Protocol \
-        (LSP) implementation for %Qore with 25+ features including hover, go-to-definition, \
-        code completion, rename, semantic tokens, type/call hierarchy, and formatting
-    |user|<a href="../../modules/QoreRepl/html/index.html#qorereplintro">QoreRepl</a>|Provides a reusable REPL \
-        (Read-Eval-Print Loop) implementation for command-line and network-based Qore interpreters
+    |user|<a href="../../modules/QoreVisionExtraction/html/index.html#qorevisionextractionintro">QoreVisionExtraction</a>|Provides \
+        multimodal LLM vision extraction for image description, table extraction, and text extraction
+    |user|<a href="../../modules/Qorize/html/index.html#qorizeintro">Qorize</a>|Provides basic support for \
+        automatically-generating %Qore code from data
     |user|<a href="../../modules/QUnit/html/index.html#qunitintro">QUnit</a>|Provides an API for defining and executing tests \
         and reporting results in various formats
     |binary|<a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a>|Provides a reflection API to %Qore
@@ -500,6 +633,14 @@ ModuleName/
     |user|<a href="../../modules/Schema/html/index.html#schemaintro">Schema</a>|Provides automatic schema management \
         functionality as a meta-layer for <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a>'s medium and \
         low-level schema management functionality
+    |user|<a href="../../modules/SegmentDataProvider/html/index.html#segmentdataproviderintro">SegmentDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Twilio Segment services
+    |user|<a href="../../modules/SegmentRestClient/html/index.html#segmentrestclientintro">SegmentRestClient</a>|providing APIs for \
+        communicating with Twilio Segment REST APIs
+    |user|<a href="../../modules/SendCloudDataProvider/html/index.html#sendclouddataproviderintro">SendCloudDataProvider</a>|Provides \
+        data provider classes for the SendCloud shipping API (parcels, returns, service points, and polling-based triggers)
+    |user|<a href="../../modules/SendCloudRestClient/html/index.html#sendcloudrestclientintro">SendCloudRestClient</a>|Provides a \
+        REST client API for interacting with the SendCloud shipping automation API
     |user|<a href="../../modules/ServerSentEventClient/html/index.html#serversenteventclientintro">ServerSentEventClient</a>|Provides \
         client-side support for Server Sent Events (SSE)
     |user|<a href="../../modules/ServerSentEventHandler/html/index.html#serversenteventhandlerintro">ServerSentEventHandler</a>|Provides \
@@ -512,15 +653,10 @@ ModuleName/
         communicating with <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio REST API
     |user|<a href="../../modules/SewioWebSocketClient/html/index.html#sewiowebsocketclientintro">SewioWebSocketClient</a>|providing APIs for \
         communicating with <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio WebSocket API
-    |user|<a href="../../modules/LemlistDataProvider/html/index.html#lemlistdataproviderintro">LemlistDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Lemlist sales outreach \
-        and email campaign management including campaigns, leads, activities, tasks, contacts, and webhooks
-    |user|<a href="../../modules/LemlistRestClient/html/index.html#lemlistrestclientintro">LemlistRestClient</a>|Provides APIs for \
-        communicating with <a href="https://lemlist.com">Lemlist</a>'s REST API
-    |user|<a href="../../modules/SendCloudDataProvider/html/index.html#sendclouddataproviderintro">SendCloudDataProvider</a>|Provides \
-        data provider classes for the SendCloud shipping API (parcels, returns, service points, and polling-based triggers)
-    |user|<a href="../../modules/SendCloudRestClient/html/index.html#sendcloudrestclientintro">SendCloudRestClient</a>|Provides a \
-        REST client API for interacting with the SendCloud shipping automation API
+    |user|<a href="../../modules/SGLangDataProvider/html/index.html#sglangdataproviderintro">SGLangDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for SGLang chat, embeddings, constrained generation, and server admin endpoints
+    |user|<a href="../../modules/SGLangRestClient/html/index.html#sglangrestclientintro">SGLangRestClient</a>|providing APIs for \
+        communicating with <a href="https://github.com/sgl-project/sglang">SGLang</a> model servers (OpenAI-compatible + native endpoints)
     |user|<a href="../../modules/ShippoDataProvider/html/index.html#shippodataproviderintro">ShippoDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Shippo shipping services \
         including shipments, labels, orders, rates, and polling triggers
@@ -531,46 +667,20 @@ ModuleName/
         logistics services including order management, shipments, carriers, warehouses, and webhooks
     |user|<a href="../../modules/ShipStationRestClient/html/index.html#shipstationrestclientintro">ShipStationRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.shipstation.com">ShipStation</a>'s REST API
-    |user|<a href="../../modules/SystemeIoDataProvider/html/index.html#systemeio_dataproviderintro">SystemeIoDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Systeme.io all-in-one marketing \
-        platform including contacts, tags, courses, communities, and subscriptions
-    |user|<a href="../../modules/SystemeIoRestClient/html/index.html#systemeiorestclientintro">SystemeIoRestClient</a>|Provides APIs for \
-        communicating with <a href="https://systeme.io">Systeme.io</a>'s REST API
-    |user|<a href="../../modules/CustomerIoDataProvider/html/index.html#customeriodataproviderintro">CustomerIoDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Customer.io marketing automation \
-        including customer management, campaigns, broadcasts, transactional messaging, and webhook events
-    |user|<a href="../../modules/CustomerIoRestClient/html/index.html#customeriorestclientintro">CustomerIoRestClient</a>|Provides APIs for \
-        communicating with <a href="https://customer.io">Customer.io</a>'s REST API
-    |user|<a href="../../modules/InsightlyRestClient/html/index.html#insightlyrestclientintro">InsightlyRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.insightly.com">Insightly</a>'s REST API v3.1 with API key authentication
-    |user|<a href="../../modules/InsightlyDataProvider/html/index.html#insightlydataproviderintro">InsightlyDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Insightly CRM \
-        including contacts, organisations, leads, opportunities, projects, tasks, and events
-    |user|<a href="../../modules/InstantlyDataProvider/html/index.html#instantlydataproviderintro">InstantlyDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Instantly email outreach and \
-        sales automation including campaigns, leads, email accounts, and webhook events
-    |user|<a href="../../modules/InstantlyRestClient/html/index.html#instantlyrestclientintro">InstantlyRestClient</a>|Provides APIs for \
-        communicating with <a href="https://instantly.ai">Instantly</a>'s REST API v2
-    |user|<a href="../../modules/ApolloDataProvider/html/index.html#apollodataproviderintro">ApolloDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Apollo B2B sales \
-        intelligence including contacts, accounts, deals, tasks, enrichment, and search
-    |user|<a href="../../modules/ApolloRestClient/html/index.html#apollorestclientintro">ApolloRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.apollo.io">Apollo</a>'s REST API with OAuth2 and API key authentication
-    |user|<a href="../../modules/KeapDataProvider/html/index.html#keapdataproviderintro">KeapDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Keap CRM and \
-        marketing automation including contacts, companies, opportunities, orders, tags, tasks, and events
-    |user|<a href="../../modules/KeapRestClient/html/index.html#keaprestclientintro">KeapRestClient</a>|Provides APIs for \
-        communicating with <a href="https://keap.com">Keap</a>'s REST API with OAuth2 authentication
-    |user|<a href="../../modules/KitDataProvider/html/index.html#kitdataproviderintro">KitDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Kit email \
-        marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases
-    |user|<a href="../../modules/KitRestClient/html/index.html#kitrestclientintro">KitRestClient</a>|Provides APIs for \
-        communicating with <a href="https://kit.com">Kit</a>'s REST API with OAuth2 and API key authentication
-    |user|<a href="../../modules/ConstantContactDataProvider/html/index.html#constantcontactdataproviderintro">ConstantContactDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Constant Contact \
-        email marketing including contacts, lists, tags, segments, campaigns, and custom fields
-    |user|<a href="../../modules/ConstantContactRestClient/html/index.html#constantcontactrestclientintro">ConstantContactRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.constantcontact.com">Constant Contact</a>'s REST API with OAuth2 authentication
+    |user|<a href="../../modules/SmartSheetDataProvider/html/index.html#smartsheetdataproviderintro">SmartSheetDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Smartsheet \
+        spreadsheet and work management, including sheets, rows, workspaces, folders, and groups
+    |user|<a href="../../modules/SmartSheetRestClient/html/index.html#smartsheetrestclientintro">SmartSheetRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.smartsheet.com">Smartsheet</a>'s REST API with OAuth2 authentication and regional endpoint support
+    |user|<a href="../../modules/SmtpClient/html/index.html#smtpclientintro">SmtpClient</a>|Provides SMTP client functionality; \
+        provides an API for sending emails via an SMTP server
+    |user|<a href="../../modules/Sqlite3SqlUtil/html/index.html#sqlite3sqlutilintro">Sqlite3SqlUtil</a>|Provides a high-level \
+        DB-independent API for working with SQLite3 database objects; loaded automatically by the \
+        <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with SQLite3 databases \
+        for automated schema management, programmatic DB access, schema and data synchronization, and more
+    |user|<a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a>|Provides a high-level DB-independent API for \
+        working with databases; for automated schema management, programmatic DB access, schema and data \
+        synchronization, and more
     |user|<a href="../../modules/SquareDataProvider/html/index.html#squaredataproviderintro">SquareDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Square payments and \
         commerce including customers, orders, payments, invoices, bookings, catalog, inventory, and events
@@ -581,35 +691,50 @@ ModuleName/
         including orders, products, product variants, product images, inventory, and transactions
     |user|<a href="../../modules/SquarespaceRestClient/html/index.html#squarespacerestclientintro">SquarespaceRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.squarespace.com">Squarespace</a>'s Commerce REST API with OAuth2 authentication
-    |user|<a href="../../modules/TableauDataProvider/html/index.html#tableaudataproviderintro">TableauDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Tableau analytics \
-        including datasources, projects, users, extract refresh tasks, and event triggers
-    |user|<a href="../../modules/TableauRestClient/html/index.html#tableaurestclientintro">TableauRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.tableau.com">Tableau</a>'s REST API with Personal Access Token authentication
-    |user|<a href="../../modules/SmtpClient/html/index.html#smtpclientintro">SmtpClient</a>|Provides SMTP client functionality; \
-        provides an API for sending emails via an SMTP server
     |binary|<a href="../../modules/sshutil/html/index.html#sshutilintro">sshutil</a>|Provides generic SSH client \
         identity, server host-key, and remote host-key trust provider contracts
-    |user|<a href="../../modules/Sqlite3SqlUtil/html/index.html#sqlite3sqlutilintro">Sqlite3SqlUtil</a>|Provides a high-level \
-        DB-independent API for working with SQLite3 database objects; loaded automatically by the \
-        <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with SQLite3 databases \
-        for automated schema management, programmatic DB access, schema and data synchronization, and more
-    |user|<a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a>|Provides a high-level DB-independent API for \
-        working with databases; for automated schema management, programmatic DB access, schema and data \
-        synchronization, and more
+    |user|<a href="../../modules/StabilityAiDataProvider/html/index.html#stabilityaidataproviderintro">StabilityAiDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://stability.ai">Stability AI</a> text-to-image generation (Stable Diffusion 3 / Ultra / Core)
+    |user|<a href="../../modules/StabilityAiRestClient/html/index.html#stabilityairestclientintro">StabilityAiRestClient</a>|Provides a REST client for \
+        <a href="https://stability.ai">Stability AI</a>; registers a `stability-ai` image-generator backend in @ref qoremediautilsintro "QoreMediaUtils"
     |user|<a href="../../modules/Swagger/html/index.html#swaggerintro">Swagger</a>|Provides a \
         <a href="https://swagger.io/">Swagger 2.0 REST API validation API</a>
     |user|<a href="../../modules/SwaggerDataProvider/html/index.html#swaggerdataproviderintro">SwaggerDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
         <a href="https://swagger.io/">Swagger</a> schemas
+    |user|<a href="../../modules/SystemeIoDataProvider/html/index.html#systemeio_dataproviderintro">SystemeIoDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Systeme.io all-in-one marketing \
+        platform including contacts, tags, courses, communities, and subscriptions
+    |user|<a href="../../modules/SystemeIoRestClient/html/index.html#systemeiorestclientintro">SystemeIoRestClient</a>|Provides APIs for \
+        communicating with <a href="https://systeme.io">Systeme.io</a>'s REST API
+    |user|<a href="../../modules/TableauDataProvider/html/index.html#tableaudataproviderintro">TableauDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Tableau analytics \
+        including datasources, projects, users, extract refresh tasks, and event triggers
+    |user|<a href="../../modules/TableauRestClient/html/index.html#tableaurestclientintro">TableauRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.tableau.com">Tableau</a>'s REST API with Personal Access Token authentication
     |user|<a href="../../modules/TableMapper/html/index.html#tablemapperintro">TableMapper</a>|Provides a data mapping functionality \
         and iterator support using <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> and \
         <a href="../../modules/Mapper/html/index.html#mapperintro">Mapper</a> to map arbitrary data to an SQL table target
+    |user|<a href="../../modules/TallyDataProvider/html/index.html#tallydataproviderintro">TallyDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Tally.so form management services
+    |user|<a href="../../modules/TallyRestClient/html/index.html#tallyrestclientintro">TallyRestClient</a>|providing APIs for \
+        communicating with Tally.so REST APIs
+    |user|<a href="../../modules/TavilyDataProvider/html/index.html#tavilydataproviderintro">TavilyDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Tavily web-search services (search/extract/crawl/map)
+    |user|<a href="../../modules/TavilyRestClient/html/index.html#tavilyrestclientintro">TavilyRestClient</a>|providing APIs for \
+        communicating with Tavily web-search REST APIs (registers a `tavily://` connection scheme and exports agent-tool helpers in `TavilyAgentTools` for plugging into @ref qoreagentstrategiesintro "QoreAgentStrategies")
     |user|<a href="../../modules/TelnetClient/html/index.html#telnetclientintro">TelnetClient</a>|Provides Telnet client functionality
     |user|<a href="../../modules/TerminalFormat/html/index.html#terminalformatintro">TerminalFormat</a>|Provides markdown \
         and rich text rendering for ANSI terminals
     |user|<a href="../../modules/TextWrap/html/index.html#textwrapintro">TextWrap</a>|Provides text wrapping and filling \
         functionality
+    |user|<a href="../../modules/TogetherDataProvider/html/index.html#togetherdataproviderintro">TogetherDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Together AI chat, embeddings, and image-generation services
+    |user|<a href="../../modules/TogetherRestClient/html/index.html#togetherrestclientintro">TogetherRestClient</a>|providing APIs for \
+        communicating with Together AI REST APIs (registers an LlmProvider for mode `together`, an embedder backend `together`, and a `together://` connection scheme)
+    |binary|<a href="../../modules/tokenizer/html/index.html#tokenizerintro">tokenizer</a>|Provides \
+        HuggingFace-compatible text tokenization (BPE, WordPiece, Unigram) with word_ids, sliding window, \
+        pre-tokenized input, dynamic vocabulary, and full tokenizer.json support
     |user|<a href="../../modules/UnbounceDataProvider/html/index.html#unbouncedataproviderintro">UnbounceDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Unbounce landing page \
         services including accounts, pages, leads, form fields, and polling triggers
@@ -620,33 +745,28 @@ ModuleName/
         services including customers, products, sales orders, credit notes, and polling triggers
     |user|<a href="../../modules/UnleashedRestClient/html/index.html#unleashedrestclientintro">UnleashedRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.unleashedsoftware.com">Unleashed Software</a>'s REST API with HMAC-SHA256 authentication
-    |user|<a href="../../modules/KatanaDataProvider/html/index.html#katanadataproviderintro">KatanaDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Katana Manufacturing ERP \
-        including products, materials, variants, manufacturing orders, sales orders, purchase orders, customers, suppliers, \
-        locations, inventory, stock adjustments, tax rates, and webhook events
-    |user|<a href="../../modules/KatanaRestClient/html/index.html#katanarestclientintro">KatanaRestClient</a>|Provides APIs for \
-        communicating with <a href="https://katanamrp.com">Katana</a>'s REST API with API key authentication
-    |user|<a href="../../modules/OneDriveDataProvider/html/index.html#onedrivedataproviderintro">OneDriveDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Microsoft OneDrive \
-        cloud file storage via Microsoft Graph
-    |user|<a href="../../modules/OneDriveRestClient/html/index.html#onedriverestclientintro">OneDriveRestClient</a>|Provides APIs for \
-        communicating with Microsoft OneDrive REST APIs via Microsoft Graph
-    |user|<a href="../../modules/TallyDataProvider/html/index.html#tallydataproviderintro">TallyDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Tally.so form management services
-    |user|<a href="../../modules/TallyRestClient/html/index.html#tallyrestclientintro">TallyRestClient</a>|providing APIs for \
-        communicating with Tally.so REST APIs
+    |user|<a href="../../modules/UnstructuredDataProvider/html/index.html#unstructureddataproviderintro">UnstructuredDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Unstructured.io document partitioning
+    |user|<a href="../../modules/UnstructuredRestClient/html/index.html#unstructuredrestclientintro">UnstructuredRestClient</a>|providing APIs for \
+        communicating with Unstructured.io REST APIs (multipart-aware document partitioning); also registers an `unstructured` chunker strategy in @ref qoreragutilsintro "QoreRagUtils"
+    |user|<a href="../../modules/Util/html/index.html#utilintro">Util</a>|Provides a some miscellaneous generally useful \
+        routines; often used by other user modules for example
+    |user|<a href="../../modules/VertexAiDataProvider/html/index.html#vertexaidataproviderintro">VertexAiDataProvider</a>|Data \
+        provider API for Google Vertex AI — discoverable Gemini GenerateContent + Embed actions in the action catalog
+    |user|<a href="../../modules/VertexAiRestClient/html/index.html#vertexairestclientintro">VertexAiRestClient</a>|REST \
+        client and LLM provider for Google Vertex AI — Gemini-on-Vertex via regional endpoints with service-account/ADC auth
     |user|<a href="../../modules/VoyageDataProvider/html/index.html#voyagedataproviderintro">VoyageDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Voyage AI embedding and reranking services
     |user|<a href="../../modules/VoyageRestClient/html/index.html#voyagerestclientintro">VoyageRestClient</a>|providing APIs for \
         communicating with Voyage AI REST APIs
-    |user|<a href="../../modules/SGLangRestClient/html/index.html#sglangrestclientintro">SGLangRestClient</a>|providing APIs for \
-        communicating with <a href="https://github.com/sgl-project/sglang">SGLang</a> model servers (OpenAI-compatible + native endpoints)
-    |user|<a href="../../modules/SGLangDataProvider/html/index.html#sglangdataproviderintro">SGLangDataProvider</a>|Provides a \
-        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for SGLang chat, embeddings, constrained generation, and server admin endpoints
-    |user|<a href="../../modules/QoreRagUtils/html/index.html#qoreragutilsintro">QoreRagUtils</a>|composable abstraction layer for \
-        retrieval-augmented generation (RAG) — pluggable embedder/vector-store/reranker/chunker with built-in backends (local ONNX, OpenAI, Voyage, SGLang, BGE-M3 FastAPI)
-    |user|<a href="../../modules/Util/html/index.html#utilintro">Util</a>|Provides a some miscellaneous generally useful \
-        routines; often used by other user modules for example
+    |user|<a href="../../modules/WaveDataProvider/html/index.html#wavedataproviderintro">WaveDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Wave accounting and invoicing services
+    |user|<a href="../../modules/WaveRestClient/html/index.html#waverestclientintro">WaveRestClient</a>|Provides APIs for \
+        communicating with Wave's GraphQL API
+    |user|<a href="../../modules/WeaviateDataProvider/html/index.html#weaviatedataproviderintro">WeaviateDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for <a href="https://weaviate.io">Weaviate</a> vector-database servers
+    |user|<a href="../../modules/WeaviateRestClient/html/index.html#weaviaterestclientintro">WeaviateRestClient</a>|providing APIs for \
+        communicating with <a href="https://weaviate.io">Weaviate</a> REST APIs (registers a `weaviate` vector-store backend in @ref qoreragutilsintro "QoreRagUtils" and a `weaviate://` connection scheme)
     |user|<a href="../../modules/WebSocketClient/html/index.html#websocketclientintro">WebSocketClient</a>|Provides an event-driven \
         client API for connecting to WebSocket servers
     |user|<a href="../../modules/WebSocketHandler/html/index.html#websockethandlerintro">WebSocketHandler</a>|Provides an interface to the \
@@ -657,6 +777,10 @@ ModuleName/
     |user|<a href="../../modules/WebUtil/html/index.html#webutilintro">WebUtil</a>|Provides higher-level classes for implementing \
         more complex web services in %Qore; works with the \
         <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
+    |user|<a href="../../modules/WooCommerceDataProvider/html/index.html#woocommercedataproviderintro">WooCommerceDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for WooCommerce e-commerce services
+    |user|<a href="../../modules/WooCommerceRestClient/html/index.html#woocommercerestclientintro">WooCommerceRestClient</a>|Provides APIs for \
+        communicating with WooCommerce's REST API
     |user|<a href="../../modules/XdbcFirebirdSqlUtilBase/html/index.html#xdbcfirebirdsqlutilbaseintro">XdbcFirebirdSqlUtilBase</a>|Provides a \
         high-level DB-independent API for working with Firebird database objects; this module supports \
         <a href="../../modules/JdbcFirebirdSqlUtil/html/index.html#jdbcfirebirdsqlutilintro">JdbcFirebirdSqlUtil</a> and \
@@ -665,21 +789,21 @@ ModuleName/
         for automated schema management, programmatic DB access, schema and data synchronization, and more
     |user|<a href="../../modules/ZeyosRestClient/html/index.html#zeyosrestclientintro">ZeyosRestClient</a>|providing APIs for \
         communicating with <a href="http://www.zeyos.com">Zeyos.com</a>'s REST API
-    |user|<a href="../../modules/ZohoBooksRestClient/html/index.html#zohobooksrestclientintro">ZohoBooksRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.zoho.com/books/">Zoho Books</a> REST APIs
     |user|<a href="../../modules/ZohoBooksDataProvider/html/index.html#zohobooksdataproviderintro">ZohoBooksDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Zoho Books \
         accounting and invoicing services
-    |user|<a href="../../modules/ZohoInventoryRestClient/html/index.html#zohoinventoryrestclientintro">ZohoInventoryRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.zoho.com/inventory/">Zoho Inventory</a> REST APIs
+    |user|<a href="../../modules/ZohoBooksRestClient/html/index.html#zohobooksrestclientintro">ZohoBooksRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.zoho.com/books/">Zoho Books</a> REST APIs
     |user|<a href="../../modules/ZohoInventoryDataProvider/html/index.html#zohoinventorydataproviderintro">ZohoInventoryDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Zoho Inventory \
         inventory and order management services
-    |user|<a href="../../modules/ZohoInvoiceRestClient/html/index.html#zohoinvoicerestclientintro">ZohoInvoiceRestClient</a>|Provides APIs for \
-        communicating with <a href="https://www.zoho.com/invoice/">Zoho Invoice</a> REST APIs
+    |user|<a href="../../modules/ZohoInventoryRestClient/html/index.html#zohoinventoryrestclientintro">ZohoInventoryRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.zoho.com/inventory/">Zoho Inventory</a> REST APIs
     |user|<a href="../../modules/ZohoInvoiceDataProvider/html/index.html#zohoinvoicedataproviderintro">ZohoInvoiceDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Zoho Invoice \
         invoicing and billing services
+    |user|<a href="../../modules/ZohoInvoiceRestClient/html/index.html#zohoinvoicerestclientintro">ZohoInvoiceRestClient</a>|Provides APIs for \
+        communicating with <a href="https://www.zoho.com/invoice/">Zoho Invoice</a> REST APIs
 
     <b>Modules Provided Separately</b>
     |!Type|!Module|!Description
@@ -696,7 +820,6 @@ ModuleName/
         - <a href="https://github.com/qoretechnologies/module-cairo">CairoDataProvider</a>: \
             provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
             for 2D graphics rendering
-    |binary|<a href="https://github.com/qoretechnologies/module-sybase">freetds</a>|Provides a FreeTDS-based DBI driver for communicating with Sybase and MS SQL Server databases
     |binary|<a href="https://github.com/qoretechnologies/module-fsevent">fsevent</a>|Provides an event-driven filesystem event API, also provides the following user modules:\n\
         - <a href="https://github.com/qoretechnologies/module-fsevent">FsEventPoller</a>: \
             provides an \c fsevent-based filesystem polling solution\n\
@@ -853,7 +976,6 @@ ModuleName/
         - <a href="https://github.com/qoretechnologies/module-ncurses">NcursesReplUi</a>: \
             provides a REPL UI widget for interactive terminal interfaces
     |binary|<a href="https://github.com/qoretechnologies/module-odbc">odbc</a>|Provides an ODBC DBI driver to %Qore
-    |binary|<a href="https://github.com/qoretechnologies/module-oracle">oracle</a>|Provides an Oracle DBI driver, providing many advanced features such as support for named types and collections, advanced queuing, etc, also provides the following user modules:\n- <a href="http://docs.qore.org/modules/oracle/current/OracleExtensions/html/index.html">OracleExtensions</a>: provides infrastructure for SQL tracing
     |binary|<a href="https://github.com/qoretechnologies/module-openldap">openldap</a>|Provides an OpenLDAP API to %Qore, also \
         provides the following user modules:\n\
         - <a href="https://github.com/qoretechnologies/module-openldap">LdapActiveDirectory</a>: \
@@ -868,6 +990,7 @@ ModuleName/
             provides helper APIs for working with LDAP servers (entry management and search iteration)\n\
         - <a href="https://github.com/qoretechnologies/module-openldap">LdifHelper</a>: \
             provides LDIF (RFC 2849) import/export support for LDAP entries
+    |binary|<a href="https://github.com/qoretechnologies/module-oracle">oracle</a>|Provides an Oracle DBI driver, providing many advanced features such as support for named types and collections, advanced queuing, etc, also provides the following user modules:\n- <a href="http://docs.qore.org/modules/oracle/current/OracleExtensions/html/index.html">OracleExtensions</a>: provides infrastructure for SQL tracing
     |binary|<a href="https://github.com/qoretechnologies/module-pdf">pdf</a>|Provides PDF manipulation APIs to %Qore \
         using <a href="https://podofo.io">PoDoFo</a>, also provides the following user module:\n\
         - <a href="http://docs.qore.org/modules/pdf/current/PdfDataProvider/html/index.html">PdfDataProvider</a>: \
@@ -902,6 +1025,7 @@ ModuleName/
             <a href="https://github.com/qoretechnologies/module-ssh2">SftpPoller</a> module\n\
         - <a href="https://github.com/qoretechnologies/module-ssh2">Ssh2Connections</a>: \
             provides SSH2 connection management for the \c ConnectionProvider framework
+    |binary|<a href="https://github.com/qoretechnologies/module-sybase">freetds</a>|Provides a FreeTDS-based DBI driver for communicating with Sybase and MS SQL Server databases
     |binary|<a href="https://github.com/qoretechnologies/module-sybase">sybase</a>|Provides a Sybase DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-sysconf">sysconf</a>|Provides sysconf, pathconf, and confstr APIs
     |binary|<a href="https://github.com/qoretechnologies/module-tar">tar</a>|Provides tar archive functionality to %Qore \

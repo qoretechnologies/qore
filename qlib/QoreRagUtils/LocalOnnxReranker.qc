@@ -59,7 +59,11 @@ public class LocalOnnxReranker inherits AbstractReranker {
     }
 
     #! Re-ranks a list of documents against a query and returns the top-K
-    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k) {
+    /** @param opts ignored by the local ONNX backend — there are no
+        per-call options (model + tokenizer are fixed at construction time)
+    */
+    list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
+            *hash<auto> opts) {
         if (!documents) {
             return ();
         }

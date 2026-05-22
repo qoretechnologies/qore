@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ChromaDataProvider
+
+%exec-class ChromaDataProviderTest
+
+class FakeChromaRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+    constructor() : RestClientIo({"url": "http://localhost:8000"}) {}
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+    string getSafeUrl() { return "http://localhost:8000"; }
+}
+
+public class ChromaDataProviderTest inherits QUnit::Test {
+    constructor() : Test("ChromaDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("query hits tenant/database-scoped collection URL",
+            \queryTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("chroma");
+        assertEq("chroma", f.getInfo().name);
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Chroma");
+        assertEq("Chroma", app.name);
+        assertEq("chroma", app.scheme);
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Chroma");
+        assertEq(1, actions.size());
+        assertEq("vector-search", actions[0].action);
+    }
+
+    private queryTest() {
+        FakeChromaRestClientIo fake();
+        fake.response_body = {
+            "ids": (("doc1", "doc2"),),
+            "distances": ((0.1, 0.3),),
+            "metadatas": (({"title": "A"}, {"title": "B"}),),
+        };
+        ChromaDataProvider::ChromaQueryDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "collection_id": "abc-uuid-123",
+            "query_embeddings": ((0.1, 0.2, 0.3),),
+            "n_results": 5,
+        });
+        assertEq("POST", fake.last_method);
+        # default tenant/database used when not overridden
+        assertEq(
+            "/api/v2/tenants/default_tenant/databases/default_database/collections/abc-uuid-123/query",
+            fake.last_path);
+        # collection_id removed from body before send
+        assertEq(NOTHING, fake.last_request.collection_id);
+        assertEq(5, fake.last_request.n_results);
+        assertEq("doc1", resp.ids[0][0]);
+    }
+}

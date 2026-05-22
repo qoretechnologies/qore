@@ -4530,6 +4530,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             channel_raw->close();
                             channel_raw->deref(xsink);
                         }
+                        mgr.closeAndEvict(conn, xsink);
                         return nullptr;
                     }
 
@@ -4547,6 +4548,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                         channel_raw->close();
                                         channel_raw->deref(xsink);
                                     }
+                                    mgr.closeAndEvict(conn, xsink);
                                     return nullptr;
                                 }
                             }
@@ -4564,6 +4566,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                         channel_raw->close();
                                         channel_raw->deref(xsink);
                                     }
+                                    mgr.closeAndEvict(conn, xsink);
                                     return nullptr;
                                 }
                             }
@@ -4583,6 +4586,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 channel_raw->close();
                                 channel_raw->deref(xsink);
                             }
+                            mgr.closeAndEvict(conn, xsink);
                             return nullptr;
                     }
 
@@ -4611,6 +4615,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             channel_raw->close();
                             channel_raw->deref(xsink);
                         }
+                        mgr.closeAndEvict(conn, xsink);
                         return nullptr;
                     }
                     if (r <= 0) {
@@ -4623,6 +4628,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             channel_raw->close();
                             channel_raw->deref(xsink);
                         }
+                        mgr.closeAndEvict(conn, xsink);
                         return nullptr;
                     }
                 }
@@ -4637,6 +4643,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         channel_raw->close();
                         channel_raw->deref(xsink);
                     }
+                    mgr.closeAndEvict(conn, xsink);
                     return nullptr;
                 }
                 if (trailer_result->getType() == NT_HASH) {
@@ -7660,8 +7667,9 @@ bool QoreHttpClientObject::isConnected() const {
     if (http_priv->msock->socket->isOpen()) {
         return true;
     }
+    // Filters closed-but-not-yet-evicted conns to avoid the async eviction race.
     std::shared_ptr<HttpClientConnectionManagerBase> mgr = http_priv->getConnMgrIfPresent();
-    return mgr && mgr->getPoolSize() > 0;
+    return mgr && mgr->getOpenPoolSize() > 0;
 }
 
 bool QoreHttpClientObject::isOpen() const {

@@ -1,0 +1,764 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BedrockRestClient.qm REST client + LLM provider for AWS Bedrock
+
+/*  BedrockRestClient.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires(reexport) AwsRestClient
+%requires QoreLlmTypes
+%requires QoreRagTypes
+
+%try-module json
+%define NoJson
+%endtry
+
+module BedrockRestClient {
+    version = "1.0";
+    desc = "REST client and LLM provider for AWS Bedrock — speaks the unified "
+        "Converse / ConverseStream API across Anthropic, Llama, Mistral, "
+        "Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("bedrock",
+            BedrockRestConnection::ConnectionScheme);
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(
+            new BedrockLlmProviderFactory());
+        QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
+            new BedrockRestClient::BedrockEmbedderFactory());
+    };
+}
+
+/** @mainpage BedrockRestClient Module
+
+    @tableofcontents
+
+    @section bedrockrestclientintro Introduction to the BedrockRestClient Module
+
+    The %BedrockRestClient module wraps AWS Bedrock for use with the
+    @ref qorellmutilsintro "QoreLlmUtils" agent stack and the
+    @ref qoreragutilsintro "QoreRagUtils" RAG pipeline.  Both the unified
+    Converse API (chat + streaming + tool use, covering the Anthropic /
+    Llama / Mistral / Cohere / AI21 / Titan / DeepSeek model families) and
+    Titan / Cohere embeddings are supported.
+
+    SigV4 signing, region detection, and the standard AWS credential
+    resolution chain (static -> env vars -> ECS task-role -> IMDSv2 ->
+    STS AssumeRole) are inherited from
+    @ref awsrestclientintro "AwsRestClient".
+
+    @par Connection options
+
+    - \c url (optional): override the default
+      \c https://bedrock-runtime.{region}.amazonaws.com (set automatically
+      from \c aws_region when omitted)
+    - \c aws_region (required when not derivable from URL): the AWS region
+      (e.g. \c "us-east-1")
+    - \c aws_keyid / \c aws_secret / \c aws_token: see @ref awsrestclientintro
+      — all four credential paths (static, env, ECS/IMDS, STS) are honored
+
+    @par LlmBackendConfig consumed by @ref BedrockLlmProvider
+
+    - \c url (optional): same as above
+    - \c model (required): the Bedrock model ID, e.g.
+      \c "anthropic.claude-3-5-sonnet-20240620-v1:0",
+      \c "amazon.nova-pro-v1:0", \c "meta.llama3-1-70b-instruct-v1:0",
+      \c "mistral.mistral-large-2402-v1:0"
+    - \c api_key: unused by Bedrock (auth via SigV4); included for
+      LlmBackendConfig schema compatibility
+    - \c provider_options.aws_region (recommended): the AWS region
+    - \c provider_options.aws_keyid / .aws_secret / .aws_token: optional
+      static credentials (env vars / IMDS pickup runs automatically when
+      these are omitted)
+    - \c provider_options.aws_role_arn: optional STS AssumeRole
+
+    @par Example
+
+    @code{.py}
+%requires BedrockRestClient
+
+BedrockLlmProvider p(<LlmBackendConfig>{
+    "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+    "provider_options": {
+        "aws_region": "us-east-1",
+    },
+});
+hash<ChatResponse> r = p.chat((
+    <ChatMessage>{"role": "user", "content": "Hello!"},
+));
+    @endcode
+
+    @section bedrockrestclientrelnotes Release Notes
+
+    @subsection bedrockrestclient_v1_0 BedrockRestClient v1.0
+    - initial release: BedrockRestConnection + BedrockRestClient(Io),
+      BedrockLlmProvider (Converse), BedrockEmbedder (Titan + Cohere)
+*/
+
+#! Contains all public definitions in the BedrockRestClient module
+public namespace BedrockRestClient {
+#! Default Bedrock service identifier (used for SigV4 scope)
+public const BedrockService = "bedrock";
+
+#! Default Bedrock runtime service hostname pattern
+public const BedrockRuntimeHostPattern = "bedrock-runtime.%s.amazonaws.com";
+
+#! Bedrock REST connection (registered under the \c "bedrock" scheme)
+public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "AWS Bedrock Connection",
+            "short_desc": "A connection to the AWS Bedrock runtime",
+            "desc": "A connection to AWS Bedrock for chat completions "
+                "(Converse API) and embeddings via SigV4-signed REST calls. "
+                "Inherits all AWS credential modes from AwsRestConnection "
+                "(static keys, env vars, ECS task-role, IMDSv2, "
+                "STS AssumeRole).",
+            "cls": Class::forName("BedrockRestConnection"),
+            "schemes": {"bedrock": True},
+            "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options,
+        };
+    }
+
+    constructor(string name, string description, string url,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : AwsRestClient::AwsRestConnection(name, description,
+                BedrockRestClient::ensureBedrockUrl(url, options), attributes,
+                BedrockRestClient::ensureBedrockService(options)) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : AwsRestClient::AwsRestConnection(config, attr) {
+    }
+
+    string getType() {
+        return "bedrock";
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! Namespace-local helper: returns a default Bedrock runtime URL when none was supplied
+string sub ensureBedrockUrl(string url, *hash<auto> options) {
+    if (url.val()) {
+        return url;
+    }
+    *string region = options.aws_region;
+    if (!region.val()) {
+        throw "BEDROCK-CONFIG-ERROR",
+            "BedrockRestConnection requires either a url or aws_region";
+    }
+    return "https://" + sprintf(BedrockRuntimeHostPattern, region);
+}
+
+#! Namespace-local helper: sets aws_service=bedrock and returns the options hash
+hash<auto> sub ensureBedrockService(hash<auto> options) {
+    options.aws_service = BedrockService;
+    return options;
+}
+
+#! Bedrock LLM provider — speaks the unified Converse API
+/** Implements @ref QoreLlmUtils::AbstractLlmProvider for any model
+    available via Bedrock's Converse endpoint.  Streaming is delivered via
+    a synthetic single-delta event (full response + done) so callers that
+    expect a streaming interface get a coherent event sequence; future
+    work will route through Bedrock's ConverseStream + AwsEventStream
+    binary framing for token-level streaming.
+
+    @par Authentication
+
+    Pure SigV4 — pass AWS credentials via \c provider_options or rely on
+    the AwsRestClient credential chain (env vars / ECS task-role / IMDSv2 /
+    STS AssumeRole).  No \c api_key is consumed.
+
+    @par Model ID
+
+    The \c LlmBackendConfig::model field must be a Bedrock model identifier
+    (e.g. \c "anthropic.claude-3-5-sonnet-20240620-v1:0").  When omitted, a
+    safe default of \c "amazon.nova-lite-v1:0" is used.
+*/
+public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    public {
+        const DefaultModel = "amazon.nova-lite-v1:0";
+    }
+
+    private {
+        *AwsRestClient::AwsRestClientIo rest_client;
+        Mutex rest_mutex();
+    }
+
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : QoreLlmUtils::AbstractLlmProvider(config) {
+        # validate region resolution at construction so we fail fast
+        BedrockLlmProvider::resolveRegion(config);
+    }
+
+    string getMode() {
+        return "bedrock";
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": user_prompt},
+        );
+        hash<auto> body = buildConverseBody(messages, NOTHING, opts,
+            system_prompt, output_schema);
+        hash<auto> resp = postConverse(body, opts);
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": extractConverseText(resp.body),
+            "usage": normalizeUsage(resp.body.usage),
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> body = buildConverseBody(messages, tools, opts);
+        hash<auto> resp = postConverse(body, opts);
+        return parseConverseResponse(resp.body, opts);
+    }
+
+    #! Streaming chat — v1 emits a single synthetic delta + done from the non-streaming call
+    /** Token-level streaming via Bedrock's ConverseStream endpoint and the
+        AwsEventStream binary frame decoder is a follow-up; this synthetic
+        implementation keeps the @ref QoreLlmUtils::AbstractLlmProvider
+        streaming contract well-defined for current consumers.
+    */
+    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<QoreLlmUtils::ChatResponse> r = chat(messages, tools, opts);
+        if (r.content.val()) {
+            callback(<QoreLlmUtils::ChatStreamEvent>{
+                "delta": r.content,
+                "raw": r.raw,
+            });
+        }
+        callback(<QoreLlmUtils::ChatStreamEvent>{"done": True, "raw": r.raw});
+    }
+
+    #! Returns the configured (or default) Bedrock model ID
+    string getBedrockModelId(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return getRequestModel(opts) ?? DefaultModel;
+    }
+
+    #! Builds a Bedrock Converse request body from the provider-neutral inputs
+    private:internal hash<auto> buildConverseBody(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts,
+            *string extra_system_prompt,
+            *hash<auto> output_schema) {
+        list<hash<auto>> wire_messages = ();
+        list<hash<auto>> system_blocks = ();
+
+        if (extra_system_prompt.val()) {
+            push system_blocks, {"text": extra_system_prompt};
+        }
+
+        foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
+            if (msg.role == "system") {
+                if (msg.content.val()) {
+                    push system_blocks, {"text": msg.content};
+                }
+                continue;
+            }
+
+            list<hash<auto>> content_blocks = ();
+            if (msg.role == "tool") {
+                push content_blocks, {
+                    "toolResult": {
+                        "toolUseId": msg.tool_call_id
+                            ?? msg.name ?? "tool_result",
+                        "content": ({"text": msg.content ?? ""},),
+                    },
+                };
+                push wire_messages, {"role": "user", "content": content_blocks};
+                continue;
+            }
+
+            if (msg.content_parts) {
+                foreach hash<QoreLlmUtils::ContentPart> part
+                        in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        push content_blocks, {
+                            "image": {
+                                "format": BedrockLlmProvider::mimeToBedrockImageFormat(
+                                    part.mime_type),
+                                "source": {"bytes": part.data},
+                            },
+                        };
+                    } else if (part.type == "file" && part.data) {
+                        push content_blocks, {
+                            "document": {
+                                "format": BedrockLlmProvider::mimeToBedrockDocFormat(
+                                    part.mime_type),
+                                "name": part.filename ?? "attachment",
+                                "source": {"bytes": part.data},
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push content_blocks, {"text": part.text};
+                    }
+                }
+            } else if (msg.content.val()) {
+                push content_blocks, {"text": msg.content};
+            }
+
+            if (msg.role == "assistant" && msg.tool_calls) {
+                foreach hash<QoreLlmUtils::ChatToolCall> tc
+                        in (msg.tool_calls) {
+                    push content_blocks, {
+                        "toolUse": {
+                            "toolUseId": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments ?? {},
+                        },
+                    };
+                }
+            }
+
+            if (!content_blocks) {
+                content_blocks = ({"text": ""},);
+            }
+            push wire_messages, {
+                "role": msg.role == "assistant" ? "assistant" : "user",
+                "content": content_blocks,
+            };
+        }
+
+        hash<auto!> body = {
+            "messages": wire_messages,
+            "inferenceConfig": {
+                "maxTokens": getRequestMaxOutputTokens(opts),
+                "temperature": getRequestTemperature(opts),
+            },
+        };
+        if (system_blocks) {
+            body.system = system_blocks;
+        }
+
+        if (tools && tools.size()) {
+            list<hash<auto>> tool_specs = ();
+            foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
+                push tool_specs, {
+                    "toolSpec": {
+                        "name": td.name,
+                        "description": td.description ?? "",
+                        "inputSchema": {
+                            "json": td.parameters
+                                ?? {"type": "object", "properties": {}},
+                        },
+                    },
+                };
+            }
+            body.toolConfig = {"tools": tool_specs};
+        }
+
+        if (output_schema) {
+            # Bedrock Converse does not have a native response_format field;
+            # callers wanting strict JSON should use a tool with a single
+            # required structured-output tool.  For v1 we surface the schema
+            # to the model as a system-prompt hint.
+%ifdef NoJson
+            push system_blocks, {
+                "text": "Respond with JSON matching the configured output schema.",
+            };
+%else
+            push system_blocks, {
+                "text": "Respond with JSON matching the following schema: "
+                    + make_json(output_schema),
+            };
+%endif
+            body.system = system_blocks;
+        }
+
+        return mergeRequestBodyOptions(body, opts);
+    }
+
+    #! Posts a Converse request and returns the deserialized response
+    private:internal hash<auto> postConverse(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+        string path = sprintf("/model/%s/converse",
+            encode_url(getBedrockModelId(opts), True));
+        try {
+            return withRetry(hash<auto> sub () {
+                return rest_client.restPost(path, body);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR",
+                sprintf("Bedrock Converse request to %y failed: %s",
+                    path, ex.desc), ex;
+        }
+    }
+
+    #! Parses a Bedrock Converse response into the provider-neutral shape
+    private:internal hash<QoreLlmUtils::ChatResponse> parseConverseResponse(
+            hash<auto> body, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> out_msg = body.output.message ?? {};
+        list<string> text_parts = ();
+        *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls;
+        foreach hash<auto> block in (out_msg.content ?? ()) {
+            if (block.text.val()) {
+                push text_parts, block.text;
+            } else if (block.toolUse) {
+                if (!tool_calls) {
+                    tool_calls = ();
+                }
+                push tool_calls, <QoreLlmUtils::ChatToolCall>{
+                    "id": block.toolUse.toolUseId,
+                    "name": block.toolUse.name,
+                    "arguments": block.toolUse.input ?? {},
+                };
+            }
+        }
+        return <QoreLlmUtils::ChatResponse>{
+            "id": body.requestId ?? body.responseMetadata.requestId,
+            "model": getBedrockModelId(opts),
+            "stop_reason": BedrockLlmProvider::mapStopReason(body.stopReason,
+                tool_calls),
+            "content": text_parts ? text_parts.join("") : NOTHING,
+            "tool_calls": tool_calls,
+            "usage": normalizeUsage(body.usage),
+            "raw": body,
+        };
+    }
+
+    #! Extracts concatenated text from a Bedrock Converse response body
+    private:internal string extractConverseText(hash<auto> body) {
+        list<string> parts = ();
+        foreach hash<auto> block in (body.output.message.content ?? ()) {
+            if (block.text.val()) {
+                push parts, block.text;
+            }
+        }
+        return parts.join("");
+    }
+
+    #! Maps Bedrock \c usage to the OpenAI-style counters
+    private:internal hash<auto> normalizeUsage(*hash<auto> usage) {
+        if (!usage) {
+            return {};
+        }
+        int prompt_tokens = usage.inputTokens ?? 0;
+        int completion_tokens = usage.outputTokens ?? 0;
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": usage.totalTokens
+                ?? (prompt_tokens + completion_tokens),
+            "input_tokens": prompt_tokens,
+            "output_tokens": completion_tokens,
+        };
+    }
+
+    #! Maps Bedrock \c stopReason values to the QoreLlmUtils stop-reason vocabulary
+    private:internal static string mapStopReason(*string reason,
+            *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls) {
+        switch (reason) {
+            case "end_turn":         return "end_turn";
+            case "tool_use":         return "tool_use";
+            case "max_tokens":       return "max_tokens";
+            case "stop_sequence":    return "stop_sequence";
+            case "content_filtered": return "stop_sequence";
+            case "guardrail_intervened": return "stop_sequence";
+            default:
+                return tool_calls ? "tool_use" : (reason ?? "end_turn");
+        }
+    }
+
+    #! Returns a Bedrock image-block format string from a MIME type
+    private:internal static string mimeToBedrockImageFormat(*string mime) {
+        switch (mime ?? "image/png") {
+            case "image/png":  return "png";
+            case "image/jpeg": case "image/jpg": return "jpeg";
+            case "image/gif":  return "gif";
+            case "image/webp": return "webp";
+            default:           return "png";
+        }
+    }
+
+    #! Returns a Bedrock document-block format string from a MIME type
+    private:internal static string mimeToBedrockDocFormat(*string mime) {
+        switch (mime) {
+            case "application/pdf":  return "pdf";
+            case "text/csv":         return "csv";
+            case "text/html":        return "html";
+            case "text/plain":       return "txt";
+            case "text/markdown":    return "md";
+            case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                return "docx";
+            case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                return "xlsx";
+            default:                 return "pdf";
+        }
+    }
+
+    #! Resolves the AWS region from LlmBackendConfig
+    private:internal static string resolveRegion(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        *string region = config.provider_options.aws_region
+            ?? (config.url.val() ? BedrockLlmProvider::regionFromUrl(config.url)
+                : NOTHING);
+        if (!region.val()) {
+            *string env_region = getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION");
+            if (env_region.val()) {
+                region = env_region;
+            }
+        }
+        if (!region.val()) {
+            throw "LLM-CONFIG-ERROR",
+                "BedrockLlmProvider requires an AWS region — set "
+                "provider_options.aws_region, supply a region-qualified url, "
+                "or set AWS_REGION / AWS_DEFAULT_REGION in the environment";
+        }
+        return region;
+    }
+
+    #! Extracts a region segment from a Bedrock runtime URL (best-effort)
+    private:internal static *string regionFromUrl(string url) {
+        list<string> m = (url =~ x/bedrock-runtime\.([^\.]+)\.amazonaws\.com/);
+        return m ? m[0] : NOTHING;
+    }
+
+    #! Lazy-builds the AwsRestClientIo
+    private:internal ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                string region = BedrockLlmProvider::resolveRegion(getConfig());
+                hash<auto!> opts;
+                opts.url = getConfig().url
+                    ?? "https://" + sprintf(BedrockRuntimeHostPattern, region);
+                opts.aws_region = region;
+                opts.aws_service = BedrockService;
+                # forward optional credential knobs from provider_options
+                foreach string key in (("aws_keyid", "aws_secret", "aws_token",
+                        "aws_role_arn", "aws_role_session_name",
+                        "aws_external_id", "aws_imds_disabled",
+                        "aws_imds_url", "aws_sts_endpoint")) {
+                    if (exists getConfig().provider_options{key}) {
+                        opts{key} = getConfig().provider_options{key};
+                    }
+                }
+                rest_client = new AwsRestClient::AwsRestClientIo(opts);
+            }
+        }
+    }
+}
+
+#! Factory for @ref BedrockLlmProvider
+public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "bedrock";
+    }
+
+    string getDisplayName() {
+        return "AWS Bedrock (Converse API)";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(
+            hash<QoreLlmUtils::LlmBackendConfig> config) {
+        return new BedrockLlmProvider(config);
+    }
+
+    hash<QoreLlmUtils::LlmProviderInfo> getInfo() {
+        return <QoreLlmUtils::LlmProviderInfo>{
+            "mode": getMode(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+            "supports_streaming": True,  # via synthetic single-delta fallback in v1
+            "supports_tools": True,
+            "supports_structured_output": False,  # no native response_format in Converse
+            "supports_multimodal": True,
+        };
+    }
+}
+
+#! Bedrock embedder — supports Titan (amazon.titan-embed-text-*) and Cohere
+/** Uses Bedrock's \c InvokeModel for embedding requests; the body shape
+    differs by model family so callers must select an appropriate model.
+
+    @par Configuration
+
+    - \c model (required): the Bedrock embedding model ID, e.g.
+      \c "amazon.titan-embed-text-v2:0" or \c "cohere.embed-english-v3"
+    - \c options.aws_region (recommended)
+    - \c options.aws_keyid / .aws_secret / .aws_token: optional static creds
+*/
+public class BedrockEmbedder inherits QoreRagUtils::AbstractEmbedder {
+    public {
+        const TitanV2DefaultDimension = 1024;
+    }
+
+    private {
+        hash<QoreRagUtils::EmbedderConfig> config;
+        *AwsRestClient::AwsRestClientIo rest_client;
+        Mutex rest_mutex();
+        *int cached_dimension;
+    }
+
+    constructor(hash<QoreRagUtils::EmbedderConfig> config) {
+        if (!config.model.val()) {
+            throw "EMBEDDER-CONFIG-ERROR",
+                "BedrockEmbedder requires 'model' in EmbedderConfig (the "
+                "Bedrock model ID, e.g. amazon.titan-embed-text-v2:0)";
+        }
+        self.config = config;
+        if (exists config.options.dimension) {
+            cached_dimension = config.options.dimension;
+        }
+    }
+
+    list<float> encode(string text, *hash<auto> opts) {
+        ensureRestClient();
+        hash<auto> body = BedrockEmbedder::buildEmbedBody(config.model, text);
+        string path = sprintf("/model/%s/invoke",
+            encode_url(config.model, True));
+        hash<auto> resp;
+        try {
+            resp = rest_client.restPost(path, body);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "EMBEDDER-ERROR",
+                sprintf("Bedrock InvokeModel embed request for %y failed: %s",
+                    config.model, ex.desc), ex;
+        }
+        list<float> v = BedrockEmbedder::extractEmbedding(config.model, resp.body);
+        if (!cached_dimension && v) {
+            cached_dimension = v.size();
+        }
+        return v;
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        if (!texts) {
+            return ();
+        }
+        # Titan invoke is single-text; Cohere supports batch.  For simplicity
+        # we sequentialize here; future work can switch Cohere to its native
+        # batch call.
+        list<list<float>> rv = ();
+        foreach string t in (texts) {
+            push rv, encode(t, opts);
+        }
+        return rv;
+    }
+
+    int getDimension() {
+        if (cached_dimension) {
+            return cached_dimension;
+        }
+        # probe with a tiny embed call
+        encode(" ");
+        return cached_dimension ?? TitanV2DefaultDimension;
+    }
+
+    *string getModel() {
+        return config.model;
+    }
+
+    private:internal ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                *string region = config.options.aws_region
+                    ?? getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION");
+                if (!region.val()) {
+                    throw "EMBEDDER-CONFIG-ERROR",
+                        "BedrockEmbedder requires an AWS region — set "
+                        "options.aws_region or AWS_REGION in the environment";
+                }
+                hash<auto!> opts;
+                opts.url = config.url
+                    ?? "https://" + sprintf(BedrockRuntimeHostPattern, region);
+                opts.aws_region = region;
+                opts.aws_service = BedrockService;
+                foreach string key in (("aws_keyid", "aws_secret", "aws_token",
+                        "aws_role_arn", "aws_imds_disabled", "aws_imds_url")) {
+                    if (exists config.options{key}) {
+                        opts{key} = config.options{key};
+                    }
+                }
+                rest_client = new AwsRestClient::AwsRestClientIo(opts);
+            }
+        }
+    }
+
+    private:internal static hash<auto> buildEmbedBody(string model, string text) {
+        if (model =~ /^amazon\.titan-embed/) {
+            return {"inputText": text};
+        }
+        if (model =~ /^cohere\.embed/) {
+            return {
+                "texts": (text,),
+                "input_type": "search_document",
+            };
+        }
+        # default to Titan-shaped body
+        return {"inputText": text};
+    }
+
+    private:internal static list<float> extractEmbedding(string model,
+            hash<auto> body) {
+        if (model =~ /^amazon\.titan-embed/) {
+            return body.embedding ?? ();
+        }
+        if (model =~ /^cohere\.embed/) {
+            # Cohere returns embeddings as a list of vectors
+            list<list<float>> embeddings = body.embeddings ?? ();
+            return embeddings ? embeddings[0] : ();
+        }
+        return body.embedding ?? ();
+    }
+}
+
+#! Factory for @ref BedrockEmbedder
+public class BedrockEmbedderFactory inherits QoreRagUtils::AbstractEmbedderFactory {
+    string getType() {
+        return "bedrock";
+    }
+
+    string getDisplayName() {
+        return "AWS Bedrock embedder (Titan + Cohere)";
+    }
+
+    QoreRagUtils::AbstractEmbedder create(hash<QoreRagUtils::EmbedderConfig> config) {
+        return new BedrockEmbedder(config);
+    }
+}
+}

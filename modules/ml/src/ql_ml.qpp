@@ -59,6 +59,8 @@
 #include "QC_DateTimeFeatures.h"
 #include "QC_TextFeatures.h"
 #include "QC_SparseMatrix.h"
+#include "QC_AbstractMLModel.h"
+#include "QC_MLPipeline.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -98,6 +100,11 @@ extern const TypedHashDecl* hashdeclClassMetrics;
 extern const TypedHashDecl* hashdeclClassificationReport;
 extern const TypedHashDecl* hashdeclCrossValidationFold;
 extern const TypedHashDecl* hashdeclHypothesisTestResult;
+
+// Wraps a freshly-deserialized priv pointer in a QoreObject of the right qclass.
+// Defined in ml-module.cpp; consumed by ml_deserialize() and ml_load_model() below.
+extern QoreObject* makeMLModelObject(const std::string& algorithm, AbstractPrivateData* priv,
+    QoreProgram* pgm, ExceptionSink* xsink);
 
 //! Result of Isolation Forest anomaly scoring
 /** Result of Isolation Forest anomaly scoring
@@ -813,7 +820,7 @@ printf("Accuracy: %.1f%%\n", acc * 100);  # 80.0%
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_accuracy(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_accuracy(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -834,7 +841,7 @@ printf("Matrix: %y\n", cm.matrix);  # ((1, 1), (1, 1))
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-hash<ConfusionMatrixResult> ml_confusion_matrix(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+hash<ConfusionMatrixResult> ml_confusion_matrix(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -859,7 +866,7 @@ foreach hash<ClassMetrics> cls in (report.per_class) {
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-hash<ClassificationReport> ml_classification_report(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+hash<ClassificationReport> ml_classification_report(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -879,7 +886,7 @@ float mse = ml_mse((3.0, 5.0, 7.0), (2.8, 5.2, 7.1));
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_mse(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_mse(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -900,7 +907,7 @@ printf("Average prediction error: $%.2f\n", rmse);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_rmse(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_rmse(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -921,7 +928,7 @@ printf("Predictions are off by %.1f days on average\n", mae);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_mae(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_mae(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -942,7 +949,7 @@ printf("Model explains %.0f%% of the variance\n", r2 * 100);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_r2_score(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_r2_score(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -963,7 +970,7 @@ printf("Model explains %.0f%% of the variance\n", ev * 100);
 
     @throw ML-METRICS-ERROR empty or mismatched inputs
 */
-float ml_explained_variance(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+float ml_explained_variance(list<float> y_true, list<float> y_pred) [dom=DEFAULT] {
     VectorXd yt = qoreListToVector(y_true, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd yp = qoreListToVector(y_pred, xsink);
@@ -984,7 +991,7 @@ printf("Clustering quality: %.2f\n", score);  # > 0.5 is generally good
 
     @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
 */
-float ml_silhouette_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+float ml_silhouette_score(list<list<float>> data, list<float> labels) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd lbl = qoreListToVector(labels, xsink);
@@ -999,7 +1006,7 @@ float ml_silhouette_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
 
     @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
 */
-float ml_davies_bouldin_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+float ml_davies_bouldin_score(list<list<float>> data, list<float> labels) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd lbl = qoreListToVector(labels, xsink);
@@ -1014,7 +1021,7 @@ float ml_davies_bouldin_score(list<auto> data, list<auto> labels) [dom=DEFAULT] 
 
     @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
 */
-float ml_calinski_harabasz_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+float ml_calinski_harabasz_score(list<list<float>> data, list<float> labels) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd lbl = qoreListToVector(labels, xsink);
@@ -1023,7 +1030,9 @@ float ml_calinski_harabasz_score(list<auto> data, list<auto> labels) [dom=DEFAUL
 }
 
 //! Serializes a fitted ML model to binary format
-/** @param model a fitted ML model object (KMeans, LinearRegression, etc.)
+/** @param model a fitted ML model — any concrete @ref Qore::ML::AbstractMLModel
+    "AbstractMLModel" subclass (KMeans, LinearRegression, Ridge, MLPipeline,
+    SparseMatrix, ...)
     @return binary data containing the serialized model
 
     @par Example:
@@ -1033,511 +1042,34 @@ km.fitMatrix(data);
 binary blob = ml_serialize(km);
     @endcode
 
-    @throw ML-SERIALIZE-ERROR if the model is not fitted or the object type is unknown
+    @throw ML-SERIALIZE-ERROR if the model is not fitted
 */
-binary ml_serialize(object model) [dom=DEFAULT] {
-    // Try each known algorithm CID
-    std::string algorithm;
-    std::vector<uint8_t> model_data;
-    std::vector<std::string> field_names;
-
-    QoreKMeans* km = dynamic_cast<QoreKMeans*>(
-        model->getReferencedPrivateData(CID_KMEANS, xsink));
-    if (km) {
-        if (!km->isFitted()) {
-            km->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "KMeans";
-        model_data = km->serializeState();
-        field_names = km->getFieldNames();
-        km->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+binary ml_serialize(AbstractMLModel[QoreMLModel] model) [dom=DEFAULT] {
+    if (!model->isFitted()) {
+        xsink->raiseException("ML-SERIALIZE-ERROR",
+            "model has not been fitted: call fit() before serializing");
+        return QoreValue();
     }
-    if (*xsink) { xsink->clear(); }
-
-    QoreLinearRegression* lr = dynamic_cast<QoreLinearRegression*>(
-        model->getReferencedPrivateData(CID_LINEARREGRESSION, xsink));
-    if (lr) {
-        if (!lr->isFitted()) {
-            lr->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "LinearRegression";
-        model_data = lr->serializeState();
-        field_names = lr->getFieldNames();
-        lr->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreRidge* ridgep = dynamic_cast<QoreRidge*>(
-        model->getReferencedPrivateData(CID_RIDGE, xsink));
-    if (ridgep) {
-        if (!ridgep->isFitted()) {
-            ridgep->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "Ridge model has not been fitted");
-            return QoreValue();
-        }
-        algorithm = "Ridge";
-        model_data = ridgep->serializeState();
-        field_names = ridgep->getFieldNames();
-        ridgep->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreLasso* lassop = dynamic_cast<QoreLasso*>(
-        model->getReferencedPrivateData(CID_LASSO, xsink));
-    if (lassop) {
-        if (!lassop->isFitted()) {
-            lassop->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "Lasso model has not been fitted");
-            return QoreValue();
-        }
-        algorithm = "Lasso";
-        model_data = lassop->serializeState();
-        field_names = lassop->getFieldNames();
-        lassop->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreElasticNet* enetp = dynamic_cast<QoreElasticNet*>(
-        model->getReferencedPrivateData(CID_ELASTICNET, xsink));
-    if (enetp) {
-        if (!enetp->isFitted()) {
-            enetp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "ElasticNet model has not been fitted");
-            return QoreValue();
-        }
-        algorithm = "ElasticNet";
-        model_data = enetp->serializeState();
-        field_names = enetp->getFieldNames();
-        enetp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreLogisticRegression* logr = dynamic_cast<QoreLogisticRegression*>(
-        model->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
-    if (logr) {
-        if (!logr->isFitted()) {
-            logr->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "LogisticRegression";
-        model_data = logr->serializeState();
-        field_names = logr->getFieldNames();
-        logr->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QorePCA* pca = dynamic_cast<QorePCA*>(
-        model->getReferencedPrivateData(CID_PCA, xsink));
-    if (pca) {
-        if (!pca->isFitted()) {
-            pca->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "PCA";
-        model_data = pca->serializeState();
-        field_names = pca->getFieldNames();
-        pca->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreIsolationForest* iforest = dynamic_cast<QoreIsolationForest*>(
-        model->getReferencedPrivateData(CID_ISOLATIONFOREST, xsink));
-    if (iforest) {
-        if (!iforest->isFitted()) {
-            iforest->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "IsolationForest";
-        model_data = iforest->serializeState();
-        field_names = iforest->getFieldNames();
-        iforest->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreLOF* lof = dynamic_cast<QoreLOF*>(
-        model->getReferencedPrivateData(CID_LOF, xsink));
-    if (lof) {
-        if (!lof->isFitted()) {
-            lof->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "LOF";
-        model_data = lof->serializeState();
-        field_names = lof->getFieldNames();
-        lof->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreGMM* gmm = dynamic_cast<QoreGMM*>(
-        model->getReferencedPrivateData(CID_GMM, xsink));
-    if (gmm) {
-        if (!gmm->isFitted()) {
-            gmm->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "GMM";
-        model_data = gmm->serializeState();
-        field_names = gmm->getFieldNames();
-        gmm->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreHoltWinters* hw = dynamic_cast<QoreHoltWinters*>(
-        model->getReferencedPrivateData(CID_HOLTWINTERS, xsink));
-    if (hw) {
-        if (!hw->isFitted()) {
-            hw->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "HoltWinters";
-        model_data = hw->serializeState();
-        hw->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreKNN* knn = dynamic_cast<QoreKNN*>(
-        model->getReferencedPrivateData(CID_KNN, xsink));
-    if (knn) {
-        if (!knn->isFitted()) {
-            knn->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "KNN";
-        model_data = knn->serializeState();
-        field_names = knn->getFieldNames();
-        knn->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreStandardScaler* ss = dynamic_cast<QoreStandardScaler*>(
-        model->getReferencedPrivateData(CID_STANDARDSCALER, xsink));
-    if (ss) {
-        if (!ss->isFitted()) {
-            ss->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "StandardScaler";
-        model_data = ss->serializeState();
-        field_names = ss->getFieldNames();
-        ss->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreMinMaxScaler* mms = dynamic_cast<QoreMinMaxScaler*>(
-        model->getReferencedPrivateData(CID_MINMAXSCALER, xsink));
-    if (mms) {
-        if (!mms->isFitted()) {
-            mms->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "MinMaxScaler";
-        model_data = mms->serializeState();
-        field_names = mms->getFieldNames();
-        mms->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreImputer* imp = dynamic_cast<QoreImputer*>(
-        model->getReferencedPrivateData(CID_IMPUTER, xsink));
-    if (imp) {
-        if (!imp->isFitted()) {
-            imp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "Imputer";
-        model_data = imp->serializeState();
-        field_names = imp->getFieldNames();
-        imp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreDecisionTree* dtp = dynamic_cast<QoreDecisionTree*>(
-        model->getReferencedPrivateData(CID_DECISIONTREE, xsink));
-    if (dtp) {
-        if (!dtp->isFitted()) {
-            dtp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "DecisionTree";
-        model_data = dtp->serializeState();
-        field_names = dtp->getFieldNames();
-        dtp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreRandomForest* rfp = dynamic_cast<QoreRandomForest*>(
-        model->getReferencedPrivateData(CID_RANDOMFOREST, xsink));
-    if (rfp) {
-        if (!rfp->isFitted()) {
-            rfp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "RandomForest";
-        model_data = rfp->serializeState();
-        field_names = rfp->getFieldNames();
-        rfp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreOneHotEncoder* ohep = dynamic_cast<QoreOneHotEncoder*>(
-        model->getReferencedPrivateData(CID_ONEHOTENCODER, xsink));
-    if (ohep) {
-        if (!ohep->isFitted()) {
-            ohep->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "OneHotEncoder";
-        model_data = ohep->serializeState();
-        field_names = ohep->getFieldNames();
-        ohep->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreLabelEncoder* lep = dynamic_cast<QoreLabelEncoder*>(
-        model->getReferencedPrivateData(CID_LABELENCODER, xsink));
-    if (lep) {
-        if (!lep->isFitted()) {
-            lep->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "LabelEncoder";
-        model_data = lep->serializeState();
-        field_names = lep->getFieldNames();
-        lep->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreVarianceThreshold* vtp = dynamic_cast<QoreVarianceThreshold*>(
-        model->getReferencedPrivateData(CID_VARIANCETHRESHOLD, xsink));
-    if (vtp) {
-        if (!vtp->isFitted()) {
-            vtp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "VarianceThreshold";
-        model_data = vtp->serializeState();
-        field_names = vtp->getFieldNames();
-        vtp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QorePolynomialFeatures* pfp = dynamic_cast<QorePolynomialFeatures*>(
-        model->getReferencedPrivateData(CID_POLYNOMIALFEATURES, xsink));
-    if (pfp) {
-        if (!pfp->isFitted()) {
-            pfp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "PolynomialFeatures";
-        model_data = pfp->serializeState();
-        field_names = pfp->getFieldNames();
-        pfp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreSelectKBest* skbp = dynamic_cast<QoreSelectKBest*>(
-        model->getReferencedPrivateData(CID_SELECTKBEST, xsink));
-    if (skbp) {
-        if (!skbp->isFitted()) {
-            skbp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "SelectKBest";
-        model_data = skbp->serializeState();
-        field_names = skbp->getFieldNames();
-        skbp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreRFE* rfep = dynamic_cast<QoreRFE*>(
-        model->getReferencedPrivateData(CID_RFE, xsink));
-    if (rfep) {
-        if (!rfep->isFitted()) {
-            rfep->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "RFE";
-        model_data = rfep->serializeState();
-        field_names = rfep->getFieldNames();
-        rfep->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreDateTimeFeatures* dtfp = dynamic_cast<QoreDateTimeFeatures*>(
-        model->getReferencedPrivateData(CID_DATETIMEFEATURES, xsink));
-    if (dtfp) {
-        // DateTimeFeatures is stateless (always fitted)
-        algorithm = "DateTimeFeatures";
-        model_data = dtfp->serializeState();
-        dtfp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreTextFeatures* tfp = dynamic_cast<QoreTextFeatures*>(
-        model->getReferencedPrivateData(CID_TEXTFEATURES, xsink));
-    if (tfp) {
-        if (!tfp->isFitted()) {
-            tfp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "TextFeatures";
-        model_data = tfp->serializeState();
-        field_names = tfp->getFieldNames();
-        tfp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreNaiveBayes* nbp = dynamic_cast<QoreNaiveBayes*>(
-        model->getReferencedPrivateData(CID_NAIVEBAYES, xsink));
-    if (nbp) {
-        if (!nbp->isFitted()) {
-            nbp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "NaiveBayes";
-        model_data = nbp->serializeState();
-        field_names = nbp->getFieldNames();
-        nbp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreSVM* svmp = dynamic_cast<QoreSVM*>(
-        model->getReferencedPrivateData(CID_SVM, xsink));
-    if (svmp) {
-        if (!svmp->isFitted()) {
-            svmp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "SVM";
-        model_data = svmp->serializeState();
-        field_names = svmp->getFieldNames();
-        svmp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreGradientBoostedTrees* gbtp = dynamic_cast<QoreGradientBoostedTrees*>(
-        model->getReferencedPrivateData(CID_GRADIENTBOOSTEDTREES, xsink));
-    if (gbtp) {
-        if (!gbtp->isFitted()) {
-            gbtp->deref(xsink);
-            xsink->raiseException("ML-SERIALIZE-ERROR",
-                "model has not been fitted: call fit() before serializing");
-            return QoreValue();
-        }
-        algorithm = "GradientBoostedTrees";
-        model_data = gbtp->serializeState();
-        field_names = gbtp->getFieldNames();
-        gbtp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    QoreSparseMatrix* smp = dynamic_cast<QoreSparseMatrix*>(
-        model->getReferencedPrivateData(CID_SPARSEMATRIX, xsink));
-    if (smp) {
-        algorithm = "SparseMatrix";
-        model_data = smp->serializeState();
-        smp->deref(xsink);
-        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
-    }
-    if (*xsink) { xsink->clear(); }
-
-    xsink->raiseException("ML-SERIALIZE-ERROR",
-        "unknown model type: object is not a supported ML algorithm");
-    return QoreValue();
+    return MLSerialization::serializeModel(model->getAlgorithmName(),
+        model->serializeState(), "{}", model->getFieldNames(), xsink);
 }
 
 //! Deserializes a binary blob back to an ML model object
 /** @param data binary data previously produced by ml_serialize()
-    @return the deserialized ML model object
+    @return the deserialized ML model — concrete type is determined by the algorithm tag
+    stored in the blob (e.g. \c KMeans, \c LinearRegression, \c MLPipeline). Cast to the
+    expected subclass to access type-specific methods.
 
     @par Example:
     @code{.py}
 binary blob = ml_serialize(km);
-object restored = ml_deserialize(blob);
+KMeans restored = cast<KMeans>(ml_deserialize(blob));
     @endcode
 
-    @throw ML-DESERIALIZE-ERROR if the data is invalid or corrupted
+    @throw ML-DESERIALIZE-ERROR if the data is invalid, corrupted, or the algorithm
+    tag is not registered
 */
-object ml_deserialize(binary data) [dom=DEFAULT] {
+AbstractMLModel ml_deserialize(binary data) [dom=DEFAULT] {
     const void* raw = data->getPtr();
     size_t len = data->size();
 
@@ -1558,109 +1090,14 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
         return QoreValue();
     }
 
-    // Create the appropriate QoreObject
-    QoreObject* obj = nullptr;
-    if (header.algorithm == "KMeans") {
-        obj = new QoreObject(QC_KMEANS, getProgram());
-        obj->setPrivate(CID_KMEANS, priv);
-    } else if (header.algorithm == "LinearRegression") {
-        obj = new QoreObject(QC_LINEARREGRESSION, getProgram());
-        obj->setPrivate(CID_LINEARREGRESSION, priv);
-    } else if (header.algorithm == "Ridge") {
-        obj = new QoreObject(QC_RIDGE, getProgram());
-        obj->setPrivate(CID_RIDGE, priv);
-    } else if (header.algorithm == "Lasso") {
-        obj = new QoreObject(QC_LASSO, getProgram());
-        obj->setPrivate(CID_LASSO, priv);
-    } else if (header.algorithm == "ElasticNet") {
-        obj = new QoreObject(QC_ELASTICNET, getProgram());
-        obj->setPrivate(CID_ELASTICNET, priv);
-    } else if (header.algorithm == "LogisticRegression") {
-        obj = new QoreObject(QC_LOGISTICREGRESSION, getProgram());
-        obj->setPrivate(CID_LOGISTICREGRESSION, priv);
-    } else if (header.algorithm == "PCA") {
-        obj = new QoreObject(QC_PCA, getProgram());
-        obj->setPrivate(CID_PCA, priv);
-    } else if (header.algorithm == "IsolationForest") {
-        obj = new QoreObject(QC_ISOLATIONFOREST, getProgram());
-        obj->setPrivate(CID_ISOLATIONFOREST, priv);
-    } else if (header.algorithm == "LOF") {
-        obj = new QoreObject(QC_LOF, getProgram());
-        obj->setPrivate(CID_LOF, priv);
-    } else if (header.algorithm == "GMM") {
-        obj = new QoreObject(QC_GMM, getProgram());
-        obj->setPrivate(CID_GMM, priv);
-    } else if (header.algorithm == "HoltWinters") {
-        obj = new QoreObject(QC_HOLTWINTERS, getProgram());
-        obj->setPrivate(CID_HOLTWINTERS, priv);
-    } else if (header.algorithm == "KNN") {
-        obj = new QoreObject(QC_KNN, getProgram());
-        obj->setPrivate(CID_KNN, priv);
-    } else if (header.algorithm == "StandardScaler") {
-        obj = new QoreObject(QC_STANDARDSCALER, getProgram());
-        obj->setPrivate(CID_STANDARDSCALER, priv);
-    } else if (header.algorithm == "MinMaxScaler") {
-        obj = new QoreObject(QC_MINMAXSCALER, getProgram());
-        obj->setPrivate(CID_MINMAXSCALER, priv);
-    } else if (header.algorithm == "Imputer") {
-        obj = new QoreObject(QC_IMPUTER, getProgram());
-        obj->setPrivate(CID_IMPUTER, priv);
-    } else if (header.algorithm == "DecisionTree") {
-        obj = new QoreObject(QC_DECISIONTREE, getProgram());
-        obj->setPrivate(CID_DECISIONTREE, priv);
-    } else if (header.algorithm == "RandomForest") {
-        obj = new QoreObject(QC_RANDOMFOREST, getProgram());
-        obj->setPrivate(CID_RANDOMFOREST, priv);
-    } else if (header.algorithm == "GradientBoostedTrees") {
-        obj = new QoreObject(QC_GRADIENTBOOSTEDTREES, getProgram());
-        obj->setPrivate(CID_GRADIENTBOOSTEDTREES, priv);
-    } else if (header.algorithm == "SVM") {
-        obj = new QoreObject(QC_SVM, getProgram());
-        obj->setPrivate(CID_SVM, priv);
-    } else if (header.algorithm == "NaiveBayes") {
-        obj = new QoreObject(QC_NAIVEBAYES, getProgram());
-        obj->setPrivate(CID_NAIVEBAYES, priv);
-    } else if (header.algorithm == "OneHotEncoder") {
-        obj = new QoreObject(QC_ONEHOTENCODER, getProgram());
-        obj->setPrivate(CID_ONEHOTENCODER, priv);
-    } else if (header.algorithm == "LabelEncoder") {
-        obj = new QoreObject(QC_LABELENCODER, getProgram());
-        obj->setPrivate(CID_LABELENCODER, priv);
-    } else if (header.algorithm == "VarianceThreshold") {
-        obj = new QoreObject(QC_VARIANCETHRESHOLD, getProgram());
-        obj->setPrivate(CID_VARIANCETHRESHOLD, priv);
-    } else if (header.algorithm == "PolynomialFeatures") {
-        obj = new QoreObject(QC_POLYNOMIALFEATURES, getProgram());
-        obj->setPrivate(CID_POLYNOMIALFEATURES, priv);
-    } else if (header.algorithm == "SelectKBest") {
-        obj = new QoreObject(QC_SELECTKBEST, getProgram());
-        obj->setPrivate(CID_SELECTKBEST, priv);
-    } else if (header.algorithm == "RFE") {
-        obj = new QoreObject(QC_RFE, getProgram());
-        obj->setPrivate(CID_RFE, priv);
-    } else if (header.algorithm == "DateTimeFeatures") {
-        obj = new QoreObject(QC_DATETIMEFEATURES, getProgram());
-        obj->setPrivate(CID_DATETIMEFEATURES, priv);
-    } else if (header.algorithm == "TextFeatures") {
-        obj = new QoreObject(QC_TEXTFEATURES, getProgram());
-        obj->setPrivate(CID_TEXTFEATURES, priv);
-    } else if (header.algorithm == "SparseMatrix") {
-        obj = new QoreObject(QC_SPARSEMATRIX, getProgram());
-        obj->setPrivate(CID_SPARSEMATRIX, priv);
-    } else {
-        priv->deref(xsink);
-        xsink->raiseException("ML-DESERIALIZE-ERROR",
-            "unknown algorithm '%s'", header.algorithm.c_str());
-        return QoreValue();
-    }
-
-    return obj;
+    return makeMLModelObject(header.algorithm, priv, getProgram(), xsink);
 }
 
 //! Saves a fitted ML model to a file in native binary (.qml) format
-/** @param model a fitted ML model object
+/** @param model a fitted ML model — any concrete @ref Qore::ML::AbstractMLModel
+    "AbstractMLModel" subclass
     @param path the file path to save to
-    @param options optional hash (reserved for future use)
+    @param options reserved for future use; currently ignored
 
     @par Example:
     @code{.py}
@@ -1669,121 +1106,22 @@ km.fitMatrix(data);
 ml_save_model(km, "/tmp/model.qml");
     @endcode
 
-    @throw ML-SERIALIZE-ERROR if serialization fails
+    @throw ML-SERIALIZE-ERROR if the model is not fitted
     @throw FILE-ERROR if the file cannot be written
 */
-nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILESYSTEM] {
-    // Serialize to binary
-    // We need to call the same logic as ml_serialize
-    // Try each known algorithm CID
-    std::string algorithm;
-    std::vector<uint8_t> model_data;
-    std::vector<std::string> field_names;
-    bool found = false;
-
-#define TRY_SERIALIZE_ALGO(CID_VAR, TYPE, NAME) \
-    if (!found) { \
-        TYPE* p = dynamic_cast<TYPE*>( \
-            model->getReferencedPrivateData(CID_VAR, xsink)); \
-        if (p) { \
-            if (!p->isFitted()) { \
-                p->deref(xsink); \
-                xsink->raiseException("ML-SERIALIZE-ERROR", \
-                    "model has not been fitted: call fit() before saving"); \
-                return QoreValue(); \
-            } \
-            algorithm = NAME; \
-            model_data = p->serializeState(); \
-            field_names = p->getFieldNames(); \
-            p->deref(xsink); \
-            found = true; \
-        } else if (*xsink) { xsink->clear(); } \
-    }
-
-    TRY_SERIALIZE_ALGO(CID_KMEANS, QoreKMeans, "KMeans")
-    TRY_SERIALIZE_ALGO(CID_LINEARREGRESSION, QoreLinearRegression, "LinearRegression")
-    TRY_SERIALIZE_ALGO(CID_RIDGE, QoreRidge, "Ridge")
-    TRY_SERIALIZE_ALGO(CID_LASSO, QoreLasso, "Lasso")
-    TRY_SERIALIZE_ALGO(CID_ELASTICNET, QoreElasticNet, "ElasticNet")
-    TRY_SERIALIZE_ALGO(CID_LOGISTICREGRESSION, QoreLogisticRegression, "LogisticRegression")
-    TRY_SERIALIZE_ALGO(CID_PCA, QorePCA, "PCA")
-    TRY_SERIALIZE_ALGO(CID_ISOLATIONFOREST, QoreIsolationForest, "IsolationForest")
-    TRY_SERIALIZE_ALGO(CID_LOF, QoreLOF, "LOF")
-    TRY_SERIALIZE_ALGO(CID_GMM, QoreGMM, "GMM")
-    TRY_SERIALIZE_ALGO(CID_KNN, QoreKNN, "KNN")
-    TRY_SERIALIZE_ALGO(CID_STANDARDSCALER, QoreStandardScaler, "StandardScaler")
-    TRY_SERIALIZE_ALGO(CID_MINMAXSCALER, QoreMinMaxScaler, "MinMaxScaler")
-    TRY_SERIALIZE_ALGO(CID_IMPUTER, QoreImputer, "Imputer")
-    TRY_SERIALIZE_ALGO(CID_DECISIONTREE, QoreDecisionTree, "DecisionTree")
-    TRY_SERIALIZE_ALGO(CID_RANDOMFOREST, QoreRandomForest, "RandomForest")
-    TRY_SERIALIZE_ALGO(CID_GRADIENTBOOSTEDTREES, QoreGradientBoostedTrees, "GradientBoostedTrees")
-    TRY_SERIALIZE_ALGO(CID_SVM, QoreSVM, "SVM")
-    TRY_SERIALIZE_ALGO(CID_NAIVEBAYES, QoreNaiveBayes, "NaiveBayes")
-    TRY_SERIALIZE_ALGO(CID_ONEHOTENCODER, QoreOneHotEncoder, "OneHotEncoder")
-    TRY_SERIALIZE_ALGO(CID_LABELENCODER, QoreLabelEncoder, "LabelEncoder")
-    TRY_SERIALIZE_ALGO(CID_VARIANCETHRESHOLD, QoreVarianceThreshold, "VarianceThreshold")
-    TRY_SERIALIZE_ALGO(CID_POLYNOMIALFEATURES, QorePolynomialFeatures, "PolynomialFeatures")
-    TRY_SERIALIZE_ALGO(CID_SELECTKBEST, QoreSelectKBest, "SelectKBest")
-    TRY_SERIALIZE_ALGO(CID_RFE, QoreRFE, "RFE")
-    TRY_SERIALIZE_ALGO(CID_TEXTFEATURES, QoreTextFeatures, "TextFeatures")
-
-    // SparseMatrix has no field_names/isFitted pattern
-    if (!found) {
-        QoreSparseMatrix* smp = dynamic_cast<QoreSparseMatrix*>(
-            model->getReferencedPrivateData(CID_SPARSEMATRIX, xsink));
-        if (smp) {
-            algorithm = "SparseMatrix";
-            model_data = smp->serializeState();
-            smp->deref(xsink);
-            found = true;
-        } else if (*xsink) { xsink->clear(); }
-    }
-
-    // HoltWinters has no field_names getter in the pattern above
-    if (!found) {
-        QoreHoltWinters* hw = dynamic_cast<QoreHoltWinters*>(
-            model->getReferencedPrivateData(CID_HOLTWINTERS, xsink));
-        if (hw) {
-            if (!hw->isFitted()) {
-                hw->deref(xsink);
-                xsink->raiseException("ML-SERIALIZE-ERROR",
-                    "model has not been fitted: call fit() before saving");
-                return QoreValue();
-            }
-            algorithm = "HoltWinters";
-            model_data = hw->serializeState();
-            hw->deref(xsink);
-            found = true;
-        } else if (*xsink) { xsink->clear(); }
-    }
-
-    // DateTimeFeatures is stateless (no field_names, always fitted)
-    if (!found) {
-        QoreDateTimeFeatures* dtfp = dynamic_cast<QoreDateTimeFeatures*>(
-            model->getReferencedPrivateData(CID_DATETIMEFEATURES, xsink));
-        if (dtfp) {
-            algorithm = "DateTimeFeatures";
-            model_data = dtfp->serializeState();
-            dtfp->deref(xsink);
-            found = true;
-        } else if (*xsink) { xsink->clear(); }
-    }
-
-#undef TRY_SERIALIZE_ALGO
-
-    if (!found) {
+nothing ml_save_model(AbstractMLModel[QoreMLModel] model, string path, *hash<auto> options) [dom=FILESYSTEM] {
+    if (!model->isFitted()) {
         xsink->raiseException("ML-SERIALIZE-ERROR",
-            "unknown model type: object is not a supported ML algorithm");
+            "model has not been fitted: call fit() before saving");
         return QoreValue();
     }
-
     SimpleRefHolder<BinaryNode> blob(MLSerialization::serializeModel(
-        algorithm, model_data, "{}", field_names, xsink));
+        model->getAlgorithmName(), model->serializeState(), "{}",
+        model->getFieldNames(), xsink));
     if (*xsink) {
         return QoreValue();
     }
 
-    // Write to file
     QoreFile f;
     if (f.open2(xsink, path->c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)) {
         return QoreValue();
@@ -1796,24 +1134,24 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
 
 //! Loads an ML model from a file
 /** @param path the file path to load from
-    @return the deserialized ML model object
+    @return the deserialized ML model — concrete type matches what was saved with
+    ml_save_model(). Cast to the expected subclass to access type-specific methods.
 
     @par Example:
     @code{.py}
-object model = ml_load_model("/tmp/model.qml");
+KMeans model = cast<KMeans>(ml_load_model("/tmp/model.qml"));
     @endcode
 
-    @throw ML-DESERIALIZE-ERROR if the data is invalid or corrupted
+    @throw ML-DESERIALIZE-ERROR if the data is invalid, corrupted, or the algorithm tag
+    is not registered
     @throw FILE-ERROR if the file cannot be read
 */
-object ml_load_model(string path) [dom=FILESYSTEM] {
-    // Read file into binary
+AbstractMLModel ml_load_model(string path) [dom=FILESYSTEM] {
     QoreFile f;
     if (f.open2(xsink, path->c_str(), O_RDONLY)) {
         return QoreValue();
     }
 
-    // Read all data
     SimpleRefHolder<BinaryNode> bin(f.readBinary(-1, -1, xsink));
     if (*xsink || !bin) {
         return QoreValue();
@@ -1839,103 +1177,7 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
         return QoreValue();
     }
 
-    // Create the appropriate QoreObject
-    QoreObject* obj = nullptr;
-    if (header.algorithm == "KMeans") {
-        obj = new QoreObject(QC_KMEANS, getProgram());
-        obj->setPrivate(CID_KMEANS, priv);
-    } else if (header.algorithm == "LinearRegression") {
-        obj = new QoreObject(QC_LINEARREGRESSION, getProgram());
-        obj->setPrivate(CID_LINEARREGRESSION, priv);
-    } else if (header.algorithm == "Ridge") {
-        obj = new QoreObject(QC_RIDGE, getProgram());
-        obj->setPrivate(CID_RIDGE, priv);
-    } else if (header.algorithm == "Lasso") {
-        obj = new QoreObject(QC_LASSO, getProgram());
-        obj->setPrivate(CID_LASSO, priv);
-    } else if (header.algorithm == "ElasticNet") {
-        obj = new QoreObject(QC_ELASTICNET, getProgram());
-        obj->setPrivate(CID_ELASTICNET, priv);
-    } else if (header.algorithm == "LogisticRegression") {
-        obj = new QoreObject(QC_LOGISTICREGRESSION, getProgram());
-        obj->setPrivate(CID_LOGISTICREGRESSION, priv);
-    } else if (header.algorithm == "PCA") {
-        obj = new QoreObject(QC_PCA, getProgram());
-        obj->setPrivate(CID_PCA, priv);
-    } else if (header.algorithm == "IsolationForest") {
-        obj = new QoreObject(QC_ISOLATIONFOREST, getProgram());
-        obj->setPrivate(CID_ISOLATIONFOREST, priv);
-    } else if (header.algorithm == "LOF") {
-        obj = new QoreObject(QC_LOF, getProgram());
-        obj->setPrivate(CID_LOF, priv);
-    } else if (header.algorithm == "GMM") {
-        obj = new QoreObject(QC_GMM, getProgram());
-        obj->setPrivate(CID_GMM, priv);
-    } else if (header.algorithm == "HoltWinters") {
-        obj = new QoreObject(QC_HOLTWINTERS, getProgram());
-        obj->setPrivate(CID_HOLTWINTERS, priv);
-    } else if (header.algorithm == "KNN") {
-        obj = new QoreObject(QC_KNN, getProgram());
-        obj->setPrivate(CID_KNN, priv);
-    } else if (header.algorithm == "StandardScaler") {
-        obj = new QoreObject(QC_STANDARDSCALER, getProgram());
-        obj->setPrivate(CID_STANDARDSCALER, priv);
-    } else if (header.algorithm == "MinMaxScaler") {
-        obj = new QoreObject(QC_MINMAXSCALER, getProgram());
-        obj->setPrivate(CID_MINMAXSCALER, priv);
-    } else if (header.algorithm == "Imputer") {
-        obj = new QoreObject(QC_IMPUTER, getProgram());
-        obj->setPrivate(CID_IMPUTER, priv);
-    } else if (header.algorithm == "DecisionTree") {
-        obj = new QoreObject(QC_DECISIONTREE, getProgram());
-        obj->setPrivate(CID_DECISIONTREE, priv);
-    } else if (header.algorithm == "RandomForest") {
-        obj = new QoreObject(QC_RANDOMFOREST, getProgram());
-        obj->setPrivate(CID_RANDOMFOREST, priv);
-    } else if (header.algorithm == "GradientBoostedTrees") {
-        obj = new QoreObject(QC_GRADIENTBOOSTEDTREES, getProgram());
-        obj->setPrivate(CID_GRADIENTBOOSTEDTREES, priv);
-    } else if (header.algorithm == "SVM") {
-        obj = new QoreObject(QC_SVM, getProgram());
-        obj->setPrivate(CID_SVM, priv);
-    } else if (header.algorithm == "NaiveBayes") {
-        obj = new QoreObject(QC_NAIVEBAYES, getProgram());
-        obj->setPrivate(CID_NAIVEBAYES, priv);
-    } else if (header.algorithm == "OneHotEncoder") {
-        obj = new QoreObject(QC_ONEHOTENCODER, getProgram());
-        obj->setPrivate(CID_ONEHOTENCODER, priv);
-    } else if (header.algorithm == "LabelEncoder") {
-        obj = new QoreObject(QC_LABELENCODER, getProgram());
-        obj->setPrivate(CID_LABELENCODER, priv);
-    } else if (header.algorithm == "VarianceThreshold") {
-        obj = new QoreObject(QC_VARIANCETHRESHOLD, getProgram());
-        obj->setPrivate(CID_VARIANCETHRESHOLD, priv);
-    } else if (header.algorithm == "PolynomialFeatures") {
-        obj = new QoreObject(QC_POLYNOMIALFEATURES, getProgram());
-        obj->setPrivate(CID_POLYNOMIALFEATURES, priv);
-    } else if (header.algorithm == "SelectKBest") {
-        obj = new QoreObject(QC_SELECTKBEST, getProgram());
-        obj->setPrivate(CID_SELECTKBEST, priv);
-    } else if (header.algorithm == "RFE") {
-        obj = new QoreObject(QC_RFE, getProgram());
-        obj->setPrivate(CID_RFE, priv);
-    } else if (header.algorithm == "DateTimeFeatures") {
-        obj = new QoreObject(QC_DATETIMEFEATURES, getProgram());
-        obj->setPrivate(CID_DATETIMEFEATURES, priv);
-    } else if (header.algorithm == "TextFeatures") {
-        obj = new QoreObject(QC_TEXTFEATURES, getProgram());
-        obj->setPrivate(CID_TEXTFEATURES, priv);
-    } else if (header.algorithm == "SparseMatrix") {
-        obj = new QoreObject(QC_SPARSEMATRIX, getProgram());
-        obj->setPrivate(CID_SPARSEMATRIX, priv);
-    } else {
-        priv->deref(xsink);
-        xsink->raiseException("ML-DESERIALIZE-ERROR",
-            "unknown algorithm '%s'", header.algorithm.c_str());
-        return QoreValue();
-    }
-
-    return obj;
+    return makeMLModelObject(header.algorithm, priv, getProgram(), xsink);
 }
 
 //! Computes the p-th percentile of a list of values
@@ -1949,7 +1191,7 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     float q1 = ml_percentile(values, 25.0);
     @endcode
 */
-float ml_percentile(list<auto> data, float p) [dom=DEFAULT] {
+float ml_percentile(list<float> data, float p) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_percentile(vec, p);
@@ -1959,7 +1201,7 @@ float ml_percentile(list<auto> data, float p) [dom=DEFAULT] {
 /** @param data list of numeric values
     @return IQR value
 */
-float ml_iqr(list<auto> data) [dom=DEFAULT] {
+float ml_iqr(list<float> data) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_iqr(vec);
@@ -1969,7 +1211,7 @@ float ml_iqr(list<auto> data) [dom=DEFAULT] {
 /** @param data list of numeric values
     @return skewness (0 = symmetric, positive = right-skewed, negative = left-skewed)
 */
-float ml_skewness(list<auto> data) [dom=DEFAULT] {
+float ml_skewness(list<float> data) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_skewness(vec);
@@ -1979,7 +1221,7 @@ float ml_skewness(list<auto> data) [dom=DEFAULT] {
 /** @param data list of numeric values
     @return kurtosis (0 = normal-like tails, positive = heavy tails)
 */
-float ml_kurtosis(list<auto> data) [dom=DEFAULT] {
+float ml_kurtosis(list<float> data) [dom=DEFAULT] {
     VectorXd vec = qoreListToVector(data, xsink);
     if (*xsink) { return QoreValue(); }
     return ::ml_kurtosis(vec);
@@ -1989,7 +1231,7 @@ float ml_kurtosis(list<auto> data) [dom=DEFAULT] {
 /** @param data matrix as list of row lists
     @return correlation matrix as list of row lists (values -1 to 1)
 */
-list<auto> ml_correlation_matrix(list<auto> data) [dom=DEFAULT] {
+list<list<float>> ml_correlation_matrix(list<list<float>> data) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd corr = ::ml_correlation_matrix(mat);
@@ -2008,7 +1250,7 @@ list<auto> ml_correlation_matrix(list<auto> data) [dom=DEFAULT] {
 /** @param data matrix as list of row lists
     @return covariance matrix as list of row lists
 */
-list<auto> ml_covariance_matrix(list<auto> data) [dom=DEFAULT] {
+list<list<float>> ml_covariance_matrix(list<list<float>> data) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
     if (*xsink) { return QoreValue(); }
     MatrixXd cov = ::ml_covariance_matrix(mat);
@@ -2037,7 +1279,7 @@ list<auto> ml_covariance_matrix(list<auto> data) [dom=DEFAULT] {
     if (r.p_value < 0.05) { printf("Significant difference!\n"); }
     @endcode
 */
-hash<HypothesisTestResult> ml_t_test(list<auto> a, list<auto> b) [dom=DEFAULT] {
+hash<HypothesisTestResult> ml_t_test(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -2069,7 +1311,7 @@ hash<HypothesisTestResult> ml_t_test(list<auto> a, list<auto> b) [dom=DEFAULT] {
     hash<ML::HypothesisTestResult> r = ml_chi_squared_test(((10, 20), (30, 40)));
     @endcode
 */
-hash<HypothesisTestResult> ml_chi_squared_test(list<auto> table) [dom=DEFAULT] {
+hash<HypothesisTestResult> ml_chi_squared_test(list<list<float>> table) [dom=DEFAULT] {
     MatrixXd mat = qoreListOfListsToMatrix(table, xsink);
     if (*xsink) { return QoreValue(); }
     double statistic, p_value, df;
@@ -2133,7 +1375,7 @@ float ml_normal_ppf(float p, float mean = 0.0, float std_dev = 1.0) [dom=DEFAULT
     # sim ≈ 0.5 — partially similar directions
     @endcode
 */
-float ml_cosine_similarity(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_cosine_similarity(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -2161,7 +1403,7 @@ float ml_cosine_similarity(list<auto> a, list<auto> b) [dom=DEFAULT] {
     # dp = 1*4 + 2*5 + 3*6 = 32.0
     @endcode
 */
-float ml_dot_product(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_dot_product(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -2189,7 +1431,7 @@ float ml_dot_product(list<auto> a, list<auto> b) [dom=DEFAULT] {
     # dist = 5.0
     @endcode
 */
-float ml_euclidean_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_euclidean_distance(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -2217,7 +1459,7 @@ float ml_euclidean_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
     # dist = 3 + 4 = 7.0
     @endcode
 */
-float ml_manhattan_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
+float ml_manhattan_distance(list<float> a, list<float> b) [dom=DEFAULT] {
     VectorXd va = qoreListToVector(a, xsink);
     if (*xsink) { return QoreValue(); }
     VectorXd vb = qoreListToVector(b, xsink);
@@ -2250,7 +1492,7 @@ float ml_manhattan_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_l2_normalize(list<auto> v) [dom=DEFAULT] {
+list<float> ml_l2_normalize(list<float> v) [dom=DEFAULT] {
     if (!v->size()) {
         xsink->raiseException("ML-VECTOR-ERROR", "input vector is empty");
         return QoreValue();
@@ -2288,7 +1530,7 @@ list<float> ml_l2_normalize(list<auto> v) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_mean_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
+list<float> ml_mean_pool(list<list<float>> embeddings, list<int> mask) [dom=DEFAULT] {
     if (!embeddings->size()) {
         xsink->raiseException("ML-VECTOR-ERROR", "embeddings list is empty");
         return QoreValue();
@@ -2357,7 +1599,7 @@ list<float> ml_mean_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_max_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
+list<float> ml_max_pool(list<list<float>> embeddings, list<int> mask) [dom=DEFAULT] {
     if (!embeddings->size()) {
         xsink->raiseException("ML-VECTOR-ERROR", "embeddings list is empty");
         return QoreValue();
@@ -2428,7 +1670,7 @@ list<float> ml_max_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
 
     @since ml 1.0
 */
-list<float> ml_cosine_similarity_batch(list<auto> query, list<auto> candidates) [dom=DEFAULT] {
+list<float> ml_cosine_similarity_batch(list<float> query, list<list<float>> candidates) [dom=DEFAULT] {
     VectorXd q = qoreListToVector(query, xsink);
     if (*xsink) { return QoreValue(); }
     double q_norm = q.norm();

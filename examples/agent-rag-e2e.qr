@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file agent-rag-e2e.qr
+#! End-to-end RAG-agent example combining Phase 2/3/4 of the AI provider
+#! expansion: Tavily web search → LlamaParse document extraction →
+#! chunk → Cohere embed → Pinecone store → Cohere rerank → Bedrock Claude.
+#!
+#! Run with the following environment variables set:
+#!   TAVILY_API_KEY            - Tavily web-search API key
+#!   LLAMAPARSE_API_KEY        - LlamaParse API key
+#!   COHERE_API_KEY            - Cohere API key (used for both embed + rerank)
+#!   PINECONE_API_KEY          - Pinecone control-plane API key
+#!   PINECONE_INDEX            - name of an existing Pinecone index
+#!                              (dimension 1024 for embed-multilingual-v3.0)
+#!   AWS_ACCESS_KEY_ID         - AWS credentials for Bedrock
+#!   AWS_SECRET_ACCESS_KEY     - AWS credentials for Bedrock
+#!   AWS_REGION                - AWS aws_region_val (default: us-east-1)
+#!   BEDROCK_MODEL_ID          - Bedrock model id
+#!                              (e.g. anthropic.claude-3-5-sonnet-20240620-v1:0)
+#!
+#! Optional:
+#!   QUERY                     - the user question; defaults to a Qore-related one
+#!
+#! All keys are checked at startup; if any required key is missing the script
+#! prints a clear message and exits without making network calls.
+
+%modern
+
+%requires TavilyRestClient
+%requires LlamaParseRestClient
+%requires CohereRestClient
+%requires PineconeRestClient
+%requires BedrockRestClient
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires QoreRagTypes
+%requires QoreRagUtils
+
+%exec-class AgentRagE2E
+
+class AgentRagE2E {
+    private {
+        hash<string, string> env;
+        string query;
+    }
+
+    constructor() {
+        env = collectEnv();
+        if (!validateEnv()) {
+            exit(0);
+        }
+        query = getenv("QUERY") ?? "What new AI providers landed in Qore 2.3?";
+
+        printf("Query: %s\n", query);
+
+        # Step 1: Tavily web search
+        list<hash<auto>> hits = tavilySearch(query);
+        if (!hits) {
+            printf("No web results — nothing to ingest.\n");
+            exit(0);
+        }
+        printf("Tavily: %d hits, top URL: %s\n", hits.size(), hits[0].url);
+
+        # Step 2: LlamaParse the top hit into markdown
+        string markdown = llamaParseExtract(hits[0].url);
+        printf("LlamaParse: extracted %d chars of markdown\n", markdown.length());
+
+        # Step 3: chunk via the LlamaParse chunker (inline mode — we already have markdown)
+        QoreRagUtils::AbstractChunker chunker =
+            QoreRagUtils::RagProviderRegistry::createChunker(
+                <QoreRagUtils::ChunkerConfig>{
+                    "strategy": "llama-parse",
+                    "target_tokens": 256,
+                });
+        list<hash<QoreRagUtils::ChunkInfo>> chunks = chunker.chunk(markdown,
+            {"source_url": hits[0].url});
+        printf("Chunker: %d chunks\n", chunks.size());
+
+        # Step 4: Cohere embedder
+        QoreRagUtils::AbstractEmbedder embedder =
+            QoreRagUtils::RagProviderRegistry::createEmbedder(
+                <QoreRagUtils::EmbedderConfig>{
+                    "backend": "cohere",
+                    "api_key": env."COHERE_API_KEY",
+                    "model": "embed-multilingual-v3.0",
+                });
+        list<list<float>> vectors = embedder.encodeBatch(
+            map $1.content, chunks);
+        printf("Cohere embed: %d vectors of dim %d\n", vectors.size(),
+            vectors[0].size());
+
+        # Step 5: Pinecone upsert + query
+        QoreRagUtils::AbstractVectorStore store =
+            QoreRagUtils::RagProviderRegistry::createVectorStore(
+                <QoreRagUtils::VectorStoreConfig>{
+                    "backend": "pinecone",
+                    "collection": env."PINECONE_INDEX",
+                    "options": {"api_key": env."PINECONE_API_KEY"},
+                });
+        list<hash<QoreRagUtils::VectorRecord>> records = ();
+        int idx = 0;
+        foreach hash<QoreRagUtils::ChunkInfo> c in (chunks) {
+            push records, <QoreRagUtils::VectorRecord>{
+                "id": sprintf("e2e-%d-%d", now_us().toInt(), idx),
+                "vector": vectors[idx],
+                "payload": {
+                    "content": c.content,
+                    "source_url": c.metadata.source_url,
+                    "section": c.metadata.section,
+                },
+            };
+            ++idx;
+        }
+        store.upsert(records);
+        printf("Pinecone: upserted %d records\n", records.size());
+
+        list<float> query_vector = embedder.encode(query);
+        list<hash<QoreRagUtils::VectorSearchResult>> results =
+            store.search(query_vector, 10);
+        printf("Pinecone: retrieved %d candidates\n", results.size());
+
+        # Step 6: Cohere rerank
+        QoreRagUtils::AbstractReranker reranker =
+            QoreRagUtils::RagProviderRegistry::createReranker(
+                <QoreRagUtils::RerankerConfig>{
+                    "backend": "cohere",
+                    "api_key": env."COHERE_API_KEY",
+                    "model": "rerank-v3.5",
+                });
+        list<string> docs = map $1.payload.content, results;
+        list<hash<QoreRagUtils::RerankResult>> reranked =
+            reranker.rerank(query, docs, 3);
+        printf("Cohere rerank: top-3 selected\n");
+
+        # Step 7: Bedrock Claude (chat with reranked grounded_ctx)
+        QoreLlmUtils::AbstractLlmProvider llm =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("bedrock")
+                .create(<QoreLlmUtils::LlmBackendConfig>{
+                    "model": env."BEDROCK_MODEL_ID",
+                    "provider_options": {
+                        "aws_aws_region_val": env."AWS_REGION" ?? "us-east-1",
+                    },
+                });
+
+        string grounded_ctx = (foldl $1 + "\n\n---\n\n" + $2,
+            map $1.document, reranked);
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (
+            <QoreLlmUtils::ChatMessage>{
+                "role": "system",
+                "content": "Answer the user's question using only the supplied "
+                    "grounded_ctx.  If the grounded_ctx doesn't contain the answer, say so.",
+            },
+            <QoreLlmUtils::ChatMessage>{
+                "role": "user",
+                "content": sprintf("Context:\n%s\n\nQuestion: %s", grounded_ctx, query),
+            },
+        );
+
+        hash<QoreLlmUtils::ChatResponse> resp = llm.chat(messages);
+        printf("\n--- Answer ---\n%s\n", resp.content);
+    }
+
+    #! Reads required env vars + returns a hash
+    private hash<string, string> collectEnv() {
+        hash<string, string> rv = {};
+        list<string> env_keys = (
+            "TAVILY_API_KEY",
+            "LLAMAPARSE_API_KEY",
+            "COHERE_API_KEY",
+            "PINECONE_API_KEY",
+            "PINECONE_INDEX",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "BEDROCK_MODEL_ID",
+        );
+        foreach string k in (env_keys) {
+            *string v = getenv(k);
+            if (v.val()) {
+                rv{k} = v;
+            }
+        }
+        # Optional AWS_REGION
+        *string aws_region_val = getenv("AWS_REGION");
+        if (aws_region_val.val()) {
+            rv."AWS_REGION" = aws_region_val;
+        }
+        return rv;
+    }
+
+    private bool validateEnv() {
+        list<string> required = (
+            "TAVILY_API_KEY",
+            "LLAMAPARSE_API_KEY",
+            "COHERE_API_KEY",
+            "PINECONE_API_KEY",
+            "PINECONE_INDEX",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "BEDROCK_MODEL_ID",
+        );
+        list<string> missing = ();
+        foreach string k in (required) {
+            if (!env{k}.val()) {
+                push missing, k;
+            }
+        }
+        if (missing) {
+            printf("Missing required environment variables:\n");
+            foreach string k in (missing) {
+                printf("  - %s\n", k);
+            }
+            printf("\nSee the top of this file for a description of each.\n");
+            return False;
+        }
+        return True;
+    }
+
+    private list<hash<auto>> tavilySearch(string q) {
+        TavilyRestClient::TavilyRestClientIo client(
+            {"url": "https://api.tavily.com", "apikey": env."TAVILY_API_KEY"});
+        hash<auto> resp = client.restPost("/search", {
+            "query": q,
+            "search_depth": "advanced",
+            "max_results": 5,
+        });
+        return resp.body.results ?? ();
+    }
+
+    private string llamaParseExtract(string url) {
+        LlamaParseRestClient::LlamaParseRestClientIo client(
+            {"apikey": env."LLAMAPARSE_API_KEY"});
+        hash<auto> result = client.parseDocument(url);
+        return result.content;
+    }
+}

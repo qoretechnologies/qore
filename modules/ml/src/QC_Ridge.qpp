@@ -59,7 +59,7 @@ printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
     @endcode
 
 */
-qclass Ridge [arg=QoreRidge* ridge; ns=Qore::ML; flags=final];
+qclass Ridge [arg=QoreRidge* ridge; ns=Qore::ML; vparent=AbstractMLRegressor];
 
 //! Creates a Ridge regression with the given options
 /** @param options a hash with the following optional keys:
@@ -118,7 +118,7 @@ Ridge::copy() {
     @throw ML-DATA-ERROR if data is empty or has no numeric fields
     @throw ML-RIDGE-ERROR if fitting fails
 */
-nothing Ridge::fit(list<auto> data, string target_field) {
+nothing Ridge::fit(list<hash<auto>> data, string target_field) {
     if (!data || data->empty()) {
         xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
         return QoreValue();
@@ -183,7 +183,7 @@ nothing Ridge::fit(list<auto> data, string target_field) {
     @throw ML-DATA-ERROR if the matrix is empty or malformed
     @throw ML-RIDGE-ERROR if fitting fails
 */
-nothing Ridge::fitMatrix(list<auto> X, list<auto> y) {
+nothing Ridge::fitMatrix(list<list<float>> X, list<float> y) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -202,7 +202,7 @@ nothing Ridge::fitMatrix(list<auto> X, list<auto> y) {
     @throw ML-RIDGE-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing Ridge::update(list<auto> data, float learning_rate) {
+nothing Ridge::update(list<hash<auto>> data, float learning_rate) {
     const std::vector<std::string>& feat_names = ridge->getFieldNames();
     const std::string& target_name = ridge->getTargetField();
     if (feat_names.empty() || target_name.empty()) {
@@ -247,7 +247,7 @@ nothing Ridge::update(list<auto> data, float learning_rate) {
     @throw ML-RIDGE-ERROR model not fitted or dimension mismatch
     @throw ML-DATA-ERROR data format errors
 */
-nothing Ridge::updateMatrix(list<auto> matrix, list<auto> target, float learning_rate) {
+nothing Ridge::updateMatrix(list<list<float>> matrix, list<float> target, float learning_rate) {
     MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) {
         return QoreValue();
@@ -287,7 +287,7 @@ hash<RidgeResult> Ridge::predict(hash<auto> record) {
 
     @throw ML-RIDGE-ERROR if the model has not been fitted or input dimensions mismatch
 */
-list<hash<RidgeResult>> Ridge::predictMatrix(list<auto> X) {
+list<hash<RidgeResult>> Ridge::predictMatrix(list<list<float>> X) {
     MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
     if (*xsink) {
         return QoreValue();
@@ -387,7 +387,7 @@ list<float> Ridge::getFeatureStds() [flags=RET_VALUE_ONLY] {
     @throw ML-RIDGE-ERROR if fitting fails or dimensions mismatch
     @throw ML-DATA-ERROR if the target vector is malformed
 */
-nothing Ridge::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+nothing Ridge::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<float> y) {
     VectorXd target = qoreListToVector(y, xsink);
     if (*xsink) {
         return QoreValue();

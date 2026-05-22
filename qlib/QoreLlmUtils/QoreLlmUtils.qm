@@ -26,14 +26,12 @@
 %requires qore >= 2.0
 %modern
 
-%requires RestClientIo
-%requires GeminiRestClient
+%requires(reexport) QoreLlmTypes
+%requires reflection
 
 %try-module json
 %define NoJson
 %endtry
-
-%requires HttpClientStreamingIo
 module QoreLlmUtils {
     version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
@@ -41,6 +39,9 @@ module QoreLlmUtils {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
+    init = sub () {
+        LlmProviderRegistry::registerFactory(new CallbackLlmProviderFactory());
+    };
 }
 
 /** @mainpage QoreLlmUtils Module

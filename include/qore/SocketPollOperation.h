@@ -131,6 +131,9 @@ protected:
 
     //! Returns true if abort() should close the socket (default: true)
     DLLEXPORT virtual bool abortNeedsClose() const;
+
+    //! Base abort implementation; caller must hold the socket lock.
+    DLLEXPORT void abortLocked(ExceptionSink* xsink);
 };
 
 //! Non-blocking TCP connect (with optional TLS upgrade)
@@ -337,6 +340,9 @@ public:
 
     //! Aborts: clears data buffer then delegates to base abort
     DLLEXPORT virtual void abort(ExceptionSink* xsink) override;
+
+    //! Recv-base abort impl; caller must hold the socket lock.
+    DLLEXPORT void abortLocked(ExceptionSink* xsink);
 
     DLLEXPORT virtual bool goalReached() const override;
 

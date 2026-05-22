@@ -1,0 +1,151 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore DeepSeekDataProvider module definition
+
+/*  DeepSeekDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) DeepSeekRestClient
+%requires RestClientIo
+
+module DeepSeekDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for DeepSeek AI services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new DeepSeekDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": DeepSeekDataProvider::AppName,
+            "display_name": "DeepSeek",
+            "short_desc": "DeepSeek frontier and reasoning LLMs via an OpenAI-compatible API",
+            "desc": "Provides access to [DeepSeek](https://platform.deepseek.com) — a "
+                "frontier-class LLM provider offering budget-friendly chat and reasoning models.\n\n"
+                "DeepSeek exposes an OpenAI-compatible chat-completions API, so DeepSeek "
+                "models drop into existing OpenAI-shape consumers (chat, tool calling, "
+                "structured-output JSON schema, streaming) with only a base-URL change.\n\n"
+                "**Common use cases**:\n"
+                "- **Cost-sensitive chat assistants** using `deepseek-chat` — competitive "
+                "quality at a fraction of frontier-model pricing\n"
+                "- **Multi-step reasoning** using `deepseek-reasoner` — emits "
+                "`reasoning_content` alongside the final answer for explainable outputs\n"
+                "- **Tool-calling agents** — OpenAI-shape `tools` and `tool_choice` work "
+                "unchanged\n"
+                "- **Structured extraction** via JSON-schema `response_format`",
+            "scheme": "deepseek",
+            "logo": DeepSeekLogo,
+            "logo_file_name": "deepseek-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register chat-completion action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeepSeekDataProvider::AppName,
+            "path": "/chat-completion",
+            "action": "chat-completion",
+            "display_name": "Chat Completion",
+            "short_desc": "Generate a chat completion from a DeepSeek model",
+            "desc": "Sends a list of chat messages to a DeepSeek model using the "
+                "OpenAI-compatible `/v1/chat/completions` endpoint and returns the "
+                "generated response.\n\n"
+                "**Example use cases**:\n"
+                "- General-purpose chat with `deepseek-chat`\n"
+                "- Multi-step reasoning with `deepseek-reasoner` — the response carries a "
+                "`reasoning_content` field alongside the final `content`\n"
+                "- Tool-calling agents (pass `tools` and `tool_choice` in the request)\n"
+                "- Structured extraction (pass `response_format` with a JSON schema)",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DeepSeekChatCompletionRequestDataType::Fields{"messages", "model",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DeepSeekChatCompletionRequestDataType::Fields{
+                    "temperature", "max_tokens",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DeepSeekChatCompletionRequestDataType::Fields - (
+                    "messages", "model", "temperature", "max_tokens",
+                )
+            ),
+            "output_type": DeepSeekChatCompletionDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage DeepSeekDataProvider Module
+
+    @tableofcontents
+
+    @section deepseekdataproviderintro DeepSeekDataProvider Introduction
+
+    The %DeepSeekDataProvider module provides a data provider API for
+    [DeepSeek](https://platform.deepseek.com) chat models.
+
+    The following data providers are exposed:
+    - @ref DeepSeekDataProvider::DeepSeekDataProvider "DeepSeekDataProvider"
+      — the root provider
+    - @ref DeepSeekDataProvider::DeepSeekChatCompletionDataProvider
+      "DeepSeekChatCompletionDataProvider" — OpenAI-compatible chat
+
+    @par Example:
+    @code{.py}
+%requires DeepSeekDataProvider
+
+DeepSeekRestConnection rc = get_connection("deepseek");
+DeepSeekDataProvider::DeepSeekDataProvider prov(rc.getAsync());
+
+AbstractDataProvider chat = prov.getChildProvider("chat-completion");
+hash<auto> result = chat.doRequest({
+    "model": "deepseek-chat",
+    "messages": (
+        {"role": "user", "content": "Hello!"},
+    ),
+});
+printf("Response: %s\n", result.choices[0].message.content);
+    @endcode
+
+    @section DeepSeekDataProviderRelnotes Release Notes
+
+    @subsection DeepSeekDataProviderv1_0 DeepSeekDataProvider v1.0
+    - the initial version of the %DeepSeekDataProvider module
+*/
+
+#! contains all public definitions in the DeepSeekDataProvider module
+public namespace DeepSeekDataProvider {
+#! DeepSeek application name
+public const AppName = "DeepSeek";
+}
+
+#! App logo loaded from file
+public const DeepSeekLogo = File::readTextFile(get_script_dir() + "/deepseek-logo.svg");

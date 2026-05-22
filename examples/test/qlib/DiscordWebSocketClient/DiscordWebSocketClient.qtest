@@ -23,6 +23,9 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     public {
         #! all payloads passed to sendData()
         list<auto> sent();
+
+        #! flipped by the stubbed startHeartbeatThreadIntern() so tests can assert it would have started
+        bool started_heartbeat_thread = False;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -42,6 +45,61 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     bool testHeartbeatZombieCheck() {
         return heartbeatZombieCheck();
     }
+
+    #! exposes the resumable-session state for assertion
+    hash<auto> testGetSessionState() {
+        return {
+            "session_id": session_id,
+            "last_sequence": last_sequence,
+        };
+    }
+
+    #! seeds resumable-session state without actually contacting the gateway
+    setSessionStateForTest(string sid, int seq) {
+        session_id = sid;
+        last_sequence = seq;
+    }
+
+    #! exposes the resume watchdog cancel path (DOP_DISPATCH / DOP_INVALID_SESSION arrival)
+    bool testResumeWatchdogActive() {
+        return !resume_completed;
+    }
+
+    #! marks a resume as in flight without engaging the async I/O controller timer
+    /** mirrors what armResumeWatchdog() does to the state machine without
+        depending on a running AsyncIoController in unit tests
+    */
+    armResumeWatchdogForTest() {
+        resume_completed = False;
+    }
+
+    #! suppresses the real heartbeat thread (no network, no controller in unit tests)
+    /** stubs out startHeartbeatThreadIntern() so handleHello() can be exercised
+        without launching a background thread; the started_heartbeat_thread
+        public flag records that the start would have happened
+    */
+    private startHeartbeatThreadIntern() {
+        started_heartbeat_thread = True;
+        # mimic hb_tid being set so a subsequent handleHello() does not try to
+        # start another "thread" — matches the real method's effect on state
+        hb_tid = -1;
+    }
+
+    #! production armResumeWatchdog() uses AsyncSocketIo::getGlobalAsyncIoController()
+    /** which is not available in plain unit tests; override to preserve only
+        the observable state change (resume_completed = False) so handleHello()
+        can be exercised end-to-end and tests can still assert the contract via
+        testResumeWatchdogActive()
+    */
+    private armResumeWatchdog() {
+        resume_completed = False;
+    }
+
+    #! mirror the override above for cancel — keep the state machine consistent
+    private cancelResumeWatchdog() {
+        resume_completed = True;
+        resume_miss_count = 0;
+    }
 }
 
 public class Main inherits QUnit::Test {
@@ -49,6 +107,8 @@ public class Main inherits QUnit::Test {
         addTestCase("discord tests", \discordTests());
         addTestCase("heartbeat request tests", \heartbeatRequestTests());
         addTestCase("heartbeat zombie detection tests", \zombieDetectionTests());
+        addTestCase("resume watchdog tests", \resumeWatchdogTests());
+        addTestCase("hello identify/resume decision tests", \helloIdentifyResumeTests());
         addTestCase("connection tests", \connectionTests());
 
         # Return for compatibility with test harness that checks return value.
@@ -119,6 +179,101 @@ public class Main inherits QUnit::Test {
         # a payload with no opcode must still raise an error
         assertThrows("DISCORD-ERROR", "missing opcode",
             sub () { c.testHandleEventData({"d": "x"}); });
+    }
+
+    #! the RESUME watchdog catches a silent-fail resume; INVALID_SESSION clears session state
+    /** verifies (a) DOP_INVALID_SESSION (op 9) clears session_id and last_sequence so the next
+        reconnect goes through sendIdentify(); (b) DOP_DISPATCH (op 0) disarms the resume watchdog;
+        (c) DOP_INVALID_SESSION also disarms the resume watchdog
+    */
+    resumeWatchdogTests() {
+        checkModule();
+
+        # (a) INVALID_SESSION must clear session_id and last_sequence
+        {
+            TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+            c.setSessionStateForTest("abc-session", 42);
+            hash<auto> before = c.testGetSessionState();
+            assertEq("abc-session", before.session_id);
+            assertEq(42, before.last_sequence);
+
+            # DOP_INVALID_SESSION (op 9) — Discord rejected the session
+            c.testHandleEventData({"op": 9, "d": False});
+            hash<auto> after = c.testGetSessionState();
+            # session_id is a non-nullable string; clearSessionState() empties it,
+            # which is falsy so the next reconnect's `if (session_id && last_sequence)`
+            # guard routes to sendIdentify()
+            assertEq("", after.session_id);
+            assertEq(0, after.last_sequence);
+            assertFalse(after.session_id.val());
+        }
+
+        # (b) DOP_DISPATCH (op 0) disarms the resume watchdog — any dispatch is proof
+        # that the gateway accepted the resume (or is talking to us at all)
+        {
+            TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+            # forcibly mark a resume as in flight (we cannot actually arm the async timer
+            # here without an AsyncIoController, but we can prove the cancel path runs)
+            c.armResumeWatchdogForTest();
+            assertTrue(c.testResumeWatchdogActive());
+            # any DISPATCH event (RESUMED, READY, or a real message) clears the watchdog
+            c.testHandleEventData({"op": 0, "t": "RESUMED", "s": 1, "d": NOTHING});
+            assertFalse(c.testResumeWatchdogActive());
+        }
+
+        # (c) DOP_INVALID_SESSION also disarms the resume watchdog (the error is delivered;
+        # the watchdog has done its job and the existing INVALID_SESSION path drives recovery)
+        {
+            TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+            c.setSessionStateForTest("abc-session", 42);
+            c.armResumeWatchdogForTest();
+            assertTrue(c.testResumeWatchdogActive());
+            c.testHandleEventData({"op": 9, "d": False});
+            assertFalse(c.testResumeWatchdogActive());
+        }
+    }
+
+    #! handleHello() must send exactly one of IDENTIFY or RESUME (not both)
+    /** Discord's gateway protocol requires the client to wait for HELLO before
+        sending IDENTIFY or RESUME, and never to send both on the same
+        connection.  Previously the code sent RESUME pre-emptively from
+        doReconnect() and then IDENTIFY unconditionally from handleHello(),
+        producing both messages per session-resume reconnect — which the gateway
+        treats as ambiguous and can silently drop the session.  This test
+        verifies the new contract: exactly one message goes out per HELLO,
+        chosen by the session state at HELLO time.
+    */
+    helloIdentifyResumeTests() {
+        checkModule();
+
+        # No session → IDENTIFY (op 2), no RESUME (op 6)
+        {
+            TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+            assertEq(False, c.started_heartbeat_thread);
+            c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+            # HELLO must have started the heartbeat path
+            assertTrue(c.started_heartbeat_thread);
+            # exactly one outbound message, and it must be IDENTIFY
+            assertEq(1, c.sent.size());
+            assertEq(2, c.sent[0].op);
+            # the IDENTIFY's payload must NOT carry session_id (would mean a stray RESUME body)
+            assertNothing(c.sent[0].d.session_id);
+        }
+
+        # Resumable session → RESUME (op 6), no IDENTIFY (op 2)
+        {
+            TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+            c.setSessionStateForTest("session-xyz", 99);
+            c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+            assertTrue(c.started_heartbeat_thread);
+            assertEq(1, c.sent.size());
+            assertEq(6, c.sent[0].op);
+            # RESUME payload must carry the seeded session
+            assertEq("session-xyz", c.sent[0].d.session_id);
+            assertEq(99, c.sent[0].d.seq);
+            # and the watchdog must be armed waiting for RESUMED/INVALID_SESSION
+            assertTrue(c.testResumeWatchdogActive());
+        }
     }
 
     connectionTests() {

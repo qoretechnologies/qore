@@ -1,0 +1,1005 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreRagTypes.qm provider-neutral type and abstract-class layer for Qore RAG modules
+
+/*  QoreRagTypes.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires reflection
+
+module QoreRagTypes {
+    version = "1.0.0";
+    desc = "user module providing the provider-neutral hashdecls and abstract "
+        "provider classes shared by QoreRagUtils and RAG provider modules";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreRagTypes Module
+
+    @tableofcontents
+
+    @section qoreragtypesintro QoreRagTypes Module Introduction
+
+    The %QoreRagTypes module provides the provider-neutral type and abstract
+    class layer that @ref qoreragutilsintro "QoreRagUtils" and individual
+    RAG REST client modules (OpenAiRestClient, GeminiRestClient,
+    VoyageRestClient, SGLangRestClient, BgeM3RestClient) share.  It exists
+    as a separate module so that REST client modules can depend on the
+    abstract provider contract without forming a dependency cycle with
+    %QoreRagUtils.
+
+    Symbols defined here live in the @ref QoreRagUtils namespace so callers
+    that \c "%requires QoreRagUtils" see them transparently; the split is
+    purely a packaging detail.
+
+    @section qoreragtypesmembers Public symbols
+
+    Hashdecls describing configuration and results:
+
+    - @ref QoreRagUtils::EmbedderConfig — embedder configuration
+    - @ref QoreRagUtils::VectorStoreConfig — vector-store configuration
+    - @ref QoreRagUtils::RerankerConfig — reranker configuration
+    - @ref QoreRagUtils::ChunkerConfig — chunker configuration
+    - @ref QoreRagUtils::RagConfig — top-level pipeline configuration
+    - @ref QoreRagUtils::RagPipelineOptions — optional pipeline hooks
+    - @ref QoreRagUtils::ChunkInfo — single chunk produced by a chunker
+    - @ref QoreRagUtils::VectorRecord — vector record in a store
+    - @ref QoreRagUtils::VectorSearchResult — vector search hit
+    - @ref QoreRagUtils::RerankResult — reranker result
+    - @ref QoreRagUtils::RetrievalHit — pipeline retrieval hit
+    - @ref QoreRagUtils::RagProviderInfo — provider discovery metadata
+
+    Abstract building blocks:
+
+    - @ref QoreRagUtils::AbstractEmbedder — converts text into vectors
+    - @ref QoreRagUtils::AbstractVectorStore — persists vectors and searches
+    - @ref QoreRagUtils::AbstractReranker — re-orders candidates by relevance
+    - @ref QoreRagUtils::AbstractChunker — splits documents into chunks
+    - @ref QoreRagUtils::AbstractEmbeddingCache — query embedding cache
+
+    Provider factory abstractions:
+
+    - @ref QoreRagUtils::AbstractEmbedderFactory — factory for embedders
+    - @ref QoreRagUtils::AbstractRerankerFactory — factory for rerankers
+    - @ref QoreRagUtils::AbstractVectorStoreFactory — factory for vector stores
+    - @ref QoreRagUtils::RagProviderRegistry — central registry of factories,
+      with FactoryMap lazy-load by config \c type / \c backend
+
+    @section qoreragtypesrelnotes Release Notes
+
+    @subsection qoreragtypes_1_0 QoreRagTypes 1.0
+    - Initial release; extracted from the QoreRagUtils module to break a
+      future dependency cycle with RAG provider modules
+*/
+
+#! Provider-neutral RAG types and abstract classes (shared with QoreRagUtils)
+public namespace QoreRagUtils {
+
+#! Configuration for an embedder backend
+public hashdecl EmbedderConfig {
+    #! Backend identifier — implementation-specific (e.g. "local-onnx", "openai", "voyage", "gemini", "sglang", "bge-m3")
+    *string backend;
+    #! Path to a local model file (used by ONNX embedder)
+    *string model_path;
+    #! REST URL for HTTP-based embedders
+    *string url;
+    #! Model name to send in API requests
+    *string model;
+    #! API key for HTTP-based embedders
+    *string api_key;
+    #! Output embedding dimension (where the backend supports it)
+    *int dimension;
+    #! Batch size for bulk encoding
+    int batch_size = 32;
+    #! Default request timeout for HTTP-based embedders (per-call \c opts override takes precedence)
+    /** Forwarded to the underlying REST client at construction; ignored by
+        non-HTTP backends.  Use Qore's \c timeout type literals (e.g. \c 10s,
+        \c 5000ms).  See @ref AbstractEmbedder::encodeBatch() "encodeBatch()"
+        for per-call override semantics.
+    */
+    *timeout timeout;
+    #! Default connection timeout for HTTP-based embedders (per-call \c opts override takes precedence)
+    /** Forwarded to the underlying REST client at construction; ignored by
+        non-HTTP backends.  Note: @ref RestClientIo only applies a connection
+        timeout to NEW connections, so a per-call \c connect_timeout in
+        @ref AbstractEmbedder::encodeBatch() "encodeBatch()" causes the
+        embedder to use a transient REST client for that call.
+    */
+    *timeout connect_timeout;
+    #! Free-form backend-specific options
+    *hash<auto> options;
+}
+
+#! Configuration for a vector-store backend
+public hashdecl VectorStoreConfig {
+    #! Backend identifier (e.g. "qdrant", "pgvector")
+    *string backend;
+    #! Collection or table name
+    *string collection;
+    #! Connection URL or DSN
+    *string url;
+    #! Free-form backend-specific options (filters, payload schema, etc.)
+    *hash<auto> options;
+}
+
+#! Configuration for a reranker backend
+public hashdecl RerankerConfig {
+    #! Backend identifier (e.g. "local-onnx", "voyage", "http-gateway")
+    *string backend;
+    #! Path to a local model file (ONNX reranker)
+    *string model_path;
+    #! REST URL for HTTP rerankers
+    *string url;
+    #! Model name to send
+    *string model;
+    #! API key
+    *string api_key;
+    #! Free-form backend-specific options
+    *hash<auto> options;
+}
+
+#! Configuration for a chunker backend
+public hashdecl ChunkerConfig {
+    #! Strategy name: "structured" (default), "semantic", "fixed"
+    string strategy = "structured";
+    #! Target token count per chunk
+    int target_tokens = 512;
+    #! Overlap tokens between consecutive chunks (for "fixed" strategy)
+    int overlap_tokens = 50;
+    #! Similarity threshold (used by "semantic" chunker)
+    float similarity_threshold = 0.7;
+    #! Free-form backend-specific options
+    *hash<auto> options;
+}
+
+#! Top-level RAG pipeline configuration
+public hashdecl RagConfig {
+    #! Embedder configuration
+    hash<EmbedderConfig> embedder;
+    #! Vector store configuration
+    hash<VectorStoreConfig> vector_store;
+    #! Reranker configuration (optional — when omitted, retrieval returns vector-search ordering)
+    *hash<RerankerConfig> reranker;
+    #! Chunker configuration (used by ingest)
+    hash<ChunkerConfig> chunker;
+    #! Default top-K for retrieval (final returned count)
+    int top_k = 10;
+    #! Initial vector-search top-K before reranking (only when reranker is configured)
+    int initial_retrieval_k = 50;
+}
+
+#! Optional hooks passed to RagPipeline::constructor()
+/** Every field is optional and strictly additive — omitting the options hash
+    preserves the behavior of earlier module versions.
+*/
+public hashdecl RagPipelineOptions {
+    #! Optional query transformer (e.g. HyDE-style hypothetical-answer generation)
+    /** When set, the raw query is passed through this callable and the result
+        is used for embedding.  The reranker still sees the **original** query
+        so that scoring semantics stay stable.
+    */
+    *code<string(string)> query_transformer;
+
+    #! Optional cache for query embeddings
+    /** When set, RagPipeline::retrieve() consults this cache before calling
+        @ref AbstractEmbedder::encode() and populates it on cache misses.
+        Cache keys are the exact string that would otherwise be passed to
+        \c encode() — the transformer output when a \c query_transformer is
+        configured, otherwise the raw query.
+    */
+    *AbstractEmbeddingCache embedding_cache;
+
+    #! Explicit vector-search K before reranking
+    /** When set **and** a reranker is configured, overrides the pipeline's
+        \c initial_retrieval_k for the vector-store call.  The reranker still
+        emits \c top_k results.  Use this to implement an over-retrieval
+        multiplier (e.g. 5x top_k) without changing the pipeline default.
+    */
+    *int pre_rerank_top_k;
+}
+
+#! A single chunk produced by a chunker
+public hashdecl ChunkInfo {
+    #! Sequential index of this chunk in the source document
+    int index;
+    #! The chunk text content
+    string content;
+    #! Approximate token count
+    int token_count;
+    #! Free-form metadata inherited from the source (page, heading, slide, etc.)
+    *hash<auto> metadata;
+}
+
+#! A vector record stored in a vector store
+public hashdecl VectorRecord {
+    #! Unique record id
+    string id;
+    #! The dense vector
+    list<float> vector;
+    #! Free-form payload (stored alongside the vector for retrieval-time access)
+    *hash<auto> payload;
+}
+
+#! A search hit returned by a vector store
+public hashdecl VectorSearchResult {
+    #! Record id
+    string id;
+    #! Similarity score (backend-defined; typically cosine in [0,1])
+    float score;
+    #! Stored payload
+    *hash<auto> payload;
+}
+
+#! A reranker result
+public hashdecl RerankResult {
+    #! Original index in the input documents list
+    int index;
+    #! Relevance score (higher = more relevant)
+    float score;
+    #! The document text (echoed back for caller convenience)
+    string document;
+}
+
+#! A retrieval hit returned by RagPipeline::retrieve()
+public hashdecl RetrievalHit {
+    #! Stored chunk id
+    string id;
+    #! Final relevance score (post-reranking when a reranker is configured)
+    float score;
+    #! Chunk content
+    string content;
+    #! Free-form payload (typically the chunk's metadata)
+    *hash<auto> payload;
+}
+
+#! Static metadata describing a registered RAG provider factory
+/** Returned by @ref AbstractEmbedderFactory::getInfo(),
+    @ref AbstractRerankerFactory::getInfo(), and
+    @ref AbstractVectorStoreFactory::getInfo().
+*/
+public hashdecl RagProviderInfo {
+    #! The backend / type string used to look up this provider
+    string type;
+    #! Human-readable name for diagnostics and discovery UIs
+    string display_name;
+    #! Module that supplies this provider (e.g. \c "OpenAiRestClient")
+    *string module_name;
+}
+
+#! Abstract base class for text embedders
+/** Concrete subclasses wrap a specific backend (local ONNX, OpenAI HTTP API,
+    Voyage HTTP API, SGLang, BGE-M3 FastAPI, etc.) and translate text to
+    fixed-dimension dense vectors.
+
+    Implementations must be thread-safe — multiple threads may call
+    @ref encode() and @ref encodeBatch() concurrently.
+
+    @par Per-call options
+
+    @ref encode() and @ref encodeBatch() accept an optional \c opts hash that
+    can override per-call defaults; HTTP-backed embedders recognize:
+
+    - \c timeout (\c *timeout) — request timeout for this call only
+    - \c connect_timeout (\c *timeout) — connection timeout for this call only
+
+    Precedence: per-call \c opts > @ref EmbedderConfig defaults > REST client
+    / connection default.
+
+    @par Permanent vs transient backend errors
+
+    HTTP backends classify their own \c REST-RESPONSE-ERROR exceptions via the
+    private @ref isPermanentEmbedderConfigError() override.  When that returns
+    @ref True (e.g. unknown model, model is not an embedding model), the
+    embedder rethrows as @c EMBEDDER-MODEL-CONFIG-ERROR via
+    @ref throwEmbedderModelConfigError() so callers can distinguish permanent
+    misconfiguration from transient infrastructure failures (5xx, timeouts,
+    rate limits) without parsing backend-specific JSON shapes.
+*/
+public class AbstractEmbedder {
+    #! Encodes a single piece of text into a vector
+    /** @param text the input text
+        @param opts optional per-call options; recognized HTTP keys are
+        \c timeout and \c connect_timeout (both \c *timeout).  Non-HTTP
+        backends ignore \c opts.
+
+        @return a dense vector of floats with length equal to @ref getDimension()
+    */
+    abstract list<float> encode(string text, *hash<auto> opts);
+
+    #! Encodes a batch of texts into vectors
+    /** @param texts the input texts
+        @param opts optional per-call options; recognized HTTP keys are
+        \c timeout and \c connect_timeout (both \c *timeout).  Non-HTTP
+        backends ignore \c opts.
+
+        @return a list of vectors in the same order as the input
+    */
+    abstract list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts);
+
+    #! Returns the embedding dimension produced by this backend
+    /** Used by callers to size vector store columns / Qdrant collections.
+
+        @return the vector dimension
+    */
+    abstract int getDimension();
+
+    #! Returns the model name in use (informational)
+    *string getModel() {
+        return NOTHING;
+    }
+
+    #! Classifies a backend exception as a permanent model/configuration failure
+    /** Concrete subclasses for HTTP backends override this to recognize
+        backend-specific permanent-failure shapes (e.g. unknown model,
+        model is not an embedding model, body type \c BadRequestError or
+        \c InvalidModelError).  The default implementation returns @ref False
+        so that any exception propagates as a transient REST error unless the
+        subclass classifies it.
+
+        Called from each subclass's @ref encodeBatch() catch block; when this
+        returns @ref True, the subclass calls
+        @ref throwEmbedderModelConfigError() to rethrow as
+        @c EMBEDDER-MODEL-CONFIG-ERROR with a normalized \c arg shape.
+
+        @param ex the original exception (typically \c REST-RESPONSE-ERROR)
+
+        @return @ref True if the error is permanent (block create / surface
+        misconfiguration); @ref False if transient (warn and continue)
+    */
+    private bool isPermanentEmbedderConfigError(hash<ExceptionInfo> ex) {
+        return False;
+    }
+
+    #! Rethrows a backend exception as a normalized \c EMBEDDER-MODEL-CONFIG-ERROR
+    /** Subclasses call this from their @ref encodeBatch() catch block once
+        @ref isPermanentEmbedderConfigError() has returned @ref True.
+
+        The thrown exception preserves the original error metadata so callers
+        can construct a usable error message:
+
+        - \c arg.backend — backend identifier (e.g. \c "openai", \c "voyage")
+        - \c arg.model — model name (or @ref NOTHING)
+        - \c arg.status_code — HTTP status code from the original error
+        - \c arg.body — response body from the original error
+        - \c arg.original_err — \c ex.err of the original exception
+        - \c arg.original_desc — \c ex.desc of the original exception
+
+        @param orig the original \c REST-RESPONSE-ERROR exception
+        @param backend backend identifier
+        @param model model name (or @ref NOTHING)
+
+        @throw EMBEDDER-MODEL-CONFIG-ERROR always
+    */
+    private throwEmbedderModelConfigError(hash<ExceptionInfo> orig,
+            string backend, *string model) {
+        *int status_code = orig.arg.status_code;
+        auto body = orig.arg.body;
+        throw "EMBEDDER-MODEL-CONFIG-ERROR",
+            sprintf("%s: model %y rejected by backend (HTTP %s): %s",
+                backend, model ?? "<unset>",
+                exists status_code ? string(status_code) : "?",
+                orig.desc),
+            {
+                "backend": backend,
+                "model": model,
+                "status_code": status_code,
+                "body": body,
+                "original_err": orig.err,
+                "original_desc": orig.desc,
+            };
+    }
+}
+
+#! Abstract base class for cross-encoder rerankers
+/** Concrete subclasses wrap a specific backend (local ONNX cross-encoder,
+    Voyage rerank API, gateway HTTP endpoint, etc.) and score a list of
+    candidate documents against a query.
+
+    Implementations must be thread-safe.
+*/
+public class AbstractReranker {
+    #! Re-ranks a list of documents against a query and returns the top-K
+    /** @param query the query text
+        @param documents the candidate documents (typically from a first-stage vector search)
+        @param top_k how many results to return after reranking; if greater than
+            \c documents.size(), all documents are returned
+        @param opts optional per-call backend-specific options.  Concrete
+            rerankers free to ignore unknown keys.  Reserved keys recognized
+            by the cloud reranker family (Cohere, Voyage, Jina):
+            - \c max_chunks_per_doc (\c int): when documents are longer than
+              the model context, the maximum number of chunks the backend
+              should split a document into; backend-defined default
+            - \c rank_fields (\c list<string>): when documents are
+              structured (passed as JSON strings or hashes), the fields the
+              backend should attend to during scoring
+            - \c truncation (\c string): backend-specific truncation
+              strategy (e.g. Voyage's \c "STRING", \c "NONE")
+            - \c return_documents (\c bool): when explicitly \c False, the
+              caller is signalling it doesn't need document text echoed
+              back; concrete implementations are free to echo it anyway
+
+        @return list of @ref RerankResult hashes ordered by descending score; the
+            \c index field maps each result back to its position in the input
+    */
+    abstract list<hash<RerankResult>> rerank(string query, list<string> documents,
+            int top_k, *hash<auto> opts);
+
+    #! Returns the model name in use (informational)
+    *string getModel() {
+        return NOTHING;
+    }
+}
+
+#! Abstract base class for document chunkers
+/** Concrete subclasses split text content into chunks using a specific
+    strategy (structured, semantic, fixed-size).
+
+    Implementations must be thread-safe.
+*/
+public class AbstractChunker {
+    #! Splits content into chunks
+    /** @param content the source document text
+        @param metadata optional metadata that should be inherited by every chunk
+            (page, heading, slide, source filename, etc.)
+
+        @return list of @ref ChunkInfo hashes; chunk indices are 0-based and
+            ascending in source order
+    */
+    abstract list<hash<ChunkInfo>> chunk(string content, *hash<auto> metadata);
+
+    #! Returns the strategy name (e.g. "structured", "semantic", "fixed")
+    abstract string getStrategy();
+
+    #! Approximate token count for a string
+    /** Default implementation uses a 4-chars-per-token heuristic; subclasses
+        backed by a real tokenizer should override.
+    */
+    int approximateTokens(string text) {
+        return (text.length() / 4) ?? 0;
+    }
+}
+
+#! Abstract base class for query-embedding caches
+/** A RagPipeline that is wired with an AbstractEmbeddingCache will consult
+    the cache for the query vector before calling
+    @ref AbstractEmbedder::encode() and will populate the cache with every
+    miss.  Cache keys are the raw query strings (or transformer outputs,
+    when a \c query_transformer is configured — whichever string is about
+    to be encoded).
+
+    Implementations must be thread-safe; the pipeline may call
+    @ref get() and @ref put() from multiple threads concurrently.
+*/
+public class AbstractEmbeddingCache {
+    #! Looks up a cached embedding for the given key
+    /** @param key the cache key (the exact string that would otherwise be
+            passed to @ref AbstractEmbedder::encode())
+
+        @return the cached embedding, or @ref NOTHING if not present
+    */
+    abstract *list<float> get(string key);
+
+    #! Stores an embedding under the given key
+    /** @param key the cache key
+        @param vector the embedding vector to cache
+    */
+    abstract put(string key, list<float> vector);
+
+    #! Optional size hint — returns the current number of cached entries
+    /** Default returns -1, meaning "unknown".
+
+        @return the entry count or -1 if the implementation does not track it
+    */
+    int size() {
+        return -1;
+    }
+}
+
+#! Abstract base class for vector stores (Qdrant, pgvector, etc.)
+/** Concrete subclasses wrap a specific backend and translate calls into
+    upserts and similarity searches.
+
+    Implementations must be thread-safe.
+*/
+public class AbstractVectorStore {
+    #! Upserts a batch of vector records
+    /** @param records the records to insert or update (keyed by \c id)
+    */
+    abstract upsert(list<hash<VectorRecord>> records);
+
+    #! Deletes records by id
+    /** @param ids the record ids to remove
+    */
+    abstract deleteByIds(list<string> ids);
+
+    #! Searches for the K most similar vectors to a query vector
+    /** @param query_vector the query embedding
+        @param k how many results to return
+        @param filter optional backend-specific filter (e.g. payload predicates)
+
+        @return list of @ref VectorSearchResult hashes ordered by descending similarity
+    */
+    abstract list<hash<VectorSearchResult>> search(list<float> query_vector,
+        int k, *hash<auto> filter);
+
+    #! Returns the configured collection / table name
+    abstract string getCollection();
+
+    #! Returns the vector dimension this store expects
+    abstract int getDimension();
+}
+
+#! Abstract factory for an embedder
+public class AbstractEmbedderFactory {
+    #! Returns the backend identifier (e.g. \c "openai")
+    abstract string getType();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates an embedder instance from an @ref EmbedderConfig
+    abstract AbstractEmbedder create(hash<EmbedderConfig> config);
+
+    #! Returns static information about the embedder this factory creates
+    hash<RagProviderInfo> getInfo() {
+        return <RagProviderInfo>{
+            "type": getType(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Abstract factory for a reranker
+public class AbstractRerankerFactory {
+    #! Returns the backend identifier (e.g. \c "voyage")
+    abstract string getType();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a reranker instance from a @ref RerankerConfig
+    abstract AbstractReranker create(hash<RerankerConfig> config);
+
+    #! Returns static information about the reranker this factory creates
+    hash<RagProviderInfo> getInfo() {
+        return <RagProviderInfo>{
+            "type": getType(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Abstract factory for a vector store
+public class AbstractVectorStoreFactory {
+    #! Returns the backend identifier (e.g. \c "qdrant")
+    abstract string getType();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a vector store instance from a @ref VectorStoreConfig
+    abstract AbstractVectorStore create(hash<VectorStoreConfig> config);
+
+    #! Returns static information about the vector store this factory creates
+    hash<RagProviderInfo> getInfo() {
+        return <RagProviderInfo>{
+            "type": getType(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Abstract factory for a chunker
+public class AbstractChunkerFactory {
+    #! Returns the strategy identifier (e.g. \c "structured", \c "llama-parse")
+    /** Matches @ref ChunkerConfig::strategy for registry lookup.
+    */
+    abstract string getStrategy();
+
+    #! Returns a human-readable display name
+    abstract string getDisplayName();
+
+    #! Creates a chunker instance from a @ref ChunkerConfig
+    abstract AbstractChunker create(hash<ChunkerConfig> config);
+
+    #! Returns static information about the chunker this factory creates
+    hash<RagProviderInfo> getInfo() {
+        return <RagProviderInfo>{
+            "type": getStrategy(),
+            "display_name": getDisplayName(),
+            "module_name": Class::getClass(self).getModuleName(),
+        };
+    }
+}
+
+#! Central registry of RAG provider factories (embedders, rerankers, vector stores)
+/** Mirrors the FactoryMap pattern from
+    @ref DataProvider::DataProvider::registerFactory() and the LLM-side
+    @ref QoreLlmUtils::LlmProviderRegistry.  Each of the three role-specific
+    factory maps points a backend / type string at the Qore module that
+    supplies the matching factory; the module is lazy-loaded on first lookup.
+
+    Backends whose factory ships with @ref QoreRagUtils itself (e.g.
+    \c "local-onnx", \c "http-gateway") are registered when QoreRagUtils'
+    \c init block runs.
+*/
+public class RagProviderRegistry {
+    public {
+        #! Map of embedder backend names to providing modules
+        const EmbedderModuleMap = {
+            "openai":     "OpenAiRestClient",
+            "gemini":     "GeminiRestClient",
+            "voyage":     "VoyageRestClient",
+            "sglang":     "SGLangRestClient",
+            "bge-m3":     "BgeM3RestClient",
+            "local-onnx": "QoreRagUtils",
+            "bedrock":    "BedrockRestClient",
+            "vertex-ai":  "VertexAiRestClient",
+            "together":   "TogetherRestClient",
+            "fireworks":  "FireworksRestClient",
+            "ollama":     "OllamaRestClient",
+            "jina":       "JinaRestClient",
+            "cohere":     "CohereRestClient",
+            "mistral":    "MistralRestClient",
+        };
+
+        #! Map of reranker backend names to providing modules
+        const RerankerModuleMap = {
+            "voyage":       "VoyageRestClient",
+            "local-onnx":   "QoreRagUtils",
+            "http-gateway": "QoreRagUtils",
+            "jina":         "JinaRestClient",
+            "cohere":       "CohereRestClient",
+        };
+
+        #! Map of vector-store backend names to providing modules
+        /** Each entry maps a backend / type string to the Qore module that
+            supplies the matching factory.  Additional vector stores can be
+            registered at runtime via @ref registerVectorStoreFactory().
+        */
+        const VectorStoreModuleMap = {
+            "qdrant":      "QdrantDataProvider",
+            "pgvector":    "QoreRagUtils",
+            "chroma":      "ChromaRestClient",
+            "mongo-atlas": "MongoDbDataProvider",
+            "pinecone":    "PineconeRestClient",
+            "weaviate":    "WeaviateRestClient",
+            "milvus":      "MilvusRestClient",
+        };
+
+        #! Map of chunker strategy names to providing modules
+        /** Each entry maps a strategy string to the Qore module that
+            supplies the matching factory.  Additional chunkers can be
+            registered at runtime via @ref registerChunkerFactory().
+        */
+        const ChunkerModuleMap = {
+            "structured":   "QoreRagUtils",
+            "fixed":        "QoreRagUtils",
+            "llama-parse":  "LlamaParseRestClient",
+            "unstructured": "UnstructuredRestClient",
+        };
+    }
+
+    private {
+        static hash<string, AbstractEmbedderFactory> embedder_cache = {};
+        static hash<string, AbstractRerankerFactory> reranker_cache = {};
+        static hash<string, AbstractVectorStoreFactory> vector_store_cache = {};
+        static hash<string, AbstractChunkerFactory> chunker_cache = {};
+        static Mutex registry_lock();
+    }
+
+    #! Registers an embedder factory
+    /** @param factory the new embedder factory
+
+        @throw RAG-CONFIG-ERROR a factory for the same backend is already registered
+    */
+    static registerEmbedderFactory(AbstractEmbedderFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string type = factory.getType();
+        if (embedder_cache{type}) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("embedder factory for %y has already been registered",
+                    type);
+        }
+        embedder_cache{type} = factory;
+    }
+
+    #! Registers a reranker factory
+    static registerRerankerFactory(AbstractRerankerFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string type = factory.getType();
+        if (reranker_cache{type}) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("reranker factory for %y has already been registered",
+                    type);
+        }
+        reranker_cache{type} = factory;
+    }
+
+    #! Registers a vector-store factory
+    static registerVectorStoreFactory(AbstractVectorStoreFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string type = factory.getType();
+        if (vector_store_cache{type}) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("vector-store factory for %y has already been "
+                    "registered", type);
+        }
+        vector_store_cache{type} = factory;
+    }
+
+    #! Registers a chunker factory
+    /** @param factory the new chunker factory
+
+        @throw RAG-CONFIG-ERROR a factory for the same strategy is already registered
+    */
+    static registerChunkerFactory(AbstractChunkerFactory factory) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        string type = factory.getStrategy();
+        if (chunker_cache{type}) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("chunker factory for %y has already been registered",
+                    type);
+        }
+        chunker_cache{type} = factory;
+    }
+
+    #! Removes an embedder factory (intended for tests)
+    static deregisterEmbedderFactory(string type) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove embedder_cache{type};
+    }
+
+    #! Removes a reranker factory (intended for tests)
+    static deregisterRerankerFactory(string type) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove reranker_cache{type};
+    }
+
+    #! Removes a vector-store factory (intended for tests)
+    static deregisterVectorStoreFactory(string type) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove vector_store_cache{type};
+    }
+
+    #! Removes a chunker factory (intended for tests)
+    static deregisterChunkerFactory(string type) {
+        registry_lock.lock();
+        on_exit registry_lock.unlock();
+        remove chunker_cache{type};
+    }
+
+    #! Returns the embedder factory for the given backend, lazy-loading its module if needed
+    static *AbstractEmbedderFactory getEmbedderFactory(string type) {
+        if (embedder_cache{type}) {
+            return embedder_cache{type};
+        }
+        *string module_name = EmbedderModuleMap{type};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for embedder %y: %s",
+                    module_name, type, ex.desc), ex;
+        }
+        return embedder_cache{type};
+    }
+
+    #! Returns the reranker factory for the given backend, lazy-loading its module if needed
+    static *AbstractRerankerFactory getRerankerFactory(string type) {
+        if (reranker_cache{type}) {
+            return reranker_cache{type};
+        }
+        *string module_name = RerankerModuleMap{type};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for reranker %y: %s",
+                    module_name, type, ex.desc), ex;
+        }
+        return reranker_cache{type};
+    }
+
+    #! Returns the vector-store factory for the given backend, lazy-loading its module if needed
+    static *AbstractVectorStoreFactory getVectorStoreFactory(string type) {
+        if (vector_store_cache{type}) {
+            return vector_store_cache{type};
+        }
+        *string module_name = VectorStoreModuleMap{type};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for vector store %y: %s",
+                    module_name, type, ex.desc), ex;
+        }
+        return vector_store_cache{type};
+    }
+
+    #! Returns the chunker factory for the given strategy, lazy-loading its module if needed
+    static *AbstractChunkerFactory getChunkerFactory(string type) {
+        if (chunker_cache{type}) {
+            return chunker_cache{type};
+        }
+        *string module_name = ChunkerModuleMap{type};
+        if (!module_name) {
+            return NOTHING;
+        }
+        try {
+            load_module(module_name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("cannot load provider module %y for chunker %y: %s",
+                    module_name, type, ex.desc), ex;
+        }
+        return chunker_cache{type};
+    }
+
+    #! Returns the embedder factory or throws an exception
+    static AbstractEmbedderFactory getEmbedderFactoryEx(string type) {
+        *AbstractEmbedderFactory f = getEmbedderFactory(type);
+        if (!f) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("embedder backend %y is unknown; registered backends: "
+                    "%y; backends available via lazy module load: %y",
+                    type, keys embedder_cache, keys EmbedderModuleMap);
+        }
+        return f;
+    }
+
+    #! Returns the reranker factory or throws an exception
+    static AbstractRerankerFactory getRerankerFactoryEx(string type) {
+        *AbstractRerankerFactory f = getRerankerFactory(type);
+        if (!f) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("reranker backend %y is unknown; registered backends: "
+                    "%y; backends available via lazy module load: %y",
+                    type, keys reranker_cache, keys RerankerModuleMap);
+        }
+        return f;
+    }
+
+    #! Returns the vector-store factory or throws an exception
+    static AbstractVectorStoreFactory getVectorStoreFactoryEx(string type) {
+        *AbstractVectorStoreFactory f = getVectorStoreFactory(type);
+        if (!f) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("vector-store backend %y is unknown; registered "
+                    "backends: %y", type, keys vector_store_cache);
+        }
+        return f;
+    }
+
+    #! Returns the chunker factory or throws an exception
+    static AbstractChunkerFactory getChunkerFactoryEx(string type) {
+        *AbstractChunkerFactory f = getChunkerFactory(type);
+        if (!f) {
+            throw "RAG-CONFIG-ERROR",
+                sprintf("chunker strategy %y is unknown; registered "
+                    "strategies: %y; strategies available via lazy module "
+                    "load: %y",
+                    type, keys chunker_cache, keys ChunkerModuleMap);
+        }
+        return f;
+    }
+
+    #! Constructs an embedder for the given @ref EmbedderConfig
+    /** Convenience wrapper that resolves the backend via
+        @ref EmbedderConfig::backend, looks up the factory (lazy-loading
+        its module if needed), and calls its \c create() method.
+
+        @param config the embedder configuration
+
+        @return a concrete @ref AbstractEmbedder
+
+        @throw RAG-CONFIG-ERROR @ref EmbedderConfig::backend is missing or unknown
+    */
+    static AbstractEmbedder createEmbedder(hash<EmbedderConfig> config) {
+        if (!config.backend.val()) {
+            throw "RAG-CONFIG-ERROR",
+                "EmbedderConfig.backend is required for factory lookup";
+        }
+        return getEmbedderFactoryEx(config.backend).create(config);
+    }
+
+    #! Constructs a reranker for the given @ref RerankerConfig
+    static AbstractReranker createReranker(hash<RerankerConfig> config) {
+        if (!config.backend.val()) {
+            throw "RAG-CONFIG-ERROR",
+                "RerankerConfig.backend is required for factory lookup";
+        }
+        return getRerankerFactoryEx(config.backend).create(config);
+    }
+
+    #! Constructs a vector store for the given @ref VectorStoreConfig
+    static AbstractVectorStore createVectorStore(hash<VectorStoreConfig> config) {
+        if (!config.backend.val()) {
+            throw "RAG-CONFIG-ERROR",
+                "VectorStoreConfig.backend is required for factory lookup";
+        }
+        return getVectorStoreFactoryEx(config.backend).create(config);
+    }
+
+    #! Constructs a chunker for the given @ref ChunkerConfig
+    /** Convenience wrapper that resolves the strategy via
+        @ref ChunkerConfig::strategy, looks up the factory (lazy-loading
+        its module if needed), and calls its \c create() method.
+
+        @param config the chunker configuration
+
+        @return a concrete @ref AbstractChunker
+
+        @throw RAG-CONFIG-ERROR @ref ChunkerConfig::strategy is missing or unknown
+    */
+    static AbstractChunker createChunker(hash<ChunkerConfig> config) {
+        if (!config.strategy.val()) {
+            throw "RAG-CONFIG-ERROR",
+                "ChunkerConfig.strategy is required for factory lookup";
+        }
+        return getChunkerFactoryEx(config.strategy).create(config);
+    }
+
+    #! Returns the list of currently-registered embedder backend strings
+    static list<string> knownEmbedderBackends() {
+        return keys embedder_cache;
+    }
+
+    #! Returns the list of currently-registered reranker backend strings
+    static list<string> knownRerankerBackends() {
+        return keys reranker_cache;
+    }
+
+    #! Returns the list of currently-registered vector-store backend strings
+    static list<string> knownVectorStoreBackends() {
+        return keys vector_store_cache;
+    }
+
+    #! Returns the list of currently-registered chunker strategy strings
+    static list<string> knownChunkerStrategies() {
+        return keys chunker_cache;
+    }
+}
+
+} # namespace QoreRagUtils

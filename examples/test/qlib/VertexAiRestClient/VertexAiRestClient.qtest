@@ -1,0 +1,326 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/GcpAuth.qm
+%requires ../../../../qlib/GeminiBodyShape.qm
+%requires ../../../../qlib/VertexAiRestClient.qm
+
+%try-module json >= 1.11
+%define NoJson
+%endtry
+
+%exec-class VertexAiTest
+
+# A combined fake server that handles:
+# - GCP token endpoint (/token)
+# - Vertex AI :generateContent
+# - Vertex AI :predict (for embedder)
+class FakeVertexHandler inherits AbstractHttpRequestHandler {
+    public {
+        string last_path = "";
+        *hash<auto> last_body;
+        string last_authorization = "";
+        hash<auto> generate_response = {
+            "candidates": (
+                {
+                    "content": {
+                        "parts": ({"text": "Hello from Vertex"},),
+                        "role": "model",
+                    },
+                    "finishReason": "STOP",
+                },
+            ),
+            "usageMetadata": {
+                "promptTokenCount": 8,
+                "candidatesTokenCount": 4,
+                "totalTokenCount": 12,
+            },
+            "model": "gemini-2.0-flash",
+            "responseId": "vertex-test-id",
+        };
+        hash<auto> predict_response = {
+            "predictions": (
+                {"embeddings": {"values": (0.5, 0.4, 0.3, 0.2, 0.1)}},
+            ),
+        };
+        hash<auto> token_response = {
+            "access_token": "fake-vertex-token",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        };
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        last_path = cx.raw_path;
+        last_authorization = hdr."authorization" ?? "";
+        string body_str = body
+            ? (body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body)
+            : "";
+%ifndef NoJson
+        try {
+            last_body = parse_json(body_str);
+        } catch () {
+            last_body = NOTHING;
+        }
+%endif
+        # Token endpoint (used by GcpAuth) — accept with or without trailing slash
+        if (last_path =~ /\/token\/?$/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200,
+                make_json(token_response));
+        }
+        if (last_path =~ /:generateContent$/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200,
+                make_json(generate_response));
+        }
+        if (last_path =~ /:predict$/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200,
+                make_json(predict_response));
+        }
+        return makeResponse(404, "unknown vertex path: " + last_path);
+    }
+}
+
+public class VertexAiTest inherits QUnit::Test {
+    private {
+        HttpServer fake_http;
+        int fake_port;
+        FakeVertexHandler handler;
+        string sa_path;
+    }
+
+    constructor() : Test("VertexAi Test", "1.0") {
+        addTestCase("factory + getInfo",                  \factoryTest());
+        addTestCase("Gemini-on-Vertex chat round-trip",   \chatTest());
+        addTestCase("complete() helper",                  \completeTest());
+        addTestCase("synthetic chatStream emits delta+done", \chatStreamTest());
+        addTestCase("URL path includes project/region/model", \pathTest());
+        addTestCase("missing project_id throws",          \missingProjectTest());
+        addTestCase("embedder factory + round-trip",      \embedderTest());
+        addTestCase("VertexAiRestConnection constructs",  \connectionTest());
+
+        try {
+            setupFakeServer();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("setup error: %s\n", get_exception_string(ex));
+            }
+        }
+        set_return_value(main());
+    }
+
+    static checkJson(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    private setupFakeServer() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        fake_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        handler = new FakeVertexHandler();
+        fake_http.setDefaultHandler("vertex", handler);
+        fake_port = fake_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # write a minimal service-account JSON file whose token_uri points
+        # at our fake token endpoint so GcpAuth resolves via JWT-bearer
+        sa_path = tmp_location() + "/vertex_sa_" + get_random_string(8) + ".json";
+        File f();
+        f.open2(sa_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(make_json({
+            "type": "service_account",
+            "project_id": "fake-project",
+            "private_key_id": "key-id",
+            "private_key": TestPrivateKey,
+            "client_email": "fake@fake-project.iam.gserviceaccount.com",
+            "token_uri": "http://localhost:" + fake_port + "/token",
+        }));
+        f.close();
+    }
+
+    globalTearDown() {
+        if (sa_path && is_file(sa_path)) {
+            unlink(sa_path);
+        }
+        delete fake_http;
+    }
+
+    private factoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("vertex-ai");
+        assertEq("vertex-ai", f.getMode());
+        hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
+        assertEq("VertexAiRestClient", info.module_name);
+        assertTrue(info.supports_tools);
+        assertTrue(info.supports_structured_output);
+        assertTrue(info.supports_multimodal);
+        assertTrue(info.supports_reasoning_token_budget);
+    }
+
+    private chatTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        # clear any cached GCP token from previous tests
+        GcpAuth::clearTokenCache();
+
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "hello"},
+        ));
+        assertEq("Hello from Vertex", r.content);
+        assertEq("end_turn", r.stop_reason);
+        assertEq(8,  r.usage.prompt_tokens);
+        assertEq(4,  r.usage.completion_tokens);
+        assertEq(12, r.usage.total_tokens);
+        # request body shape: contents/parts/text
+        assertEq("user", handler.last_body.contents[0].role);
+        assertEq("hello", handler.last_body.contents[0].parts[0].text);
+        # authorization header carries the fake bearer
+        assertEq("Bearer fake-vertex-token", handler.last_authorization);
+    }
+
+    private completeTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        hash<QoreLlmUtils::LlmCompletionResult> r =
+            p.complete("You are a helper.", "Say hi.");
+        assertEq("Hello from Vertex", r.content);
+        # system prompt routed to Gemini systemInstruction.parts
+        assertEq("You are a helper.",
+            handler.last_body.systemInstruction.parts[0].text);
+    }
+
+    private chatStreamTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
+        p.chatStream((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "stream"},
+        ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+            push events, e;
+        });
+        assertEq(2, events.size());
+        assertEq("Hello from Vertex", events[0].delta);
+        assertEq(True, events[1].done);
+    }
+
+    private pathTest() {
+        VertexAiTest::checkJson(self);
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        string path = p.getVertexPath();
+        assertEq("/v1/projects/fake-project/locations/us-central1/"
+            "publishers/google/models/gemini-2.0-flash:generateContent", path);
+    }
+
+    private missingProjectTest() {
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new VertexAiRestClient::VertexAiLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "model": "gemini-2.0-flash",
+                });
+        });
+    }
+
+    private embedderTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        QoreRagUtils::AbstractEmbedderFactory f =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("vertex-ai");
+        assertEq("vertex-ai", f.getType());
+        QoreRagUtils::AbstractEmbedder emb = f.create(<QoreRagUtils::EmbedderConfig>{
+            "backend": "vertex-ai",
+            "model": "text-embedding-005",
+            "url": "http://localhost:" + fake_port,
+            "options": {
+                "gcp_project_id": "fake-project",
+                "gcp_region": "us-central1",
+                "gcp_sa_json_path": sa_path,
+            },
+        });
+        list<float> v = emb.encode("hello");
+        assertEq((0.5, 0.4, 0.3, 0.2, 0.1), v);
+        assertEq(5, emb.getDimension());
+        # request body shape: instances[].content
+        assertEq("hello", handler.last_body.instances[0].content);
+    }
+
+    private connectionTest() {
+        VertexAiTest::checkJson(self);
+        VertexAiRestClient::VertexAiRestConnection conn(
+            "vertex-test", "test", "", NOTHING, {
+                "gcp_project_id": "fake-project",
+                "gcp_region": "us-central1",
+            });
+        assertEq("vertex-ai", conn.getType());
+    }
+
+    private VertexAiRestClient::VertexAiLlmProvider newProvider() {
+        return new VertexAiRestClient::VertexAiLlmProvider(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "gemini-2.0-flash",
+                "url": "http://localhost:" + fake_port,
+                "provider_options": {
+                    "gcp_project_id": "fake-project",
+                    "gcp_region": "us-central1",
+                    "gcp_sa_json_path": sa_path,
+                },
+            });
+    }
+
+    # 2048-bit RSA private key for the test SA file (same key used in GcpAuth tests).
+    public {
+        const TestPrivateKey =
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDNNJM8mGUmGdzh\n"
+            "Hg7Q8YukWxILdQRkS/4lXLkBKVTrsXnL3lEh7VxYjvgZbnUWh4nlIcGfvSrgMTUg\n"
+            "GnyAhwIxELLU0FoR4G4Tz3wDF7tCsezL3rIfeIqAYR2/d2Uca7G2Jm4lG9LZ97V8\n"
+            "G6dh4uEaqAcW5UvU2/H7Y3CdgTzgrjGYDsKvz76xb6tJp+oDH+lhdQa/wTH7T/Yc\n"
+            "JlF9OmHsdU+OkSt/jh3FdjE+f6vlGfQ1OlGEW1d6obPOLZv+SBcgVcpFTaIvZjFb\n"
+            "RrhRBxBSmTtvr0v6jZsq3R3idkLgkXEcKxsAUTRPHpnvCi+jXp01igZ4aHsB5N/d\n"
+            "p27cExN1AgMBAAECggEAFt8eLgU7+CHj2gRTNn1IXr4SROxBR47vPLNJ4mNwTXot\n"
+            "0qBpxbm9Yt0v+/p4q3pxX22LRsv5wkfh0Y6kfPVnUSxN+H+vCM/3PBrZcvR4Ujk5\n"
+            "0c5gtjV0WghQqGmJ6Cad8AVPkjC1KKkjxIVNxoaaWiNiuw5HxbBhrjxXyTtSWB8z\n"
+            "f87wlR5YjBBabIzKpe0VK2H+11WD6BVgsLBgwbq8nMqFcZRRdtMt4HX/4mInZxr4\n"
+            "vzn6cE5GVPmZ/3y2NA2H4N6tlT3jJ7yT9SbpZG6KRPCv9YDjyJpZ0R+J5GR5LFGc\n"
+            "h4l1+gp4XJpcj5fzKjVZHvtCgT78MTGI1Q/JTnpoAQKBgQDxLNwUOLZj0XJ65JhE\n"
+            "vS6KmlxBTH4f/T+QyiFEC4/SySf2bdmIHFhsKBXOdrkSiTfa3ai0R29lFTNlMQ7N\n"
+            "X8WL2H6OEK/eOWvgB7Hgf3IpIyyy18OQRC1y2gXfm/Gt6tKwYRXkE5kSiSbgaeMI\n"
+            "OqDXC6w+nThEY1GOpc+CGgzdoQKBgQDZyf9R8/u9G/V0nzcMyZcGBl5G0eGm1d2W\n"
+            "BeR3oF0lOu/M3vF8Q3oeSi6KIvWvfsBA9SaQyk4DRYR68Y7d9hJ/iuyEYRHqWJne\n"
+            "+r3WqgvxIvyZS3aQYK4G/sHjGztehrhgK0rdtNGdrxOg9pvk5wwbCQ7K0CGwBcc4\n"
+            "F0p/HW0r1QKBgEYK0bSp3SrLQEZmGW0Yz2nRrl+JKb7gO7d2sIaKHFwLpfWBLDcF\n"
+            "BdoJWeHzJsyJB1cVCgY/0Sw7UnTfRZyDvBhVNNm7BUsJ7tEKvg2cgK4Vcc0/m/F4\n"
+            "S5wEU5LbjjLNcLmYHN3+/Zwy/wHEdmCwbeS6t2dqYS8x2gIVePcdoQAhAoGAEsBV\n"
+            "ZeoOgsBC5lhnXFY3jR4xqjILK63u+sckTQiPCmEM2/W4U+wj7Rs9krhKuyqWfh9I\n"
+            "qSk0Zb6BgnZN+yC/4Ay+rsHFAvzMRnPpKM6smaCqcXAj1cR94aSCNvHzaWoCwJrP\n"
+            "rDg86bgPyT8vJWmuYqzm/3WClBM0bIv5wsahG4kCgYEAh9NLB2OZjN7E3Xn5DAcl\n"
+            "Apl/sPg4PWPdQHfgwSeqkAYrhCq/2YmlBhdQNuq06WfBzAxhKr8X3aXjk+8vJugO\n"
+            "lJUSiIfRcXAcuc6Wt4cAdK4dfQE9G+yLD3GIcOCt7QmDcaXJUgCgVMR8RFx27gpO\n"
+            "EJ+aHjj/4PztpiD8b4O5w7c=\n"
+            "-----END PRIVATE KEY-----\n";
+    }
+}

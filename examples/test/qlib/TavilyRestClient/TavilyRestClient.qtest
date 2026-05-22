@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/TavilyRestClient.qm
+
+%exec-class TavilyRestClientTest
+
+class FakeTavilyRestClientIo inherits TavilyRestClient::TavilyRestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : TavilyRestClient::TavilyRestClientIo(
+            {"url": "https://api.tavily.com", "apikey": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+    string getSafeUrl() {
+        return "https://api.tavily.com";
+    }
+}
+
+public class TavilyRestClientTest inherits QUnit::Test {
+    constructor() : Test("TavilyRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",       \connectionSchemeTest());
+        addTestCase("REST options apply Bearer mapping",  \restOptionsTest());
+        addTestCase("search tool factory produces ToolDefinition",
+            \searchToolTest());
+        addTestCase("extract tool factory produces ToolDefinition",
+            \extractToolTest());
+        addTestCase("dispatcher routes tavily_search to /search",
+            \dispatcherSearchTest());
+        addTestCase("dispatcher routes tavily_extract to /extract",
+            \dispatcherExtractTest());
+        addTestCase("dispatcher rejects unknown tools",   \dispatcherUnknownTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("tavily");
+        assertEq("Tavily Web Search Connection", info.display_name);
+        assertTrue(info.schemes.tavily);
+        assertEq("apikey", info.required_options);
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = TavilyRestClient::TavilyRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("https://api.tavily.com", opts.url);
+    }
+
+    private searchToolTest() {
+        hash<QoreLlmUtils::ToolDefinition> t =
+            TavilyRestClient::TavilyAgentTools::makeSearchTool();
+        assertEq("tavily_search", t.name);
+        assertTrue(t.description.size() > 0);
+        # Parameter schema must declare `query` as required
+        assertEq("object", t.parameters."type");
+        assertTrue(inlist("query", t.parameters.required));
+        # And declare known knobs as properties
+        assertTrue(exists t.parameters.properties.query);
+        assertTrue(exists t.parameters.properties.search_depth);
+        assertTrue(exists t.parameters.properties.max_results);
+        assertTrue(exists t.parameters.properties.include_answer);
+        assertTrue(exists t.parameters.properties.include_domains);
+        assertTrue(exists t.parameters.properties.exclude_domains);
+    }
+
+    private extractToolTest() {
+        hash<QoreLlmUtils::ToolDefinition> t =
+            TavilyRestClient::TavilyAgentTools::makeExtractTool();
+        assertEq("tavily_extract", t.name);
+        assertEq(("urls",), t.parameters.required);
+        assertEq("array", t.parameters.properties.urls."type");
+    }
+
+    private dispatcherSearchTest() {
+        FakeTavilyRestClientIo fake();
+        fake.response_body = {
+            "query": "Qore 2.3 release date",
+            "answer": "Qore 2.3 is in development...",
+            "results": (
+                {"title": "Qore", "url": "https://qore.org", "score": 0.95},
+            ),
+        };
+
+        code dispatcher = TavilyRestClient::TavilyAgentTools::makeDispatcher(fake);
+        hash<auto> result = dispatcher("tavily_search", {
+            "query": "Qore 2.3 release date",
+            "max_results": 3,
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("/search", fake.last_path);
+        assertEq("Qore 2.3 release date", fake.last_request.query);
+        assertEq(3, fake.last_request.max_results);
+        assertEq("Qore 2.3 release date", result.query);
+        assertEq("https://qore.org", result.results[0].url);
+    }
+
+    private dispatcherExtractTest() {
+        FakeTavilyRestClientIo fake();
+        fake.response_body = {
+            "results": (
+                {"url": "https://qore.org", "raw_content": "## Qore..."},
+            ),
+        };
+
+        code dispatcher = TavilyRestClient::TavilyAgentTools::makeDispatcher(fake);
+        hash<auto> result = dispatcher("tavily_extract", {
+            "urls": ("https://qore.org",),
+            "extract_depth": "advanced",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("/extract", fake.last_path);
+        assertEq("https://qore.org", fake.last_request.urls[0]);
+        assertEq("## Qore...", result.results[0].raw_content);
+    }
+
+    private dispatcherUnknownTest() {
+        FakeTavilyRestClientIo fake();
+        code dispatcher = TavilyRestClient::TavilyAgentTools::makeDispatcher(fake);
+        assertThrows("AGENT-TOOL-ERROR", sub () {
+            dispatcher("unknown_tool", {});
+        });
+    }
+}

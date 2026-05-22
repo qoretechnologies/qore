@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/LlamaParseRestClient.qm
+%requires ../../../../qlib/LlamaParseDataProvider
+
+%exec-class LlamaParseDataProviderTest
+
+#! Subclasses the real LlamaParseRestClientIo and overrides parseDocument
+#! to skip the upload/poll/fetch lifecycle — returns a canned result.
+class FakeLlamaParseRestClientIo inherits LlamaParseRestClient::LlamaParseRestClientIo {
+    public {
+        string last_url;
+        *hash<auto> last_options;
+        hash<auto> canned_result;
+    }
+    constructor() : LlamaParseRestClientIo({"apikey": "fake-key"}) {}
+
+    hash<auto> parseDocument(string url, *hash<auto> options) {
+        last_url = url;
+        last_options = options;
+        return canned_result;
+    }
+}
+
+public class LlamaParseDataProviderTest inherits QUnit::Test {
+    constructor() : Test("LlamaParseDataProvider Test", "1.0") {
+        addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("parse-document forwards to parseDocument()",
+            \parseDocumentTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("llamaparse");
+        assertEq("llamaparse", f.getInfo().name);
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("LlamaParse");
+        assertEq("LlamaParse", app.name);
+        assertEq("llamaparse", app.scheme);
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("LlamaParse");
+        assertEq(1, actions.size());
+        assertEq("parse-document", actions[0].action);
+    }
+
+    private parseDocumentTest() {
+        FakeLlamaParseRestClientIo fake();
+        fake.canned_result = {
+            "job_id": "abc-123",
+            "status": "SUCCESS",
+            "result_type": "markdown",
+            "content": "# Hello\n\nWorld.",
+        };
+        LlamaParseDataProvider::LlamaParseDocumentDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "url": "https://example.com/doc.pdf",
+            "result_type": "markdown",
+            "language": "en",
+        });
+        assertEq("https://example.com/doc.pdf", fake.last_url);
+        assertEq("markdown", fake.last_options.result_type);
+        assertEq("en", fake.last_options.language);
+        # url is stripped from options before being passed through
+        assertEq(NOTHING, fake.last_options.url);
+        assertEq("abc-123", resp.job_id);
+        assertEq("SUCCESS", resp.status);
+        assertEq("# Hello\n\nWorld.", resp.content);
+    }
+}

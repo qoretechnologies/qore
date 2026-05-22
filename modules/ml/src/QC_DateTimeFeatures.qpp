@@ -36,7 +36,7 @@
 
     @since ml 1.0
 */
-qclass DateTimeFeatures [arg=QoreDateTimeFeatures* dtf; ns=Qore::ML; flags=final];
+qclass DateTimeFeatures [arg=QoreDateTimeFeatures* dtf; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a DateTimeFeatures transformer
 /** @param options optional hash with:

@@ -16,6 +16,7 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
         addTestCase("Hashdecl with typed code", \hashdeclTypedCodeTest());
         addTestCase("Call reference assignment", \callRefTest());
         addTestCase("Nested complex types in signature", \nestedComplexTypesTest());
+        addTestCase("Nested code<> with complex param types", \nestedCodeWithComplexParamTest());
         addTestCase("Multiple typed code operations", \multipleOperationsTest());
         addTestCase("Higher-order functions", \higherOrderTest());
         addTestCase("Default parameter in closure", \defaultParamTest());
@@ -175,6 +176,32 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
             return result;
         };
         assertEq(({"index": 0}, {"index": 1}), createList(2));
+    }
+
+    # Regression: code<> param whose own signature contains a complex type with '<'
+    # (e.g. hash<auto>) used to confuse parse_type_string_to_pti() into treating
+    # the '<' inside hash<auto> as the parameterization marker of "nothing(hash".
+    nestedCodeWithComplexParamTest() {
+        # Outer code<> takes a code<> whose param is hash<auto>
+        code<nothing(code<nothing(hash<auto>)>)> outer = sub (code<nothing(hash<auto>)> cb) {
+            cb({"x": 1});
+        };
+        hash<auto> seen;
+        outer(sub (hash<auto> h) { seen = h; });
+        assertEq({"x": 1}, seen);
+
+        # Three-level nesting
+        code<nothing(code<nothing(code<nothing(hash<auto>)>)>)> outer3 =
+            sub (code<nothing(code<nothing(hash<auto>)>)> mid) {
+                mid(sub (hash<auto> h) { seen = h; });
+            };
+        outer3(sub (code<nothing(hash<auto>)> inner) { inner({"y": 2}); });
+        assertEq({"y": 2}, seen);
+
+        # Complex return type combined with complex param
+        code<*hash<auto>(*hash<auto>)> rt = *hash<auto> sub (*hash<auto> h) { return h; };
+        assertEq({"k": 5}, rt({"k": 5}));
+        assertEq(NOTHING, rt());
     }
 
     multipleOperationsTest() {

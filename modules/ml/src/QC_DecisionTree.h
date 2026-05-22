@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_DECISIONTREE_H
 
 #include "FlatTree.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLClassifier.h"
 
 #include <mutex>
 #include <random>
@@ -24,7 +26,7 @@ DLLLOCAL void preinitDecisionTreeClass();
 DLLLOCAL QoreClass* initDecisionTreeClass(QoreNamespace& ns);
 
 //! CART Decision Tree for classification and regression
-class QoreDecisionTree : public AbstractPrivateData {
+class QoreDecisionTree : public QoreMLModel {
 public:
     //! Constructor with hyperparameters
     DLLLOCAL QoreDecisionTree(int max_depth, int min_samples_split,
@@ -53,13 +55,15 @@ public:
     DLLLOCAL QoreHashNode* getFeatureImportances(ExceptionSink* xsink) const;
 
     //! Whether the model has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "DecisionTree"; }
 
     //! Field names for hash-based API
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
     DLLLOCAL void setTargetField(const std::string& name) {
@@ -70,7 +74,7 @@ public:
     }
 
     //! Serialization
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreDecisionTree* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

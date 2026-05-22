@@ -40,8 +40,9 @@ public namespace QoreMLUtils {
 ML::LinearRegression lr({"fit_intercept": True});
 lr.fitMatrix(X, y);
 
-code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
-    return map $1.prediction, lr.predictMatrix(X_data);
+code<list<float>(list<list<float>>)> predictor = list<float> sub (list<list<float>> X_data) {
+    list<float> predictions = map $1.prediction, lr.predictMatrix(X_data);
+    return predictions;
 };
 
 PermutationImportance pi({"n_repeats": 10, "seed": 42});
@@ -89,8 +90,8 @@ public class PermutationImportance {
 
         @throw PERMUTATION-IMPORTANCE-ERROR if data is empty or dimensions mismatch
     */
-    hash<auto> compute(code<list<auto> (list<auto>)> predictor, list<auto> X, list<auto> y,
-            code<float (list<auto>, list<auto>)> scorer, *list<string> feature_names) {
+    hash<auto> compute(code<list<float> (list<list<float>>)> predictor, list<list<float>> X, list<float> y,
+            code<float (list<float>, list<float>)> scorer, *list<string> feature_names) {
         if (!X.size()) {
             throw "PERMUTATION-IMPORTANCE-ERROR", "empty feature matrix";
         }
@@ -107,7 +108,7 @@ public class PermutationImportance {
         }
 
         # Compute baseline score
-        list<auto> y_pred_base = predictor(X);
+        list<float> y_pred_base = predictor(X);
         float baseline_score = scorer(y, y_pred_base);
 
         # Seed the RNG for reproducibility
@@ -121,8 +122,8 @@ public class PermutationImportance {
 
             for (int r = 0; r < n_repeats; ++r) {
                 # Create shuffled copy of X with column j permuted
-                list<auto> X_perm = shuffleColumn(X, j, n_samples);
-                list<auto> y_pred_perm = predictor(X_perm);
+                list<list<float>> X_perm = shuffleColumn(X, j, n_samples);
+                list<float> y_pred_perm = predictor(X_perm);
                 float perm_score = scorer(y, y_pred_perm);
                 push score_drops, baseline_score - perm_score;
             }
@@ -140,24 +141,24 @@ public class PermutationImportance {
     }
 
     #! Shuffles column j of matrix X using Fisher-Yates
-    private static list<auto> shuffleColumn(list<auto> X, int j, int n_samples) {
+    private static list<list<float>> shuffleColumn(list<list<float>> X, int j, int n_samples) {
         # Deep copy the column values
-        list<auto> col_values = map $1[j], X;
+        list<float> col_values = map $1[j], X;
 
         # Fisher-Yates shuffle using Qore's built-in RNG
         for (int i = n_samples - 1; i > 0; --i) {
             int swap_idx = rand() % (i + 1);
             if (swap_idx != i) {
-                auto tmp = col_values[i];
+                float tmp = col_values[i];
                 col_values[i] = col_values[swap_idx];
                 col_values[swap_idx] = tmp;
             }
         }
 
         # Build new matrix with shuffled column
-        list<auto> X_perm();
+        list<list<float>> X_perm();
         for (int i = 0; i < n_samples; ++i) {
-            list<auto> row = X[i] + ();  # shallow copy of row
+            list<float> row = X[i] + ();  # shallow copy of row
             row[j] = col_values[i];
             push X_perm, row;
         }

@@ -55,15 +55,64 @@ public class QoreRegistryModelProcessor inherits DataProvider::AbstractDataProvi
             "pipeline_processor_options": ConstructorOptions,
         };
 
+        #! Supported \c backend_type values
+        const BackendTypes = (
+            <AllowedValueInfo>{"value": "filesystem", "display_name": "Filesystem"},
+            <AllowedValueInfo>{"value": "database", "display_name": "Database (SqlUtil)"},
+            <AllowedValueInfo>{"value": "rest", "display_name": "REST API"},
+        );
+
         #! Constructor options
+        /** qorus#244: extended with \c backend_type so this processor can
+            consume DB- and REST-backed registries (e.g. the live Qorus
+            ml_models / ml_versions / ml_blobs registry served by
+            \c /api/v9/models), not just filesystem-backed ones.
+        */
         const ConstructorOptions = {
+            "backend_type": <DataProviderOptionInfo>{
+                "display_name": "Backend Type",
+                "short_desc": "Storage backend type for the model registry",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The type of storage backend to use: 'filesystem' (default), "
+                    "'database' (e.g., the Qorus omq schema's ml_models tables), "
+                    "or 'rest' (e.g., the Qorus /api/v9/models REST surface).",
+                "allowed_values": BackendTypes,
+                "default_value": "filesystem",
+            },
             "registry_path": <DataProviderOptionInfo>{
                 "display_name": "Registry Path",
                 "short_desc": "Filesystem path to the model registry",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Base directory path for the model registry. For Qorus, "
-                    "this is typically `$OMQ_DIR/user/models`.",
-                "required": True,
+                "desc": "Base directory path for the filesystem-backed model "
+                    "registry; required when backend_type is 'filesystem'.",
+            },
+            "registry_datasource": <DataProviderOptionInfo>{
+                "display_name": "Registry Datasource",
+                "short_desc": "Database datasource for database backend",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "An AbstractDatasource object for database storage; "
+                    "required when backend_type is 'database'.",
+            },
+            "registry_table_prefix": <DataProviderOptionInfo>{
+                "display_name": "Registry Table Prefix",
+                "short_desc": "Table name prefix for database backend",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Prefix for database table names (default 'ml_'); "
+                    "only used with backend_type 'database'.",
+            },
+            "registry_rest_client": <DataProviderOptionInfo>{
+                "display_name": "REST Client",
+                "short_desc": "REST client object for REST backend",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "A REST client object with get/post/put/del methods; "
+                    "required when backend_type is 'rest'.",
+            },
+            "registry_rest_base_path": <DataProviderOptionInfo>{
+                "display_name": "REST Base Path",
+                "short_desc": "Base path for REST API endpoints",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Base URL path for model registry REST endpoints "
+                    "(e.g., '/models'); required when backend_type is 'rest'.",
             },
             "model_name": <DataProviderOptionInfo>{
                 "display_name": "Model Name",
@@ -149,11 +198,21 @@ public class QoreRegistryModelProcessor inherits DataProvider::AbstractDataProvi
             window_size = copts.window_size;
         }
 
-        # Create registry and load model
-        hash<auto> reg_opts = {"path": copts.registry_path};
-        if (copts.tenant_id) {
-            reg_opts.tenant_id = copts.tenant_id;
-        }
+        # qorus#244: build the registry options from the backend-typed
+        # constructor options and delegate to ModelRegistry's built-in
+        # backend dispatch (see ModelRegistry::createBackend).  This lets
+        # the same processor consume a filesystem path, a Qorus omq
+        # datasource, or the Qorus /api/v9/models REST surface without
+        # subclassing.
+        hash<auto> reg_opts = {
+            "backend_type": copts.backend_type ?? "filesystem",
+            "path": copts.registry_path,
+            "datasource": copts.registry_datasource,
+            "table_prefix": copts.registry_table_prefix,
+            "rest_client": copts.registry_rest_client,
+            "rest_base_path": copts.registry_rest_base_path,
+            "tenant_id": copts.tenant_id,
+        };
         QoreModelRegistry::ModelRegistry registry(reg_opts);
 
         if (copts.tag) {

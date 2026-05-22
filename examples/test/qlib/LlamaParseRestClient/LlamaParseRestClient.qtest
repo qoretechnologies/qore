@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/LlamaParseRestClient.qm
+
+%exec-class LlamaParseRestClientTest
+
+#! Drives the upload -> poll -> fetch lifecycle deterministically:
+#! - first POST /upload returns {id: "job1"}
+#! - first 2 GETs of /job/job1 return PENDING / PROCESSING
+#! - third GET returns SUCCESS
+#! - GET /job/job1/result/markdown returns the markdown body
+class FakeLlamaParseClient inherits LlamaParseRestClient::LlamaParseRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+        list<string> poll_sequence = ("PENDING", "PROCESSING", "SUCCESS");
+        int poll_index = 0;
+        int sleep_calls = 0;
+    }
+
+    constructor() : LlamaParseRestClient::LlamaParseRestClientIo(
+            {"url": "https://api.cloud.llamaindex.ai/api/parsing", "apikey": "x"}) {
+        # inject a no-op sleeper so the test doesn't wait
+        setSleeper(nothing sub (timeout to) { ++sleep_calls; });
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"method": "POST", "path": path, "body": body};
+        if (path == "/upload") {
+            return <RestClient::RestResponseInfo>{
+                "body": {"id": "job1", "status": "PENDING"},
+            };
+        }
+        throw "FAKE-ERROR", sprintf("unexpected POST %y", path);
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push calls, {"method": "GET", "path": path};
+        if (path == "/job/job1") {
+            string status = poll_sequence[poll_index];
+            if (poll_index < poll_sequence.size() - 1) {
+                ++poll_index;
+            }
+            return <RestClient::RestResponseInfo>{
+                "body": {"id": "job1", "status": status},
+            };
+        }
+        if (path == "/job/job1/result/markdown") {
+            return <RestClient::RestResponseInfo>{
+                "body": {"markdown": "# Title\n\nFirst paragraph.\n\nSecond paragraph."},
+            };
+        }
+        if (path == "/job/job1/result/text") {
+            return <RestClient::RestResponseInfo>{
+                "body": {"text": "Plain text body."},
+            };
+        }
+        if (path == "/job/job1/result/json") {
+            return <RestClient::RestResponseInfo>{
+                "body": {"pages": ({"page": 1, "md": "Hi"},)},
+            };
+        }
+        throw "FAKE-ERROR", sprintf("unexpected GET %y", path);
+    }
+
+    string getSafeUrl() {
+        return "https://api.cloud.llamaindex.ai/api/parsing";
+    }
+}
+
+public class LlamaParseRestClientTest inherits QUnit::Test {
+    constructor() : Test("LlamaParseRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",       \connectionSchemeTest());
+        addTestCase("REST options apply Bearer mapping",  \restOptionsTest());
+        addTestCase("ChunkerModuleMap entry registered",  \chunkerModuleMapTest());
+        addTestCase("chunker factory registered",         \chunkerFactoryTest());
+        addTestCase("parseDocument runs upload-poll-fetch lifecycle",
+            \parseDocumentTest());
+        addTestCase("parseDocument honors result_type",   \resultTypeTest());
+        addTestCase("pollUntilDone respects job_timeout", \pollTimeoutTest());
+        addTestCase("chunker splits markdown at section boundaries",
+            \chunkerInlineTest());
+        addTestCase("chunker rejects URL without api_key", \chunkerNoApiKeyTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("llamaparse");
+        assertEq("LlamaParse Document Extraction Connection", info.display_name);
+        assertTrue(info.schemes.llamaparse);
+        assertEq("apikey", info.required_options);
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = LlamaParseRestClient::LlamaParseRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("https://api.cloud.llamaindex.ai/api/parsing", opts.url);
+    }
+
+    private chunkerModuleMapTest() {
+        assertEq("LlamaParseRestClient",
+            QoreRagUtils::RagProviderRegistry::ChunkerModuleMap{"llama-parse"});
+    }
+
+    private chunkerFactoryTest() {
+        QoreRagUtils::AbstractChunkerFactory f =
+            QoreRagUtils::RagProviderRegistry::getChunkerFactoryEx("llama-parse");
+        assertEq("llama-parse", f.getStrategy());
+        assertEq("LlamaParse document extraction + section-aware chunker",
+            f.getDisplayName());
+        assertEq("LlamaParseRestClient", f.getInfo().module_name);
+    }
+
+    private parseDocumentTest() {
+        FakeLlamaParseClient fake();
+        hash<auto> result = fake.parseDocument(
+            "https://example.com/doc.pdf",
+            {"poll_interval_ms": 1ms},
+        );
+
+        assertEq("job1", result.job_id);
+        assertEq("SUCCESS", result.status);
+        assertEq("markdown", result.result_type);
+        assertTrue(result.content =~ /# Title/);
+
+        # Verify the call sequence: POST /upload, GET /job/job1 x3, GET /result/markdown
+        assertEq("POST", fake.calls[0].method);
+        assertEq("/upload", fake.calls[0].path);
+        assertEq("https://example.com/doc.pdf", fake.calls[0].body.input_url);
+
+        list<hash<auto>> job_polls = select fake.calls, $1.path == "/job/job1";
+        assertEq(3, job_polls.size());
+        assertEq("GET", job_polls[0].method);
+
+        # Final fetch
+        hash<auto> last = fake.calls[fake.calls.size() - 1];
+        assertEq("/job/job1/result/markdown", last.path);
+        # Sleeper invoked between polls (status changed twice = 2 sleeps)
+        assertEq(2, fake.sleep_calls);
+    }
+
+    private resultTypeTest() {
+        FakeLlamaParseClient fake();
+        # text result type
+        hash<auto> result = fake.parseDocument(
+            "https://example.com/doc.pdf",
+            {"poll_interval_ms": 1ms, "result_type": "text"},
+        );
+        assertEq("text", result.result_type);
+        hash<auto> last = fake.calls[fake.calls.size() - 1];
+        assertEq("/job/job1/result/text", last.path);
+    }
+
+    private pollTimeoutTest() {
+        # build a fake that NEVER returns SUCCESS
+        FakeLlamaParseClient fake();
+        fake.poll_sequence = ("PENDING", "PENDING", "PENDING", "PENDING", "PENDING");
+        assertThrows("LLAMAPARSE-ERROR", sub () {
+            fake.parseDocument("https://example.com/doc.pdf", {
+                "poll_interval_ms": 1ms,
+                "job_timeout": 50ms,
+            });
+        });
+    }
+
+    private chunkerInlineTest() {
+        # When content is inline markdown (not a URL), the chunker splits without
+        # touching the LlamaParse API
+        QoreRagUtils::LlamaParseChunker c(<QoreRagUtils::ChunkerConfig>{
+            "strategy": "llama-parse",
+            "target_tokens": 100,
+        });
+        string md = "# Section One\n\nFirst paragraph here.\n\n"
+            "# Section Two\n\nSecond section's content here.\n";
+        list<hash<QoreRagUtils::ChunkInfo>> chunks = c.chunk(md);
+
+        assertEq(2, chunks.size());
+        assertEq("Section One", chunks[0].metadata.section);
+        assertEq("Section Two", chunks[1].metadata.section);
+        # Sequential indices
+        assertEq(0, chunks[0].index);
+        assertEq(1, chunks[1].index);
+    }
+
+    private chunkerNoApiKeyTest() {
+        QoreRagUtils::LlamaParseChunker c(<QoreRagUtils::ChunkerConfig>{
+            "strategy": "llama-parse",
+        });
+        assertThrows("LLAMAPARSE-CHUNKER-ERROR", sub () {
+            # URL but no api_key — throws
+            c.chunk("https://example.com/doc.pdf");
+        });
+    }
+}

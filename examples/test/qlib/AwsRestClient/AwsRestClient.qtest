@@ -80,6 +80,12 @@ class AwsTest inherits QUnit::Test {
         addTestCase("Aws.com REST", \AwsRestClientRestTests());
         addTestCase("negative tests", \negativeTest());
         addTestCase("connection tests", \connectionTest());
+        addTestCase("env-var credential fallback", \envVarCredentialTest());
+        addTestCase("STS XML response parse", \stsParseTest());
+        addTestCase("STS AssumeRole end-to-end", \stsAssumeRoleE2ETest());
+        addTestCase("IMDS credentials body parse", \imdsParseTest());
+        addTestCase("IMDSv2 end-to-end against fake server", \imdsE2ETest());
+        addTestCase("aws_imds_disabled skips IMDS", \imdsDisabledTest());
         set_return_value(main());
     }
 
@@ -173,6 +179,295 @@ class AwsTest inherits QUnit::Test {
         AwsRestClient new_client = conn.get(False);
         assertEq(True, new_client instanceof AwsRestClient);
     }
+
+    #! Verifies AwsRestClient picks up credentials from AWS_* environment variables
+    envVarCredentialTest() {
+        # snapshot existing process env so we can restore it
+        *string saved_keyid  = getenv("AWS_ACCESS_KEY_ID");
+        *string saved_secret = getenv("AWS_SECRET_ACCESS_KEY");
+        *string saved_token  = getenv("AWS_SESSION_TOKEN");
+        *string saved_region = getenv("AWS_REGION");
+        *string saved_default_region = getenv("AWS_DEFAULT_REGION");
+        on_exit {
+            saved_keyid.val()
+                ? setenv("AWS_ACCESS_KEY_ID", saved_keyid)
+                : unsetenv("AWS_ACCESS_KEY_ID");
+            saved_secret.val()
+                ? setenv("AWS_SECRET_ACCESS_KEY", saved_secret)
+                : unsetenv("AWS_SECRET_ACCESS_KEY");
+            saved_token.val()
+                ? setenv("AWS_SESSION_TOKEN", saved_token)
+                : unsetenv("AWS_SESSION_TOKEN");
+            saved_region.val()
+                ? setenv("AWS_REGION", saved_region)
+                : unsetenv("AWS_REGION");
+            saved_default_region.val()
+                ? setenv("AWS_DEFAULT_REGION", saved_default_region)
+                : unsetenv("AWS_DEFAULT_REGION");
+        }
+
+        # without env vars or aws_keyid in opts, construction must fail
+        unsetenv("AWS_ACCESS_KEY_ID");
+        unsetenv("AWS_SECRET_ACCESS_KEY");
+        unsetenv("AWS_SESSION_TOKEN");
+        unsetenv("AWS_REGION");
+        unsetenv("AWS_DEFAULT_REGION");
+        assertThrows("AWSRESTCLIENT-ERROR", sub () {
+            new AwsRestClient({
+                "url": "http://localhost:" + port,
+                "aws_service": "iam",
+            });
+        });
+
+        # with env vars set, the same call should succeed
+        setenv("AWS_ACCESS_KEY_ID",     "AKIA-ENV-KEY-ID");
+        setenv("AWS_SECRET_ACCESS_KEY", "envSECRET");
+        setenv("AWS_SESSION_TOKEN",     "envSESSION");
+        setenv("AWS_REGION",            "us-east-1");
+        AwsRestClient c = new AwsRestClient({
+            "url": "http://localhost:" + port,
+            "aws_service": "iam",
+        });
+        assertEq(True, c instanceof AwsRestClient);
+
+        # explicit opts must win over env vars
+        AwsRestClient c2 = new AwsRestClient({
+            "url": "http://localhost:" + port,
+            "aws_keyid": "AKIA-EXPLICIT",
+            "aws_secret": "explicitSecret",
+            "aws_region": "eu-west-1",
+            "aws_service": "iam",
+        });
+        assertEq(True, c2 instanceof AwsRestClient);
+
+        # AWS_DEFAULT_REGION should be picked up when AWS_REGION is unset
+        unsetenv("AWS_REGION");
+        setenv("AWS_DEFAULT_REGION", "ap-south-1");
+        AwsRestClient c3 = new AwsRestClient({
+            "url": "http://localhost:" + port,
+            "aws_service": "iam",
+        });
+        assertEq(True, c3 instanceof AwsRestClient);
+    }
+
+    #! parseAssumeRoleResponse extracts all expected fields from real STS XML
+    stsParseTest() {
+        string xml =
+            "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n"
+            "  <AssumeRoleResult>\n"
+            "    <Credentials>\n"
+            "      <AccessKeyId>ASIA-TEST-KEY</AccessKeyId>\n"
+            "      <SecretAccessKey>TEST/SECRET+VALUE</SecretAccessKey>\n"
+            "      <SessionToken>TEST-SESSION-TOKEN</SessionToken>\n"
+            "      <Expiration>2026-06-01T12:00:00Z</Expiration>\n"
+            "    </Credentials>\n"
+            "    <AssumedRoleUser>\n"
+            "      <Arn>arn:aws:sts::123456789012:assumed-role/MyRole/qore</Arn>\n"
+            "      <AssumedRoleId>AROAEXAMPLE:qore</AssumedRoleId>\n"
+            "    </AssumedRoleUser>\n"
+            "  </AssumeRoleResult>\n"
+            "</AssumeRoleResponse>\n";
+        hash<auto> creds = AwsRestClientBase::parseAssumeRoleResponse(xml);
+        assertEq("ASIA-TEST-KEY",       creds.aws_keyid);
+        assertEq("TEST/SECRET+VALUE",   creds.aws_secret);
+        assertEq("TEST-SESSION-TOKEN",  creds.aws_token);
+        assertEq(2026-06-01T12:00:00Z,  creds.expires);
+
+        # binary body works too
+        hash<auto> creds2 = AwsRestClientBase::parseAssumeRoleResponse(binary(xml));
+        assertEq("ASIA-TEST-KEY", creds2.aws_keyid);
+
+        # missing AccessKeyId should throw
+        assertThrows("AWSRESTCLIENT-STS-ERROR", sub () {
+            AwsRestClientBase::parseAssumeRoleResponse(
+                "<AssumeRoleResponse></AssumeRoleResponse>");
+        });
+    }
+
+    #! End-to-end: AssumeRole against a fake STS HTTP endpoint, then sign with the temp creds
+    stsAssumeRoleE2ETest() {
+        # spin up a fake STS endpoint that returns canned credentials
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer sts_http(<HttpServerOptionInfo>{"logger": logger});
+        FakeStsHandler sts_handler();
+        sts_http.setDefaultHandler("sts", sts_handler);
+        int sts_port = sts_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit delete sts_http;
+
+        hash<auto> creds = AwsRestClientBase::assumeRole({
+            "aws_keyid": "AKIA-BASE",
+            "aws_secret": "baseSecret",
+            "aws_region": "us-east-1",
+            "aws_role_arn": "arn:aws:iam::123456789012:role/MyRole",
+            "aws_role_session_name": "test-session",
+            "aws_external_id": "ext-id-42",
+            "aws_sts_endpoint": "http://localhost:" + sts_port,
+        });
+        assertEq("FAKE-ASIA-KEY",   creds.aws_keyid);
+        assertEq("fake-secret-456", creds.aws_secret);
+        assertEq("fake-session-token-xyz", creds.aws_token);
+        assertTrue(creds.expires > now_us());
+
+        # verify the STS handler received the expected Query API parameters
+        assertEq("AssumeRole", sts_handler.params.Action);
+        assertEq("arn:aws:iam::123456789012:role/MyRole", sts_handler.params.RoleArn);
+        assertEq("test-session", sts_handler.params.RoleSessionName);
+        assertEq("ext-id-42",    sts_handler.params.ExternalId);
+        assertEq("3600",         sts_handler.params.DurationSeconds);
+
+        # constructor with aws_role_arn should overlay the temp creds onto opts
+        # (no actual signed request is made in this test — we just verify the
+        # client accepts the role-arn option without throwing)
+        AwsRestClient role_client({
+            "url": "http://localhost:" + port,
+            "aws_keyid": "AKIA-BASE",
+            "aws_secret": "baseSecret",
+            "aws_region": "us-east-1",
+            "aws_service": "iam",
+            "aws_role_arn": "arn:aws:iam::123456789012:role/MyRole",
+            "aws_sts_endpoint": "http://localhost:" + sts_port,
+        });
+        assertEq(True, role_client instanceof AwsRestClient);
+    }
+
+    #! parseImdsCredentialsBody handles hash and rejects unsupported types
+    imdsParseTest() {
+        hash<auto> hash_body = {
+            "Code": "Success",
+            "AccessKeyId": "ASIA-IMDS-KEY",
+            "SecretAccessKey": "imds-secret",
+            "Token": "imds-token",
+            "Expiration": "2099-12-31T23:59:59Z",
+        };
+        hash<auto> creds = AwsRestClientBase::parseImdsCredentialsBody(hash_body);
+        assertEq("ASIA-IMDS-KEY", creds.aws_keyid);
+        assertEq("imds-secret",   creds.aws_secret);
+        assertEq("imds-token",    creds.aws_token);
+        assertEq(2099-12-31T23:59:59Z, creds.expires);
+
+        # missing required field
+        assertThrows("AWSRESTCLIENT-IMDS-ERROR", sub () {
+            AwsRestClientBase::parseImdsCredentialsBody({"Code": "Success"});
+        });
+
+        # unsupported body type
+        assertThrows("AWSRESTCLIENT-IMDS-ERROR", sub () {
+            AwsRestClientBase::parseImdsCredentialsBody(42);
+        });
+    }
+
+    #! End-to-end IMDSv2 flow against a fake IMDS server
+    imdsE2ETest() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer imds_http(<HttpServerOptionInfo>{"logger": logger});
+        FakeImdsHandler imds_handler();
+        imds_http.setDefaultHandler("imds", imds_handler);
+        int imds_port = imds_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit delete imds_http;
+
+        # snapshot existing AWS env vars so the test sees a clean slate
+        *string saved_keyid = getenv("AWS_ACCESS_KEY_ID");
+        *string saved_ecs_rel = getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+        *string saved_ecs_full = getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        unsetenv("AWS_ACCESS_KEY_ID");
+        unsetenv("AWS_SECRET_ACCESS_KEY");
+        unsetenv("AWS_SESSION_TOKEN");
+        unsetenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+        unsetenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        on_exit {
+            saved_keyid.val()
+                ? setenv("AWS_ACCESS_KEY_ID", saved_keyid)
+                : unsetenv("AWS_ACCESS_KEY_ID");
+            saved_ecs_rel.val()
+                ? setenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", saved_ecs_rel)
+                : unsetenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+            saved_ecs_full.val()
+                ? setenv("AWS_CONTAINER_CREDENTIALS_FULL_URI", saved_ecs_full)
+                : unsetenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        }
+
+        # direct invocation of the IMDS helper
+        hash<auto> creds = AwsRestClientBase::getImdsCredentials({
+            "aws_imds_url": "http://localhost:" + imds_port,
+        });
+        assertEq("ASIA-IMDS-E2E", creds.aws_keyid);
+        assertEq("imds-e2e-secret", creds.aws_secret);
+        assertEq("imds-e2e-token", creds.aws_token);
+
+        # verify the IMDS handler enforced the IMDSv2 token requirement —
+        # both subsequent GETs must have carried the token header
+        assertTrue(imds_handler.put_call_count >= 1,
+            "IMDSv2 PUT /latest/api/token was not called");
+        assertEq("21600", imds_handler.last_ttl_seconds);
+        assertEq(imds_handler.issued_token, imds_handler.last_role_list_token);
+        assertEq(imds_handler.issued_token, imds_handler.last_creds_token);
+
+        # constructor pulls IMDS automatically when no static creds are set
+        AwsRestClient instance_client({
+            "url": "http://localhost:" + port,
+            "aws_region": "us-east-1",
+            "aws_service": "iam",
+            "aws_imds_url": "http://localhost:" + imds_port,
+        });
+        assertEq(True, instance_client instanceof AwsRestClient);
+    }
+
+    #! aws_imds_disabled must short-circuit instance-credential pickup
+    imdsDisabledTest() {
+        *string saved_keyid = getenv("AWS_ACCESS_KEY_ID");
+        unsetenv("AWS_ACCESS_KEY_ID");
+        unsetenv("AWS_SECRET_ACCESS_KEY");
+        on_exit {
+            saved_keyid.val()
+                ? setenv("AWS_ACCESS_KEY_ID", saved_keyid)
+                : unsetenv("AWS_ACCESS_KEY_ID");
+        }
+        # with IMDS disabled, missing credentials must produce the canonical
+        # RequiredOptions error rather than attempting a metadata fetch that
+        # would otherwise time out
+        assertThrows("AWSRESTCLIENT-ERROR", sub () {
+            new AwsRestClient({
+                "url": "http://localhost:" + port,
+                "aws_region": "us-east-1",
+                "aws_service": "iam",
+                "aws_imds_disabled": True,
+            });
+        });
+    }
+}
+
+#! Fake STS endpoint that records the form-encoded query and returns canned creds
+class FakeStsHandler inherits AbstractHttpRequestHandler {
+    public {
+        hash<auto> params = {};
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        # parse form-encoded body
+        string body_str;
+        if (body.typeCode() == NT_BINARY) {
+            body_str = body.toString("UTF-8");
+        } else if (body.typeCode() == NT_STRING) {
+            body_str = body;
+        } else {
+            body_str = "";
+        }
+        foreach string pair in (body_str.split("&")) {
+            list<string> kv = pair.split("=");
+            if (kv.size() == 2) {
+                params{decode_url(kv[0])} = decode_url(kv[1]);
+            }
+        }
+        string xml =
+            "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">"
+            "<AssumeRoleResult><Credentials>"
+            "<AccessKeyId>FAKE-ASIA-KEY</AccessKeyId>"
+            "<SecretAccessKey>fake-secret-456</SecretAccessKey>"
+            "<SessionToken>fake-session-token-xyz</SessionToken>"
+            "<Expiration>2099-12-31T23:59:59Z</Expiration>"
+            "</Credentials></AssumeRoleResult></AssumeRoleResponse>";
+        return makeResponse({"Content-Type": "text/xml"}, 200, xml);
+    }
 }
 
 class AwsRestTestClient inherits AwsRestClient {
@@ -182,5 +477,45 @@ class AwsRestTestClient inherits AwsRestClient {
     string getSignatureTest(string meth, string path, hash<auto> hdr, *data body, date gmdate, string scope) {
         string signed_headers;
         return getSignature(meth, path, \hdr, body, gmdate, scope, \signed_headers);
+    }
+}
+
+#! Fake IMDSv2 endpoint that mints session tokens and returns canned credentials
+class FakeImdsHandler inherits AbstractHttpRequestHandler {
+    public {
+        string issued_token = "fake-imds-session-token";
+        int put_call_count = 0;
+        string last_ttl_seconds = "";
+        string last_role_list_token = "";
+        string last_creds_token = "";
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        string path = cx.raw_path;
+        string method = hdr.method;
+        # IMDSv2: PUT /latest/api/token issues the session token
+        if (method == "PUT" && path =~ /^\/latest\/api\/token$/) {
+            ++put_call_count;
+            last_ttl_seconds = hdr."x-aws-ec2-metadata-token-ttl-seconds" ?? "";
+            return makeResponse({"Content-Type": "text/plain"}, 200,
+                issued_token);
+        }
+        # List of roles attached to the instance
+        if (method == "GET" && path =~ /^\/latest\/meta-data\/iam\/security-credentials\/?$/) {
+            last_role_list_token = hdr."x-aws-ec2-metadata-token" ?? "";
+            return makeResponse({"Content-Type": "text/plain"}, 200,
+                "qore-test-role");
+        }
+        # Credentials for the role
+        if (method == "GET" && path =~ /^\/latest\/meta-data\/iam\/security-credentials\/qore-test-role$/) {
+            last_creds_token = hdr."x-aws-ec2-metadata-token" ?? "";
+            return makeResponse({"Content-Type": "application/json"}, 200,
+                "{\"Code\":\"Success\","
+                "\"AccessKeyId\":\"ASIA-IMDS-E2E\","
+                "\"SecretAccessKey\":\"imds-e2e-secret\","
+                "\"Token\":\"imds-e2e-token\","
+                "\"Expiration\":\"2099-12-31T23:59:59Z\"}");
+        }
+        return makeResponse(404, "unknown IMDS path: " + path);
     }
 }

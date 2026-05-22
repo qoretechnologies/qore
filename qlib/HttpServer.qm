@@ -1294,7 +1294,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         } else {
             family = AF_INET;
         }
-        udp_sock.bindINET(bind_addr, bind_port, True, family, SOCK_DGRAM);
+        # SO_REUSEADDR must be False for UDP/QUIC: on Linux it lets IPv6 [::] and
+        # IPv4 0.0.0.0 silently share a UDP port, after which the kernel delivers
+        # IPv4 datagrams only to the IPv4 socket — the H3 listener bound on [::]
+        # would then never receive any traffic from IPv4 clients.  With reuseaddr
+        # disabled the bind fails on conflict and the random-port retry path in
+        # addINETListenersInternResolved() picks a fresh port that actually works.
+        udp_sock.bindINET(bind_addr, bind_port, False, family, SOCK_DGRAM);
 
         # Get the actual port that was bound
         hash<auto> sock_info = udp_sock.getSocketInfo(False);
@@ -4857,6 +4863,33 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         save_thread_data("uctx", get_thread_data("uctx") + uctx);
     }
 
+    #! Force-closes the persistent session for the given connection
+    /** Override of @ref HttpServer::HttpListenerInterface::signalPersistentSessionClose();
+        delegates to the underlying async-I/O controller's
+        @ref HttpServerAsyncIo::HttpAsyncSocketIoController::signalPersistentQueuesForConnection(),
+        which pushes a \c "close" marker into the dedicated persistent
+        handler queue identified by @c uh, unblocking the dedicated thread
+        if it is parked in @c Queue::get().  The dedicated thread's
+        persistent loop then exits and its @c on_exit runs the normal
+        cleanup path (@c removeUserThreadContext() + @c persistentClosed()),
+        releasing any handler-attached user thread context on the correct
+        (listener) thread.
+
+        Safe to call from any thread; idempotent (no-op if no queue is
+        registered under @c uh, e.g. when the dedicated thread has already
+        exited).
+
+        @param uh the connection unique hash identifying the persistent
+            session to close
+    */
+    signalPersistentSessionClose(softstring uh) {
+        *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = serv
+            ? serv.getHttpAsyncIo() : NOTHING;
+        if (ctrl) {
+            ctrl.signalPersistentQueuesForConnection(uh);
+        }
+    }
+
     stopNoWait() {
         background stop();
     }
@@ -5183,6 +5216,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 : s.uniqueHash();
         }
 
+        # Expose the per-connection unique hash on @c cx so handler code can
+        # match against the framework's persistent-queue key (e.g. to pass to
+        # @ref HttpListenerInterface::signalPersistentSessionClose()).  For
+        # HTTP/3 this includes the QUIC session_id suffix matching the
+        # multiplexed sock_key derivation above; for HTTP/2 it is the
+        # underlying socket's uniqueHash; for HTTP/1.x the value is set
+        # below at the H1 sock_key derivation site.  Computed and assigned
+        # here so any handler reading cx after dispatch sees the same key
+        # the framework uses to key the per-connection persistent queue,
+        # regardless of which downstream branch the request takes.
+        if (sock_key.val()) {
+            cx.sock_key = sock_key;
+        }
+
         # Get peer info for handleRequest
         hash<auto> info = cx."peer-info";
         info.desc = info.address_desc;
@@ -5376,6 +5423,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             code<nothing(string)> deregister_fn =
                 header_info.deregister_persistent_queue;
             sock_key = s.uniqueHash();
+            # Mirror the multiplexed branch: expose the H1 sock_key on cx
+            # so handlers can pass it to
+            # @ref HttpListenerInterface::signalPersistentSessionClose().
+            cx.sock_key = sock_key;
             register_fn(sock_key, pq);
             on_exit deregister_fn(sock_key);
             if (!cx.close && s.isOpen()) {

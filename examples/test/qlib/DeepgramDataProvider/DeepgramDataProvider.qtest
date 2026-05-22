@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/DeepgramRestClient.qm
+%requires ../../../../qlib/DeepgramDataProvider
+
+%exec-class DeepgramDataProviderTest
+
+class FakeDeepgramRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method;
+        string last_path;
+        *hash<auto> last_body;
+        hash<auto> response;
+    }
+    constructor() : RestClientIo({"url": "https://api.deepgram.com"}) {}
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        last_method = "POST";
+        last_path = path;
+        last_body = body;
+        return cast<hash<RestClient::RestResponseInfo>>(response);
+    }
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        last_method = "GET";
+        last_path = path;
+        return cast<hash<RestClient::RestResponseInfo>>(response);
+    }
+    string getSafeUrl() { return "https://api.deepgram.com"; }
+}
+
+public class DeepgramDataProviderTest inherits QUnit::Test {
+    constructor() : Test("DeepgramDataProvider Test", "1.0") {
+        addTestCase("factory + app + 2 actions registered", \registrationTest());
+        addTestCase("transcribe-file builds query string from non-URL params",
+            \transcribeFileQueryStringTest());
+        addTestCase("transcribe-file omits NOTHING params from the query string",
+            \transcribeFileSkipNothingTest());
+        addTestCase("synthesize-speech surfaces audio bytes + content-type",
+            \synthesizeSpeechTest());
+        addTestCase("app declares Speech AppGroup",       \speechAppGroupTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("deepgram");
+        assertEq("deepgram", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Deepgram");
+        assertEq("Deepgram", app.name);
+        assertEq("deepgram", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Deepgram");
+        assertEq(2, actions.size());
+
+        list<string> action_codes = sort(map $1.action, actions);
+        assertEq(("synthesize-speech", "transcribe-file"), action_codes);
+    }
+
+    private transcribeFileQueryStringTest() {
+        FakeDeepgramRestClientIo fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {
+                "metadata": {"request_id": "abc-123", "duration": 12.5},
+                "results": {"channels": ({"alternatives":
+                    ({"transcript": "hello world", "confidence": 0.97},)},)},
+            },
+        };
+        DeepgramDataProvider::DeepgramTranscribeFileDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "url": "https://example.com/audio.wav",
+            "model": "nova-3",
+            "language": "en-US",
+            "smart_format": True,
+            "diarize": False,
+        });
+
+        assertEq("POST", fake.last_method);
+        # URL is in the JSON body — not the query string
+        assertEq("https://example.com/audio.wav", fake.last_body.url);
+        # All other params go in the query string
+        assertTrue(fake.last_path =~ /^\/v1\/listen\?/);
+        assertTrue(fake.last_path =~ /model=nova-3/);
+        # URL-encoded
+        assertTrue(fake.last_path =~ /language=en-US/);
+        # Booleans serialize to "true"/"false"
+        assertTrue(fake.last_path =~ /smart_format=true/);
+        assertTrue(fake.last_path =~ /diarize=false/);
+
+        # Response surfaces through
+        assertEq("hello world",
+            resp.results.channels[0].alternatives[0].transcript);
+        assertEq("abc-123", resp.metadata.request_id);
+    }
+
+    private transcribeFileSkipNothingTest() {
+        FakeDeepgramRestClientIo fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"metadata": {}, "results": {}},
+        };
+        DeepgramDataProvider::DeepgramTranscribeFileDataProvider prov(fake);
+        prov.doRequest({
+            "url": "https://example.com/a.wav",
+            "model": "nova-3",
+        });
+        # Fields with no default_value AND not passed by the caller MUST NOT
+        # appear in the query string (e.g. punctuate, diarize, summarize,
+        # utterances, keywords).  Fields with a default_value (language,
+        # smart_format) are auto-filled by the framework — those WILL appear.
+        assertFalse(fake.last_path =~ /punctuate=/);
+        assertFalse(fake.last_path =~ /diarize=/);
+        assertFalse(fake.last_path =~ /summarize=/);
+        assertFalse(fake.last_path =~ /detect_language=/);
+        assertFalse(fake.last_path =~ /utterances=/);
+        assertFalse(fake.last_path =~ /keywords=/);
+        assertFalse(fake.last_path =~ /callback=/);
+    }
+
+    private synthesizeSpeechTest() {
+        FakeDeepgramRestClientIo fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": binary("FAKE-MP3-BYTES"),
+            "headers": {
+                "content-type": "audio/mpeg",
+                "dg-request-id": "req-999",
+            },
+        };
+        DeepgramDataProvider::DeepgramSynthesizeSpeechDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "text": "Hello!",
+            "model": "aura-asteria-en",
+            "encoding": "mp3",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path =~ /^\/v1\/speak\?/);
+        assertTrue(fake.last_path =~ /model=aura-asteria-en/);
+        # Text goes in JSON body, not query string
+        assertEq("Hello!", fake.last_body.text);
+        assertFalse(fake.last_path =~ /text=/);
+
+        assertEq(binary("FAKE-MP3-BYTES"), resp.audio);
+        assertEq("audio/mpeg", resp.content_type);
+        assertEq("req-999", resp.request_id);
+    }
+
+    private speechAppGroupTest() {
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Deepgram");
+        # Deepgram declares both AiLlm and the new Speech AppGroup
+        assertTrue(inlist(DataProvider::AppGroup::AiLlm,  app.groups));
+        assertTrue(inlist(DataProvider::AppGroup::Speech, app.groups));
+    }
+}

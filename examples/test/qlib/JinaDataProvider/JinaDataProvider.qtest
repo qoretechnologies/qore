@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/JinaDataProvider
+
+%exec-class JinaDataProviderTest
+
+class FakeJinaRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.jina.ai", "token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    string getSafeUrl() {
+        return "https://api.jina.ai";
+    }
+}
+
+public class JinaDataProviderTest inherits QUnit::Test {
+    constructor() : Test("JinaDataProvider Test", "1.0") {
+        addTestCase("factory + app + 2 actions registered", \registrationTest());
+        addTestCase("root provider lists 2 children",       \rootProviderTest());
+        addTestCase("create-embeddings forwards body unchanged",
+            \embeddingRequestTest());
+        addTestCase("rerank parses 'results' (Jina format)",
+            \rerankRequestTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("jina");
+        assertEq("jina", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("JinaAi");
+        assertEq("JinaAi", app.name);
+        assertEq("Jina AI", app.display_name);
+        assertEq("jina", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("JinaAi");
+        assertEq(2, actions.size());
+        list<string> action_names = sort(map $1.action, actions);
+        assertEq(("create-embeddings", "rerank"), action_names);
+    }
+
+    private rootProviderTest() {
+        FakeJinaRestClientIo fake();
+        JinaDataProvider::JinaDataProvider prov(fake);
+        list<string> children = sort(prov.getChildProviderNames());
+        assertEq(("create-embeddings", "rerank"), children);
+    }
+
+    private embeddingRequestTest() {
+        FakeJinaRestClientIo fake();
+        fake.response_body = {
+            "model": "jina-embeddings-v3",
+            "object": "list",
+            "data": (
+                {"index": 0, "object": "embedding",
+                 "embedding": (0.1, 0.2, 0.3)},
+            ),
+            "usage": {"total_tokens": 3},
+        };
+
+        JinaDataProvider::JinaEmbeddingDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "jina-embeddings-v3",
+            "input": ("hello",),
+            "task": "retrieval.query",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("embeddings", fake.last_path);
+        assertEq("retrieval.query", fake.last_request.task);
+        assertEq(3, resp.data[0].embedding.size());
+    }
+
+    private rerankRequestTest() {
+        FakeJinaRestClientIo fake();
+        # Jina rerank response uses `results` (not `data` like Voyage)
+        fake.response_body = {
+            "model": "jina-reranker-v2-base-multilingual",
+            "results": (
+                {"index": 2, "relevance_score": 0.95,
+                 "document": {"text": "Doc C"}},
+                {"index": 0, "relevance_score": 0.42,
+                 "document": {"text": "Doc A"}},
+            ),
+            "usage": {"total_tokens": 100},
+        };
+
+        JinaDataProvider::JinaRerankDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "jina-reranker-v2-base-multilingual",
+            "query": "test query",
+            "documents": ("Doc A", "Doc B", "Doc C"),
+            "top_n": 2,
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("rerank", fake.last_path);
+        assertEq(2, resp.results.size());
+        assertEq(0.95, resp.results[0].relevance_score);
+        assertEq(2, resp.results[0]."index");
+    }
+}

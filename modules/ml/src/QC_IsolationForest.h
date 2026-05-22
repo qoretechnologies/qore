@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_ISOLATIONFOREST_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLAnomalyDetector.h"
 
 #include <vector>
 #include <random>
@@ -63,7 +65,7 @@ struct IsolationTree {
 };
 
 //! Isolation Forest implementation class
-class QoreIsolationForest : public AbstractPrivateData {
+class QoreIsolationForest : public QoreMLModel {
 public:
     //! Constructor with options
     DLLLOCAL QoreIsolationForest(int n_trees, int sample_size, int max_depth,
@@ -79,7 +81,9 @@ public:
     DLLLOCAL QoreListNode* scoreMatrix(const MatrixXd& data, ExceptionSink* xsink) const;
 
     //! Whether the model has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "IsolationForest"; }
 
     //! Getters
     DLLLOCAL int getNumTrees() const { return n_trees; }
@@ -92,10 +96,10 @@ public:
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+    DLLLOCAL std::vector<std::string> getFieldNames() const override { return field_names; }
 
     //! Serialize model state to binary
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
 
     //! Deserialize model state from binary
     DLLLOCAL static QoreIsolationForest* deserializeState(const uint8_t* data, size_t len,

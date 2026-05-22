@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/FireworksRestClient.qm
+
+%exec-class FireworksRestClientTest
+
+public class FireworksRestClientTest inherits QUnit::Test {
+    constructor() : Test("FireworksRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",       \connectionSchemeTest());
+        addTestCase("LLM factory registered + lazy-loadable",
+            \llmFactoryTest());
+        addTestCase("Embedder factory registered",        \embedderFactoryTest());
+        addTestCase("LLM provider applies default URL",   \defaultUrlTest());
+        addTestCase("default chat path is OpenAI shape",  \chatPathTest());
+        addTestCase("REST client options apply Bearer mapping",
+            \restOptionsTest());
+        addTestCase("embedder requires api_key",          \embedderConfigTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("fireworks");
+        assertEq("Fireworks AI REST Connection", info.display_name);
+        assertTrue(info.schemes.fireworks);
+        assertEq("apikey", info.required_options);
+    }
+
+    private llmFactoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("fireworks");
+        assertEq("fireworks", f.getMode());
+        assertEq("Fireworks AI chat completions", f.getDisplayName());
+        assertEq("FireworksRestClient", f.getInfo().module_name);
+    }
+
+    private embedderFactoryTest() {
+        QoreRagUtils::AbstractEmbedderFactory ef =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("fireworks");
+        assertEq("fireworks", ef.getType());
+        assertEq("Fireworks AI embeddings", ef.getDisplayName());
+    }
+
+    private defaultUrlTest() {
+        FireworksRestClient::FireworksLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "accounts/fireworks/models/llama-v3p1-405b-instruct",
+                "api_key": "test-key",
+            });
+        assertEq("fireworks", p.getMode());
+        assertEq(FireworksRestClient::FireworksLlmProvider::DefaultUrl,
+            p.getConfig().url);
+    }
+
+    private chatPathTest() {
+        FireworksRestClient::FireworksLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "accounts/fireworks/models/llama-v3p1-405b-instruct",
+                "api_key": "k",
+            });
+        assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = FireworksRestClient::FireworksRestClientBase::getOptions({
+            "apikey": "my-key",
+        });
+        assertEq("my-key", opts.token);
+        assertEq(NOTHING, opts.apikey);
+        assertEq("https://api.fireworks.ai/inference", opts.url);
+        assertEq("v1", opts.api);
+        assertEq("/v1", opts.default_path);
+    }
+
+    private embedderConfigTest() {
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::FireworksEmbedder(<QoreRagUtils::EmbedderConfig>{
+                "backend": "fireworks",
+                "model": "nomic-ai/nomic-embed-text-v1.5",
+            });
+        });
+        QoreRagUtils::FireworksEmbedder e(<QoreRagUtils::EmbedderConfig>{
+            "backend": "fireworks",
+            "api_key": "k",
+        });
+        assertEq("nomic-ai/nomic-embed-text-v1.5", e.getModel());
+    }
+}

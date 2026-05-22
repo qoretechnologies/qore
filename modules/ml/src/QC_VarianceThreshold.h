@@ -12,6 +12,8 @@
 #define _QORE_MODULE_ML_QC_VARIANCETHRESHOLD_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLTransformer.h"
 
 #include <mutex>
 
@@ -25,7 +27,7 @@ DLLLOCAL QoreClass* initVarianceThresholdClass(QoreNamespace& ns);
 /** fit() computes per-feature variance. transform() keeps only features
     with variance > threshold. Default threshold 0.0 removes constant features.
 */
-class QoreVarianceThreshold : public AbstractPrivateData {
+class QoreVarianceThreshold : public QoreMLModel {
 public:
     DLLLOCAL QoreVarianceThreshold(double threshold);
 
@@ -33,11 +35,13 @@ public:
     DLLLOCAL MatrixXd transform(const MatrixXd& X, ExceptionSink* xsink) const;
     DLLLOCAL MatrixXd fitTransform(const MatrixXd& X, ExceptionSink* xsink);
 
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    DLLLOCAL std::string getAlgorithmName() const override { return "VarianceThreshold"; }
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) {
         field_names = names;
     }
-    DLLLOCAL const std::vector<std::string>& getFieldNames() const {
+    DLLLOCAL std::vector<std::string> getFieldNames() const override {
         return field_names;
     }
 
@@ -47,7 +51,7 @@ public:
     //! Get the mask of selected features (true = kept)
     DLLLOCAL QoreListNode* getSupport(ExceptionSink* xsink) const;
 
-    DLLLOCAL std::vector<uint8_t> serializeState() const;
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
     DLLLOCAL static QoreVarianceThreshold* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);
 

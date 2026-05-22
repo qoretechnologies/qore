@@ -45,12 +45,13 @@ QoreListNode* QoreSparseMatrix::toDense(ExceptionSink* xsink) const {
     int rows = static_cast<int>(dense.rows());
     int cols = static_cast<int>(dense.cols());
 
-    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(
+        qore_get_complex_list_type(floatTypeInfo)), xsink);
     for (int i = 0; i < rows; ++i) {
         if (i % 100 == 0 && qore_check_cancel(xsink, "SparseMatrix toDense")) {
             return nullptr;
         }
-        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        ReferenceHolder<QoreListNode> row(new QoreListNode(floatTypeInfo), xsink);
         for (int j = 0; j < cols; ++j) {
             row->push(dense(i, j), xsink);
         }

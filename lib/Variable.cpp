@@ -1514,25 +1514,30 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
 
     // Strip narrowed type from hash/list when assigning to hash<auto!>/list<auto!> variables
     // For hash<auto!>/list<auto!> (NoNarrow): always set to autoHashTypeInfo/autoListTypeInfo
-    // Note: Setting to autoHashTypeInfo/autoListTypeInfo preserves nested hashdecl types
-    // Setting to nullptr would make the hash untyped, which causes copy_strip_complex_types to be
-    // called on nested values, losing hashdecl type info
-    // hash<auto>/list<auto> variables don't need any modification - they preserve the source type
+    // The point of auto! is to disable type narrowing at the variable level, so the top-level
+    // hashdecl on the source value must also be discarded; otherwise the runtime would continue
+    // to enforce hashdecl strictness (rejecting unknown keys / different value types) on a value
+    // that the user declared as flexible. Nested hashdecl values are preserved because we only
+    // strip the outer container's type info, not its members.
     if (typeInfo == autoNoNarrowHashTypeInfo || typeInfo == autoNoNarrowHashOrNothingTypeInfo) {
         // hash<auto!> / *hash<auto!> - always strip to autoHashTypeInfo
         if (n.getType() == NT_HASH) {
             QoreHashNode* h = n.get<QoreHashNode>();
             qore_hash_private* hp = qore_hash_private::get(*h);
-            if (!hp->getHashDecl()) {
-                if (hp->complexTypeInfo == autoHashTypeInfo) {
-                    // Already no-narrow; no copy is needed just to preserve
-                    // the same container type.
-                } else if (!h->is_unique()) {
+            if (hp->getHashDecl() || hp->complexTypeInfo != autoHashTypeInfo) {
+                if (!h->is_unique()) {
                     QoreHashNode* copy = h->copy();
-                    qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
+                    qore_hash_private* cp = qore_hash_private::get(*copy);
+                    if (cp->getHashDecl()) {
+                        cp->setHashDecl(nullptr);
+                    }
+                    cp->complexTypeInfo = autoHashTypeInfo;
                     n = copy;
                     saveTemp(h);
                 } else {
+                    if (hp->getHashDecl()) {
+                        hp->setHashDecl(nullptr);
+                    }
                     hp->complexTypeInfo = autoHashTypeInfo;
                 }
             }

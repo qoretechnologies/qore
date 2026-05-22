@@ -1,0 +1,323 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/AwsRestClient.qm
+%requires ../../../../qlib/BedrockRestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class BedrockTest
+
+class FakeBedrockHandler inherits AbstractHttpRequestHandler {
+    public {
+        string last_path = "";
+        *hash<auto> last_body;
+        string last_authorization = "";
+        # default canned response for /model/.../converse
+        hash<auto> converse_response = {
+            "output": {
+                "message": {
+                    "role": "assistant",
+                    "content": ({"text": "Hello from Bedrock"},),
+                },
+            },
+            "stopReason": "end_turn",
+            "usage": {
+                "inputTokens": 12,
+                "outputTokens": 5,
+                "totalTokens": 17,
+            },
+        };
+        # default canned response for /model/.../invoke (Titan embed)
+        hash<auto> embed_response = {
+            "embedding": (0.1, 0.2, 0.3, 0.4),
+            "inputTextTokenCount": 3,
+        };
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        last_path = cx.raw_path;
+        last_authorization = hdr."authorization" ?? "";
+        string body_str = body
+            ? (body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body)
+            : "";
+%ifndef NoJson
+        try {
+            last_body = parse_json(body_str);
+        } catch () {
+            last_body = NOTHING;
+        }
+%endif
+        # Route by path
+        if (last_path =~ /\/converse$/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200,
+                make_json(converse_response));
+        }
+        if (last_path =~ /\/invoke$/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200,
+                make_json(embed_response));
+        }
+        return makeResponse(404, "unknown bedrock path: " + last_path);
+    }
+}
+
+public class BedrockTest inherits QUnit::Test {
+    private {
+        HttpServer bedrock_http;
+        int bedrock_port;
+        FakeBedrockHandler handler;
+    }
+
+    constructor() : Test("Bedrock Test", "1.0") {
+        addTestCase("factory registered + getInfo",       \factoryTest());
+        addTestCase("Converse chat round-trip",           \converseChatTest());
+        addTestCase("Converse tool_use round-trip",       \converseToolUseTest());
+        addTestCase("Converse complete() helper",         \completeTest());
+        addTestCase("synthetic chatStream emits delta+done", \chatStreamTest());
+        addTestCase("SigV4 authorization header is signed", \sigV4Test());
+        addTestCase("missing region throws at construction", \missingRegionTest());
+        addTestCase("Titan embedder round-trip",          \titanEmbedderTest());
+        addTestCase("BedrockRestConnection accepts options", \connectionTest());
+
+        try {
+            setupFakeServer();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("setup error: %s\n", get_exception_string(ex));
+            }
+        }
+        set_return_value(main());
+    }
+
+    private setupFakeServer() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        bedrock_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        handler = new FakeBedrockHandler();
+        bedrock_http.setDefaultHandler("bedrock", handler);
+        bedrock_port = bedrock_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete bedrock_http;
+    }
+
+    static checkJson(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    private factoryTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory f =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("bedrock");
+        assertEq("bedrock", f.getMode());
+        hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
+        assertEq("BedrockRestClient", info.module_name);
+        assertTrue(info.supports_tools);
+        assertTrue(info.supports_multimodal);
+    }
+
+    private converseChatTest() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        BedrockRestClient::BedrockLlmProvider p = newProvider();
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},
+        ));
+        assertEq("Hello from Bedrock", r.content);
+        assertEq("end_turn", r.stop_reason);
+        assertEq(12, r.usage.prompt_tokens);
+        assertEq(5,  r.usage.completion_tokens);
+        assertEq(17, r.usage.total_tokens);
+        # verify the request body shape sent to Bedrock
+        assertEq(1, handler.last_body.messages.size());
+        assertEq("user", handler.last_body.messages[0].role);
+        assertEq("ping", handler.last_body.messages[0].content[0].text);
+        # path includes URL-encoded model ID
+        assertTrue(handler.last_path =~ /\/model\/anthropic\..*\/converse$/,
+            sprintf("expected /model/anthropic.../converse, got %y", handler.last_path));
+    }
+
+    private converseToolUseTest() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        # toolUse response — save+restore so subsequent tests see the default text shape
+        hash<auto> saved_response = handler.converse_response;
+        on_exit handler.converse_response = saved_response;
+        handler.converse_response = {
+            "output": {
+                "message": {
+                    "role": "assistant",
+                    "content": ({
+                        "toolUse": {
+                            "toolUseId": "tooluse_abc",
+                            "name": "get_weather",
+                            "input": {"city": "London"},
+                        },
+                    },),
+                },
+            },
+            "stopReason": "tool_use",
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+        };
+        BedrockRestClient::BedrockLlmProvider p = newProvider();
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "weather?"},
+        ), (
+            <QoreLlmUtils::ToolDefinition>{
+                "name": "get_weather",
+                "description": "weather lookup",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"city": {"type": "string"}},
+                },
+            },
+        ));
+        assertEq("tool_use", r.stop_reason);
+        assertEq(1, r.tool_calls.size());
+        assertEq("tooluse_abc",   r.tool_calls[0].id);
+        assertEq("get_weather",   r.tool_calls[0].name);
+        assertEq("London",        r.tool_calls[0].arguments.city);
+        # verify tool config was sent in the request
+        assertEq(1, handler.last_body.toolConfig.tools.size());
+        assertEq("get_weather",
+            handler.last_body.toolConfig.tools[0].toolSpec.name);
+    }
+
+    private completeTest() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        BedrockRestClient::BedrockLlmProvider p = newProvider();
+        hash<QoreLlmUtils::LlmCompletionResult> r = p.complete(
+            "You are a helper.", "Say hi.");
+        assertEq("Hello from Bedrock", r.content);
+        # system prompt routed to Bedrock 'system' block
+        assertEq("You are a helper.", handler.last_body.system[0].text);
+    }
+
+    private chatStreamTest() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        BedrockRestClient::BedrockLlmProvider p = newProvider();
+        list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
+        p.chatStream((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "stream"},
+        ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+            push events, e;
+        });
+        assertEq(2, events.size());
+        assertEq("Hello from Bedrock", events[0].delta);
+        assertEq(True, events[1].done);
+    }
+
+    private sigV4Test() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        BedrockRestClient::BedrockLlmProvider p = newProvider();
+        p.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "x"},));
+        # the request must have been SigV4-signed; AWS4-HMAC-SHA256 in Authorization
+        assertTrue(handler.last_authorization =~ /^AWS4-HMAC-SHA256/,
+            sprintf("expected SigV4 authorization header, got %y",
+                handler.last_authorization));
+        # scope must include the bedrock service
+        assertTrue(handler.last_authorization =~ /\/bedrock\/aws4_request/,
+            "Authorization scope must mention 'bedrock' service");
+    }
+
+    private missingRegionTest() {
+        BedrockTest::checkJson(self);
+        # snapshot env; ensure no region is leaking in
+        *string saved_r = getenv("AWS_REGION");
+        *string saved_dr = getenv("AWS_DEFAULT_REGION");
+        unsetenv("AWS_REGION");
+        unsetenv("AWS_DEFAULT_REGION");
+        on_exit {
+            saved_r.val()  ? setenv("AWS_REGION", saved_r)          : unsetenv("AWS_REGION");
+            saved_dr.val() ? setenv("AWS_DEFAULT_REGION", saved_dr) : unsetenv("AWS_DEFAULT_REGION");
+        }
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            new BedrockRestClient::BedrockLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+                "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                "provider_options": {"aws_keyid": "k", "aws_secret": "s"},
+            });
+        });
+    }
+
+    private titanEmbedderTest() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        QoreRagUtils::AbstractEmbedderFactory f =
+            QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("bedrock");
+        assertEq("bedrock", f.getType());
+        QoreRagUtils::AbstractEmbedder emb = f.create(<QoreRagUtils::EmbedderConfig>{
+            "backend": "bedrock",
+            "model": "amazon.titan-embed-text-v2:0",
+            "url": "http://localhost:" + bedrock_port,
+            "options": {
+                "aws_region": "us-east-1",
+                "aws_keyid": "k",
+                "aws_secret": "s",
+                "aws_imds_disabled": True,
+            },
+        });
+        list<float> v = emb.encode("hello world");
+        assertEq((0.1, 0.2, 0.3, 0.4), v);
+        assertEq(4, emb.getDimension());
+        # request body: Titan-shaped
+        assertEq("hello world", handler.last_body.inputText);
+    }
+
+    private connectionTest() {
+        BedrockTest::checkJson(self);
+        # only AWS connection-options registered in the schema are accepted
+        # by the ConnectionProvider layer; credential-chain extension keys
+        # like aws_imds_disabled are runtime-only for this v1
+        BedrockRestClient::BedrockRestConnection conn("bedrock-test",
+            "test", "", NOTHING, {
+                "aws_region": "us-east-1",
+                "aws_keyid": "k",
+                "aws_secret": "s",
+            });
+        assertEq("bedrock", conn.getType());
+    }
+
+    private BedrockRestClient::BedrockLlmProvider newProvider() {
+        return new BedrockRestClient::BedrockLlmProvider(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                "url": "http://localhost:" + bedrock_port,
+                "provider_options": {
+                    "aws_region": "us-east-1",
+                    "aws_keyid": "AKIA-TEST",
+                    "aws_secret": "test-secret",
+                    "aws_imds_disabled": True,
+                },
+            });
+    }
+}

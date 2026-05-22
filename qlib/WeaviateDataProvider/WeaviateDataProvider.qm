@@ -1,0 +1,99 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore WeaviateDataProvider module definition
+
+/*  WeaviateDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) WeaviateRestClient
+%requires RestClientIo
+
+module WeaviateDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Weaviate vector DB";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new WeaviateDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": WeaviateDataProvider::AppName,
+            "display_name": "Weaviate",
+            "short_desc": "Weaviate open-source vector database with hybrid search",
+            "desc": "Provides access to [Weaviate](https://weaviate.io) — an open-source "
+                "vector database supporting hybrid search (vector + keyword), "
+                "multi-tenancy, and a wide range of vectorizer modules.\n\n"
+                "Use the @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" "
+                "backend in @ref qorerragutilsintro \"QoreRagUtils\" for the supported "
+                "ingest/retrieve path through @ref QoreRagUtils::RagPipeline "
+                "\"RagPipeline\".",
+            "scheme": "weaviate",
+            "logo": WeaviateLogo,
+            "logo_file_name": "weaviate-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WeaviateDataProvider::AppName,
+            "path": "/list-classes",
+            "action": "list-classes",
+            "display_name": "List Schema Classes",
+            "short_desc": "List Weaviate schema classes",
+            "desc": "Calls `GET /v1/schema` to enumerate the configured Weaviate classes "
+                "(name, properties, vectorizer, sharding config).",
+            "action_code": DPAT_API,
+            "groups": ("Admin",),
+            "options": {},
+            "output_type": WeaviateListClassesDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage WeaviateDataProvider Module
+
+    @tableofcontents
+
+    @section weaviatedataproviderintro WeaviateDataProvider Introduction
+
+    Lightweight data-provider integration for
+    [Weaviate](https://weaviate.io).  For full vector operations use the
+    @ref QoreRagUtils::WeaviateVectorStore "WeaviateVectorStore" backend
+    via @ref QoreRagUtils::RagPipeline "RagPipeline".
+
+    @section WeaviateDataProviderRelnotes Release Notes
+
+    @subsection WeaviateDataProviderv1_0 WeaviateDataProvider v1.0
+    - the initial version of the %WeaviateDataProvider module
+*/
+
+#! contains all public definitions in the WeaviateDataProvider module
+public namespace WeaviateDataProvider {
+#! Weaviate application name
+public const AppName = "Weaviate";
+}
+
+#! App logo loaded from file
+public const WeaviateLogo = File::readTextFile(get_script_dir() + "/weaviate-logo.svg");

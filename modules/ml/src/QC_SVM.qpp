@@ -31,7 +31,7 @@ extern const TypedHashDecl* hashdeclSVMResult;
 
     @since ml 1.0
 */
-qclass SVM [arg=QoreSVM* svm; ns=Qore::ML; flags=final];
+qclass SVM [arg=QoreSVM* svm; ns=Qore::ML; vparent=AbstractMLClassifier];
 
 //! Creates an SVM with the given options
 /** @param options a hash with:
@@ -96,7 +96,7 @@ SVM::copy() {
 /** @param data list of hash records
     @param target_field the target column name
 */
-nothing SVM::fit(list<auto> data, string target_field) {
+nothing SVM::fit(list<hash<auto>> data, string target_field) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) { return QoreValue(); }
@@ -157,7 +157,7 @@ hash<auto> SVM::predict(hash<auto> record) {
 /** @param matrix list of row lists
     @return list of SVMResult hashes
 */
-list<hash<auto>> SVM::predictMatrix(list<auto> matrix) {
+list<hash<auto>> SVM::predictMatrix(list<list<float>> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
     return svm->predictMatrix(X, xsink);

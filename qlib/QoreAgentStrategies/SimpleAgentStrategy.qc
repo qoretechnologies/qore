@@ -215,6 +215,210 @@ public class SimpleAgentStrategy inherits AbstractAgentStrategy {
         };
     }
 
+    #! Streaming variant of @ref execute() that surfaces per-chunk events
+    /** Mirrors the @ref execute() loop but uses
+        @ref AbstractAgentStrategy::callChatStream() so each LLM iteration
+        emits its content deltas, tool-call deltas, and per-iteration
+        terminal event to @a on_event in real time.  Terminal \c done
+        events from intermediate iterations are SUPPRESSED so the
+        caller's wire-level SSE stream sees a continuous conversation
+        across tool dispatches — a single terminal \c done is emitted
+        after the loop exits.
+
+        Tool-dispatch progress is surfaced via the @ref AgentEvent
+        callback (@ref tool_dispatched / @ref tool_completed) so clients
+        can render dispatch indicators between LLM bursts.
+
+        @param ctx the agent context
+        @param on_event called once per @ref ChatStreamEvent reaching the
+            caller; suppression of intermediate terminals is already
+            applied before @a on_event runs
+
+        @return an @ref AgentResult with the same shape @ref execute()
+            returns; \c metadata carries the per-iteration count and a
+            \c streamed flag set to @ref True
+
+        @par Example: drive a chat endpoint's SSE response from a
+        streaming agent loop while still receiving the final accumulated
+        @ref AgentResult for post-processing (audit logging, conversation
+        persistence, token accounting)
+
+        @code{.py}
+SimpleAgentStrategy strat(backend, {"max_iterations": 5});
+hash<AgentResult> res = strat.executeStream(<AgentContext>{
+    "message": user_input,
+    "tools": tool_defs,
+    "tool_dispatch": tool_dispatcher,
+}, sub (hash<ChatStreamEvent> ev) {
+    if (ev.delta.val()) {
+        sse_queue.push(sprintf("data: %s\n\n",
+            make_json({"delta": ev.delta})));
+    }
+    if (ev.done) {
+        sse_queue.push("data: [DONE]\n\n");
+    }
+});
+audit.recordTurn(res);
+        @endcode
+    */
+    hash<AgentResult> executeStream(hash<AgentContext> ctx, code on_event) {
+        resetTokenCounter();
+        list<hash<auto>> all_tool_calls = ();
+        int llm_calls = 0;
+
+        emitEvent(<AgentEvent>{
+            "event_type": "strategy_started",
+            "strategy": "simple",
+            "timestamp": now_us(),
+        });
+
+        list<hash<QoreLlmUtils::ChatMessage>> messages = buildInitialMessages(ctx);
+
+        int iteration = 0;
+        # Suppress the upstream-emitted terminal `done` until the strategy
+        # decides the conversation is actually complete (i.e. no more tool
+        # calls).  The caller sees ONE terminal `done` at the end of the
+        # final iteration.
+        while (iteration < max_iterations) {
+            ++iteration;
+
+            int this_iteration = iteration;
+            hash<QoreLlmUtils::ChatResponse> response = callChatStream(messages,
+                sub (hash<QoreLlmUtils::ChatStreamEvent> event) {
+                    # Strip terminal `done` from intermediate iterations.
+                    # The loop emits its own final `done` after exit.
+                    # An intermediate `done` always corresponds to an
+                    # OpenAI `finish_reason` chunk; whether it carries
+                    # `tool_calls` or `stop` is settled here by the
+                    # strategy's loop guard below.  Surfacing it now
+                    # would cause clients to terminate prematurely.
+                    if (event.done) {
+                        return;
+                    }
+                    on_event(event);
+                }, ctx.tools);
+            ++llm_calls;
+
+            emitEvent(<AgentEvent>{
+                "event_type": "llm_called",
+                "strategy": "simple",
+                "iteration": iteration,
+                "timestamp": now_us(),
+            });
+
+            if (response.stop_reason != "tool_use" || !response.tool_calls) {
+                # Final iteration — surface the terminal `done` to the
+                # caller now.  Forward the upstream's terminal `raw`
+                # chunk so callers that parse `event.raw.usage` /
+                # `finish_reason` see the right shape.
+                on_event(<QoreLlmUtils::ChatStreamEvent>{
+                    "done": True,
+                    "raw": response.raw,
+                });
+                emitEvent(<AgentEvent>{
+                    "event_type": "strategy_completed",
+                    "strategy": "simple",
+                    "iteration": iteration,
+                    "timestamp": now_us(),
+                    "metadata": {"reason": "end_turn"},
+                });
+                return <AgentResult>{
+                    "response": response.content ?? "",
+                    "tool_calls": all_tool_calls,
+                    "total_tokens": getTokensConsumed(),
+                    "llm_calls": llm_calls,
+                    "metadata": {
+                        "strategy": "simple",
+                        "iterations": iteration,
+                        "streamed": True,
+                    },
+                };
+            }
+
+            # Tool dispatch round.  Append the assistant message that
+            # requested the tool calls (same shape as the non-streaming
+            # execute() loop) so the next LLM call has the full thread.
+            push messages, <QoreLlmUtils::ChatMessage>{
+                "role": "assistant",
+                "content": response.content,
+                "tool_calls": response.tool_calls,
+            };
+
+            list<hash<auto>> dispatch_results = dispatchTools(ctx,
+                response.tool_calls);
+
+            foreach hash<auto> dr in (dispatch_results) {
+                string result_content;
+                if (dr.error.val()) {
+                    result_content = dr.error;
+                } else if (dr.result.typeCode() == NT_STRING) {
+                    result_content = dr.result;
+                } else {
+                    result_content = make_json(dr.result ?? {});
+                }
+                push messages, <QoreLlmUtils::ChatMessage>{
+                    "role": "tool",
+                    "content": result_content,
+                    "tool_call_id": dr.id,
+                    "name": dr.name,
+                };
+                push all_tool_calls, {
+                    "tool": dr.name,
+                    "args": dr.args ?? {},
+                    "result": dr.result,
+                    "error": dr.error,
+                };
+            }
+
+            emitEvent(<AgentEvent>{
+                "event_type": "iteration_completed",
+                "strategy": "simple",
+                "iteration": iteration,
+                "timestamp": now_us(),
+                "metadata": {"tool_count": dispatch_results.size()},
+            });
+        }
+
+        # Max iterations exhausted — make a final non-streaming call for a
+        # text response (same fallback execute() does).  Surface the final
+        # text as a single content delta + terminal `done` so the caller
+        # still sees a coherent stream.
+        hash<QoreLlmUtils::ChatResponse> final_response = callChat(messages);
+        ++llm_calls;
+        if (final_response.content.val()) {
+            on_event(<QoreLlmUtils::ChatStreamEvent>{
+                "delta": final_response.content,
+                "done": False,
+            });
+        }
+        on_event(<QoreLlmUtils::ChatStreamEvent>{
+            "done": True,
+            "raw": final_response.raw,
+        });
+
+        emitEvent(<AgentEvent>{
+            "event_type": "strategy_completed",
+            "strategy": "simple",
+            "iteration": max_iterations,
+            "timestamp": now_us(),
+            "metadata": {"reason": "max_iterations"},
+        });
+
+        return <AgentResult>{
+            "response": final_response.content
+                ?? "Maximum iterations reached without a final response.",
+            "tool_calls": all_tool_calls,
+            "total_tokens": getTokensConsumed(),
+            "llm_calls": llm_calls,
+            "metadata": {
+                "strategy": "simple",
+                "iterations": max_iterations,
+                "max_iterations_reached": True,
+                "streamed": True,
+            },
+        };
+    }
+
     #! Dispatches tool calls (parallel or sequential)
     private list<hash<auto>> dispatchTools(hash<AgentContext> ctx,
             list<hash<QoreLlmUtils::ChatToolCall>> tool_calls) {

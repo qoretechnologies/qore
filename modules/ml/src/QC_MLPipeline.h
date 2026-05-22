@@ -29,6 +29,8 @@
 #define _QORE_MODULE_ML_QC_MLPIPELINE_H
 
 #include "ml_common.h"
+#include "QoreMLModel.h"
+#include "QC_AbstractMLModel.h"
 #include "QC_StandardScaler.h"
 #include "QC_MinMaxScaler.h"
 #include "QC_Imputer.h"
@@ -75,7 +77,7 @@ struct PipelineStep {
 };
 
 //! MLPipeline — chains preprocessors and an estimator into a single fit/predict unit
-class QoreMLPipeline : public AbstractPrivateData {
+class QoreMLPipeline : public QoreMLModel {
 public:
     DLLLOCAL QoreMLPipeline() {}
 
@@ -108,13 +110,23 @@ public:
     DLLLOCAL QoreListNode* predictMatrix(const MatrixXd& X, ExceptionSink* xsink) const;
 
     //! Whether the pipeline has been fitted
-    DLLLOCAL bool isFitted() const { return fitted; }
+    DLLLOCAL bool isFitted() const override { return fitted; }
+
+    //! Algorithm tag used by the serialization framework
+    DLLLOCAL std::string getAlgorithmName() const override { return "MLPipeline"; }
 
     //! Get the number of steps
     DLLLOCAL int getNumSteps() const { return static_cast<int>(steps.size()); }
 
     //! Get step names
     DLLLOCAL QoreListNode* getStepNames(ExceptionSink* xsink) const;
+
+    //! Serialize the pipeline (each step packed by algorithm tag + bytes)
+    DLLLOCAL std::vector<uint8_t> serializeState() const override;
+
+    //! Deserialize a pipeline blob; constructs child QoreObjects via getProgram()
+    DLLLOCAL static QoreMLPipeline* deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink);
 
 private:
     std::vector<PipelineStep> steps;

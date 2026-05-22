@@ -1,0 +1,311 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/AwsEventStream.qm
+
+%exec-class AwsEventStreamTest
+
+public class AwsEventStreamTest inherits QUnit::Test {
+    constructor() : Test("AwsEventStream Test", "1.0") {
+        addTestCase("crc32 reference vectors", \crcReferenceVectorsTest());
+        addTestCase("single frame round-trip", \singleFrameTest());
+        addTestCase("multiple frames in one feed", \multipleFramesTest());
+        addTestCase("frame split across feeds", \splitFrameTest());
+        addTestCase("all header types", \allHeaderTypesTest());
+        addTestCase("prelude CRC mismatch throws", \preludeCrcErrorTest());
+        addTestCase("message CRC mismatch throws", \messageCrcErrorTest());
+        addTestCase("invalid total length rejected", \invalidTotalLengthTest());
+        addTestCase("empty payload frame", \emptyPayloadTest());
+        set_return_value(main());
+    }
+
+    private crcReferenceVectorsTest() {
+        # well-known CRC-32 (IEEE 802.3, reflected) reference vectors
+        assertEq(0xcbf43926, AwsEventStream::AwsEventStreamDecoder::crc32(binary("123456789")));
+        assertEq(0xd202ef8d, AwsEventStream::AwsEventStreamDecoder::crc32(binary(<00>)));
+        assertEq(0xe8b7be43, AwsEventStream::AwsEventStreamDecoder::crc32(binary("a")));
+        assertEq(0,          AwsEventStream::AwsEventStreamDecoder::crc32(binary()));
+    }
+
+    private singleFrameTest() {
+        binary frame = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "messageStart"),
+             ":content-type": ("string", "application/json")},
+            binary("{\"role\":\"assistant\"}"));
+
+        AwsEventStream::AwsEventStreamDecoder dec();
+        dec.feed(frame);
+        *hash<AwsEventStream::AwsEventStreamFrame> f = dec.nextFrame();
+        assertEq("messageStart", f.headers.":event-type");
+        assertEq("application/json", f.headers.":content-type");
+        assertEq("{\"role\":\"assistant\"}", f.payload.toString("UTF-8"));
+        assertEq(0, dec.getBufferSize());
+        # no further frames
+        assertEq(NOTHING, dec.nextFrame());
+    }
+
+    private multipleFramesTest() {
+        binary f1 = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "contentBlockDelta")},
+            binary("chunk-1"));
+        binary f2 = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "contentBlockDelta")},
+            binary("chunk-2"));
+        binary f3 = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "messageStop")},
+            binary());
+
+        AwsEventStream::AwsEventStreamDecoder dec();
+        dec.feed(f1 + f2 + f3);
+        *hash<AwsEventStream::AwsEventStreamFrame> r1 = dec.nextFrame();
+        *hash<AwsEventStream::AwsEventStreamFrame> r2 = dec.nextFrame();
+        *hash<AwsEventStream::AwsEventStreamFrame> r3 = dec.nextFrame();
+        assertEq("chunk-1", r1.payload.toString("UTF-8"));
+        assertEq("chunk-2", r2.payload.toString("UTF-8"));
+        assertEq(0, r3.payload.size());
+        assertEq("messageStop", r3.headers.":event-type");
+        assertEq(NOTHING, dec.nextFrame());
+    }
+
+    private splitFrameTest() {
+        binary frame = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "contentBlockDelta")},
+            binary("a-payload-of-modest-length"));
+
+        AwsEventStream::AwsEventStreamDecoder dec();
+
+        # Feed first 5 bytes — not enough for the 12-byte prelude
+        dec.feed(frame[0..4]);
+        assertEq(NOTHING, dec.nextFrame());
+        assertEq(5, dec.getBufferSize());
+
+        # Feed enough for the prelude but not the rest
+        dec.feed(frame[5..15]);
+        assertEq(NOTHING, dec.nextFrame());
+        assertEq(16, dec.getBufferSize());
+
+        # Feed the rest
+        dec.feed(frame[16..frame.size() - 1]);
+        *hash<AwsEventStream::AwsEventStreamFrame> f = dec.nextFrame();
+        assertEq("a-payload-of-modest-length", f.payload.toString("UTF-8"));
+        assertEq(0, dec.getBufferSize());
+    }
+
+    #! Exercises every header type tag the decoder must handle
+    private allHeaderTypesTest() {
+        hash<string, list<auto>> hdrs = {
+            "h-bool-true":  ("bool-true",),
+            "h-bool-false": ("bool-false",),
+            "h-byte":       ("byte", -5),
+            "h-short":      ("short", -2000),
+            "h-int":        ("int", 12345678),
+            "h-long":       ("long", 9000000000),
+            "h-bytes":      ("bytes", <DEADBEEF>),
+            "h-string":     ("string", "modelStreamErrorException"),
+            "h-timestamp":  ("timestamp", 1700000000000),  # ms
+            "h-uuid":       ("uuid", "550e8400-e29b-41d4-a716-446655440000"),
+        };
+        binary frame = AwsEventStreamTest::buildFrame(hdrs, binary("payload"));
+        AwsEventStream::AwsEventStreamDecoder dec();
+        dec.feed(frame);
+        *hash<AwsEventStream::AwsEventStreamFrame> f = dec.nextFrame();
+
+        assertEq(True,  f.headers."h-bool-true");
+        assertEq(False, f.headers."h-bool-false");
+        assertEq(-5,    f.headers."h-byte");
+        assertEq(-2000, f.headers."h-short");
+        assertEq(12345678,    f.headers."h-int");
+        assertEq(9000000000,  f.headers."h-long");
+        assertEq(<DEADBEEF>,  f.headers."h-bytes");
+        assertEq("modelStreamErrorException", f.headers."h-string");
+        # timestamp decoded as date 1970-01-01Z + ms
+        date expected = 1970-01-01Z + milliseconds(1700000000000);
+        assertEq(expected, f.headers."h-timestamp");
+        assertEq("550e8400-e29b-41d4-a716-446655440000", f.headers."h-uuid");
+        assertEq("payload", f.payload.toString("UTF-8"));
+    }
+
+    private preludeCrcErrorTest() {
+        binary frame = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "messageStart")}, binary("p"));
+        # corrupt one byte in the prelude CRC32 (bytes 8..11)
+        binary corrupted = frame[0..8] + binary(<00>) + frame[10..frame.size() - 1];
+        AwsEventStream::AwsEventStreamDecoder dec();
+        dec.feed(corrupted);
+        assertThrows("AWS-EVENT-STREAM-CRC-ERROR", \dec.nextFrame());
+    }
+
+    private messageCrcErrorTest() {
+        binary frame = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "messageStart")}, binary("payload"));
+        # corrupt the last byte (part of message CRC32)
+        binary corrupted = frame[0..frame.size() - 2] + binary(<EE>);
+        AwsEventStream::AwsEventStreamDecoder dec();
+        dec.feed(corrupted);
+        assertThrows("AWS-EVENT-STREAM-CRC-ERROR", \dec.nextFrame());
+    }
+
+    private invalidTotalLengthTest() {
+        # build a frame whose prelude claims total_len < minimum (16)
+        binary fake = binary();
+        fake += <00000004>;  # total_len = 4 (too small)
+        fake += <00000000>;  # headers_len = 0
+        int crc = AwsEventStream::AwsEventStreamDecoder::crc32(fake[0..7]);
+        fake += AwsEventStreamTest::u32be(crc);
+        fake += <00000000>;  # bogus trailing bytes so size >= 12
+
+        AwsEventStream::AwsEventStreamDecoder dec();
+        dec.feed(fake);
+        assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", \dec.nextFrame());
+    }
+
+    private emptyPayloadTest() {
+        binary frame = AwsEventStreamTest::buildFrame(
+            {":event-type": ("string", "messageStop")}, binary());
+        AwsEventStream::AwsEventStreamDecoder dec();
+        dec.feed(frame);
+        *hash<AwsEventStream::AwsEventStreamFrame> f = dec.nextFrame();
+        assertEq(0, f.payload.size());
+        assertEq("messageStop", f.headers.":event-type");
+    }
+
+    # ===== fixture builders =====
+
+    #! Builds a valid AWS event-stream frame
+    /** @param headers hash of name -> (type-tag, value), where type-tag is
+        one of: bool-true, bool-false, byte, short, int, long, bytes,
+        string, timestamp (int ms), uuid (8-4-4-4-12 string)
+    */
+    static binary buildFrame(hash<string, list<auto>> headers, binary payload) {
+        binary hb = binary();
+        foreach hash<auto> i in (headers.pairIterator()) {
+            string name = i.key;
+            string tag = i.value[0];
+            auto val = i.value[1];
+            binary name_bytes = binary(name);
+            if (name_bytes.size() > 0xFF) {
+                throw "TEST-FIXTURE-ERROR", "header name too long";
+            }
+            hb += AwsEventStreamTest::u8(name_bytes.size());
+            hb += name_bytes;
+            (binary type_byte, binary value_bytes) = AwsEventStreamTest::encodeHeaderValue(tag, val);
+            hb += type_byte + value_bytes;
+        }
+
+        int total_len = 12 + hb.size() + payload.size() + 4;
+        int headers_len = hb.size();
+
+        binary prelude = AwsEventStreamTest::u32be(total_len)
+            + AwsEventStreamTest::u32be(headers_len);
+        int prelude_crc = AwsEventStream::AwsEventStreamDecoder::crc32(prelude);
+        prelude += AwsEventStreamTest::u32be(prelude_crc);
+
+        binary msg = prelude + hb + payload;
+        int msg_crc = AwsEventStream::AwsEventStreamDecoder::crc32(msg);
+        return msg + AwsEventStreamTest::u32be(msg_crc);
+    }
+
+    static list<binary> encodeHeaderValue(string tag, auto val) {
+        switch (tag) {
+            case "bool-true":  return (binary(<00>), binary());
+            case "bool-false": return (binary(<01>), binary());
+            case "byte":       return (binary(<02>), AwsEventStreamTest::i8(val));
+            case "short":      return (binary(<03>), AwsEventStreamTest::i16be(val));
+            case "int":        return (binary(<04>), AwsEventStreamTest::u32be(val));
+            case "long":       return (binary(<05>), AwsEventStreamTest::i64be(val));
+            case "bytes": {
+                binary b;
+                b = val;
+                return (binary(<06>), AwsEventStreamTest::u16be(b.size()) + b);
+            }
+            case "string": {
+                string s;
+                s = val;
+                binary b = binary(s);
+                return (binary(<07>), AwsEventStreamTest::u16be(b.size()) + b);
+            }
+            case "timestamp":
+                return (binary(<08>), AwsEventStreamTest::i64be(val));
+            case "uuid": {
+                # input is the 8-4-4-4-12 dashed UUID string
+                string s;
+                s = val;
+                s =~ s/-//g;
+                return (binary(<09>), AwsEventStreamTest::hexToBin(s));
+            }
+            default:
+                throw "TEST-FIXTURE-ERROR", sprintf("unknown header tag %y", tag);
+        }
+    }
+
+    static binary u8(int v) {
+        return chr(v & 0xFF).toBinary();
+    }
+
+    static binary i8(int v) {
+        if (v < 0) {
+            v += 0x100;
+        }
+        return chr(v & 0xFF).toBinary();
+    }
+
+    static binary u16be(int v) {
+        return chr((v >> 8) & 0xFF).toBinary() + chr(v & 0xFF).toBinary();
+    }
+
+    static binary i16be(int v) {
+        if (v < 0) {
+            v += 0x10000;
+        }
+        return AwsEventStreamTest::u16be(v);
+    }
+
+    static binary u32be(int v) {
+        return chr((v >> 24) & 0xFF).toBinary()
+             + chr((v >> 16) & 0xFF).toBinary()
+             + chr((v >>  8) & 0xFF).toBinary()
+             + chr( v        & 0xFF).toBinary();
+    }
+
+    static binary i64be(int v) {
+        binary hi = AwsEventStreamTest::u32be((v >> 32) & 0xFFFFFFFF);
+        binary lo = AwsEventStreamTest::u32be(v & 0xFFFFFFFF);
+        return hi + lo;
+    }
+
+    static binary hexToBin(string hex) {
+        binary b = binary();
+        for (int i = 0; i < hex.size(); i += 2) {
+            int hi = AwsEventStreamTest::hexDigit(hex[i .. i]);
+            int lo = AwsEventStreamTest::hexDigit(hex[i + 1 .. i + 1]);
+            b += chr(((hi << 4) | lo) & 0xFF).toBinary();
+        }
+        return b;
+    }
+
+    static int hexDigit(string c) {
+        switch (c) {
+            case "0": return 0;
+            case "1": return 1;
+            case "2": return 2;
+            case "3": return 3;
+            case "4": return 4;
+            case "5": return 5;
+            case "6": return 6;
+            case "7": return 7;
+            case "8": return 8;
+            case "9": return 9;
+            case "a": case "A": return 10;
+            case "b": case "B": return 11;
+            case "c": case "C": return 12;
+            case "d": case "D": return 13;
+            case "e": case "E": return 14;
+            case "f": case "F": return 15;
+        }
+        throw "TEST-FIXTURE-ERROR", sprintf("not a hex digit: %y", c);
+    }
+}

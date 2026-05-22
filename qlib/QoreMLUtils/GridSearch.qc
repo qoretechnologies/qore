@@ -34,17 +34,18 @@ public namespace QoreMLUtils {
 %requires ml
 
 # Define a model factory that creates and fits a Ridge model
-code<object(hash<auto>, list<auto>, list<auto>)> model_factory =
-    object sub (hash<auto> params, list<auto> X_train, list<auto> y_train) {
+code<object(hash<auto>, list<list<float>>, list<float>)> model_factory =
+    object sub (hash<auto> params, list<list<float>> X_train, list<float> y_train) {
         ML::Ridge model(params);
         model.fitMatrix(X_train, y_train);
         return model;
     };
 
 # Define a prediction extractor
-code<list<auto>(object, list<auto>)> predictor =
-    list<auto> sub (object model, list<auto> X_test) {
-        return map $1.prediction, cast<ML::Ridge>(model).predictMatrix(X_test);
+code<list<float>(object, list<list<float>>)> predictor =
+    list<float> sub (object model, list<list<float>> X_test) {
+        list<float> predictions = map $1.prediction, cast<ML::Ridge>(model).predictMatrix(X_test);
+        return predictions;
     };
 
 GridSearch gs({
@@ -64,16 +65,16 @@ printf("Best score: %f\n", result.best_score);
 public class GridSearch {
     private {
         #! Closure that creates and fits a model: (hash params, list X_train, list y_train) -> object
-        code<object (hash<auto>, list<auto>, list<auto>)> model_factory;
+        code<object (hash<auto>, list<list<float>>, list<float>)> model_factory;
 
-        #! Closure that extracts predictions: (object model, list X_test) -> list<auto>
-        code<list<auto> (object, list<auto>)> predictor;
+        #! Closure that extracts predictions: (object model, list X_test) -> list<float>
+        code<list<float> (object, list<list<float>>)> predictor;
 
         #! Hash mapping parameter names to lists of values to try
         hash<auto> param_grid;
 
         #! Closure that scores predictions: (list y_true, list y_pred) -> float
-        code<float (list<auto>, list<auto>)> scorer;
+        code<float (list<float>, list<float>)> scorer;
 
         #! Number of cross-validation folds
         int n_folds;
@@ -138,7 +139,7 @@ public class GridSearch {
 
         @throw GRID-SEARCH-ERROR if data is empty or too small for the number of folds
     */
-    hash<auto> fitMatrix(list<auto> X, list<auto> y) {
+    hash<auto> fitMatrix(list<list<float>> X, list<float> y) {
         if (!X.size() || !y.size()) {
             throw "GRID-SEARCH-ERROR", "empty training data";
         }
@@ -172,14 +173,14 @@ public class GridSearch {
 
             foreach hash<auto> fold in (folds) {
                 # Split data
-                list<auto> X_train = map X[$1], fold.train_indices;
-                list<auto> y_train = map y[$1], fold.train_indices;
-                list<auto> X_test = map X[$1], fold.test_indices;
-                list<auto> y_test = map y[$1], fold.test_indices;
+                list<list<float>> X_train = map X[$1], fold.train_indices;
+                list<float> y_train = map y[$1], fold.train_indices;
+                list<list<float>> X_test = map X[$1], fold.test_indices;
+                list<float> y_test = map y[$1], fold.test_indices;
 
                 # Train and predict
                 object model = model_factory(params, X_train, y_train);
-                list<auto> y_pred = predictor(model, X_test);
+                list<float> y_pred = predictor(model, X_test);
 
                 # Score
                 float score = scorer(y_test, y_pred);
@@ -257,7 +258,7 @@ public class GridSearch {
         proportionally across folds so each fold has approximately the same
         class distribution as the full dataset.
     */
-    static list<hash<auto>> stratifiedSplit(list<auto> y, int n_folds, bool do_shuffle, int seed) {
+    static list<hash<auto>> stratifiedSplit(list<float> y, int n_folds, bool do_shuffle, int seed) {
         int n_samples = y.size();
 
         # Group indices by class label

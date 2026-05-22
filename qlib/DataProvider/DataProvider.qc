@@ -82,10 +82,16 @@ public class DataProvider {
 
             "aftership": "AftershipDataProvider",
             "anthropic": "AnthropicDataProvider",
+            "assemblyai": "AssemblyAiDataProvider",
             "asyncapi": "AsyncApiDataProvider",
+            "azure-openai": "AzureOpenAiDataProvider",
+            "bedrock": "BedrockDataProvider",
+            "bfl": "BflDataProvider",
 
             "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
+            "aws-textract": "AwsTextractDataProvider",
+            "azure-documentintelligence": "AzureDocumentIntelligenceDataProvider",
 
             "baselinker": "BaseLinkerDataProvider",
 
@@ -114,6 +120,8 @@ public class DataProvider {
             "dataframe": "DataProviderDataFrame",
             "db": "DbDataProvider",
             "deel": "DeelDataProvider",
+            "deepgram": "DeepgramDataProvider",
+            "deepseek": "DeepSeekDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",
             "easypost": "EasyPostDataProvider",
@@ -143,6 +151,7 @@ public class DataProvider {
             "gorgias": "GorgiasDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
+            "google-documentai": "GoogleDocumentAiDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
             "generator": "GeneratorDataProvider",
 
@@ -225,6 +234,21 @@ public class DataProvider {
             "opcua": "OpcUaDataProvider",
 
             "grok": "GrokDataProvider",
+            "groq": "GroqDataProvider",
+            "together": "TogetherDataProvider",
+            "fireworks": "FireworksDataProvider",
+            "ollama": "OllamaDataProvider",
+            "jina": "JinaDataProvider",
+            "cohere": "CohereDataProvider",
+            "mistral": "MistralDataProvider",
+            "chroma": "ChromaDataProvider",
+            "pinecone": "PineconeDataProvider",
+            "weaviate": "WeaviateDataProvider",
+            "milvus": "MilvusDataProvider",
+            "tavily": "TavilyDataProvider",
+            "exa": "ExaDataProvider",
+            "llamaparse": "LlamaParseDataProvider",
+            "unstructured": "UnstructuredDataProvider",
             "openai": "OpenAiDataProvider",
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",
@@ -232,6 +256,7 @@ public class DataProvider {
             "pdfco": "PdfCoDataProvider",
             "segment": "SegmentDataProvider",
             "pop3": "Pop3ClientDataProvider",
+            "stability-ai": "StabilityAiDataProvider",
 
             # provided by the jni module
             "powerpointread": "PowerPointDataProvider",
@@ -301,6 +326,8 @@ public class DataProvider {
             "avrowrite": "AvroDataProvider",
             "vcfread": "VcfDataProvider",
             "vcfwrite": "VcfDataProvider",
+
+            "vertex-ai": "VertexAiDataProvider",
 
             # provided by the jni module
             "visioread": "VisioDataProvider",

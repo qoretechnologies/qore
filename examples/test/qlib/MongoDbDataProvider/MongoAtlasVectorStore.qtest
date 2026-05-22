@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/MongoDbDataProvider
+
+%exec-class MongoAtlasVectorStoreTest
+
+public class MongoAtlasVectorStoreTest inherits QUnit::Test {
+    constructor() : Test("MongoAtlasVectorStore Test", "1.0") {
+        addTestCase("factory registered + lazy-loadable",   \factoryTest());
+        addTestCase("constructor validates required config", \constructorValidationTest());
+        addTestCase("constructor accepts full config",       \constructorOkTest());
+        addTestCase("vector-search action wired into collection ChildMap",
+            \childMapTest());
+        set_return_value(main());
+    }
+
+    private factoryTest() {
+        QoreRagUtils::AbstractVectorStoreFactory f =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx("mongo-atlas");
+        assertEq("mongo-atlas", f.getType());
+        assertEq("MongoDB Atlas Vector Search", f.getDisplayName());
+        assertEq("MongoDbDataProvider", f.getInfo().module_name);
+    }
+
+    private constructorValidationTest() {
+        # missing collection
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::MongoAtlasVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "mongo-atlas",
+                "url": "mongodb://localhost:27017",
+                "options": {"database": "test", "index_name": "idx"},
+            });
+        });
+        # missing url
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::MongoAtlasVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "mongo-atlas",
+                "collection": "embeddings",
+                "options": {"database": "test", "index_name": "idx"},
+            });
+        });
+        # missing database
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::MongoAtlasVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "mongo-atlas",
+                "collection": "embeddings",
+                "url": "mongodb://localhost:27017",
+                "options": {"index_name": "idx"},
+            });
+        });
+        # missing index_name
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::MongoAtlasVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "mongo-atlas",
+                "collection": "embeddings",
+                "url": "mongodb://localhost:27017",
+                "options": {"database": "test"},
+            });
+        });
+    }
+
+    private constructorOkTest() {
+        QoreRagUtils::MongoAtlasVectorStore store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "mongo-atlas",
+            "collection": "embeddings",
+            "url": "mongodb://localhost:27017/test",
+            "options": {
+                "database": "test",
+                "index_name": "embeddings_vector_idx",
+                "embedding_path": "vec",
+                "dimension": 1536,
+            },
+        });
+        # constructor lazy-defers client creation; getCollection works
+        assertEq("embeddings", store.getCollection());
+        # dimension supplied in config, no probe needed
+        assertEq(1536, store.getDimension());
+    }
+
+    private childMapTest() {
+        # MongoDbCollectionDataProvider's ChildMap should have a "vector-search"
+        # entry pointing at MongoDbVectorSearchDataProvider — exercise by class
+        # lookup since instantiation requires a real MongoCollection
+        Class vs_cls = Class::forName(
+            "MongoDbDataProvider::MongoDbVectorSearchDataProvider");
+        assertEq("MongoDbVectorSearchDataProvider", vs_cls.getName());
+
+        # Request-type class is constructable
+        MongoDbDataProvider::MongoDbVectorSearchRequestDataType t();
+        assertTrue(t instanceof DataProvider::HashDataType);
+    }
+}

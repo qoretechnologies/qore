@@ -9,6 +9,14 @@
 
 %exec-class FutureTest
 
+class GenericDiagnosticTest<T> {
+    f(T v) {
+    }
+
+    f(string s, T v) {
+    }
+}
+
 class FutureTest inherits QUnit::Test {
     constructor() : QUnit::Test("Future/Promise/WaitGroup", "1.0", \ARGV) {
         addTestCase("Promise set/Future get roundtrip", \testBasicSetGet());
@@ -506,7 +514,7 @@ class FutureTest inherits QUnit::Test {
 
     testGenericThreadClassTypeErrors() {
         Program p();
-        assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+        assertThrows("PARSE-TYPE-ERROR", "Queue<int>::push\\(int value", \p.parse(),
             ("%new-style\nQueue<int> q(); q.push(value: \"wrong\");", "generic-queue-type-error"));
 
         Program p2();
@@ -517,6 +525,42 @@ class FutureTest inherits QUnit::Test {
         assertThrows("PARSE-TYPE-ERROR", \p3.parse(),
             ("%new-style\nChannel<int> ch(1); ChannelIterator<auto> it = ch.iterator();",
                 "generic-channel-iterator-type-error"));
+
+        Program p4();
+        assertThrows("NAMED-ARG-UNKNOWN", "Queue<int>::push\\(int value", \p4.parse(),
+            ("%new-style\nQueue<int> q(); q.push(wrong: 1);", "generic-queue-named-arg-error"));
+
+        Program p5();
+        assertThrows("PARSE-TYPE-ERROR", "G<int>::f\\(int v", \p5.parse(),
+            ("%new-style\nclass G<T> { f(T v) {} f(string s, T v) {} } G<int> g(); g.f(\"x\");",
+                "generic-multi-variant-type-error"));
+
+        Program p6();
+        assertThrows("NAMED-ARG-UNKNOWN", "G<int>::f\\(int v", \p6.parse(),
+            ("%new-style\nclass G<T> { f(T v) {} f(string s, T v) {} } G<int> g(); g.f(wrong: 1);",
+                "generic-multi-variant-named-arg-error"));
+
+        Program p7();
+        assertThrows("PARSE-TYPE-ERROR", "G<int>::f\\(int v", \p7.parse(),
+            ("%new-style\nclass G<T> { static f(T v) {} static f(string s, T v) {} } G<int>::f(\"x\");",
+                "generic-static-multi-variant-type-error"));
+
+        Program p8();
+        assertThrows("PARSE-TYPE-ERROR", "C::echo\\(int value", \p8.parse(),
+            ("%new-style\nclass C { T echo<T>(T value) { return value; } } C c(); c.echo<int>(\"x\");",
+                "generic-method-explicit-type-error"));
+
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "Queue<int>::push\\(int value", sub() {
+            auto q = new Queue<int>();
+            any x = "x";
+            q.push(x);
+        });
+
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "GenericDiagnosticTest<int>::f\\(int v", sub() {
+            auto g = new GenericDiagnosticTest<int>();
+            any x = "x";
+            g.f(x);
+        });
     }
 }
 

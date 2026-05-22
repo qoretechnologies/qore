@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/FireworksDataProvider
+
+%exec-class FireworksDataProviderTest
+
+class FakeFireworksRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.fireworks.ai/inference", "token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    string getSafeUrl() {
+        return "https://api.fireworks.ai/inference";
+    }
+}
+
+public class FireworksDataProviderTest inherits QUnit::Test {
+    constructor() : Test("FireworksDataProvider Test", "1.0") {
+        addTestCase("factory + app + 2 actions registered", \registrationTest());
+        addTestCase("root provider lists 2 children",       \rootProviderTest());
+        addTestCase("chat-completion converts created date", \chatRequestTest());
+        addTestCase("create-embeddings forwards body unchanged",
+            \embeddingRequestTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("fireworks");
+        assertEq("fireworks", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("FireworksAi");
+        assertEq("FireworksAi", app.name);
+        assertEq("Fireworks AI", app.display_name);
+        assertEq("fireworks", app.scheme);
+        assertEq("fireworks-ai-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.size() > 0);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("FireworksAi");
+        assertEq(2, actions.size());
+        list<string> action_names = sort(map $1.action, actions);
+        assertEq(("chat-completion", "create-embeddings"), action_names);
+    }
+
+    private rootProviderTest() {
+        FakeFireworksRestClientIo fake();
+        FireworksDataProvider::FireworksDataProvider prov(fake);
+        assertEq("fireworks", prov.getName());
+        list<string> children = sort(prov.getChildProviderNames());
+        assertEq(("chat-completion", "create-embeddings"), children);
+    }
+
+    private chatRequestTest() {
+        FakeFireworksRestClientIo fake();
+        fake.response_body = {
+            "id": "fid",
+            "created": 1700000000,
+            "model": "accounts/fireworks/models/llama-v3p1-405b-instruct",
+            "choices": (
+                {"index": 0, "message": {"role": "assistant", "content": "Hi"},
+                 "finish_reason": "stop"},
+            ),
+            "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
+        };
+
+        FireworksDataProvider::FireworksChatCompletionDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "accounts/fireworks/models/llama-v3p1-405b-instruct",
+            "messages": ({"role": "user", "content": "Hi"},),
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("chat/completions", fake.last_path);
+        assertEq("Hi", resp.choices[0].message.content);
+        assertEq(NT_DATE, resp.created.typeCode());
+        assertEq(1700000000, int(resp.created - 1970-01-01Z));
+    }
+
+    private embeddingRequestTest() {
+        FakeFireworksRestClientIo fake();
+        fake.response_body = {
+            "object": "list",
+            "model": "nomic-ai/nomic-embed-text-v1.5",
+            "data": (
+                {"index": 0, "object": "embedding",
+                 "embedding": (0.1, 0.2, 0.3)},
+            ),
+            "usage": {"prompt_tokens": 3, "total_tokens": 3},
+        };
+
+        FireworksDataProvider::FireworksEmbeddingDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "nomic-ai/nomic-embed-text-v1.5",
+            "input": ("hello",),
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("embeddings", fake.last_path);
+        assertEq("nomic-ai/nomic-embed-text-v1.5", fake.last_request.model);
+        assertEq(3, resp.data[0].embedding.size());
+    }
+}

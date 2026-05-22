@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreAsyncJobUtils.qm
+
+%exec-class QoreAsyncJobUtilsTest
+
+public class QoreAsyncJobUtilsTest inherits QUnit::Test {
+    constructor() : Test("QoreAsyncJobUtils Test", "1.0") {
+        addTestCase("poll returns first terminal status",     \terminalImmediatelyTest());
+        addTestCase("poll iterates through non-terminal states until terminal",
+            \multiIterationTest());
+        addTestCase("sleeper is called between non-terminal iterations only",
+            \sleeperCallCountTest());
+        addTestCase("custom exception class is raised on timeout",
+            \customErrorClassTest());
+        addTestCase("default exception class is ASYNC-JOB-TIMEOUT",
+            \defaultErrorClassTest());
+        addTestCase("timeout exception carries last status",  \timeoutPayloadTest());
+        addTestCase("setSleeper replaces sleeper after construction",
+            \setSleeperTest());
+        addTestCase("custom poll interval is forwarded to sleeper",
+            \customIntervalTest());
+        set_return_value(main());
+    }
+
+    private terminalImmediatelyTest() {
+        # The first fetch returns a terminal status — should return immediately
+        # without calling the sleeper at all.
+        int sleep_calls = 0;
+        int fetch_calls = 0;
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) {
+                ++fetch_calls;
+                return {"id": j, "status": "SUCCESS"};
+            },
+            bool sub (hash<auto> s) { return s.status == "SUCCESS"; },
+        );
+        p.setSleeper(nothing sub (timeout t) { ++sleep_calls; });
+
+        hash<auto> r = p.poll("job-1");
+        assertEq("SUCCESS", r.status);
+        assertEq(1, fetch_calls);
+        assertEq(0, sleep_calls);
+    }
+
+    private multiIterationTest() {
+        list<string> seq = ("PENDING", "PROCESSING", "PROCESSING", "DONE");
+        int idx = 0;
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) {
+                string s = seq[idx];
+                if (idx < seq.size() - 1) {
+                    ++idx;
+                }
+                return {"id": j, "status": s};
+            },
+            bool sub (hash<auto> s) { return s.status == "DONE"; },
+        );
+        p.setSleeper(nothing sub (timeout t) {});
+
+        hash<auto> r = p.poll("job-X");
+        assertEq("DONE", r.status);
+        assertEq("job-X", r.id);
+    }
+
+    private sleeperCallCountTest() {
+        # 3 non-terminal then 1 terminal = exactly 3 sleeper invocations
+        list<string> seq = ("PENDING", "PROCESSING", "PROCESSING", "SUCCESS");
+        int idx = 0;
+        int sleeps = 0;
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) {
+                string s = seq[idx];
+                if (idx < seq.size() - 1) {
+                    ++idx;
+                }
+                return {"status": s};
+            },
+            bool sub (hash<auto> s) { return s.status == "SUCCESS"; },
+        );
+        p.setSleeper(nothing sub (timeout t) { ++sleeps; });
+        p.poll("job-S");
+        assertEq(3, sleeps);
+    }
+
+    private customErrorClassTest() {
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) { return {"status": "PENDING"}; },
+            bool sub (hash<auto> s) { return False; },
+            "Foo job",
+            "FOO-TIMEOUT",
+        );
+        p.setSleeper(nothing sub (timeout t) {});
+        assertThrows("FOO-TIMEOUT", sub () {
+            p.poll("j", 1ms, 1ms);
+        });
+    }
+
+    private defaultErrorClassTest() {
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) { return {"status": "PENDING"}; },
+            bool sub (hash<auto> s) { return False; },
+        );
+        p.setSleeper(nothing sub (timeout t) {});
+        assertThrows("ASYNC-JOB-TIMEOUT", sub () {
+            p.poll("j", 1ms, 1ms);
+        });
+    }
+
+    private timeoutPayloadTest() {
+        # The exception's arg hash carries job_id + last observed status
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) { return {"status": "STUCK", "extra": "x"}; },
+            bool sub (hash<auto> s) { return False; },
+        );
+        p.setSleeper(nothing sub (timeout t) {});
+        try {
+            p.poll("job-99", 1ms, 1ms);
+            fail("expected timeout");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASYNC-JOB-TIMEOUT", ex.err);
+            assertEq("job-99", ex.arg.job_id);
+            assertEq("STUCK", ex.arg.last_status.status);
+            assertEq("x", ex.arg.last_status.extra);
+        }
+    }
+
+    private setSleeperTest() {
+        # Replace the initial usleep-based sleeper with a counting one
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) {
+                return {"status": j == "ready" ? "OK" : "WAIT"};
+            },
+            bool sub (hash<auto> s) { return s.status == "OK"; },
+        );
+        int calls = 0;
+        p.setSleeper(nothing sub (timeout t) { ++calls; });
+        # Will time out (status never becomes OK with this id) — proves the
+        # counting sleeper replaced the default
+        assertThrows("ASYNC-JOB-TIMEOUT", sub () {
+            p.poll("never", 1ms, 1ms);
+        });
+        # Sleeper was invoked at least once (might be more depending on race)
+        assertTrue(calls >= 1);
+    }
+
+    private customIntervalTest() {
+        # The interval the caller passes is exactly what the sleeper sees
+        timeout observed;
+        QoreAsyncJobUtils::AsyncJobPoller p(
+            hash<auto> sub (string j) { return {"status": "PENDING"}; },
+            bool sub (hash<auto> s) { return False; },
+        );
+        p.setSleeper(nothing sub (timeout t) { observed = t; });
+        try {
+            p.poll("j", 1ms, 250ms);
+        } catch () {
+            # expected timeout
+        }
+        assertEq(250, observed);
+    }
+}

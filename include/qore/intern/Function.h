@@ -1660,7 +1660,9 @@ protected:
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
-        bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const;
+        bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
+        const QoreTypeInfo* receiver_type_info = nullptr,
+        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, const QoreParseOptions& ppo,
         const AbstractQoreFunctionVariant* variant) const;

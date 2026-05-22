@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/CohereDataProvider
+
+%exec-class CohereDataProviderTest
+
+class FakeCohereRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.cohere.com", "token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path,
+            auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{"body": response_body};
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    string getSafeUrl() {
+        return "https://api.cohere.com";
+    }
+}
+
+public class CohereDataProviderTest inherits QUnit::Test {
+    constructor() : Test("CohereDataProvider Test", "1.0") {
+        addTestCase("factory + app + 4 actions registered", \registrationTest());
+        addTestCase("root provider lists 4 children",       \rootProviderTest());
+        addTestCase("chat hits /v2/chat",                   \chatRequestTest());
+        addTestCase("embed injects embedding_types default", \embedRequestTest());
+        addTestCase("rerank hits /v2/rerank",               \rerankRequestTest());
+        addTestCase("classify uses absolute /v1/classify path",
+            \classifyRequestTest());
+        set_return_value(main());
+    }
+
+    private registrationTest() {
+        DataProvider::AbstractDataProviderFactory f =
+            DataProvider::DataProvider::getFactory("cohere");
+        assertEq("cohere", f.getInfo().name);
+
+        hash<DataProviderAppInfo> app =
+            DataProvider::DataProviderActionCatalog::getApp("Cohere");
+        assertEq("Cohere", app.name);
+        assertEq("cohere", app.scheme);
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProvider::DataProviderActionCatalog::getActions("Cohere");
+        assertEq(4, actions.size());
+        list<string> action_names = sort(map $1.action, actions);
+        assertEq(("chat", "classify", "embed", "rerank"), action_names);
+    }
+
+    private rootProviderTest() {
+        FakeCohereRestClientIo fake();
+        CohereDataProvider::CohereDataProvider prov(fake);
+        list<string> children = sort(prov.getChildProviderNames());
+        assertEq(("chat", "classify", "embed", "rerank"), children);
+    }
+
+    private chatRequestTest() {
+        FakeCohereRestClientIo fake();
+        fake.response_body = {
+            "id": "cohere-id",
+            "finish_reason": "COMPLETE",
+            "message": {
+                "role": "assistant",
+                "content": (
+                    {"type": "text", "text": "Hi"},
+                ),
+            },
+            "usage": {"tokens": {"input_tokens": 10, "output_tokens": 1}},
+        };
+
+        CohereDataProvider::CohereChatDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "command-r-plus",
+            "messages": ({"role": "user", "content": "Hi"},),
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("chat", fake.last_path);
+        assertEq("COMPLETE", resp.finish_reason);
+        assertEq("Hi", resp.message.content[0].text);
+    }
+
+    private embedRequestTest() {
+        FakeCohereRestClientIo fake();
+        fake.response_body = {
+            "id": "embed-id",
+            "embeddings": {"float": ((0.1, 0.2, 0.3),)},
+        };
+
+        CohereDataProvider::CohereEmbedDataProvider prov(fake);
+        prov.doRequest({
+            "model": "embed-multilingual-v3.0",
+            "texts": ("hello",),
+            "input_type": "search_document",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("embed", fake.last_path);
+        # `embedding_types` injected by doRequestImpl when caller omits it
+        assertEq(("float",), fake.last_request.embedding_types);
+        assertEq("search_document", fake.last_request.input_type);
+    }
+
+    private rerankRequestTest() {
+        FakeCohereRestClientIo fake();
+        fake.response_body = {
+            "id": "rerank-id",
+            "results": (
+                {"index": 0, "relevance_score": 0.88,
+                 "document": {"text": "Doc A"}},
+            ),
+        };
+
+        CohereDataProvider::CohereRerankDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "model": "rerank-v3.5",
+            "query": "test",
+            "documents": ("Doc A", "Doc B"),
+            "top_n": 1,
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("rerank", fake.last_path);
+        assertEq(0.88, resp.results[0].relevance_score);
+    }
+
+    private classifyRequestTest() {
+        FakeCohereRestClientIo fake();
+        fake.response_body = {
+            "id": "cls-id",
+            "classifications": (
+                {"id": "c1", "input": "Great!", "prediction": "positive",
+                 "confidence": 0.95, "labels": {"positive": 0.95, "negative": 0.05}},
+            ),
+        };
+
+        CohereDataProvider::CohereClassifyDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "inputs": ("Great!",),
+            "examples": (
+                {"text": "I love this", "label": "positive"},
+                {"text": "I hate this", "label": "negative"},
+            ),
+        });
+
+        assertEq("POST", fake.last_method);
+        # absolute path addresses v1 endpoint from v2-default client
+        assertEq("/v1/classify", fake.last_path);
+        assertEq("positive", resp.classifications[0].prediction);
+    }
+}

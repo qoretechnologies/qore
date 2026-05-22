@@ -28,7 +28,7 @@
 
     @since ml 1.0
 */
-qclass LabelEncoder [arg=QoreLabelEncoder* le; ns=Qore::ML; flags=final];
+qclass LabelEncoder [arg=QoreLabelEncoder* le; ns=Qore::ML; vparent=AbstractMLTransformer];
 
 //! Creates a LabelEncoder
 /** Creates an empty encoder. Call fit() to learn the category mapping.

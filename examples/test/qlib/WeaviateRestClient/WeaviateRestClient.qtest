@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/WeaviateRestClient.qm
+
+%exec-class WeaviateRestClientTest
+
+public class WeaviateRestClientTest inherits QUnit::Test {
+    constructor() : Test("WeaviateRestClient Test", "1.0") {
+        addTestCase("connection scheme registered", \connectionSchemeTest());
+        addTestCase("vector-store factory registered", \factoryTest());
+        addTestCase("constructor validates collection", \constructorValidationTest());
+        addTestCase("collection name preserved",        \constructorOkTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("weaviate");
+        assertEq("Weaviate Vector DB Connection", info.display_name);
+        assertTrue(info.schemes.weaviate);
+        # apikey optional — Weaviate local is anonymous
+        assertEq(NOTHING, info.required_options);
+    }
+
+    private factoryTest() {
+        QoreRagUtils::AbstractVectorStoreFactory f =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactoryEx("weaviate");
+        assertEq("weaviate", f.getType());
+        assertEq("Weaviate vector database", f.getDisplayName());
+    }
+
+    private constructorValidationTest() {
+        assertThrows("VECTOR-STORE-CONFIG-ERROR", sub () {
+            new QoreRagUtils::WeaviateVectorStore(<QoreRagUtils::VectorStoreConfig>{
+                "backend": "weaviate",
+            });
+        });
+    }
+
+    private constructorOkTest() {
+        QoreRagUtils::WeaviateVectorStore store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "weaviate",
+            "collection": "Article",
+            "url": "http://localhost:8080",
+            "options": {"dimension": 768, "tenant": "tenant1"},
+        });
+        assertEq("Article", store.getCollection());
+        assertEq(768, store.getDimension());
+    }
+}

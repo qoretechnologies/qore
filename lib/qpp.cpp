@@ -3410,6 +3410,14 @@ protected:
                 fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
                 continue;
             }
+            // union<...> and *union<...>: ptype has the leading "union" (the angle-bracket
+            // payload was stripped above). Runtime value can be any of the member types, so
+            // expose it to the function body as an untyped QoreValue and let the body
+            // inspect getType() / coerce as needed.
+            if (ptype == "union" || ptype == "*union") {
+                fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
+                continue;
+            }
             if (ptype == "*data") {
                 fprintf(fp,
                     "    QoreValue qpp_data_value_%d = get_param_value(args, %d);\n"

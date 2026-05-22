@@ -1,0 +1,47 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/GoogleDocumentAiRestClient.qm
+
+%exec-class GoogleDocumentAiRestClientTest
+
+public class GoogleDocumentAiRestClientTest inherits QUnit::Test {
+    constructor() : Test("GoogleDocumentAiRestClient Test", "1.0") {
+        addTestCase("connection scheme registered",  \connectionSchemeTest());
+        addTestCase("default URL is US region",      \defaultUrlTest());
+        addTestCase("gcp_region selects regional endpoint", \regionalUrlTest());
+        addTestCase("explicit URL is honoured",      \explicitUrlTest());
+        set_return_value(main());
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("google-documentai");
+        assertEq("Google Document AI Connection", info.display_name);
+        assertTrue(info.schemes."google-documentai");
+        assertEq("gcp_project_id", info.required_options);
+    }
+
+    private defaultUrlTest() {
+        hash<auto> opts = GoogleDocumentAiRestClient::GoogleDocumentAiRestClientBase::getOptions({});
+        assertEq("https://us-documentai.googleapis.com", opts.url);
+    }
+
+    private regionalUrlTest() {
+        hash<auto> opts = GoogleDocumentAiRestClient::GoogleDocumentAiRestClientBase::getOptions({
+            "gcp_region": "eu",
+        });
+        assertEq("https://eu-documentai.googleapis.com", opts.url);
+    }
+
+    private explicitUrlTest() {
+        hash<auto> opts = GoogleDocumentAiRestClient::GoogleDocumentAiRestClientBase::getOptions({
+            "url": "https://custom.example.com",
+        });
+        assertEq("https://custom.example.com", opts.url);
+    }
+}
