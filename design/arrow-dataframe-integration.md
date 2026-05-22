@@ -28,7 +28,7 @@ Define these only when the matching APIs and tests are implemented:
 
 | Macro / CMake variable | Meaning |
 |------------------------|---------|
-| `QORE_HAVE_COLUMNAR_RESULT_V2` | `QoreColumnarResult` exposes recursive schema descriptors and v2 add/import APIs. |
+| `QORE_HAVE_COLUMNAR_RESULT_V2` | Implemented: `QoreColumnarResult` exposes recursive schema descriptors and v2 schema APIs. |
 | `QORE_HAVE_ARROW_C_DATA_INTEROP` | libqore can import/export `ColumnarResult` through the Arrow C Data Interface. |
 | `QORE_HAVE_EXTERNAL_BUFFER_STORAGE` | `QoreBufferNode` can safely wrap external immutable buffer storage with owner lifetime tracking. |
 | `QORE_HAVE_DECIMAL128_BUFFER` | `buffer<decimal128>` or equivalent fixed-width decimal storage is available. |

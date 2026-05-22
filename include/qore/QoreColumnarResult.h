@@ -51,8 +51,49 @@ enum class QoreColumnarColumnType : uint8_t {
     Binary,
 };
 
+//! Recursive columnar schema node kinds used by QoreColumnarResult v2 metadata.
+enum class QoreColumnarTypeKind : uint8_t {
+    Auto = 0,
+    Bool,
+    Int,
+    Float,
+    Number,
+    String,
+    Date,
+    Binary,
+    Timestamp,
+    Duration,
+    Decimal128,
+    List,
+    LargeList,
+    FixedSizeList,
+    Struct,
+    Map,
+    Dictionary,
+};
+
+//! Recursive columnar type descriptor used to preserve Arrow/Parquet-style schema metadata.
+struct QoreColumnarTypeDescriptor {
+    std::string name;
+    QoreColumnarTypeKind kind = QoreColumnarTypeKind::Auto;
+    QoreColumnarColumnType column_type = QoreColumnarColumnType::Auto;
+    QoreBufferElementType buffer_type = QoreBufferElementType::Invalid;
+    bool nullable = false;
+    int32_t precision = 0;
+    int32_t scale = 0;
+    int32_t fixed_size = 0;
+    std::string native_type;
+    std::string time_unit;
+    std::string timezone;
+    std::string dictionary_index_type;
+    std::vector<QoreColumnarTypeDescriptor> children;
+};
+
 //! Returns the source-level name for a columnar result column type.
 DLLEXPORT const char* qore_columnar_column_type_name(QoreColumnarColumnType type);
+
+//! Returns the source-level name for a recursive columnar schema kind.
+DLLEXPORT const char* qore_columnar_type_kind_name(QoreColumnarTypeKind kind);
 
 //! Column-oriented result set storage for DBI and DataFrame integrations.
 class QoreColumnarResult : public AbstractPrivateData {
@@ -64,11 +105,13 @@ public:
         QoreBufferElementType buffer_type = QoreBufferElementType::Invalid;
         bool nullable = false;
         std::string native_type;
+        QoreColumnarTypeDescriptor schema;
         QoreValue data;
 
         DLLLOCAL Column() = default;
         DLLLOCAL Column(std::string n_name, QoreColumnarColumnType n_column_type,
             QoreBufferElementType n_buffer_type, bool n_nullable, std::string n_native_type, QoreValue n_data);
+        DLLLOCAL Column(std::string n_name, const QoreColumnarTypeDescriptor& n_schema, QoreValue n_data);
         DLLLOCAL Column(Column&& old) noexcept;
         DLLLOCAL Column& operator=(Column&& old) noexcept;
         DLLLOCAL Column(const Column&) = delete;
@@ -90,6 +133,10 @@ public:
     //! Adds a column and takes ownership of @a data.
     DLLEXPORT int addColumn(const char* name, QoreValue data, QoreColumnarColumnType column_type,
         QoreBufferElementType buffer_type, bool nullable, const char* native_type, ExceptionSink* xsink);
+
+    //! Adds a column with recursive schema metadata and takes ownership of @a data.
+    DLLEXPORT int addColumn(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
+        ExceptionSink* xsink);
 
     //! Returns the number of rows.
     DLLEXPORT size_t numRows() const {
@@ -117,6 +164,9 @@ public:
 
     //! Returns schema metadata in result order.
     DLLEXPORT QoreListNode* getSchema(ExceptionSink* xsink) const;
+
+    //! Returns recursive schema metadata in result order.
+    DLLEXPORT QoreListNode* getSchemaV2(ExceptionSink* xsink) const;
 
     //! Returns a hash of column values.
     DLLEXPORT QoreHashNode* toColumnHash(ExceptionSink* xsink) const;

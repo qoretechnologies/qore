@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <initializer_list>
 #include <strings.h>
@@ -79,10 +80,8 @@ static std::string columnar_get_string_value(QoreValue value) {
         return std::string();
     }
 
-    ExceptionSink xsink;
-    QoreString str;
-    value.getAsString(str, 0, &xsink);
-    return xsink ? std::string() : std::string(str.c_str());
+    QoreStringValueHelper str(value);
+    return std::string(str->c_str());
 }
 
 static std::string columnar_get_desc_string(const QoreHashNode* desc, const char* key) {
@@ -579,6 +578,332 @@ static QoreColumnarColumnType columnar_type_from_buffer(QoreBufferElementType bu
     return QoreColumnarColumnType::Auto;
 }
 
+static QoreColumnarTypeKind columnar_kind_from_flat_type(QoreColumnarColumnType type) {
+    switch (type) {
+        case QoreColumnarColumnType::Bool:
+            return QoreColumnarTypeKind::Bool;
+        case QoreColumnarColumnType::Int:
+            return QoreColumnarTypeKind::Int;
+        case QoreColumnarColumnType::Float:
+            return QoreColumnarTypeKind::Float;
+        case QoreColumnarColumnType::Number:
+            return QoreColumnarTypeKind::Number;
+        case QoreColumnarColumnType::String:
+            return QoreColumnarTypeKind::String;
+        case QoreColumnarColumnType::Date:
+            return QoreColumnarTypeKind::Date;
+        case QoreColumnarColumnType::Binary:
+            return QoreColumnarTypeKind::Binary;
+        case QoreColumnarColumnType::Auto:
+        default:
+            return QoreColumnarTypeKind::Auto;
+    }
+}
+
+static QoreColumnarColumnType columnar_flat_type_from_kind(QoreColumnarTypeKind kind) {
+    switch (kind) {
+        case QoreColumnarTypeKind::Bool:
+            return QoreColumnarColumnType::Bool;
+        case QoreColumnarTypeKind::Int:
+            return QoreColumnarColumnType::Int;
+        case QoreColumnarTypeKind::Float:
+            return QoreColumnarColumnType::Float;
+        case QoreColumnarTypeKind::Number:
+        case QoreColumnarTypeKind::Decimal128:
+            return QoreColumnarColumnType::Number;
+        case QoreColumnarTypeKind::String:
+            return QoreColumnarColumnType::String;
+        case QoreColumnarTypeKind::Date:
+        case QoreColumnarTypeKind::Timestamp:
+        case QoreColumnarTypeKind::Duration:
+            return QoreColumnarColumnType::Date;
+        case QoreColumnarTypeKind::Binary:
+            return QoreColumnarColumnType::Binary;
+        case QoreColumnarTypeKind::Auto:
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList:
+        case QoreColumnarTypeKind::Struct:
+        case QoreColumnarTypeKind::Map:
+        case QoreColumnarTypeKind::Dictionary:
+        default:
+            return QoreColumnarColumnType::Auto;
+    }
+}
+
+static bool columnar_type_kind_from_name(const std::string& value, QoreColumnarTypeKind& kind) {
+    std::string type = columnar_lower_type(value);
+    if (type == "bool" || type == "boolean") {
+        kind = QoreColumnarTypeKind::Bool;
+    } else if (type == "int" || type == "integer") {
+        kind = QoreColumnarTypeKind::Int;
+    } else if (type == "float" || type == "double") {
+        kind = QoreColumnarTypeKind::Float;
+    } else if (type == "number" || type == "numeric" || type == "decimal") {
+        kind = QoreColumnarTypeKind::Number;
+    } else if (type == "string" || type == "utf8" || type == "large_utf8") {
+        kind = QoreColumnarTypeKind::String;
+    } else if (type == "date") {
+        kind = QoreColumnarTypeKind::Date;
+    } else if (type == "binary" || type == "large_binary" || type == "fixed_size_binary") {
+        kind = QoreColumnarTypeKind::Binary;
+    } else if (type == "timestamp") {
+        kind = QoreColumnarTypeKind::Timestamp;
+    } else if (type == "duration") {
+        kind = QoreColumnarTypeKind::Duration;
+    } else if (type == "decimal128") {
+        kind = QoreColumnarTypeKind::Decimal128;
+    } else if (type == "list") {
+        kind = QoreColumnarTypeKind::List;
+    } else if (type == "large_list") {
+        kind = QoreColumnarTypeKind::LargeList;
+    } else if (type == "fixed_size_list") {
+        kind = QoreColumnarTypeKind::FixedSizeList;
+    } else if (type == "struct") {
+        kind = QoreColumnarTypeKind::Struct;
+    } else if (type == "map") {
+        kind = QoreColumnarTypeKind::Map;
+    } else if (type == "dictionary") {
+        kind = QoreColumnarTypeKind::Dictionary;
+    } else if (type == "auto") {
+        kind = QoreColumnarTypeKind::Auto;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static QoreColumnarTypeDescriptor columnar_descriptor_from_flat(QoreColumnarColumnType column_type,
+        QoreBufferElementType buffer_type, bool nullable, const char* native_type) {
+    QoreColumnarTypeDescriptor schema;
+    schema.kind = columnar_kind_from_flat_type(column_type);
+    schema.column_type = column_type;
+    schema.buffer_type = buffer_type;
+    schema.nullable = nullable;
+    schema.native_type = native_type ? native_type : "";
+    return schema;
+}
+
+static QoreColumnarTypeDescriptor columnar_descriptor_from_shape(const ColumnarShape& shape,
+        const char* native_type) {
+    return columnar_descriptor_from_flat(shape.column_type, shape.buffer_type, shape.nullable, native_type);
+}
+
+static bool columnar_parse_decimal_metadata(const std::string& native_type, int32_t& precision, int32_t& scale) {
+    std::string type = columnar_lower_type(native_type);
+    if (type.find("decimal") == std::string::npos && type.find("numeric") == std::string::npos
+            && type.find("number") == std::string::npos) {
+        return false;
+    }
+
+    size_t open = native_type.find('(');
+    size_t comma = native_type.find(',', open == std::string::npos ? 0 : open + 1);
+    size_t close = native_type.find(')', comma == std::string::npos ? 0 : comma + 1);
+    if (open == std::string::npos || comma == std::string::npos || close == std::string::npos) {
+        return false;
+    }
+
+    precision = static_cast<int32_t>(std::strtol(native_type.substr(open + 1, comma - open - 1).c_str(), nullptr, 10));
+    scale = static_cast<int32_t>(std::strtol(native_type.substr(comma + 1, close - comma - 1).c_str(), nullptr, 10));
+    return precision > 0 && scale >= 0;
+}
+
+static QoreColumnarTypeDescriptor columnar_descriptor_from_desc(const QoreHashNode* desc,
+        const QoreColumnarTypeDescriptor& fallback, ExceptionSink* xsink);
+
+static QoreHashNode* columnar_descriptor_to_hash(const QoreColumnarTypeDescriptor& schema, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    if (!schema.name.empty()) {
+        h->setKeyValue("name", new QoreStringNode(schema.name), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    h->setKeyValue("kind", new QoreStringNode(qore_columnar_type_kind_name(schema.kind)), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    h->setKeyValue("type", new QoreStringNode(qore_columnar_column_type_name(schema.column_type)), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    h->setKeyValue("nullable", schema.nullable, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (schema.buffer_type != QoreBufferElementType::Invalid) {
+        h->setKeyValue("buffer_type", new QoreStringNode(qore_buffer_element_type_name(schema.buffer_type)), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (!schema.native_type.empty()) {
+        h->setKeyValue("native_type", new QoreStringNode(schema.native_type), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (schema.precision) {
+        h->setKeyValue("precision", static_cast<int64>(schema.precision), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (schema.scale) {
+        h->setKeyValue("scale", static_cast<int64>(schema.scale), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (schema.fixed_size) {
+        h->setKeyValue("fixed_size", static_cast<int64>(schema.fixed_size), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (!schema.time_unit.empty()) {
+        h->setKeyValue("time_unit", new QoreStringNode(schema.time_unit), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (!schema.timezone.empty()) {
+        h->setKeyValue("timezone", new QoreStringNode(schema.timezone), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (!schema.dictionary_index_type.empty()) {
+        h->setKeyValue("dictionary_index_type", new QoreStringNode(schema.dictionary_index_type), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (!schema.children.empty()) {
+        ReferenceHolder<QoreListNode> children(new QoreListNode(autoTypeInfo), xsink);
+        for (size_t i = 0; i < schema.children.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "building columnar schema children")) {
+                return nullptr;
+            }
+            children->push(columnar_descriptor_to_hash(schema.children[i], xsink), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+        h->setKeyValue("children", children.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return h.release();
+}
+
+static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreHashNode* desc,
+        const QoreColumnarTypeDescriptor& fallback, ExceptionSink* xsink) {
+    QoreColumnarTypeDescriptor schema = fallback;
+    if (!desc) {
+        return schema;
+    }
+
+    std::string name = columnar_get_desc_string(desc, "name");
+    if (!name.empty()) {
+        schema.name = std::move(name);
+    }
+
+    std::string kind_name = columnar_get_desc_string(desc, "kind");
+    if (kind_name.empty()) {
+        kind_name = columnar_get_desc_string(desc, "logical_type");
+    }
+    if (!kind_name.empty()) {
+        QoreColumnarTypeKind kind;
+        if (columnar_type_kind_from_name(kind_name, kind)) {
+            schema.kind = kind;
+            schema.column_type = columnar_flat_type_from_kind(kind);
+        }
+    }
+
+    QoreValue nullable = desc->getKeyValue("nullable");
+    if (nullable.getType() == NT_BOOLEAN) {
+        schema.nullable = nullable.getAsBool();
+    }
+
+    std::string native_type = columnar_get_desc_string(desc, "native_type");
+    if (!native_type.empty()) {
+        schema.native_type = native_type;
+    }
+
+    std::string buffer_type = columnar_get_desc_string(desc, "buffer_type");
+    if (!buffer_type.empty()) {
+        QoreBufferElementType parsed = QoreBufferElementType::Invalid;
+        if (qore_buffer_element_type_from_name(buffer_type.c_str(), parsed)) {
+            schema.buffer_type = parsed;
+            schema.column_type = columnar_type_from_buffer(parsed);
+            schema.kind = columnar_kind_from_flat_type(schema.column_type);
+        }
+    }
+
+    schema.precision = static_cast<int32_t>(columnar_get_desc_int(desc, "precision", schema.precision));
+    schema.scale = static_cast<int32_t>(columnar_get_desc_int(desc, "scale", schema.scale));
+    schema.fixed_size = static_cast<int32_t>(columnar_get_desc_int(desc, "fixed_size", schema.fixed_size));
+
+    std::string time_unit = columnar_get_desc_string(desc, "time_unit");
+    if (!time_unit.empty()) {
+        schema.time_unit = std::move(time_unit);
+    }
+    std::string timezone = columnar_get_desc_string(desc, "timezone");
+    if (!timezone.empty()) {
+        schema.timezone = std::move(timezone);
+    }
+    std::string dictionary_index_type = columnar_get_desc_string(desc, "dictionary_index_type");
+    if (!dictionary_index_type.empty()) {
+        schema.dictionary_index_type = std::move(dictionary_index_type);
+    }
+
+    QoreValue children_value = desc->getKeyValue("children");
+    if (children_value.getType() == NT_LIST) {
+        const QoreListNode* children = children_value.get<const QoreListNode>();
+        schema.children.clear();
+        schema.children.reserve(children->size());
+        for (size_t i = 0; i < children->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "parsing columnar schema children")) {
+                return schema;
+            }
+            QoreValue child_value = children->retrieveEntry(i);
+            if (child_value.getType() != NT_HASH) {
+                continue;
+            }
+            QoreColumnarTypeDescriptor child_fallback;
+            schema.children.push_back(
+                columnar_descriptor_from_desc_hash(child_value.get<const QoreHashNode>(), child_fallback, xsink));
+            if (*xsink) {
+                return schema;
+            }
+        }
+    }
+
+    if (schema.kind == QoreColumnarTypeKind::Number && columnar_parse_decimal_metadata(schema.native_type,
+            schema.precision, schema.scale) && schema.precision <= 38) {
+        schema.kind = QoreColumnarTypeKind::Decimal128;
+        schema.column_type = QoreColumnarColumnType::Number;
+    }
+
+    return schema;
+}
+
+static QoreColumnarTypeDescriptor columnar_descriptor_from_desc(const QoreHashNode* desc,
+        const QoreColumnarTypeDescriptor& fallback, ExceptionSink* xsink) {
+    if (!desc) {
+        return fallback;
+    }
+
+    QoreValue schema_value = desc->getKeyValue("schema");
+    if (schema_value.getType() == NT_HASH) {
+        return columnar_descriptor_from_desc_hash(schema_value.get<const QoreHashNode>(), fallback, xsink);
+    }
+
+    return columnar_descriptor_from_desc_hash(desc, fallback, xsink);
+}
+
 }
 
 const char* qore_columnar_column_type_name(QoreColumnarColumnType type) {
@@ -603,15 +928,65 @@ const char* qore_columnar_column_type_name(QoreColumnarColumnType type) {
     }
 }
 
+const char* qore_columnar_type_kind_name(QoreColumnarTypeKind kind) {
+    switch (kind) {
+        case QoreColumnarTypeKind::Bool:
+            return "bool";
+        case QoreColumnarTypeKind::Int:
+            return "int";
+        case QoreColumnarTypeKind::Float:
+            return "float";
+        case QoreColumnarTypeKind::Number:
+            return "number";
+        case QoreColumnarTypeKind::String:
+            return "string";
+        case QoreColumnarTypeKind::Date:
+            return "date";
+        case QoreColumnarTypeKind::Binary:
+            return "binary";
+        case QoreColumnarTypeKind::Timestamp:
+            return "timestamp";
+        case QoreColumnarTypeKind::Duration:
+            return "duration";
+        case QoreColumnarTypeKind::Decimal128:
+            return "decimal128";
+        case QoreColumnarTypeKind::List:
+            return "list";
+        case QoreColumnarTypeKind::LargeList:
+            return "large_list";
+        case QoreColumnarTypeKind::FixedSizeList:
+            return "fixed_size_list";
+        case QoreColumnarTypeKind::Struct:
+            return "struct";
+        case QoreColumnarTypeKind::Map:
+            return "map";
+        case QoreColumnarTypeKind::Dictionary:
+            return "dictionary";
+        case QoreColumnarTypeKind::Auto:
+        default:
+            return "auto";
+    }
+}
+
 QoreColumnarResult::Column::Column(std::string n_name, QoreColumnarColumnType n_column_type,
         QoreBufferElementType n_buffer_type, bool n_nullable, std::string n_native_type, QoreValue n_data)
         : name(std::move(n_name)), column_type(n_column_type), buffer_type(n_buffer_type), nullable(n_nullable),
         native_type(std::move(n_native_type)), data(n_data) {
+    schema = columnar_descriptor_from_flat(column_type, buffer_type, nullable, native_type.c_str());
+    schema.name = name;
+}
+
+QoreColumnarResult::Column::Column(std::string n_name, const QoreColumnarTypeDescriptor& n_schema,
+        QoreValue n_data) : name(std::move(n_name)), column_type(n_schema.column_type),
+        buffer_type(n_schema.buffer_type), nullable(n_schema.nullable), native_type(n_schema.native_type),
+        schema(n_schema), data(n_data) {
+    schema.name = name;
 }
 
 QoreColumnarResult::Column::Column(Column&& old) noexcept
         : name(std::move(old.name)), column_type(old.column_type), buffer_type(old.buffer_type),
-        nullable(old.nullable), native_type(std::move(old.native_type)), data(old.data) {
+        nullable(old.nullable), native_type(std::move(old.native_type)), schema(std::move(old.schema)),
+        data(old.data) {
     old.data = QoreValue();
 }
 
@@ -624,6 +999,7 @@ QoreColumnarResult::Column& QoreColumnarResult::Column::operator=(Column&& old) 
         buffer_type = old.buffer_type;
         nullable = old.nullable;
         native_type = std::move(old.native_type);
+        schema = std::move(old.schema);
         data = old.data;
         old.data = QoreValue();
     }
@@ -653,6 +1029,13 @@ int QoreColumnarResult::setRowCount(size_t n_rows, ExceptionSink* xsink) {
 
 int QoreColumnarResult::addColumn(const char* name, QoreValue data, QoreColumnarColumnType column_type,
         QoreBufferElementType buffer_type, bool nullable, const char* native_type, ExceptionSink* xsink) {
+    QoreColumnarTypeDescriptor schema = columnar_descriptor_from_flat(column_type, buffer_type, nullable,
+        native_type);
+    return addColumn(name, data, schema, xsink);
+}
+
+int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
+        ExceptionSink* xsink) {
     ValueHolder data_holder(data, xsink);
     size_t size = columnar_value_size(data);
     if (data.getType() != NT_LIST && data.getType() != NT_BUFFER) {
@@ -664,8 +1047,7 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, QoreColumnar
         return -1;
     }
 
-    columns.emplace_back(name, column_type, buffer_type, nullable, native_type ? native_type : "",
-        data_holder.release());
+    columns.emplace_back(name, schema, data_holder.release());
     return 0;
 }
 
@@ -691,8 +1073,14 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
 
         if (value.getType() == NT_BUFFER) {
             const QoreBufferNode* buffer = value.get<const QoreBufferNode>();
-            if (rv->addColumn(i.getKey(), value.refSelf(), columnar_type_from_buffer(buffer->getElementType()),
-                    buffer->getElementType(), buffer->hasNullableElements(), native_type.c_str(), xsink)) {
+            QoreColumnarTypeDescriptor schema = columnar_descriptor_from_flat(
+                columnar_type_from_buffer(buffer->getElementType()), buffer->getElementType(),
+                buffer->hasNullableElements(), native_type.c_str());
+            schema = columnar_descriptor_from_desc(column_desc, schema, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (rv->addColumn(i.getKey(), value.refSelf(), schema, xsink)) {
                 return nullptr;
             }
             continue;
@@ -715,12 +1103,17 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
             return nullptr;
         }
 
+        QoreColumnarTypeDescriptor schema = columnar_descriptor_from_shape(shape, native_type.c_str());
+        schema = columnar_descriptor_from_desc(column_desc, schema, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
         ValueHolder column_value(columnar_make_column_value(source, shape, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
-        if (rv->addColumn(i.getKey(), column_value.release(), shape.column_type, shape.buffer_type, shape.nullable,
-                native_type.c_str(), xsink)) {
+        if (rv->addColumn(i.getKey(), column_value.release(), schema, xsink)) {
             return nullptr;
         }
     }
@@ -860,7 +1253,25 @@ QoreListNode* QoreColumnarResult::getSchema(ExceptionSink* xsink) const {
                 return nullptr;
             }
         }
+        h->setKeyValue("schema", columnar_descriptor_to_hash(column.schema, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         rv->push(h.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreColumnarResult::getSchemaV2(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "columnar result v2 schema list")) {
+            return nullptr;
+        }
+        rv->push(columnar_descriptor_to_hash(columns[i].schema, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -931,8 +1342,7 @@ QoreColumnarResult* QoreColumnarResult::filter(QoreValue mask, ExceptionSink* xs
         if (*xsink) {
             return nullptr;
         }
-        if (rv->addColumn(column.name.c_str(), data.release(), column.column_type, column.buffer_type,
-                column.nullable, column.native_type.c_str(), xsink)) {
+        if (rv->addColumn(column.name.c_str(), data.release(), column.schema, xsink)) {
             return nullptr;
         }
     }
@@ -958,8 +1368,7 @@ QoreColumnarResult* QoreColumnarResult::slice(size_t offset, size_t count, Excep
         if (*xsink) {
             return nullptr;
         }
-        if (rv->addColumn(column.name.c_str(), data.release(), column.column_type, column.buffer_type,
-                column.nullable, column.native_type.c_str(), xsink)) {
+        if (rv->addColumn(column.name.c_str(), data.release(), column.schema, xsink)) {
             return nullptr;
         }
     }

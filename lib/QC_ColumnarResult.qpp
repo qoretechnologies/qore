@@ -142,6 +142,7 @@ list<string> ColumnarResult::columnNames() [flags=RET_VALUE_ONLY] {
     - \c nullable: True if the column can contain null values
     - \c buffer_type: dense buffer element type, when dense buffer storage is used
     - \c native_type: database-native type name, when available
+    - \c schema: recursive schema metadata with Arrow/Parquet-style logical type details
 
     @return ordered list of schema hashes
 
@@ -154,6 +155,38 @@ foreach hash<auto> column in (result.schema()) {
 */
 list<hash<auto>> ColumnarResult::schema() [flags=RET_VALUE_ONLY] {
     return result->getSchema(xsink);
+}
+
+//! Returns recursive schema metadata in result order
+/** Each returned hash describes one top-level column and can contain:
+    - \c name: column name
+    - \c kind: logical kind such as \c int, \c string, \c decimal128, \c list,
+      \c struct, or \c timestamp
+    - \c type: compatibility storage type name
+    - \c nullable: True if the value can be null
+    - \c buffer_type: dense buffer element type, when dense buffer storage is used
+    - \c native_type: database, Arrow, Parquet, or driver-native type name
+    - \c precision and \c scale for decimal values
+    - \c time_unit and \c timezone for timestamp values
+    - \c fixed_size for fixed-size list or binary values
+    - \c children for nested list, struct, map, or dictionary values
+
+    The current implementation preserves this metadata for construction,
+    filtering, slicing, and API round trips. Nested and decimal values are still
+    materialized through the existing column containers until the dense nested
+    and decimal storage phases land.
+
+    @return ordered list of recursive schema hashes
+
+    @par Example:
+    @code{.py}
+foreach hash<auto> column in (result.schemaV2()) {
+    printf("%s: %s\n", column.name, column.kind);
+}
+    @endcode
+*/
+list<hash<auto>> ColumnarResult::schemaV2() [flags=RET_VALUE_ONLY] {
+    return result->getSchemaV2(xsink);
 }
 
 //! Returns a column container by name

@@ -1182,6 +1182,35 @@ sub invalid_dataframe_api() {
             {"id": 2, "amount": 220.0}));
         assertEq((1, 2), row_columns.getColumn("id").toList(),
             "ColumnarResult::fromRows builds compatibility columnar blocks");
+        ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
+            "total": (12.34n, NOTHING),
+        }, {
+            "total": {"native_type": "decimal(18, 2)", "nullable": True},
+        });
+        list<hash<auto>> decimal_schema = decimal_columns.schemaV2();
+        assertEq("decimal128", decimal_schema[0].kind,
+            "ColumnarResult::schemaV2 preserves decimal logical type");
+        assertEq(18, decimal_schema[0].precision,
+            "ColumnarResult::schemaV2 preserves decimal precision");
+        assertEq(2, decimal_schema[0].scale,
+            "ColumnarResult::schemaV2 preserves decimal scale");
+        ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
+            "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
+        }, {
+            "customer": {"schema": {
+                "kind": "struct",
+                "nullable": False,
+                "children": (
+                    {"name": "id", "kind": "int", "nullable": False},
+                    {"name": "name", "kind": "string", "nullable": True}
+                ),
+            }},
+        });
+        list<hash<auto>> nested_schema = nested_columns.slice(offset: 0, count: 1).schemaV2();
+        assertEq("struct", nested_schema[0].kind,
+            "ColumnarResult::schemaV2 preserves nested logical type");
+        assertEq("id", nested_schema[0].children[0].name,
+            "ColumnarResult::schemaV2 preserves nested child names");
 
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),
