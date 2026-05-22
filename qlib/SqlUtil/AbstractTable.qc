@@ -3576,10 +3576,10 @@ upsert(row_hash);
         @see getBulkUpsertClosure()
     */
     code<int(hash<auto>, hash<auto>)> getBulkUpdateClosure(hash<auto> example_set, hash<auto> example_cond) {
-        # execute the first row to generate and prepare the SQL
-        *AbstractSQLStatement stmt;
-        bool first = True;
         return int sub (hash<auto> set_data, hash<auto> cond_data) {
+            # execute the first row to generate and prepare the SQL
+            *AbstractSQLStatement stmt;
+            bool first = True;
             int uc = 0;
             if (set_data.firstValue().typeCode() == NT_LIST) {
                 # hash-of-lists: iterate over rows

@@ -1098,7 +1098,7 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         if (!exists dbname) {
             return GET_PHYSICAL_DB_SIZE_NOVAL;
         }
-        return ds.selectRow("select f.size * 8 as val -- to bytes
+        return ds.selectRow("select sum(cast(f.size as bigint)) * 8192 as val
                                 from sys.master_files f
                                 inner join sys.databases d on d.database_id = f.database_id
                                 where d.name = %v", dbname).val ?? GET_PHYSICAL_DB_SIZE_NOVAL;
