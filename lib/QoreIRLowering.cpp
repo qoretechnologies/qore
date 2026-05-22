@@ -745,12 +745,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreValue expr = ret_stmt->getExpression();
         if (!expr || expr.isNothing()) {
             // Emit block cleanups for all active scopes before returning.
-            // CF_SKIP_LVARS: pre-instantiated locals mechanism handles local cleanup
-            // at function exit. The break/continue paths need explicit UninstantiateLocal
-            // because execution continues after the loop, but on return the function
-            // exits immediately and the caller handles cleanup.
+            // Include lvar cleanup here so object destructors run before the
+            // source-level caller resumes.  The function wrapper still pops
+            // pre-instantiated local slots later; UninstantiateLocal clears the
+            // value without corrupting that stack ownership contract.
             // Also handles RefForeach cleanup (record + finalize without fill remaining).
-            if (!emitBlockCleanups(0, error, false, CF_SKIP_LVARS)) {
+            if (!emitBlockCleanups(0, error, false)) {
                 return false;
             }
             // Emit CatchCleanup for all active catch scopes before returning
@@ -774,6 +774,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!cleanup_before_return) {
             for (const auto& entry : cleanup_stack) {
                 if (entry.type == BlockCleanupEntry::Scope
+                        || entry.type == BlockCleanupEntry::Lvars
+                        || entry.type == BlockCleanupEntry::CatchVar
                         || entry.type == BlockCleanupEntry::RefForeachRecord
                         || entry.type == BlockCleanupEntry::RefForeach
                         || entry.type == BlockCleanupEntry::Context) {
@@ -785,9 +787,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (cleanup_before_return) {
             lowered = builder.createRefSelf(lowered, stmt->loc)->result;
         }
-        // Emit block cleanups for all active scopes (fires on_exit handlers).
-        // Same as ReturnNothing — CF_SKIP_LVARS, and handles RefForeach cleanup.
-        if (!emitBlockCleanups(0, error, false, CF_SKIP_LVARS)) {
+        // Emit block cleanups for all active scopes (fires on_exit handlers,
+        // clears lvar values, and handles RefForeach cleanup).
+        if (!emitBlockCleanups(0, error, false)) {
             return false;
         }
         // Emit CatchCleanup for all active catch scopes before returning
@@ -2632,19 +2634,23 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     // RefForeach (finalize/write-back).
     //
     // A HandlerBarrier entry (pushed by lowerHandlersAtExit around a
-    // handler body being inlined) acts as a hard floor: when we
-    // encounter one on the walk, raise `target_depth` to just below it
-    // so the Scope entry that fired this handler is not revisited.
-    // Without the clamp, a non-local exit inside the handler body would
+    // handler body being inlined) marks the Scope entry that fired the
+    // handler as protected.  Non-local exits from inside the handler must
+    // not revisit that Scope entry, or the same handler range would be
+    // inlined recursively.  Other cleanup entries below the protected Scope
+    // still have to run, especially Lvars, so object destructors fire before
+    // the source-level caller resumes.
+    // Without the protected-scope skip, a non-local exit inside the handler body would
     // recursively re-enter `lowerHandlersAtExit` on the same handler
     // range and infinite-recurse (see 8fb555ac1 for the symmetric fix
     // on TryStatement / RefForeach).  The barrier's own `handler_start`
-    // records the depth the creator of the barrier wants to clamp to.
+    // records the depth just above the Scope entry to protect.
+    size_t protected_scope_index = SIZE_MAX;
     for (size_t j = cleanup_stack.size(); j > target_depth; --j) {
         if (cleanup_stack[j - 1].type == BlockCleanupEntry::HandlerBarrier) {
             const size_t clamp_to = cleanup_stack[j - 1].handler_start;
-            if (clamp_to > target_depth) {
-                target_depth = clamp_to;
+            if (clamp_to > target_depth && clamp_to != 0) {
+                protected_scope_index = clamp_to - 1;
             }
             break;  // only the innermost barrier matters
         }
@@ -2656,6 +2662,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         const BlockCleanupEntry entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
+                if ((i - 1) == protected_scope_index) {
+                    break;
+                }
                 // Clear the runtime OBE registration before executing inline
                 // handler code.  A handler can contain a non-local exit; if the
                 // ScopeExit ran after the inline body, that exit path would

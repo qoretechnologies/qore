@@ -1862,7 +1862,7 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
     }
     const QoreTypeInfo* ti = list ? list->getTypeInfo() : nullptr;
     const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexList(ti);
-    if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+    if (vt && vt != anyTypeInfo) {
         std::string type_path = getAOTSerializableTypePath(ti);
         qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
             type_path.c_str());
@@ -1885,7 +1885,7 @@ static void qoreAOTWriteHashValueType(QoreAOTBinaryWriter& writer,
         }
         const QoreTypeInfo* ti = hash->getTypeInfo();
         const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexHash(ti);
-        if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+        if (vt && vt != anyTypeInfo) {
             std::string type_path = getAOTSerializableTypePath(ti);
             qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
                 type_path.c_str());
@@ -2843,7 +2843,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 if (!error.empty()) {
                     return QoreValue();
                 }
-                list->push(elem, nullptr);
+                qore_list_private::get(**list)->pushIntern(elem);
             }
             QoreValue rv(list.release());
             if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
@@ -2880,7 +2880,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 if (!error.empty()) {
                     return QoreValue();
                 }
-                hash->setKeyValue(key, val, nullptr);
+                qore_hash_private::get(**hash)->setKeyValueIntern(key, val);
             }
             QoreValue rv(hash.release());
             if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
@@ -10814,6 +10814,38 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
             ce->init = true;
             ce->aot_shell_pending = false;
             pcc.value_blob.clear();
+        }
+    }
+
+    // Now that every class constant in the batch has a value, collapse any
+    // nested deferred sibling references that had to remain lazy during the
+    // first pass.  This preserves source semantics for constants such as a
+    // folded hash referring to a later sibling constant.
+    ExceptionSink xsink;
+    for (uint32_t i = 0; i < class_list.size() && i < pending_class_constants.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class constant materialization")) {
+            error = "AOT class constant materialization cancelled";
+            return false;
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        for (size_t j = 0; j < pending_class_constants[i].size(); ++j) {
+            if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT class constant materialization")) {
+                error = "AOT class constant materialization cancelled";
+                return false;
+            }
+            auto& pcc = pending_class_constants[i][j];
+            ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
+            if (!ce || ce->aot_shell_pending) {
+                continue;
+            }
+            ce->materializeRuntimeRefs(&xsink);
+            if (xsink) {
+                xsink.clear();
+            }
         }
     }
 

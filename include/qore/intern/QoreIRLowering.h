@@ -388,10 +388,11 @@ private:
      *  @param end_index end index in block_handlers (SIZE_MAX = through the end)
      *  @param barrier_depth cleanup_stack depth to set as a hard floor while a
      *    handler body is being inlined — any `emitBlockCleanups` invoked from a
-     *    non-local exit (return/break/continue) inside the handler body clamps
-     *    its walk at this depth so the firing Scope entry (which still owns
-     *    this handler range) can't re-enter `lowerHandlersAtExit` on the same
-     *    handlers.  SIZE_MAX = no barrier.  Implemented via a
+     *    non-local exit (return/break/continue) inside the handler body skips
+     *    the firing Scope entry (which still owns this handler range) so it
+     *    can't re-enter `lowerHandlersAtExit` on the same handlers. Cleanup
+     *    entries below that Scope, such as block locals, still run. SIZE_MAX =
+     *    no barrier. Implemented via a
      *    HandlerBarrier entry pushed on cleanup_stack for the duration of the
      *    handler body lowering.
      *  @return false if lowering failed
@@ -417,11 +418,9 @@ private:
     struct BlockCleanupEntry {
         //! HandlerBarrier is a sentinel pushed around a handler body being
         //! inlined by lowerHandlersAtExit().  It has no cleanup effect, but
-        //! emitBlockCleanups() treats it as a hard floor — the walk stops
-        //! at the barrier so a non-local exit inside the handler body can
-        //! not reach back past the firing Scope entry and re-enter the same
-        //! handler range (infinite-recursion guard; symmetric to the
-        //! TryStatement/RefForeach anchors added in 8fb555ac1).
+        //! emitBlockCleanups() uses it to skip the firing Scope entry so a
+        //! non-local exit inside the handler body cannot re-enter the same
+        //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries

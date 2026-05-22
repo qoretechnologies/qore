@@ -5248,7 +5248,7 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
     }
 
     const QoreTypeInfo* inner_h_vt = QoreTypeInfo::getComplexHashValueType(target_ti);
-    if (inner_h_vt && inner_h_vt != autoTypeInfo) {
+    if (inner_h_vt) {
         if (v.getType() != NT_HASH) {
             return true;
         }
@@ -5259,15 +5259,22 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             v = copy;
             h = copy;
         }
-        HashIterator hi(h);
-        while (hi.next()) {
-            hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
-            QoreValue cur(ha.swap(QoreValue()));
-            if (!QoreTypeInfo::retypeValue(cur, inner_h_vt, xsink)) {
+        if (inner_h_vt != autoTypeInfo) {
+            HashIterator hi(h);
+            size_t i = 0;
+            while (hi.next()) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "hash value retyping")) {
+                    return false;
+                }
+                hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
+                QoreValue cur(ha.swap(QoreValue()));
+                if (!QoreTypeInfo::retypeValue(cur, inner_h_vt, xsink)) {
+                    ha.swap(cur);
+                    return false;
+                }
                 ha.swap(cur);
-                return false;
+                ++i;
             }
-            ha.swap(cur);
         }
         qore_hash_private::get(*h)->complexTypeInfo
             = qore_get_complex_hash_type(inner_h_vt);
@@ -5275,7 +5282,7 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
     }
 
     const QoreTypeInfo* inner_l_vt = QoreTypeInfo::getComplexListValueType(target_ti);
-    if (inner_l_vt && inner_l_vt != autoTypeInfo) {
+    if (inner_l_vt) {
         if (v.getType() != NT_LIST) {
             return true;
         }
@@ -5287,14 +5294,19 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             l = copy;
         }
         qore_list_private* lp = qore_list_private::get(*l);
-        size_t n = l->size();
-        for (size_t i = 0; i < n; ++i) {
-            QoreValue cur = lp->swap(i, QoreValue());
-            if (!QoreTypeInfo::retypeValue(cur, inner_l_vt, xsink)) {
+        if (inner_l_vt != autoTypeInfo) {
+            size_t n = l->size();
+            for (size_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "list value retyping")) {
+                    return false;
+                }
+                QoreValue cur = lp->swap(i, QoreValue());
+                if (!QoreTypeInfo::retypeValue(cur, inner_l_vt, xsink)) {
+                    lp->swap(i, cur);
+                    return false;
+                }
                 lp->swap(i, cur);
-                return false;
             }
-            lp->swap(i, cur);
         }
         lp->complexTypeInfo = qore_get_complex_list_type(inner_l_vt);
         return true;

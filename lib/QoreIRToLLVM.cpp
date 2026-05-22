@@ -1640,6 +1640,47 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module) {
         }
         pending_ssa_cleanup.resize(mark.pending_ssa_count);
     }
+
+    flushLocalReloadStateAtTempBoundary(module);
+}
+
+void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
+    if (!local_reload_boundary_cleanup_pending) {
+        return;
+    }
+    local_reload_boundary_cleanup_pending = false;
+
+    if (local_reload_trackers.empty() && local_reload_deferred.empty()) {
+        return;
+    }
+
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    auto clear_alloca = [&](llvm::Value* alloca) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+        builder->CreateCall(helper, {val, xsink_arg});
+    };
+
+    for (auto& [key, alloca] : local_reload_trackers) {
+        (void)key;
+        clear_alloca(alloca);
+    }
+    for (auto& [key, alloca] : local_reload_deferred) {
+        (void)key;
+        clear_alloca(alloca);
+    }
+
+    if (local_reload_epoch) {
+        llvm::Value* epoch = builder->CreateLoad(i64_type, local_reload_epoch);
+        llvm::Value* next_epoch = builder->CreateAdd(epoch,
+                llvm::ConstantInt::get(i64_type, 1), "local_reload_epoch_next");
+        builder->CreateStore(next_epoch, local_reload_epoch);
+        for (auto& [key, valid_epoch] : local_valid_epochs) {
+            (void)key;
+            builder->CreateStore(epoch, valid_epoch);
+        }
+    }
 }
 
 unsigned QoreIRToLLVM::estimateInvokeCleanupArrayCapacity(const QoreIRFunction& func) const {
@@ -2847,6 +2888,7 @@ void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Functi
     llvm::Value* next_epoch = builder->CreateAdd(epoch,
             llvm::ConstantInt::get(i64_type, 1), "local_reload_epoch_next");
     builder->CreateStore(next_epoch, epoch_alloca);
+    local_reload_boundary_cleanup_pending = true;
     (void)module;
 }
 
@@ -4305,6 +4347,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_reload_deferred.clear();
     local_reload_epoch = nullptr;
     local_valid_epochs.clear();
+    local_reload_boundary_cleanup_pending = false;
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
     landingpad_blocks.clear();
