@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/DeepgramRestClient.qm
 %requires ../../../../qlib/DeepgramDataProvider
@@ -37,7 +38,26 @@ class FakeDeepgramRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class DeepgramDataProviderTest inherits QUnit::Test {
-    constructor() : Test("DeepgramDataProvider Test", "1.0") {
+    public {
+        #! `-c,--connection` is added on top of the default QUnit option set
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! Public Deepgram audio sample used by the live transcribe test
+        const LiveAudioUrl = "https://dpgr.am/spacewalk.wav";
+    }
+
+    private {
+        #! Connection name from `-c <name>` or the `DEEPGRAM_CONNECTION` env var
+        *string conn_name;
+    }
+
+    constructor() : Test("DeepgramDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.DEEPGRAM_CONNECTION;
+
         addTestCase("factory + app + 2 actions registered", \registrationTest());
         addTestCase("transcribe-file builds query string from non-URL params",
             \transcribeFileQueryStringTest());
@@ -46,7 +66,22 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         addTestCase("synthesize-speech surfaces audio bytes + content-type",
             \synthesizeSpeechTest());
         addTestCase("app declares Speech AppGroup",       \speechAppGroupTest());
+
+        # Live tests require a real Deepgram connection (cost: tiny — one
+        # short transcription + one short TTS synthesis per run)
+        if (conn_name) {
+            addTestCase("live: ping + transcribe + synthesize",
+                \liveDeepgramTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Deepgram connection name; without it (and without the "
+            "DEEPGRAM_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -160,5 +195,43 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         # Deepgram declares both AiLlm and the new Speech AppGroup
         assertTrue(inlist(DataProvider::AppGroup::AiLlm,  app.groups));
         assertTrue(inlist(DataProvider::AppGroup::Speech, app.groups));
+    }
+
+    #! Exercises Deepgram's live `/v1/listen` and `/v1/speak` endpoints
+    /** Verifies the actual wire format against Deepgram's production
+        servers.  Costs: ~10 seconds of ASR + ~3 words of TTS — negligible
+        against any tier.
+    */
+    private liveDeepgramTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Deepgram connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        # Transcribe Deepgram's own ~10s public spacewalk sample
+        AbstractDataProvider tr = prov.getChildProvider("transcribe-file");
+        auto tresult = tr.doRequest({
+            "url":          LiveAudioUrl,
+            "model":        "nova-3",
+            "smart_format": True,
+        });
+        assertTrue(tresult.results.channels[0].alternatives[0].transcript.val(),
+            "Deepgram returned a non-empty transcript");
+        assertTrue(tresult.metadata.duration > 0,
+            "Deepgram reported audio duration");
+
+        # Synthesize ~3 words via TTS (cheapest unit)
+        AbstractDataProvider syn = prov.getChildProvider("synthesize-speech");
+        auto sresult = syn.doRequest({
+            "text":     "Hello, world.",
+            "model":    "aura-asteria-en",
+            "encoding": "mp3",
+        });
+        assertTrue(sresult.audio.size() > 100,
+            "Deepgram TTS returned non-trivial audio bytes");
+        assertTrue(sresult.content_type =~ /audio/,
+            "Deepgram TTS content_type is audio/*");
     }
 }

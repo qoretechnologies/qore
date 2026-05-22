@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/QoreAsyncJobUtils.qm
 %requires ../../../../qlib/QoreMediaUtils.qm
@@ -43,7 +44,21 @@ class FakeBflClient inherits BflRestClient::BflRestClientIo {
 }
 
 public class BflDataProviderTest inherits QUnit::Test {
-    constructor() : Test("BflDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("BflDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.BFL_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("generate-image submits to the right endpoint",
             \endpointTest());
@@ -53,7 +68,22 @@ public class BflDataProviderTest inherits QUnit::Test {
             \unknownModelTest());
         addTestCase("app declares DesignCreative AppGroup",
             \designCreativeTest());
+
+        # Live test requires a real BFL connection.
+        # Cost: ~$0.025 per image on `flux-dev` (the cheapest model).
+        if (conn_name) {
+            addTestCase("live: ping + generate-image (flux-dev)",
+                \liveBflTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Black Forest Labs connection name; without it (and "
+            "without the BFL_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -110,5 +140,31 @@ public class BflDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("BlackForestLabs");
         assertTrue(inlist(DataProvider::AppGroup::AiLlm,          app.groups));
         assertTrue(inlist(DataProvider::AppGroup::DesignCreative, app.groups));
+    }
+
+    #! Exercises BFL's live `/v1/flux-dev` submit-then-poll lifecycle
+    /** Verifies the actual wire format against BFL's production endpoint —
+        including the polling_url header parsing, async poll until `Ready`,
+        and CDN-URL response shape.  Cost: ~$0.025 per image on `flux-dev`
+        (BFL's cheapest model).
+    */
+    private liveBflTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("BFL connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider gi = prov.getChildProvider("generate-image");
+        auto result = gi.doRequest({
+            "prompt":      "a single red apple on a white background",
+            "model":       "flux-dev",   # cheapest tier
+            "aspect_ratio": "1:1",
+        });
+        assertEq("Ready", result.status,
+            "BFL job reached Ready status");
+        assertTrue(result.result.sample.val()
+                && result.result.sample =~ /^https?:\/\//,
+            "BFL returned a CDN URL");
     }
 }

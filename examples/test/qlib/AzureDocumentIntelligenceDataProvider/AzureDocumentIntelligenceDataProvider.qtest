@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/QoreAsyncJobUtils.qm
 %requires ../../../../qlib/AzureDocumentIntelligenceRestClient.qm
@@ -44,7 +45,28 @@ class FakeAzureDocIntelClient
 }
 
 public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
-    constructor() : Test("AzureDocumentIntelligenceDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! Microsoft's published sample invoice PDF — used by Azure's own
+        #! Document Intelligence quickstart docs.  Stable, public, free.
+        const LiveDocUrl =
+            "https://raw.githubusercontent.com/Azure-Samples/cognitive-services-REST-api-samples/"
+            "master/curl/form-recognizer/sample-invoice.pdf";
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("AzureDocumentIntelligenceDataProvider Test", "1.0",
+            \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.AZURE_DOCUMENTINTELLIGENCE_CONNECTION;
+
         addTestCase("factory + app + action registered",  \registrationTest());
         addTestCase("analyze-document with URL source",   \urlSourceTest());
         addTestCase("analyze-document with bytes encodes base64",
@@ -54,7 +76,24 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
         addTestCase("app declares Documents AppGroup",    \documentsAppGroupTest());
         addTestCase("model_id allowed_values has display_name",
             \allowedValuesTest());
+
+        # Live tests require a real Azure Document Intelligence connection.
+        # Cost: 1 page on prebuilt-document (free-tier eligible — 500
+        # pages/month for 12 months).
+        if (conn_name) {
+            addTestCase("live: ping + analyze-document",
+                \liveAzureDocIntelTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Azure Document Intelligence connection name; without "
+            "it (and without the AZURE_DOCUMENTINTELLIGENCE_CONNECTION env "
+            "var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -128,5 +167,31 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
             assertTrue(av.value.val());
             assertTrue(av.display_name.val());
         }
+    }
+
+    #! Exercises Azure DI's live `/documentintelligence/documentModels` API
+    /** Verifies the actual wire format against Azure's Document
+        Intelligence service — including the operation-location header
+        parsing and async poll-until-succeeded lifecycle.  Cost: 1 page
+        on the prebuilt-document model (free-tier eligible).
+    */
+    private liveAzureDocIntelTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Azure DI connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider ad = prov.getChildProvider("analyze-document");
+        auto result = ad.doRequest({
+            "model_id":     "prebuilt-document",
+            "document_url": LiveDocUrl,
+        });
+        assertTrue(result.content.val(),
+            "Azure DI returned non-empty content");
+        assertTrue(result.pages.size() >= 1,
+            "Azure DI returned at least one page");
+        assertEq("prebuilt-document", result.modelId,
+            "Azure DI echoed the model id");
     }
 }

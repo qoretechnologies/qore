@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/GoogleDocumentAiRestClient.qm
 %requires ../../../../qlib/GoogleDocumentAiDataProvider
@@ -14,7 +15,27 @@
 %exec-class GoogleDocumentAiDataProviderTest
 
 public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
-    constructor() : Test("GoogleDocumentAiDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! Tiny inline PNG (1x1 transparent pixel) — minimum-cost input
+        const TinyPng = parse_base64_string(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAj"
+            "CB0C8AAAAASUVORK5CYII=");
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("GoogleDocumentAiDataProvider Test", "1.0",
+            \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.GOOGLE_DOCUMENTAI_CONNECTION;
+
         addTestCase("factory + app + process-document registered",
             \registrationTest());
         addTestCase("app declares Documents AppGroup",
@@ -25,7 +46,26 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
             \requestFieldsTest());
         addTestCase("constructor rejects missing gcp_project_id",
             \missingProjectTest());
+
+        # Live tests require a real Google Document AI connection + a
+        # `processor_id` env var (Google Doc AI processors are account-
+        # specific and must be created in the GCP console).
+        # Cost: 1 page on the OCR processor (free-tier eligible).
+        if (conn_name) {
+            addTestCase("live: ping + process-document",
+                \liveGoogleDocAiTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Google Document AI connection name; without it (and "
+            "without the GOOGLE_DOCUMENTAI_CONNECTION env var) the live "
+            "test is skipped.  Also requires GOOGLE_DOCUMENTAI_PROCESSOR_ID "
+            "naming a processor in the project.",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -76,5 +116,40 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
         assertThrows("CONSTRUCTOR-ERROR", sub () {
             GoogleDocumentAiDataProvider::GoogleDocumentAiDataProvider p({});
         });
+    }
+
+    #! Exercises Google Document AI's live `:process` endpoint
+    /** Verifies the actual wire format against Google Cloud's Document
+        AI service.  Requires both a connection name AND a
+        `GOOGLE_DOCUMENTAI_PROCESSOR_ID` env var naming a processor in
+        the connection's project.  Cost: 1 page on the OCR processor
+        (free-tier eligible).
+    */
+    private liveGoogleDocAiTest() {
+        *string processor_id = ENV.GOOGLE_DOCUMENTAI_PROCESSOR_ID;
+        if (!processor_id.val()) {
+            testSkip("GOOGLE_DOCUMENTAI_PROCESSOR_ID env var is required "
+                "for the live test (create a processor in the GCP console "
+                "and set this env var to its UUID)");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Google Document AI connection ping "
+            "failed: %s", ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider pd = prov.getChildProvider("process-document");
+        auto result = pd.doRequest({
+            "processor_id":   processor_id,
+            "document_bytes": TinyPng,
+            "mime_type":      "image/png",
+        });
+        # Document AI returns a Document object with mimeType + (often
+        # empty) text on a blank pixel
+        assertTrue(exists result.document,
+            "Google Document AI returned a document object");
+        assertTrue(result.document.mimeType.val(),
+            "document.mimeType is set");
     }
 }
