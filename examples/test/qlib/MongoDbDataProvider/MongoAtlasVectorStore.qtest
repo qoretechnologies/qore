@@ -5,6 +5,7 @@
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/QoreRagTypes.qm
 %requires ../../../../qlib/QoreRagUtils
 %requires ../../../../qlib/MongoDbDataProvider
@@ -12,13 +13,49 @@
 %exec-class MongoAtlasVectorStoreTest
 
 public class MongoAtlasVectorStoreTest inherits QUnit::Test {
-    constructor() : Test("MongoAtlasVectorStore Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("MongoAtlasVectorStore Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.MONGODB_ATLAS_CONNECTION;
+
         addTestCase("factory registered + lazy-loadable",   \factoryTest());
         addTestCase("constructor validates required config", \constructorValidationTest());
         addTestCase("constructor accepts full config",       \constructorOkTest());
         addTestCase("vector-search action wired into collection ChildMap",
             \childMapTest());
+
+        # Live test requires a real MongoDB Atlas connection AND
+        # `MONGODB_ATLAS_COLLECTION`, `MONGODB_ATLAS_DATABASE`, and
+        # `MONGODB_ATLAS_INDEX_NAME` env vars naming an existing
+        # collection with a configured Atlas Vector Search index.
+        # Cost: MongoDB Atlas M0 free-tier eligible if the index is
+        # configured.
+        if (conn_name) {
+            addTestCase("live: ping + vector-search (existing collection + "
+                "index)", \liveMongoAtlasTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the MongoDB Atlas connection name; without it (and without "
+            "the MONGODB_ATLAS_CONNECTION env var) the live test is "
+            "skipped.  Also requires MONGODB_ATLAS_COLLECTION, "
+            "MONGODB_ATLAS_DATABASE, and MONGODB_ATLAS_INDEX_NAME naming "
+            "an existing collection with an Atlas Vector Search index.",
+            OptionColumn);
     }
 
     private factoryTest() {
@@ -95,5 +132,58 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
         # Request-type class is constructable
         MongoDbDataProvider::MongoDbVectorSearchRequestDataType t();
         assertTrue(t instanceof DataProvider::HashDataType);
+    }
+
+    #! Exercises MongoAtlasVectorStore against a real Atlas cluster
+    /** Verifies the actual wire format against MongoDB Atlas — including
+        the `$vectorSearch` aggregation stage and the configured Atlas
+        Vector Search index.  Requires a connection name AND env vars
+        naming an existing collection + database + index_name.  The
+        query embedding dimension is derived from the collection's
+        stored vectors via `getDimension()`; the test sends a zero-vector
+        of that length and asserts the response shape, not content.
+
+        Cost: MongoDB Atlas M0 free-tier eligible if the vector index
+        is configured.
+    */
+    private liveMongoAtlasTest() {
+        *string coll = ENV.MONGODB_ATLAS_COLLECTION;
+        *string db_name = ENV.MONGODB_ATLAS_DATABASE;
+        *string idx_name = ENV.MONGODB_ATLAS_INDEX_NAME;
+        if (!coll.val() || !db_name.val() || !idx_name.val()) {
+            testSkip("MONGODB_ATLAS_COLLECTION, MONGODB_ATLAS_DATABASE, and "
+                "MONGODB_ATLAS_INDEX_NAME env vars must all be set for the "
+                "live test");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("MongoDB Atlas connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        QoreRagUtils::MongoAtlasVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend":    "mongo-atlas",
+                "collection": coll,
+                "url":        conn.getUrl(),
+                "options":    {
+                    "database":   db_name,
+                    "index_name": idx_name,
+                },
+            });
+        # Probe stored-vector dimension from the collection — Atlas
+        # rejects $vectorSearch queries whose vector length does not
+        # match the index dimension
+        int dim = store.getDimension();
+        assertTrue(dim > 0, "MongoAtlas getDimension() probed a dimension");
+
+        list<float> query = map 0.0, xrange(dim);
+        list<hash<QoreRagUtils::VectorSearchResult>> hits =
+            store.search(query, 1);
+        # Atlas may return zero hits if the collection is empty;
+        # verify the result is a (possibly empty) list — i.e. the
+        # `$vectorSearch` stage was accepted by the server
+        assertTrue(hits.typeCode() == NT_LIST,
+            "MongoAtlas vector-search returned a list");
     }
 }

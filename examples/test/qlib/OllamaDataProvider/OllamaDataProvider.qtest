@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/OllamaDataProvider
 
@@ -51,7 +52,21 @@ class FakeOllamaRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class OllamaDataProviderTest inherits QUnit::Test {
-    constructor() : Test("OllamaDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("OllamaDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.OLLAMA_CONNECTION;
+
         addTestCase("factory + app + 3 actions registered", \registrationTest());
         addTestCase("root provider lists 3 children",       \rootProviderTest());
         addTestCase("chat-completion uses OpenAI-compat path",
@@ -59,7 +74,22 @@ public class OllamaDataProviderTest inherits QUnit::Test {
         addTestCase("create-embeddings uses native /api/embed",
             \embeddingPathTest());
         addTestCase("list-models uses /api/tags",           \listModelsTest());
+
+        # Live test requires a real Ollama connection.
+        # Cost: reads /api/tags from the configured Ollama instance
+        # (no model cost — purely metadata).
+        if (conn_name) {
+            addTestCase("live: ping + list-models", \liveOllamaTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Ollama connection name; without it (and "
+            "without the OLLAMA_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -156,5 +186,27 @@ public class OllamaDataProviderTest inherits QUnit::Test {
         assertEq("/api/tags", fake.last_path);
         assertEq("llama3.3:latest", resp.models[0].name);
         assertEq("llama", resp.models[0].details.family);
+    }
+
+    #! Exercises Ollama's live /api/tags endpoint
+    /** Verifies the daemon is responsive and listing returns a models list.
+        Since Ollama is local and model availability varies per host, the
+        live test uses list-models (a no-op metadata read) rather than a
+        chat-completion. Cost: reads /api/tags from the configured Ollama
+        instance (no model cost — purely metadata).
+    */
+    private liveOllamaTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Ollama connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider lm = prov.getChildProvider("list-models");
+        auto result = lm.doRequest(NOTHING);
+        assertTrue(exists result.models,
+            "Ollama list-models response includes models field");
+        assertEq(NT_LIST, result.models.typeCode(),
+            "Ollama list-models models field is a list");
     }
 }

@@ -160,6 +160,9 @@ public class HttpAsyncSocketIoController {
         #! Registered listeners: listener unique hash -> listener info
         hash<string, hash<HttpListenerInfo>> listeners;
 
+        #! QUIC HttpListener wrapper unique hash -> UDP listener unique hash
+        hash<string, string> quic_listener_hash_by_http_listener;
+
         #! Active connections: socket unique hash -> connection info
         hash<string, hash<HttpActiveConnectionInfo>> connections;
 
@@ -346,6 +349,7 @@ public class HttpAsyncSocketIoController {
             detached_listeners = listeners;
             detached_connections = connections;
             listeners = {};
+            quic_listener_hash_by_http_listener = {};
             connections = {};
             accept_counts = {};
         }
@@ -761,11 +765,13 @@ public class HttpAsyncSocketIoController {
                 "http_listener": http_listener,
                 "socket_info": socket_info,
             };
+            quic_listener_hash_by_http_listener{http_listener.uniqueHash()} = lhash;
         }
         # Remove listener from map if submitQuicAcceptOp fails
         on_error {
             AutoWriteLock al(m);
             remove listeners{lhash};
+            remove quic_listener_hash_by_http_listener{http_listener.uniqueHash()};
         }
 
         # Submit QUIC accept operation
@@ -778,7 +784,22 @@ public class HttpAsyncSocketIoController {
     /** @param listener the listener to remove
     */
     removeListener(Socket listener) {
-        string lhash = listener.uniqueHash();
+        string listener_hash = listener.uniqueHash();
+        string lhash = listener_hash;
+        string conn_listener_hash = listener_hash;
+        *hash<HttpListenerInfo> linfo;
+        {
+            AutoReadLock al(m);
+            linfo = listeners{lhash};
+            if (!linfo && quic_listener_hash_by_http_listener.hasKey(listener_hash)) {
+                lhash = quic_listener_hash_by_http_listener{listener_hash};
+                linfo = listeners{lhash};
+            }
+            if (linfo && linfo.http_listener) {
+                conn_listener_hash = linfo.http_listener.uniqueHash();
+            }
+        }
+
         @debug(log(LoggerLevel::DEBUG, "removeListener: removing listener %s", lhash));
         # Cancel accept operations (owned by the listener hash)
         controller.cancelByOwner(lhash);
@@ -786,14 +807,13 @@ public class HttpAsyncSocketIoController {
         # Cancel all connection operations on this listener
         # Connection ops use the connection unique hash (uh) as owner,
         # not the listener hash, so cancelByOwner(lhash) doesn't reach them.
-        # Match connections by comparing the listener object identity.
+        # Match connections by comparing the dispatch listener object identity.
         list<string> conn_keys;
         {
             AutoReadLock al(m);
-            string listener_obj_hash = listener.uniqueHash();
             foreach string uh in (keys connections) {
                 *HttpServer::HttpListenerInterface li = connections{uh}.listener;
-                if (li && li.uniqueHash() == listener_obj_hash) {
+                if (li && li.uniqueHash() == conn_listener_hash) {
                     conn_keys += uh;
                 }
             }
@@ -806,8 +826,23 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        if (linfo && linfo.http_version == HttpVersionMode::H3) {
+            try {
+                linfo.listener.close();
+            } catch () {
+                # ignore errors for already-closed listeners
+            }
+        }
+
         {
             AutoWriteLock al(m);
+            if (quic_listener_hash_by_http_listener.hasKey(listener_hash)
+                    && quic_listener_hash_by_http_listener{listener_hash} == lhash) {
+                remove quic_listener_hash_by_http_listener{listener_hash};
+            }
+            if (linfo && linfo.http_listener) {
+                remove quic_listener_hash_by_http_listener{linfo.http_listener.uniqueHash()};
+            }
             remove listeners{lhash};
             remove accept_counts{lhash};
         }

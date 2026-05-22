@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/FireworksDataProvider
 
@@ -51,13 +52,42 @@ class FakeFireworksRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class FireworksDataProviderTest inherits QUnit::Test {
-    constructor() : Test("FireworksDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("FireworksDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.FIREWORKS_CONNECTION;
+
         addTestCase("factory + app + 2 actions registered", \registrationTest());
         addTestCase("root provider lists 2 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
             \embeddingRequestTest());
+
+        # Live test requires a real Fireworks AI connection.
+        # Cost: 1 token-bounded llama-v3p1-8b-instruct request (~$0.0001 per run).
+        if (conn_name) {
+            addTestCase("live: ping + chat-completion (llama-v3p1-8b-instruct)",
+                \liveFireworksTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Fireworks AI connection name; without it (and "
+            "without the FIREWORKS_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -136,5 +166,29 @@ public class FireworksDataProviderTest inherits QUnit::Test {
         assertEq("embeddings", fake.last_path);
         assertEq("nomic-ai/nomic-embed-text-v1.5", fake.last_request.model);
         assertEq(3, resp.data[0].embedding.size());
+    }
+
+    #! Exercises Fireworks AI's live chat-completion endpoint
+    /** Verifies the actual wire format against Fireworks AI's production
+        endpoint with a token-bounded request on llama-v3p1-8b-instruct.
+        Cost: ~$0.0001 per run (capped via max_tokens=16).
+    */
+    private liveFireworksTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Fireworks connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider chat = prov.getChildProvider("chat-completion");
+        auto resp = chat.doRequest({
+            "model": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+            "messages": ({"role": "user", "content": "Say hi in one word."},),
+            "max_tokens": 16,
+        });
+        assertTrue(resp.choices[0].message.content.val(),
+            "Fireworks returned non-empty assistant content");
+        assertTrue(resp.usage.total_tokens > 0,
+            "Fireworks reported positive total_tokens");
     }
 }

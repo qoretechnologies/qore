@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/AwsTextractRestClient.qm
 %requires ../../../../qlib/AwsTextractDataProvider
@@ -35,7 +36,28 @@ class FakeAwsTextractClient inherits AwsTextractRestClient::AwsTextractRestClien
 }
 
 public class AwsTextractDataProviderTest inherits QUnit::Test {
-    constructor() : Test("AwsTextractDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! Tiny inline PNG (1x1 transparent pixel) — sufficient to elicit a
+        #! valid Textract response with a PAGE block but no detected words.
+        #! Keeps cost minimal (1 page = $0.0015 on the regular tier).
+        const TinyPng = parse_base64_string(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAj"
+            "CB0C8AAAAASUVORK5CYII=");
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("AwsTextractDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.AWS_TEXTRACT_CONNECTION;
+
         addTestCase("factory + app + 2 actions registered", \registrationTest());
         addTestCase("detect-document-text builds Document.Bytes from document_bytes",
             \detectBytesTest());
@@ -50,7 +72,23 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
         addTestCase("buildDocument raises when no source given",
             \noSourceTest());
         addTestCase("app declares Documents AppGroup",   \documentsAppGroupTest());
+
+        # Live tests require a real AWS connection with Textract permissions
+        # (cost: 1 page on regular tier ≈ $0.0015 per run — fits inside the
+        # 3-month / 1k-page free tier indefinitely while testing)
+        if (conn_name) {
+            addTestCase("live: ping + detect-document-text",
+                \liveTextractTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the AWS Textract connection name; without it (and without "
+            "the AWS_TEXTRACT_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -160,5 +198,29 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("AwsTextract");
         assertTrue(inlist(DataProvider::AppGroup::AiLlm,     app.groups));
         assertTrue(inlist(DataProvider::AppGroup::Documents, app.groups));
+    }
+
+    #! Exercises Textract's live `DetectDocumentText` action via SigV4
+    /** Verifies the actual wire format against AWS Textract's production
+        endpoint.  Cost: ~$0.0015 per page (free-tier eligible).
+    */
+    private liveTextractTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("AWS Textract connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider dt = prov.getChildProvider("detect-document-text");
+        auto result = dt.doRequest({"document_bytes": TinyPng});
+
+        # Even on a blank pixel, Textract returns at least a PAGE block
+        assertTrue(result.Blocks.size() >= 1,
+            "Textract returned at least one Block");
+        # First block is conventionally a PAGE
+        assertEq("PAGE", result.Blocks[0].BlockType,
+            "first Block is PAGE");
+        assertTrue(result.DocumentMetadata.Pages >= 1,
+            "Textract reported >= 1 page");
     }
 }

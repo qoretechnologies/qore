@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/UnstructuredRestClient.qm
 %requires ../../../../qlib/UnstructuredDataProvider
@@ -31,11 +32,41 @@ class FakeUnstructuredRestClientIo inherits UnstructuredRestClient::Unstructured
 }
 
 public class UnstructuredDataProviderTest inherits QUnit::Test {
-    constructor() : Test("UnstructuredDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("UnstructuredDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.UNSTRUCTURED_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("partition-text forwards to partitionText()",
             \partitionTextTest());
+
+        # Live test requires a real Unstructured connection.
+        # Unstructured Serverless free tier: 1000 pages/month. ~$0 per run
+        # when within free tier.
+        if (conn_name) {
+            addTestCase("live: ping + partition (tiny inline html)",
+                \liveUnstructuredTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Unstructured connection name; without it (and without "
+            "the UNSTRUCTURED_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -74,5 +105,29 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         assertEq(2, resp.elt_list.size());
         assertEq("Title", resp.elt_list[0].type);
         assertEq("Section One", resp.elt_list[0].text);
+    }
+
+    #! Exercises Unstructured's live multipart upload + partition lifecycle
+    /** Verifies the actual wire format against Unstructured's production API
+        using a tiny inline HTML snippet.  Unstructured Serverless free
+        tier: 1000 pages/month.  ~$0 per run when within free tier.
+    */
+    private liveUnstructuredTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Unstructured connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider pt = prov.getChildProvider("partition-text");
+        auto resp = pt.doRequest({
+            "text":     "<html><body><h1>Title</h1>"
+                        "<p>Hello world.</p></body></html>",
+            "strategy": "fast",
+        });
+        assertTrue(resp.elt_list.size() >= 1,
+            "Unstructured returned at least one element");
+        assertTrue(resp.elt_list[0].type.val(),
+            "Unstructured element has a type");
     }
 }

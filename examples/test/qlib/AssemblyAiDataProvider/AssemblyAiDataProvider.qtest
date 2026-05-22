@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/QoreAsyncJobUtils.qm
 %requires ../../../../qlib/AssemblyAiRestClient.qm
@@ -58,13 +59,50 @@ class FakeAssemblyAiClient inherits AssemblyAiRestClient::AssemblyAiRestClientIo
 }
 
 public class AssemblyAiDataProviderTest inherits QUnit::Test {
-    constructor() : Test("AssemblyAiDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! Public short-form sample used by the live transcribe test
+        /** AssemblyAI's own published demo file — short enough that
+            transcription completes in under a minute and stays well
+            under the free-tier monthly minute budget.
+        */
+        const LiveAudioUrl =
+            "https://storage.googleapis.com/aai-web-samples/"
+            "5_common_sports_injuries.mp3";
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("AssemblyAiDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.ASSEMBLYAI_CONNECTION;
+
         addTestCase("factory + app + transcribe action registered",
             \registrationTest());
         addTestCase("transcribe action runs the lifecycle and surfaces transcript",
             \transcribeActionTest());
         addTestCase("app declares Speech AppGroup",       \speechAppGroupTest());
+
+        # Live tests require a real AssemblyAI connection (cost: one short
+        # transcription per run — fits inside the free-tier monthly budget)
+        if (conn_name) {
+            addTestCase("live: ping + transcribe", \liveAssemblyAiTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the AssemblyAI connection name; without it (and without the "
+            "ASSEMBLYAI_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -113,5 +151,30 @@ public class AssemblyAiDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("AssemblyAI");
         assertTrue(inlist(DataProvider::AppGroup::AiLlm,  app.groups));
         assertTrue(inlist(DataProvider::AppGroup::Speech, app.groups));
+    }
+
+    #! Exercises AssemblyAI's live `/v2/transcript` submit-then-poll lifecycle
+    /** Verifies the actual wire format against AssemblyAI's production
+        servers.  Cost: one short transcription per run.
+    */
+    private liveAssemblyAiTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("AssemblyAI connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider tr = prov.getChildProvider("transcribe");
+        auto result = tr.doRequest({
+            "audio_url":      LiveAudioUrl,
+            "speech_model":   "nano",  # cheapest tier
+            "punctuate":      True,
+        });
+        assertEq("completed", result.status,
+            "AssemblyAI transcript reached completed status");
+        assertTrue(result.text.val(),
+            "AssemblyAI returned a non-empty transcript");
+        assertTrue(result.audio_duration > 0,
+            "AssemblyAI reported audio_duration");
     }
 }

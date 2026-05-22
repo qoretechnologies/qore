@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ExaDataProvider
 
@@ -40,13 +41,41 @@ class FakeExaRestClientIo inherits ExaRestClient::ExaRestClientIo {
 }
 
 public class ExaDataProviderTest inherits QUnit::Test {
-    constructor() : Test("ExaDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("ExaDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.EXA_CONNECTION;
+
         addTestCase("factory + app + 3 actions registered", \registrationTest());
         addTestCase("root provider lists 3 children",        \rootProviderTest());
         addTestCase("search posts to /search",               \searchTest());
         addTestCase("find-similar posts to /findSimilar",    \findSimilarTest());
         addTestCase("contents posts to /contents",           \contentsTest());
+
+        # Live test requires a real Exa connection.
+        # 1 search on Exa (~$0.005 per run — Exa free tier offers $10 credit).
+        if (conn_name) {
+            addTestCase("live: ping + search", \liveExaTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Exa connection name; without it (and without the "
+            "EXA_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -115,5 +144,28 @@ public class ExaDataProviderTest inherits QUnit::Test {
         assertEq("POST", fake.last_method);
         assertEq("/contents", fake.last_path);
         assertEq(("abc",), fake.last_request.ids);
+    }
+
+    #! Exercises Exa's live `/search` endpoint
+    /** Verifies the actual wire format against Exa's production API.
+        Cost: 1 search on Exa (~$0.005 per run — Exa free tier offers $10
+        credit).
+    */
+    private liveExaTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Exa connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider s = prov.getChildProvider("search");
+        auto resp = s.doRequest({
+            "query":       "claude opus large language model",
+            "num_results": 1,
+        });
+        assertTrue(resp.results.size() >= 1,
+            "Exa search returned at least one result");
+        assertTrue(resp.results[0].url.val(),
+            "Exa search result has a URL");
     }
 }
