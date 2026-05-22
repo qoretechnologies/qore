@@ -192,7 +192,7 @@ public:
         const QoreListNode* on_columns, const std::string& how,
         ExceptionSink* xsink) const;
 
-    // --- Parquet I/O (optional — requires Apache Arrow) ---
+    // --- Parquet I/O via Apache Arrow and Parquet ---
 
     //! Read a Parquet file into a DataFrame
     DLLLOCAL static QoreDataFrame* readParquet(const std::string& path,
