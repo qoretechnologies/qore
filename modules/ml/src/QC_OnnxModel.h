@@ -115,6 +115,7 @@ private:
     std::vector<TensorMeta> output_meta;
 
     std::string active_provider;
+    bool auto_provider_selected = false;
 
     //! Initialize the Ort::Env and populate session options from the config hash
     /** Shared between the path-based and memory-based configured constructors.
@@ -126,6 +127,18 @@ private:
     //! Configure session options from a config hash
     DLLLOCAL void configureSession(Ort::SessionOptions& opts, const QoreHashNode* config,
         ExceptionSink* xsink);
+
+    //! Configure non-provider session options from a config hash
+    DLLLOCAL void configureBaseSessionOptions(Ort::SessionOptions& opts,
+        const QoreHashNode* config, ExceptionSink* xsink);
+
+    //! Create a path-based session, falling back to CPU if an auto-selected provider fails
+    DLLLOCAL void createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
+        const QoreHashNode* config, ExceptionSink* xsink);
+
+    //! Create an in-memory session, falling back to CPU if an auto-selected provider fails
+    DLLLOCAL void createSessionFromMemory(const void* model_data, size_t model_data_len,
+        Ort::SessionOptions& opts, const QoreHashNode* config, ExceptionSink* xsink);
 
     //! Auto-detect and append the best available GPU execution provider
     DLLLOCAL void autoDetectProvider(Ort::SessionOptions& opts);

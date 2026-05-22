@@ -32,12 +32,31 @@
 #include <algorithm>
 #include <numeric>
 #include <cstring>
+#include <mutex>
+#include <unordered_set>
 
 // Hashdecl extern declarations
 extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
 extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+
+namespace {
+
+std::mutex auto_provider_mutex;
+std::unordered_set<std::string> unusable_auto_providers;
+
+bool isAutoProviderDisabled(const std::string& provider) {
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    return unusable_auto_providers.find(provider) != unusable_auto_providers.end();
+}
+
+void disableAutoProvider(const std::string& provider) {
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    unusable_auto_providers.insert(provider);
+}
+
+}
 
 QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
     : active_provider("CPUExecutionProvider") {
@@ -46,7 +65,10 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
-        session = std::make_unique<Ort::Session>(*env, model_path, session_options);
+        createSessionFromPath(model_path, session_options, nullptr, xsink);
+        if (*xsink) {
+            return;
+        }
         loadMetadata(xsink);
     } catch (const Ort::Exception& e) {
         xsink->raiseException("ML-ONNX-ERROR", "failed to load ONNX model '%s': %s",
@@ -61,7 +83,10 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
         if (!initEnvAndOptions(session_options, config, xsink)) {
             return;
         }
-        session = std::make_unique<Ort::Session>(*env, model_path, session_options);
+        createSessionFromPath(model_path, session_options, config, xsink);
+        if (*xsink) {
+            return;
+        }
         loadMetadata(xsink);
     } catch (const Ort::Exception& e) {
         xsink->raiseException("ML-ONNX-ERROR", "failed to load ONNX model '%s': %s",
@@ -77,8 +102,10 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
         // Ort::Session copies the buffer, so the caller's memory lifetime doesn't matter
-        session = std::make_unique<Ort::Session>(*env, model_data, model_data_len,
-            session_options);
+        createSessionFromMemory(model_data, model_data_len, session_options, nullptr, xsink);
+        if (*xsink) {
+            return;
+        }
         loadMetadata(xsink);
     } catch (const Ort::Exception& e) {
         xsink->raiseException("ML-ONNX-ERROR",
@@ -94,8 +121,10 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
         if (!initEnvAndOptions(session_options, config, xsink)) {
             return;
         }
-        session = std::make_unique<Ort::Session>(*env, model_data, model_data_len,
-            session_options);
+        createSessionFromMemory(model_data, model_data_len, session_options, config, xsink);
+        if (*xsink) {
+            return;
+        }
         loadMetadata(xsink);
     } catch (const Ort::Exception& e) {
         xsink->raiseException("ML-ONNX-ERROR",
@@ -128,8 +157,13 @@ bool QoreOnnxModel::initEnvAndOptions(Ort::SessionOptions& session_options,
     return true;
 }
 
-void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNode* config,
-    ExceptionSink* xsink) {
+void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
+    const QoreHashNode* config, ExceptionSink* xsink) {
+    if (!config) {
+        opts.SetIntraOpNumThreads(1);
+        return;
+    }
+
     // intra_op_threads (default: 1)
     QoreValue intra_val = config->getKeyValue("intra_op_threads");
     if (!intra_val.isNullOrNothing()) {
@@ -190,6 +224,75 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
     if (!log_sev_val.isNullOrNothing()) {
         opts.SetLogSeverityLevel((int)log_sev_val.getAsBigInt());
     }
+}
+
+void QoreOnnxModel::createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
+    const QoreHashNode* config, ExceptionSink* xsink) {
+    try {
+        session = std::make_unique<Ort::Session>(*env, model_path, opts);
+    } catch (const Ort::Exception& e) {
+        if (!auto_provider_selected || active_provider == "CPUExecutionProvider") {
+            throw;
+        }
+
+        std::string provider = active_provider;
+        disableAutoProvider(provider);
+        Ort::SessionOptions cpu_opts;
+        configureBaseSessionOptions(cpu_opts, config, xsink);
+        if (*xsink) {
+            return;
+        }
+        active_provider = "CPUExecutionProvider";
+        auto_provider_selected = false;
+
+        try {
+            session = std::make_unique<Ort::Session>(*env, model_path, cpu_opts);
+        } catch (const Ort::Exception& cpu_e) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "failed to load ONNX model '%s' with auto-selected provider '%s': %s; "
+                "CPU fallback also failed: %s", model_path, provider.c_str(), e.what(),
+                cpu_e.what());
+        }
+    }
+}
+
+void QoreOnnxModel::createSessionFromMemory(const void* model_data, size_t model_data_len,
+    Ort::SessionOptions& opts, const QoreHashNode* config, ExceptionSink* xsink) {
+    try {
+        session = std::make_unique<Ort::Session>(*env, model_data, model_data_len, opts);
+    } catch (const Ort::Exception& e) {
+        if (!auto_provider_selected || active_provider == "CPUExecutionProvider") {
+            throw;
+        }
+
+        std::string provider = active_provider;
+        disableAutoProvider(provider);
+        Ort::SessionOptions cpu_opts;
+        configureBaseSessionOptions(cpu_opts, config, xsink);
+        if (*xsink) {
+            return;
+        }
+        active_provider = "CPUExecutionProvider";
+        auto_provider_selected = false;
+
+        try {
+            session = std::make_unique<Ort::Session>(*env, model_data, model_data_len,
+                cpu_opts);
+        } catch (const Ort::Exception& cpu_e) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "failed to load ONNX model from memory (%zu bytes) with auto-selected "
+                "provider '%s': %s; CPU fallback also failed: %s", model_data_len,
+                provider.c_str(), e.what(), cpu_e.what());
+        }
+    }
+}
+
+void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNode* config,
+    ExceptionSink* xsink) {
+    configureBaseSessionOptions(opts, config, xsink);
+    if (*xsink) {
+        return;
+    }
 
     // providers (list of OnnxProviderConfig)
     QoreValue providers_val = config->getKeyValue("providers");
@@ -232,6 +335,7 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
 }
 
 void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
+    auto_provider_selected = false;
     std::vector<std::string> available = Ort::GetAvailableProviders();
 
     // Priority order: CUDA (Linux), CoreML (macOS), then CPU fallback
@@ -242,17 +346,27 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
 
     for (const auto& pref : preferred) {
         if (std::find(available.begin(), available.end(), pref) != available.end()) {
+            if (isAutoProviderDisabled(pref)) {
+                continue;
+            }
+
             try {
                 std::unordered_map<std::string, std::string> empty_opts;
                 ExceptionSink xsink;
                 appendProvider(opts, pref, empty_opts, &xsink);
                 if (!xsink) {
+                    auto_provider_selected = active_provider != "CPUExecutionProvider";
                     return;
                 }
                 // Provider failed to initialize — try the next one
+                xsink.clear();
+                disableAutoProvider(pref);
                 active_provider = "CPUExecutionProvider";
+                auto_provider_selected = false;
             } catch (...) {
+                disableAutoProvider(pref);
                 active_provider = "CPUExecutionProvider";
+                auto_provider_selected = false;
             }
         }
     }

@@ -3327,13 +3327,22 @@ public class MlTest inherits QUnit::Test {
                 },
             ),
         };
-        ML::OnnxModel model(getTestModelPath(), config);
-        assertTrue(model.isLoaded());
-        assertEq("CUDAExecutionProvider", model.getProviderInfo());
 
-        # Verify inference works on CUDA
-        hash<auto> result = model.run({"X": ((3.0,),)});
-        assertFloat(7.0, result.Y[0], 1e-4);
+        try {
+            ML::OnnxModel model(getTestModelPath(), config);
+            assertTrue(model.isLoaded());
+            assertEq("CUDAExecutionProvider", model.getProviderInfo());
+
+            # Verify inference works on CUDA
+            hash<auto> result = model.run({"X": ((3.0,),)});
+            assertFloat(7.0, result.Y[0], 1e-4);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ML-ONNX-PROVIDER-ERROR") {
+                testSkip("CUDA execution provider is advertised but not usable: " + ex.desc);
+                return;
+            }
+            rethrow;
+        }
     }
 
     # --- StandardScaler tests ---
