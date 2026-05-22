@@ -7028,16 +7028,23 @@ load_local_done:
                         if (var_slot_id < local_init_slots.size()
                                 && local_init_slots[var_slot_id] != UINT32_MAX) {
                             uint32_t init_slot = local_init_slots[var_slot_id];
-                            if (init_slot < values.size()) {
+                            if (valueUsedLaterInCurrentBlock(init_slot)) {
+                                // keep it alive for the future use below
+                            } else if (init_slot < values.size()) {
                                 values[init_slot].discard(xsink);
                                 values[init_slot] = QoreValue();
+                                local_init_slots[var_slot_id] = UINT32_MAX;
                             }
-                            local_init_slots[var_slot_id] = UINT32_MAX;
                         }
                         // Clean up all LoadLocal result slots for this local,
                         // INCLUDING those in the cleanup vector (scope exit releases all)
                         if (var_slot_id < local_load_slots.size()) {
+                            std::vector<uint32_t> kept_load_slots;
                             for (uint32_t vid : local_load_slots[var_slot_id]) {
+                                if (valueUsedLaterInCurrentBlock(vid)) {
+                                    kept_load_slots.push_back(vid);
+                                    continue;
+                                }
                                 if (vid < values.size()) {
                                     values[vid].discard(xsink);
                                     values[vid] = QoreValue();
@@ -7046,7 +7053,7 @@ load_local_done:
                                     load_slot_registered[vid] = false;
                                 }
                             }
-                            local_load_slots[var_slot_id].clear();
+                            local_load_slots[var_slot_id] = std::move(kept_load_slots);
                         }
                     };
 
@@ -7168,6 +7175,9 @@ load_local_done:
                                         }
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
                                             if (!values[vi].hasNode()) {
+                                                continue;
+                                            }
+                                            if (valueUsedLaterInCurrentBlock(vi)) {
                                                 continue;
                                             }
                                             if (local_owned_slots.count(vi)) {
