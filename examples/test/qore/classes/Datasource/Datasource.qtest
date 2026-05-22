@@ -124,27 +124,32 @@ public class DatasourceTest inherits QUnit::Test {
 
     typedSelectTest() {
         Datasource ds = getAnyDatasource();
-        string sql = getTypedSelectSql(ds.getDriverName());
+        string driver = ds.getDriverName();
+        string sql = getTypedSelectSql(driver);
+        list<auto> expected_ids = getTypedSelectExpectedIds(driver);
 
         hash<auto> cols = ds.selectTyped(sql);
         assertEq(True, cols.complexType());
-        assertEq("buffer<int64>", cols.id.fullType());
-        assertEq((1, 2), cols.id.toList());
+        assertEq(getTypedSelectExpectedIdType(driver), cols.id.fullType());
+        assertEq(expected_ids, cols.id.type() == Type::List ? cols.id : cols.id.toList());
         assertEq("list<*string>", cols.name.fullType());
-        assertEq(("alice", NOTHING), cols.name);
+        assertEq("alice", cols.name[0]);
+        assertSqlNullish(cols.name[1]);
 
         list<auto> rows = ds.selectRowsTyped(sql);
         assertEq(2, elements rows);
         assertEq(True, rows[0].complexType());
-        assertEq(1, rows[0].id);
+        assertEq(expected_ids[0], rows[0].id);
         assertEq("alice", rows[0].name);
-        assertEq(2, rows[1].id);
-        assertNothing(rows[1].name);
+        assertEq(expected_ids[1], rows[1].id);
+        assertSqlNullish(rows[1].name);
     }
 
     columnarSelectTest() {
         Datasource ds = getAnyDatasource();
-        string sql = getTypedSelectSql(ds.getDriverName());
+        string driver = ds.getDriverName();
+        string sql = getTypedSelectSql(driver);
+        list<auto> expected_ids = getTypedSelectExpectedIds(driver);
 
         ColumnarResult result = ds.selectColumnar(sql);
         assertEq(2, result.numRows());
@@ -152,8 +157,11 @@ public class DatasourceTest inherits QUnit::Test {
 
         auto id_col = result.getColumn("id");
         list<auto> ids = id_col.type() == Type::List ? id_col : id_col.toList();
-        assertEq((1, 2), ids);
-        assertEq(("alice", NOTHING), result.getColumn("name"));
+        assertEq(expected_ids, ids);
+        auto name_col = result.getColumn("name");
+        list<auto> names = name_col.type() == Type::List ? name_col : name_col.toList();
+        assertEq("alice", names[0]);
+        assertSqlNullish(names[1]);
 
         hash<auto> columns = result.toColumnHash();
         assertEq(True, exists columns.id);
@@ -161,10 +169,10 @@ public class DatasourceTest inherits QUnit::Test {
 
         list<hash<auto>> rows = result.toRows();
         assertEq(2, elements rows);
-        assertEq(1, rows[0].id);
+        assertEq(expected_ids[0], rows[0].id);
         assertEq("alice", rows[0].name);
-        assertEq(2, rows[1].id);
-        assertNothing(rows[1].name);
+        assertEq(expected_ids[1], rows[1].id);
+        assertSqlNullish(rows[1].name);
 
         SQLStatement stmt(ds);
         stmt.prepare(sql);
@@ -173,9 +181,16 @@ public class DatasourceTest inherits QUnit::Test {
         ColumnarResult fetched = stmt.fetchColumnar(rows: -1);
         auto fetched_id_col = fetched.getColumn("id");
         list<auto> fetched_ids = fetched_id_col.type() == Type::List ? fetched_id_col : fetched_id_col.toList();
-        assertEq((1, 2), fetched_ids);
-        assertEq(("alice", NOTHING), fetched.getColumn("name"));
+        assertEq(expected_ids, fetched_ids);
+        auto fetched_name_col = fetched.getColumn("name");
+        list<auto> fetched_names = fetched_name_col.type() == Type::List ? fetched_name_col : fetched_name_col.toList();
+        assertEq("alice", fetched_names[0]);
+        assertSqlNullish(fetched_names[1]);
         stmt.commit();
+    }
+
+    assertSqlNullish(auto value) {
+        assertTrue(!exists value || value === NULL);
     }
 
     string getTypedSelectSql(string driver) {
@@ -184,6 +199,22 @@ public class DatasourceTest inherits QUnit::Test {
         }
 
         return "select 1 as id, 'alice' as name union all select 2 as id, null as name order by id";
+    }
+
+    list<auto> getTypedSelectExpectedIds(string driver) {
+        if (driver == "oracle") {
+            return (1n, 2n);
+        }
+
+        return (1, 2);
+    }
+
+    string getTypedSelectExpectedIdType(string driver) {
+        if (driver == "oracle") {
+            return "list<number>";
+        }
+
+        return "buffer<int64>";
     }
 
     Datasource getOracleDatasource() {
