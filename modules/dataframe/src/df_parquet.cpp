@@ -33,6 +33,56 @@ static bool checkArrowColumnStatus(const arrow::Status& status, ExceptionSink* x
     return true;
 }
 
+static QoreBufferElementType arrowTypeToBufferElementType(const std::shared_ptr<arrow::DataType>& type) {
+    switch (type->id()) {
+        case arrow::Type::INT8:
+            return QoreBufferElementType::Int8;
+        case arrow::Type::INT16:
+            return QoreBufferElementType::Int16;
+        case arrow::Type::INT32:
+            return QoreBufferElementType::Int32;
+        case arrow::Type::INT64:
+            return QoreBufferElementType::Int64;
+        case arrow::Type::FLOAT:
+            return QoreBufferElementType::Float32;
+        case arrow::Type::DOUBLE:
+            return QoreBufferElementType::Float64;
+        case arrow::Type::BOOL:
+            return QoreBufferElementType::Bool;
+        default:
+            return QoreBufferElementType::Invalid;
+    }
+}
+
+static QoreBufferNode* tryArrowFixedWidthColumnToDenseBuffer(
+        const std::shared_ptr<arrow::ChunkedArray>& arr,
+        const std::shared_ptr<arrow::Field>& field,
+        ExceptionSink* xsink) {
+    if (arr->num_chunks() != 1) {
+        return nullptr;
+    }
+
+    QoreBufferElementType element_type = arrowTypeToBufferElementType(arr->type());
+    if (element_type == QoreBufferElementType::Invalid) {
+        return nullptr;
+    }
+
+    std::shared_ptr<arrow::Array> chunk = arr->chunk(0);
+    std::shared_ptr<arrow::ArrayData> data = chunk->data();
+    if (!data || data->buffers.size() < 2 || !data->buffers[1]) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Arrow column '%s' has no fixed-width data buffer", field->name().c_str());
+        return nullptr;
+    }
+
+    const uint8_t* validity = data->buffers[0] ? data->buffers[0]->data() : nullptr;
+    const uint8_t* values = data->buffers[1]->data();
+    bool nullable = field->nullable() || chunk->null_count() > 0 || validity;
+    std::shared_ptr<const void> owner(chunk, static_cast<const void*>(chunk.get()));
+    return QoreBufferNode::wrapExternalStorage(element_type, nullable, static_cast<size_t>(chunk->offset()),
+        static_cast<size_t>(chunk->length()), values, validity, std::move(owner), chunk->null_count(), xsink);
+}
+
 template <typename ArrowArray, typename StoreValue, typename StoreNull>
 static bool copyArrowChunks(const std::shared_ptr<arrow::ChunkedArray>& arr, ColumnData& cd,
         ExceptionSink* xsink, const char* action, StoreValue store_value, StoreNull store_null) {
@@ -57,7 +107,17 @@ static bool copyArrowChunks(const std::shared_ptr<arrow::ChunkedArray>& arr, Col
 
 // Convert an Arrow ChunkedArray to a DataFrame Column
 static std::shared_ptr<ColumnData> arrowColumnToDF(
-        const std::shared_ptr<arrow::ChunkedArray>& arr, ExceptionSink* xsink) {
+        const std::shared_ptr<arrow::ChunkedArray>& arr,
+        const std::shared_ptr<arrow::Field>& field,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreBufferNode> dense_buffer(tryArrowFixedWidthColumnToDenseBuffer(arr, field, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (dense_buffer) {
+        return buildColumnDataFromBuffer(*dense_buffer, xsink);
+    }
+
     auto cd = std::make_shared<ColumnData>();
     int64_t n = arr->length();
     cd->n_rows = n;
@@ -255,7 +315,7 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         auto arrow_col = table->column(c);
         std::string col_name = table->schema()->field(c)->name();
 
-        auto cd = arrowColumnToDF(arrow_col, xsink);
+        auto cd = arrowColumnToDF(arrow_col, table->schema()->field(c), xsink);
         if (*xsink) {
             delete df;
             return nullptr;

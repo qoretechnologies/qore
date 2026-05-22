@@ -38,6 +38,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -193,6 +194,50 @@ public:
     DLLEXPORT QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, const QoreListNode* list,
         ExceptionSink* xsink);
 
+    //! Wraps immutable external fixed-width storage without copying.
+    /** The returned buffer keeps @a owner alive for the lifetime of the buffer
+        storage.  The external memory is treated as immutable; any Qore write
+        path detaches the storage into an owned buffer before modifying it.
+
+        @param element_type the primitive element storage type; string storage is not supported
+        @param nullable_elements true if individual elements may be NOTHING
+        @param length number of visible elements
+        @param data pointer to the external data buffer
+        @param validity pointer to the external validity bitmap, or nullptr when all elements are valid
+        @param owner shared owner for the external data and validity buffers
+        @param null_count number of null values, or -1 to calculate it from @a validity
+        @param xsink exception sink for validation and cancellation errors
+        @return a buffer wrapping the external storage, or nullptr on error
+        @throw BUFFER-TYPE-ERROR if @a element_type is unsupported
+        @throw BUFFER-EXTERNAL-STORAGE-ERROR if required pointers or ownership are missing
+     */
+    DLLEXPORT static QoreBufferNode* wrapExternalStorage(QoreBufferElementType element_type,
+        bool nullable_elements, size_t length, const void* data, const uint8_t* validity,
+        std::shared_ptr<const void> owner, int64_t null_count, ExceptionSink* xsink);
+
+    //! Wraps immutable external fixed-width storage with an initial element offset.
+    /** This overload is intended for Arrow-style arrays where the data and
+        validity buffers may have a logical element offset.  The returned buffer
+        has @a length visible elements and uses @a offset only for physical
+        indexing into @a data and @a validity.
+
+        @param element_type the primitive element storage type; string storage is not supported
+        @param nullable_elements true if individual elements may be NOTHING
+        @param offset first visible element in the external buffers
+        @param length number of visible elements
+        @param data pointer to the external data buffer
+        @param validity pointer to the external validity bitmap, or nullptr when all elements are valid
+        @param owner shared owner for the external data and validity buffers
+        @param null_count number of null values in the visible range, or -1 to calculate it from @a validity
+        @param xsink exception sink for validation and cancellation errors
+        @return a buffer wrapping the external storage, or nullptr on error
+        @throw BUFFER-TYPE-ERROR if @a element_type is unsupported
+        @throw BUFFER-EXTERNAL-STORAGE-ERROR if required pointers or ownership are missing
+     */
+    DLLEXPORT static QoreBufferNode* wrapExternalStorage(QoreBufferElementType element_type,
+        bool nullable_elements, size_t offset, size_t length, const void* data, const uint8_t* validity,
+        std::shared_ptr<const void> owner, int64_t null_count, ExceptionSink* xsink);
+
     //! @copydoc AbstractQoreNode::getAsBoolImpl()
     DLLEXPORT virtual bool getAsBoolImpl() const;
 
@@ -278,6 +323,31 @@ public:
         @return the raw storage pointer, or nullptr for an empty buffer
      */
     DLLEXPORT const void* getRawData() const;
+
+    //! Returns a const pointer to the raw validity bitmap storage.
+    /** The returned pointer uses the buffer's physical representation and
+        includes this buffer's byte-aligned view offset.  Use
+        getRawValidityBitOffset() for the bit offset of the first visible
+        element when the value is not byte-aligned.
+
+        @return the raw validity bitmap pointer, or nullptr for non-nullable buffers or all-valid external storage
+     */
+    DLLEXPORT const uint8_t* getRawValidityData() const;
+
+    //! Returns the bit offset of the first visible element in getRawData() for bit-packed bool buffers.
+    /** @return a value in the range [0, 7], or zero for byte-addressable element types
+     */
+    DLLEXPORT size_t getRawDataBitOffset() const;
+
+    //! Returns the bit offset of the first visible element in getRawValidityData().
+    /** @return a value in the range [0, 7], or zero for non-nullable buffers
+     */
+    DLLEXPORT size_t getRawValidityBitOffset() const;
+
+    //! Tests whether this buffer's storage is backed by immutable external memory.
+    /** @return true if this buffer or its storage root wraps external memory
+     */
+    DLLEXPORT bool hasExternalStorage() const;
 
     //! Returns this buffer's complex Qore type.
     /** @return type info for buffer<T> or buffer<*T>
@@ -404,11 +474,16 @@ private:
     mutable int64 null_count = 0;
     AlignedByteBuffer data_buffer;
     AlignedByteBuffer validity_buffer;
+    std::shared_ptr<const void> external_owner;
+    const uint8_t* external_data = nullptr;
+    const uint8_t* external_validity = nullptr;
     QoreBufferNode* view_parent = nullptr;
     size_t view_offset = 0;
     mutable std::atomic_int view_ref_count{0};
 
     DLLLOCAL QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t length);
+    DLLLOCAL QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
+        const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count);
     DLLLOCAL bool isView() const {
         return view_parent;
     }
@@ -425,6 +500,8 @@ private:
     DLLLOCAL const char* stringBytes() const;
     DLLLOCAL size_t dataByteSize(size_t n_length) const;
     DLLLOCAL void resizeStorage(size_t n_length);
+    DLLLOCAL int detachExternalStorage(ExceptionSink* xsink);
+    DLLLOCAL int ensureOwnedStorage(ExceptionSink* xsink);
     DLLLOCAL bool getValidityBit(size_t index) const;
     DLLLOCAL void setValidityBit(size_t index, bool valid);
     DLLLOCAL bool getBoolBit(size_t index) const;

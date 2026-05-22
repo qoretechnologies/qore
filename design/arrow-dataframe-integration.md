@@ -30,7 +30,7 @@ Define these only when the matching APIs and tests are implemented:
 |------------------------|---------|
 | `QORE_HAVE_COLUMNAR_RESULT_V2` | Implemented: `QoreColumnarResult` exposes recursive schema descriptors and v2 schema APIs. |
 | `QORE_HAVE_ARROW_C_DATA_INTEROP` | libqore can import/export `ColumnarResult` through the Arrow C Data Interface. |
-| `QORE_HAVE_EXTERNAL_BUFFER_STORAGE` | `QoreBufferNode` can safely wrap external immutable buffer storage with owner lifetime tracking. |
+| `QORE_HAVE_EXTERNAL_BUFFER_STORAGE` | Implemented: `QoreBufferNode` can wrap immutable external fixed-width storage with owner lifetime tracking and detach-on-write mutation. |
 | `QORE_HAVE_DECIMAL128_BUFFER` | `buffer<decimal128>` or equivalent fixed-width decimal storage is available. |
 | `QORE_HAVE_ARROW_DATAFRAME_INTEROP` | DataFrame exposes Arrow/ColumnarResult APIs suitable for module-grpc integration. |
 

@@ -793,7 +793,7 @@ QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const 
         QoreColumnarColumnType columnar_type = columnarTypeFromDataFrameType(cd.type);
         QoreBufferElementType buffer_type = cd.hasDenseBuffer()
             ? cd.dense_buffer_type : bufferTypeFromDataFrameType(cd.type);
-        bool nullable = cd.countNull() > 0;
+        bool nullable = cd.hasDenseBuffer() ? cd.dense_buffer->hasNullableElements() : cd.countNull() > 0;
 
         if (buffer_type != QoreBufferElementType::Invalid) {
             ReferenceHolder<QoreBufferNode> buffer(columnToQoreBuffer(cd, xsink), xsink);

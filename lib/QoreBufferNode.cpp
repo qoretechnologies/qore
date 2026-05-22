@@ -48,6 +48,39 @@ static size_t qore_buffer_bitmap_bytes(size_t elements) {
     return ((elements + 63) / 64) * 8;
 }
 
+static bool qore_buffer_external_storage_supported(QoreBufferElementType element_type) {
+    switch (element_type) {
+        case QoreBufferElementType::Int8:
+        case QoreBufferElementType::Int16:
+        case QoreBufferElementType::Int32:
+        case QoreBufferElementType::Int64:
+        case QoreBufferElementType::Float32:
+        case QoreBufferElementType::Float64:
+        case QoreBufferElementType::Bool:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static int64 qore_buffer_count_nulls_bitmap(const uint8_t* validity, size_t offset, size_t length,
+        ExceptionSink* xsink) {
+    if (!validity || !length) {
+        return 0;
+    }
+    int64 rv = 0;
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "counting external buffer nulls")) {
+            return -1;
+        }
+        size_t physical = offset + i;
+        if (!(validity[physical / 8] & (uint8_t(1) << (physical % 8)))) {
+            ++rv;
+        }
+    }
+    return rv;
+}
+
 static void* qore_buffer_aligned_alloc(size_t size) {
     if (!size) {
         return nullptr;
@@ -786,11 +819,102 @@ QoreBufferNode::QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t len
     ++view_parent->view_ref_count;
 }
 
+QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
+        const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count)
+        : AbstractQoreNode(NT_BUFFER, true, false), element_type(element_type),
+        nullable_elements(nullable_elements), length(length), null_count(null_count), external_owner(std::move(owner)),
+        external_data(static_cast<const uint8_t*>(data)), external_validity(validity) {
+    assert(element_type != QoreBufferElementType::Invalid);
+    assert(qore_buffer_external_storage_supported(element_type));
+    assert(!length || external_data);
+    assert(!length || external_owner);
+}
+
 QoreBufferNode::~QoreBufferNode() {
     if (view_parent) {
         --view_parent->view_ref_count;
         view_parent->deref(nullptr);
     }
+}
+
+QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType element_type, bool nullable_elements,
+        size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner,
+        int64_t null_count, ExceptionSink* xsink) {
+    return wrapExternalStorage(element_type, nullable_elements, 0, length, data, validity, std::move(owner),
+        null_count, xsink);
+}
+
+QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType element_type, bool nullable_elements,
+        size_t offset, size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner,
+        int64_t null_count, ExceptionSink* xsink) {
+    if (!xsink) {
+        return nullptr;
+    }
+    if (!qore_buffer_external_storage_supported(element_type)) {
+        xsink->raiseException("BUFFER-TYPE-ERROR",
+            "cannot wrap external storage for buffer<%s>; only fixed-width numeric and bool buffers are supported",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+    if (offset > std::numeric_limits<size_t>::max() - length) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "external buffer offset " QSD " and length " QSD " overflow storage size", offset, length);
+        return nullptr;
+    }
+    size_t root_length = offset + length;
+    if (root_length && !data) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "cannot wrap non-empty external buffer<%s> storage without a data pointer",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+    if (root_length && !owner) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "cannot wrap non-empty external buffer<%s> storage without an owner",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+    if (nullable_elements && !validity && null_count > 0) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "external nullable buffer<%s> storage with null_count " QLLD " requires a validity bitmap",
+            qore_buffer_element_type_name(element_type), null_count);
+        return nullptr;
+    }
+    if (null_count < -1) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "external buffer<%s> null_count must be >= -1; got " QLLD,
+            qore_buffer_element_type_name(element_type), null_count);
+        return nullptr;
+    }
+    if (nullable_elements && null_count > static_cast<int64>(length)) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "external buffer<%s> null_count " QLLD " exceeds length " QSD,
+            qore_buffer_element_type_name(element_type), null_count, length);
+        return nullptr;
+    }
+
+    int64_t root_null_count = 0;
+    if (nullable_elements) {
+        if (!validity) {
+            root_null_count = 0;
+        } else if (!offset && null_count >= 0) {
+            root_null_count = null_count;
+        } else {
+            root_null_count = qore_buffer_count_nulls_bitmap(validity, 0, root_length, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    ReferenceHolder<QoreBufferNode> root(new QoreBufferNode(element_type, nullable_elements, root_length, data,
+        validity, std::move(owner), root_null_count), xsink);
+    if (!offset) {
+        return root.release();
+    }
+
+    QoreBufferNode* rv = new QoreBufferNode(*root, offset, length);
+    return rv;
 }
 
 QoreBufferNode* QoreBufferNode::storageRoot() {
@@ -811,7 +935,8 @@ uint8_t* QoreBufferNode::dataBytes() {
 }
 
 const uint8_t* QoreBufferNode::dataBytes() const {
-    return storageRoot()->data_buffer.data();
+    const QoreBufferNode* root = storageRoot();
+    return root->external_data ? root->external_data : root->data_buffer.data();
 }
 
 uint8_t* QoreBufferNode::validityBytes() {
@@ -819,7 +944,8 @@ uint8_t* QoreBufferNode::validityBytes() {
 }
 
 const uint8_t* QoreBufferNode::validityBytes() const {
-    return storageRoot()->validity_buffer.data();
+    const QoreBufferNode* root = storageRoot();
+    return root->external_data ? root->external_validity : root->validity_buffer.data();
 }
 
 uint64_t* QoreBufferNode::stringOffsets() {
@@ -856,6 +982,9 @@ size_t QoreBufferNode::dataByteSize(size_t n_length) const {
 
 void QoreBufferNode::resizeStorage(size_t n_length) {
     assert(!isView());
+    external_owner.reset();
+    external_data = nullptr;
+    external_validity = nullptr;
     length = n_length;
     data_buffer.resize(dataByteSize(length), true);
     if (nullable_elements) {
@@ -867,11 +996,55 @@ void QoreBufferNode::resizeStorage(size_t n_length) {
     }
 }
 
+int QoreBufferNode::detachExternalStorage(ExceptionSink* xsink) {
+    QoreBufferNode* root = storageRoot();
+    if (!root->external_data) {
+        return 0;
+    }
+    if (!xsink) {
+        return -1;
+    }
+
+    size_t data_size = root->dataByteSize(root->length);
+    root->data_buffer.resize(data_size, false);
+    if (data_size) {
+        memcpy(root->data_buffer.data(), root->external_data, data_size);
+    }
+
+    if (root->nullable_elements) {
+        size_t validity_size = qore_buffer_bitmap_bytes(root->length);
+        root->validity_buffer.resize(validity_size, false);
+        if (validity_size) {
+            if (root->external_validity) {
+                memcpy(root->validity_buffer.data(), root->external_validity, validity_size);
+            } else {
+                memset(root->validity_buffer.data(), 0xff, validity_size);
+                root->null_count = 0;
+            }
+        }
+    } else {
+        root->validity_buffer.clear();
+        root->null_count = 0;
+    }
+
+    root->external_data = nullptr;
+    root->external_validity = nullptr;
+    root->external_owner.reset();
+    return 0;
+}
+
+int QoreBufferNode::ensureOwnedStorage(ExceptionSink* xsink) {
+    return storageRoot()->detachExternalStorage(xsink);
+}
+
 bool QoreBufferNode::getValidityBit(size_t index) const {
     assert(nullable_elements);
     assert(index < length);
     size_t physical = physicalIndex(index);
     const uint8_t* bytes = validityBytes();
+    if (!bytes) {
+        return true;
+    }
     return bytes[physical / 8] & (uint8_t(1) << (physical % 8));
 }
 
@@ -1177,6 +1350,9 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
                     "buffer<%s> element %d", i, qore_buffer_element_type_name(element_type), (int)index);
                 return -1;
             }
+            if (ensureOwnedStorage(xsink)) {
+                return -1;
+            }
             size_t physical = physicalIndex(index);
             uint8_t* ptr = dataBytes() + (physical * qore_buffer_element_storage_size(element_type));
             switch (element_type) {
@@ -1222,9 +1398,15 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
                         "buffer<float32> element %d", d, (int)index);
                     return -1;
                 }
+                if (ensureOwnedStorage(xsink)) {
+                    return -1;
+                }
                 float v = static_cast<float>(d);
                 memcpy(dataBytes() + (physicalIndex(index) * sizeof(v)), &v, sizeof(v));
             } else {
+                if (ensureOwnedStorage(xsink)) {
+                    return -1;
+                }
                 memcpy(dataBytes() + (physicalIndex(index) * sizeof(d)), &d, sizeof(d));
             }
             break;
@@ -1233,6 +1415,9 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
             if (value.getType() != NT_BOOLEAN) {
                 xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign type '%s' to buffer<bool> element %d; "
                     "expected bool", value.getFullTypeName(), (int)index);
+                return -1;
+            }
+            if (ensureOwnedStorage(xsink)) {
                 return -1;
             }
             setBoolBit(index, value.getAsBool());
@@ -1401,7 +1586,7 @@ const QoreTypeInfo* QoreBufferNode::getElementTypeInfo() const {
 }
 
 void* QoreBufferNode::getRawData() {
-    if (!length) {
+    if (!length || hasExternalStorage()) {
         return nullptr;
     }
     if (element_type == QoreBufferElementType::String) {
@@ -1426,6 +1611,36 @@ const void* QoreBufferNode::getRawData() const {
         return dataBytes() + (physical / 8);
     }
     return dataBytes() + (physical * qore_buffer_element_storage_size(element_type));
+}
+
+const uint8_t* QoreBufferNode::getRawValidityData() const {
+    if (!nullable_elements || !length) {
+        return nullptr;
+    }
+    const uint8_t* bytes = validityBytes();
+    if (!bytes) {
+        return nullptr;
+    }
+    size_t physical = physicalIndex(0);
+    return bytes + (physical / 8);
+}
+
+size_t QoreBufferNode::getRawDataBitOffset() const {
+    if (!length || element_type != QoreBufferElementType::Bool) {
+        return 0;
+    }
+    return physicalIndex(0) % 8;
+}
+
+size_t QoreBufferNode::getRawValidityBitOffset() const {
+    if (!length || !nullable_elements) {
+        return 0;
+    }
+    return physicalIndex(0) % 8;
+}
+
+bool QoreBufferNode::hasExternalStorage() const {
+    return storageRoot()->external_data;
 }
 
 bool QoreBufferNode::isElementNull(size_t index) const {
@@ -1501,6 +1716,9 @@ int QoreBufferNode::setEntry(size_t index, QoreValue value, ExceptionSink* xsink
         if (!nullable_elements) {
             xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign NOTHING or NULL to non-nullable buffer<%s> "
                 "element %d", qore_buffer_element_type_name(element_type), (int)index);
+            return -1;
+        }
+        if (ensureOwnedStorage(xsink)) {
             return -1;
         }
         setNull(index);
@@ -1784,6 +2002,9 @@ QoreBufferNode* QoreBufferNode::view(size_t offset, size_t count) const {
 }
 
 bool QoreBufferNode::isUniqueForMutation() const {
+    if (hasExternalStorage()) {
+        return false;
+    }
     if (isView()) {
         return true;
     }

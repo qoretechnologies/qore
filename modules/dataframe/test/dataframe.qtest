@@ -1496,6 +1496,10 @@ sub invalid_dataframe_api() {
 
         # Verify values
         assertEq((1, 2, 3), df2.getColumn("id"), "Parquet int column");
+        assertEq("buffer<*int64>", df2.getColumnBuffer("id").fullType(),
+            "Parquet nullable Arrow int column is preserved as a dense buffer");
+        assertEq((1, 2, 3), df2.getColumnBuffer("id").toList(),
+            "Parquet dense int column preserves values");
         assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
             "Parquet string column");
 
@@ -1504,6 +1508,12 @@ sub invalid_dataframe_api() {
         assertEq(95.5, scores[0], "Parquet float value");
         assertEq(88.0, scores[1], "Parquet float value 2");
         assertEq(NOTHING, scores[2], "Parquet null preserved");
+        ColumnarResult columns = df2.toColumnarResult();
+        assertEq("buffer<*int64>", columns.getColumn("id").fullType(),
+            "Parquet DataFrame toColumnarResult keeps dense Arrow int storage");
+        list<hash<auto>> schema = columns.schemaV2();
+        assertTrue(schema[0].nullable,
+            "Parquet nullable Arrow schema metadata is preserved in ColumnarResult");
     }
 
     mlIntegrationTest() {

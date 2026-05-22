@@ -550,10 +550,15 @@ bool prepareDenseBufferValueFrame(const ResolvedPluginOperation& op, const char*
             denseBufferTypeName(*buffer), "is too large for the DenseBuffer helper ABI",
             "dense_buffer_size_overflow", xsink);
     }
+    if (writable && buffer->hasExternalStorage()) {
+        return raiseDenseBufferValueError(op, helper_name, role,
+            "owned mutable buffer<int8|int16|int32|int64|float32|float64>", denseBufferTypeName(*buffer),
+            "wraps immutable external storage", "dense_buffer_external_storage", xsink);
+    }
 
     out.buffer = buffer;
     out.mutable_data = writable ? buffer->getRawData() : nullptr;
-    out.const_data = buffer->getRawData();
+    out.const_data = static_cast<const QoreBufferNode*>(buffer)->getRawData();
     out.size = static_cast<int64_t>(buffer->size());
     out.stride = 1;
     return false;
