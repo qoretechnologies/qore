@@ -600,6 +600,19 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! Event thread condition variable
         Condition tid_cond();
 
+        #! Monotonic teardown generation; incremented by each clearTid() call
+        /** Used by waitTidCleared() to detect that the connection it is waiting
+            for has been torn down even when the @ref tid sentinel is immediately
+            reused by a reconnect.  In async mode @ref tid is the constant
+            sentinel -1, so comparing @ref tid alone suffers an ABA race: a
+            reconnect can tear down the old connection (clearTid() sets tid to
+            NOTHING) and re-establish a new one (updateTid(-1)) before the
+            waiter re-evaluates its predicate, leaving the waiter blocked forever
+            on a healthy connection.  Tracking a generation that only ever
+            increases makes the wait robust to sentinel reuse.
+        */
+        int tid_generation = 0;
+
         #! Unique websocket connection ID; -1 when not connected
         int cid = -1;
 
@@ -2002,13 +2015,25 @@ ws.setEventQueue();
         remove tid;
         stop = 0;
         do_reconnect = False;
+        # advance the teardown generation so waitTidCleared() observes this
+        # teardown even if the tid sentinel is immediately reused by a reconnect
+        ++tid_generation;
         if (tid_waiting) {
             tid_cond.broadcast();
         }
     }
 
     private waitTidCleared(int old_tid) {
-        while (tid == old_tid) {
+        # Wait for the next clearTid() (teardown of the connection active when
+        # this method was entered) rather than for the tid value to change.  In
+        # async mode tid is the constant sentinel -1, which a reconnect reuses
+        # immediately via updateTid(-1); waiting on the tid value alone would
+        # then race (ABA) and block forever.  Capturing the generation while
+        # holding m guarantees we observe exactly the teardown we are waiting
+        # for.  The tid check is retained so callers that wait on a still-active
+        # legacy event-thread tid behave as before.
+        int gen = tid_generation;
+        while (tid_generation == gen && tid == old_tid) {
             ++tid_waiting;
             tid_cond.wait(m);
             --tid_waiting;
