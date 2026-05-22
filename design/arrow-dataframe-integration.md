@@ -32,7 +32,7 @@ Define these only when the matching APIs and tests are implemented:
 | `QORE_HAVE_ARROW_C_DATA_INTEROP` | libqore can import/export `ColumnarResult` through the Arrow C Data Interface. |
 | `QORE_HAVE_EXTERNAL_BUFFER_STORAGE` | Implemented: `QoreBufferNode` can wrap immutable external fixed-width storage with owner lifetime tracking and detach-on-write mutation. |
 | `QORE_HAVE_DECIMAL128_BUFFER` | `buffer<decimal128>` or equivalent fixed-width decimal storage is available. |
-| `QORE_HAVE_ARROW_DATAFRAME_INTEROP` | DataFrame exposes Arrow/ColumnarResult APIs suitable for module-grpc integration. |
+| `QORE_HAVE_ARROW_DATAFRAME_INTEROP` | Implemented: DataFrame exposes in-memory Arrow IPC import/export APIs and ColumnarResult-compatible dense storage paths suitable for module-grpc integration. |
 
 The installed `QoreConfig.cmake` must export equivalent CMake variables so
 modules can conditionally compile:
@@ -98,7 +98,10 @@ where an API exposes conversion details.
 ### dataframe
 
 - Route Parquet read/write through the shared Arrow/ColumnarResult bridge.
-- Add DataFrame Arrow IPC import/export APIs.
+- Add DataFrame Arrow IPC import/export APIs.  Implemented as
+  `DataFrame::fromArrowIpc(binary)` and `DataFrame::toArrowIpc()`;
+  fixed-width Arrow columns are imported through dense DataFrame buffers when
+  possible.
 - Preserve decimal and nested schema in `fromColumnarResult()` and
   `toColumnarResult()`.
 - Keep row/hash/list materialization explicit.
@@ -108,10 +111,14 @@ where an API exposes conversion details.
 
 - Keep existing Arrow schema, IPC, and RecordBatch APIs.
 - Add `ArrowRecordBatch(ColumnarResult)` and
-  `ArrowRecordBatch::toColumnarResult()`.
+  `ArrowRecordBatch::toColumnarResult()`.  Implemented with conditional CMake
+  probes so the module still builds against qore versions without the new
+  feature contract.
 - Make Arrow Flight readers yield `ColumnarResult` blocks by default.
+  Implemented as explicit `readColumnarResult()` helpers to preserve source
+  compatibility.
 - Make Arrow Flight writers accept `ColumnarResult`, DataFrame, hash-of-lists,
-  and row records.
+  and row records.  Implemented through shared record-batch coercion helpers.
 - Make ArrowFlightDataProvider advertise and preserve `BufferColumns`, with
   `DataFrameBlock` support when the dataframe module is available.
 - Compile the new path only when qore exposes the feature-detection contract.

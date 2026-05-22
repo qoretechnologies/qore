@@ -1182,6 +1182,66 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
     return obj.release();
 }
 
+//! Reads an Apache Arrow IPC stream or file binary into a new DataFrame
+/** @param data an Apache Arrow IPC stream or file-format binary buffer
+
+    Loads Arrow columnar data from memory.  Fixed-width Arrow columns such as
+    \c int64, \c double, and \c bool are preserved as dense DataFrame buffers
+    when possible, allowing follow-on \c toColumnarResult() calls to keep packed
+    column storage without materializing row hashes.  String and timestamp
+    columns are converted to DataFrame string and date columns.  Arrow types
+    not natively represented by DataFrame are currently converted through their
+    Arrow scalar string representation.
+
+    @return new DataFrame object with Arrow IPC data
+
+    @par Example:
+    @code{.py}
+    binary payload = source_df.toArrowIpc();
+    DataFrame df = DataFrame::fromArrowIpc(payload);
+
+    ColumnarResult columns = df.toColumnarResult();
+    printf("loaded %d Arrow rows with %d columns\n",
+        df.numRows(), columns.numColumns());
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the data cannot be parsed as Arrow IPC data
+*/
+static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = QoreDataFrame::fromArrowIpc(data, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Writes the DataFrame as an Apache Arrow IPC stream binary
+/** Serializes DataFrame columns to an Arrow IPC stream in memory.  This is the
+    preferred interchange format for passing DataFrame data to binary modules
+    such as gRPC/Arrow Flight without touching the filesystem.  Supported
+    DataFrame columns are written as Arrow \c int64, \c double, \c utf8,
+    \c bool, or UTC microsecond \c timestamp columns; heterogeneous \c AUTO
+    columns are skipped because Arrow IPC requires a concrete column type.
+
+    @return an Arrow IPC stream containing the DataFrame schema and data
+
+    @par Example:
+    @code{.py}
+    DataFrame df(({"id": 1, "score": 95.5}, {"id": 2, "score": 88.0}));
+
+    binary payload = df.toArrowIpc();
+    DataFrame copy = DataFrame::fromArrowIpc(payload);
+    assertEq(df.toRecords(), copy.toRecords());
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if Arrow serialization fails
+*/
+binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
+    return df->toArrowIpc(xsink);
+}
+
 //! Reads a Parquet file into a new DataFrame
 /** @param path the Parquet file path
 

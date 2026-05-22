@@ -12,6 +12,7 @@
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 
@@ -261,6 +262,166 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
     return cd;
 }
 
+static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Column>& columns,
+        int64_t n_rows, arrow::MemoryPool* pool, ExceptionSink* xsink) {
+    std::vector<std::shared_ptr<arrow::Field>> fields;
+    std::vector<std::shared_ptr<arrow::Array>> arrays;
+
+    size_t column_index = 0;
+    for (const auto& col : columns) {
+        if (column_index && !(column_index % 100)
+                && qore_check_cancel(xsink, "building Arrow table from DataFrame columns")) {
+            return nullptr;
+        }
+        ++column_index;
+
+        const ColumnData& cd = *col.data;
+
+        switch (cd.type) {
+            case ColumnType::INT64: {
+                fields.push_back(arrow::field(col.name, arrow::int64()));
+                arrow::Int64Builder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow int64 array", col.name)) {
+                    return nullptr;
+                }
+                for (int64_t i = 0; i < cd.n_rows; ++i) {
+                    if (checkParquetCancel(i, "building Arrow int64 array", xsink)) {
+                        return nullptr;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.int_data[i]);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow int64 value", col.name)) {
+                        return nullptr;
+                    }
+                }
+                std::shared_ptr<arrow::Array> arr;
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow int64 array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return nullptr;
+                }
+                arrays.push_back(arr);
+                break;
+            }
+            case ColumnType::FLOAT64: {
+                fields.push_back(arrow::field(col.name, arrow::float64()));
+                arrow::DoubleBuilder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow float64 array", col.name)) {
+                    return nullptr;
+                }
+                for (int64_t i = 0; i < cd.n_rows; ++i) {
+                    if (checkParquetCancel(i, "building Arrow float64 array", xsink)) {
+                        return nullptr;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.float_data(i));
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow float64 value", col.name)) {
+                        return nullptr;
+                    }
+                }
+                std::shared_ptr<arrow::Array> arr;
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow float64 array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return nullptr;
+                }
+                arrays.push_back(arr);
+                break;
+            }
+            case ColumnType::STRING: {
+                fields.push_back(arrow::field(col.name, arrow::utf8()));
+                arrow::StringBuilder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow string array", col.name)) {
+                    return nullptr;
+                }
+                for (int64_t i = 0; i < cd.n_rows; ++i) {
+                    if (checkParquetCancel(i, "building Arrow string array", xsink)) {
+                        return nullptr;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.str_data[i]);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow string value", col.name)) {
+                        return nullptr;
+                    }
+                }
+                std::shared_ptr<arrow::Array> arr;
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow string array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return nullptr;
+                }
+                arrays.push_back(arr);
+                break;
+            }
+            case ColumnType::BOOL: {
+                fields.push_back(arrow::field(col.name, arrow::boolean()));
+                arrow::BooleanBuilder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow boolean array", col.name)) {
+                    return nullptr;
+                }
+                for (int64_t i = 0; i < cd.n_rows; ++i) {
+                    if (checkParquetCancel(i, "building Arrow boolean array", xsink)) {
+                        return nullptr;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.bool_data[i] != 0);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow boolean value", col.name)) {
+                        return nullptr;
+                    }
+                }
+                std::shared_ptr<arrow::Array> arr;
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow boolean array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return nullptr;
+                }
+                arrays.push_back(arr);
+                break;
+            }
+            case ColumnType::DATE: {
+                auto ts_type = arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
+                fields.push_back(arrow::field(col.name, ts_type));
+                arrow::TimestampBuilder builder(ts_type, pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow timestamp array", col.name)) {
+                    return nullptr;
+                }
+                for (int64_t i = 0; i < cd.n_rows; ++i) {
+                    if (checkParquetCancel(i, "building Arrow timestamp array", xsink)) {
+                        return nullptr;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.date_data[i]);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow timestamp value", col.name)) {
+                        return nullptr;
+                    }
+                }
+                std::shared_ptr<arrow::Array> arr;
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow timestamp array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return nullptr;
+                }
+                arrays.push_back(arr);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    return arrow::Table::Make(arrow::schema(fields), arrays, n_rows);
+}
+
 QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         ExceptionSink* xsink) {
     if (qore_check_cancel(xsink, "reading Parquet file")) {
@@ -312,6 +473,11 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     df->n_rows = table->num_rows();
 
     for (int c = 0; c < table->num_columns(); ++c) {
+        if (c && !(c % 100) && qore_check_cancel(xsink, "converting Parquet table to DataFrame")) {
+            delete df;
+            return nullptr;
+        }
+
         auto arrow_col = table->column(c);
         std::string col_name = table->schema()->field(c)->name();
 
@@ -331,6 +497,136 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     return df;
 }
 
+QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
+        ExceptionSink* xsink) {
+    if (qore_check_cancel(xsink, "reading Arrow IPC data")) {
+        return nullptr;
+    }
+
+    auto buffer = arrow::Buffer::Wrap(static_cast<const uint8_t*>(data->getPtr()), data->size());
+    auto stream_source = std::make_shared<arrow::io::BufferReader>(buffer);
+    auto maybe_stream_reader = arrow::ipc::RecordBatchStreamReader::Open(stream_source);
+
+    std::shared_ptr<arrow::Table> table;
+    if (maybe_stream_reader.ok()) {
+        auto maybe_table = maybe_stream_reader.ValueOrDie()->ToTable();
+        if (!maybe_table.ok()) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "error reading Arrow IPC stream: %s", maybe_table.status().ToString().c_str());
+            return nullptr;
+        }
+        table = maybe_table.ValueOrDie();
+    } else {
+        auto file_source = std::make_shared<arrow::io::BufferReader>(buffer);
+        auto maybe_file_reader = arrow::ipc::RecordBatchFileReader::Open(file_source);
+        if (!maybe_file_reader.ok()) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "cannot open Arrow IPC data as stream or file; stream error: %s; file error: %s",
+                maybe_stream_reader.status().ToString().c_str(),
+                maybe_file_reader.status().ToString().c_str());
+            return nullptr;
+        }
+        auto maybe_table = maybe_file_reader.ValueOrDie()->ToTable();
+        if (!maybe_table.ok()) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "error reading Arrow IPC file: %s", maybe_table.status().ToString().c_str());
+            return nullptr;
+        }
+        table = maybe_table.ValueOrDie();
+    }
+
+    if (qore_check_cancel(xsink, "converting Arrow IPC data to DataFrame")) {
+        return nullptr;
+    }
+
+    auto* df = new QoreDataFrame();
+    df->n_rows = table->num_rows();
+
+    for (int c = 0; c < table->num_columns(); ++c) {
+        if (c && !(c % 100) && qore_check_cancel(xsink, "converting Arrow IPC table to DataFrame")) {
+            delete df;
+            return nullptr;
+        }
+
+        auto arrow_col = table->column(c);
+        std::string col_name = table->schema()->field(c)->name();
+
+        auto cd = arrowColumnToDF(arrow_col, table->schema()->field(c), xsink);
+        if (*xsink) {
+            delete df;
+            return nullptr;
+        }
+
+        Column col;
+        col.name = col_name;
+        col.data = std::move(cd);
+        df->col_index[col.name] = df->columns.size();
+        df->columns.push_back(std::move(col));
+    }
+
+    return df;
+}
+
+BinaryNode* QoreDataFrame::toArrowIpc(ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "writing Arrow IPC data")) {
+        return nullptr;
+    }
+    arrow::MemoryPool* pool = arrow::system_memory_pool();
+
+    std::shared_ptr<arrow::Table> table;
+    {
+        std::lock_guard<std::mutex> lk(mtx);
+        table = dataFrameToArrowTable(columns, n_rows, pool, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    auto maybe_sink = arrow::io::BufferOutputStream::Create(4096, pool);
+    if (!maybe_sink.ok()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "cannot create Arrow IPC output buffer: %s", maybe_sink.status().ToString().c_str());
+        return nullptr;
+    }
+    auto sink = maybe_sink.ValueOrDie();
+
+    auto maybe_writer = arrow::ipc::MakeStreamWriter(sink.get(), table->schema());
+    if (!maybe_writer.ok()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "cannot create Arrow IPC stream writer: %s", maybe_writer.status().ToString().c_str());
+        return nullptr;
+    }
+    auto writer = maybe_writer.ValueOrDie();
+
+    auto status = writer->WriteTable(*table);
+    if (!status.ok()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "error writing Arrow IPC stream: %s", status.ToString().c_str());
+        return nullptr;
+    }
+
+    status = writer->Close();
+    if (!status.ok()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "error closing Arrow IPC stream writer: %s", status.ToString().c_str());
+        return nullptr;
+    }
+
+    auto maybe_buffer = sink->Finish();
+    if (!maybe_buffer.ok()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "error finalizing Arrow IPC output buffer: %s", maybe_buffer.status().ToString().c_str());
+        return nullptr;
+    }
+
+    auto buffer = maybe_buffer.ValueOrDie();
+    SimpleRefHolder<BinaryNode> out(new BinaryNode());
+    if (buffer->size()) {
+        out->append(buffer->data(), static_cast<size_t>(buffer->size()));
+    }
+    return out.release();
+}
+
 void QoreDataFrame::writeParquet(const std::string& path,
         ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "writing Parquet file")) {
@@ -340,159 +636,10 @@ void QoreDataFrame::writeParquet(const std::string& path,
 
     std::lock_guard<std::mutex> lk(mtx);
 
-    // Build Arrow schema and arrays
-    std::vector<std::shared_ptr<arrow::Field>> fields;
-    std::vector<std::shared_ptr<arrow::Array>> arrays;
-
-    for (const auto& col : columns) {
-        const ColumnData& cd = *col.data;
-
-        switch (cd.type) {
-            case ColumnType::INT64: {
-                fields.push_back(arrow::field(col.name, arrow::int64()));
-                arrow::Int64Builder builder(pool);
-                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
-                        "error reserving Arrow int64 array", col.name)) {
-                    return;
-                }
-                for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (checkParquetCancel(i, "building Arrow int64 array", xsink)) {
-                        return;
-                    }
-                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.int_data[i]);
-                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow int64 value", col.name)) {
-                        return;
-                    }
-                }
-                std::shared_ptr<arrow::Array> arr;
-                auto st = builder.Finish(&arr);
-                if (!st.ok()) {
-                    xsink->raiseException("DATAFRAME-IO-ERROR",
-                        "error building Arrow int64 array for column '%s': %s",
-                        col.name.c_str(), st.ToString().c_str());
-                    return;
-                }
-                arrays.push_back(arr);
-                break;
-            }
-            case ColumnType::FLOAT64: {
-                fields.push_back(arrow::field(col.name, arrow::float64()));
-                arrow::DoubleBuilder builder(pool);
-                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
-                        "error reserving Arrow float64 array", col.name)) {
-                    return;
-                }
-                for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (checkParquetCancel(i, "building Arrow float64 array", xsink)) {
-                        return;
-                    }
-                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.float_data(i));
-                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow float64 value", col.name)) {
-                        return;
-                    }
-                }
-                std::shared_ptr<arrow::Array> arr;
-                auto st = builder.Finish(&arr);
-                if (!st.ok()) {
-                    xsink->raiseException("DATAFRAME-IO-ERROR",
-                        "error building Arrow float64 array for column '%s': %s",
-                        col.name.c_str(), st.ToString().c_str());
-                    return;
-                }
-                arrays.push_back(arr);
-                break;
-            }
-            case ColumnType::STRING: {
-                fields.push_back(arrow::field(col.name, arrow::utf8()));
-                arrow::StringBuilder builder(pool);
-                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
-                        "error reserving Arrow string array", col.name)) {
-                    return;
-                }
-                for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (checkParquetCancel(i, "building Arrow string array", xsink)) {
-                        return;
-                    }
-                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.str_data[i]);
-                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow string value", col.name)) {
-                        return;
-                    }
-                }
-                std::shared_ptr<arrow::Array> arr;
-                auto st = builder.Finish(&arr);
-                if (!st.ok()) {
-                    xsink->raiseException("DATAFRAME-IO-ERROR",
-                        "error building Arrow string array for column '%s': %s",
-                        col.name.c_str(), st.ToString().c_str());
-                    return;
-                }
-                arrays.push_back(arr);
-                break;
-            }
-            case ColumnType::BOOL: {
-                fields.push_back(arrow::field(col.name, arrow::boolean()));
-                arrow::BooleanBuilder builder(pool);
-                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
-                        "error reserving Arrow boolean array", col.name)) {
-                    return;
-                }
-                for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (checkParquetCancel(i, "building Arrow boolean array", xsink)) {
-                        return;
-                    }
-                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.bool_data[i] != 0);
-                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow boolean value", col.name)) {
-                        return;
-                    }
-                }
-                std::shared_ptr<arrow::Array> arr;
-                auto st = builder.Finish(&arr);
-                if (!st.ok()) {
-                    xsink->raiseException("DATAFRAME-IO-ERROR",
-                        "error building Arrow boolean array for column '%s': %s",
-                        col.name.c_str(), st.ToString().c_str());
-                    return;
-                }
-                arrays.push_back(arr);
-                break;
-            }
-            case ColumnType::DATE: {
-                // Store dates as int64 microseconds (Arrow TIMESTAMP)
-                auto ts_type = arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
-                fields.push_back(arrow::field(col.name, ts_type));
-                arrow::TimestampBuilder builder(ts_type, pool);
-                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
-                        "error reserving Arrow timestamp array", col.name)) {
-                    return;
-                }
-                for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (checkParquetCancel(i, "building Arrow timestamp array", xsink)) {
-                        return;
-                    }
-                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.date_data[i]);
-                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow timestamp value", col.name)) {
-                        return;
-                    }
-                }
-                std::shared_ptr<arrow::Array> arr;
-                auto st = builder.Finish(&arr);
-                if (!st.ok()) {
-                    xsink->raiseException("DATAFRAME-IO-ERROR",
-                        "error building Arrow timestamp array for column '%s': %s",
-                        col.name.c_str(), st.ToString().c_str());
-                    return;
-                }
-                arrays.push_back(arr);
-                break;
-            }
-            default:
-                // Skip AUTO columns (unsupported in Parquet)
-                break;
-        }
+    auto table = dataFrameToArrowTable(columns, n_rows, pool, xsink);
+    if (*xsink) {
+        return;
     }
-
-    auto schema = arrow::schema(fields);
-    auto table = arrow::Table::Make(schema, arrays);
 
     // Open output file
     auto maybe_outfile = arrow::io::FileOutputStream::Open(path);
@@ -505,7 +652,7 @@ void QoreDataFrame::writeParquet(const std::string& path,
     auto outfile = maybe_outfile.ValueOrDie();
 
     // Write table
-    auto status = parquet::arrow::WriteTable(*table, pool, outfile, n_rows > 0 ? n_rows : 1024);
+    auto status = parquet::arrow::WriteTable(*table, pool, outfile, table->num_rows() > 0 ? table->num_rows() : 1024);
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "error writing Parquet file '%s': %s", path.c_str(),

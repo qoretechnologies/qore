@@ -87,6 +87,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("dbQueryTest", \dbQueryTest());
         addTestCase("mlIntegrationTest", \mlIntegrationTest());
         addTestCase("parquetTest", \parquetTest());
+        addTestCase("arrowIpcTest", \arrowIpcTest());
         addTestCase("dataProviderTest", \dataProviderTest());
         addTestCase("dataProviderPipelineShapeTest", \dataProviderPipelineShapeTest());
         addTestCase("bufferColumnsPipelineShapeTest", \bufferColumnsPipelineShapeTest());
@@ -1514,6 +1515,45 @@ sub invalid_dataframe_api() {
         list<hash<auto>> schema = columns.schemaV2();
         assertTrue(schema[0].nullable,
             "Parquet nullable Arrow schema metadata is preserved in ColumnarResult");
+    }
+
+    arrowIpcTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"id": 1, "name": "Alice", "score": 95.5, "active": True},
+             {"id": 2, "name": "Bob",   "score": 88.0, "active": False},
+             {"id": 3, "name": "Carol", "score": NOTHING, "active": True}));
+
+        binary payload = df.toArrowIpc();
+        assertTrue(payload.size() > 0, "Arrow IPC export returns non-empty binary");
+
+        auto df2 = DataFrame::DataFrame::fromArrowIpc(payload);
+        assertEq(3, df2.numRows(), "Arrow IPC round-trip rows");
+        assertEq(4, df2.numCols(), "Arrow IPC round-trip cols");
+        assertEq((1, 2, 3), df2.getColumn("id"), "Arrow IPC int column");
+        assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
+            "Arrow IPC string column");
+        assertEq((True, False, True), df2.getColumn("active"),
+            "Arrow IPC bool column");
+
+        list<auto> scores = df2.getColumn("score");
+        assertEq(95.5, scores[0], "Arrow IPC float value");
+        assertEq(88.0, scores[1], "Arrow IPC float value 2");
+        assertEq(NOTHING, scores[2], "Arrow IPC null preserved");
+
+        assertEq("buffer<*int64>", df2.getColumnBuffer("id").fullType(),
+            "Arrow IPC fixed-width int column is preserved as a dense buffer");
+        ColumnarResult columns = df2.toColumnarResult();
+        assertEq("buffer<*int64>", columns.getColumn("id").fullType(),
+            "Arrow IPC DataFrame toColumnarResult keeps dense Arrow int storage");
+        list<hash<auto>> schema = columns.schemaV2();
+        assertEq("id", schema[0].name, "Arrow IPC schema keeps first column name");
+        assertEq("int64", schema[0].buffer_type,
+            "Arrow IPC schema metadata preserves dense int storage");
+        assertTrue(schema[0].nullable,
+            "Arrow IPC nullable Arrow schema metadata is preserved in ColumnarResult");
     }
 
     mlIntegrationTest() {

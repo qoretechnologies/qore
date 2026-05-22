@@ -202,6 +202,13 @@ public:
     DLLLOCAL void writeParquet(const std::string& path,
         ExceptionSink* xsink) const;
 
+    //! Read Arrow IPC stream or file data into a DataFrame
+    DLLLOCAL static QoreDataFrame* fromArrowIpc(const BinaryNode* data,
+        ExceptionSink* xsink);
+
+    //! Write this DataFrame to an Arrow IPC stream binary
+    DLLLOCAL BinaryNode* toArrowIpc(ExceptionSink* xsink) const;
+
     // --- ML Integration ---
 
     //! Extract numeric columns as a matrix (list of row lists)
