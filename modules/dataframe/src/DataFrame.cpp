@@ -77,6 +77,110 @@ static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
     return ColumnType::FLOAT64;
 }
 
+static ColumnType fastRecordColumnType(QoreValue value) {
+    if (value.isNullOrNothing()) {
+        return ColumnType::AUTO;
+    }
+
+    switch (value.getType()) {
+        case NT_INT:
+            return ColumnType::INT64;
+        case NT_FLOAT:
+        case NT_NUMBER:
+            return ColumnType::FLOAT64;
+        case NT_STRING:
+            return ColumnType::STRING;
+        case NT_BOOLEAN:
+            return ColumnType::BOOL;
+        case NT_DATE:
+            return ColumnType::DATE;
+        default:
+            return ColumnType::STRING;
+    }
+}
+
+static bool fastRecordValueCompatible(ColumnType type, QoreValue value) {
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    switch (type) {
+        case ColumnType::FLOAT64:
+            return value.getType() == NT_FLOAT || value.getType() == NT_NUMBER || value.getType() == NT_INT;
+        case ColumnType::INT64:
+            return value.getType() == NT_INT;
+        case ColumnType::STRING:
+            return true;
+        case ColumnType::BOOL:
+            return value.getType() == NT_BOOLEAN;
+        case ColumnType::DATE:
+            return value.getType() == NT_DATE;
+        default:
+            return false;
+    }
+}
+
+static void initializeRecordColumnData(ColumnData& data, ColumnType type, int64_t n) {
+    data.type = type;
+    data.n_rows = n;
+    data.null_mask.resize(n, 0);
+    switch (data.type) {
+        case ColumnType::FLOAT64:
+            data.float_data.resize(n);
+            break;
+        case ColumnType::INT64:
+            data.int_data.resize(n);
+            break;
+        case ColumnType::STRING:
+            data.str_data.resize(n);
+            break;
+        case ColumnType::BOOL:
+            data.bool_data.resize(n);
+            break;
+        case ColumnType::DATE:
+            data.date_data.resize(n);
+            break;
+        default:
+            break;
+    }
+}
+
+static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
+    if (value.isNullOrNothing()) {
+        data.null_mask[i] = 1;
+        if (data.type == ColumnType::FLOAT64) {
+            data.float_data(i) = std::numeric_limits<double>::quiet_NaN();
+        }
+        return;
+    }
+
+    switch (data.type) {
+        case ColumnType::FLOAT64:
+            data.float_data(i) = value.getAsFloat();
+            break;
+        case ColumnType::INT64:
+            data.int_data[i] = value.getAsBigInt();
+            break;
+        case ColumnType::STRING: {
+            QoreStringValueHelper str(value);
+            data.str_data[i] = str->c_str();
+            break;
+        }
+        case ColumnType::BOOL:
+            data.bool_data[i] = value.getAsBool() ? 1 : 0;
+            break;
+        case ColumnType::DATE:
+            if (value.getType() == NT_DATE) {
+                data.date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+            } else {
+                data.null_mask[i] = 1;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 static QoreColumnarColumnType columnarTypeFromDataFrameType(ColumnType type) {
     switch (type) {
         case ColumnType::FLOAT64:
@@ -152,6 +256,7 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
     }
 
     std::vector<std::string> col_names;
+    col_names.reserve(first->size());
     ConstHashIterator hi(first);
     while (hi.next()) {
         col_names.push_back(hi.getKey());
@@ -159,7 +264,74 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
 
     int64_t n = (int64_t)records->size();
     size_t num_cols = col_names.size();
+    std::vector<const char*> col_keys;
+    col_keys.reserve(num_cols);
+    for (const std::string& name : col_names) {
+        col_keys.push_back(name.c_str());
+    }
+
+    std::vector<ColumnType> fast_types(num_cols);
+    bool can_fast = true;
+    for (size_t c = 0; c < num_cols; ++c) {
+        fast_types[c] = fastRecordColumnType(first->getKeyValue(col_keys[c]));
+        if (fast_types[c] == ColumnType::AUTO) {
+            can_fast = false;
+            break;
+        }
+    }
+
+    if (can_fast) {
+        auto* df = new QoreDataFrame();
+        df->n_rows = n;
+        df->columns.reserve(num_cols);
+        df->col_index.reserve(num_cols);
+
+        for (size_t c = 0; c < num_cols; ++c) {
+            auto data = std::make_shared<ColumnData>();
+            initializeRecordColumnData(*data, fast_types[c], n);
+
+            Column col;
+            col.name = col_names[c];
+            col.data = std::move(data);
+            df->col_index[col.name] = df->columns.size();
+            df->columns.push_back(std::move(col));
+        }
+
+        bool fast_failed = false;
+        for (int64_t i = 0; i < n; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame from records")) {
+                delete df;
+                return nullptr;
+            }
+            const QoreHashNode* row = records->retrieveEntry(i).get<const QoreHashNode>();
+            if (!row) {
+                xsink->raiseException("DATAFRAME-ERROR",
+                    "expected hash at index " QLLD ", got non-hash", i);
+                delete df;
+                return nullptr;
+            }
+            for (size_t c = 0; c < num_cols; ++c) {
+                QoreValue value = row->getKeyValue(col_keys[c]);
+                if (!fastRecordValueCompatible(fast_types[c], value)) {
+                    fast_failed = true;
+                    break;
+                }
+                storeRecordValue(*df->columns[c].data, i, value);
+            }
+            if (fast_failed) {
+                break;
+            }
+        }
+
+        if (!fast_failed) {
+            return df;
+        }
+        delete df;
+    }
+
     std::vector<RecordColumnInference> inferred(num_cols);
+    std::vector<const QoreHashNode*> rows;
+    rows.reserve(n);
     for (int64_t i = 0; i < n; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "inferring DataFrame record columns")) {
             return nullptr;
@@ -170,37 +342,19 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
                 "expected hash at index " QLLD ", got non-hash", i);
             return nullptr;
         }
+        rows.push_back(row);
         for (size_t c = 0; c < num_cols; ++c) {
-            mergeRecordColumnType(inferred[c], row->getKeyValue(col_names[c].c_str()));
+            mergeRecordColumnType(inferred[c], row->getKeyValue(col_keys[c]));
         }
     }
 
     auto* df = new QoreDataFrame();
     df->n_rows = n;
+    df->columns.reserve(num_cols);
+    df->col_index.reserve(num_cols);
     for (size_t c = 0; c < num_cols; ++c) {
         auto data = std::make_shared<ColumnData>();
-        data->type = finishRecordColumnType(inferred[c]);
-        data->n_rows = n;
-        data->null_mask.resize(n, 0);
-        switch (data->type) {
-            case ColumnType::FLOAT64:
-                data->float_data.resize(n);
-                break;
-            case ColumnType::INT64:
-                data->int_data.resize(n);
-                break;
-            case ColumnType::STRING:
-                data->str_data.resize(n);
-                break;
-            case ColumnType::BOOL:
-                data->bool_data.resize(n);
-                break;
-            case ColumnType::DATE:
-                data->date_data.resize(n);
-                break;
-            default:
-                break;
-        }
+        initializeRecordColumnData(*data, finishRecordColumnType(inferred[c]), n);
 
         Column col;
         col.name = col_names[c];
@@ -214,43 +368,9 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
             delete df;
             return nullptr;
         }
-        const QoreHashNode* row = records->retrieveEntry(i).get<const QoreHashNode>();
+        const QoreHashNode* row = rows[i];
         for (size_t c = 0; c < num_cols; ++c) {
-            ColumnData& data = *df->columns[c].data;
-            QoreValue value = row->getKeyValue(col_names[c].c_str());
-            if (value.isNullOrNothing()) {
-                data.null_mask[i] = 1;
-                if (data.type == ColumnType::FLOAT64) {
-                    data.float_data(i) = std::numeric_limits<double>::quiet_NaN();
-                }
-                continue;
-            }
-
-            switch (data.type) {
-                case ColumnType::FLOAT64:
-                    data.float_data(i) = value.getAsFloat();
-                    break;
-                case ColumnType::INT64:
-                    data.int_data[i] = value.getAsBigInt();
-                    break;
-                case ColumnType::STRING: {
-                    QoreStringValueHelper str(value);
-                    data.str_data[i] = str->c_str();
-                    break;
-                }
-                case ColumnType::BOOL:
-                    data.bool_data[i] = value.getAsBool() ? 1 : 0;
-                    break;
-                case ColumnType::DATE:
-                    if (value.getType() == NT_DATE) {
-                        data.date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
-                    } else {
-                        data.null_mask[i] = 1;
-                    }
-                    break;
-                default:
-                    break;
-            }
+            storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]));
         }
     }
 
