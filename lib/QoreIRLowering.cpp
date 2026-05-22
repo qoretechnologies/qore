@@ -12638,6 +12638,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         virtual_implicit = saved;
 
         bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+        QoreIRValue old_element;
+        QoreIRValue old_argv;
         if (needs_implicit_push) {
             QoreIRFunction* func = builder.getFunction();
 
@@ -12645,22 +12647,19 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             push_elem->result = func->createValue();
             push_elem->operands.push_back(index_val);
             push_elem->loc = ms->loc;
-            QoreIRValue old_element = push_elem->result;
+            old_element = push_elem->result;
 
             auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
             push_argv->result = func->createValue();
             push_argv->operands.push_back(element_val);
             push_argv->loc = ms->loc;
-            QoreIRValue old_argv = push_argv->result;
+            old_argv = push_argv->result;
 
             size_t insert_pos = 1;  // After element load
             body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
                 std::move(push_elem));
             body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
                 std::move(push_argv));
-
-            builder.createPopImplicitArg(old_argv, ms->loc);
-            builder.createPopImplicitElement(old_element, ms->loc);
         }
 
         builder.createListAppend(result_list, map_result, ms->loc);
@@ -12668,6 +12667,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
         // Continue block: increment index, loop back
         builder.setBlock(cont_block);
+
+        if (needs_implicit_push) {
+            builder.createPopImplicitArg(old_argv, ms->loc);
+            builder.createPopImplicitElement(old_element, ms->loc);
+        }
 
         QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
