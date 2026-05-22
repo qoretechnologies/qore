@@ -10,8 +10,6 @@
 
 #include "QC_DataFrame.h"
 
-#ifdef HAVE_ARROW
-
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/reader.h>
@@ -20,6 +18,42 @@
 #include <limits>
 
 namespace QoreDataFrameNS {
+
+static bool checkParquetCancel(int64_t i, const char* action, ExceptionSink* xsink) {
+    return i && !(i % 100) && qore_check_cancel(xsink, action);
+}
+
+static bool checkArrowColumnStatus(const arrow::Status& status, ExceptionSink* xsink,
+        const char* action, const std::string& column_name) {
+    if (status.ok()) {
+        return false;
+    }
+    xsink->raiseException("DATAFRAME-IO-ERROR", "%s for column '%s': %s",
+        action, column_name.c_str(), status.ToString().c_str());
+    return true;
+}
+
+template <typename ArrowArray, typename StoreValue, typename StoreNull>
+static bool copyArrowChunks(const std::shared_ptr<arrow::ChunkedArray>& arr, ColumnData& cd,
+        ExceptionSink* xsink, const char* action, StoreValue store_value, StoreNull store_null) {
+    int64_t idx = 0;
+    for (int c = 0; c < arr->num_chunks(); ++c) {
+        auto chunk = std::static_pointer_cast<ArrowArray>(arr->chunk(c));
+        for (int64_t i = 0; i < chunk->length(); ++i) {
+            if (checkParquetCancel(idx, action, xsink)) {
+                return false;
+            }
+            if (chunk->IsNull(i)) {
+                cd.null_mask[idx] = 1;
+                store_null(cd, idx);
+            } else {
+                store_value(cd, idx, *chunk, i);
+            }
+            ++idx;
+        }
+    }
+    return true;
+}
 
 // Convert an Arrow ChunkedArray to a DataFrame Column
 static std::shared_ptr<ColumnData> arrowColumnToDF(
@@ -36,110 +70,106 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
             || arrow_type->id() == arrow::Type::INT16 || arrow_type->id() == arrow::Type::INT8) {
         cd->type = ColumnType::INT64;
         cd->int_data.resize(n);
-        int64_t idx = 0;
-        for (int c = 0; c < arr->num_chunks(); ++c) {
-            auto chunk = arr->chunk(c);
-            for (int64_t i = 0; i < chunk->length(); ++i) {
-                if (chunk->IsNull(i)) {
-                    cd->null_mask[idx] = 1;
-                    cd->int_data[idx] = 0;
-                } else {
-                    auto scalar = chunk->GetScalar(i).ValueOrDie();
-                    cd->int_data[idx] = std::static_pointer_cast<arrow::Int64Scalar>(
-                        scalar->CastTo(arrow::int64()).ValueOrDie())->value;
-                }
-                ++idx;
-            }
+        auto store_null = [](ColumnData& data, int64_t idx) { data.int_data[idx] = 0; };
+        bool ok = true;
+        switch (arrow_type->id()) {
+            case arrow::Type::INT64:
+                ok = copyArrowChunks<arrow::Int64Array>(arr, *cd, xsink, "converting Arrow int64 column",
+                    [](ColumnData& data, int64_t idx, const arrow::Int64Array& chunk, int64_t i) {
+                        data.int_data[idx] = chunk.Value(i);
+                    }, store_null);
+                break;
+            case arrow::Type::INT32:
+                ok = copyArrowChunks<arrow::Int32Array>(arr, *cd, xsink, "converting Arrow int32 column",
+                    [](ColumnData& data, int64_t idx, const arrow::Int32Array& chunk, int64_t i) {
+                        data.int_data[idx] = chunk.Value(i);
+                    }, store_null);
+                break;
+            case arrow::Type::INT16:
+                ok = copyArrowChunks<arrow::Int16Array>(arr, *cd, xsink, "converting Arrow int16 column",
+                    [](ColumnData& data, int64_t idx, const arrow::Int16Array& chunk, int64_t i) {
+                        data.int_data[idx] = chunk.Value(i);
+                    }, store_null);
+                break;
+            case arrow::Type::INT8:
+                ok = copyArrowChunks<arrow::Int8Array>(arr, *cd, xsink, "converting Arrow int8 column",
+                    [](ColumnData& data, int64_t idx, const arrow::Int8Array& chunk, int64_t i) {
+                        data.int_data[idx] = chunk.Value(i);
+                    }, store_null);
+                break;
+            default:
+                break;
+        }
+        if (!ok) {
+            return nullptr;
         }
     } else if (arrow_type->id() == arrow::Type::DOUBLE
             || arrow_type->id() == arrow::Type::FLOAT) {
         cd->type = ColumnType::FLOAT64;
         cd->float_data.resize(n);
-        int64_t idx = 0;
-        for (int c = 0; c < arr->num_chunks(); ++c) {
-            auto chunk = arr->chunk(c);
-            for (int64_t i = 0; i < chunk->length(); ++i) {
-                if (chunk->IsNull(i)) {
-                    cd->null_mask[idx] = 1;
-                    cd->float_data(idx) = std::numeric_limits<double>::quiet_NaN();
-                } else {
-                    auto scalar = chunk->GetScalar(i).ValueOrDie();
-                    cd->float_data(idx) = std::static_pointer_cast<arrow::DoubleScalar>(
-                        scalar->CastTo(arrow::float64()).ValueOrDie())->value;
-                }
-                ++idx;
-            }
+        auto store_null = [](ColumnData& data, int64_t idx) {
+            data.float_data(idx) = std::numeric_limits<double>::quiet_NaN();
+        };
+        bool ok = true;
+        if (arrow_type->id() == arrow::Type::DOUBLE) {
+            ok = copyArrowChunks<arrow::DoubleArray>(arr, *cd, xsink, "converting Arrow double column",
+                [](ColumnData& data, int64_t idx, const arrow::DoubleArray& chunk, int64_t i) {
+                    data.float_data(idx) = chunk.Value(i);
+                }, store_null);
+        } else {
+            ok = copyArrowChunks<arrow::FloatArray>(arr, *cd, xsink, "converting Arrow float column",
+                [](ColumnData& data, int64_t idx, const arrow::FloatArray& chunk, int64_t i) {
+                    data.float_data(idx) = chunk.Value(i);
+                }, store_null);
+        }
+        if (!ok) {
+            return nullptr;
         }
     } else if (arrow_type->id() == arrow::Type::STRING
             || arrow_type->id() == arrow::Type::LARGE_STRING) {
         cd->type = ColumnType::STRING;
         cd->str_data.resize(n);
-        int64_t idx = 0;
-        for (int c = 0; c < arr->num_chunks(); ++c) {
-            auto chunk = arr->chunk(c);
-            for (int64_t i = 0; i < chunk->length(); ++i) {
-                if (chunk->IsNull(i)) {
-                    cd->null_mask[idx] = 1;
-                } else {
-                    auto scalar = chunk->GetScalar(i).ValueOrDie();
-                    cd->str_data[idx] = scalar->ToString();
-                }
-                ++idx;
-            }
+        auto store_null = [](ColumnData&, int64_t) {};
+        bool ok = true;
+        if (arrow_type->id() == arrow::Type::STRING) {
+            ok = copyArrowChunks<arrow::StringArray>(arr, *cd, xsink, "converting Arrow string column",
+                [](ColumnData& data, int64_t idx, const arrow::StringArray& chunk, int64_t i) {
+                    data.str_data[idx] = chunk.GetString(i);
+                }, store_null);
+        } else {
+            ok = copyArrowChunks<arrow::LargeStringArray>(arr, *cd, xsink, "converting Arrow large string column",
+                [](ColumnData& data, int64_t idx, const arrow::LargeStringArray& chunk, int64_t i) {
+                    data.str_data[idx] = chunk.GetString(i);
+                }, store_null);
+        }
+        if (!ok) {
+            return nullptr;
         }
     } else if (arrow_type->id() == arrow::Type::BOOL) {
         cd->type = ColumnType::BOOL;
         cd->bool_data.resize(n);
-        int64_t idx = 0;
-        for (int c = 0; c < arr->num_chunks(); ++c) {
-            auto chunk = arr->chunk(c);
-            for (int64_t i = 0; i < chunk->length(); ++i) {
-                if (chunk->IsNull(i)) {
-                    cd->null_mask[idx] = 1;
-                    cd->bool_data[idx] = 0;
-                } else {
-                    auto scalar = chunk->GetScalar(i).ValueOrDie();
-                    cd->bool_data[idx] = std::static_pointer_cast<arrow::BooleanScalar>(
-                        scalar)->value ? 1 : 0;
-                }
-                ++idx;
-            }
+        if (!copyArrowChunks<arrow::BooleanArray>(arr, *cd, xsink, "converting Arrow boolean column",
+                [](ColumnData& data, int64_t idx, const arrow::BooleanArray& chunk, int64_t i) {
+                    data.bool_data[idx] = chunk.Value(i) ? 1 : 0;
+                }, [](ColumnData& data, int64_t idx) { data.bool_data[idx] = 0; })) {
+            return nullptr;
         }
     } else if (arrow_type->id() == arrow::Type::TIMESTAMP) {
         cd->type = ColumnType::DATE;
         cd->date_data.resize(n);
-        int64_t idx = 0;
-        for (int c = 0; c < arr->num_chunks(); ++c) {
-            auto chunk = arr->chunk(c);
-            for (int64_t i = 0; i < chunk->length(); ++i) {
-                if (chunk->IsNull(i)) {
-                    cd->null_mask[idx] = 1;
-                    cd->date_data[idx] = 0;
-                } else {
-                    auto scalar = chunk->GetScalar(i).ValueOrDie();
-                    // Convert to microseconds
-                    auto ts = std::static_pointer_cast<arrow::TimestampScalar>(scalar);
-                    auto ts_type = std::static_pointer_cast<arrow::TimestampType>(
-                        ts->type);
-                    int64_t val = ts->value;
-                    // Normalize to microseconds
+        auto ts_type = std::static_pointer_cast<arrow::TimestampType>(arrow_type);
+        if (!copyArrowChunks<arrow::TimestampArray>(arr, *cd, xsink, "converting Arrow timestamp column",
+                [ts_type](ColumnData& data, int64_t idx, const arrow::TimestampArray& chunk, int64_t i) {
+                    int64_t val = chunk.Value(i);
                     switch (ts_type->unit()) {
-                        case arrow::TimeUnit::SECOND:
-                            val *= 1000000;
-                            break;
-                        case arrow::TimeUnit::MILLI:
-                            val *= 1000;
-                            break;
-                        case arrow::TimeUnit::MICRO:
-                            break;
-                        case arrow::TimeUnit::NANO:
-                            val /= 1000;
-                            break;
+                        case arrow::TimeUnit::SECOND: val *= 1000000; break;
+                        case arrow::TimeUnit::MILLI:  val *= 1000; break;
+                        case arrow::TimeUnit::MICRO:  break;
+                        case arrow::TimeUnit::NANO:   val /= 1000; break;
                     }
-                    cd->date_data[idx] = val;
-                }
-                ++idx;
-            }
+                    data.date_data[idx] = val;
+                }, [](ColumnData& data, int64_t idx) { data.date_data[idx] = 0; })) {
+            return nullptr;
         }
     } else {
         // Fallback: convert everything to string
@@ -149,11 +179,19 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
         for (int c = 0; c < arr->num_chunks(); ++c) {
             auto chunk = arr->chunk(c);
             for (int64_t i = 0; i < chunk->length(); ++i) {
+                if (checkParquetCancel(idx, "converting Arrow fallback column", xsink)) {
+                    return nullptr;
+                }
                 if (chunk->IsNull(i)) {
                     cd->null_mask[idx] = 1;
                 } else {
-                    auto scalar = chunk->GetScalar(i).ValueOrDie();
-                    cd->str_data[idx] = scalar->ToString();
+                    auto scalar_result = chunk->GetScalar(i);
+                    if (!scalar_result.ok()) {
+                        xsink->raiseException("DATAFRAME-IO-ERROR",
+                            "error reading Arrow scalar: %s", scalar_result.status().ToString().c_str());
+                        return nullptr;
+                    }
+                    cd->str_data[idx] = scalar_result.ValueOrDie()->ToString();
                 }
                 ++idx;
             }
@@ -168,9 +206,10 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     if (qore_check_cancel(xsink, "reading Parquet file")) {
         return nullptr;
     }
+    arrow::MemoryPool* pool = arrow::system_memory_pool();
 
     // Open file
-    auto maybe_infile = arrow::io::ReadableFile::Open(path);
+    auto maybe_infile = arrow::io::ReadableFile::Open(path, pool);
     if (!maybe_infile.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "cannot open Parquet file '%s': %s", path.c_str(),
@@ -182,6 +221,7 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     // Open Parquet reader via FileReaderBuilder
     std::unique_ptr<parquet::arrow::FileReader> reader;
     auto st_builder = parquet::arrow::FileReaderBuilder();
+    st_builder.memory_pool(pool);
     auto status = st_builder.Open(infile);
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
@@ -236,6 +276,7 @@ void QoreDataFrame::writeParquet(const std::string& path,
     if (qore_check_cancel(xsink, "writing Parquet file")) {
         return;
     }
+    arrow::MemoryPool* pool = arrow::system_memory_pool();
 
     std::lock_guard<std::mutex> lk(mtx);
 
@@ -249,13 +290,18 @@ void QoreDataFrame::writeParquet(const std::string& path,
         switch (cd.type) {
             case ColumnType::INT64: {
                 fields.push_back(arrow::field(col.name, arrow::int64()));
-                arrow::Int64Builder builder;
-                ARROW_UNUSED(builder.Reserve(cd.n_rows));
+                arrow::Int64Builder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow int64 array", col.name)) {
+                    return;
+                }
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (cd.isNull(i)) {
-                        ARROW_UNUSED(builder.AppendNull());
-                    } else {
-                        ARROW_UNUSED(builder.Append(cd.int_data[i]));
+                    if (checkParquetCancel(i, "building Arrow int64 array", xsink)) {
+                        return;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.int_data[i]);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow int64 value", col.name)) {
+                        return;
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
@@ -271,13 +317,18 @@ void QoreDataFrame::writeParquet(const std::string& path,
             }
             case ColumnType::FLOAT64: {
                 fields.push_back(arrow::field(col.name, arrow::float64()));
-                arrow::DoubleBuilder builder;
-                ARROW_UNUSED(builder.Reserve(cd.n_rows));
+                arrow::DoubleBuilder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow float64 array", col.name)) {
+                    return;
+                }
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (cd.isNull(i)) {
-                        ARROW_UNUSED(builder.AppendNull());
-                    } else {
-                        ARROW_UNUSED(builder.Append(cd.float_data(i)));
+                    if (checkParquetCancel(i, "building Arrow float64 array", xsink)) {
+                        return;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.float_data(i));
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow float64 value", col.name)) {
+                        return;
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
@@ -293,13 +344,18 @@ void QoreDataFrame::writeParquet(const std::string& path,
             }
             case ColumnType::STRING: {
                 fields.push_back(arrow::field(col.name, arrow::utf8()));
-                arrow::StringBuilder builder;
-                ARROW_UNUSED(builder.Reserve(cd.n_rows));
+                arrow::StringBuilder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow string array", col.name)) {
+                    return;
+                }
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (cd.isNull(i)) {
-                        ARROW_UNUSED(builder.AppendNull());
-                    } else {
-                        ARROW_UNUSED(builder.Append(cd.str_data[i]));
+                    if (checkParquetCancel(i, "building Arrow string array", xsink)) {
+                        return;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.str_data[i]);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow string value", col.name)) {
+                        return;
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
@@ -315,13 +371,18 @@ void QoreDataFrame::writeParquet(const std::string& path,
             }
             case ColumnType::BOOL: {
                 fields.push_back(arrow::field(col.name, arrow::boolean()));
-                arrow::BooleanBuilder builder;
-                ARROW_UNUSED(builder.Reserve(cd.n_rows));
+                arrow::BooleanBuilder builder(pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow boolean array", col.name)) {
+                    return;
+                }
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (cd.isNull(i)) {
-                        ARROW_UNUSED(builder.AppendNull());
-                    } else {
-                        ARROW_UNUSED(builder.Append(cd.bool_data[i] != 0));
+                    if (checkParquetCancel(i, "building Arrow boolean array", xsink)) {
+                        return;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.bool_data[i] != 0);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow boolean value", col.name)) {
+                        return;
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
@@ -339,14 +400,18 @@ void QoreDataFrame::writeParquet(const std::string& path,
                 // Store dates as int64 microseconds (Arrow TIMESTAMP)
                 auto ts_type = arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
                 fields.push_back(arrow::field(col.name, ts_type));
-                arrow::TimestampBuilder builder(ts_type,
-                    arrow::default_memory_pool());
-                ARROW_UNUSED(builder.Reserve(cd.n_rows));
+                arrow::TimestampBuilder builder(ts_type, pool);
+                if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
+                        "error reserving Arrow timestamp array", col.name)) {
+                    return;
+                }
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
-                    if (cd.isNull(i)) {
-                        ARROW_UNUSED(builder.AppendNull());
-                    } else {
-                        ARROW_UNUSED(builder.Append(cd.date_data[i]));
+                    if (checkParquetCancel(i, "building Arrow timestamp array", xsink)) {
+                        return;
+                    }
+                    auto st = cd.isNull(i) ? builder.AppendNull() : builder.Append(cd.date_data[i]);
+                    if (checkArrowColumnStatus(st, xsink, "error appending Arrow timestamp value", col.name)) {
+                        return;
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
@@ -380,8 +445,7 @@ void QoreDataFrame::writeParquet(const std::string& path,
     auto outfile = maybe_outfile.ValueOrDie();
 
     // Write table
-    auto status = parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
-        outfile, n_rows > 0 ? n_rows : 1024);
+    auto status = parquet::arrow::WriteTable(*table, pool, outfile, n_rows > 0 ? n_rows : 1024);
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "error writing Parquet file '%s': %s", path.c_str(),
@@ -390,26 +454,3 @@ void QoreDataFrame::writeParquet(const std::string& path,
 }
 
 } // namespace QoreDataFrameNS
-
-#else // !HAVE_ARROW
-
-namespace QoreDataFrameNS {
-
-QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
-        ExceptionSink* xsink) {
-    xsink->raiseException("MISSING-FEATURE-ERROR",
-        "Parquet support requires Apache Arrow; install libarrow and libparquet "
-        "and rebuild the dataframe module");
-    return nullptr;
-}
-
-void QoreDataFrame::writeParquet(const std::string& path,
-        ExceptionSink* xsink) const {
-    xsink->raiseException("MISSING-FEATURE-ERROR",
-        "Parquet support requires Apache Arrow; install libarrow and libparquet "
-        "and rebuild the dataframe module");
-}
-
-} // namespace QoreDataFrameNS
-
-#endif // HAVE_ARROW

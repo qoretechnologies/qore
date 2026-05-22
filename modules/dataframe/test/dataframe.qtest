@@ -1458,15 +1458,7 @@ sub invalid_dataframe_api() {
             unlink(tmp_path);
         }
 
-        # Write — may throw MISSING-FEATURE-ERROR if Arrow not available
-        try {
-            df.writeParquet(tmp_path);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "MISSING-FEATURE-ERROR") {
-                testSkip("Apache Arrow not available");
-            }
-            rethrow;
-        }
+        df.writeParquet(tmp_path);
 
         # Read back
         auto df2 = DataFrame::DataFrame::readParquet(tmp_path);

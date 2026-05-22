@@ -1185,8 +1185,7 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
 //! Reads a Parquet file into a new DataFrame
 /** @param path the Parquet file path
 
-    Requires Apache Arrow to be installed. If Arrow is not available, throws
-    \c MISSING-FEATURE-ERROR.
+    Uses Apache Arrow and Parquet to load typed columnar data from disk.
 
     @return new DataFrame object with Parquet data
 
@@ -1197,7 +1196,6 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened or parsed
-    @throw MISSING-FEATURE-ERROR if Apache Arrow is not installed
 */
 static DataFrame DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::readParquet(path->c_str(), xsink);
@@ -1212,8 +1210,7 @@ static DataFrame DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_
 //! Writes the DataFrame to a Parquet file
 /** @param path the Parquet file path
 
-    Requires Apache Arrow to be installed. If Arrow is not available, throws
-    \c MISSING-FEATURE-ERROR.
+    Uses Apache Arrow and Parquet to write typed columnar data to disk.
 
     @par Example:
     @code{.py}
@@ -1221,7 +1218,6 @@ static DataFrame DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
-    @throw MISSING-FEATURE-ERROR if Apache Arrow is not installed
 */
 nothing DataFrame::writeParquet(string path) [dom=FILESYSTEM] {
     df->writeParquet(path->c_str(), xsink);

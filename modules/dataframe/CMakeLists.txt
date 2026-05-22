@@ -26,18 +26,10 @@ if (NOT Eigen3_FOUND)
     find_package(Eigen3 REQUIRED NO_MODULE)
 endif()
 
-# Apache Arrow/Parquet is optional
-set(HAVE_ARROW FALSE)
-find_package(Arrow QUIET)
-find_package(Parquet QUIET)
-if (Arrow_FOUND AND Parquet_FOUND)
-    set(HAVE_ARROW TRUE)
-    message(STATUS "Apache Arrow/Parquet found - building with Parquet I/O support")
-    add_definitions(-DHAVE_ARROW)
-else()
-    message(STATUS "Apache Arrow/Parquet not found - readParquet/writeParquet will "
-        "throw MISSING-FEATURE-ERROR")
-endif()
+# Apache Arrow/Parquet is required for DataFrame Parquet I/O.
+find_package(Arrow REQUIRED CONFIG)
+find_package(Parquet REQUIRED CONFIG)
+message(STATUS "Apache Arrow/Parquet found - building with Parquet I/O support")
 
 # Start of hacks to simulate installed QoreConfig.cmake
 if (NOT QORE_MODULES_DIR)
@@ -90,9 +82,7 @@ set(df_module_name "dataframe")
 
 add_library(${df_module_name} MODULE ${DF_CPP_SRC} ${DF_QPP_SOURCES})
 target_link_libraries(${df_module_name} Eigen3::Eigen)
-if (HAVE_ARROW)
-    target_link_libraries(${df_module_name} Arrow::arrow_shared Parquet::parquet_shared)
-endif()
+target_link_libraries(${df_module_name} Arrow::arrow_shared Parquet::parquet_shared)
 add_dependencies(${df_module_name} libqore DF_QPP_GENERATED_FILES)
 
 qore_binary_module_qore(${df_module_name} "${VERSION}" "/${VERSION}")

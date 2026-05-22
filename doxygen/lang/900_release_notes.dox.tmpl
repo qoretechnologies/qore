@@ -1882,8 +1882,8 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref dataframeintro "dataframe" module
       - new builtin module providing a columnar DataFrame with typed columns (int64, float64,
         string, bool, date) and null/missing value support
-      - construction from records (\c list<hash>), column hash, CSV files, database queries, Parquet
-        files (optional Apache Arrow dependency), or numeric matrices
+      - construction from records (\c list<hash>), column hash, CSV files, database queries,
+        Parquet files via Apache Arrow, or numeric matrices
       - SQL-like query operations: select, filter (11 operators), sort, fillna, dropna
       - groupBy with 10 aggregation functions (sum, mean, median, std, min, max, count, first,
         last, nunique) and GroupedDataFrame class
@@ -1915,7 +1915,7 @@ foreach string module_name in (registry.getProcessModules()) {
         validation, duplicate-column diagnostics, and shared column storage
         where possible
       - streaming CSV reader with type inference from first 100 rows
-      - Parquet I/O via Apache Arrow (\c #ifdef \c HAVE_ARROW gated, \c MISSING-FEATURE-ERROR fallback)
+      - Parquet I/O via Apache Arrow and Parquet
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
       - ML integration: toMatrix, toVector, fromMatrix for zero-overhead ML algorithm feeding
       - describe() for per-column descriptive statistics (mean, std, quartiles, unique count)
