@@ -308,8 +308,9 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         # filter merged into query
         assertTrue(calls[0].sql =~ /WHERE payload->>'tag' = \$2/);
         # the vector literal is first bind arg, the filter arg follows
-        assertEq(2, calls[0].args[0].size());
-        assertEq("x", calls[0].args[0][1]);
+        # (vselect spreads the bind list, so args has 2 entries)
+        assertEq(2, calls[0].args.size());
+        assertEq("x", calls[0].args[1]);
     }
 
     private dimensionProbeTest() {
