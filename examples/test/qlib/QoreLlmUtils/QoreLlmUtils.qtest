@@ -126,6 +126,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend callback mode - missing callback", \callbackNoCallbackTest());
         addTestCase("LlmBackend callback mode - dispatch options",
             \callbackDispatchOptionsTest());
+        addTestCase("LlmTelemetry normalizes provider usage",
+            \telemetryUsageNormalizerTest());
+        addTestCase("LlmBackend emits callback chat telemetry",
+            \telemetryCallbackChatTest());
+        addTestCase("LlmBackend ignores observer failures",
+            \telemetryObserverFailureIsolationTest());
         addTestCase("LlmBackend request options override model",
             \requestOptionsOverrideModelTest());
         addTestCase("LlmStructuredRepair parses repaired JSON text",
@@ -395,6 +401,98 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("PUT", calls[1].method);
         assertEq("ai/v1/chat/completions", calls[1].path);
         assertEq("hello", calls[1].body.messages[0].content);
+    }
+
+    telemetryUsageNormalizerTest() {
+        hash<LlmTokenUsage> usage = LlmTelemetry::normalizeUsage({
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "prompt_tokens_details": {"cached_tokens": 3},
+            "completion_tokens_details": {"reasoning_tokens": 2},
+        });
+        assertEq(10, usage.input_tokens);
+        assertEq(5, usage.output_tokens);
+        assertEq(17, usage.total_tokens);
+        assertEq(3, usage.cached_input_tokens);
+        assertEq(2, usage.reasoning_tokens);
+
+        hash<LlmTokenUsage> gemini_usage = LlmTelemetry::normalizeUsage({
+            "promptTokenCount": 11,
+            "candidatesTokenCount": 7,
+            "totalTokenCount": 18,
+            "cachedContentTokenCount": 4,
+        });
+        assertEq(11, gemini_usage.input_tokens);
+        assertEq(7, gemini_usage.output_tokens);
+        assertEq(18, gemini_usage.total_tokens);
+        assertEq(4, gemini_usage.cached_input_tokens);
+    }
+
+    telemetryCallbackChatTest() {
+        list<hash<LlmTelemetryEvent>> events = ();
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "model": "default-model",
+            "telemetry_context": {"trace_id": "trace-1"},
+            "telemetry_observer": <LlmTelemetryObserver>{
+                "event_callback": sub (hash<LlmTelemetryEvent> event) {
+                    push events, event;
+                },
+            },
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> b) {
+                return {
+                    "id": "resp-1",
+                    "model": "provider-model",
+                    "choices": ({"message": {"content": "ok"},
+                        "finish_reason": "stop"},),
+                    "usage": {"prompt_tokens": 3,
+                        "completion_tokens": 4, "total_tokens": 7},
+                };
+            },
+        });
+
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "hello"},
+        ));
+        assertEq("ok", rv.content);
+        assertEq(2, events.size());
+        assertEq("start", events[0].type);
+        assertEq("chat", events[0].operation);
+        assertEq("callback", events[0].provider_mode);
+        assertEq("trace-1", events[0].telemetry_context.trace_id);
+        assertEq(1, events[0].request.message_count);
+        assertEq(5, events[0].request.text_bytes);
+
+        assertEq("end", events[1].type);
+        assertEq("ok", events[1].status);
+        assertEq("end_turn", events[1].stop_reason);
+        assertEq("resp-1", events[1].response_id);
+        assertEq("provider-model", events[1].model);
+        assertEq(3, events[1].usage.input_tokens);
+        assertEq(4, events[1].usage.output_tokens);
+        assertEq(7, events[1].usage.total_tokens);
+    }
+
+    telemetryObserverFailureIsolationTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "telemetry_observer": <LlmTelemetryObserver>{
+                "event_callback": sub (hash<LlmTelemetryEvent> event) {
+                    throw "OBSERVER-ERROR", "ignored";
+                },
+            },
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> b) {
+                return {
+                    "choices": ({"message": {"content": "still-ok"},
+                        "finish_reason": "stop"},),
+                    "usage": {"total_tokens": 1},
+                };
+            },
+        });
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "hello"},
+        ));
+        assertEq("still-ok", rv.content);
     }
 
     requestOptionsOverrideModelTest() {

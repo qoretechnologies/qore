@@ -164,6 +164,17 @@ public hashdecl LlmBackendConfig {
     string callback_path = "chat/completions";
     #! Initial retry delay in milliseconds for exponential backoff; default 1000
     int retry_delay_ms = 1000;
+    #! Optional telemetry observer for all calls through this backend
+    /** The observer receives provider-neutral lifecycle events.  It is
+        intentionally policy-free: no cost calculation, no tenancy rules, and
+        no persistence are performed by QoreLlmUtils.
+    */
+    *hash<LlmTelemetryObserver> telemetry_observer;
+    #! Optional caller-owned telemetry correlation context
+    /** Copied verbatim to telemetry events unless overridden per call via
+        @ref LlmRequestOptions::telemetry_context.
+    */
+    *hash<auto> telemetry_context;
 }
 
 #! Per-call request overrides for LLM calls
@@ -191,6 +202,20 @@ public hashdecl LlmRequestOptions {
     *hash<auto> output_schema;
     #! Provider-specific request body fields merged into the generated body
     *hash<auto> body_options;
+    #! Optional per-call telemetry observer
+    /** When set, this observer receives provider-neutral call lifecycle
+        events for this request.  Per-call observers override the backend
+        configuration observer.  Observer failures are ignored by the backend
+        so observability cannot break the LLM call.
+    */
+    *hash<LlmTelemetryObserver> telemetry_observer;
+    #! Optional caller-owned telemetry correlation context
+    /** Copied verbatim to telemetry events.  The Qore module treats this as
+        opaque metadata; applications such as Qorus can use it to attach trace
+        ids, span ids, tenant ids, or other policy-layer context without
+        baking those concepts into QoreLlmUtils.
+    */
+    *hash<auto> telemetry_context;
 }
 
 #! Result from an LLM completion call
@@ -275,6 +300,93 @@ public hashdecl ChatResponse {
     *hash<auto> raw;
     #! Provider-specific diagnostics suitable for surfacing through facade APIs
     *hash<auto> provider_diagnostics;
+}
+
+#! Provider-neutral token usage counters
+/** Providers expose token accounting under different names.  This hashdecl
+    is the stable normalized shape produced by
+    @ref QoreLlmUtils::LlmTelemetry::normalizeUsage().
+*/
+public hashdecl LlmTokenUsage {
+    #! Prompt / input token count
+    int input_tokens = 0;
+    #! Completion / output token count
+    int output_tokens = 0;
+    #! Total tokens reported or derived from input + output
+    int total_tokens = 0;
+    #! Input tokens served from a provider cache
+    int cached_input_tokens = 0;
+    #! Input tokens written to a provider cache
+    int cache_creation_input_tokens = 0;
+    #! Hidden reasoning / thinking token count
+    int reasoning_tokens = 0;
+    #! Embedding token count when the response came from an embedding API
+    int embedding_tokens = 0;
+    #! Reranker token count when the response came from a rerank API
+    int reranker_tokens = 0;
+}
+
+#! LLM lifecycle telemetry event
+/** This event intentionally excludes raw prompt and response text.  Callers
+    that need content capture should add it explicitly in their own policy
+    layer after redaction.
+*/
+public hashdecl LlmTelemetryEvent {
+    #! Event type: "start", "stream_delta", "end", "error", or "retry"
+    string type;
+    #! Operation: "complete", "chat", "chat_stream", "chat_completions", etc.
+    string operation;
+    #! Provider mode from @ref LlmBackendConfig::mode
+    string provider_mode;
+    #! Configured or response model when known
+    *string model;
+    #! Event timestamp
+    date timestamp;
+    #! Caller-owned opaque correlation context
+    *hash<auto> telemetry_context;
+    #! Safe request summary without raw prompt text
+    *hash<auto> request;
+    #! Safe response summary without raw response text
+    *hash<auto> response;
+    #! Safe stream delta summary without raw delta text
+    *hash<auto> stream_delta;
+    #! Normalized provider usage counters
+    *hash<LlmTokenUsage> usage;
+    #! Raw provider usage hash when available
+    *hash<auto> raw_usage;
+    #! Status: "ok" or "error"
+    *string status;
+    #! Provider stop / finish reason when available
+    *string stop_reason;
+    #! Provider response id when available
+    *string response_id;
+    #! Call latency in milliseconds
+    *int latency_ms;
+    #! Time to first streamed delta in milliseconds
+    *int time_to_first_delta_ms;
+    #! Normalized error metadata
+    *hash<auto> error;
+    #! Additional non-sensitive attributes
+    *hash<auto> attributes;
+}
+
+#! Optional observer callbacks for LLM telemetry
+/** All callbacks are best-effort.  The backend catches and ignores observer
+    exceptions so an observability sink cannot affect model-call behavior.
+*/
+public hashdecl LlmTelemetryObserver {
+    #! Receives every event
+    *code<nothing(hash<LlmTelemetryEvent>)> event_callback;
+    #! Receives "start" events
+    *code<nothing(hash<LlmTelemetryEvent>)> start_callback;
+    #! Receives "stream_delta" events
+    *code<nothing(hash<LlmTelemetryEvent>)> stream_delta_callback;
+    #! Receives "end" events
+    *code<nothing(hash<LlmTelemetryEvent>)> end_callback;
+    #! Receives "error" events
+    *code<nothing(hash<LlmTelemetryEvent>)> error_callback;
+    #! Receives "retry" events when a backend can surface retry attempts
+    *code<nothing(hash<LlmTelemetryEvent>)> retry_callback;
 }
 
 #! A streaming event from a chat completion

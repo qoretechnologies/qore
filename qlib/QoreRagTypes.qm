@@ -97,6 +97,89 @@ module QoreRagTypes {
 #! Provider-neutral RAG types and abstract classes (shared with QoreRagUtils)
 public namespace QoreRagUtils {
 
+#! Provider-neutral RAG usage and quality-adjacent metrics
+public hashdecl RagUsageMetrics {
+    #! Number of input documents
+    int document_count = 0;
+    #! Number of chunks produced or processed
+    int chunk_count = 0;
+    #! Approximate text tokens processed
+    int token_count = 0;
+    #! Number of texts passed to an embedder
+    int embedding_input_count = 0;
+    #! Number of vectors produced or stored
+    int vector_count = 0;
+    #! Vector dimensionality
+    int vector_dimensions = 0;
+    #! Requested vector-search candidate count
+    int requested_top_k = 0;
+    #! Number of candidates examined before reranking
+    int candidate_count = 0;
+    #! Number of results returned to the caller
+    int returned_count = 0;
+    #! Embedding cache hit count
+    int embedding_cache_hits = 0;
+    #! Embedding cache miss count
+    int embedding_cache_misses = 0;
+    #! Approximate storage bytes affected when known
+    int storage_bytes = 0;
+    #! Number of vector stores tried in a fallback chain
+    int vector_store_attempts = 0;
+    #! Number of vector stores that failed before a result was returned
+    int vector_store_failures = 0;
+}
+
+#! RAG lifecycle telemetry event
+/** Events contain operation metadata and counts only.  Raw query, document,
+    chunk, and embedding content is intentionally excluded by default.
+*/
+public hashdecl RagTelemetryEvent {
+    #! Event type: "start", "end", or "error"
+    string type;
+    #! Operation: "ingest", "retrieve", "rerank", "embed", "chunk", etc.
+    string operation;
+    #! Event timestamp
+    date timestamp;
+    #! Backend or component name when known
+    *string backend;
+    #! Model name when known
+    *string model;
+    #! Vector collection / table when known
+    *string collection;
+    #! Caller-owned opaque correlation context
+    *hash<auto> telemetry_context;
+    #! Safe request summary
+    *hash<auto> request;
+    #! Safe response summary
+    *hash<auto> response;
+    #! Provider-neutral metrics
+    *hash<RagUsageMetrics> metrics;
+    #! Status: "ok" or "error"
+    *string status;
+    #! Latency in milliseconds
+    *int latency_ms;
+    #! Normalized error metadata
+    *hash<auto> error;
+    #! Additional non-sensitive attributes
+    *hash<auto> attributes;
+}
+
+#! Optional observer callbacks for RAG telemetry
+/** All callbacks are best-effort.  The RAG pipeline catches and ignores
+    observer failures so instrumentation cannot affect retrieval or ingest
+    behavior.
+*/
+public hashdecl RagTelemetryObserver {
+    #! Receives every event
+    *code<nothing(hash<RagTelemetryEvent>)> event_callback;
+    #! Receives "start" events
+    *code<nothing(hash<RagTelemetryEvent>)> start_callback;
+    #! Receives "end" events
+    *code<nothing(hash<RagTelemetryEvent>)> end_callback;
+    #! Receives "error" events
+    *code<nothing(hash<RagTelemetryEvent>)> error_callback;
+}
+
 #! Configuration for an embedder backend
 public hashdecl EmbedderConfig {
     #! Backend identifier — implementation-specific (e.g. "local-onnx", "openai", "voyage", "gemini", "sglang", "bge-m3")
@@ -130,6 +213,10 @@ public hashdecl EmbedderConfig {
     *timeout connect_timeout;
     #! Free-form backend-specific options
     *hash<auto> options;
+    #! Optional observer for direct embedder usage
+    *hash<RagTelemetryObserver> telemetry_observer;
+    #! Optional caller-owned telemetry correlation context
+    *hash<auto> telemetry_context;
 }
 
 #! Configuration for a vector-store backend
@@ -142,6 +229,10 @@ public hashdecl VectorStoreConfig {
     *string url;
     #! Free-form backend-specific options (filters, payload schema, etc.)
     *hash<auto> options;
+    #! Optional observer for direct vector-store usage
+    *hash<RagTelemetryObserver> telemetry_observer;
+    #! Optional caller-owned telemetry correlation context
+    *hash<auto> telemetry_context;
 }
 
 #! Configuration for a reranker backend
@@ -158,6 +249,10 @@ public hashdecl RerankerConfig {
     *string api_key;
     #! Free-form backend-specific options
     *hash<auto> options;
+    #! Optional observer for direct reranker usage
+    *hash<RagTelemetryObserver> telemetry_observer;
+    #! Optional caller-owned telemetry correlation context
+    *hash<auto> telemetry_context;
 }
 
 #! Configuration for a chunker backend
@@ -172,6 +267,10 @@ public hashdecl ChunkerConfig {
     float similarity_threshold = 0.7;
     #! Free-form backend-specific options
     *hash<auto> options;
+    #! Optional observer for direct chunker usage
+    *hash<RagTelemetryObserver> telemetry_observer;
+    #! Optional caller-owned telemetry correlation context
+    *hash<auto> telemetry_context;
 }
 
 #! Top-level RAG pipeline configuration
@@ -218,6 +317,12 @@ public hashdecl RagPipelineOptions {
         multiplier (e.g. 5x top_k) without changing the pipeline default.
     */
     *int pre_rerank_top_k;
+
+    #! Optional observer for pipeline operations
+    *hash<RagTelemetryObserver> telemetry_observer;
+
+    #! Optional caller-owned telemetry correlation context
+    *hash<auto> telemetry_context;
 }
 
 #! A single chunk produced by a chunker
