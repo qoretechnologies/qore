@@ -979,6 +979,19 @@ static bool removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
     return false;
 }
 
+static bool removeAllCleanupEntries(std::vector<uint32_t>& cleanup, uint32_t id) {
+    bool removed = false;
+    for (auto it = cleanup.begin(); it != cleanup.end();) {
+        if (*it == id) {
+            it = cleanup.erase(it);
+            removed = true;
+        } else {
+            ++it;
+        }
+    }
+    return removed;
+}
+
 static bool hasCleanupEntry(const std::vector<uint32_t>& cleanup, uint32_t id) {
     return std::find(cleanup.begin(), cleanup.end(), id) != cleanup.end();
 }
@@ -1532,7 +1545,8 @@ static void countCallArgOccurrences(const IRValueSlots& values,
 
 static void consumeLastUseCallArgSlots(IRValueSlots& values, std::vector<uint32_t>& cleanup,
         const std::vector<QoreIRValue>& operands, size_t start_index,
-        const std::vector<uint32_t>& value_use_counts, ExceptionSink* xsink) {
+        const std::vector<uint32_t>& value_use_counts,
+        const std::unordered_set<uint32_t>* borrowed_slots, ExceptionSink* xsink) {
     std::unordered_map<uint32_t, uint32_t> occurrences;
     countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
     uint32_t checked = 0;
@@ -1548,7 +1562,11 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, std::vector<uint32_
         if (!slot.hasNode()) {
             continue;
         }
-        removeCleanupEntry(cleanup, id);
+        removeAllCleanupEntries(cleanup, id);
+        if (borrowed_slots && borrowed_slots->count(id)) {
+            slot = QoreValue();
+            continue;
+        }
         slot.discard(xsink);
         slot = QoreValue();
     }
@@ -3611,6 +3629,56 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& ephemeral_weak_ref_slots = frame.ephemeral_weak_ref_slots;
     int last_ephemeral_line = -1;
 
+    std::unordered_map<uint32_t, int> operand_remaining_uses;
+    std::unordered_set<uint32_t> weak_load_temp_slots;
+    size_t operand_scan_count = 0;
+    for (const auto& b : func.blocks) {
+        for (const auto& inst_ptr : b->instructions) {
+            if (((++operand_scan_count % 100) == 0)
+                    && qore_check_cancel(xsink, "IR weak-load use-count build")) {
+                return false;
+            }
+            if (!inst_ptr) {
+                continue;
+            }
+            for (const auto& op : inst_ptr->operands) {
+                operand_remaining_uses[op.id]++;
+            }
+        }
+    }
+
+    auto releaseWeakLoadTemp = [&](uint32_t id) {
+        if (id >= values.size()) {
+            return;
+        }
+        removeAllCleanupEntries(cleanup, id);
+        values[id] = QoreValue();
+        weak_load_temp_slots.erase(id);
+    };
+
+    auto clearSlotForOverwrite = [&](uint32_t id) {
+        if (id >= values.size()) {
+            return;
+        }
+        bool had_borrowed_value = weak_load_temp_slots.erase(id) > 0;
+        bool had_cleanup = removeAllCleanupEntries(cleanup, id);
+        if (had_cleanup && !had_borrowed_value) {
+            values[id].discard(xsink);
+        }
+        values[id] = QoreValue();
+    };
+
+    auto consumeOperandUse = [&](uint32_t id) {
+        auto uses_it = operand_remaining_uses.find(id);
+        if (uses_it == operand_remaining_uses.end()) {
+            return;
+        }
+        --uses_it->second;
+        if (uses_it->second <= 0 && weak_load_temp_slots.count(id)) {
+            releaseWeakLoadTemp(id);
+        }
+    };
+
     while (block) {
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -4737,6 +4805,7 @@ next_instruction:
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 QoreValue out;
                 bool result_slot_owned = false;
+                bool weak_ref_load = false;
 
                 if (local_inst->is_closure) {
                     // Closure path: always read from runtime stack (closures can
@@ -4758,6 +4827,9 @@ next_instruction:
                     }
                     if (needs_deref && out.hasNode()) {
                         result_slot_owned = true;
+                    } else if (!needs_deref && out.hasNode()) {
+                        LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
+                        weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
                     }
                 } else if (local_inst->auto_ref) {
                     // FAST PATH: direct slot cache access (most common case)
@@ -4826,8 +4898,13 @@ next_instruction:
                                 locals_slot_cache[sid] = val.hasNode() ? val.refSelf() : val;
                             }
                         }
-                        out = val.hasNode() ? val.refSelf() : val;
-                        result_slot_owned = out.hasNode();
+                        if (is_weak_ref_local && val.hasNode()) {
+                            out = val;
+                            weak_ref_load = true;
+                        } else {
+                            out = val.hasNode() ? val.refSelf() : val;
+                            result_slot_owned = out.hasNode();
+                        }
                         // Release eval()'s owned ref — slot-cache and out each hold
                         // their own +1 refs via refSelf()
                         if (needs_deref && val.hasNode()) {
@@ -4855,27 +4932,31 @@ next_instruction:
                         }
                         if (needs_deref && out.hasNode()) {
                             result_slot_owned = true;
+                        } else if (!needs_deref && out.hasNode()) {
+                            LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
+                            weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
                         }
                     }
                 }
 load_local_done:
                 if (result_slot_owned) {
+                    if (local_inst->result.id < values.size()
+                            && weak_load_temp_slots.count(local_inst->result.id)) {
+                        clearSlotForOverwrite(local_inst->result.id);
+                    }
                     setValueSlot(values, local_inst->result.id, out, xsink);
                 } else {
                     // Lvalue loads borrow the local's current node without taking a
                     // reference.  Do not use setValueSlot(), which would dereference
                     // a borrowed value left in this slot from an earlier iteration.
-                    if (local_inst->result.id < values.size()) {
-                        if (removeCleanupEntry(cleanup, local_inst->result.id)) {
-                            values[local_inst->result.id].discard(xsink);
-                        } else {
-                            values[local_inst->result.id] = QoreValue();
-                        }
-                    }
+                    clearSlotForOverwrite(local_inst->result.id);
                     setValueSlotDirect(values, local_inst->result.id, out);
+                    if (weak_ref_load && out.hasNode()) {
+                        weak_load_temp_slots.insert(local_inst->result.id);
+                    }
                 }
                 // Mark as local-owned for DGC container scan
-                if (local_inst->result.id >= 0) {
+                if (!weak_ref_load && local_inst->result.id >= 0) {
                     local_owned_slots.insert(local_inst->result.id);
                 }
                 if (result_slot_owned && out.hasNode()) {
@@ -4918,6 +4999,8 @@ load_local_done:
             case QoreIROpcode::LoadClosure: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 QoreValue out;
+                bool is_weak_ref_local = false;
+                bool result_slot_owned = false;
                 if (!inst->operands.empty() && closure) {
                     QoreValue idx_val = getIRValue(values, inst->operands[0]);
                     int64 idx = idx_val.getAsBigInt();
@@ -4927,12 +5010,14 @@ load_local_done:
                     }
                     // Closure arg: val is shared reference, needs refSelf for value slot
                     out = val.hasNode() ? val.refSelf() : val;
+                    result_slot_owned = out.hasNode();
                 } else {
                     auto it = closures.find(local_inst->local);
                     if (it != closures.end() && it->second.getType() != NT_REFERENCE) {
                         // Cache hit: val is shared with cache, needs refSelf for value slot
                         QoreValue val = it->second;
                         out = val.hasNode() ? val.refSelf() : val;
+                        result_slot_owned = out.hasNode();
                     } else if (local_inst->local) {
                         // Ensure the variable is instantiated before lookup.
                         // When a function with closureUse() vars executes in its own
@@ -4978,17 +5063,30 @@ load_local_done:
                             }
                         }
                         if (cv) {
-                            QoreValue val = cv->eval(xsink);
-                            if (xsink && *xsink) {
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
+                            is_weak_ref_local = isWeakReferenceType(cv->val.getType());
+                            if (is_weak_ref_local) {
+                                bool needs_deref = false;
+                                QoreValue val = cv->eval(needs_deref, xsink);
+                                if (xsink && *xsink) {
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupLocalCaches();
+                                    return false;
+                                }
+                                out = val;
+                            } else {
+                                QoreValue val = cv->eval(xsink);
+                                if (xsink && *xsink) {
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupLocalCaches();
+                                    return false;
+                                }
+                                // cv->eval() returns a referenced value (+1); store a separate
+                                // reference in the cache and use eval's reference for the value
+                                // slot.  No additional refSelf for out — eval's +1 transfers to it.
+                                storeValue(closures, local_inst->local, val, nullptr);
+                                out = val;
+                                result_slot_owned = out.hasNode();
                             }
-                            // cv->eval() returns a referenced value (+1); store a separate
-                            // reference in the cache and use eval's reference for the value
-                            // slot.  No additional refSelf for out — eval's +1 transfers to it.
-                            storeValue(closures, local_inst->local, val, nullptr);
-                            out = val;
                         } else {
                             // Closure variable not found in closure context — fall back to
                             // local stack lookup. This happens when a function has variables
@@ -4996,6 +5094,7 @@ load_local_done:
                             // current execution context is the function's own body, not a
                             // closure. In that case, the variable lives on the local stack.
                             if (LocalVarValue* lvv = thread_try_find_lvar(local_inst->local)) {
+                                is_weak_ref_local = isWeakReferenceType(lvv->val.getType());
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
@@ -5004,15 +5103,32 @@ load_local_done:
                                     return false;
                                 }
                                 // If needs_deref is false, we need to refSelf for the value slot
-                                if (!needs_deref && out.hasNode()) {
+                                if (is_weak_ref_local) {
+                                    // keep the borrowed weak target unowned
+                                } else if (!needs_deref && out.hasNode()) {
                                     out = out.refSelf();
+                                    result_slot_owned = true;
+                                } else if (needs_deref && out.hasNode()) {
+                                    result_slot_owned = true;
                                 }
                             }
                         }
                     }
                 }
-                setValueSlot(values, local_inst->result.id, out, xsink);
-                if (out.hasNode() && local_inst->auto_ref) {
+                if (result_slot_owned) {
+                    if (local_inst->result.id < values.size()
+                            && weak_load_temp_slots.count(local_inst->result.id)) {
+                        clearSlotForOverwrite(local_inst->result.id);
+                    }
+                    setValueSlot(values, local_inst->result.id, out, xsink);
+                } else {
+                    clearSlotForOverwrite(local_inst->result.id);
+                    setValueSlotDirect(values, local_inst->result.id, out);
+                    if (is_weak_ref_local && out.hasNode()) {
+                        weak_load_temp_slots.insert(local_inst->result.id);
+                    }
+                }
+                if (result_slot_owned && out.hasNode() && local_inst->auto_ref) {
                     cleanup.push_back(local_inst->result.id);
                 }
                 ++ip;
@@ -7889,10 +8005,15 @@ load_local_done:
                         slot = QoreValue();
                     }
                 }
-                // Weak-reference loads are normal statement temporaries; the
-                // cleanup stack above owns their lifetime.  Clear bookkeeping
-                // after statement cleanup without tying lifetime to source lines,
-                // because a single expression can span multiple lines.
+                while (!weak_load_temp_slots.empty()) {
+                    uint32_t id = *weak_load_temp_slots.begin();
+                    releaseWeakLoadTemp(id);
+                }
+                // Strong refs produced by self/static weak-reference evaluation
+                // are normal statement temporaries; the cleanup stack above owns
+                // their lifetime.  Clear bookkeeping after statement cleanup
+                // without tying lifetime to source lines, because a single
+                // expression can span multiple lines.
                 ephemeral_weak_ref_slots.clear();
                 ++ip;
                 break;
@@ -9909,7 +10030,7 @@ lvalue_path_unary_done:
                             return returnAfterUnhandledException();
                         }
                         consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
-                            value_use_counts, xsink);
+                            value_use_counts, &weak_load_temp_slots, xsink);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
                         }
@@ -10105,7 +10226,7 @@ lvalue_path_unary_done:
                             return returnAfterUnhandledException();
                         }
                         consumeLastUseCallArgSlots(values, cleanup,
-                            static_inst->operands, 0, value_use_counts, xsink);
+                            static_inst->operands, 0, value_use_counts, &weak_load_temp_slots, xsink);
                         if (xsink && *xsink) {
                             if (arg_list) {
                                 arg_list->deref(xsink);
@@ -10237,7 +10358,7 @@ lvalue_path_unary_done:
                         return returnAfterUnhandledException();
                     }
                     consumeLastUseCallArgSlots(values, cleanup, inst->operands, arg_start,
-                        value_use_counts, xsink);
+                        value_use_counts, &weak_load_temp_slots, xsink);
                     if (xsink && *xsink) {
                         if (arg_list) {
                             arg_list->deref(xsink);
@@ -11513,6 +11634,10 @@ lvalue_path_unary_done:
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
                 return false;
+        }
+
+        for (const auto& op : inst->operands) {
+            consumeOperandUse(op.id);
         }
 
         // Fast path: if we're still in the same block (no branch occurred),

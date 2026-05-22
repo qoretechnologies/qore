@@ -191,7 +191,7 @@ public class PgVectorRagProvider inherits AbstractVectorStore {
         }
         sql += sprintf(" ORDER BY dist LIMIT %d", k);
 
-        *hash<auto> rows = ds.select(sql, bind_args);
+        *hash<auto> rows = ds.vselect(sql, bind_args);
         list<hash<VectorSearchResult>> result = ();
         if (!rows) {
             return result;

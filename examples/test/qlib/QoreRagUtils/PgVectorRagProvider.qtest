@@ -6,6 +6,7 @@
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/QoreRagTypes.qm
 %requires ../../../../qlib/QoreRagUtils
 
@@ -100,7 +101,21 @@ class FakePgsqlDatasource inherits Qore::SQL::AbstractDatasource {
 }
 
 public class PgVectorRagProviderTest inherits QUnit::Test {
-    constructor() : Test("PgVectorRagProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("PgVectorRagProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.PGVECTOR_CONNECTION;
+
         addTestCase("factory registered + lazy-loadable",   \factoryTest());
         addTestCase("constructor requires collection + datasource",
             \constructorValidationTest());
@@ -118,7 +133,29 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
             \dimensionProbeTest());
         addTestCase("score conversion differs by distance metric",
             \scoreConversionTest());
+
+        # Live test requires a real Postgres+pgvector connection AND a
+        # `PGVECTOR_TABLE` env var naming an existing pgvector-backed
+        # table.  The PgVectorRagProvider wraps an AbstractDatasource
+        # directly; the live test obtains the Datasource from the named
+        # connection and verifies that search() runs against the actual
+        # database.
+        # Cost: Free (self-hostable Postgres + pgvector).
+        if (conn_name) {
+            addTestCase("live: ping + vector-search (existing table)",
+                \livePgVectorTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Postgres+pgvector DB connection name; without it (and "
+            "without the PGVECTOR_CONNECTION env var) the live test is "
+            "skipped.  Also requires PGVECTOR_TABLE naming an existing "
+            "pgvector-backed table with an `embedding vector` column.",
+            OptionColumn);
     }
 
     private factoryTest() {
@@ -271,8 +308,9 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         # filter merged into query
         assertTrue(calls[0].sql =~ /WHERE payload->>'tag' = \$2/);
         # the vector literal is first bind arg, the filter arg follows
-        assertEq(2, calls[0].args[0].size());
-        assertEq("x", calls[0].args[0][1]);
+        # (vselect spreads the bind list, so args has 2 entries)
+        assertEq(2, calls[0].args.size());
+        assertEq("x", calls[0].args[1]);
     }
 
     private dimensionProbeTest() {
@@ -310,5 +348,53 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         });
         # l2: -dist = -1.5
         assertEq(-1.5, l2_store.search((0.0, 0.0, 0.0), 1)[0].score);
+    }
+
+    #! Exercises PgVectorRagProvider against a real Postgres+pgvector DB
+    /** Verifies the actual wire format against PostgreSQL with pgvector
+        installed.  Requires a connection name (resolved via
+        ConnectionProvider — typically a `db://` Datasource connection)
+        AND a `PGVECTOR_TABLE` env var naming an existing table whose
+        `embedding` column is a pgvector `vector` type.  The query
+        embedding dimension is probed from the table; the test sends a
+        zero-vector of that length and asserts the response is a list,
+        not its contents.
+
+        Cost: Free (self-hostable Postgres + pgvector).
+    */
+    private livePgVectorTest() {
+        *string table = ENV.PGVECTOR_TABLE;
+        if (!table.val()) {
+            testSkip("PGVECTOR_TABLE env var must name an existing "
+                "pgvector-backed table");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("pgvector connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        # conn.get() returns a Datasource for a db:// connection — pass
+        # it straight into PgVectorRagProvider's `datasource` option
+        Qore::SQL::AbstractDatasource ds = conn.get();
+        QoreRagUtils::PgVectorRagProvider store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend":    "pgvector",
+                "collection": table,
+                "options":    {"datasource": ds},
+            });
+        # Probe the dimension from the table; pgvector rejects queries
+        # whose vector length does not match the column dimension
+        int dim = store.getDimension();
+        assertTrue(dim > 0, "PgVector getDimension() probed a dimension");
+
+        list<float> query = map 0.0, xrange(dim);
+        list<hash<QoreRagUtils::VectorSearchResult>> hits =
+            store.search(query, 1);
+        # An empty table is valid; verify the call succeeds and returns
+        # a (possibly empty) list — i.e. the ORDER BY embedding <=> $1
+        # query was accepted by the server
+        assertTrue(hits.typeCode() == NT_LIST,
+            "PgVector search returned a list");
     }
 }

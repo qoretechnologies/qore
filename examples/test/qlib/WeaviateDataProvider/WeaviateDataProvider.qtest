@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/WeaviateDataProvider
 
@@ -29,10 +30,45 @@ class FakeWeaviateRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class WeaviateDataProviderTest inherits QUnit::Test {
-    constructor() : Test("WeaviateDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("WeaviateDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.WEAVIATE_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("list-classes hits /schema", \listClassesTest());
+
+        # Live test requires a real Weaviate connection AND a
+        # `WEAVIATE_CLASS` env var naming an existing class in the
+        # schema.  The WeaviateDataProvider currently exposes a
+        # control-plane `list-classes` action; the live test verifies
+        # that the named class actually appears in the schema response.
+        # Cost: Free (self-hostable).
+        if (conn_name) {
+            addTestCase("live: ping + list-classes (verifies existing class)",
+                \liveWeaviateTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Weaviate connection name; without it (and without the "
+            "WEAVIATE_CONNECTION env var) the live test is skipped.  Also "
+            "requires WEAVIATE_CLASS naming an existing class in the "
+            "Weaviate schema.",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -64,5 +100,41 @@ public class WeaviateDataProviderTest inherits QUnit::Test {
         assertEq(2, resp.classes.size());
         assertEq("Article", resp.classes[0]."class");
         assertEq("none", resp.classes[0].vectorizer);
+    }
+
+    #! Exercises Weaviate's live `/schema` endpoint
+    /** Verifies the actual wire format against a running Weaviate server.
+        Requires both a connection name AND a `WEAVIATE_CLASS` env var
+        naming an existing class in the schema; the test asserts that
+        the named class appears in the response.
+
+        Cost: Free (self-hostable).
+    */
+    private liveWeaviateTest() {
+        *string class_name = ENV.WEAVIATE_CLASS;
+        if (!class_name.val()) {
+            testSkip("WEAVIATE_CLASS env var must name an existing Weaviate "
+                "class");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Weaviate connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider lc = prov.getChildProvider("list-classes");
+        auto resp = lc.doRequest(NOTHING);
+        assertTrue(exists resp.classes,
+            "Weaviate list-classes returned a classes field");
+        bool found = False;
+        foreach hash<auto> c in (resp.classes ?? ()) {
+            if (c."class" == class_name) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, sprintf("WEAVIATE_CLASS %y was found in the "
+            "schema response", class_name));
     }
 }

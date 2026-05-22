@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/MistralDataProvider
 
@@ -51,14 +52,43 @@ class FakeMistralRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class MistralDataProviderTest inherits QUnit::Test {
-    constructor() : Test("MistralDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("MistralDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.MISTRAL_CONNECTION;
+
         addTestCase("factory + app + 3 actions registered", \registrationTest());
         addTestCase("root provider lists 3 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
             \embeddingRequestTest());
         addTestCase("ocr posts to /ocr",                    \ocrRequestTest());
+
+        # Live test requires a real Mistral AI connection.
+        # Cost: 1 token-bounded open-mistral-nemo request (~$0.0001 per run).
+        if (conn_name) {
+            addTestCase("live: ping + chat-completion (open-mistral-nemo)",
+                \liveMistralTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Mistral AI connection name; without it (and "
+            "without the MISTRAL_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -161,5 +191,29 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertEq("document_url", fake.last_request.document."type");
         assertEq("# Hello\n\nWorld.", resp.pages[0].markdown);
         assertEq(1, resp.usage_info.pages_processed);
+    }
+
+    #! Exercises Mistral AI's live chat-completion endpoint
+    /** Verifies the actual wire format against Mistral AI's production
+        endpoint with a token-bounded request on `open-mistral-nemo`.
+        Cost: ~$0.0001 per run (capped via max_tokens=16).
+    */
+    private liveMistralTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Mistral connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider chat = prov.getChildProvider("chat-completion");
+        auto resp = chat.doRequest({
+            "model": "open-mistral-nemo",
+            "messages": ({"role": "user", "content": "Say hi in one word."},),
+            "max_tokens": 16,
+        });
+        assertTrue(resp.choices[0].message.content.val(),
+            "Mistral returned non-empty assistant content");
+        assertTrue(resp.usage.total_tokens > 0,
+            "Mistral reported positive total_tokens");
     }
 }

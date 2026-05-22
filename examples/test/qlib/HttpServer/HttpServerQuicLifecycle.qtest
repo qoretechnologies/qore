@@ -151,6 +151,9 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
         }
 
         if (m_quic_available) {
+            addTestCase("H3 listener stop releases UDP port for rebind", \testListenerStopReleasesUdpPort());
+            addTestCase("paired H3 listener stop releases UDP port for rebind",
+                \testPairedListenerStopReleasesUdpPort());
             addTestCase("H3 normal request completes efficiently", \testNormalRequest());
             addTestCase("H3 request timeout on silent server", \testRequestTimeout());
             addTestCase("H3 connection reuse after error", \testConnectionReuseAfterError());
@@ -167,7 +170,61 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
         return sprintf("https://127.0.0.1:%d", m_quic_port);
     }
 
-    #! Test 1: Normal H3 request completes within reasonable time (no livelock)
+    #! Stopping a standalone H3 listener releases its UDP port
+    testListenerStopReleasesUdpPort() {
+        Logger logger("rebind", LoggerLevel::getLevelInfo());
+        HttpServer http(<HttpServerOptionInfo>{
+            "logger": logger,
+        });
+        http.waitForAsyncIo();
+        on_exit delete http;
+
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "node": "127.0.0.1",
+            "family": AF_INET,
+        };
+
+        hash<auto> first = http.addQuicListener(opts);
+        int port = first.port;
+        http.stopListenerID(first.id);
+
+        hash<auto> second = http.addQuicListener(opts, port);
+        assertEq(port, second.port, "H3 listener can rebind to the same UDP port after stop");
+        http.stopListenerID(second.id);
+    }
+
+    #! Stopping a TLS listener also releases its paired H3 UDP port
+    testPairedListenerStopReleasesUdpPort() {
+        Logger logger("paired-rebind", LoggerLevel::getLevelInfo());
+        HttpServer http(<HttpServerOptionInfo>{
+            "logger": logger,
+            "enable_h3": True,
+        });
+        http.waitForAsyncIo();
+        on_exit delete http;
+
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "node": "127.0.0.1",
+            "family": AF_INET,
+        };
+
+        hash<auto> first = http.addListener(opts);
+        int port = first.port;
+        http.stopListenerID(first.id);
+
+        opts.service = string(port);
+        hash<auto> second = http.addListener(opts);
+        assertEq(port, second.port,
+            "paired H3 listener can rebind to the same UDP port after TCP listener stop");
+        http.stopListenerID(second.id);
+    }
+
+    #! Normal H3 request completes within reasonable time (no livelock)
     testNormalRequest() {
         RestClientIo rc({
             "url": getQuicUrl(),
@@ -187,7 +244,7 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
             sprintf("H3 request completed in %y (expected < 5s)", elapsed));
     }
 
-    #! Test 2: Client times out on silent server (no livelock, no busy-loop)
+    #! Client times out on silent server (no livelock, no busy-loop)
     testRequestTimeout() {
         # Use a separate server with the silent handler
         Logger logger("silent", LoggerLevel::getLevelInfo());
@@ -240,7 +297,7 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
             sprintf("timeout completed in %y (expected < 10s)", elapsed));
     }
 
-    #! Test 3: Connection reuse after stream error doesn't livelock
+    #! Connection reuse after stream error doesn't livelock
     testConnectionReuseAfterError() {
         RestClientIo rc({
             "url": getQuicUrl(),

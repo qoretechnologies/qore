@@ -10,6 +10,7 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/AzureAuth.qm
@@ -67,13 +68,24 @@ class FakeAzureHandler inherits AbstractHttpRequestHandler {
 }
 
 public class AzureOpenAiDataProviderTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
     private {
         HttpServer http;
         int port;
         FakeAzureHandler handler;
+        *string conn_name;
     }
 
-    constructor() : Test("AzureOpenAiDataProvider Test", "1.0") {
+    constructor() : Test("AzureOpenAiDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.AZURE_OPENAI_CONNECTION;
+
         addTestCase("factory + provider info",            \factoryTest());
         addTestCase("app registered with logo + group",   \appTest());
         addTestCase("chat-completion + embedding actions registered", \actionsTest());
@@ -90,7 +102,54 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
                 printf("setup error: %s\n", get_exception_string(ex));
             }
         }
+
+        # Live test requires a real Azure OpenAI connection plus the
+        # AZURE_OPENAI_DEPLOYMENT env var naming a deployment in the account.
+        # Cost: 1 token-bounded gpt-4o-mini request (~$0.0001 per run).
+        if (conn_name) {
+            addTestCase("live: ping + chat-completion (gpt-4o-mini)",
+                \liveAzureOpenAiTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Azure OpenAI connection name; without it (and without "
+            "the AZURE_OPENAI_CONNECTION env var) the live test is skipped",
+            OptionColumn);
+    }
+
+    #! Exercises Azure OpenAI's live chat-completion endpoint.
+    /** Verifies the actual wire format against Azure OpenAI's production
+        deployments — including api-key auth, deployment-name URL routing, and
+        the chat-completion response shape.  Cost: 1 token-bounded
+        gpt-4o-mini request (~$0.0001 per run).
+    */
+    private liveAzureOpenAiTest() {
+        *string deployment = ENV.AZURE_OPENAI_DEPLOYMENT;
+        if (!deployment.val()) {
+            testSkip("AZURE_OPENAI_DEPLOYMENT env var is required to name a "
+                "deployment in the account");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Azure OpenAI connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider cc = prov.getChildProvider("chat-completion");
+        auto resp = cc.doRequest({
+            "deployment": deployment,
+            "messages": ({"role": "user", "content": "Say hi in one word."},),
+            "max_tokens": 16,
+        });
+        assertTrue(resp.choices[0].message.content.val(),
+            "Azure OpenAI returned assistant text");
+        assertTrue(resp.usage.total_tokens > 0,
+            "Azure OpenAI reported a positive total-token count");
     }
 
     static checkJson(Test test) {

@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/CohereDataProvider
 
@@ -51,7 +52,21 @@ class FakeCohereRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class CohereDataProviderTest inherits QUnit::Test {
-    constructor() : Test("CohereDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("CohereDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.COHERE_CONNECTION;
+
         addTestCase("factory + app + 4 actions registered", \registrationTest());
         addTestCase("root provider lists 4 children",       \rootProviderTest());
         addTestCase("chat hits /v2/chat",                   \chatRequestTest());
@@ -59,7 +74,23 @@ public class CohereDataProviderTest inherits QUnit::Test {
         addTestCase("rerank hits /v2/rerank",               \rerankRequestTest());
         addTestCase("classify uses absolute /v1/classify path",
             \classifyRequestTest());
+
+        # Live test requires a real Cohere connection.
+        # Cost: 1 embedding on embed-english-light-v3.0 (Cohere trial-key
+        # friendly — 1000 calls/month free).
+        if (conn_name) {
+            addTestCase("live: ping + embed (embed-english-light-v3.0)",
+                \liveCohereTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Cohere connection name; without it (and "
+            "without the COHERE_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -179,5 +210,27 @@ public class CohereDataProviderTest inherits QUnit::Test {
         # absolute path addresses v1 endpoint from v2-default client
         assertEq("/v1/classify", fake.last_path);
         assertEq("positive", resp.classifications[0].prediction);
+    }
+
+    #! Exercises Cohere's live embed endpoint
+    /** Verifies the actual wire format against Cohere's production embed
+        endpoint with a single-text request on `embed-english-light-v3.0`.
+        Cost: 1 embedding (Cohere trial-key friendly — 1000 calls/month free).
+    */
+    private liveCohereTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Cohere connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider emb = prov.getChildProvider("embed");
+        auto resp = emb.doRequest({
+            "model": "embed-english-light-v3.0",
+            "texts": ("hello",),
+            "input_type": "search_document",
+        });
+        assertTrue(resp.embeddings.float[0].size() > 0,
+            "Cohere returned non-empty embedding vector");
     }
 }

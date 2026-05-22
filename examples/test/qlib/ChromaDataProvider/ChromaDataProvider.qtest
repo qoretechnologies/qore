@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ChromaDataProvider
 
@@ -41,11 +42,46 @@ class FakeChromaRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class ChromaDataProviderTest inherits QUnit::Test {
-    constructor() : Test("ChromaDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("ChromaDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.CHROMA_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("query hits tenant/database-scoped collection URL",
             \queryTest());
+
+        # Live test requires a real Chroma connection AND a
+        # `CHROMA_COLLECTION_ID` env var naming an existing Chroma
+        # collection UUID — Chroma vector search must target an
+        # already-populated collection whose embedding dimension
+        # matches the supplied query vector.
+        # Cost: Free (self-hostable).
+        if (conn_name) {
+            addTestCase("live: ping + vector-search (existing collection)",
+                \liveChromaTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Chroma connection name; without it (and without the "
+            "CHROMA_CONNECTION env var) the live test is skipped.  Also "
+            "requires CHROMA_COLLECTION_ID naming an existing collection "
+            "UUID.",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -84,5 +120,47 @@ public class ChromaDataProviderTest inherits QUnit::Test {
         assertEq(NOTHING, fake.last_request.collection_id);
         assertEq(5, fake.last_request.n_results);
         assertEq("doc1", resp.ids[0][0]);
+    }
+
+    #! Exercises Chroma's live `/collections/{id}/query` endpoint
+    /** Verifies the actual wire format against a running Chroma server.
+        Requires both a connection name AND a `CHROMA_COLLECTION_ID` env
+        var naming an existing collection.  Chroma rejects queries whose
+        embedding dimension does not match the collection's stored
+        vectors; the test assumes the user has aligned `CHROMA_QUERY_DIM`
+        (default 5) to the collection's embedder.
+
+        Cost: Free (self-hostable). Requires an existing Chroma collection
+        with embeddings.
+    */
+    private liveChromaTest() {
+        *string coll_id = ENV.CHROMA_COLLECTION_ID;
+        if (!coll_id.val()) {
+            testSkip("CHROMA_COLLECTION_ID env var must name an existing "
+                "Chroma collection UUID");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Chroma connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider q = prov.getChildProvider("query");
+        # Use a small 5-dim vector by default; users can override the
+        # dimension by setting CHROMA_QUERY_DIM if their collection's
+        # embedder requires a different size.
+        int dim = (ENV.CHROMA_QUERY_DIM ?? "5").toInt();
+        list<float> vec = map 0.1, xrange(dim);
+        auto resp = q.doRequest({
+            "collection_id": coll_id,
+            "query_embeddings": (vec,),
+            "n_results": 1,
+        });
+        # Chroma always returns an `ids` field (may be empty when the
+        # collection has no documents) — the assertion verifies the
+        # response shape rather than content
+        assertTrue(exists resp.ids,
+            "Chroma vector-search returned an ids field");
     }
 }

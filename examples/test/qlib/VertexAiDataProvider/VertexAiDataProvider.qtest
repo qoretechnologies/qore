@@ -10,6 +10,7 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/GcpAuth.qm
@@ -72,14 +73,25 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
 }
 
 public class VertexAiDataProviderTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
     private {
         HttpServer http;
         int port;
         FakeVertexHandler handler;
         string sa_path;
+        *string conn_name;
     }
 
-    constructor() : Test("VertexAiDataProvider Test", "1.0") {
+    constructor() : Test("VertexAiDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.VERTEX_AI_CONNECTION;
+
         addTestCase("factory + provider info",            \factoryTest());
         addTestCase("app registered with logo + group",   \appTest());
         addTestCase("generate-content + embed actions registered",
@@ -98,7 +110,50 @@ public class VertexAiDataProviderTest inherits QUnit::Test {
                 printf("setup error: %s\n", get_exception_string(ex));
             }
         }
+
+        # Live test requires a real Google Vertex AI connection.
+        # Cost: 1 token-bounded gemini-2.5-flash-lite request (free tier
+        # eligible).
+        if (conn_name) {
+            addTestCase("live: ping + generate-content (gemini-2.5-flash-lite)",
+                \liveVertexAiTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Google Vertex AI connection name; without it (and "
+            "without the VERTEX_AI_CONNECTION env var) the live test is "
+            "skipped",
+            OptionColumn);
+    }
+
+    #! Exercises Vertex AI's live generateContent endpoint.
+    /** Verifies the actual wire format against Google Vertex AI's production
+        endpoint — including GcpAuth Bearer-token issuance, the
+        project/region/publisher/model URL routing, and the generateContent
+        response shape.  Cost: 1 token-bounded gemini-2.5-flash-lite request
+        (free tier eligible).
+    */
+    private liveVertexAiTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Vertex AI connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider gc = prov.getChildProvider("generate-content");
+        auto resp = gc.doRequest({
+            "model": "gemini-2.5-flash-lite",
+            "contents": ({"role": "user", "parts": ({"text": "Say hi in one word."},)},),
+            "generationConfig": {"maxOutputTokens": 16, "temperature": 0.0},
+        });
+        assertTrue(resp.candidates[0].content.parts[0].text.val(),
+            "Vertex AI returned assistant text");
+        assertTrue(resp.usageMetadata.totalTokenCount > 0,
+            "Vertex AI reported a positive total-token count");
     }
 
     static checkJson(Test test) {

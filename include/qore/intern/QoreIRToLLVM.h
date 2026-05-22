@@ -423,10 +423,10 @@ private:
     // the cached WeakReferenceNode from an LLVM alloca.
     std::unordered_set<const void*> weak_assigned_locals;
 
-    // Result IDs produced by LoadLocal on weak-assigned locals.  These loads
-    // return temporary strong refs that must be released at last use; otherwise
-    // a loop condition like `while (weak)` keeps the referent alive until
-    // function exit in LLVM mode.
+    // Result IDs produced by LoadLocal/LoadClosure on weak-assigned locals.
+    // These loads return temporary strong refs that must be released at last
+    // use; otherwise a loop condition like `while (weak)` keeps the referent
+    // alive until function exit in LLVM mode.
     std::unordered_set<uint32_t> weak_load_result_ids;
 
     // Allocas tracking active iterator pointers from IteratorCreate/IteratorCreateReverse.

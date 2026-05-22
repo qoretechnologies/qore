@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/MilvusDataProvider
 
@@ -31,11 +32,45 @@ class FakeMilvusRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class MilvusDataProviderTest inherits QUnit::Test {
-    constructor() : Test("MilvusDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("MilvusDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.MILVUS_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("list-collections hits /collections/list",
             \listCollectionsTest());
+
+        # Live test requires a real Milvus connection AND a
+        # `MILVUS_COLLECTION` env var naming an existing collection.
+        # The MilvusDataProvider currently exposes a control-plane
+        # `list-collections` action; the live test verifies that the
+        # named collection appears in the response.
+        # Cost: Free (self-hostable).
+        if (conn_name) {
+            addTestCase("live: ping + list-collections (verifies existing collection)",
+                \liveMilvusTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Milvus connection name; without it (and without the "
+            "MILVUS_CONNECTION env var) the live test is skipped.  Also "
+            "requires MILVUS_COLLECTION naming an existing collection.",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -64,5 +99,36 @@ public class MilvusDataProviderTest inherits QUnit::Test {
         assertEq("/collections/list", fake.last_path);
         assertEq(3, resp.data.size());
         assertEq("vectors", resp.data[0]);
+    }
+
+    #! Exercises Milvus's live `/collections/list` endpoint
+    /** Verifies the actual wire format against a running Milvus server.
+        Requires both a connection name AND a `MILVUS_COLLECTION` env
+        var naming an existing collection; the test asserts that the
+        named collection appears in the response.
+
+        Cost: Free (self-hostable).
+    */
+    private liveMilvusTest() {
+        *string coll_name = ENV.MILVUS_COLLECTION;
+        if (!coll_name.val()) {
+            testSkip("MILVUS_COLLECTION env var must name an existing "
+                "Milvus collection");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Milvus connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider lc = prov.getChildProvider("list-collections");
+        auto resp = lc.doRequest(NOTHING);
+        # Milvus 2.4+ wraps the collection-name list in `data`
+        assertTrue(exists resp.data,
+            "Milvus list-collections returned a data field");
+        bool found = inlist(coll_name, resp.data ?? ());
+        assertTrue(found, sprintf("MILVUS_COLLECTION %y was found in the "
+            "list-collections response", coll_name));
     }
 }

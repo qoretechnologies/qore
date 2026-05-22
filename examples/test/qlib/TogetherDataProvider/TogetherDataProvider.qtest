@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/TogetherDataProvider
 
@@ -51,7 +52,21 @@ class FakeTogetherRestClientIo inherits RestClientIo::RestClientIo {
 }
 
 public class TogetherDataProviderTest inherits QUnit::Test {
-    constructor() : Test("TogetherDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("TogetherDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.TOGETHER_CONNECTION;
+
         addTestCase("factory + app + 3 actions registered", \registrationTest());
         addTestCase("root provider lists 3 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
@@ -60,7 +75,22 @@ public class TogetherDataProviderTest inherits QUnit::Test {
         addTestCase("generate-image posts to images/generations",
             \imageRequestTest());
         addTestCase("data types expose correct fields",     \typeSchemaTest());
+
+        # Live test requires a real Together AI connection.
+        # Cost: 1 token-bounded Llama-3.2-3B request (~$0.00006 per run).
+        if (conn_name) {
+            addTestCase("live: ping + chat-completion (Llama-3.2-3B-Instruct-Turbo)",
+                \liveTogetherTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Together AI connection name; without it (and "
+            "without the TOGETHER_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -190,5 +220,29 @@ public class TogetherDataProviderTest inherits QUnit::Test {
         assertTrue(exists fields.steps);
         assertTrue(exists fields.response_format);
         assertTrue(exists fields.negative_prompt);
+    }
+
+    #! Exercises Together AI's live chat-completion endpoint
+    /** Verifies the actual wire format against Together AI's production
+        endpoint with a token-bounded request on Llama-3.2-3B-Instruct-Turbo.
+        Cost: ~$0.00006 per run (capped via max_tokens=16).
+    */
+    private liveTogetherTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Together connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider chat = prov.getChildProvider("chat-completion");
+        auto resp = chat.doRequest({
+            "model": "meta-llama/Llama-3.2-3B-Instruct-Turbo",
+            "messages": ({"role": "user", "content": "Say hi in one word."},),
+            "max_tokens": 16,
+        });
+        assertTrue(resp.choices[0].message.content.val(),
+            "Together returned non-empty assistant content");
+        assertTrue(resp.usage.total_tokens > 0,
+            "Together reported positive total_tokens");
     }
 }

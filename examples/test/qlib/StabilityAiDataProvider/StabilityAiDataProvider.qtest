@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/QoreMediaUtils.qm
 %requires ../../../../qlib/StabilityAiRestClient.qm
@@ -37,7 +38,22 @@ class FakeStabilityAiClient inherits StabilityAiRestClient::StabilityAiRestClien
 }
 
 public class StabilityAiDataProviderTest inherits QUnit::Test {
-    constructor() : Test("StabilityAiDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("StabilityAiDataProvider Test", "1.0",
+            \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.STABILITY_AI_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("generate-image hits the ultra endpoint by default",
             \defaultEndpointTest());
@@ -49,7 +65,23 @@ public class StabilityAiDataProviderTest inherits QUnit::Test {
             \designCreativeGroupTest());
         addTestCase("model allowed_values has display_name",
             \allowedValuesTest());
+
+        # Live test requires a real Stability AI connection.
+        # Cost: one image on `core` (~$0.03 per run — well within the
+        # $10 starter credit).
+        if (conn_name) {
+            addTestCase("live: ping + generate-image (core)",
+                \liveStabilityAiTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Stability AI connection name; without it (and without "
+            "the STABILITY_AI_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -122,5 +154,33 @@ public class StabilityAiDataProviderTest inherits QUnit::Test {
             assertTrue(av.value.val());
             assertTrue(av.display_name.val());
         }
+    }
+
+    #! Exercises Stability AI's live `/v2beta/stable-image/generate/core`
+    /** Verifies the actual wire format against Stability's production
+        endpoint including the `Accept: image/<format>` raw-bytes-response
+        mode.  Cost: ~$0.03 per image on the `core` model.
+    */
+    private liveStabilityAiTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("Stability AI connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider gi = prov.getChildProvider("generate-image");
+        auto result = gi.doRequest({
+            "prompt":        "a single red apple on a white background",
+            "model":         "core",   # cheapest tier
+            "output_format": "jpeg",
+            "aspect_ratio":  "1:1",
+        });
+        assertTrue(result.image.size() > 1024,
+            "Stability AI returned a non-trivial image (>1KB)");
+        assertEq("image/jpeg", result.content_type,
+            "content_type matches requested output_format");
+        # Stability returns the seed used as a response header
+        assertTrue(result.seed.val(),
+            "Stability AI returned a seed");
     }
 }

@@ -7,6 +7,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/LlamaParseRestClient.qm
 %requires ../../../../qlib/LlamaParseDataProvider
@@ -31,11 +32,47 @@ class FakeLlamaParseRestClientIo inherits LlamaParseRestClient::LlamaParseRestCl
 }
 
 public class LlamaParseDataProviderTest inherits QUnit::Test {
-    constructor() : Test("LlamaParseDataProvider Test", "1.0") {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! Stable, tiny, publicly hosted sample invoice PDF (1 page)
+        const SamplePdfUrl =
+            "https://raw.githubusercontent.com/Azure-Samples/"
+            "cognitive-services-REST-api-samples/master/curl/form-recognizer/"
+            "sample-invoice.pdf";
+    }
+
+    private {
+        *string conn_name;
+    }
+
+    constructor() : Test("LlamaParseDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.LLAMAPARSE_CONNECTION;
+
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("parse-document forwards to parseDocument()",
             \parseDocumentTest());
+
+        # Live test requires a real LlamaParse connection.
+        # LlamaParse free tier: 1000 pages/day. ~$0 per run when within free
+        # tier.
+        if (conn_name) {
+            addTestCase("live: ping + parse-document (1-page sample PDF URL)",
+                \liveLlamaParseTest());
+        }
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the LlamaParse connection name; without it (and without the "
+            "LLAMAPARSE_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private registrationTest() {
@@ -74,5 +111,30 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
         assertEq("abc-123", resp.job_id);
         assertEq("SUCCESS", resp.status);
         assertEq("# Hello\n\nWorld.", resp.content);
+    }
+
+    #! Exercises LlamaParse's live upload/poll/fetch lifecycle
+    /** Verifies the actual wire format against LlamaParse's production
+        API using a stable, publicly hosted 1-page sample PDF.
+
+        LlamaParse free tier: 1000 pages/day.  ~$0 per run when within
+        free tier.
+    */
+    private liveLlamaParseTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("LlamaParse connection ping failed: %s",
+            ping.info ?? "no info"));
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider pd = prov.getChildProvider("parse-document");
+        auto resp = pd.doRequest({
+            "url":         SamplePdfUrl,
+            "result_type": "markdown",
+        });
+        assertTrue(resp.status.val(),
+            "LlamaParse returned a status");
+        assertTrue(resp.content.val() || resp.result.val(),
+            "LlamaParse returned parsed content");
     }
 }
