@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class StackGuardCompiledTest
+
+class StackGuardCompiledTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string timeout_cmd;
+    }
+
+    constructor() : QUnit::Test("StackGuardCompiledTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = dirname(qore_bin) + "/qcc";
+        }
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+
+        addTestCase("stack guard in AST mode", \testAstStackGuard());
+        addTestCase("stack guard in IR mode", \testIrStackGuard());
+        addTestCase("stack guard in JIT mode", \testJitStackGuard());
+        addTestCase("stack guard in tiered mode", \testTieredStackGuard());
+        addTestCase("stack guard in AOT executable", \testAotStackGuard());
+
+        set_return_value(main());
+    }
+
+    private string stackScript() {
+        return "%modern
+int calls = 0;
+
+sub recurse(int n) {
+    ++calls;
+    if (n > 0) {
+        recurse(n - 1);
+        return;
+    }
+    if (n == 0) {
+        return;
+    }
+    recurse(n);
+}
+
+try {
+    for (int i = 0; i < 80; ++i) {
+        recurse(4);
+    }
+    recurse(-1);
+    printf(\"NO_EXCEPTION\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+    }
+
+    private string writeScript(string dir) {
+        string path = dir + "/stack-guard.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(stackScript());
+        f.close();
+        return path;
+    }
+
+    private string runCommand(string cmd) {
+        string prefix = timeout_cmd.val() ? timeout_cmd + " 30s " : "";
+        return backquote(prefix + cmd + " 2>&1; echo EXIT=$?");
+    }
+
+    private assertStackLimit(string output, string label) {
+        assertTrue(output.regex("STACK-LIMIT-EXCEEDED"), label + ": " + output);
+        assertTrue(!output.regex("NO_EXCEPTION"), label + " did not miss stack overflow: " + output);
+        assertTrue(!output.regex("EXIT=124"), label + " timed out: " + output);
+        assertTrue(!output.regex("Segmentation fault|SIGSEGV"), label + " crashed: " + output);
+    }
+
+    private runMode(string mode, string label) {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        TmpDir tmp("qore-stack-guard-compiled-");
+        string script = writeScript(tmp.path);
+        string out = runCommand(sprintf(
+            "env LD_LIBRARY_PATH=%s %s --enable-debug --exec-mode=%s "
+                "--jit-ir-threshold=1 --jit-jit-threshold=2 %s",
+            libqore_dir, qore_bin, mode, script));
+        assertStackLimit(out, label);
+    }
+
+    testAstStackGuard() {
+        runMode("ast", "AST stack guard");
+    }
+
+    testIrStackGuard() {
+        runMode("ir", "IR stack guard");
+    }
+
+    testJitStackGuard() {
+        runMode("jit", "JIT stack guard");
+    }
+
+    testTieredStackGuard() {
+        runMode("tiered", "tiered stack guard");
+    }
+
+    testAotStackGuard() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        TmpDir tmp("qore-stack-guard-aot-");
+        string script = writeScript(tmp.path);
+        string exe = tmp.path + "/stack-guard-aot";
+        string compile_out = backquote(sprintf(
+            "env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O3 --strip-source -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, exe, script));
+        assertTrue(compile_out.regex("EXIT=0"), "AOT stack guard compile failed: " + compile_out);
+        assertTrue(is_file(exe), "AOT stack guard executable exists");
+
+        string out = runCommand(sprintf("env LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
+        assertStackLimit(out, "AOT stack guard");
+    }
+}

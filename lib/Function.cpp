@@ -5544,6 +5544,11 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, bool caller_has_frame_boundary) const {
     assert(pgm);
+#ifdef QORE_MANAGE_STACK
+    if (check_stack(xsink)) {
+        return QoreValue();
+    }
+#endif
     // Note: statements can be null for AOT-only functions (deserialized from binary metadata)
     // assert(statements);
     QoreParseOptions po = getParseOptions(pgm->getParseOptions());

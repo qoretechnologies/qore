@@ -4299,6 +4299,28 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     landingpad_blocks.clear();
     has_on_block_exit_handlers = false;
 
+    // Every generated function entry must perform the same native stack guard
+    // check as AST user-code entry.  Some optimized call paths invoke LLVM
+    // functions directly and bypass runtime helpers such as qore_rt_call_fast().
+    if (!func.blocks.empty()) {
+        llvm::BasicBlock* first_ir_bb = block_map[func.blocks.front().get()];
+        llvm::BasicBlock* stack_check_bb = llvm::BasicBlock::Create(ctx,
+                "stack_check", llvm_func, first_ir_bb);
+        llvm::BasicBlock* stack_overflow_bb = llvm::BasicBlock::Create(ctx,
+                "stack_overflow", llvm_func, first_ir_bb);
+
+        builder->SetInsertPoint(stack_check_bb);
+        auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
+                llvm::FunctionType::get(i32_type, {ptr_type}, false));
+        llvm::Value* err = builder->CreateCall(check_fn, {xsink_arg});
+        llvm::Value* ok = builder->CreateICmpEQ(err,
+                llvm::ConstantInt::get(i32_type, 0));
+        builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
+
+        builder->SetInsertPoint(stack_overflow_bb);
+        builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    }
+
     if (invoke_cleanup_array_capacity && !func.blocks.empty()) {
         llvm::BasicBlock& entry = llvm_func->getEntryBlock();
         llvm::IRBuilder<> ab(&entry, entry.begin());
@@ -4324,28 +4346,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         auto obe_count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
                 llvm::FunctionType::get(i64_type, {}, false));
         obe_saved_count = builder->CreateCall(obe_count_fn, {});
-    }
-
-    // AOT fast entry: emit check_stack at function start and redirect first block
-    // to a body continuation block (the runtime helper doesn't do this for fast entry)
-    if (aot_mode && is_fast_entry && !func.blocks.empty()) {
-        auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
-                llvm::FunctionType::get(i32_type, {ptr_type}, false));
-        llvm::Value* err = builder->CreateCall(check_fn, {xsink_arg});
-        llvm::Value* ok = builder->CreateICmpEQ(err, llvm::ConstantInt::get(i32_type, 0));
-
-        llvm::BasicBlock* body_bb = llvm::BasicBlock::Create(ctx, "body", llvm_func);
-        llvm::BasicBlock* overflow_bb = llvm::BasicBlock::Create(ctx, "stack_overflow",
-                llvm_func);
-        builder->CreateCondBr(ok, body_bb, overflow_bb);
-
-        // Stack overflow: return NOTHING (nanboxed)
-        builder->SetInsertPoint(overflow_bb);
-        builder->CreateRet(llvm::ConstantInt::get(i64_type, 0));
-
-        // Remap first IR block to body continuation so block-lowering loop uses it
-        block_map[func.blocks.front().get()] = body_bb;
-        builder->SetInsertPoint(body_bb);
     }
 
     // Initialize runtime location tracking: cache TLS pointers for per-line updates.

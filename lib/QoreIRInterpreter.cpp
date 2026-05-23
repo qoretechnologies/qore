@@ -9888,8 +9888,10 @@ lvalue_path_unary_done:
 
                     // Inline IR-to-IR call: skip qore_rt_call_fast overhead entirely
                     // when the callee has direct_params_eligible IR.
-                    // Eliminates: check_stack, ThreadFrameBoundaryHelper, ArgvContextHelper,
-                    // param TLS push/pop, execJITWithDeopt wrapper, name string construction.
+                    // QoreIRInterpreter::execute() still performs the callee
+                    // stack guard; this skips the runtime-helper check and the
+                    // ThreadFrameBoundaryHelper, ArgvContextHelper, param TLS
+                    // push/pop, execJITWithDeopt wrapper, and name construction.
                     int8_t state = direct_inst->inline_ir_state.load(std::memory_order_acquire);
                     if (state == 0) {
                         // First call: check eligibility and cache result

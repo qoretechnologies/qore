@@ -108,6 +108,7 @@
 #include <qore/intern/BackquoteNode.h>
 
 static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
+    { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
     { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
     { "qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any) },
