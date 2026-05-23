@@ -5997,6 +5997,22 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     }
 
     QoreValue val{};  // value-initialized to NOTHING (bits=0)
+#ifdef QORE_MANAGE_STACK
+    // Strategic stack-guard check at the user-code call chokepoint.  The
+    // per-statement check in AbstractStatement::exec() can be too coarse for
+    // recursion through deeply-layered call machinery (e.g. cross-Program or
+    // sandboxed execution): a single Qore-level call can expand into many
+    // native C++ frames between two statement-level checks, and that one
+    // inter-check stretch can overrun the QORE_STACK_GUARD margin and fault
+    // before the next statement check fires.  Checking here on every user
+    // function/method/closure body entry bounds the inter-check native stack
+    // growth to a single call's setup, so deep recursion raises a catchable
+    // STACK-LIMIT-EXCEEDED instead of crashing the process — without enlarging
+    // the stack guard.
+    if (check_stack(xsink)) {
+        return val;
+    }
+#endif
     if (statements) {
         // RAII so uninstantiateSelf() runs even on C++ exception unwind through
         // statements->exec() (e.g., a JNI bridge re-throw); without this, the
