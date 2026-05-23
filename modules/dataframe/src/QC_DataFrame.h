@@ -147,6 +147,14 @@ public:
     //! Drop rows containing any null values
     DLLLOCAL QoreDataFrame* dropna(ExceptionSink* xsink) const;
 
+    //! Count distinct values in one column
+    DLLLOCAL QoreDataFrame* valueCounts(const std::string& column, bool dropna,
+        bool sort_desc, const std::string& count_name, ExceptionSink* xsink) const;
+
+    //! Return the number of distinct values in one column
+    DLLLOCAL int64_t nunique(const std::string& column, bool dropna,
+        ExceptionSink* xsink) const;
+
     //! Return a new DataFrame with an additional or replaced column
     DLLLOCAL QoreDataFrame* withColumn(const std::string& name,
         const QoreListNode* data, ExceptionSink* xsink) const;

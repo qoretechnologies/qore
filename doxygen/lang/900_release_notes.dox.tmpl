@@ -141,8 +141,9 @@
       autonomous provider-to-provider runs
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
-      SQL read/write, and DataProvider pipeline cases; the fastest SQL-read
-      path requires a DBI driver with native columnar support
+      value counting, missing-data cleanup, reshape, Arrow/Parquet roundtrip,
+      SQL read/write, DataProvider pipeline, and ML analytics cases; the
+      fastest SQL-read path requires a DBI driver with native columnar support
     - new experimental @ref plugin_types "plugin-type" registration ABI
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper
@@ -1914,11 +1915,13 @@ foreach string module_name in (registry.getProcessModules()) {
         string, bool, date) and null/missing value support
       - construction from records (\c list<hash>), column hash, CSV files, database queries,
         Parquet files via Apache Arrow, or numeric matrices
-      - SQL-like query operations: select, filter (11 operators), sort, fillna, dropna
+      - SQL-like query operations: select, filter (11 operators), sort, fillna, dropna,
+        valueCounts, and nunique
       - groupBy with 10 aggregation functions (sum, mean, median, std, min, max, count, first,
         last, nunique) and GroupedDataFrame class
       - join operations: inner, left, right, outer, cross with hash join algorithm
-      - reshape: pivot (long to wide), melt (wide to long), withColumn (immutable column add)
+      - reshape: pivot (long to wide), melt (wide to long), withColumn (immutable column add);
+        pivot has optimized typed-key paths for common long-to-wide numeric reshapes
       - window functions: rowNumber, lag, lead, cumSum, rollingMean with partition/order support
       - native plugin-operator access: \c df["column"] returns a column list, \c df[row]
         returns a row hash, and \c df[start..stop] returns an inclusive row-range DataFrame

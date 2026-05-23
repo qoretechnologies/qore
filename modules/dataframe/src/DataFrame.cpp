@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <sstream>
 #include <unordered_set>
 
@@ -284,6 +285,53 @@ static void preserveColumnarSchema(ColumnData& data, const std::string& name,
     data.columnar_schema = schema;
     data.columnar_schema.name = name;
     data.has_columnar_schema = true;
+}
+
+static std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
+    if (cd.isNull(row)) {
+        return std::string("\xffnull", 5);
+    }
+
+    std::string key;
+    switch (cd.type) {
+        case ColumnType::FLOAT64: {
+            double value = cd.float_data(row);
+            if (value == 0.0) {
+                value = 0.0;  // Normalize -0.0 to match numeric equality.
+            }
+            uint64_t bits;
+            std::memcpy(&bits, &value, sizeof(bits));
+            key.assign("f", 1);
+            key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+            return key;
+        }
+        case ColumnType::INT64: {
+            int64_t value = cd.int_data[row];
+            key.assign("i", 1);
+            key.append(reinterpret_cast<const char*>(&value), sizeof(value));
+            return key;
+        }
+        case ColumnType::STRING:
+            key.assign("s", 1);
+            key.append(cd.str_data[row]);
+            return key;
+        case ColumnType::BOOL:
+            return cd.bool_data[row] ? std::string("b1", 2) : std::string("b0", 2);
+        case ColumnType::DATE: {
+            int64_t value = cd.date_data[row];
+            key.assign("d", 1);
+            key.append(reinterpret_cast<const char*>(&value), sizeof(value));
+            return key;
+        }
+        case ColumnType::AUTO: {
+            QoreStringValueHelper sh(cd.auto_data[row]);
+            key.assign("a", 1);
+            key.append(sh->c_str(), sh->size());
+            return key;
+        }
+        default:
+            return {};
+    }
 }
 
 }
@@ -1975,6 +2023,480 @@ QoreDataFrame* QoreDataFrame::dropna(ExceptionSink* xsink) const {
     }
 
     return selectRows(keep_rows, xsink);
+}
+
+QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna,
+        bool sort_desc, const std::string& count_name, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "counting DataFrame column values")) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lk(mtx);
+
+    int idx = getColIdx(column, xsink);
+    if (idx < 0) {
+        return nullptr;
+    }
+
+    const ColumnData& src = *columns[idx].data;
+    const std::string out_count_name = count_name == column ? "value_count" : count_name;
+
+    if (src.type == ColumnType::INT64) {
+        struct IntCountEntry {
+            int64_t value;
+            bool is_null;
+            int64_t count;
+        };
+        std::unordered_map<int64_t, size_t> value_map;
+        value_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+        std::vector<IntCountEntry> entries;
+        int64_t null_entry = -1;
+        for (int64_t row = 0; row < n_rows; ++row) {
+            if (row && !(row % 100) && qore_check_cancel(xsink, "counting integer DataFrame values")) {
+                return nullptr;
+            }
+            if (src.isNull(row)) {
+                if (dropna) {
+                    continue;
+                }
+                if (null_entry < 0) {
+                    null_entry = static_cast<int64_t>(entries.size());
+                    entries.push_back({0, true, 1});
+                } else {
+                    ++entries[null_entry].count;
+                }
+                continue;
+            }
+            int64_t value = src.int_data[row];
+            auto it = value_map.find(value);
+            if (it == value_map.end()) {
+                value_map.emplace(value, entries.size());
+                entries.push_back({value, false, 1});
+            } else {
+                ++entries[it->second].count;
+            }
+        }
+
+        std::vector<size_t> order(entries.size());
+        for (size_t i = 0; i < entries.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "ordering integer DataFrame value counts")) {
+                return nullptr;
+            }
+            order[i] = i;
+        }
+        if (sort_desc) {
+            std::stable_sort(order.begin(), order.end(), [&entries](size_t a, size_t b) {
+                return entries[a].count > entries[b].count;
+            });
+        }
+
+        auto* df = new QoreDataFrame();
+        df->n_rows = static_cast<int64_t>(entries.size());
+        auto value_cd = std::make_shared<ColumnData>();
+        value_cd->type = ColumnType::INT64;
+        value_cd->n_rows = df->n_rows;
+        value_cd->null_mask.resize(df->n_rows, 0);
+        value_cd->int_data.resize(df->n_rows);
+        auto count_cd = std::make_shared<ColumnData>();
+        count_cd->type = ColumnType::INT64;
+        count_cd->n_rows = df->n_rows;
+        count_cd->null_mask.resize(df->n_rows, 0);
+        count_cd->int_data.resize(df->n_rows);
+        for (int64_t out = 0; out < df->n_rows; ++out) {
+            if (out && !(out % 100) && qore_check_cancel(xsink, "building integer DataFrame value counts")) {
+                delete df;
+                return nullptr;
+            }
+            const IntCountEntry& entry = entries[order[out]];
+            value_cd->null_mask[out] = entry.is_null ? 1 : 0;
+            value_cd->int_data[out] = entry.value;
+            count_cd->int_data[out] = entry.count;
+        }
+        Column value_col;
+        value_col.name = column;
+        value_col.data = std::move(value_cd);
+        df->col_index[value_col.name] = df->columns.size();
+        df->columns.push_back(std::move(value_col));
+        Column count_col;
+        count_col.name = out_count_name;
+        count_col.data = std::move(count_cd);
+        df->col_index[count_col.name] = df->columns.size();
+        df->columns.push_back(std::move(count_col));
+        return df;
+    }
+
+    if (src.type == ColumnType::STRING) {
+        struct StringCountEntry {
+            std::string value;
+            bool is_null;
+            int64_t count;
+        };
+        std::unordered_map<std::string, size_t> value_map;
+        value_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+        std::vector<StringCountEntry> entries;
+        int64_t null_entry = -1;
+        for (int64_t row = 0; row < n_rows; ++row) {
+            if (row && !(row % 100) && qore_check_cancel(xsink, "counting string DataFrame values")) {
+                return nullptr;
+            }
+            if (src.isNull(row)) {
+                if (dropna) {
+                    continue;
+                }
+                if (null_entry < 0) {
+                    null_entry = static_cast<int64_t>(entries.size());
+                    entries.push_back({"", true, 1});
+                } else {
+                    ++entries[null_entry].count;
+                }
+                continue;
+            }
+            const std::string& value = src.str_data[row];
+            auto it = value_map.find(value);
+            if (it == value_map.end()) {
+                value_map.emplace(value, entries.size());
+                entries.push_back({value, false, 1});
+            } else {
+                ++entries[it->second].count;
+            }
+        }
+
+        std::vector<size_t> order(entries.size());
+        for (size_t i = 0; i < entries.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "ordering string DataFrame value counts")) {
+                return nullptr;
+            }
+            order[i] = i;
+        }
+        if (sort_desc) {
+            std::stable_sort(order.begin(), order.end(), [&entries](size_t a, size_t b) {
+                return entries[a].count > entries[b].count;
+            });
+        }
+
+        auto* df = new QoreDataFrame();
+        df->n_rows = static_cast<int64_t>(entries.size());
+        auto value_cd = std::make_shared<ColumnData>();
+        value_cd->type = ColumnType::STRING;
+        value_cd->n_rows = df->n_rows;
+        value_cd->null_mask.resize(df->n_rows, 0);
+        value_cd->str_data.resize(df->n_rows);
+        auto count_cd = std::make_shared<ColumnData>();
+        count_cd->type = ColumnType::INT64;
+        count_cd->n_rows = df->n_rows;
+        count_cd->null_mask.resize(df->n_rows, 0);
+        count_cd->int_data.resize(df->n_rows);
+        for (int64_t out = 0; out < df->n_rows; ++out) {
+            if (out && !(out % 100) && qore_check_cancel(xsink, "building string DataFrame value counts")) {
+                delete df;
+                return nullptr;
+            }
+            const StringCountEntry& entry = entries[order[out]];
+            value_cd->null_mask[out] = entry.is_null ? 1 : 0;
+            value_cd->str_data[out] = entry.value;
+            count_cd->int_data[out] = entry.count;
+        }
+        Column value_col;
+        value_col.name = column;
+        value_col.data = std::move(value_cd);
+        df->col_index[value_col.name] = df->columns.size();
+        df->columns.push_back(std::move(value_col));
+        Column count_col;
+        count_col.name = out_count_name;
+        count_col.data = std::move(count_cd);
+        df->col_index[count_col.name] = df->columns.size();
+        df->columns.push_back(std::move(count_col));
+        return df;
+    }
+
+    if (src.type == ColumnType::BOOL) {
+        struct BoolCountEntry {
+            bool value;
+            bool is_null;
+            int64_t count;
+        };
+        std::vector<BoolCountEntry> entries;
+        int64_t false_entry = -1;
+        int64_t true_entry = -1;
+        int64_t null_entry = -1;
+        for (int64_t row = 0; row < n_rows; ++row) {
+            if (row && !(row % 100) && qore_check_cancel(xsink, "counting bool DataFrame values")) {
+                return nullptr;
+            }
+            if (src.isNull(row)) {
+                if (dropna) {
+                    continue;
+                }
+                if (null_entry < 0) {
+                    null_entry = static_cast<int64_t>(entries.size());
+                    entries.push_back({false, true, 1});
+                } else {
+                    ++entries[null_entry].count;
+                }
+            } else if (src.bool_data[row]) {
+                if (true_entry < 0) {
+                    true_entry = static_cast<int64_t>(entries.size());
+                    entries.push_back({true, false, 1});
+                } else {
+                    ++entries[true_entry].count;
+                }
+            } else {
+                if (false_entry < 0) {
+                    false_entry = static_cast<int64_t>(entries.size());
+                    entries.push_back({false, false, 1});
+                } else {
+                    ++entries[false_entry].count;
+                }
+            }
+        }
+
+        if (sort_desc) {
+            std::stable_sort(entries.begin(), entries.end(), [](const BoolCountEntry& a, const BoolCountEntry& b) {
+                return a.count > b.count;
+            });
+        }
+
+        auto* df = new QoreDataFrame();
+        df->n_rows = static_cast<int64_t>(entries.size());
+        auto value_cd = std::make_shared<ColumnData>();
+        value_cd->type = ColumnType::BOOL;
+        value_cd->n_rows = df->n_rows;
+        value_cd->null_mask.resize(df->n_rows, 0);
+        value_cd->bool_data.resize(df->n_rows);
+        auto count_cd = std::make_shared<ColumnData>();
+        count_cd->type = ColumnType::INT64;
+        count_cd->n_rows = df->n_rows;
+        count_cd->null_mask.resize(df->n_rows, 0);
+        count_cd->int_data.resize(df->n_rows);
+        for (int64_t out = 0; out < df->n_rows; ++out) {
+            const BoolCountEntry& entry = entries[out];
+            value_cd->null_mask[out] = entry.is_null ? 1 : 0;
+            value_cd->bool_data[out] = entry.value ? 1 : 0;
+            count_cd->int_data[out] = entry.count;
+        }
+        Column value_col;
+        value_col.name = column;
+        value_col.data = std::move(value_cd);
+        df->col_index[value_col.name] = df->columns.size();
+        df->columns.push_back(std::move(value_col));
+        Column count_col;
+        count_col.name = out_count_name;
+        count_col.data = std::move(count_cd);
+        df->col_index[count_col.name] = df->columns.size();
+        df->columns.push_back(std::move(count_col));
+        return df;
+    }
+
+    struct CountEntry {
+        int64_t first_row;
+        int64_t count;
+    };
+    std::unordered_map<std::string, size_t> entry_map;
+    entry_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+    std::vector<CountEntry> entries;
+
+    for (int64_t row = 0; row < n_rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "counting DataFrame column values")) {
+            return nullptr;
+        }
+        if (dropna && src.isNull(row)) {
+            continue;
+        }
+
+        std::string key = dataFrameValueKey(src, row);
+        auto it = entry_map.find(key);
+        if (it == entry_map.end()) {
+            entry_map.emplace(std::move(key), entries.size());
+            entries.push_back({row, 1});
+        } else {
+            ++entries[it->second].count;
+        }
+    }
+
+    std::vector<size_t> order(entries.size());
+    for (size_t i = 0; i < entries.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "ordering DataFrame value counts")) {
+            return nullptr;
+        }
+        order[i] = i;
+    }
+    if (sort_desc) {
+        std::stable_sort(order.begin(), order.end(), [&entries](size_t a, size_t b) {
+            return entries[a].count > entries[b].count;
+        });
+    }
+
+    auto* df = new QoreDataFrame();
+    df->n_rows = static_cast<int64_t>(entries.size());
+
+    auto value_cd = std::make_shared<ColumnData>();
+    value_cd->type = src.type;
+    value_cd->n_rows = df->n_rows;
+    value_cd->null_mask.resize(df->n_rows, 0);
+    switch (src.type) {
+        case ColumnType::FLOAT64:
+            value_cd->float_data.resize(df->n_rows);
+            break;
+        case ColumnType::INT64:
+            value_cd->int_data.resize(df->n_rows);
+            break;
+        case ColumnType::STRING:
+            value_cd->str_data.resize(df->n_rows);
+            break;
+        case ColumnType::BOOL:
+            value_cd->bool_data.resize(df->n_rows);
+            break;
+        case ColumnType::DATE:
+            value_cd->date_data.resize(df->n_rows);
+            break;
+        case ColumnType::AUTO:
+            value_cd->auto_data.resize(df->n_rows);
+            break;
+        default:
+            break;
+    }
+
+    auto count_cd = std::make_shared<ColumnData>();
+    count_cd->type = ColumnType::INT64;
+    count_cd->n_rows = df->n_rows;
+    count_cd->null_mask.resize(df->n_rows, 0);
+    count_cd->int_data.resize(df->n_rows);
+
+    for (int64_t out = 0; out < df->n_rows; ++out) {
+        if (out && !(out % 100) && qore_check_cancel(xsink, "building DataFrame value counts")) {
+            delete df;
+            return nullptr;
+        }
+        const CountEntry& entry = entries[order[out]];
+        int64_t row = entry.first_row;
+        value_cd->null_mask[out] = src.null_mask[row];
+        if (!value_cd->null_mask[out]) {
+            switch (src.type) {
+                case ColumnType::FLOAT64:
+                    value_cd->float_data(out) = src.float_data(row);
+                    break;
+                case ColumnType::INT64:
+                    value_cd->int_data[out] = src.int_data[row];
+                    break;
+                case ColumnType::STRING:
+                    value_cd->str_data[out] = src.str_data[row];
+                    break;
+                case ColumnType::BOOL:
+                    value_cd->bool_data[out] = src.bool_data[row];
+                    break;
+                case ColumnType::DATE:
+                    value_cd->date_data[out] = src.date_data[row];
+                    break;
+                case ColumnType::AUTO:
+                    value_cd->setAutoValue(out, src.auto_data[row], xsink);
+                    if (*xsink) {
+                        delete df;
+                        return nullptr;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        count_cd->int_data[out] = entry.count;
+    }
+
+    Column value_col;
+    value_col.name = column;
+    value_col.data = std::move(value_cd);
+    df->col_index[value_col.name] = df->columns.size();
+    df->columns.push_back(std::move(value_col));
+
+    Column count_col;
+    count_col.name = out_count_name;
+    count_col.data = std::move(count_cd);
+    df->col_index[count_col.name] = df->columns.size();
+    df->columns.push_back(std::move(count_col));
+
+    return df;
+}
+
+int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
+        ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "counting unique DataFrame values")) {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lk(mtx);
+
+    int idx = getColIdx(column, xsink);
+    if (idx < 0) {
+        return 0;
+    }
+
+    const ColumnData& src = *columns[idx].data;
+    if (src.type == ColumnType::INT64) {
+        std::unordered_set<int64_t> seen;
+        seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+        bool seen_null = false;
+        for (int64_t row = 0; row < n_rows; ++row) {
+            if (row && !(row % 100) && qore_check_cancel(xsink, "counting unique integer DataFrame values")) {
+                return 0;
+            }
+            if (src.isNull(row)) {
+                if (!dropna) {
+                    seen_null = true;
+                }
+            } else {
+                seen.insert(src.int_data[row]);
+            }
+        }
+        return static_cast<int64_t>(seen.size()) + (seen_null ? 1 : 0);
+    }
+    if (src.type == ColumnType::STRING) {
+        std::unordered_set<std::string> seen;
+        seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+        bool seen_null = false;
+        for (int64_t row = 0; row < n_rows; ++row) {
+            if (row && !(row % 100) && qore_check_cancel(xsink, "counting unique string DataFrame values")) {
+                return 0;
+            }
+            if (src.isNull(row)) {
+                if (!dropna) {
+                    seen_null = true;
+                }
+            } else {
+                seen.insert(src.str_data[row]);
+            }
+        }
+        return static_cast<int64_t>(seen.size()) + (seen_null ? 1 : 0);
+    }
+    if (src.type == ColumnType::BOOL) {
+        bool seen_false = false;
+        bool seen_true = false;
+        bool seen_null = false;
+        for (int64_t row = 0; row < n_rows; ++row) {
+            if (row && !(row % 100) && qore_check_cancel(xsink, "counting unique bool DataFrame values")) {
+                return 0;
+            }
+            if (src.isNull(row)) {
+                if (!dropna) {
+                    seen_null = true;
+                }
+            } else if (src.bool_data[row]) {
+                seen_true = true;
+            } else {
+                seen_false = true;
+            }
+        }
+        return (seen_false ? 1 : 0) + (seen_true ? 1 : 0) + (seen_null ? 1 : 0);
+    }
+
+    std::unordered_set<std::string> seen;
+    seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+    for (int64_t row = 0; row < n_rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "counting unique DataFrame values")) {
+            return 0;
+        }
+        if (dropna && src.isNull(row)) {
+            continue;
+        }
+        seen.insert(dataFrameValueKey(src, row));
+    }
+    return static_cast<int64_t>(seen.size());
 }
 
 // --- Mutation ---

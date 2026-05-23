@@ -201,8 +201,9 @@ The implemented hot paths are:
 
 The benchmark suite lives under `bench/`. On the measured local setup with a
 native PostgreSQL columnar driver, Qore was faster than pandas for the included
-typed column construction, filtering, aggregation, join, SQL read/write, and
-DataProvider pipeline cases.
+typed column construction, filtering, aggregation, join, value-counting,
+missing-data cleanup, reshape, Arrow/Parquet roundtrip, SQL read/write,
+DataProvider pipeline, and ML analytics cases.
 
 Further optimization work should require both a correctness test and a
 benchmark showing that the added specialization pays for itself. Good future

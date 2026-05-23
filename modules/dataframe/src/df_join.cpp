@@ -290,8 +290,39 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
     // Build hash table from the right DataFrame: key → list of row indices
     std::unordered_map<std::string, std::vector<int64_t>> right_hash;
     std::unordered_map<int64_t, std::vector<int64_t>> right_int64_hash;
+    std::unordered_map<int64_t, int64_t> right_int64_unique_hash;
     std::vector<int64_t> right_null_rows;
-    if (single_int64_key) {
+    bool unique_right_keys = false;
+    if (single_int64_key && how == "left") {
+        unique_right_keys = true;
+        right_int64_unique_hash.reserve(other->n_rows);
+        const ColumnData& rkey = *other->columns[right_key_indices[0]].data;
+        for (int64_t r = 0; r < other->n_rows; ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                return nullptr;
+            }
+            if (rkey.isNull(r)) {
+                if (!right_null_rows.empty()) {
+                    unique_right_keys = false;
+                    break;
+                }
+                right_null_rows.push_back(r);
+            } else {
+                auto inserted = right_int64_unique_hash.emplace(rkey.int_data[r], r);
+                if (!inserted.second) {
+                    unique_right_keys = false;
+                    break;
+                }
+            }
+        }
+
+        if (!unique_right_keys) {
+            right_null_rows.clear();
+            right_int64_unique_hash.clear();
+        }
+    }
+
+    if (single_int64_key && !unique_right_keys) {
         right_int64_hash.reserve(other->n_rows);
         const ColumnData& rkey = *other->columns[right_key_indices[0]].data;
         for (int64_t r = 0; r < other->n_rows; ++r) {
@@ -304,7 +335,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                 right_int64_hash[rkey.int_data[r]].push_back(r);
             }
         }
-    } else {
+    } else if (!single_int64_key) {
         right_hash.reserve(other->n_rows);
         for (int64_t r = 0; r < other->n_rows; ++r) {
             if (r && !(r % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
@@ -316,21 +347,6 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
     }
 
     if (single_int64_key && how == "left") {
-        bool unique_right_keys = right_null_rows.size() <= 1;
-        if (unique_right_keys) {
-            size_t checked = 0;
-            for (const auto& i : right_int64_hash) {
-                if (checked && !(checked % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
-                    return nullptr;
-                }
-                ++checked;
-                if (i.second.size() > 1) {
-                    unique_right_keys = false;
-                    break;
-                }
-            }
-        }
-
         if (unique_right_keys) {
             const ColumnData& lkey = *columns[left_key_indices[0]].data;
             std::vector<int64_t> right_row_for_left(n_rows, -1);
@@ -343,9 +359,9 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                         right_row_for_left[l] = right_null_rows[0];
                     }
                 } else {
-                    auto i = right_int64_hash.find(lkey.int_data[l]);
-                    if (i != right_int64_hash.end()) {
-                        right_row_for_left[l] = i->second[0];
+                    auto i = right_int64_unique_hash.find(lkey.int_data[l]);
+                    if (i != right_int64_unique_hash.end()) {
+                        right_row_for_left[l] = i->second;
                     }
                 }
             }

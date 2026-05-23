@@ -46,6 +46,10 @@ def approx_analytic_bytes(rows: int) -> int:
     return rows * 56
 
 
+def approx_wide_bytes(rows: int) -> int:
+    return rows * 80
+
+
 def status_for(i: int) -> str:
     return "inactive" if (i % 5) == 0 else "active"
 
@@ -144,6 +148,32 @@ def make_analytic_columns(rows: int) -> dict[str, list[object]]:
         "target": target,
         "label": [1 if value >= 0.0 else 0 for value in target],
         "cohort": [region_for(i) for i in range(rows)],
+    }
+
+
+def make_nullable_columns(rows: int) -> dict[str, list[object]]:
+    ids: list[int] = []
+    regions: list[str] = []
+    amount_a: list[object] = []
+    amount_b: list[object] = []
+    amount_c: list[object] = []
+    category: list[object] = []
+
+    for i in range(rows):
+        ids.append(i)
+        regions.append(region_for(i))
+        amount_a.append(None if (i % 11) == 10 else amount_for(i))
+        amount_b.append(None if (i % 13) == 12 else score_for(i))
+        amount_c.append(None if (i % 17) == 16 else target_for(i))
+        category.append(None if (i % 19) == 18 else status_for(i))
+
+    return {
+        "id": ids,
+        "region": regions,
+        "amount_a": amount_a,
+        "amount_b": amount_b,
+        "amount_c": amount_c,
+        "category": category,
     }
 
 
@@ -337,6 +367,53 @@ def add_solution_cases(results: dict[str, dict[str, object]]) -> None:
     )
 
 
+def add_dataframe_workflow_cases(df: pd.DataFrame, rows: int, results: dict[str, dict[str, object]]) -> None:
+    nullable_df = pd.DataFrame(make_nullable_columns(rows))
+
+    def value_counts() -> None:
+        counts = df["customer_id"].value_counts(sort=False, dropna=True)
+        if len(counts) < 1:
+            raise RuntimeError("pandas_value_counts produced no rows")
+        regions = df["region"].nunique(dropna=True)
+        if regions != 6:
+            raise RuntimeError(f"expected 6 regions, got {regions}")
+
+    results["pandas_value_counts"] = run_case(
+        "pandas_value_counts", 10, 2, approx_bytes(rows) * 2, value_counts
+    )
+
+    def cleaning() -> None:
+        filled = nullable_df.fillna(0)
+        cleaned = nullable_df.dropna()
+        if len(filled) != rows:
+            raise RuntimeError("pandas_cleaning fillna changed row count")
+        if len(cleaned) < 1:
+            raise RuntimeError("pandas_cleaning dropna produced no rows")
+
+    results["pandas_cleaning"] = run_case(
+        "pandas_cleaning", 8, 2, approx_wide_bytes(rows) * 2, cleaning
+    )
+
+    def reshape() -> None:
+        long_df = nullable_df.melt(
+            id_vars=["id", "region"],
+            value_vars=["amount_a", "amount_b", "amount_c"],
+            var_name="metric",
+            value_name="value",
+        )
+        if len(long_df) != rows * 3:
+            raise RuntimeError("pandas_reshape melt produced wrong row count")
+        wide = long_df.pivot_table(
+            index="id", columns="metric", values="value", aggfunc="mean", sort=False, dropna=False
+        )
+        if len(wide) != rows:
+            raise RuntimeError("pandas_reshape pivot produced wrong row count")
+
+    results["pandas_reshape"] = run_case(
+        "pandas_reshape", 6, 1, approx_wide_bytes(rows) * 4, reshape
+    )
+
+
 def add_ai_cases(results: dict[str, dict[str, object]]) -> None:
     try:
         from sklearn.cluster import KMeans
@@ -392,6 +469,9 @@ def compare_to_qore(qore_path: Path, results: dict[str, dict[str, object]]) -> N
         ("SQL write", "dataframe_sql_to_table", "pandas_sql_to_table"),
         ("Arrow IPC roundtrip", "dataframe_arrow_ipc_roundtrip", "pandas_arrow_ipc_roundtrip"),
         ("Parquet roundtrip", "dataframe_parquet_roundtrip", "pandas_parquet_roundtrip"),
+        ("value counts", "dataframe_value_counts", "pandas_value_counts"),
+        ("cleaning", "dataframe_cleaning", "pandas_cleaning"),
+        ("reshape", "dataframe_reshape", "pandas_reshape"),
         ("solution ETL", "solution_etl_dataframe", "pandas_solution_etl_dataframe"),
         ("solution AI", "solution_ai_analytics", "sklearn_solution_ai_analytics"),
     )
@@ -487,6 +567,8 @@ def main() -> int:
     results["pandas_filter_group"] = run_case(
         "pandas_filter_group", 8, 2, approx_bytes(rows), filter_group
     )
+
+    add_dataframe_workflow_cases(df, rows, results)
 
     if not args.no_sql:
         add_sql_cases(results)

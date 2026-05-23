@@ -45,103 +45,200 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
 
     // Build groups: hash group key values → row indices
     std::unordered_map<std::string, size_t> group_map;  // key_str → group index
+    group_map.reserve(static_cast<size_t>(std::min<int64_t>(source_n_rows, 65536)));
+
+    auto get_key_value = [](const ColumnData& cd, int64_t row) -> std::string {
+        if (cd.isNull(row)) {
+            return "\x00NULL\x00";  // sentinel for null
+        }
+        switch (cd.type) {
+            case ColumnType::FLOAT64:
+                return std::to_string(cd.float_data(row));
+            case ColumnType::INT64:
+                return std::to_string(cd.int_data[row]);
+            case ColumnType::STRING:
+                return cd.str_data[row];
+            case ColumnType::BOOL:
+                return cd.bool_data[row] ? "true" : "false";
+            case ColumnType::DATE:
+                return std::to_string(cd.date_data[row]);
+            case ColumnType::AUTO: {
+                QoreStringValueHelper sh(cd.auto_data[row]);
+                return sh->c_str();
+            }
+            default:
+                return {};
+        }
+    };
 
     for (int64_t r = 0; r < source_n_rows; ++r) {
+        if (r && !(r % 100) && qore_check_cancel(xsink, "building grouped DataFrame keys")) {
+            return;
+        }
         // Build key string from group column values
         std::string key;
-        std::vector<std::string> key_values;
         for (const auto& gc : group_cols) {
             size_t ci = src_col_index.at(gc);
             const ColumnData& cd = *src_columns[ci].data;
-            std::string val;
-            if (cd.isNull(r)) {
-                val = "\x00NULL\x00";  // sentinel for null
-            } else {
-                switch (cd.type) {
-                    case ColumnType::FLOAT64:
-                        val = std::to_string(cd.float_data(r));
-                        break;
-                    case ColumnType::INT64:
-                        val = std::to_string(cd.int_data[r]);
-                        break;
-                    case ColumnType::STRING:
-                        val = cd.str_data[r];
-                        break;
-                    case ColumnType::BOOL:
-                        val = cd.bool_data[r] ? "true" : "false";
-                        break;
-                    case ColumnType::DATE:
-                        val = std::to_string(cd.date_data[r]);
-                        break;
-                    case ColumnType::AUTO: {
-                        QoreStringValueHelper sh(cd.auto_data[r]);
-                        val = sh->c_str();
-                        break;
-                    }
-                    default:
-                        break;
-                }
-            }
+            std::string val = get_key_value(cd, r);
             if (!key.empty()) {
                 key += "\x01";  // separator
             }
             key += val;
-            key_values.push_back(val);
         }
 
-        auto it = group_map.find(key);
-        if (it == group_map.end()) {
-            size_t gi = groups.size();
-            group_map[key] = gi;
+        auto inserted = group_map.emplace(std::move(key), groups.size());
+        if (inserted.second) {
+            std::vector<std::string> key_values;
+            key_values.reserve(group_cols.size());
+            for (const auto& gc : group_cols) {
+                size_t ci = src_col_index.at(gc);
+                key_values.push_back(get_key_value(*src_columns[ci].data, r));
+            }
             groups.push_back({std::move(key_values), {r}});
         } else {
-            groups[it->second].row_indices.push_back(r);
+            groups[inserted.first->second].row_indices.push_back(r);
         }
     }
 }
 
 double QoreGroupedDataFrame::aggregateNumeric(const ColumnData& cd,
-        const std::vector<int64_t>& indices, const std::string& func) const {
-    std::vector<double> vals;
-    vals.reserve(indices.size());
-    for (int64_t i : indices) {
-        if (!cd.isNull(i)) {
-            double v = (cd.type == ColumnType::FLOAT64) ? cd.float_data(i)
-                : (double)cd.int_data[i];
-            vals.push_back(v);
+        const std::vector<int64_t>& indices, const std::string& func, ExceptionSink* xsink) const {
+    auto get_value = [&cd](int64_t i) -> double {
+        return cd.type == ColumnType::FLOAT64 ? cd.float_data(i) : static_cast<double>(cd.int_data[i]);
+    };
+
+    if (func == "sum" || func == "mean") {
+        double s = 0;
+        int64_t count = 0;
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "aggregating numeric DataFrame group")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            int64_t row = indices[i];
+            if (!cd.isNull(row)) {
+                s += get_value(row);
+                ++count;
+            }
         }
+        if (!count) {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        return func == "mean" ? s / static_cast<double>(count) : s;
     }
 
-    if (vals.empty()) {
+    if (func == "min" || func == "max") {
+        double result = 0.0;
+        bool have_value = false;
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "aggregating numeric DataFrame group")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            int64_t row = indices[i];
+            if (cd.isNull(row)) {
+                continue;
+            }
+            double value = get_value(row);
+            if (!have_value) {
+                result = value;
+                have_value = true;
+            } else if (func == "min") {
+                result = std::min(result, value);
+            } else {
+                result = std::max(result, value);
+            }
+        }
+        return have_value ? result : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    if (func == "count") {
+        int64_t count = 0;
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "counting numeric DataFrame group")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            if (!cd.isNull(indices[i])) {
+                ++count;
+            }
+        }
+        return static_cast<double>(count);
+    }
+
+    if (func == "first") {
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "finding first numeric DataFrame group value")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            int64_t row = indices[i];
+            if (!cd.isNull(row)) {
+                return get_value(row);
+            }
+        }
         return std::numeric_limits<double>::quiet_NaN();
     }
 
-    if (func == "sum") {
-        double s = 0;
-        for (double v : vals) { s += v; }
-        return s;
+    if (func == "last") {
+        double result = 0.0;
+        bool have_value = false;
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "finding last numeric DataFrame group value")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            int64_t row = indices[i];
+            if (!cd.isNull(row)) {
+                result = get_value(row);
+                have_value = true;
+            }
+        }
+        return have_value ? result : std::numeric_limits<double>::quiet_NaN();
     }
-    if (func == "mean") {
-        double s = 0;
-        for (double v : vals) { s += v; }
-        return s / vals.size();
-    }
-    if (func == "min") {
-        return *std::min_element(vals.begin(), vals.end());
-    }
-    if (func == "max") {
-        return *std::max_element(vals.begin(), vals.end());
-    }
+
     if (func == "std") {
-        if (vals.size() < 2) { return 0.0; }
         double s = 0;
-        for (double v : vals) { s += v; }
-        double mean = s / vals.size();
+        int64_t count = 0;
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "aggregating numeric DataFrame group")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            int64_t row = indices[i];
+            if (!cd.isNull(row)) {
+                s += get_value(row);
+                ++count;
+            }
+        }
+        if (count < 2) {
+            return count ? 0.0 : std::numeric_limits<double>::quiet_NaN();
+        }
+        double mean = s / static_cast<double>(count);
         double var_sum = 0;
-        for (double v : vals) { var_sum += (v - mean) * (v - mean); }
-        return std::sqrt(var_sum / (vals.size() - 1));
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "aggregating numeric DataFrame group variance")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            int64_t row = indices[i];
+            if (!cd.isNull(row)) {
+                double delta = get_value(row) - mean;
+                var_sum += delta * delta;
+            }
+        }
+        return std::sqrt(var_sum / static_cast<double>(count - 1));
     }
+
     if (func == "median") {
+        std::vector<double> vals;
+        vals.reserve(indices.size());
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "collecting median DataFrame group values")) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            int64_t row = indices[i];
+            if (!cd.isNull(row)) {
+                vals.push_back(get_value(row));
+            }
+        }
+        if (vals.empty()) {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
         std::sort(vals.begin(), vals.end());
         size_t n = vals.size();
         if (n % 2 == 0) {
@@ -149,15 +246,7 @@ double QoreGroupedDataFrame::aggregateNumeric(const ColumnData& cd,
         }
         return vals[n / 2];
     }
-    if (func == "count") {
-        return (double)vals.size();
-    }
-    if (func == "first") {
-        return vals.front();
-    }
-    if (func == "last") {
-        return vals.back();
-    }
+
     return std::numeric_limits<double>::quiet_NaN();
 }
 
@@ -294,7 +383,15 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
                 cd->float_data.resize(n_groups);
 
                 for (int64_t g = 0; g < n_groups; ++g) {
-                    double val = aggregateNumeric(src_cd, groups[g].row_indices, func);
+                    if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame columns")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    double val = aggregateNumeric(src_cd, groups[g].row_indices, func, xsink);
+                    if (*xsink) {
+                        delete df;
+                        return nullptr;
+                    }
                     if (std::isnan(val)) {
                         cd->null_mask[g] = 1;
                     }

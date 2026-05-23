@@ -876,6 +876,49 @@ DataFrame DataFrame::dropna() [flags=RET_VALUE_ONLY] {
     return obj.release();
 }
 
+//! Returns counts of distinct values in one column
+/** @param column the column to count
+    @param dropna if True (the default), null values are excluded
+    @param sort_desc if True, sort rows by count descending; otherwise values
+           are returned in first-seen order for maximum throughput
+    @param count_name optional name of the count column; defaults to \c count
+    @return new DataFrame with the value column and count column
+
+    @par Example:
+    @code{.py}
+    DataFrame counts = orders.valueCounts("status", sort_desc: True);
+    printf("%s\n", counts.toString());
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if the column is not found
+*/
+DataFrame DataFrame::valueCounts(string column, bool dropna = True, bool sort_desc = False,
+        string count_name = "count") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreDataFrame* result = df->valueCounts(column->c_str(), dropna, sort_desc, count_name->c_str(), xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns the number of distinct values in one column
+/** @param column the column to inspect
+    @param dropna if True (the default), null values are excluded
+    @return unique value count
+
+    @par Example:
+    @code{.py}
+    int customer_segments = customers.nunique("segment");
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if the column is not found
+*/
+int DataFrame::nunique(string column, bool dropna = True) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return df->nunique(column->c_str(), dropna, xsink);
+}
+
 //! Converts the DataFrame to a list of record hashes
 /** @return list<hash<auto>> where each element is one row
 */

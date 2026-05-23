@@ -8,7 +8,12 @@ REPO="$(cd "$HERE/.." && pwd)"
 
 QORE_BIN="${QORE_BIN:-$REPO/build/qore}"
 MODULE_PATHS=("$HERE/lib")
-for path in "$REPO/build/modules/dataframe" "$REPO/build/qlib-qmod" "$REPO/qlib"; do
+for path in "$REPO"/build/modules/*; do
+    if [[ -d "$path" ]]; then
+        MODULE_PATHS+=("$path")
+    fi
+done
+for path in "$REPO/build/qlib-qmod" "$REPO/qlib"; do
     if [[ -d "$path" ]]; then
         MODULE_PATHS+=("$path")
     fi

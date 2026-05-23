@@ -11,7 +11,8 @@
     Features:
     - Typed columns: \c float64 (Eigen3-backed), \c int64, \c string, \c bool, \c date
     - Null/missing value support with per-column null masks
-    - SQL-like operations: select, filter, sort, groupby, join, pivot, melt, window functions
+    - SQL-like operations: select, filter, sort, groupby, join, valueCounts, nunique,
+      pivot, melt, missing-data cleanup, and window functions
     - Dense column interop with \c buffer<T> and @ref Qore::SQL::ColumnarResult "ColumnarResult"
       for SQL and pipeline workloads
     - Native plugin-operator support: \c frame["column"] for columns,
@@ -36,27 +37,35 @@
     This is not a claim that every DataFrame operation is faster than every
     alternative implementation. It is the intended performance profile for the
     covered workload class: typed column construction, filtering, groupby,
-    joins, SQL read/write, and DataProvider pipelines that can keep data
-    columnar. Drivers with
+    joins, value counting, missing-data cleanup, reshaping, Arrow/Parquet I/O,
+    SQL read/write, DataProvider pipelines, and ML-oriented analytical flows
+    that can keep data columnar. Drivers with
     @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT "DBI_CAP_HAS_COLUMNAR_SELECT"
     provide the fastest SQL-read path; drivers without it still work through
     compatibility conversion.
 
-    In local benchmarks on the Qore 2.3 development branch with system-installed
+    In local benchmarks on the Qore 2.3 development branch with locally built
     modules, including a PostgreSQL DBI driver with native columnar support,
     Qore was faster than pandas for the paired cases in the benchmark suite:
 
     | Case | Qore median | pandas median | pandas / Qore |
     |------|-------------|---------------|---------------|
-    | construct columns | 10.530 ms | 40.648 ms | 3.86x |
-    | construct records | 35.829 ms | 36.908 ms | 1.03x |
-    | filter mask | 1.151 ms | 1.787 ms | 1.55x |
-    | groupby aggregate | 4.363 ms | 4.399 ms | 1.01x |
-    | filter + group | 1.046 ms | 2.891 ms | 2.76x |
-    | left join | 1.752 ms | 2.604 ms | 1.49x |
-    | DataProvider filter + group | 1.538 ms | 2.891 ms | 1.88x |
-    | SQL read | 12.462 ms | 17.275 ms | 1.39x |
-    | SQL write | 18.088 ms | 65.623 ms | 3.63x |
+    | construct columns | 9.206 ms | 37.396 ms | 4.06x |
+    | construct records | 16.902 ms | 36.150 ms | 2.14x |
+    | filter mask | 0.988 ms | 1.788 ms | 1.81x |
+    | groupby aggregate | 2.874 ms | 4.428 ms | 1.54x |
+    | filter + group | 0.892 ms | 2.845 ms | 3.19x |
+    | left join | 2.229 ms | 2.591 ms | 1.16x |
+    | DataProvider filter + group | 1.351 ms | 2.845 ms | 2.11x |
+    | SQL read | 13.441 ms | 18.239 ms | 1.36x |
+    | SQL write | 20.594 ms | 64.647 ms | 3.14x |
+    | Arrow IPC roundtrip | 5.204 ms | 10.030 ms | 1.93x |
+    | Parquet roundtrip | 17.770 ms | 22.460 ms | 1.26x |
+    | value counts | 0.975 ms | 1.430 ms | 1.47x |
+    | fill/drop missing values | 3.449 ms | 7.317 ms | 2.12x |
+    | melt + pivot reshape | 13.995 ms | 38.887 ms | 2.78x |
+    | solution ETL pipeline | 4.563 ms | 7.207 ms | 1.58x |
+    | solution AI analytics | 28.630 ms | 71.392 ms | 2.49x |
 
     The benchmark suite is in the source tree under \c bench/ and can be rerun
     against a local build. Absolute timings depend on hardware, database driver,

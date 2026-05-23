@@ -252,6 +252,109 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     const ColumnData& col_cd = *columns[col_ci].data;
     const ColumnData& val_cd = *columns[val_ci].data;
 
+    if (idx_cd.type == ColumnType::INT64 && col_cd.type == ColumnType::STRING
+            && (val_cd.type == ColumnType::FLOAT64 || val_cd.type == ColumnType::INT64)) {
+        std::vector<int64_t> unique_indices;
+        std::unordered_map<int64_t, size_t> index_map;
+        std::vector<std::string> unique_cols;
+        std::unordered_map<std::string, size_t> col_map;
+        index_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+        col_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
+
+        for (int64_t i = 0; i < n_rows; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "pivoting integer/string DataFrame keys")) {
+                return nullptr;
+            }
+            if (!idx_cd.isNull(i)) {
+                int64_t idx_val = idx_cd.int_data[i];
+                auto inserted = index_map.emplace(idx_val, unique_indices.size());
+                if (inserted.second) {
+                    unique_indices.push_back(idx_val);
+                }
+            }
+            if (!col_cd.isNull(i)) {
+                const std::string& col_val = col_cd.str_data[i];
+                auto inserted = col_map.emplace(col_val, unique_cols.size());
+                if (inserted.second) {
+                    unique_cols.push_back(col_val);
+                }
+            }
+        }
+
+        int64_t out_rows = static_cast<int64_t>(unique_indices.size());
+        size_t out_cols = unique_cols.size();
+        std::vector<double> sums(static_cast<size_t>(out_rows) * out_cols, 0.0);
+        std::vector<int64_t> counts(static_cast<size_t>(out_rows) * out_cols, 0);
+
+        for (int64_t i = 0; i < n_rows; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "pivoting integer/string DataFrame values")) {
+                return nullptr;
+            }
+            if (idx_cd.isNull(i) || col_cd.isNull(i)) {
+                continue;
+            }
+            auto ri_it = index_map.find(idx_cd.int_data[i]);
+            auto ci_it = col_map.find(col_cd.str_data[i]);
+            if (ri_it == index_map.end() || ci_it == col_map.end()) {
+                continue;
+            }
+            size_t pos = ri_it->second * out_cols + ci_it->second;
+            if (!val_cd.isNull(i)) {
+                sums[pos] += val_cd.type == ColumnType::FLOAT64 ? val_cd.float_data(i)
+                    : static_cast<double>(val_cd.int_data[i]);
+            }
+            ++counts[pos];
+        }
+
+        auto* df = new QoreDataFrame();
+        df->n_rows = out_rows;
+
+        auto idx_out = std::make_shared<ColumnData>();
+        idx_out->type = ColumnType::INT64;
+        idx_out->n_rows = out_rows;
+        idx_out->null_mask.resize(out_rows, 0);
+        idx_out->int_data = std::move(unique_indices);
+        Column idx_col_out;
+        idx_col_out.name = index_col;
+        idx_col_out.data = std::move(idx_out);
+        df->col_index[idx_col_out.name] = df->columns.size();
+        df->columns.push_back(std::move(idx_col_out));
+
+        for (size_t c = 0; c < unique_cols.size(); ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "building pivoted DataFrame column set")) {
+                delete df;
+                return nullptr;
+            }
+            auto cd = std::make_shared<ColumnData>();
+            cd->type = ColumnType::FLOAT64;
+            cd->n_rows = out_rows;
+            cd->null_mask.resize(out_rows, 0);
+            cd->float_data.resize(out_rows);
+            for (int64_t r = 0; r < out_rows; ++r) {
+                if (r && !(r % 100) && qore_check_cancel(xsink, "building pivoted DataFrame columns")) {
+                    delete df;
+                    return nullptr;
+                }
+                size_t pos = static_cast<size_t>(r) * out_cols + c;
+                if (!counts[pos]) {
+                    cd->null_mask[r] = 1;
+                    cd->float_data(r) = std::numeric_limits<double>::quiet_NaN();
+                } else if (agg_func == "mean") {
+                    cd->float_data(r) = sums[pos] / static_cast<double>(counts[pos]);
+                } else {
+                    cd->float_data(r) = sums[pos];
+                }
+            }
+            Column col;
+            col.name = unique_cols[c];
+            col.data = std::move(cd);
+            df->col_index[col.name] = df->columns.size();
+            df->columns.push_back(std::move(col));
+        }
+
+        return df;
+    }
+
     // Collect unique index values and column values
     std::vector<std::string> unique_indices;
     std::unordered_map<std::string, size_t> index_map;

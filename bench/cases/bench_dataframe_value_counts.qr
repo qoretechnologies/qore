@@ -1,0 +1,39 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameValueCounts
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameValueCounts {
+    constructor() {
+        Bench::BenchRunner r("dataframe_value_counts");
+        r.iterations = 10;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeBufferFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows) * 2;
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame counts = df.valueCounts("customer_id");
+            DataFrameBench::verifyRows("dataframe_value_counts/customer_id", counts, 1);
+            int regions = df.nunique("region");
+            if (regions != 6) {
+                throw "BENCHMARK-ERROR", sprintf("expected 6 regions, got %d", regions);
+            }
+        };
+
+        exit(r.run());
+    }
+}

@@ -80,6 +80,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("horizontalConcatTest", \horizontalConcatTest());
         addTestCase("columnarResultFilterTest", \columnarResultFilterTest());
         addTestCase("fillnaDropnaTest", \fillnaDropnaTest());
+        addTestCase("valueCountsTest", \valueCountsTest());
         addTestCase("csvReadTest", \csvReadTest());
         addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
@@ -664,6 +665,49 @@ sub invalid_dataframe_api() {
         assertEq(1, dropped.numRows(), "dropna keeps only complete rows");
         assertEq(1, dropped.getColumn("a")[0], "dropna correct row");
         assertEq("x", dropped.getColumn("b")[0], "dropna correct row value");
+    }
+
+    valueCountsTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df({
+            "region": ("north", "south", "north", "west", "south", "south", NOTHING),
+            "score": (10.0, 20.0, 10.0, 30.0, 20.0, 20.0, NOTHING),
+            "flag": (True, False, True, True, False, False, NOTHING),
+        });
+
+        DataFrame::DataFrame counts = df.valueCounts("region");
+        assertEq(("north", "south", "west"), counts.getColumn("region"),
+            "valueCounts excludes nulls by default");
+        assertEq((2, 3, 1), counts.getColumn("count"),
+            "valueCounts preserves first-seen order by default");
+
+        DataFrame::DataFrame sorted_counts = df.valueCounts("region", sort_desc: True);
+        assertEq(("south", "north", "west"), sorted_counts.getColumn("region"),
+            "valueCounts can sort by descending count");
+        assertEq((3, 2, 1), sorted_counts.getColumn("count"),
+            "valueCounts sorted counts are correct");
+
+        DataFrame::DataFrame with_null = df.valueCounts("region", dropna: False, count_name: "n");
+        assertEq(4, with_null.numRows(), "valueCounts can include nulls");
+        assertEq((2, 3, 1, 1), with_null.getColumn("n"),
+            "valueCounts counts null values when requested");
+
+        assertEq(3, df.nunique("region"), "nunique excludes nulls by default");
+        assertEq(4, df.nunique("region", dropna: False), "nunique can include nulls");
+        assertEq(3, df.nunique("score"), "nunique handles numeric columns");
+        assertEq(2, df.nunique("flag"), "nunique handles bool columns");
+        DataFrame::DataFrame flag_counts = df.valueCounts("flag");
+        assertEq((True, False), flag_counts.getColumn("flag"),
+            "valueCounts preserves first-seen order for bool columns");
+
+        DataFrame::DataFrame count_name_df({"count": ("a", "a", "b")});
+        DataFrame::DataFrame count_name_counts = count_name_df.valueCounts("count");
+        assertEq(("count", "value_count"), count_name_counts.columnNames(),
+            "valueCounts avoids duplicate default count column names");
+        assertEq((2, 1), count_name_counts.getColumn("value_count"),
+            "valueCounts duplicate-name fallback counts correctly");
     }
 
     errorCasesTest() {

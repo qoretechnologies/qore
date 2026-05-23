@@ -69,6 +69,11 @@ public namespace DataFrameBench {
         return rows * 56;
     }
 
+    public int sub approxWideBytes(int rows) {
+        # id + group fields + three numeric measures used by reshape/cleaning cases.
+        return rows * 80;
+    }
+
     public string sub statusFor(int i) {
         return (i % 5) == 0 ? "inactive" : "active";
     }
@@ -208,6 +213,37 @@ public namespace DataFrameBench {
 
     public DataFrame::DataFrame sub makeCustomerFrame(int rows) {
         return new DataFrame::DataFrame(makeCustomerColumns(rows));
+    }
+
+    public hash<auto> sub makeNullableColumns(int rows) {
+        list<int> ids;
+        list<string> regions;
+        list<auto> amount_a;
+        list<auto> amount_b;
+        list<auto> amount_c;
+        list<auto> category;
+
+        for (int i = 0; i < rows; ++i) {
+            push ids, i;
+            push regions, regionFor(i);
+            push amount_a, (i % 11) == 10 ? NOTHING : amountFor(i);
+            push amount_b, (i % 13) == 12 ? NOTHING : scoreFor(i);
+            push amount_c, (i % 17) == 16 ? NOTHING : targetFor(i);
+            push category, (i % 19) == 18 ? NOTHING : statusFor(i);
+        }
+
+        return {
+            "id": ids,
+            "region": regions,
+            "amount_a": amount_a,
+            "amount_b": amount_b,
+            "amount_c": amount_c,
+            "category": category,
+        };
+    }
+
+    public DataFrame::DataFrame sub makeNullableFrame(int rows) {
+        return new DataFrame::DataFrame(makeNullableColumns(rows));
     }
 
     public float sub feature1For(int i) {

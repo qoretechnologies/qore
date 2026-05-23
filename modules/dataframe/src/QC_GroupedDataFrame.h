@@ -71,7 +71,7 @@ private:
 
     //! Helper: apply a single aggregation function to a column's values at given indices
     DLLLOCAL double aggregateNumeric(const ColumnData& cd,
-        const std::vector<int64_t>& indices, const std::string& func) const;
+        const std::vector<int64_t>& indices, const std::string& func, ExceptionSink* xsink) const;
 };
 
 } // namespace QoreDataFrameNS
