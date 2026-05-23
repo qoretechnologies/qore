@@ -24,8 +24,272 @@
 #! Main QoreModelRegistry namespace
 public namespace QoreModelRegistry {
 
+class ModelRegistryDataProviderHelper {
+    static hash<auto> registerPackageRecord(ModelRegistry registry, string model_name, hash<auto> rec) {
+        string package_path = requireString(rec, "package_path", "model package registration");
+        if (!is_dir(package_path)) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("model package registration requires field 'package_path' to be an existing directory; "
+                    "got '%s'", package_path);
+        }
+
+        string version_id = registry.registerPackage(package_path, makePackageOptions(model_name, rec));
+        return makeVersionRecord(registry.getVersionManifest(model_name, version_id));
+    }
+
+    static hash<auto> createArtifactRecord(ModelRegistry registry, string model_name, string version_id,
+            hash<auto> rec) {
+        string artifact_path;
+        if (exists rec.artifact_path) {
+            artifact_path = requireString(rec, "artifact_path", "named artifact registration");
+            if (!is_file(artifact_path)) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("named artifact registration requires field 'artifact_path' to be an existing file; "
+                        "got '%s'", artifact_path);
+            }
+        }
+
+        string artifact_name = rec.artifact_name
+            ? requireString(rec, "artifact_name", "named artifact registration")
+            : (artifact_path ? basename(artifact_path) : NOTHING);
+        if (!artifact_name.val()) {
+            throw "ML-REGISTRY-ERROR",
+                "named artifact registration requires non-empty string field 'artifact_name' when "
+                "'artifact_path' is not provided";
+        }
+
+        binary data;
+        if (artifact_path) {
+            data = ReadOnlyFile::readBinaryFile(artifact_path);
+        } else if (exists rec.artifact_data) {
+            if (rec.artifact_data.typeCode() != NT_BINARY) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("named artifact registration field 'artifact_data' must be binary; got %y",
+                        rec.artifact_data.fullType());
+            }
+            data = rec.artifact_data;
+        } else {
+            throw "ML-REGISTRY-ERROR",
+                "named artifact registration requires either 'artifact_path' or binary 'artifact_data'";
+        }
+
+        hash<ModelArtifactInfo> info = artifact_path
+            ? ModelArtifactInspector::inspectFile(artifact_path, artifact_name)
+            : makeArtifactInfo(artifact_name, data);
+        applyArtifactOverrides(\info, rec);
+        registry.registerNamedArtifact(model_name, version_id, artifact_name, data, info);
+        return makeArtifactRecord(info);
+    }
+
+    static hash<auto> makeVersionRecord(hash<ModelVersionInfo> version) {
+        hash<auto> rec = cast<hash<auto>>(version);
+        rec.artifact_count = version.artifacts ? version.artifacts.size() : 0;
+        if (version.execution) {
+            rec.entry_artifact = version.execution.entry_artifact;
+            rec.local_executable = version.execution.local_executable;
+        }
+        if (version.tokenizer) {
+            rec.tokenizer_json = version.tokenizer.tokenizer_json;
+            rec.tokenizer_config_json = version.tokenizer.tokenizer_config_json;
+            rec.model_max_length = version.tokenizer.model_max_length;
+            rec.has_chat_template = version.tokenizer.has_chat_template;
+        } else {
+            rec.has_chat_template = False;
+        }
+        return rec;
+    }
+
+    static hash<auto> makeArtifactRecord(hash<ModelArtifactInfo> artifact) {
+        return cast<hash<auto>>(artifact);
+    }
+
+    static hash<string, AbstractDataField> getVersionRecordType() {
+        return {
+            "version_id": new QoreDataField("version_id", "Version identifier",
+                StringType),
+            "name": new QoreDataField("name", "Model name", StringType),
+            "algorithm": new QoreDataField("algorithm", "Algorithm class name",
+                StringType),
+            "created": new QoreDataField("created", "Registration timestamp",
+                StringType),
+            "description": new QoreDataField("description", "Version description",
+                SoftStringOrNothingType),
+            "file_size": new QoreDataField("file_size", "Primary artifact size in bytes",
+                IntType),
+            "format": new QoreDataField("format", "Primary artifact format",
+                StringType),
+            "tags": new QoreDataField("tags", "Tags list",
+                AbstractDataProviderTypeMap."list"),
+            "metrics": new QoreDataField("metrics", "Performance metrics",
+                AbstractDataProviderTypeMap."*hash"),
+            "training_data_hash": new QoreDataField("training_data_hash",
+                "Training data hash", SoftStringOrNothingType),
+            "tenant_id": new QoreDataField("tenant_id", "Tenant identifier",
+                SoftStringOrNothingType),
+            "framework": new QoreDataField("framework", "Source framework",
+                SoftStringOrNothingType),
+            "artifact_kind": new QoreDataField("artifact_kind", "Artifact kind",
+                SoftStringOrNothingType),
+            "runtime": new QoreDataField("runtime", "Preferred runtime",
+                SoftStringOrNothingType),
+            "executable": new QoreDataField("executable", "Executable by Qore",
+                BoolType),
+            "safety": new QoreDataField("safety", "Safety classification",
+                StringType),
+            "artifact_count": new QoreDataField("artifact_count",
+                "Number of artifacts in the version", IntType),
+            "entry_artifact": new QoreDataField("entry_artifact",
+                "Runtime entry artifact", SoftStringOrNothingType),
+            "local_executable": new QoreDataField("local_executable",
+                "Executable in-process by Qore", BoolOrNothingType),
+            "tokenizer_json": new QoreDataField("tokenizer_json",
+                "Tokenizer artifact name", SoftStringOrNothingType),
+            "tokenizer_config_json": new QoreDataField("tokenizer_config_json",
+                "Tokenizer config artifact name", SoftStringOrNothingType),
+            "model_max_length": new QoreDataField("model_max_length",
+                "Tokenizer maximum sequence length", IntOrNothingType),
+            "has_chat_template": new QoreDataField("has_chat_template",
+                "Tokenizer has a chat template", BoolType),
+            "config": new QoreDataField("config", "Version configuration",
+                AbstractDataProviderTypeMap."*hash"),
+            "artifacts": new QoreDataField("artifacts", "Artifact metadata list",
+                AbstractDataProviderTypeMap."list"),
+            "execution": new QoreDataField("execution", "Execution metadata",
+                AbstractDataProviderTypeMap."*hash"),
+            "tokenizer": new QoreDataField("tokenizer", "Tokenizer metadata",
+                AbstractDataProviderTypeMap."*hash"),
+        };
+    }
+
+    static hash<string, AbstractDataField> getPackageCreateRecordType(bool include_name) {
+        hash<string, AbstractDataField> fields = {
+            "package_path": new QoreDataField("package_path",
+                "Filesystem directory containing the model package", StringType),
+            "version_id": new QoreDataField("version_id", "Optional version identifier",
+                SoftStringOrNothingType),
+            "description": new QoreDataField("description", "Version description",
+                SoftStringOrNothingType),
+            "metrics": new QoreDataField("metrics", "Performance metrics",
+                AbstractDataProviderTypeMap."*hash"),
+            "tags": new QoreDataField("tags", "Tags list",
+                AbstractDataProviderTypeMap."list"),
+            "training_data_hash": new QoreDataField("training_data_hash",
+                "Training data hash", SoftStringOrNothingType),
+            "algorithm": new QoreDataField("algorithm", "Algorithm name override",
+                SoftStringOrNothingType),
+            "framework": new QoreDataField("framework", "Framework name override",
+                SoftStringOrNothingType),
+            "config": new QoreDataField("config", "Version configuration",
+                AbstractDataProviderTypeMap."*hash"),
+            "registration_options": new QoreDataField("registration_options",
+                "Additional package registration options", AbstractDataProviderTypeMap."*hash"),
+        };
+        if (include_name) {
+            fields.name = new QoreDataField("name", "Model name", StringType);
+        }
+        return fields;
+    }
+
+    static string requireString(hash<auto> rec, string key, string action) {
+        if (!exists rec{key} || rec{key}.typeCode() != NT_STRING || !rec{key}.val()) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("%s requires non-empty string field '%s'", action, key);
+        }
+        return rec{key};
+    }
+
+    private static hash<auto> makePackageOptions(string model_name, hash<auto> rec) {
+        hash<auto> options = {};
+        options.name = model_name;
+        if (exists rec.registration_options) {
+            if (rec.registration_options.typeCode() != NT_HASH) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("model package registration field 'registration_options' must be hash; got %y",
+                        rec.registration_options.fullType());
+            }
+            options += rec.registration_options;
+            options.name = model_name;
+        }
+        foreach string key in (("version_id", "description", "metrics", "tags",
+                "training_data_hash", "algorithm", "framework", "config")) {
+            if (exists rec{key}) {
+                options{key} = rec{key};
+            }
+        }
+        return options;
+    }
+
+    private static hash<ModelArtifactInfo> makeArtifactInfo(string artifact_name, binary data) {
+        string format = inferArtifactFormat(artifact_name);
+        return <ModelArtifactInfo>{
+            "name": artifact_name,
+            "role": inferArtifactRole(artifact_name, format),
+            "format": format,
+            "size": data.size(),
+            "safe_to_parse": format == "qml" || format == "onnx" || format == "json"
+                || format == "safetensors",
+            "executable": format == "qml" || format == "onnx",
+        };
+    }
+
+    private static nothing applyArtifactOverrides(reference<hash<ModelArtifactInfo>> info, hash<auto> rec) {
+        foreach string key in (("role", "format", "checksum", "safe_to_parse",
+                "executable", "path_hint", "metadata")) {
+            if (exists rec{key}) {
+                info{key} = rec{key};
+            }
+        }
+    }
+
+    private static string inferArtifactFormat(string name) {
+        string lname = name.lwr();
+        if (lname =~ /[.]qml$/) {
+            return "qml";
+        }
+        if (lname =~ /[.]onnx$/) {
+            return "onnx";
+        }
+        if (lname =~ /[.]json$/) {
+            return "json";
+        }
+        if (lname =~ /[.]safetensors$/) {
+            return "safetensors";
+        }
+        if (lname =~ /[.](pt|pth|bin)$/) {
+            return "pytorch-pickle";
+        }
+        if (lname =~ /[.]pt2$/) {
+            return "torch-export";
+        }
+        return "binary";
+    }
+
+    private static string inferArtifactRole(string name, string format) {
+        string lname = name.lwr();
+        if (lname == "tokenizer.json") {
+            return "tokenizer";
+        }
+        if (lname == "config.json" || lname == "tokenizer_config.json"
+                || lname == "generation_config.json" || lname == "special_tokens_map.json") {
+            return "config";
+        }
+        if (format == "safetensors" || format == "pytorch-pickle" || format == "torch-export") {
+            return "weights";
+        }
+        return "model";
+    }
+}
+
 #! Root data provider for the model registry — lists models as children
-/** Navigate: model-registry → {model_name} → versions
+/** Navigate: model-registry → {model_name} → {version_id}.
+
+    The root provider supports DataProvider record creation for registering a
+    model package. The create record requires \c name and \c package_path and
+    accepts the same optional metadata keys used by
+    @ref QoreModelRegistry::ModelRegistry::registerPackage() "ModelRegistry::registerPackage()".
+    The returned record is the inspected version manifest with convenience
+    fields such as \c artifact_count, \c runtime, \c tokenizer_json, and
+    \c entry_artifact.
 
     @since QoreModelRegistry 2.0
 */
@@ -33,8 +297,11 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "type": "ModelRegistryDataProvider",
+            "supports_create": True,
             "supports_children": True,
             "children_can_support_records": True,
+            "children_identical": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
         };
 
@@ -184,6 +451,25 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
         return new ModelVersionsDataProvider(registry, name);
     }
 
+    private *hash<string, AbstractDataField> getRecordTypeImpl(
+            *hash<auto> search_options) {
+        return ModelRegistryDataProviderHelper::getVersionRecordType();
+    }
+
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(
+            *hash<auto> create_options) {
+        return ModelRegistryDataProviderHelper::getPackageCreateRecordType(True);
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        string model_name = ModelRegistryDataProviderHelper::requireString(rec, "name",
+            "model package registration");
+        hash<auto> record = ModelRegistryDataProviderHelper::registerPackageRecord(registry, model_name, rec);
+        remove cached_models;
+        remove cache_time;
+        return record;
+    }
+
     #! Returns the cached model list, refreshing from the backend when stale
     private *list<string> getModelListCached() {
         if (cached_models && cache_time
@@ -194,10 +480,17 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
         cache_time = now_us();
         return cached_models;
     }
+
 }
 
 #! Data provider for a specific model's versions — supports record operations
 /** Lists and manages versions of a specific model.
+
+    Records are model version manifests. Creating a record registers another
+    package version for the current model and requires \c package_path. Version
+    IDs are also exposed as child provider names; each version child is a
+    @ref ModelVersionArtifactsDataProvider that lists and accepts named
+    artifacts for that version.
 
     @since QoreModelRegistry 2.0
 */
@@ -221,8 +514,12 @@ public class ModelVersionsDataProvider inherits AbstractDataProvider {
         const ProviderInfo = <DataProviderInfo>{
             "type": "ModelVersionsDataProvider",
             "supports_read": True,
+            "supports_create": True,
             "supports_delete": True,
             "supports_native_search": True,
+            "supports_children": True,
+            "children_can_support_records": True,
+            "children_identical": True,
             "has_record": True,
             "search_options": SearchOptions,
         };
@@ -250,30 +547,38 @@ public class ModelVersionsDataProvider inherits AbstractDataProvider {
         return ProviderInfo;
     }
 
+    private *list<string> getChildProviderNamesImpl() {
+        list<string> version_ids();
+        foreach hash<auto> v in (registry.listVersions(model_name)) {
+            push version_ids, v.version_id;
+        }
+        return version_ids;
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        *list<string> version_ids = getChildProviderNamesImpl();
+        if (!version_ids || !version_ids.contains(name)) {
+            return;
+        }
+        return new ModelVersionArtifactsDataProvider(registry, model_name, name);
+    }
+
     private *hash<string, AbstractDataField> getRecordTypeImpl(
             *hash<auto> search_options) {
-        return {
-            "version_id": new QoreDataField("version_id", "Version identifier",
-                StringType),
-            "name": new QoreDataField("name", "Model name", StringType),
-            "algorithm": new QoreDataField("algorithm", "Algorithm class name",
-                StringType),
-            "created": new QoreDataField("created", "Registration timestamp",
-                StringType),
-            "description": new QoreDataField("description", "Version description",
-                SoftStringOrNothingType),
-            "file_size": new QoreDataField("file_size", "Artifact size in bytes",
-                IntType),
-            "format": new QoreDataField("format", "Serialization format",
-                StringType),
-            "tags": new QoreDataField("tags", "Tags list",
-                AbstractDataProviderTypeMap."list"),
-        };
+        return ModelRegistryDataProviderHelper::getVersionRecordType();
+    }
+
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(
+            *hash<auto> create_options) {
+        return ModelRegistryDataProviderHelper::getPackageCreateRecordType(False);
     }
 
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(
             *hash<auto> where_cond, *hash<auto> search_options) {
-        list<hash<auto>> versions = registry.listVersions(model_name);
+        list<hash<auto>> versions();
+        foreach hash<ModelVersionInfo> version in (registry.listVersions(model_name)) {
+            push versions, ModelRegistryDataProviderHelper::makeVersionRecord(version);
+        }
 
         # Apply simple where filtering if provided
         if (where_cond) {
@@ -296,6 +601,10 @@ public class ModelVersionsDataProvider inherits AbstractDataProvider {
         return new DefaultRecordIterator(versions);
     }
 
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        return ModelRegistryDataProviderHelper::registerPackageRecord(registry, model_name, rec);
+    }
+
     private int deleteRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (where_cond.version_id) {
@@ -309,6 +618,114 @@ public class ModelVersionsDataProvider inherits AbstractDataProvider {
         # Delete the entire model
         registry.deleteModel(model_name);
         return 1;
+    }
+}
+
+#! Data provider for artifacts belonging to one model version
+/** Lists package artifacts for one registered model version and allows new
+    named artifacts to be attached to that version.
+
+    Creation accepts either \c artifact_path or binary \c artifact_data.
+    \c artifact_name defaults to \c basename(artifact_path) when a path is
+    supplied. Optional fields such as \c role, \c format, \c safe_to_parse,
+    \c executable, \c checksum, \c path_hint, and \c metadata override the
+    inferred artifact metadata before it is stored.
+
+    @since QoreModelRegistry 2.2
+*/
+public class ModelVersionArtifactsDataProvider inherits AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "ModelVersionArtifactsDataProvider",
+            "supports_read": True,
+            "supports_create": True,
+            "supports_native_search": True,
+            "has_record": True,
+        };
+    }
+
+    private {
+        ModelRegistry registry;
+        string model_name;
+        string version_id;
+    }
+
+    constructor(ModelRegistry registry, string model_name, string version_id) {
+        self.registry = registry;
+        self.model_name = model_name;
+        self.version_id = version_id;
+    }
+
+    string getName() {
+        return version_id;
+    }
+
+    *string getDesc() {
+        return sprintf("Artifacts of model '%s' version '%s'", model_name, version_id);
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(
+            *hash<auto> search_options) {
+        return {
+            "name": new QoreDataField("name", "Artifact name", StringType),
+            "role": new QoreDataField("role", "Artifact role", StringType),
+            "format": new QoreDataField("format", "Artifact format", StringType),
+            "size": new QoreDataField("size", "Artifact size in bytes", IntType),
+            "checksum": new QoreDataField("checksum", "Artifact checksum",
+                SoftStringOrNothingType),
+            "safe_to_parse": new QoreDataField("safe_to_parse",
+                "Safe to inspect without executing code", BoolType),
+            "executable": new QoreDataField("executable",
+                "Executable in-process by Qore", BoolType),
+            "path_hint": new QoreDataField("path_hint", "Path or object-key hint",
+                SoftStringOrNothingType),
+            "metadata": new QoreDataField("metadata", "Artifact metadata",
+                AbstractDataProviderTypeMap."*hash"),
+            "artifact_ref": new QoreDataField("artifact_ref", "Storage reference",
+                AbstractDataProviderTypeMap."*hash"),
+        };
+    }
+
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(
+            *hash<auto> create_options) {
+        hash<string, AbstractDataField> fields = getRecordTypeImpl();
+        fields.artifact_name = new QoreDataField("artifact_name",
+            "Artifact name to register", StringType);
+        fields.artifact_path = new QoreDataField("artifact_path",
+            "Filesystem artifact path", SoftStringOrNothingType);
+        fields.artifact_data = new QoreDataField("artifact_data",
+            "Artifact binary payload", BinaryOrNothingType);
+        return fields;
+    }
+
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(
+            *hash<auto> where_cond, *hash<auto> search_options) {
+        list<hash<auto>> artifacts();
+        foreach hash<ModelArtifactInfo> artifact in (registry.listArtifacts(model_name, version_id)) {
+            hash<auto> record = ModelRegistryDataProviderHelper::makeArtifactRecord(artifact);
+            if (where_cond) {
+                bool match = True;
+                foreach string key in (keys where_cond) {
+                    if (record{key} != where_cond{key}) {
+                        match = False;
+                        break;
+                    }
+                }
+                if (!match) {
+                    continue;
+                }
+            }
+            push artifacts, record;
+        }
+        return new DefaultRecordIterator(artifacts);
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        return ModelRegistryDataProviderHelper::createArtifactRecord(registry, model_name, version_id, rec);
     }
 }
 

@@ -68,6 +68,7 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("deleteTenantStorage", \deleteTenantStorageTest());
         addTestCase("dataProviderNavigation", \dataProviderNavigationTest());
         addTestCase("dataProviderSearch", \dataProviderSearchTest());
+        addTestCase("dataProviderPackageCreate", \dataProviderPackageCreateTest());
         addTestCase("dataProviderFactory", \dataProviderFactoryTest());
         addTestCase("filesystemBackendDirect", \filesystemBackendDirectTest());
         addTestCase("namedArtifacts", \namedArtifactsTest());
@@ -854,6 +855,90 @@ class ModelRegistryTest inherits QUnit::Test {
         }
         assertEq(1, results.size(), "filtered should find 1 version");
         assertEq(vid1, results[0].version_id, "should be the KMeans version");
+    }
+
+    dataProviderPackageCreateTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string registry_dir = dir + DirSep + "registry";
+        string package_dir = dir + DirSep + "dp_package";
+        mkdir_ex(registry_dir, 0755, True);
+        mkdir_ex(package_dir, 0755, True);
+
+        writeTextFile(package_dir + DirSep + "config.json",
+            "{\"model_type\":\"bert\",\"architectures\":[\"BertModel\"]}");
+        writeTextFile(package_dir + DirSep + "tokenizer.json",
+            "{\"model\":{\"type\":\"WordPiece\",\"vocab\":{\"[UNK]\":0}}}");
+        writeTextFile(package_dir + DirSep + "tokenizer_config.json",
+            "{\"model_max_length\":256}");
+        writeBinaryFile(package_dir + DirSep + "model.safetensors",
+            makeSafeTensorsFixture());
+
+        QoreModelRegistry::ModelRegistry registry({"path": registry_dir});
+        QoreModelRegistry::ModelRegistryDataProvider dp(registry);
+
+        hash<auto> created = dp.createRecord({
+            "name": "dp-package",
+            "package_path": package_dir,
+            "description": "DataProvider-created package",
+            "tags": ("data-provider",),
+        });
+        assertEq("dp-package", created.name, "created package model name should match");
+        assertEq("metadata-only", created.runtime, "SafeTensors package runtime");
+        assertEq("tokenizer.json", created.tokenizer_json,
+            "tokenizer artifact should be exposed in created record");
+        assertTrue(created.artifact_count >= 4,
+            "created record should expose package artifact count");
+
+        *list<string> children = dp.getChildProviderNames();
+        assertTrue(children.contains("dp-package"),
+            "root provider cache should be invalidated after create");
+
+        AbstractDataProvider versions_dp = dp.getChildProvider("dp-package");
+        assertTrue(versions_dp instanceof QoreModelRegistry::ModelVersionsDataProvider,
+            "created model child should be a versions provider");
+
+        AbstractDataProviderRecordIterator it =
+            versions_dp.searchRecords({"version_id": created.version_id});
+        assertTrue(it.next(), "created version should be searchable");
+        hash<auto> version_record = it.getValue();
+        assertEq(created.version_id, version_record.version_id,
+            "version search should return created version");
+        assertEq("tokenizer.json", version_record.tokenizer_json,
+            "version record should expose tokenizer metadata");
+        assertFalse(it.next(), "version_id filter should return one record");
+
+        *list<string> version_children = versions_dp.getChildProviderNames();
+        assertTrue(version_children.contains(created.version_id),
+            "version provider should expose version IDs as artifact children");
+
+        AbstractDataProvider artifacts_dp = versions_dp.getChildProvider(created.version_id);
+        assertTrue(artifacts_dp instanceof QoreModelRegistry::ModelVersionArtifactsDataProvider,
+            "version child should be an artifact provider");
+
+        it = artifacts_dp.searchRecords({"role": "tokenizer"});
+        assertTrue(it.next(), "artifact provider should find tokenizer artifact");
+        assertEq("tokenizer.json", it.getValue().name,
+            "tokenizer artifact name should match");
+
+        string notes_path = dir + DirSep + "notes.json";
+        writeTextFile(notes_path, "{\"source\":\"dataprovider\"}");
+        hash<auto> artifact = artifacts_dp.createRecord({
+            "artifact_path": notes_path,
+            "role": "metadata",
+            "format": "json",
+            "safe_to_parse": True,
+        });
+        assertEq("notes.json", artifact.name,
+            "artifact path create should default artifact_name to basename");
+        assertEq("metadata", artifact.role, "artifact role override should be applied");
+        assertEq(File::readBinaryFile(notes_path).size(),
+            registry.loadNamedArtifact("dp-package", created.version_id, "notes.json").size(),
+            "DataProvider-created artifact should round-trip through registry");
+
+        it = artifacts_dp.searchRecords({"name": "notes.json"});
+        assertTrue(it.next(), "new artifact should be searchable");
+        assertEq("json", it.getValue().format, "new artifact format should match");
     }
 
     dataProviderFactoryTest() {

@@ -154,7 +154,44 @@ printf("runtime=%s tokenizer=%s\n",
 hash<auto> tokenizer_config = reg.loadTokenizerConfig("bge-small-en", vid);
 
 # ONNX packages are executable when ONNX Runtime is available.
-object model = reg.loadExecutable("bge-small-en", vid);
+    object model = reg.loadExecutable("bge-small-en", vid);
+    @endcode
+
+    @par DataProvider Package Registration Example:
+    @code{.py}
+%requires QoreModelRegistry
+
+QoreModelRegistry::ModelRegistry reg({"path": "/var/models"});
+QoreModelRegistry::ModelRegistryDataProvider dp(reg);
+
+# Create a new model version from a package directory through the standard
+# DataProvider create API.  The returned record is the inspected version
+# manifest with runtime, safety, tokenizer, and artifact metadata.
+hash<auto> version = dp.createRecord({
+    "name": "bge-small-en",
+    "package_path": "/srv/models/bge-small-en",
+    "description": "Embedding model package exported to ONNX",
+    "tags": ("embedding", "production"),
+});
+
+# Navigate model-registry -> model name -> version id.  The version child is an
+# artifact provider for package files such as tokenizer.json or config.json.
+AbstractDataProvider versions = dp.getChildProvider("bge-small-en");
+AbstractDataProvider artifacts = versions.getChildProvider(version.version_id);
+
+hash<auto> tokenizer_note = artifacts.createRecord({
+    "artifact_name": "tokenizer-notes.json",
+    "artifact_data": binary("{\"source\":\"curated\"}"),
+    "role": "metadata",
+    "format": "json",
+    "safe_to_parse": True,
+});
+
+AbstractDataProviderRecordIterator it =
+    artifacts.searchRecords({"role": "tokenizer"});
+while (it.next()) {
+    printf("tokenizer artifact: %s\n", it.getValue().name);
+}
     @endcode
 
     @par Safe PyTorch Metadata Example:
@@ -186,6 +223,8 @@ reg.loadExecutable("torch-source", vid);
     - Added @ref QoreModelRegistry::ModelArtifactInspector for HuggingFace,
       ONNX, SafeTensors, and PyTorch package inspection without executing
       unsafe artifacts
+    - Added DataProvider create/navigation support for model package
+      registration and per-version named artifact providers
     - Filesystem and database backends preserve package manifests and named
       artifact metadata; REST backends can expose equivalent artifact endpoints
 
