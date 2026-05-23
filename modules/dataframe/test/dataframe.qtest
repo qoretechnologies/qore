@@ -1135,6 +1135,24 @@ sub invalid_dataframe_api() {
         assertTrue(grouped_pipe.getInfo().bulk, "filter -> group-by pipeline stays in bulk mode");
 
         DataProviderDataFrame::DataFrameDataProvider prov(df);
+        assertEqSoft((DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists), prov.getBulkReadShapes(),
+            "DataFrame provider advertises native DataFrame bulk read support");
+        assertTrue(prov.supportsBulkReadShape(DataProviderShape::DataFrameBlock),
+            "DataFrame provider reports DataFrameBlock bulk read support");
+        assertTrue(prov.supportsBulkReadShape(DataProviderShape::HashOfLists),
+            "DataFrame provider keeps hash-of-lists compatibility support");
+
+        AbstractDataProviderBulkRecordInterface shaped_bulk = prov.searchRecordsBulk(3);
+        assertEq(DataProviderShape::DataFrameBlock, shaped_bulk.getValueShape(),
+            "DataFrame provider bulk iterator advertises DataFrameBlock shape");
+        *auto shaped_block = shaped_bulk.getShapedValue();
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(shaped_block),
+            "DataFrame provider shaped bulk iterator returns a DataFrame block");
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(shaped_block, DataProviderShape::DataFrameBlock),
+            "DataFrame provider shaped bulk block preserves row count");
+        assertEq(("Alice", "Bob", "Carol"), shaped_block.toColumnHash().name,
+            "DataFrame provider shaped bulk block preserves values");
+
         AbstractDataProviderBulkRecordInterface bulk = prov.searchRecordsBulk(2);
         assertEq({"name": ("Alice", "Bob"), "status": ("active", "inactive"), "amount": (90, 220)},
             bulk.getValue(), "DataFrame provider returns first bulk block");

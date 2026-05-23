@@ -56,6 +56,7 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
             "has_record": True,
             "supports_read": True,
             "supports_bulk_read": True,
+            "bulk_read_shapes": (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists),
             "supports_search_expressions": False,
             "supports_create": False,
         };
@@ -224,8 +225,27 @@ public class DataFrameBulkRecordInterface inherits DataProvider::AbstractDataPro
         return record_type;
     }
 
-    #! Returns the next DataFrame block as hash-of-lists
+    #! Returns the native pipeline shape produced by this iterator
+    private DataProviderShape getValueShapeImpl() {
+        return DataProviderShape::DataFrameBlock;
+    }
+
+    #! Returns the next DataFrame block in native shape
+    private *auto getShapedValueImpl() {
+        return getDataFrameBlock();
+    }
+
+    #! Returns the next DataFrame block as hash-of-lists for compatibility callers
     private *hash<auto> getValueImpl() {
+        *DataFrame::DataFrame block = getDataFrameBlock();
+        if (!block) {
+            return;
+        }
+        return block.toColumnHash();
+    }
+
+    #! Returns the next DataFrame block
+    private *DataFrame::DataFrame getDataFrameBlock() {
         int total = dataframe.numRows();
         if (pos >= total) {
             return;
@@ -237,7 +257,7 @@ public class DataFrameBulkRecordInterface inherits DataProvider::AbstractDataPro
         }
         DataFrame::DataFrame block = dataframe.slice(pos, end);
         pos = end;
-        return block.toColumnHash();
+        return block;
     }
 }
 

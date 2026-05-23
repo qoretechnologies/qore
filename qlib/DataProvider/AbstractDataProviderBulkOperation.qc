@@ -156,6 +156,22 @@ public class AbstractDataProviderBulkOperation {
         flushIntern();
     }
 
+    #! Queues shaped bulk data in the buffer
+    /** @param recs a shaped record block; \c BufferColumns and \c DataFrameBlock values are converted to
+        hash-of-lists compatibility form before they are buffered
+
+        @since DataProvider 3.5
+    */
+    queueData(auto recs) {
+        DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+        list<auto> converted = AbstractDataProcessor::convertShape(recs, shape, DataProviderShape::HashOfLists);
+        if (!converted) {
+            return;
+        }
+        hash<auto> h = converted[0];
+        queueData(h);
+    }
+
     #! Flushes any remaining batched data to the provider
     /** This method should always be called before committing the transaction (for data providers that support
         transaction management) or destroying the object

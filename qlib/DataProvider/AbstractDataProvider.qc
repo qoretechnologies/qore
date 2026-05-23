@@ -215,17 +215,47 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     */
     bool supports_bulk_read = False;
 
+    #! Native bulk read shapes supported by the data provider
+    /** If not set, the provider is assumed to return @ref DataProvider::DataProviderShape::HashOfLists
+        "HashOfLists" from bulk read APIs.  Providers that can preserve dense columnar data should include
+        @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
+        @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
+
+        @since DataProvider 3.5
+    */
+    *softlist<DataProviderShape> bulk_read_shapes;
+
     #! Does the data provider support native / optimized bulk creation?
     /** if this is @ref False and \a supports_creation is @ref True, the data provider will still support bulk write
         APIs but without any performance improvements for bulk data (simulated bulk creates)
     */
     bool supports_bulk_create = False;
 
+    #! Native bulk create input shapes supported by the data provider
+    /** If not set, the provider is assumed to accept @ref DataProvider::DataProviderShape::HashOfLists
+        "HashOfLists".  Providers that can consume dense columnar data directly should include
+        @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
+        @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
+
+        @since DataProvider 3.5
+    */
+    *softlist<DataProviderShape> bulk_create_shapes;
+
     #! Does the data provider support native / optimized bulk upserts?
     /** if this is @ref False and \a supports_upsert is @ref True, the data provider will still support bulk upsert
         APIs but without any performance improvements for bulk data (simulated bulk upserts)
     */
     bool supports_bulk_upsert = False;
+
+    #! Native bulk upsert input shapes supported by the data provider
+    /** If not set, the provider is assumed to accept @ref DataProvider::DataProviderShape::HashOfLists
+        "HashOfLists".  Providers that can consume dense columnar data directly should include
+        @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
+        @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
+
+        @since DataProvider 3.5
+    */
+    *softlist<DataProviderShape> bulk_upsert_shapes;
 
     #! Does the data provider support the request API?
     bool supports_request = False;
@@ -909,6 +939,11 @@ public hashdecl DataProviderInfo {
     */
     bool supports_bulk_read = False;
 
+    #! Native bulk read shapes supported by the data provider
+    /** @since DataProvider 3.5
+    */
+    *softlist<DataProviderShape> bulk_read_shapes;
+
     #! Does the data provider support native / optimized bulk creation?
     /** if this is @ref False and \a supports_creation is @ref True, the data provider will still support bulk write
         APIs but without any performance improvements for bulk data (simulated bulk creates)
@@ -917,6 +952,11 @@ public hashdecl DataProviderInfo {
     */
     bool supports_bulk_create = False;
 
+    #! Native bulk create input shapes supported by the data provider
+    /** @since DataProvider 3.5
+    */
+    *softlist<DataProviderShape> bulk_create_shapes;
+
     #! Does the data provider support native / optimized bulk upserts?
     /** if this is @ref False and \a supports_upsert is @ref True, the data provider will still support bulk upsert
         APIs but without any performance improvements for bulk data (simulated bulk upserts)
@@ -924,6 +964,11 @@ public hashdecl DataProviderInfo {
         @note this is a static attribute; it is the same for all data providers of the same type
     */
     bool supports_bulk_upsert = False;
+
+    #! Native bulk upsert input shapes supported by the data provider
+    /** @since DataProvider 3.5
+    */
+    *softlist<DataProviderShape> bulk_upsert_shapes;
 
     #! Does the data provider support the request API?
     /** @note this is a static attribute; it is the same for all data providers of the same type
@@ -2159,7 +2204,51 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             }
         }
         create_options = validateCreateOptions(create_options);
-        return createRecordsBulkIntern(recs, create_options);
+        return createRecordsShapeIntern(recs, detectBulkHashShape(recs), create_options);
+    }
+
+    #! Creates the given records in the data provider from any supported bulk shape
+    /** @param recs a shaped record block; supported shapes are @ref DataProviderShape::HashOfLists "HashOfLists",
+        @ref DataProviderShape::BufferColumns "BufferColumns", @ref DataProviderShape::DataFrameBlock
+        "DataFrameBlock", and a single row record
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format
+
+        @throw INVALID-OPERATION the data provider does not support record creation
+
+        @since DataProvider 3.5
+    */
+    *hash<auto> createRecordsBulk(auto recs, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        create_options = validateCreateOptions(create_options);
+        DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+        return createRecordsShapeIntern(recs, shape, create_options);
+    }
+
+    #! Creates the given shaped records in the data provider
+    /** @param recs a shaped record block
+        @param shape the shape of \a recs
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format
+
+        @since DataProvider 3.5
+    */
+    *hash<auto> createRecordsShape(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        create_options = validateCreateOptions(create_options);
+        return createRecordsShapeIntern(recs, shape, create_options);
     }
 
     #! Creates the given records in the data provider
@@ -2208,8 +2297,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         create_options = validateCreateOptions(create_options);
         hash<auto> rv;
-        while (*hash<auto> recs = stream.getValue()) {
-            *hash<auto> r = createRecordsBulkIntern(recs, create_options);
+        while (*auto recs = stream.getShapedValue()) {
+            DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+            *hash<auto> r = createRecordsShapeIntern(recs, shape, create_options);
             if (!rv) {
                 rv = r;
             } else {
@@ -2305,10 +2395,39 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *list<string> upsertRecordsBulk(hash<auto> recs, *hash<auto> upsert_options) {
         checkUpsert();
         upsert_options = validateUpsertOptions(upsert_options);
-        if (!supportsBulkUpsert()) {
-            return map upsertRecordImpl($1, upsert_options), recs.contextIterator();
-        }
-        return upsertRecordsBulkImpl(recs, upsert_options);
+        return upsertRecordsShapeIntern(recs, detectBulkHashShape(recs), upsert_options);
+    }
+
+    #! Upserts the given records in the data provider from any supported bulk shape
+    /** @param recs a shaped record block; supported shapes are @ref DataProviderShape::HashOfLists "HashOfLists",
+        @ref DataProviderShape::BufferColumns "BufferColumns", @ref DataProviderShape::DataFrameBlock
+        "DataFrameBlock", and a single row record
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order
+
+        @since DataProvider 3.5
+    */
+    *list<string> upsertRecordsBulk(auto recs, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateUpsertOptions(upsert_options);
+        DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+        return upsertRecordsShapeIntern(recs, shape, upsert_options);
+    }
+
+    #! Upserts the given shaped records in the data provider
+    /** @param recs a shaped record block
+        @param shape the shape of \a recs
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order
+
+        @since DataProvider 3.5
+    */
+    *list<string> upsertRecordsShape(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateUpsertOptions(upsert_options);
+        return upsertRecordsShapeIntern(recs, shape, upsert_options);
     }
 
     #! Creates the given records in the data provider
@@ -2355,12 +2474,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkUpsert();
         upsert_options = validateUpsertOptions(upsert_options);
         list<string> rv;
-        while (*hash<auto> recs = stream.getValue()) {
-            if (!supportsBulkUpsert()) {
-                rv += map upsertRecordImpl($1, upsert_options), recs.contextIterator();
-            } else {
-                rv += upsertRecordsBulkImpl(recs, upsert_options);
-            }
+        while (*auto recs = stream.getShapedValue()) {
+            DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+            rv += upsertRecordsShapeIntern(recs, shape, upsert_options);
         }
         return rv;
     }
@@ -4765,6 +4881,66 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return createRecordsBulkImpl(recs, create_options);
     }
 
+    #! Detects hash-based bulk shape while preserving mixed scalar/list bulk records
+    private DataProviderShape detectBulkHashShape(hash<auto> recs) {
+        if (AbstractDataProcessor::isHashOfBuffers(recs)) {
+            return DataProviderShape::BufferColumns;
+        }
+        foreach auto value in (recs.iterator()) {
+            if (value.typeCode() == NT_LIST) {
+                return DataProviderShape::HashOfLists;
+            }
+        }
+        return DataProviderShape::RowRecords;
+    }
+
+    #! Converts any shaped record block to the compatibility hash-of-lists representation
+    private hash<auto> shapedRecordsToHashOfLists(auto recs, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+                return recs;
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(recs)) {
+                    return AbstractDataProcessor::bufferColumnsToHashList(recs.toColumnHash());
+                }
+                return AbstractDataProcessor::bufferColumnsToHashList(recs);
+            case DataProviderShape::DataFrameBlock:
+                return AbstractDataProcessor::bufferColumnsToHashList(recs.toColumnHash());
+            case DataProviderShape::RowRecords:
+                if (recs.typeCode() == NT_LIST) {
+                    return AbstractDataProcessor::recordsToHashList(recs);
+                }
+                return AbstractDataProcessor::recordsToHashList((recs,));
+        }
+
+        throw "BULK-SHAPE-ERROR", sprintf("unsupported DataProvider bulk shape %s",
+            AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Creates records from a shaped block, preserving native columnar input for providers that support it
+    private *hash<auto> createRecordsShapeIntern(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        if (shape != DataProviderShape::HashOfLists && supportsBulkCreateShape(shape)) {
+            return createRecordsShapeImpl(recs, shape, create_options);
+        }
+        return createRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), create_options);
+    }
+
+    #! Upserts records from a shaped block, preserving native columnar input for providers that support it
+    private *list<string> upsertRecordsShapeIntern(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        if (shape != DataProviderShape::HashOfLists && supportsBulkUpsertShape(shape)) {
+            return upsertRecordsShapeImpl(recs, shape, upsert_options);
+        }
+        return upsertRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), upsert_options);
+    }
+
+    #! Upserts the given records in hash-of-lists compatibility bulk format
+    private *list<string> upsertRecordsBulkIntern(hash<auto> recs, *hash<auto> upsert_options) {
+        if (!supportsBulkUpsert()) {
+            return map upsertRecordImpl($1, upsert_options), recs.contextIterator();
+        }
+        return upsertRecordsBulkImpl(recs, upsert_options);
+    }
+
     #! Returns create options as action options
     private *hash<string, hash<ActionOptionInfo>> getCreateOptionsAsActionOptions() {
         return getOptionsAsActionOptions(getCreateOptions());
@@ -6151,6 +6327,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getStaticInfoImpl().supports_bulk_read;
     }
 
+    #! Returns the native bulk read shapes supported by the data provider
+    /** @since DataProvider 3.5
+    */
+    list<DataProviderShape> getBulkReadShapes() {
+        return getBulkReadShapesImpl();
+    }
+
+    #! Returns @ref True if the data provider can return the given native bulk read shape
+    /** @since DataProvider 3.5
+    */
+    bool supportsBulkReadShape(DataProviderShape shape) {
+        return getBulkReadShapes().contains(shape);
+    }
+
     #! Returns @ref True if the data provider supports the record creation API
     /**
     */
@@ -6193,11 +6383,39 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getStaticInfoImpl().supports_bulk_create;
     }
 
+    #! Returns the native bulk create input shapes supported by the data provider
+    /** @since DataProvider 3.5
+    */
+    list<DataProviderShape> getBulkCreateShapes() {
+        return getBulkCreateShapesImpl();
+    }
+
+    #! Returns @ref True if the data provider can consume the given native bulk create shape
+    /** @since DataProvider 3.5
+    */
+    bool supportsBulkCreateShape(DataProviderShape shape) {
+        return getBulkCreateShapes().contains(shape);
+    }
+
     #! Returns True if the data provider supports bulk upserts
     /**
     */
     bool supportsBulkUpsert() {
         return getStaticInfoImpl().supports_bulk_upsert;
+    }
+
+    #! Returns the native bulk upsert input shapes supported by the data provider
+    /** @since DataProvider 3.5
+    */
+    list<DataProviderShape> getBulkUpsertShapes() {
+        return getBulkUpsertShapesImpl();
+    }
+
+    #! Returns @ref True if the data provider can consume the given native bulk upsert shape
+    /** @since DataProvider 3.5
+    */
+    bool supportsBulkUpsertShape(DataProviderShape shape) {
+        return getBulkUpsertShapes().contains(shape);
     }
 
     #! Returns True if the data provider supports requests
@@ -6526,6 +6744,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         throwUnimplementedException();
     }
 
+    #! Creates records from any shaped bulk block
+    /** The default implementation converts the input to hash-of-lists compatibility format. Providers that list
+        @ref DataProviderShape::BufferColumns "BufferColumns" or @ref DataProviderShape::DataFrameBlock
+        "DataFrameBlock" in \c bulk_create_shapes should override this method to consume those shapes directly.
+
+        @since DataProvider 3.5
+    */
+    private *hash<auto> createRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        return createRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), create_options);
+    }
+
     #! Upserts the given record to the data provider
     /** @param rec a hash representing a single input record
         @param upsert_options the create options after processing by validateUpsertOptions()
@@ -6546,6 +6775,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
         throwUnimplementedException();
+    }
+
+    #! Upserts records from any shaped bulk block
+    /** The default implementation converts the input to hash-of-lists compatibility format. Providers that list
+        @ref DataProviderShape::BufferColumns "BufferColumns" or @ref DataProviderShape::DataFrameBlock
+        "DataFrameBlock" in \c bulk_upsert_shapes should override this method to consume those shapes directly.
+
+        @since DataProvider 3.5
+    */
+    private *list<string> upsertRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        return upsertRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), upsert_options);
     }
 
     #! Updates a single record matching the search options
@@ -7233,6 +7473,27 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns data provider static info
     private abstract hash<DataProviderInfo> getStaticInfoImpl();
+
+    #! Returns the provider's native bulk read shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> getBulkReadShapesImpl() {
+        return getStaticInfoImpl().bulk_read_shapes ?? (DataProviderShape::HashOfLists,);
+    }
+
+    #! Returns the provider's native bulk create input shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> getBulkCreateShapesImpl() {
+        return getStaticInfoImpl().bulk_create_shapes ?? (DataProviderShape::HashOfLists,);
+    }
+
+    #! Returns the provider's native bulk upsert input shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> getBulkUpsertShapesImpl() {
+        return getStaticInfoImpl().bulk_upsert_shapes ?? (DataProviderShape::HashOfLists,);
+    }
 
     #! Sets the debug info collector for this data provider
     /** @param collector the debug collector to use, or @ref nothing to disable debug collection
