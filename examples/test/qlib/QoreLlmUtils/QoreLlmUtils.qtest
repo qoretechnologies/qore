@@ -145,6 +145,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \structuredRepairBalancedCompletionTest());
         addTestCase("LlmStructuredRepair coerces nested schema JSON strings",
             \structuredRepairSchemaCoercionTest());
+        addTestCase("LlmRequestClassifier normalizes semantic policy result",
+            \requestClassifierSemanticPolicyTest());
+        addTestCase("CitationValidator validates supplied source ids",
+            \citationValidatorTest());
+        addTestCase("GroundedAnswerVerifier combines grounding and citations",
+            \groundedAnswerVerifierTest());
         addTestCase("LlmBackend gemini chat request and text response",
             \geminiChatRequestAndTextResponseTest());
         addTestCase("LlmBackend gemini tool call response",
@@ -261,6 +267,26 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "api_key": "gemini-test-key",
             "max_tokens": 512,
             "temperature": 0.0,
+        });
+    }
+
+    private QoreLlmUtils::LlmBackend makeStaticCompletionBackend(
+            string content) {
+        return new QoreLlmUtils::LlmBackend(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "model": "test-model",
+            "api_callback": hash<auto> sub (string method, string path,
+                    hash<auto> body) {
+                return {
+                    "choices": (
+                        {
+                            "message": {"content": content},
+                            "finish_reason": "stop",
+                        },
+                    ),
+                    "usage": {"total_tokens": 7},
+                };
+            },
         });
     }
 
@@ -676,6 +702,82 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "stringified object fields are parsed");
         assertEq("iface-fsm", value.steps[0].payload.key,
             "stringified arrays and nested objects are parsed");
+    }
+
+    requestClassifierSemanticPolicyTest() {
+        QoreLlmUtils::LlmBackend backend = makeStaticCompletionBackend(
+            "{\"allowed\":false,\"detected_language\":\"cs\","
+            "\"domain\":\"creative-writing\",\"task_category\":\"story\","
+            "\"confidence\":0.92,\"blocked_category\":\"creative-writing\","
+            "\"reason_code\":\"blocked-task-category\","
+            "\"reason\":\"creative writing is outside the supplied policy\"}");
+        QoreLlmUtils::LlmRequestClassifier classifier(backend, {
+            "policy_label": "ops-only",
+            "allowed_domains": ("operations",),
+            "blocked_task_categories": ("creative-writing",),
+        });
+
+        hash<QoreLlmUtils::LlmRequestClassification> r =
+            classifier.classify("napiš mi povídku");
+        assertFalse(r.allowed);
+        assertEq("cs", r.detected_language);
+        assertEq("creative-writing", r.blocked_category);
+        assertEq("blocked-task-category", r.reason_code);
+        assertTrue(r.confidence > 0.9);
+        assertEq(7, r.usage.total_tokens);
+    }
+
+    citationValidatorTest() {
+        list<hash<QoreLlmUtils::LlmSourceRef>> sources = (
+            <QoreLlmUtils::LlmSourceRef>{
+                "source_id": "qorus-docs",
+                "title": "Qorus docs",
+                "snippet": "Qorus workflows coordinate jobs and services.",
+            },
+        );
+        hash<QoreLlmUtils::CitationValidationResult> ok =
+            QoreLlmUtils::CitationValidator::validate(
+                "Qorus workflows coordinate jobs [source:qorus-docs].",
+                sources, {"require_citations": True});
+        assertTrue(ok.passed);
+        assertEq(("qorus-docs",), ok.cited_source_ids);
+        assertEq(1.0, ok.citation_coverage);
+
+        hash<QoreLlmUtils::CitationValidationResult> missing =
+            QoreLlmUtils::CitationValidator::validate(
+                "Qorus workflows coordinate jobs.", sources,
+                {"require_citations": True});
+        assertFalse(missing.passed);
+        assertEq(("citation-required",), missing.missing_citations);
+    }
+
+    groundedAnswerVerifierTest() {
+        QoreLlmUtils::LlmBackend backend = makeStaticCompletionBackend(
+            "{\"grounded\":true,\"grounding_score\":0.88,"
+            "\"supported_claims\":[\"Qorus workflows coordinate jobs\"],"
+            "\"unsupported_claims\":[],\"missing_citations\":[],"
+            "\"reason\":\"supported by source\"}");
+        QoreLlmUtils::GroundedAnswerVerifier verifier(backend, {
+            "require_sources": True,
+            "require_citations": True,
+            "min_grounding_score": 0.75,
+        });
+        list<hash<QoreLlmUtils::LlmSourceRef>> sources =
+            QoreLlmUtils::GroundedAnswerVerifier::buildSourceBundle((
+                {
+                    "source_id": "qorus-docs",
+                    "title": "Qorus docs",
+                    "snippet": "Qorus workflows coordinate jobs and services.",
+                },
+            ));
+
+        hash<QoreLlmUtils::GroundingVerificationResult> r =
+            verifier.verify("Qorus workflows coordinate jobs [source:qorus-docs].",
+                sources);
+        assertTrue(r.passed);
+        assertEq(0.88, r.grounding_score);
+        assertEq(1.0, r.citation_coverage);
+        assertEq(7, r.usage.total_tokens);
     }
 
     geminiChatRequestAndTextResponseTest() {
