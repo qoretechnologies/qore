@@ -145,8 +145,8 @@ DataFrame/DataProvider workloads.
 | `module-mysql` | yes | yes | partial, via typed column hash conversion | Uses driver result metadata and `ColumnarResult::fromColumnHash()`. |
 | `module-oracle` | yes | yes | partial, via typed column hash conversion | Native DBI methods are registered. |
 | `module-odbc` | yes | yes | partial, via typed column hash conversion | Native DBI methods are registered. |
-| `module-sqlite3` | no | yes | conversion only | Statement fetch supports columnar blocks; datasource select uses fallback. |
-| `module-sybase` / freetds | no | yes | conversion only | Statement fetch supports columnar blocks; datasource select uses fallback. |
+| `module-sqlite3` | yes | yes | conversion only | Native DBI methods are registered; values are shaped through libqore columnar conversion. |
+| `module-sybase` / freetds | yes | yes | conversion only | Native DBI methods are registered; values are shaped through libqore columnar conversion. |
 | `module-jni` / JDBC | yes | yes | yes for JDBC fixed-width numeric, boolean, string, and decimal128 columns | Builds remain compatible with qore develop through CMake feature probes. |
 
 When applying this work to external modules, check:
