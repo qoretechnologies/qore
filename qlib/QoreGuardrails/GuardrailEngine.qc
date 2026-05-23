@@ -128,7 +128,7 @@ public class GuardrailEngine {
         @return a hash keyed by rule-type string
             (\c "pii", \c "prompt_injection", \c "topic_restriction",
             \c "output_format", \c "toxicity", \c "hallucination",
-            \c "action_intent") where each value is a
+            \c "action_intent", \c "task_policy", \c "grounding") where each value is a
             @ref RuleTypeInfo describing that rule type
 
         @par Example
@@ -262,6 +262,35 @@ foreach hash<RuleTypeInfo> info in (registry.iterator()) {
                 "default_direction": GD_INPUT,
                 "config_schema": ActionIntentRule::getConfigSchema(),
             },
+            "task_policy": <RuleTypeInfo>{
+                "type": "task_policy",
+                "display_name": "Semantic Task Policy",
+                "short_desc": "Blocks user messages outside an application-defined "
+                    "semantic domain or task policy",
+                "desc": "Uses a language-independent LLM classifier to compare "
+                    "each user message with the configured allowed domains, "
+                    "allowed tasks, and blocked task categories.  This rule "
+                    "is intended for endpoints with a narrow remit where "
+                    "requests outside the product, operational domain, or "
+                    "task category should be refused before the main LLM "
+                    "sees the input.",
+                "default_direction": GD_INPUT,
+                "config_schema": TaskPolicyRule::getConfigSchema(),
+            },
+            "grounding": <RuleTypeInfo>{
+                "type": "grounding",
+                "display_name": "Grounded Answer Verification",
+                "short_desc": "Verifies AI responses against supplied source "
+                    "snippets and optional citation requirements",
+                "desc": "Uses a grounding verifier to check whether factual "
+                    "claims in an AI response are supported by the source "
+                    "bundle supplied in the evaluation context.  It can fail "
+                    "closed when no sources are present, require citations to "
+                    "authorized source ids, and return structured metadata "
+                    "about unsupported claims and citation coverage.",
+                "default_direction": GD_OUTPUT,
+                "config_schema": GroundingRule::getConfigSchema(),
+            },
         };
     }
 
@@ -345,11 +374,17 @@ foreach hash<RuleTypeInfo> info in (registry.iterator()) {
             case "action_intent":
                 return new ActionIntentRule(config.severity, config.params,
                     global_options.llm_config);
+            case "task_policy":
+                return new TaskPolicyRule(config.severity, config.params,
+                    global_options.llm_config);
+            case "grounding":
+                return new GroundingRule(config.severity, config.params,
+                    global_options.llm_config);
         }
         throw "GUARDRAIL-CONFIG-ERROR",
             sprintf("unknown rule type %y; expected: pii, prompt_injection, "
                 "topic_restriction, output_format, toxicity, hallucination, "
-                "action_intent",
+                "action_intent, task_policy, grounding",
                 config.type);
     }
 }
