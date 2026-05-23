@@ -79,6 +79,11 @@ AbstractDataProviderBulkRecordInterface bulk = provider.searchRecordsBulk(2);
 hash<auto> first_block = bulk.getValue();
 # first_block is {"name": ("Alice", "Bob"), "status": ("active", "inactive"), "score": (95.5, 88.0)}
 
+AbstractDataProviderBulkRecordInterface active_bulk = provider.searchRecordsBulk(
+    1000, '@status == "active" && @score >= 90.0');
+DataFrame::DataFrame active_block = active_bulk.getShapedValue();
+# active_block remains a DataFrameBlock containing Alice and Carol
+
 hash<DataProviderExpression> active_expr = <DataProviderExpression>{
     "exp": "==",
     "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
@@ -101,7 +106,9 @@ pipeline.waitDone();
     keep the DataFrame representation; processors that only support bulk records receive a hash-of-lists conversion.
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and
     @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" both support \c DataFrameBlock, so common
-    filter-and-aggregate pipelines can stay columnar until terminal output records are emitted.
+    filter-and-aggregate pipelines can stay columnar until terminal output records are emitted.  The
+    \c DataFrameDataProvider also supports DPQL search expressions directly; structured expressions and DPQL string
+    searches use the same columnar filter engine as pipeline filters.
 
     @section dataproviderdataframe_relnotes DataProviderDataFrame Release Notes
 
@@ -112,6 +119,8 @@ pipeline.waitDone();
       shape is determined by the DataFrame schema at runtime
     - DataFrame bulk reads use DataFrame column blocks and return hash-of-lists blocks without first materializing
       every row
+    - DataFrame searches now support DPQL strings and \c hash<DataProviderExpression> values directly; bulk DPQL
+      searches preserve \c DataFrameBlock shape through \c getShapedValue()
     - DataFrames submitted to a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" can remain in
       \c DataFrameBlock shape through DataFrame-aware processors such as
       @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and

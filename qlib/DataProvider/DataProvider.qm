@@ -99,9 +99,9 @@ module DataProvider {
             "path": "/",
             "action": "filter-records",
             "display_name": "Filter Records",
-            "short_desc": "Filter records by where_cond expression",
-            "desc": "Filter pipeline records using a `where_cond` expression; "
-                "matching records pass through, non-matching records are dropped",
+            "short_desc": "Filter records by expression or DPQL string",
+            "desc": "Filter pipeline records using either a structured `where_cond` expression or a `dpql_where` "
+                "string; matching records pass through, non-matching records are dropped",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_FILTER,
             "output_data_type": DPAD_PASS_THROUGH,
@@ -121,8 +121,15 @@ module DataProvider {
                         "desc": "A boolean expression to filter records; matching records pass "
                             "through, non-matching records are dropped",
                         "type": AbstractDataProviderTypeMap."*bool",
-                        "required": True,
                         "server_expression_handling": True,
+                    },
+                    "dpql_where": <DataProviderOptionInfo>{
+                        "display_name": "DPQL Filter",
+                        "short_desc": "A DPQL string filter expression",
+                        "desc": "A DPQL string expression to filter records; use this option when writing the "
+                            "predicate directly as text instead of using the expression builder",
+                        "type": AbstractDataProviderTypeMap."*string",
+                        "example_value": "@status == \"active\" && @score >= 90",
                     },
                 }, {
                     "loc": "constructor",
@@ -809,11 +816,26 @@ pipeline.waitDone();
 # rows now contains the matching DataFrame rows as record hashes.
     @endcode
 
+    The same filter can also be written directly as DPQL:
+    @code{.py}
+pipeline.append(new QoreFilterRecordsProcessor({
+    "dpql_where": '@status == "open" && @amount > 100.0',
+}));
+
+# The where_cond option also accepts a DPQL string for simple programmatic setup.
+pipeline.append(new QoreFilterRecordsProcessor({
+    "where_cond": '@status == "open" && @amount > 100.0',
+}));
+    @endcode
+
     @note
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
-    \c DataFrameBlock and \c BufferColumns directly.  Supported scalar comparisons, \c between,
+    \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
+    expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
+    \c between,
     \c in, \c notIn, null checks, and boolean combinations compile to DataFrame row masks or dense
-    ColumnarResult \c buffer<bool> masks.  More complex
+    ColumnarResult \c buffer<bool> masks.  DataFrame string predicates such as \c contains,
+    \c starts-with, and \c ends-with use DataFrame column filtering.  More complex
     expressions fall back to row-record evaluation while preserving the negotiated shape when possible.
     @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
     @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
@@ -1031,10 +1053,14 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('!(@deleted
 
     @par Using with Data Providers
     @code{.py}
-# Search a data provider using DPQL
+# Search a data provider using parsed DPQL
 hash<DataProviderExpression> where = DataProvider::parseDpqlExpression(
     '@created > 2024-01-01 && @type == "order"');
-AbstractDataProviderRecordIterator i = provider.searchRecords({"where": where});
+AbstractDataProviderRecordIterator i = provider.searchRecords(where);
+
+# Providers that support search expressions can also accept a DPQL string directly
+AbstractDataProviderRecordIterator i2 = provider.searchRecords(
+    '@created > 2024-01-01 && @type == "order"');
     @endcode
 
     @subsection dpql_round_trip Round-Trip Conversion
@@ -1158,6 +1184,11 @@ if (errors) {
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
       \c DataFrameBlock and \c BufferColumns input directly for supported comparisons, boolean combinations, and
       null checks
+    - added DPQL string support to @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
+      through \c dpql_where and string-valued \c where_cond options so pipeline filters can be configured directly
+      with DPQL while retaining the DataFrame and dense BufferColumns fast paths
+    - added @ref DataProvider::ColumnarExpressionFilter "ColumnarExpressionFilter" as the shared DataFrame and
+      ColumnarResult expression engine used by shape-aware processors and DataFrame-backed providers
     - updated @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to process hash-of-lists,
       \c BufferColumns, and DataFrame blocks directly and preserve shaped aggregate blocks on pipeline flush
     - updated @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",

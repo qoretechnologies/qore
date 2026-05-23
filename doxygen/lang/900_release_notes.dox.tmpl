@@ -137,7 +137,8 @@
       owned Arrow-compatible buffers or Qore containers
     - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper now support shaped columnar bulk blocks: DB providers can
       return \c ColumnarResult values from \c getShapedValue(), bulk DB writes can accept \c ColumnarResult and
-      hash-of-\c buffer<T> input, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
+      hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
+      \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
       autonomous provider-to-provider runs
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
@@ -1684,6 +1685,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - added module-conditional expression registration for YAML, JSON, and XML serialization
         functions (registered when the corresponding modules are available)
       - added \c dp_get_all_expression_info() public function to retrieve all expression metadata
+      - \c QoreFilterRecordsProcessor now accepts direct DPQL string filters through \c dpql_where and string-valued
+        \c where_cond constructor options and shares DataFrame / ColumnarResult expression execution with
+        DataFrame-backed providers
 
     - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
       - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
@@ -1948,6 +1952,8 @@ foreach string module_name in (registry.getProcessModules()) {
         \c ColumnarResult::combineMasks(), \c ColumnarResult::invertMask(), and
         \c ColumnarResult::nullMask() provide dense filtering, contiguous
         slicing, and boolean-mask composition for SQL/DataFrame analytics flows
+      - DataFrame-backed DataProvider searches accept DPQL strings and structured
+        \c hash<DataProviderExpression> filters directly while preserving \c DataFrameBlock shape for bulk reads
       - \c DataFrame::concat(axis:1) implements horizontal concat with row-count
         validation, duplicate-column diagnostics, and shared column storage
         where possible

@@ -91,6 +91,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("arrowIpcTest", \arrowIpcTest());
         addTestCase("dataProviderTest", \dataProviderTest());
         addTestCase("dataProviderPipelineShapeTest", \dataProviderPipelineShapeTest());
+        addTestCase("dataProviderDpqlShapeTest", \dataProviderDpqlShapeTest());
         addTestCase("bufferColumnsPipelineShapeTest", \bufferColumnsPipelineShapeTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
@@ -1020,6 +1021,25 @@ sub invalid_dataframe_api() {
         }
         assertEq(2, count, "comparison filter returns 2 records");
 
+        assertTrue(prov.supportsSearchExpressions(), "DataFrame provider supports DPQL search expressions");
+
+        # Search with a DPQL expression string
+        auto dpql_it = prov.searchRecords('@score >= 90 && @age >= 30');
+        list<string> dpql_names();
+        while (dpql_it.next()) {
+            push dpql_names, dpql_it.getValue().name;
+        }
+        assertEq(("Alice", "Carol"), dpql_names, "DataFrame provider filters row search with DPQL");
+
+        # Bulk DPQL searches preserve DataFrameBlock shape
+        AbstractDataProviderBulkRecordInterface dpql_bulk = prov.searchRecordsBulk(10, '@score >= 90');
+        assertEq(DataProviderShape::DataFrameBlock, dpql_bulk.getValueShape(),
+            "DataFrame provider DPQL bulk search advertises DataFrameBlock shape");
+        DataFrame::DataFrame dpql_block = dpql_bulk.getShapedValue();
+        assertEq(("Alice", "Carol"), dpql_block.getColumn("name"),
+            "DataFrame provider DPQL bulk search filters DataFrame blocks");
+        assertNothing(dpql_bulk.getShapedValue(), "DataFrame provider DPQL bulk search ends after matching block");
+
         # Get DataFrame back from provider
         DataFrame::DataFrame df2 = prov.getDataFrame();
         assertEq(3, df2.numRows(), "getDataFrame preserves rows");
@@ -1064,6 +1084,36 @@ sub invalid_dataframe_api() {
         DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(2, filtered.numRows(), "DataFrameBlock filter keeps matching rows");
         assertEq(("Carol", "Dave"), filtered.getColumn("name"), "DataFrameBlock filter preserves row order");
+
+        hash<DataProviderExpression> parsed_expr = DataProvider::parseDpqlExpression(
+            '@status == "active" && @amount > 100');
+        QoreFilterRecordsProcessor parsed_proc({"where_cond": parsed_expr});
+        DataFrame::DataFrame parsed_filtered = parsed_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), parsed_filtered.getColumn("name"),
+            "DataFrameBlock filter accepts parsed DPQL expressions");
+
+        QoreFilterRecordsProcessor dpql_proc({
+            "dpql_where": '@status in ("active", "pending") && @amount between 100 and 200',
+        });
+        DataFrame::DataFrame dpql_filtered = dpql_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), dpql_filtered.getColumn("name"),
+            "DataFrameBlock filter parses DPQL strings directly");
+
+        QoreFilterRecordsProcessor where_string_proc({
+            "where_cond": '@status == "active" && @amount > 100',
+        });
+        DataFrame::DataFrame where_string_filtered = where_string_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), where_string_filtered.getColumn("name"),
+            "DataFrameBlock filter accepts DPQL strings in where_cond");
+
+        QoreFilterRecordsProcessor contains_proc({
+            "dpql_where": 'contains(@name, "a") && @status == "active"',
+        });
+        DataFrame::DataFrame contains_filtered = contains_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), contains_filtered.getColumn("name"),
+            "DataFrameBlock filter applies DPQL string operators");
 
         hash<DataProviderExpression> between_expr = <DataProviderExpression>{
             "exp": DP_SEARCH_OP_BETWEEN,
@@ -1209,6 +1259,54 @@ sub invalid_dataframe_api() {
         assertEq({"name": ("Alice", "Carol", "Dave"), "status": ("active", "active", "active"),
             "amount": (90, 180, 125)}, active_bulk.getValue(), "DataFrame provider filters bulk blocks");
         assertNothing(active_bulk.getValue(), "filtered DataFrame bulk iterator ends after matching rows");
+    }
+
+    dataProviderDpqlShapeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "status": ("active", "inactive", "active", "active"),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+        });
+        auto columns = df.toColumnarResult();
+
+        QoreFilterRecordsProcessor columns_proc({
+            "dpql_where": '@amount >= 125.0 && @id != 2',
+        });
+        auto filtered = columns_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(filtered),
+            "DPQL BufferColumns filter preserves BufferColumns shape");
+        assertEq((3, 4), filtered.getColumn("id").toList(),
+            "DPQL BufferColumns filter uses dense numeric masks");
+
+        QoreFilterRecordsProcessor string_proc({
+            "dpql_where": 'contains(@name, "a") && @id > 1',
+        });
+        auto string_filtered = string_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(string_filtered),
+            "DPQL BufferColumns string fallback preserves BufferColumns shape");
+        assertEq((3, 4), string_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns string fallback keeps matching rows");
+
+        hash<auto> raw_buffers = {
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "active": new buffer<bool>((True, False, True, True)),
+        };
+        QoreFilterRecordsProcessor raw_proc({
+            "dpql_where": '@active == true && @amount >= 125.0',
+        });
+        auto raw_filtered = raw_proc.processRecordsShape(raw_buffers, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(raw_filtered),
+            "DPQL hash-of-buffers filter returns BufferColumns shape");
+        assertEq((3, 4), raw_filtered.getColumn("id").toList(),
+            "DPQL hash-of-buffers filter keeps matching rows");
     }
 
     bufferColumnsPipelineShapeTest() {

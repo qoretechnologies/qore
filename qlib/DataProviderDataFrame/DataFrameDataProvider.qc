@@ -57,7 +57,8 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
             "supports_read": True,
             "supports_bulk_read": True,
             "bulk_read_shapes": (DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists),
-            "supports_search_expressions": False,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
             "supports_create": False,
         };
     }
@@ -119,7 +120,7 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
     #! Returns an iterator over records matching the optional where condition
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(
             *hash<auto> where_cond, *hash<auto> search_options) {
-        return new DataFrameRecordIterator(dataframe, where_cond);
+        return new DataFrameRecordIterator(applyWhere(dataframe, where_cond), NOTHING);
     }
 
     #! Returns a bulk interface over records matching the optional where condition
@@ -136,13 +137,24 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Applies simple DataProvider where conditions to a DataFrame
     /** Where conditions use hash format: \c {"column": value} for equality or
-        \c {"column": {"op": value}} for comparison operators.
+        \c {"column": {"op": value}} for comparison operators.  A
+        \c hash<DataProviderExpression> value, including one produced from DPQL by
+        @ref DataProvider::DataProvider::parseDpqlExpression(), is applied through the shared columnar filter engine.
 
         @since DataProviderDataFrame 1.0
     */
     static DataFrame::DataFrame applyWhere(DataFrame::DataFrame df, *hash<auto> where_cond) {
         DataFrame::DataFrame filtered = df;
         if (where_cond) {
+            if (where_cond instanceof hash<DataProviderExpression>) {
+                hash<DataProviderExpression> expr = AbstractDataProvider::prepareExpression(
+                    cast<hash<DataProviderExpression>>(where_cond));
+                *DataFrame::DataFrame legacy_filtered = tryApplyLegacyHashComparisonExpression(df, expr);
+                if (legacy_filtered) {
+                    return legacy_filtered;
+                }
+                return DataProvider::ColumnarExpressionFilter::filterDataFrame(df, expr);
+            }
             HashIterator hi(where_cond);
             while (hi.next()) {
                 string col = hi.getKey();
@@ -160,6 +172,65 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
             }
         }
         return filtered;
+    }
+
+    #! Applies old-style provider comparison hashes after base-class normalization, if possible
+    private static *DataFrame::DataFrame tryApplyLegacyHashComparisonExpression(DataFrame::DataFrame df,
+            hash<DataProviderExpression> expr) {
+        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
+        if (op == DP_OP_AND) {
+            DataFrame::DataFrame filtered = df;
+            foreach auto arg in (expr.args) {
+                if (!(arg instanceof hash<DataProviderExpression>)) {
+                    return;
+                }
+                *DataFrame::DataFrame next = tryApplyLegacyHashComparisonExpression(filtered, arg);
+                filtered = next ?? DataProvider::ColumnarExpressionFilter::filterDataFrame(filtered, arg);
+            }
+            return filtered;
+        }
+
+        if (op != DP_SEARCH_OP_EQ || expr.args.size() != 2
+                || !(expr.args[0] instanceof hash<DataProviderFieldReference>)) {
+            return;
+        }
+
+        auto value = expr.args[1];
+        if (value.typeCode() != NT_HASH || value.hasKey("exp") || value.hasKey("field")) {
+            return;
+        }
+
+        list<string> ops = keys value;
+        foreach string filter_op in (ops) {
+            if (!isLegacyDataFrameFilterOperator(filter_op)) {
+                return;
+            }
+        }
+
+        DataFrame::DataFrame filtered = df;
+        foreach string filter_op in (ops) {
+            filtered = filtered.filter(expr.args[0].field, filter_op, value{filter_op});
+        }
+        return filtered;
+    }
+
+    #! Returns True if the operator key is an old-style DataFrame filter operator
+    private static bool isLegacyDataFrameFilterOperator(string op) {
+        switch (op) {
+            case DP_SEARCH_OP_EQ:
+            case DP_SEARCH_OP_NE:
+            case DP_SEARCH_OP_GT:
+            case DP_SEARCH_OP_GE:
+            case DP_SEARCH_OP_LT:
+            case DP_SEARCH_OP_LE:
+            case "contains":
+            case "startswith":
+            case "endswith":
+            case "is_null":
+            case "not_null":
+                return True;
+        }
+        return False;
     }
 }
 

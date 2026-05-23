@@ -47,10 +47,16 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
                 "display_name": "Filter Expression",
                 "short_desc": "A structured filter expression",
                 "desc": "A structured filter expression (`hash<DataProviderExpression>`) built by "
-                    "the expression builder",
-                "type": AbstractDataProviderTypeMap."*hash",
-                "required": True,
+                    "the expression builder, or a DPQL string for text-based configuration",
+                "type": (AbstractDataProviderTypeMap."*hash", AbstractDataProviderTypeMap."*string"),
                 "server_expression_handling": True,
+            },
+            "dpql_where": <DataProviderOptionInfo>{
+                "display_name": "DPQL Filter",
+                "short_desc": "A DPQL string filter expression",
+                "desc": "A DPQL string expression to parse and use as the filter condition; for example "
+                    "`@status == \"active\" && @score >= 90`",
+                "type": AbstractDataProviderTypeMap."*string",
             },
         };
     }
@@ -66,10 +72,16 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
 
     #! Creates the object with the given options
     constructor(hash<auto> options) {
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options, "where_cond|dpql_where");
+        if (exists copts.where_cond && exists copts.dpql_where) {
+            throw "CONSTRUCTOR-ERROR", "provide either `where_cond` or `dpql_where`, not both";
+        }
         if (copts.where_cond) {
-            where_expr = AbstractDataProvider::prepareExpression(
-                DataProvider::deserializeExpressionFromJson(copts.where_cond));
+            where_expr = AbstractDataProvider::prepareExpression(copts.where_cond.typeCode() == NT_STRING
+                ? DataProvider::parseDpqlExpression(copts.where_cond)
+                : DataProvider::deserializeExpressionFromJson(copts.where_cond));
+        } else if (copts.dpql_where) {
+            where_expr = AbstractDataProvider::prepareExpression(DataProvider::parseDpqlExpression(copts.dpql_where));
         }
     }
 
@@ -80,7 +92,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Filters records based on a `where_cond` expression; "
+        return "Filters records based on a `where_cond` or `dpql_where` expression; "
             "records matching the condition are passed through, non-matching records are dropped";
     }
 
@@ -220,379 +232,12 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         @since DataProvider 3.5
     */
     private auto filterDataFrame(auto df) {
-        return filterDataFrameExpression(df, where_expr);
-    }
-
-    #! Filters a DataFrame block by one expression
-    private auto filterDataFrameExpression(auto df, hash<DataProviderExpression> expr) {
-        *auto mask = buildDataFrameMask(df, expr);
-        if (exists mask) {
-            return df.filter(mask);
-        }
-
-        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
-        if (op == DP_OP_AND || expr.exp == "AND") {
-            auto filtered = df;
-            foreach auto arg in (expr.args) {
-                if (!(arg instanceof hash<DataProviderExpression>)) {
-                    return filterDataFrameViaRows(df);
-                }
-                filtered = filterDataFrameExpression(filtered, arg);
-            }
-            return filtered;
-        }
-
-        *hash<auto> comparison = getDataFrameComparison(expr, op);
-        if (!comparison) {
-            return filterDataFrameViaRows(df);
-        }
-        return applyDataFrameComparison(df, comparison.field, comparison.op, comparison.value);
-    }
-
-    #! Builds a vectorized DataFrame row mask, if the expression is supported
-    private *auto buildDataFrameMask(auto df, hash<DataProviderExpression> expr) {
-        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
-        if (op == DP_OP_AND || op == DP_OP_OR) {
-            *auto combined;
-            foreach auto arg in (expr.args) {
-                if (!(arg instanceof hash<DataProviderExpression>)) {
-                    return;
-                }
-                *auto mask = buildDataFrameMask(df, arg);
-                if (!exists mask) {
-                    return;
-                }
-                combined = !exists combined
-                    ? mask
-                    : (op == DP_OP_AND ? combined.intersect(mask) : combined.unionWith(mask));
-            }
-            return combined;
-        }
-
-        if (op == DP_SEARCH_OP_NOT) {
-            if (expr.args.size() != 1 || !(expr.args[0] instanceof hash<DataProviderExpression>)) {
-                return;
-            }
-            *auto mask = buildDataFrameMask(df, expr.args[0]);
-            if (exists mask) {
-                return mask.invert();
-            }
-            return;
-        }
-
-        *string null_field = getNullCheckField(expr, op);
-        if (null_field) {
-            return df.column(null_field).compare(op == DP_OP_IS_NULL ? "==" : "!=", NOTHING);
-        }
-
-        *hash<auto> between = getBetweenComparison(expr, op);
-        if (between) {
-            return buildDataFrameBetweenMask(df, between{"field"}, between{"low"}, between{"high"});
-        }
-
-        *hash<auto> in_comparison = getInComparison(expr, op);
-        if (in_comparison) {
-            return buildDataFrameInMask(df, in_comparison{"field"}, in_comparison{"values"},
-                in_comparison{"negated"});
-        }
-
-        *hash<auto> comparison = getDataFrameComparison(expr, op);
-        if (!comparison) {
-            return;
-        }
-        return buildDataFrameComparisonMask(df, comparison.field, comparison.op, comparison.value);
-    }
-
-    #! Builds a DataFrame row mask for one scalar comparison, if supported
-    private *auto buildDataFrameComparisonMask(auto df, string field, string op, auto value) {
-        switch (op) {
-            case DP_SEARCH_OP_EQ:
-            case DP_SEARCH_OP_NE:
-            case DP_SEARCH_OP_GT:
-            case DP_SEARCH_OP_GE:
-            case DP_SEARCH_OP_LT:
-            case DP_SEARCH_OP_LE:
-                return df.column(field).compare(op, value);
-        }
-        return;
-    }
-
-    #! Builds a DataFrame row mask for one between expression, if supported
-    private *auto buildDataFrameBetweenMask(auto df, string field, auto low, auto high) {
-        auto lower = df.column(field).compare(DP_SEARCH_OP_GE, low);
-        auto upper = df.column(field).compare(DP_SEARCH_OP_LE, high);
-        return lower.intersect(upper);
-    }
-
-    #! Builds a DataFrame row mask for one in/not-in expression, if supported
-    private *auto buildDataFrameInMask(auto df, string field, list<auto> values, bool negated) {
-        *auto combined;
-        foreach auto value in (values) {
-            auto mask = df.column(field).compare(DP_SEARCH_OP_EQ, value);
-            combined = !exists combined ? mask : combined.unionWith(mask);
-        }
-        return exists combined ? (negated ? combined.invert() : combined) : NOTHING;
+        return ColumnarExpressionFilter::filterDataFrame(df, where_expr);
     }
 
     #! Filters a ColumnarResult block with a compiled buffer mask when possible
     private auto filterBufferColumns(auto records) {
-        *auto mask = buildBufferMask(records, where_expr);
-        if (exists mask) {
-            return records.filter(mask);
-        }
-
-        auto df = AbstractDataProcessor::getDataFrameClass().newObject(records.toColumnHash());
-        return filterDataFrameExpression(df, where_expr).toColumnarResult();
-    }
-
-    #! Builds a boolean buffer/list mask for a ColumnarResult, if supported
-    private *auto buildBufferMask(auto records, hash<DataProviderExpression> expr) {
-        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
-        if (op == DP_OP_AND || op == DP_OP_OR) {
-            *auto combined;
-            foreach auto arg in (expr.args) {
-                if (!(arg instanceof hash<DataProviderExpression>)) {
-                    return;
-                }
-                *auto mask = buildBufferMask(records, arg);
-                if (!exists mask) {
-                    return;
-                }
-                combined = !exists combined ? mask : records.combineMasks(combined, mask, op);
-            }
-            return combined;
-        }
-
-        if (op == DP_SEARCH_OP_NOT) {
-            if (expr.args.size() != 1 || !(expr.args[0] instanceof hash<DataProviderExpression>)) {
-                return;
-            }
-            *auto mask = buildBufferMask(records, expr.args[0]);
-            if (exists mask) {
-                return records.invertMask(mask);
-            }
-            return;
-        }
-
-        *string null_field = getNullCheckField(expr, op);
-        if (null_field) {
-            return records.nullMask(null_field, op == DP_OP_IS_NOT_NULL);
-        }
-
-        *hash<auto> between = getBetweenComparison(expr, op);
-        if (between) {
-            return buildBufferBetweenMask(records, between{"field"}, between{"low"}, between{"high"});
-        }
-
-        *hash<auto> in_comparison = getInComparison(expr, op);
-        if (in_comparison) {
-            return buildBufferInMask(records, in_comparison{"field"}, in_comparison{"values"},
-                in_comparison{"negated"});
-        }
-
-        *hash<auto> comparison = getDataFrameComparison(expr, op);
-        if (!comparison || !exists comparison.value || comparison.value.typeCode() == NT_NULL) {
-            return;
-        }
-        return buildBufferComparisonMask(records, comparison.field, comparison.op, comparison.value);
-    }
-
-    #! Builds a boolean buffer mask for one dense column comparison
-    private *auto buildBufferComparisonMask(auto records, string field, string op, auto value) {
-        auto column = records.getColumn(field);
-        if (column.typeCode() != NT_BUFFER) {
-            return;
-        }
-
-        switch (op) {
-            case DP_SEARCH_OP_EQ:
-                return column == value;
-            case DP_SEARCH_OP_NE:
-                return column != value;
-            case DP_SEARCH_OP_GT:
-                return column > value;
-            case DP_SEARCH_OP_GE:
-                return column >= value;
-            case DP_SEARCH_OP_LT:
-                return column < value;
-            case DP_SEARCH_OP_LE:
-                return column <= value;
-        }
-        return;
-    }
-
-    #! Builds a boolean buffer mask for one dense between expression
-    private *auto buildBufferBetweenMask(auto records, string field, auto low, auto high) {
-        auto column = records.getColumn(field);
-        if (column.typeCode() != NT_BUFFER) {
-            return;
-        }
-        return records.combineMasks(column >= low, column <= high, DP_OP_AND);
-    }
-
-    #! Builds a boolean buffer mask for one dense in/not-in expression
-    private *auto buildBufferInMask(auto records, string field, list<auto> values, bool negated) {
-        auto column = records.getColumn(field);
-        if (column.typeCode() != NT_BUFFER) {
-            return;
-        }
-
-        *auto combined;
-        foreach auto value in (values) {
-            auto mask = column == value;
-            combined = !exists combined ? mask : records.combineMasks(combined, mask, DP_OP_OR);
-        }
-        if (!exists combined) {
-            return;
-        }
-        return negated ? records.invertMask(combined) : combined;
-    }
-
-    #! Returns the field name for a unary null-check expression, if supported
-    private *string getNullCheckField(hash<DataProviderExpression> expr, string op) {
-        if (op != DP_OP_IS_NULL && op != DP_OP_IS_NOT_NULL) {
-            return;
-        }
-        if (expr.args.size() != 1 || !(expr.args[0] instanceof hash<DataProviderFieldReference>)) {
-            return;
-        }
-        string field = expr.args[0].field;
-        return field.find(".") < 0 ? field : NOTHING;
-    }
-
-    #! Returns vectorizable between-expression information, if supported
-    private *hash<auto> getBetweenComparison(hash<DataProviderExpression> expr, string op) {
-        if (op != DP_SEARCH_OP_BETWEEN || expr.args.size() != 3
-                || !(expr.args[0] instanceof hash<DataProviderFieldReference>)
-                || !isScalarComparisonArg(expr.args[1]) || !isScalarComparisonArg(expr.args[2])) {
-            return;
-        }
-        return {
-            "field": expr.args[0].field,
-            "low": unwrapComparisonValue(expr.args[1]),
-            "high": unwrapComparisonValue(expr.args[2]),
-        };
-    }
-
-    #! Returns vectorizable in/not-in expression information, if supported
-    private *hash<auto> getInComparison(hash<DataProviderExpression> expr, string op) {
-        if ((op != DP_SEARCH_OP_IN && op != DP_OP_NOT_IN) || expr.args.size() < 2
-                || !(expr.args[0] instanceof hash<DataProviderFieldReference>)) {
-            return;
-        }
-
-        list<auto> values();
-        if (expr.args.size() == 2) {
-            auto arg = unwrapComparisonValue(expr.args[1]);
-            if (arg.typeCode() == NT_LIST) {
-                foreach auto value in (arg) {
-                    if (!isScalarComparisonArg(value)) {
-                        return;
-                    }
-                    push values, unwrapComparisonValue(value);
-                }
-            } else {
-                if (!isScalarComparisonArg(expr.args[1])) {
-                    return;
-                }
-                push values, arg;
-            }
-        } else {
-            for (int i = 1; i < expr.args.size(); ++i) {
-                if (!isScalarComparisonArg(expr.args[i])) {
-                    return;
-                }
-                push values, unwrapComparisonValue(expr.args[i]);
-            }
-        }
-        return {
-            "field": expr.args[0].field,
-            "values": values,
-            "negated": op == DP_OP_NOT_IN,
-        };
-    }
-
-    #! Returns vectorizable DataFrame comparison information, if supported
-    private *hash<auto> getDataFrameComparison(hash<DataProviderExpression> expr, string op) {
-        if (expr.args.size() != 2) {
-            return;
-        }
-
-        auto lhs = expr.args[0];
-        auto rhs = expr.args[1];
-        if (lhs instanceof hash<DataProviderFieldReference> && isScalarComparisonArg(rhs)) {
-            return {"field": lhs.field, "op": op, "value": unwrapComparisonValue(rhs)};
-        }
-        if (rhs instanceof hash<DataProviderFieldReference> && isScalarComparisonArg(lhs)) {
-            *string inverted_op = invertComparisonOperator(op);
-            if (!inverted_op) {
-                return;
-            }
-            return {"field": rhs.field, "op": inverted_op, "value": unwrapComparisonValue(lhs)};
-        }
-        return;
-    }
-
-    #! Returns True if the argument can be used as a scalar comparison value
-    private bool isScalarComparisonArg(auto arg) {
-        return !(arg instanceof hash<DataProviderExpression>)
-            && !(arg instanceof hash<DataProviderFieldReference>);
-    }
-
-    #! Unwraps serialized literal expression arguments
-    private auto unwrapComparisonValue(auto arg) {
-        if (arg.typeCode() == NT_HASH && arg.hasKey("value") && !arg.hasKey("field") && !arg.hasKey("exp")) {
-            return arg.value;
-        }
-        return arg;
-    }
-
-    #! Inverts a comparison operator when the field reference is on the right side
-    private *string invertComparisonOperator(string op) {
-        switch (op) {
-            case DP_SEARCH_OP_EQ:
-                return DP_SEARCH_OP_EQ;
-            case DP_SEARCH_OP_NE:
-                return DP_SEARCH_OP_NE;
-            case DP_SEARCH_OP_GT:
-                return DP_SEARCH_OP_LT;
-            case DP_SEARCH_OP_GE:
-                return DP_SEARCH_OP_LE;
-            case DP_SEARCH_OP_LT:
-                return DP_SEARCH_OP_GT;
-            case DP_SEARCH_OP_LE:
-                return DP_SEARCH_OP_GE;
-        }
-        return;
-    }
-
-    #! Applies a vectorized comparison to a DataFrame block
-    private auto applyDataFrameComparison(auto df, string field, string op, auto value) {
-        switch (op) {
-            case DP_SEARCH_OP_EQ:
-            case DP_SEARCH_OP_NE:
-            case DP_SEARCH_OP_GT:
-            case DP_SEARCH_OP_GE:
-            case DP_SEARCH_OP_LT:
-            case DP_SEARCH_OP_LE:
-                return df.filter(field, op, value);
-            case DP_OP_CONTAINS:
-                return df.filter(field, "contains", value);
-            case DP_OP_STARTS_WITH:
-                return df.filter(field, "startswith", value);
-            case DP_OP_ENDS_WITH:
-                return df.filter(field, "endswith", value);
-        }
-        return filterDataFrameViaRows(df);
-    }
-
-    #! Fallback path for expressions that are not vectorized yet
-    private auto filterDataFrameViaRows(auto df) {
-        *list<auto> filtered = processRecords(df.toRecords());
-        if (!filtered) {
-            return df.head(0);
-        }
-        return Class::getClass(df).newObject(filtered);
+        return ColumnarExpressionFilter::filterBufferColumns(records, where_expr);
     }
 
     #! Returns @ref True — this processor supports bulk (hash-of-lists) data
