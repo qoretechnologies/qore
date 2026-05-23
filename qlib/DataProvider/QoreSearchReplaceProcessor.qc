@@ -207,13 +207,13 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 foreach string value in (result{field}) {
                     values += replaceStringOnlyValue(value);
                 }
-                result{field} = new buffer<string>(cast<list<string>>(values));
+                result{field} = new buffer<string>(values);
             } else {
                 list<*string> values = ();
                 foreach *string value in (result{field}) {
                     values += replaceNullableStringValue(value);
                 }
-                result{field} = new buffer<*string>(cast<list<*string>>(values));
+                result{field} = new buffer<*string>(values);
             }
         }
         return result;

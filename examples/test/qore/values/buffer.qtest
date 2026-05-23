@@ -14,6 +14,7 @@ class BufferTest inherits QUnit::Test {
         addTestCase("int buffer", \intBuffer());
         addTestCase("nullable int buffer", \nullableIntBuffer());
         addTestCase("bool buffer", \boolBuffer());
+        addTestCase("typed list construction", \typedListConstruction());
         addTestCase("float buffer", \floatBuffer());
         addTestCase("decimal128 buffer", \decimalBuffer());
         addTestCase("string buffer", \stringBuffer());
@@ -71,6 +72,29 @@ class BufferTest inherits QUnit::Test {
         assertEq(True, b[0]);
         assertEq(False, b[1]);
         assertEq(True, b[2]);
+    }
+
+    typedListConstruction() {
+        list<bool> mask = (True, False, True);
+        buffer<bool> bools = new buffer<bool>(mask);
+        assertEq("buffer<bool>", bools.fullType());
+        assertEq(mask, bools.toList());
+
+        list<int> ints = (1, 2, 3);
+        buffer<int64> dense_ints = new buffer<int64>(ints);
+        assertEq("buffer<int64>", dense_ints.fullType());
+        assertEq((1, 2, 3), dense_ints.toList());
+
+        list<*int> nullable_ints = (1, NOTHING, 3);
+        buffer<*int64> dense_nullable_ints = new buffer<*int64>(nullable_ints);
+        assertEq("buffer<*int64>", dense_nullable_ints.fullType());
+        assertEq((1, NOTHING, 3), dense_nullable_ints.toList());
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "incompatible value type", \p.parse(),
+                ("sub t() { list<string> values = (\"x\",); buffer<bool> b = new buffer<bool>(values); }", ""));
+        }
     }
 
     floatBuffer() {
@@ -436,6 +460,10 @@ class BufferTest inherits QUnit::Test {
         buffer<bool> bools = buffer<bool>::filled(3, True);
         assertEq("buffer<bool>", bools.fullType());
         assertEq((True, True, True), bools.toList());
+
+        bool flag = True;
+        buffer<bool> typed_bool_fill = buffer<bool>::filled(2, flag);
+        assertEq((True, True), typed_bool_fill.toList());
 
         buffer<*int64> nullable = buffer<*int64>::filled(3, NOTHING);
         assertEq("buffer<*int64>", nullable.fullType());

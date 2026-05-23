@@ -264,9 +264,15 @@ static int parse_init_complex_buffer_factory(const QoreProgramLocation* loc, con
         } else if (arg_list) {
             arg_list->deref(nullptr);
         }
-    } else if (qore_list_private::parseInitListInitialization(loc, parse_context, parse_args, new_args, err)
-            && !err) {
-        err = -1;
+    } else {
+        QoreListNode* arg_list = nullptr;
+        err = parse_args->initArgs(parse_context, ordered_arg_types, arg_list);
+        parse_args = nullptr;
+        if (!err) {
+            new_args = arg_list;
+        } else if (arg_list) {
+            arg_list->deref(nullptr);
+        }
     }
     parse_context.typeInfo = return_type_info;
     if (err) {

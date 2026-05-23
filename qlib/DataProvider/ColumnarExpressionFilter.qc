@@ -605,7 +605,7 @@ public class ColumnarExpressionFilter {
         foreach auto raw in (vector) {
             mask += compareScalar(raw, op, value);
         }
-        return new buffer<bool>(cast<list<bool>>(mask));
+        return new buffer<bool>(mask);
     }
 
     #! Converts a vector to a dense truthiness mask
@@ -617,7 +617,7 @@ public class ColumnarExpressionFilter {
         foreach auto raw in (vector) {
             mask += valueTruthy(raw);
         }
-        return new buffer<bool>(cast<list<bool>>(mask));
+        return new buffer<bool>(mask);
     }
 
     #! Builds a DataFrame row mask for one string predicate that ColumnRef supports directly
@@ -735,7 +735,7 @@ public class ColumnarExpressionFilter {
             }
             mask += match;
         }
-        return new buffer<bool>(cast<list<bool>>(mask));
+        return new buffer<bool>(mask);
     }
 
     #! Builds a boolean buffer mask for one LIKE or regex predicate
@@ -756,7 +756,7 @@ public class ColumnarExpressionFilter {
             bool match = regex(value, pattern, options);
             mask += negated ? !match : match;
         }
-        return new buffer<bool>(cast<list<bool>>(mask));
+        return new buffer<bool>(mask);
     }
 
     #! Returns True if the value has truthy generic expression semantics

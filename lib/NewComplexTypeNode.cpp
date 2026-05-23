@@ -105,29 +105,44 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         if (ti) {
             ReferenceHolder<> holder(this, nullptr);
             QoreValue new_args{};
+            type_vec_t arg_types;
             const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
             parse_context.typeInfo = nullptr;
             int init_err = 0;
-            if (!qore_list_private::parseInitListInitialization(loc, parse_context, takeArgs(), new_args, init_err)) {
+            QoreParseListNode* parse_args = takeArgs();
+            if (parse_args) {
+                QoreListNode* arg_list = nullptr;
+                init_err = parse_args->initArgs(parse_context, arg_types, arg_list);
+                parse_args = nullptr;
+                if (!init_err) {
+                    new_args = arg_list;
+                } else if (arg_list) {
+                    arg_list->deref(nullptr);
+                }
+            }
+            if (!init_err) {
                 const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
                 const QoreTypeInfo* element_type = bti ? bti->getElementTypeInfo() : autoTypeInfo;
-                if (new_args.getType() == NT_PARSE_LIST) {
-                    const QoreParseListNode* pln = new_args.get<const QoreParseListNode>();
-                    if (pln->size() > 1) {
-                        parseException(*loc, "PARSE-TYPE-ERROR", "cannot initialize '%s' with %d arguments; "
-                            "buffer<T> construction takes zero arguments or exactly one list argument",
-                            QoreTypeInfo::getName(returnTypeInfo), (int)pln->size());
+                if (arg_types.size() > 1) {
+                    parseException(*loc, "PARSE-TYPE-ERROR", "cannot initialize '%s' with %d arguments; "
+                        "buffer<T> construction takes zero arguments or exactly one list argument",
+                        QoreTypeInfo::getName(returnTypeInfo), (int)arg_types.size());
+                    init_err = -1;
+                } else if (arg_types.size() == 1) {
+                    const QoreTypeInfo* arg_type = arg_types[0];
+                    if (QoreTypeInfo::parseReturns(arg_type, NT_LIST) == QTI_NOT_EQUAL) {
+                        parseException(*loc, "PARSE-TYPE-ERROR", "cannot initialize '%s' with argument type "
+                            "'%s'; expected a list argument", QoreTypeInfo::getName(returnTypeInfo),
+                            QoreTypeInfo::getName(arg_type));
                         init_err = -1;
-                    } else if (pln->size() == 1) {
-                        const QoreTypeInfo* arg_type = pln->getValueTypes()[0];
-                        if (QoreTypeInfo::parseReturns(arg_type, NT_LIST) == QTI_NOT_EQUAL) {
-                            parseException(*loc, "PARSE-TYPE-ERROR", "cannot initialize '%s' with argument type "
-                                "'%s'; expected a list argument", QoreTypeInfo::getName(returnTypeInfo),
-                                QoreTypeInfo::getName(arg_type));
-                            init_err = -1;
-                        } else if (qore_list_private::parseCheckComplexListInitialization(loc, element_type,
-                                arg_type, pln->get(0), "initialize buffer", true)) {
-                            init_err = -1;
+                    } else {
+                        const QoreListNode* args_list = new_args.get<const QoreListNode>();
+                        QoreValue arg = args_list->retrieveEntry(0);
+                        if (arg.getType() != NT_LIST && arg.getType() != NT_PARSE_LIST) {
+                            if (qore_list_private::parseCheckComplexListInitialization(loc, element_type, arg_type,
+                                    arg, "initialize buffer", true)) {
+                                init_err = -1;
+                            }
                         }
                     }
                 }
