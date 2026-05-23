@@ -314,8 +314,10 @@ ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
     DataProvider filter processors compile supported DPQL/DataProvider
     expressions over ColumnarResult blocks to dense boolean masks. Supported
     compiled predicates include \c &&, \c ||, \c !, scalar comparison
-    operators, computed scalar comparisons over top-level fields, truthy field
-    checks, \c between, \c inRange, \c in, and \c not \c in over dense buffer
+    operators, computed scalar comparisons over top-level fields,
+    expression-to-expression comparisons such as \c @score \c >= \c @target
+    or \c @amount \c + \c @tax \c >= \c @limit, truthy field checks,
+    \c between, \c inRange, \c in, and \c not \c in over dense buffer
     columns, \c isNull and \c isNotNull checks, case-sensitive string
     predicates, and BufferColumns \c like, \c =~, and \c !~ predicates.
     Unsupported expressions fall back to the normal row semantics:

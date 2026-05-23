@@ -35,6 +35,9 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
     constructor() : Test("ColumnarExpressionFilter", "1.0") {
         addTestCase("computed numeric DataFrame filter", \computedNumericDataFrame());
         addTestCase("computed numeric ColumnarResult filter", \computedNumericBufferColumns());
+        addTestCase("field comparison DataFrame filter", \fieldComparisonDataFrame());
+        addTestCase("field comparison ColumnarResult filter", \fieldComparisonBufferColumns());
+        addTestCase("computed field comparison ColumnarResult filter", \computedFieldComparisonBufferColumns());
         addTestCase("truthy and inRange DataFrame filter", \truthyAndRangeDataFrame());
         addTestCase("string transform ColumnarResult filter", \stringTransformBufferColumns());
 
@@ -45,6 +48,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         return {
             "id": new buffer<int64>((1, 2, 3, 4)),
             "amount": new buffer<float64>((50.0, 100.0, 125.0, 200.0)),
+            "target": new buffer<float64>((60.0, 90.0, 130.0, 150.0)),
             "score": new buffer<int64>((88, 90, 85, 97)),
             "status": new buffer<string>(("Active", "inactive", "VIP", "active")),
             "flag": new buffer<bool>((True, False, True, False)),
@@ -60,6 +64,38 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
                     "args": (<DataProviderFieldReference>{"field": "amount"}, factor),
                 },
                 threshold,
+            ),
+        };
+    }
+
+    private hash<DataProviderExpression> amountTargetComparison() {
+        return <DataProviderExpression>{
+            "exp": ">=",
+            "args": (
+                <DataProviderFieldReference>{"field": "amount"},
+                <DataProviderFieldReference>{"field": "target"},
+            ),
+        };
+    }
+
+    private hash<DataProviderExpression> computedTargetComparison() {
+        return <DataProviderExpression>{
+            "exp": ">=",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "+",
+                    "args": (
+                        <DataProviderFieldReference>{"field": "amount"},
+                        <DataProviderFieldReference>{"field": "score"},
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": "+",
+                    "args": (
+                        <DataProviderFieldReference>{"field": "target"},
+                        100.0,
+                    ),
+                },
             ),
         };
     }
@@ -86,6 +122,30 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         ColumnarResult filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
 
         assertEq((2, 3, 4), columnarIds(filtered));
+    }
+
+    private fieldComparisonDataFrame() {
+        DataFrame::DataFrame df(makeColumns());
+        QoreFilterRecordsProcessor proc({"where_cond": amountTargetComparison()});
+        DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+
+        assertEq((2, 4), dataframeIds(filtered));
+    }
+
+    private fieldComparisonBufferColumns() {
+        ColumnarResult columns = ColumnarResult::fromColumnHash(makeColumns(), NOTHING);
+        QoreFilterRecordsProcessor proc({"where_cond": amountTargetComparison()});
+        ColumnarResult filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+
+        assertEq((2, 4), columnarIds(filtered));
+    }
+
+    private computedFieldComparisonBufferColumns() {
+        ColumnarResult columns = ColumnarResult::fromColumnHash(makeColumns(), NOTHING);
+        QoreFilterRecordsProcessor proc({"where_cond": computedTargetComparison()});
+        ColumnarResult filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+
+        assertEq((2, 4), columnarIds(filtered));
     }
 
     private truthyAndRangeDataFrame() {

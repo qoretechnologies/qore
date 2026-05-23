@@ -128,6 +128,9 @@ DataFrame RowMask or dense `ColumnarResult` masks:
 - computed scalar comparisons over top-level fields, including arithmetic
   expressions such as `@amount * 1.2 >= 100`, `lwr(@status) == "active"`, and
   `coalesce(@override, @value) > 0`
+- expression-to-expression comparisons over top-level fields, including
+  field-to-field predicates such as `@amount >= @target` and computed
+  predicates such as `@amount + @tax >= @limit`
 - bare truthy field expressions such as `@flag`
 - `between`
 - `inRange` with inclusive lower and exclusive upper bounds

@@ -169,6 +169,12 @@ public class ColumnarExpressionFilter {
             return buildDataFrameComputedComparisonMask(df, computed_comparison{"expr"}, computed_comparison{"op"},
                 computed_comparison{"value"});
         }
+
+        *hash<auto> vector_comparison = getVectorComparison(expr, op);
+        if (vector_comparison) {
+            return buildDataFrameVectorComparisonMask(df, vector_comparison{"lhs"}, vector_comparison{"op"},
+                vector_comparison{"rhs"});
+        }
         return;
     }
 
@@ -231,6 +237,20 @@ public class ColumnarExpressionFilter {
     private static *auto buildDataFrameComputedComparisonMask(auto df, auto value_expr, string op, auto value) {
         hash<auto> column_cache;
         return buildDataFrameExpressionComparisonMask(df, value_expr, op, value, \column_cache);
+    }
+
+    #! Builds a DataFrame row mask for one expression-to-expression comparison
+    private static auto buildDataFrameVectorComparisonMask(auto df, auto lhs_expr, string op, auto rhs_expr) {
+        hash<auto> column_cache;
+        list<bool> mask = ();
+        int rows = df.shape().rows;
+        for (int i = 0; i < rows; ++i) {
+            mask += compareScalar(
+                evalDataFrameExpressionValue(df, lhs_expr, i, \column_cache),
+                op,
+                evalDataFrameExpressionValue(df, rhs_expr, i, \column_cache));
+        }
+        return makeDataFrameRowMask(mask);
     }
 
     #! Builds a DataFrame row mask from one expression compared with a scalar
@@ -369,6 +389,11 @@ public class ColumnarExpressionFilter {
                 return buildBufferComputedComparisonMask(records, computed_comparison{"expr"},
                     computed_comparison{"op"}, computed_comparison{"value"});
             }
+            *hash<auto> vector_comparison = getVectorComparison(expr, op);
+            if (vector_comparison) {
+                return buildBufferVectorComparisonMask(records, vector_comparison{"lhs"},
+                    vector_comparison{"op"}, vector_comparison{"rhs"});
+            }
             return;
         }
         return buildBufferComparisonMask(records, comparison.field, comparison.op, comparison.value);
@@ -459,6 +484,16 @@ public class ColumnarExpressionFilter {
             return;
         }
         return compareVectorToMask(vector.value, op, value);
+    }
+
+    #! Builds a boolean buffer mask for one expression-to-expression comparison
+    private static *auto buildBufferVectorComparisonMask(auto records, auto lhs_expr, string op, auto rhs_expr) {
+        *hash<auto> lhs = evalBufferExpressionValue(records, lhs_expr);
+        *hash<auto> rhs = evalBufferExpressionValue(records, rhs_expr);
+        if (!lhs || !rhs || !lhs.vector || !rhs.vector) {
+            return;
+        }
+        return compareVectorsToMask(lhs.value, op, rhs.value);
     }
 
     #! Evaluates a supported expression against a ColumnarResult, preserving dense buffers when possible
@@ -604,6 +639,43 @@ public class ColumnarExpressionFilter {
         list<bool> mask = ();
         foreach auto raw in (vector) {
             mask += compareScalar(raw, op, value);
+        }
+        return new buffer<bool>(mask);
+    }
+
+    #! Compares two vectors and returns a dense boolean mask
+    private static *auto compareVectorsToMask(auto lhs, string op, auto rhs) {
+        if (lhs.typeCode() == NT_BUFFER && rhs.typeCode() == NT_BUFFER
+                && isNativeBufferComparisonOperator(op)) {
+            switch (op) {
+                case DP_SEARCH_OP_EQ:
+                    return lhs == rhs;
+                case DP_SEARCH_OP_NE:
+                    return lhs != rhs;
+                case DP_SEARCH_OP_GT:
+                    return lhs > rhs;
+                case DP_SEARCH_OP_GE:
+                    return lhs >= rhs;
+                case DP_SEARCH_OP_LT:
+                    return lhs < rhs;
+                case DP_SEARCH_OP_LE:
+                    return lhs <= rhs;
+            }
+        }
+
+        if ((lhs.typeCode() != NT_BUFFER && lhs.typeCode() != NT_LIST)
+                || (rhs.typeCode() != NT_BUFFER && rhs.typeCode() != NT_LIST)) {
+            return;
+        }
+
+        if (lhs.size() != rhs.size()) {
+            throw "EXPRESSION-FILTER-ERROR", sprintf(
+                "cannot compare expression vectors with different lengths: %d and %d", lhs.size(), rhs.size());
+        }
+
+        list<bool> mask = ();
+        for (int i = 0; i < lhs.size(); ++i) {
+            mask += compareScalar(lhs[i], op, rhs[i]);
         }
         return new buffer<bool>(mask);
     }
@@ -1019,6 +1091,20 @@ public class ColumnarExpressionFilter {
                 return;
             }
             return {"expr": rhs, "op": inverted_op, "value": unwrapComparisonValue(lhs)};
+        }
+        return;
+    }
+
+    #! Returns vectorizable expression-to-expression comparison information, if supported
+    private static *hash<auto> getVectorComparison(hash<DataProviderExpression> expr, string op) {
+        if (!isComparisonOperator(op) || expr.args.size() != 2) {
+            return;
+        }
+
+        auto lhs = expr.args[0];
+        auto rhs = expr.args[1];
+        if (isVectorizableValueArg(lhs) && isVectorizableValueArg(rhs)) {
+            return {"lhs": lhs, "op": op, "rhs": rhs};
         }
         return;
     }

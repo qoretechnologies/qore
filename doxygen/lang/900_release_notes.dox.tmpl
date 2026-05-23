@@ -140,7 +140,8 @@
       return \c ColumnarResult values from \c getShapedValue(), bulk DB writes can accept \c ColumnarResult and
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
       \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
-      autonomous provider-to-provider runs
+      autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
+      expression-to-expression predicates such as \c @amount \c >= \c @target
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
       value counting, missing-data cleanup, reshape, Arrow/Parquet roundtrip,
@@ -2469,9 +2470,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - QoreFilterRecordsProcessor compiles supported DataProvider/DPQL filters
         over DataFrameBlock and BufferColumns values to vectorized DataFrame
         row masks or dense ColumnarResult boolean masks, including computed
-        scalar comparisons, truthy field checks, \c between, \c inRange,
-        \c in, \c not \c in, null checks, selected string predicates, and
-        BufferColumns \c like, \c =~, and \c !~ predicates; unsupported
+        scalar comparisons, expression-to-expression comparisons, truthy field
+        checks, \c between, \c inRange, \c in, \c not \c in, null checks,
+        selected string predicates, and BufferColumns \c like, \c =~, and \c !~ predicates; unsupported
         expressions fall back to generic row semantics
       - QoreGroupByProcessor preserves BufferColumns output for ColumnarResult
         inputs when used through shape-aware pipeline flushing

@@ -1320,6 +1320,7 @@ sub invalid_dataframe_api() {
             "id": new buffer<int64>((1, 2, 3, 4)),
             "status": ("active", "inactive", "active", "active"),
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "target": new buffer<float64>((100.0, 200.0, 185.0, 120.0)),
             "name": ("Alice", "Bob", "Carol", "Dave"),
         });
         auto columns = df.toColumnarResult();
@@ -1363,9 +1364,25 @@ sub invalid_dataframe_api() {
         assertEq((1, 4), regex_filtered.getColumn("id").toList(),
             "DPQL BufferColumns regex predicates build dense masks");
 
+        QoreFilterRecordsProcessor field_cmp_proc({
+            "dpql_where": '@amount >= @target',
+        });
+        auto field_cmp_filtered = field_cmp_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((2, 4), field_cmp_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns field comparisons build dense masks");
+
+        QoreFilterRecordsProcessor computed_cmp_proc({
+            "dpql_where": '@amount + @id >= @target',
+        });
+        auto computed_cmp_filtered = computed_cmp_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 4), computed_cmp_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns expression comparisons build dense masks");
+
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "target": new buffer<float64>((100.0, 200.0, 185.0, 120.0)),
             "active": new buffer<bool>((True, False, True, True)),
         };
         QoreFilterRecordsProcessor raw_proc({
@@ -1376,6 +1393,14 @@ sub invalid_dataframe_api() {
             "DPQL hash-of-buffers filter returns BufferColumns shape");
         assertEq((3, 4), raw_filtered.getColumn("id").toList(),
             "DPQL hash-of-buffers filter keeps matching rows");
+
+        QoreFilterRecordsProcessor raw_field_cmp_proc({
+            "dpql_where": '@amount >= @target',
+        });
+        auto raw_field_cmp_filtered = raw_field_cmp_proc.processRecordsShape(raw_buffers,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 4), raw_field_cmp_filtered.getColumn("id").toList(),
+            "DPQL hash-of-buffers field comparisons build dense masks");
     }
 
     bufferColumnsPipelineShapeTest() {

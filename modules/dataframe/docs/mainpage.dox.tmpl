@@ -271,7 +271,9 @@ pipeline.waitDone();
     rectangular event blocks, including flush-time output from partial windows.
     Supported compiled filter forms include \c &&, \c ||, \c !,
     scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
-    scalar comparisons over top-level fields, \c lwr(), \c coalesce(),
+    scalar comparisons over top-level fields, expression-to-expression
+    comparisons such as \c @amount \c >= \c @target or
+    \c @amount \c + \c @tax \c >= \c @limit, \c lwr(), \c coalesce(),
     truthy field checks, \c between, \c inRange, \c in, \c not \c in,
     \c isNull and \c isNotNull checks, case-sensitive \c contains,
     \c starts-with, and \c ends-with string predicates, and BufferColumns
