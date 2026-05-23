@@ -36,7 +36,7 @@
 %requires(reexport) SqlUtil
 
 module BulkSqlUtil {
-    version = "1.3.1";
+    version = "1.4";
     desc = "user module performing bulk DML operations with SqlUtil";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -53,7 +53,10 @@ module BulkSqlUtil {
     Bulk DML is the process of sending multiple rows to the dataserver in a single operation which allows for
     the most efficient processing of large amounts of data.
 
-    Currently insert and upsert (SQL merge) operations are supported.
+    Currently insert and upsert (SQL merge) operations are supported.  Bulk input can be supplied as row hashes,
+    lists of row hashes, hash-of-lists blocks, @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks, hashes of
+    dense \c buffer<T> columns, or \c DataFrame values.  Columnar values are converted at the bulk SQL boundary only
+    when a DBI driver still needs the compatibility hash-of-lists representation.
 
     The main functionality provided by this module:
     - @ref BulkSqlUtil::AbstractBulkOperation "AbstractBulkOperation": abstract base class for bulk DML operation classes
@@ -63,6 +66,11 @@ module BulkSqlUtil {
     See the above classes for detailed information and examples.
 
     @section bulksqlutil_relnotes Release Notes
+
+    @subsection bulksqlutil_v1_4 BulkSqlUtil v1.4
+    - added @ref BulkSqlUtil::AbstractBulkOperation::queueData() "AbstractBulkOperation::queueData()" support for
+      @ref Qore::SQL::ColumnarResult "ColumnarResult", hash-of-\c buffer<T> column blocks, and \c DataFrame input
+      for bulk insert and upsert operations
 
     @subsection bulksqlutil_v1_3_1 BulkSqlUtil v1.3.1
     - fixed a bug executing bulk upsert operations with constant data

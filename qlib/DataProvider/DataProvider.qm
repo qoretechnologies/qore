@@ -763,6 +763,15 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     \c BufferColumns values convert back to rows or hash-of-lists for processors that do not yet support dense
     columns directly.
 
+    Data providers advertise native bulk read and write shapes with \c bulk_read_shapes, \c bulk_create_shapes, and
+    \c bulk_upsert_shapes in @ref DataProvider::DataProviderInfo "DataProviderInfo".  Callers can inspect these with
+    @ref DataProvider::AbstractDataProvider::getBulkReadShapes() "getBulkReadShapes()",
+    @ref DataProvider::AbstractDataProvider::getBulkCreateShapes() "getBulkCreateShapes()", and
+    @ref DataProvider::AbstractDataProvider::getBulkUpsertShapes() "getBulkUpsertShapes()".  The shaped
+    @ref DataProvider::AbstractDataProvider::createRecordsShape() "createRecordsShape()" and
+    @ref DataProvider::AbstractDataProvider::upsertRecordsShape() "upsertRecordsShape()" APIs preserve native
+    blocks for providers that support them and fall back to hash-of-lists compatibility otherwise.
+
     @par DataFrame Pipeline Example
     @code{.py}
 %requires DataProviderDataFrame
@@ -1144,6 +1153,8 @@ if (errors) {
       hash-of-lists compatibility API
     - added automatic DataProvider pipeline shape routing and conversion with row-record boundary preservation for
       legacy \c submitImpl() processors
+    - added DataProvider bulk read/create/upsert shape metadata and shaped create/upsert entry points so providers
+      can accept \c BufferColumns or \c DataFrameBlock input without row materialization
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
       \c DataFrameBlock and \c BufferColumns input directly for supported comparisons, boolean combinations, and
       null checks

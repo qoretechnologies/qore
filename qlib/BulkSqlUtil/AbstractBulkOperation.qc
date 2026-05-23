@@ -305,6 +305,27 @@ on_error ds.rollback();
             flushIntern();
         }
 
+        #! queues shaped row data in the block buffer
+        /** @param data bulk row data in hash-of-lists, dense buffer-column, or ColumnarResult form
+
+            @since %BulkSqlUtil 1.4
+        */
+        queueData(auto data) {
+            if (data.typeCode() == NT_OBJECT && data.className() == "ColumnarResult") {
+                queueData(bufferColumnsToHashList(data.toColumnHash()));
+                return;
+            }
+            if (isHashOfBuffers(data)) {
+                queueData(bufferColumnsToHashList(data));
+                return;
+            }
+            if (data.typeCode() == NT_OBJECT && data.fullType() == "object<DataFrame>") {
+                queueData(bufferColumnsToHashList(data.toColumnHash()));
+                return;
+            }
+            queueData(cast<hash<auto>>(data));
+        }
+
         #! returns the current size of the cache as a number of rows
         /** @return the current size of the cache as a number of rows
 
@@ -360,6 +381,17 @@ on_error ds.rollback();
         #! sets up the block buffer given the initial template row for inserting
         private setupInitialRow(hash<auto> row) {
             map hbuf.$1 = (), keys row;
+        }
+
+        #! Returns True if the value is a hash of dense column buffers
+        private bool isHashOfBuffers(auto data) {
+            return data.typeCode() == NT_HASH && data && data.firstValue().typeCode() == NT_BUFFER;
+        }
+
+        #! Converts dense buffer columns to the hash-of-lists compatibility representation
+        private hash<auto> bufferColumnsToHashList(hash<auto> data) {
+            return map {$1.key: $1.value.typeCode() == NT_BUFFER ? $1.value.toList() : $1.value},
+                data.pairIterator();
         }
 
         #! flushes any remaining batched data to the database; this method should always be called before committing the transaction or destroying the object

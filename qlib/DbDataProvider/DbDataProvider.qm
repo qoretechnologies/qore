@@ -43,7 +43,7 @@
 %requires(reexport) ConnectionProvider
 
 module DbDataProvider {
-    version = "2.4";
+    version = "2.5";
     desc = "User module providing a data provider API for databases";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -315,6 +315,14 @@ module DbDataProvider {
     and deleting DB records, as well as high-performance bulk operations as well as upserts through the
     @ref dataproviderintro "DataProvider" API.
 
+    Bulk table and raw-SQL reads advertise \c BufferColumns support and return
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks from
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue()
+    "AbstractDataProviderBulkRecordInterface::getShapedValue()".  Compatibility callers can continue to use
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue() "getValue()", which returns a
+    hash-of-lists view.  Table providers also accept \c ColumnarResult and hash-of-\c buffer<T> blocks for bulk
+    create and upsert operations.
+
     The following classes are provided by this module:
     - @ref DbDataProvider::AbstractDbTableBulkOperation "AbstractDbTableBulkOperation"
     - @ref DbDataProvider::DatasourceConnection "DatasourceConnection"
@@ -329,6 +337,13 @@ module DbDataProvider {
     - @ref DbDataProvider::DbTableRecordIterator "DbTableRecordIterator"
 
     @section dbdataprovider_relnotes Release Notes
+
+    @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - added \c BufferColumns support for bulk table reads and raw SQL reads with
+      @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks from \c getShapedValue()
+    - added \c BufferColumns support for @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider" bulk create
+      and upsert operations, allowing \c ColumnarResult and hash-of-\c buffer<T> input to flow through
+      @ref BulkSqlUtil::AbstractBulkOperation "BulkSqlUtil" bulk DML operations
 
     @subsection dbdataprovider_v2_4 DbDataProvider v2.4
     - added the @ref DbDataProvider::DbVendorInfo "DbVendorInfo" hashdecl for per-vendor database app configuration

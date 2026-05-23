@@ -135,6 +135,10 @@
       \c decimal128 top-level columns use zero-copy \c buffer<T> storage when host memory is
       compatible, while string and nested list/struct values preserve schema and values through
       owned Arrow-compatible buffers or Qore containers
+    - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper now support shaped columnar bulk blocks: DB providers can
+      return \c ColumnarResult values from \c getShapedValue(), bulk DB writes can accept \c ColumnarResult and
+      hash-of-\c buffer<T> input, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
+      autonomous provider-to-provider runs
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
       SQL read/write, and DataProvider pipeline cases; the fastest SQL-read

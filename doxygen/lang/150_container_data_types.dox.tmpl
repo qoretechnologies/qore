@@ -375,6 +375,33 @@ while (True) {
     available, the APIs remain functional, but the compatibility fallback has to convert row-oriented or
     hash-of-list results before downstream code can use dense column operations.
 
+    DataProvider bulk APIs use the same columnar representation.  A provider that advertises \c BufferColumns can
+    return \c ColumnarResult blocks from \c getShapedValue(), and can accept \c ColumnarResult blocks for shaped
+    bulk create or upsert operations:
+    @code{.py}
+DbDataProvider::DbTableDataProvider provider(table.getTable());
+
+AbstractDataProviderBulkRecordInterface stream = provider.getBulkRecordInterface(10000);
+while (*auto block = stream.getShapedValue()) {
+    if (AbstractDataProcessor::detectShape(block) == DataProviderShape::BufferColumns) {
+        ColumnarResult columns = block;
+        processColumnarBlock(columns);
+    }
+}
+
+ColumnarResult new_rows = ColumnarResult::fromColumnHash({
+    "order_id": new buffer<int64>((1001, 1002, 1003)),
+    "status": ("open", "closed", "open"),
+    "score": new buffer<float64>((91.5, 73.0, 88.25)),
+});
+provider.createRecordsBulk(new_rows);
+    @endcode
+
+    @ref mapperintro "Mapper" objects are shape-aware processors as well.  \c mapAuto() accepts
+    \c ColumnarResult, hash-of-\c buffer<T>, and DataFrame blocks, and autonomous mapper runs use
+    \c getShapedValue() from input providers so columnar providers can feed bulk output providers without forcing
+    a row hash for every input record.
+
     C++ modules can exchange ColumnarResult values with other columnar runtimes through the
     <a href="https://arrow.apache.org/docs/format/CDataInterface.html">Arrow C Data Interface</a>
     without taking a compile-time dependency on Arrow C++.  libqore exports
