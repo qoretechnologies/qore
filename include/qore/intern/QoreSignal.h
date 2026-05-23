@@ -152,6 +152,7 @@ private:
    DLLLOCAL void stop_signal_thread_unlocked();
    DLLLOCAL int start_signal_thread(ExceptionSink* xsink);
    DLLLOCAL void stop_signal_thread();
+   DLLLOCAL void wait_signal_thread_stopped();
    DLLLOCAL void setMask(sigset_t& mask);
 
 public:
@@ -168,6 +169,7 @@ public:
    QoreSignalHandler handlers[QORE_SIGNAL_MAX];
    QoreThreadLock mutex;
    sig_cmd_e cmd;
+   bool thread_joinable;
 
    DLLLOCAL QoreSignalManager();
    DLLLOCAL void init(bool disable_signal_mask = false);

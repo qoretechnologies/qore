@@ -3763,7 +3763,13 @@ void QoreThreadList::deleteDataRelease(int tid) {
 
 void QoreThreadList::deleteDataReleaseSignalThread() {
     thread_data.get()->del(nullptr);
-    deleteDataRelease(0);
+    delete thread_data.get();
+    thread_data.set(nullptr);
+
+    AutoLocker al(lck);
+    entry[0].thread_data = nullptr;
+    entry[0].joined = true;
+    releaseIntern(0);
 }
 
 unsigned QoreThreadList::cancelAllActiveThreads() {
