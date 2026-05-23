@@ -1264,6 +1264,9 @@ list<*float> boxed = scores.toList();
     \c hostStorage(), and \c materialize() so Qore code can make transfer
     points explicit when an API requires raw host memory. Writes preserve value
     semantics by detaching provider-owned storage into an owned host buffer.
+    \c buffer<T> remains a primitive dense-vector type; nested arrays and
+    structs are carried by ColumnarResult schema metadata with list/hash values
+    and by Arrow/Parquet round-trip metadata.
 
     Buffers support elementwise arithmetic and comparisons. Numeric buffers can be combined with another numeric
     buffer of the same length or with a scalar \c int / \c float value; comparisons produce dense boolean masks and

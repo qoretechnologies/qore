@@ -52,8 +52,9 @@ endif()
 `QoreColumnarResult` is the canonical interchange type.  DataFrame owns its
 analytics API and may keep its internal column layout, but all external
 interchange APIs should use `ColumnarResult` first.  Arrow wrappers in
-module-grpc should add `ColumnarResult` constructors and `toColumnarResult()`
-instead of adding a third public column format.
+module-grpc expose `ColumnarResult` constructors and `toColumnarResult()`;
+when qore exports the Arrow C Data bridge, those conversions use the shared
+libqore ABI before falling back to module-local Arrow builders.
 
 ### Schema V2
 
@@ -137,7 +138,10 @@ where an API exposes conversion details.
 - Add `ArrowRecordBatch(ColumnarResult)` and
   `ArrowRecordBatch::toColumnarResult()`.  Implemented with conditional CMake
   probes so the module still builds against qore versions without the new
-  feature contract.
+  feature contract.  When `QORE_HAVE_ARROW_C_DATA_INTEROP` is available,
+  supported primitive, string, decimal128, list, and struct shapes use
+  libqore's Arrow C Data bridge for the conversion; unsupported Arrow shapes
+  keep the existing row/list fallback path.
 - Make Arrow Flight readers yield `ColumnarResult` blocks by default.
   Implemented as explicit `readColumnarResult()` helpers to preserve source
   compatibility.

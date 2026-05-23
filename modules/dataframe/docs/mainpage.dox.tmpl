@@ -153,7 +153,10 @@ printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
     \c fromColumnarResult() can move primitive columns between DataFrame,
     @ref buffer "buffer<T>", and
     @ref Qore::SQL::ColumnarResult "ColumnarResult" without first boxing every
-    cell into a list. Date columns currently remain list-backed.
+    cell into a list. Fixed-scale decimal columns use \c buffer<decimal128>.
+    Nested arrays and structs keep recursive ColumnarResult schema metadata and
+    list/hash values; \c buffer<T> remains a primitive dense-vector type. Date
+    columns currently remain list-backed.
 
     @code{.py}
 %requires dataframe

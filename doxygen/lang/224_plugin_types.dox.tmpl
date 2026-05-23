@@ -285,7 +285,10 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     DataProvider code share primitive numeric, boolean, and string columns without
     converting every cell to a row hash. String columns can also use
     \c buffer<string> or \c buffer<*string> in ColumnarResult and DataFrame
-    data paths; dense-buffer plugin helpers remain numeric-only in the v1 ABI.
+    data paths; \c buffer<decimal128> preserves fixed-scale decimal columns.
+    Nested arrays and structs use recursive ColumnarResult schema metadata and
+    list/hash values; dense-buffer plugin helpers remain numeric-only in the v1
+    ABI.
 
     @code{.py}
 %requires dataframe

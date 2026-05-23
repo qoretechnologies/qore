@@ -175,6 +175,11 @@ printf("%y\n", l1.fullType());
     - \c string
     - \c decimal128
 
+    \c buffer<T> is intentionally limited to dense primitive element storage.
+    Nested arrays, structs, maps, and dictionary-style columns are represented
+    by @ref Qore::SQL::ColumnarResult "ColumnarResult" recursive schema
+    metadata plus Qore list/hash values, not by \c buffer<list<...>> syntax.
+
     Nullable buffers use \c buffer<*T>.  A nullable buffer carries a per-element validity bitmap; reading a null
     element returns @ref nothing "NOTHING".  Both @ref null "NULL" and @ref nothing "NOTHING" initialize nullable
     buffer elements as null values.
