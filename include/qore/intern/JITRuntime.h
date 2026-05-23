@@ -68,6 +68,9 @@ bool qore_jit_validate_runtime_symbols(std::string& error);
 
 extern "C" {
 
+//! Check the current native stack guard for generated code entry points
+int qore_rt_check_stack(ExceptionSink* xsink);
+
 // --- Arithmetic helpers (for .any ops that need dynamic dispatch) ---
 
 //! Add two QoreValues with dynamic type dispatch
