@@ -45,6 +45,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("isolation-forest - basic window", \iforestBasicWindow());
         addTestCase("isolation-forest - anomaly detection", \iforestAnomalyDetection());
         addTestCase("isolation-forest - flush partial", \iforestFlushPartial());
+        addTestCase("isolation-forest - DataFrameBlock flush shape", \iforestDataFrameFlushShape());
         addTestCase("isolation-forest - not configured", \iforestNotConfigured());
         addTestCase("isolation-forest - capabilities", \iforestCapabilities());
         addTestCase("isolation-forest - constructor validation", \iforestConstructorValidation());
@@ -60,6 +61,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("kmeans - basic clustering", \kmeansBasicClustering());
         addTestCase("kmeans - online learning", \kmeansOnlineLearning());
         addTestCase("kmeans - flush partial", \kmeansFlushPartial());
+        addTestCase("kmeans - DataFrameBlock flush shape", \kmeansDataFrameFlushShape());
         addTestCase("kmeans - capabilities", \kmeansCapabilities());
         addTestCase("kmeans - constructor validation", \kmeansConstructorValidation());
 
@@ -67,6 +69,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("pca - basic reduction", \pcaBasicReduction());
         addTestCase("pca - variance threshold", \pcaVarianceThreshold());
         addTestCase("pca - flush partial", \pcaFlushPartial());
+        addTestCase("pca - DataFrameBlock flush shape", \pcaDataFrameFlushShape());
         addTestCase("pca - capabilities", \pcaCapabilities());
         addTestCase("pca - constructor validation", \pcaConstructorValidation());
 
@@ -112,6 +115,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("standard-scaler - capabilities", \stdScalerCapabilities());
         addTestCase("standard-scaler - DataFrameBlock shape", \stdScalerDataFrameShape());
         addTestCase("standard-scaler - BufferColumns shape", \stdScalerBufferColumnsShape());
+        addTestCase("standard-scaler - BufferColumns flush shape", \stdScalerBufferColumnsFlushShape());
 
         # MinMaxScaler tests
         addTestCase("min-max-scaler - basic window", \mmScalerBasicWindow());
@@ -297,6 +301,31 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         *list<auto> flushed = proc.flushRecords();
         assertTrue(exists flushed);
         assertEq(5, flushed.lsize());
+    }
+
+    iforestDataFrameFlushShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataProviderML::QoreIsolationForestProcessor proc({
+            "fields": "x,y",
+            "window_size": 10,
+            "n_trees": 10,
+            "sample_size": 3,
+        });
+
+        DataFrame::DataFrame df({
+            "x": (0.0, 1.0, 2.0),
+            "y": (0.0, 1.0, 2.0),
+        });
+        assertNothing(proc.processRecordsShape(df, DataProviderShape::DataFrameBlock));
+        *list<auto> blocks = proc.flushAndCollect();
+        assertEq(1, blocks.lsize());
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(blocks[0]));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(blocks[0], DataProviderShape::DataFrameBlock));
+        assertEq(("isolation-forest", "isolation-forest", "isolation-forest"),
+            blocks[0].getColumn("event_type"));
     }
 
     iforestNotConfigured() {
@@ -551,6 +580,30 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(5, flushed.lsize());
     }
 
+    kmeansDataFrameFlushShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataProviderML::QoreKMeansProcessor proc({
+            "fields": "x,y",
+            "window_size": 10,
+            "k": 2,
+        });
+
+        DataFrame::DataFrame df({
+            "x": (0.0, 0.1, 10.0, 10.1),
+            "y": (0.0, 0.1, 10.0, 10.1),
+        });
+        assertNothing(proc.processRecordsShape(df, DataProviderShape::DataFrameBlock));
+        *list<auto> blocks = proc.flushAndCollect();
+        assertEq(1, blocks.lsize());
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(blocks[0]));
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(blocks[0], DataProviderShape::DataFrameBlock));
+        assertEq(("kmeans-clustering", "kmeans-clustering", "kmeans-clustering", "kmeans-clustering"),
+            blocks[0].getColumn("event_type"));
+    }
+
     kmeansCapabilities() {
         DataProviderML::QoreKMeansProcessor proc();
         assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
@@ -646,6 +699,29 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         *list<auto> flushed = proc.flushRecords();
         assertTrue(exists flushed);
         assertEq(5, flushed.lsize());
+    }
+
+    pcaDataFrameFlushShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataProviderML::QorePCAProcessor proc({
+            "fields": "x,y",
+            "window_size": 10,
+            "n_components": 2,
+        });
+
+        DataFrame::DataFrame df({
+            "x": (0.0, 1.0, 2.0),
+            "y": (0.0, 2.0, 4.0),
+        });
+        assertNothing(proc.processRecordsShape(df, DataProviderShape::DataFrameBlock));
+        *list<auto> blocks = proc.flushAndCollect();
+        assertEq(1, blocks.lsize());
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(blocks[0]));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(blocks[0], DataProviderShape::DataFrameBlock));
+        assertEq(("pca", "pca", "pca"), blocks[0].getColumn("event_type"));
     }
 
     pcaCapabilities() {
@@ -1375,6 +1451,25 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
         assertEq((1.0, 2.0, 3.0), map $1.x, result.getColumn("record_values"));
         assertFloat(0.0, result.getColumn("scaled_values")[1].x, 0.01);
+    }
+
+    stdScalerBufferColumnsFlushShape() {
+        DataProviderML::QoreStandardScalerProcessor proc({
+            "fields": "x,y",
+            "window_size": 5,
+        });
+
+        auto columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((1.0, 2.0, 3.0)),
+            "y": new buffer<float64>((10.0, 20.0, 30.0)),
+        });
+        assertNothing(proc.processRecordsShape(columns, DataProviderShape::BufferColumns));
+        *list<auto> blocks = proc.flushAndCollect();
+        assertEq(1, blocks.lsize());
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(blocks[0]));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(blocks[0], DataProviderShape::BufferColumns));
+        assertEq(("standard-scaler", "standard-scaler", "standard-scaler"),
+            blocks[0].getColumn("event_type").toList());
     }
 
     # ===================== MinMaxScaler Tests =====================

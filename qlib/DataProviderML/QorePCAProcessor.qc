@@ -137,6 +137,9 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
         #! Whether flat DataFrame output includes original feature columns
         bool include_input_fields = True;
 
+        #! True while a shaped bulk block is dispatching through processRecordImpl()
+        bool processing_shaped_bulk = False;
+
         #! Whether configured
         bool configured = False;
     }
@@ -195,6 +198,9 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
             throw "PROCESSOR-ERROR",
                 "QorePCAProcessor: not configured; provide constructor options";
         }
+        if (!processing_shaped_bulk) {
+            updatePendingOutputShape(DataProvider::DataProviderShape::RowRecords);
+        }
         push buffer, record;
         if (buffer.lsize() >= window_size) {
             list<auto> results = processWindow(buffer);
@@ -205,7 +211,7 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
     }
 
     #! Flushes remaining buffered data
-    private *list<auto> flushRecordsImpl() {
+    private *list<auto> buildFlushRows() {
         if (!configured || !buffer) {
             return;
         }
@@ -218,8 +224,24 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
         return;
     }
 
+    #! Flushes remaining buffered data as row records for direct callers
+    private *list<auto> flushRecordsImpl() {
+        *list<auto> results = buildFlushRows();
+        clearPendingOutputShape();
+        return results;
+    }
+
+    #! Flushes remaining buffered data in the negotiated pipeline shape
+    private flushImpl(code enqueue) {
+        *list<auto> results = buildFlushRows();
+        DataProvider::DataProviderShape output_shape = pending_output_shape;
+        clearPendingOutputShape();
+        DataProvider::AbstractDataProcessor::emitRecordListShape(results, output_shape, enqueue);
+    }
+
     #! Processes shaped records without first materializing row hashes when complete windows are available
     private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        updatePendingOutputShape(shape);
         if (shape == DataProvider::DataProviderShape::RowRecords) {
             return processRecordImpl(records);
         }
@@ -236,6 +258,7 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
 
     #! Processes records in bulk hash-of-lists format
     private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
         *auto result = processCompleteShapeWindows(records, DataProvider::DataProviderShape::HashOfLists, 2, False);
         if (exists result) {
             return cast<hash<auto>>(result);
@@ -252,6 +275,10 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
         list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
             records, shape, DataProvider::DataProviderShape::RowRecords);
         *list<auto> results;
+        processing_shaped_bulk = True;
+        on_exit {
+            processing_shaped_bulk = False;
+        }
         foreach auto row in (rows) {
             *auto row_result = processRecordImpl(row);
             if (exists row_result) {

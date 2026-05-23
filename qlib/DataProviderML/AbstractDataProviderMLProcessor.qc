@@ -96,6 +96,14 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         };
     }
 
+    private {
+        #! Preferred shape for pending flush output
+        DataProvider::DataProviderShape pending_output_shape = DataProvider::DataProviderShape::RowRecords;
+
+        #! True if the pending output shape has been set for buffered records
+        bool pending_output_shape_set = False;
+    }
+
     #! Builds ModelRegistry constructor options from shared processor options
     /** @param copts checked processor options
 
@@ -113,6 +121,26 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
             "rest_base_path": copts.registry_rest_base_path,
             "tenant_id": copts.registry_tenant_id ?? copts.tenant_id,
         };
+    }
+
+    #! Records the shape of accumulated input for shape-preserving flushes
+    private updatePendingOutputShape(DataProvider::DataProviderShape shape) {
+        if (!pending_output_shape_set) {
+            pending_output_shape = cast<enum<DataProvider::DataProviderShape>>(shape);
+            pending_output_shape_set = True;
+            return;
+        }
+        if (pending_output_shape != shape) {
+            pending_output_shape = cast<enum<DataProvider::DataProviderShape>>(
+                DataProvider::DataProviderShape::RowRecords);
+        }
+    }
+
+    #! Clears pending flush shape state
+    private clearPendingOutputShape() {
+        pending_output_shape = cast<enum<DataProvider::DataProviderShape>>(
+            DataProvider::DataProviderShape::RowRecords);
+        pending_output_shape_set = False;
     }
 
     #! Returns @ref True because this base handles shaped bulk input
@@ -176,6 +204,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
     #! Processes records in an explicitly negotiated pipeline shape
     private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        updatePendingOutputShape(shape);
         if (shape == DataProvider::DataProviderShape::RowRecords) {
             return processRecordImpl(records);
         }
@@ -188,6 +217,20 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         }
         hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
         return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Flushes pending records in the negotiated pipeline shape
+    private flushImpl(code enqueue) {
+        *list<auto> results = flushRecordsImpl();
+        DataProvider::DataProviderShape output_shape = pending_output_shape;
+        clearPendingOutputShape();
+        DataProvider::AbstractDataProcessor::emitRecordListShape(results, output_shape, enqueue);
+    }
+
+    #! Default no-op flush implementation for stateless processors
+    private *list<auto> flushRecordsImpl() {
+        clearPendingOutputShape();
+        return;
     }
 
     #! Processes a list of row records with the subclass row processor
