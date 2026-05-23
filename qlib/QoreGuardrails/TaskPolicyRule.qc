@@ -47,6 +47,7 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
     #! Creates a task policy rule
     /** @param severity violation severity level
         @param params rule parameters:
+            - \c policy (hash): complete classifier policy hash
             - \c policy_label (string)
             - \c allowed_domains (list<string>)
             - \c allowed_tasks (list<string>)
@@ -61,7 +62,15 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
         hash<auto> p = params ?? {};
         min_confidence = p.min_confidence ?? 0.65;
         fail_uncertain = p.fail_uncertain ?? True;
-        policy = {};
+        if (exists p.policy) {
+            if (p.policy.typeCode() != NT_HASH) {
+                throw "GUARDRAIL-CONFIG-ERROR",
+                    "TaskPolicyRule 'policy' parameter must be a hash";
+            }
+            policy = cast<hash<auto>>(p.policy);
+        } else {
+            policy = {};
+        }
         foreach string key in (("policy_label", "allowed_domains",
                 "allowed_tasks", "blocked_task_categories", "examples",
                 "allow_smalltalk", "description")) {
@@ -89,6 +98,18 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
     /** @since QoreGuardrails 1.2 */
     public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
         return {
+            "policy": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(AutoHashType),),
+                "display_name": "Policy",
+                "short_desc": "Complete semantic policy hash for the classifier",
+                "desc": "Hash passed to the request classifier.  This is the "
+                    "most convenient option for untyped callers that already "
+                    "hold a policy object with `allowed_domains`, "
+                    "`allowed_tasks`, `blocked_task_categories`, `examples`, "
+                    "and related classifier keys.  Flat rule options override "
+                    "matching keys from this hash.",
+                "required": False,
+            },
             "policy_label": <DataProviderOptionInfo>{
                 "type": (AbstractDataProviderType::get(StringType),),
                 "display_name": "Policy Label",

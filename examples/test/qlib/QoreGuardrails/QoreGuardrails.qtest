@@ -47,7 +47,9 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         # Topic Restriction Rule tests
         addTestCase("TopicRestrictionRule - config validation", \topicConfigTest());
         addTestCase("TaskPolicyRule - no LLM fail-uncertain", \taskPolicyNoLlmTest());
+        addTestCase("TaskPolicyRule - policy hash config", \taskPolicyPolicyHashTest());
         addTestCase("GroundingRule - require sources", \groundingRequireSourcesTest());
+        addTestCase("GroundingRule - sources_key config", \groundingSourcesKeyTest());
 
         # GuardrailEngine tests
         addTestCase("GuardrailEngine - basic chain", \engineBasicTest());
@@ -308,6 +310,19 @@ public class QoreGuardrailsTest inherits QUnit::Test {
             r.violations[0].metadata.reason_code);
     }
 
+    taskPolicyPolicyHashTest() {
+        TaskPolicyRule rule(GS_CRITICAL, {
+            "policy": {
+                "policy_label": "ops-only",
+                "allowed_domains": ("operations",),
+                "blocked_task_categories": ("creative-writing",),
+            },
+            "fail_uncertain": False,
+        });
+        hash<GuardrailResult> r = rule.evaluate("write a poem");
+        assertTrue(r.passed);
+    }
+
     groundingRequireSourcesTest() {
         GroundingRule rule(GS_CRITICAL, {
             "require_sources": True,
@@ -317,6 +332,16 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         assertFalse(r.passed);
         assertEq("grounding", r.violations[0].rule);
         assertEq("source-required", r.violations[0].metadata.reason_code);
+    }
+
+    groundingSourcesKeyTest() {
+        GroundingRule rule(GS_CRITICAL, {
+            "sources_key": "references",
+            "require_sources": True,
+        });
+        hash<GuardrailResult> r = rule.evaluate("Qorus supports workflows.",
+            {"references": ({"id": "s1", "text": "Qorus supports workflows."},)});
+        assertTrue(r.passed);
     }
 
     # ===================== GuardrailEngine Tests =====================
@@ -533,6 +558,10 @@ public class QoreGuardrailsTest inherits QUnit::Test {
             "task_policy default direction is input");
         assertEq(GD_OUTPUT, reg.grounding.default_direction,
             "grounding default direction is output");
+        assertTrue(exists reg.task_policy.config_schema.policy,
+            "task_policy schema exposes policy hash option");
+        assertTrue(exists reg.grounding.config_schema.sources_key,
+            "grounding schema exposes sources_key option");
     }
 
     baseGetConfigSchemaTest() {

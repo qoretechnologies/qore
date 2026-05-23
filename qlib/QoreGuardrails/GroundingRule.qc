@@ -51,7 +51,8 @@ public class GroundingRule inherits AbstractGuardrailRule {
     #! Creates a grounding rule
     /** @param severity violation severity level
         @param params optional parameters:
-            - \c sources_ctx_key (string): context key for sources, default "sources"
+            - \c sources_key (string): evaluation context key for sources, default "sources"
+            - \c sources_ctx_key (string): compatibility alias for \c sources_key
             - \c require_sources (bool): fail when no sources are present
             - \c require_citations (bool): require citations in the answer
             - \c min_grounding_score (float): default 0.7
@@ -61,7 +62,7 @@ public class GroundingRule inherits AbstractGuardrailRule {
     constructor(string severity = GS_HIGH, *hash<auto> params,
             *hash<auto> llm_config) : AbstractGuardrailRule(severity) {
         hash<auto> p = params ?? {};
-        sources_ctx_key = p.sources_ctx_key ?? "sources";
+        sources_ctx_key = p.sources_key ?? p.sources_ctx_key ?? "sources";
         require_sources = p.require_sources ?? False;
         require_citations = p.require_citations ?? False;
         min_grounding_score = p.min_grounding_score ?? 0.7;
@@ -86,9 +87,9 @@ public class GroundingRule inherits AbstractGuardrailRule {
     /** @since QoreGuardrails 1.2 */
     public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
         return {
-            "sources_ctx_key": <DataProviderOptionInfo>{
+            "sources_key": <DataProviderOptionInfo>{
                 "type": (AbstractDataProviderType::get(StringType),),
-                "display_name": "Sources Context Key",
+                "display_name": "Sources Key",
                 "short_desc": "Context hash key containing source snippets",
                 "desc": "Name of the `evaluate()` context key containing "
                     "authorized source snippets or source-reference hashes.",
@@ -100,7 +101,7 @@ public class GroundingRule inherits AbstractGuardrailRule {
                 "display_name": "Require Sources",
                 "short_desc": "Fail when no authorized sources are supplied",
                 "desc": "When enabled, the rule blocks output if the caller "
-                    "does not supply any sources under `sources_ctx_key`.",
+                    "does not supply any sources under `sources_key`.",
                 "default_value": False,
                 "required": False,
                 "preselected": True,
