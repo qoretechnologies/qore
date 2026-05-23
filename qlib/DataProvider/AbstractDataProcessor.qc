@@ -658,6 +658,22 @@ public class AbstractDataProcessor inherits Qore::Serializable {
             AbstractDataProcessor::shapeName(from_shape), AbstractDataProcessor::shapeName(to_shape));
     }
 
+    #! Converts an optional hash-of-lists processor result to the negotiated output shape
+    /** @param data optional hash-of-lists result
+        @param to_shape requested output shape
+
+        @return the result converted to \a to_shape, or @ref NOTHING if \a data is @ref NOTHING
+
+        @since %DataProvider 3.5
+    */
+    static *auto convertHashListResultShape(*hash<auto> data, DataProviderShape to_shape) {
+        if (!data) {
+            return;
+        }
+        list<auto> converted = AbstractDataProcessor::convertShape(data, DataProviderShape::HashOfLists, to_shape);
+        return to_shape == DataProviderShape::RowRecords ? converted : converted[0];
+    }
+
     #! Returns the expected type of data to be submitted, if available
     /** This base class method returns @ref nothing; reimplement in subclasses to provide a type
     */

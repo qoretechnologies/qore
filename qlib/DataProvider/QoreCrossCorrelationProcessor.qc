@@ -309,8 +309,9 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
                 return processRecordsBulkImpl(records);
             case DataProviderShape::BufferColumns:
             case DataProviderShape::DataFrameBlock:
-                return processRecordsBulkImpl(AbstractDataProcessor::convertShape(
-                    records, shape, DataProviderShape::HashOfLists)[0]);
+                return AbstractDataProcessor::convertHashListResultShape(
+                    processRecordsBulkImpl(AbstractDataProcessor::convertShape(
+                        records, shape, DataProviderShape::HashOfLists)[0]), shape);
             case DataProviderShape::RowRecords:
                 return processRecordImpl(records);
         }
@@ -331,7 +332,8 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
 
     #! Returns supported output shapes
     private list<DataProviderShape> supportedOutputShapesImpl() {
-        return (DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns the processor capability bitfield

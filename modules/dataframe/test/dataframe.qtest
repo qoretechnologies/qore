@@ -1610,31 +1610,31 @@ sub invalid_dataframe_api() {
         assertTrue(stats.supportsInputShape(DataProviderShape::BufferColumns),
             "analytics processors advertise BufferColumns input");
         auto stats_block = stats.processRecordsShape(columns, DataProviderShape::BufferColumns);
-        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(stats_block),
-            "analytics processors emit hash-of-lists events from BufferColumns input");
-        assertEq(("statistics", "statistics"), stats_block{"event_type"},
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(stats_block),
+            "analytics processors emit BufferColumns events from BufferColumns input");
+        assertEq(("statistics", "statistics"), stats_block.getColumn("event_type").toList(),
             "analytics processors evaluate dense column values");
-        assertEq((155.0, 152.5), stats_block{"avg"},
+        assertEq((155.0, 152.5), stats_block.getColumn("avg").toList(),
             "analytics processors compute windows from BufferColumns input");
 
         QoreRunningStatsProcessor df_stats({"fields": "amount", "window_size": 4});
         assertTrue(df_stats.supportsInputShape(DataProviderShape::DataFrameBlock),
             "analytics processors advertise DataFrameBlock input");
         auto df_stats_block = df_stats.processRecordsShape(df, DataProviderShape::DataFrameBlock);
-        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(df_stats_block),
-            "analytics processors emit hash-of-lists events from DataFrameBlock input");
-        assertEq((153.75,), df_stats_block{"avg"},
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(df_stats_block),
+            "analytics processors emit DataFrameBlock events from DataFrameBlock input");
+        assertEq((153.75,), df_stats_block.getColumn("avg"),
             "analytics processors compute windows from DataFrameBlock input");
 
         QoreCorrelationProcessor corr({"fields": "id,amount", "window_size": 4});
         assertTrue(corr.supportsInputShape(DataProviderShape::BufferColumns),
             "correlation processor advertises BufferColumns input");
         auto corr_block = corr.processRecordsShape(columns, DataProviderShape::BufferColumns);
-        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(corr_block),
-            "correlation processor emits hash-of-lists events from BufferColumns input");
-        assertEq(("correlation",), corr_block{"event_type"},
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(corr_block),
+            "correlation processor emits BufferColumns events from BufferColumns input");
+        assertEq(("correlation",), corr_block.getColumn("event_type").toList(),
             "correlation processor evaluates dense column values");
-        assertEq((4,), corr_block{"count"},
+        assertEq((4,), corr_block.getColumn("count").toList(),
             "correlation processor counts BufferColumns rows");
 
         QoreCrossCorrelationProcessor xcorr({"field_x": "id", "field_y": "amount", "window_size": 4,
@@ -1642,11 +1642,11 @@ sub invalid_dataframe_api() {
         assertTrue(xcorr.supportsInputShape(DataProviderShape::BufferColumns),
             "cross-correlation processor advertises BufferColumns input");
         auto xcorr_block = xcorr.processRecordsShape(columns, DataProviderShape::BufferColumns);
-        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(xcorr_block),
-            "cross-correlation processor emits hash-of-lists events from BufferColumns input");
-        assertEq(("cross-correlation",), xcorr_block{"event_type"},
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(xcorr_block),
+            "cross-correlation processor emits BufferColumns events from BufferColumns input");
+        assertEq(("cross-correlation",), xcorr_block.getColumn("event_type").toList(),
             "cross-correlation processor evaluates dense column values");
-        assertEq((4,), xcorr_block{"count"},
+        assertEq((4,), xcorr_block.getColumn("count").toList(),
             "cross-correlation processor counts BufferColumns rows");
 
         hash<DataProviderExpression> or_expr = <DataProviderExpression>{

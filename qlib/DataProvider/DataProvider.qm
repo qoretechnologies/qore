@@ -765,6 +765,9 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     "AbstractDataProcessor::getSupportedOutputShapes()".  Pipelines keep the current shape when the next processor
     supports it; otherwise they convert with
     @ref DataProvider::AbstractDataProcessor::convertShape() "AbstractDataProcessor::convertShape()".
+    Shape-aware built-in processors preserve \c DataFrameBlock and \c BufferColumns bulk blocks for filter,
+    projection, update, search/replace, grouping, and analytics results when they can represent the output columns
+    without row materialization.
     \c DataFrameBlock values convert to \c HashOfLists with \c df.toColumnHash() and to row records with
     \c df.toRecords().  \c DataFrameBlock values convert to \c BufferColumns with \c df.toColumnarResult().
     \c BufferColumns values convert back to rows or hash-of-lists for processors that do not yet support dense

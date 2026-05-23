@@ -201,12 +201,14 @@ public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcesso
             return processRecordImpl(records);
         }
 
-        *auto result = processCompleteShapeWindows(records, shape, 2, output_mode == "dataframe");
+        bool dataframe_output = output_mode == "dataframe";
+        *auto result = processCompleteShapeWindows(records, shape, 2, dataframe_output);
         if (exists result) {
-            return result;
+            return AbstractDataProviderMLProcessor::convertBulkOutputShape(result, shape, dataframe_output);
         }
 
-        return processShapeRowsFallback(records, shape, output_mode == "dataframe");
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(
+            processShapeRowsFallback(records, shape, dataframe_output), shape, dataframe_output);
     }
 
     #! Processes records in bulk hash-of-lists format

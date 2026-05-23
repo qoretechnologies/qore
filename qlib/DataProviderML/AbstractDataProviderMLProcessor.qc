@@ -31,9 +31,9 @@ public namespace DataProviderML {
     to pass \c DataFrameBlock, \c BufferColumns, and \c HashOfLists blocks.
 
     Shaped input is converted to row records through
-    \c DataProvider::AbstractDataProcessor::convertShape(); outputs are emitted
-    as \c HashOfLists blocks so downstream shape-aware processors can continue
-    in bulk mode.
+    \c DataProvider::AbstractDataProcessor::convertShape(); bulk outputs are
+    converted back to the negotiated input shape when possible so downstream
+    shape-aware processors can continue in columnar bulk mode.
 
     @since DataProviderML 1.3
 */
@@ -133,9 +133,32 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
     #! Returns supported output shapes from most to least preferred
     private list<DataProvider::DataProviderShape> supportedOutputShapesImpl() {
         return (
+            DataProvider::DataProviderShape::DataFrameBlock,
+            DataProvider::DataProviderShape::BufferColumns,
             DataProvider::DataProviderShape::HashOfLists,
             DataProvider::DataProviderShape::RowRecords,
         );
+    }
+
+    #! Converts hash-of-lists bulk output to the requested shape unless the output is already shaped
+    /** @param data optional hash-of-lists processor output
+        @param shape requested output shape
+        @param already_shaped if @ref True, \a data is already in its final shape and is returned unchanged
+
+        @return the converted bulk output, the unchanged value, or @ref NOTHING if \a data is @ref NOTHING
+
+        @since DataProviderML 1.3
+    */
+    static *auto convertBulkOutputShape(*auto data, DataProvider::DataProviderShape shape, bool already_shaped = False) {
+        if (!exists data) {
+            return;
+        }
+        if (already_shaped || shape == DataProvider::DataProviderShape::HashOfLists
+                || shape == DataProvider::DataProviderShape::RowRecords || data.typeCode() != NT_HASH) {
+            return data;
+        }
+        return DataProvider::AbstractDataProcessor::convertHashListResultShape(cast<hash<auto>>(data),
+            cast<enum<DataProvider::DataProviderShape>>(shape));
     }
 
     #! Processes records in bulk hash-of-lists format
@@ -163,7 +186,8 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         if (!results) {
             return;
         }
-        return DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
     }
 
     #! Processes a list of row records with the subclass row processor

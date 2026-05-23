@@ -1650,10 +1650,11 @@ module DataProviderML {
     flow into ML processors without requiring the %DataProviderML module itself
     to depend on the \c dataframe module.
 
-    Shape-aware input is converted through the DataProvider shape API and the
-    processor emits hash-of-lists event blocks when multiple records are
-    produced.  This keeps downstream shape-aware processors in bulk mode while
-    preserving the existing row-oriented processor behavior.
+    Shape-aware input is converted through the DataProvider shape API and bulk
+    processor outputs preserve the negotiated \c DataFrameBlock or
+    \c BufferColumns shape when possible.  This keeps downstream shape-aware
+    processors in columnar bulk mode while preserving the existing row-oriented
+    processor behavior for single records and compatibility hash-of-lists input.
 
     StandardScaler, KMeans, and PCA also support \c output_mode = "dataframe".
     This mode returns flat DataFrame columns instead of nested event hashes,
@@ -1679,16 +1680,11 @@ DataProviderML::QoreIsolationForestProcessor proc({
     "window_size": 4,
 });
 
-hash<auto> events = proc.processRecordsShape(
+DataFrame::DataFrame events = proc.processRecordsShape(
     df, DataProviderShape::DataFrameBlock);
 
-# events is a HashOfLists block:
-# {
-#     "event_type": ("isolation-forest", ...),
-#     "anomaly_score": (...),
-#     "is_anomaly": (...),
-#     ...
-# }
+# events is a DataFrameBlock with columns such as:
+#   event_type, anomaly_score, is_anomaly, record_values
     @endcode
 
     @par Flat DataFrame output example:
@@ -1770,9 +1766,9 @@ DataProviderML::QoreStandardScalerProcessor scaler({
     "window_size": 3,
 });
 
-hash<auto> scaled = scaler.processRecordsShape(
+ColumnarResult scaled = scaler.processRecordsShape(
     columns, DataProviderShape::BufferColumns);
-assert scaled{"event_type"} == ("standard-scaler", "standard-scaler", "standard-scaler");
+assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-scaler", "standard-scaler");
     @endcode
 
     @section dataproviderml_relnotes Release Notes
@@ -1789,7 +1785,8 @@ assert scaled{"event_type"} == ("standard-scaler", "standard-scaler", "standard-
     @subsection dataproviderml_v1_3 DataProviderML v1.3
     - DataProviderML processors now accept \c DataFrameBlock,
       \c BufferColumns, and \c HashOfLists input shapes through the DataProvider
-      shape API and emit \c HashOfLists event blocks for bulk outputs
+      shape API and preserve \c DataFrameBlock or \c BufferColumns output shapes
+      for bulk event outputs when possible
     - StandardScaler, KMeans, and PCA can emit flat DataFrame output with dense
       buffer columns through \c output_mode = "dataframe"; optional slim output
       flags omit unchanged input columns and KMeans centroid-distance columns
