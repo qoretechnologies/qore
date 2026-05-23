@@ -3124,7 +3124,9 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
         const QoreListNode* source = value.get<const QoreListNode>();
         ColumnarShape shape;
         if (columnar_shape_from_desc(column_desc, shape)) {
-            shape.nullable = shape.nullable || columnar_list_has_nulls(source, xsink);
+            if (!shape.nullable) {
+                shape.nullable = columnar_list_has_nulls(source, xsink);
+            }
         } else {
             shape = columnar_infer_list_shape(source, xsink);
         }
