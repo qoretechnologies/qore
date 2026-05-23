@@ -150,7 +150,7 @@ public class ColumnarExpressionFilter {
         *hash<auto> string_predicate = getStringPredicate(expr, op);
         if (string_predicate) {
             return buildDataFrameStringMask(df, string_predicate.field, string_predicate.op,
-                string_predicate.value, string_predicate.ignore_case);
+                string_predicate.value, string_predicate.ignore_case, string_predicate.locale_options);
         }
 
         *hash<auto> pattern_predicate = getPatternPredicate(expr, op);
@@ -373,7 +373,7 @@ public class ColumnarExpressionFilter {
         *hash<auto> string_predicate = getStringPredicate(expr, op);
         if (string_predicate) {
             return buildBufferStringMask(records, string_predicate.field, string_predicate.op,
-                string_predicate.value, string_predicate.ignore_case);
+                string_predicate.value, string_predicate.ignore_case, string_predicate.locale_options);
         }
 
         *hash<auto> pattern_predicate = getPatternPredicate(expr, op);
@@ -693,7 +693,13 @@ public class ColumnarExpressionFilter {
     }
 
     #! Builds a DataFrame row mask for one string predicate that ColumnRef supports directly
-    private static *auto buildDataFrameStringMask(auto df, string field, string op, auto value, bool ignore_case) {
+    private static *auto buildDataFrameStringMask(auto df, string field, string op, auto value, bool ignore_case,
+            *hash<auto> locale_options) {
+        if (locale_options) {
+            auto mask = buildLocaleStringPredicateMask(df.column(field).values(), op, value, locale_options);
+            return makeDataFrameRowMask(mask.toList());
+        }
+
         if (ignore_case) {
             return buildDataFrameStringListMask(df, field, op, value, True);
         }
@@ -769,10 +775,15 @@ public class ColumnarExpressionFilter {
     }
 
     #! Builds a boolean buffer mask for one string predicate
-    private static *auto buildBufferStringMask(auto records, string field, string op, auto value, bool ignore_case) {
+    private static *auto buildBufferStringMask(auto records, string field, string op, auto value, bool ignore_case,
+            *hash<auto> locale_options) {
         auto column = records.getColumn(field);
         if (column.typeCode() != NT_BUFFER && column.typeCode() != NT_LIST) {
             return;
+        }
+
+        if (locale_options) {
+            return buildLocaleStringPredicateMask(column, op, value, locale_options);
         }
 
         softstring needle = value;
@@ -808,6 +819,21 @@ public class ColumnarExpressionFilter {
             mask += match;
         }
         return new buffer<bool>(mask);
+    }
+
+    #! Builds a locale-sensitive string predicate mask with an on-demand i18n dependency
+    private static auto buildLocaleStringPredicateMask(auto values, string op, auto value,
+            hash<auto> locale_options) {
+        try {
+            load_module("i18n");
+        } catch (hash<ExceptionInfo> ex) {
+            throw "EXPRESSION-FILTER-ERROR", sprintf(
+                "locale-sensitive string predicate %y requires the i18n module; failed to load it: %s: %s",
+                op, ex.err, ex.desc);
+        }
+        softstring needle = value;
+        return call_function_args("I18n::string_predicate_mask",
+            (values, op, string(needle), string(locale_options.locale), locale_options));
     }
 
     #! Builds a boolean buffer mask for one LIKE or regex predicate
@@ -1009,11 +1035,16 @@ public class ColumnarExpressionFilter {
         }
 
         bool ignore_case = False;
+        *hash<auto> locale_options;
         if (expr.args.size() == 3) {
             if (!isScalarComparisonArg(expr.args[2])) {
                 return;
             }
-            ignore_case = unwrapComparisonValue(expr.args[2]) ? True : False;
+            auto options = unwrapComparisonValue(expr.args[2]);
+            locale_options = getLocaleStringPredicateOptions(options, op);
+            if (!locale_options) {
+                ignore_case = options ? True : False;
+            }
         }
 
         return {
@@ -1021,7 +1052,21 @@ public class ColumnarExpressionFilter {
             "op": op,
             "value": unwrapComparisonValue(expr.args[1]),
             "ignore_case": ignore_case,
+            "locale_options": locale_options,
         };
+    }
+
+    #! Returns validated locale options for string predicates, if supplied
+    private static *hash<auto> getLocaleStringPredicateOptions(auto value, string op) {
+        if (!exists value || value.typeCode() != NT_HASH) {
+            return;
+        }
+        if (!value.hasKey("locale") || !exists value.locale || value.locale.typeCode() != NT_STRING) {
+            throw "EXPRESSION-FILTER-ERROR", sprintf(
+                "third argument to %y must be a bool ignore-case flag or a locale options hash with a string "
+                "`locale` key; got %y", op, value);
+        }
+        return value;
     }
 
     #! Returns vectorizable pattern predicate information, if supported by BufferColumns

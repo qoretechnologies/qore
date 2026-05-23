@@ -836,8 +836,11 @@ pipeline.append(new QoreFilterRecordsProcessor({
     \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
     expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
     \c between,
-    \c in, \c notIn, null checks, case-sensitive string predicates, and boolean combinations compile to
-    DataFrame row masks or dense ColumnarResult \c buffer<bool> masks.  BufferColumns input also lowers
+    \c in, \c notIn, null checks, string predicates, and boolean combinations compile to
+    DataFrame row masks or dense ColumnarResult \c buffer<bool> masks.  String predicates support the legacy
+    bool ignore-case argument and, when the \c i18n module is available, a locale options hash such as
+    <tt>{"locale": "tr-TR"}</tt> or <tt>{"locale": "en-US", "strength": "primary"}</tt> for ICU-backed
+    locale-sensitive comparison.  BufferColumns input also lowers
     SQL-like \c like and regular expression predicates to dense masks.  More complex expressions fall back
     to row-record evaluation while preserving the negotiated shape when possible.
     @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",

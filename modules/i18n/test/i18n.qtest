@@ -175,6 +175,21 @@ class I18nTest inherits QUnit::Test {
         binary b_key = I18n::get_sort_key("b", "en-US");
         assertTrue(a_key.size() > 0);
         assertNeq(a_key, b_key);
+
+        assertTrue(I18n::string_predicate("\u0130stanbul", "starts-with", "i", "tr-TR"));
+        assertFalse(I18n::string_predicate("Istanbul", "starts-with", "i", "tr-TR"));
+        assertTrue(I18n::string_predicate("R\u00e9sum\u00e9", "contains", "resume", "en-US",
+            {"strength": "primary"}));
+        assertFalse(I18n::string_predicate("R\u00e9sum\u00e9", "contains", "resume", "en-US",
+            {"strength": "secondary"}));
+        assertTrue(I18n::string_predicate("Cafe\u0301", "ends-with", "\u00e9", "en-US"));
+        assertTrue(I18n::string_predicate("Alpha", "equals", "alpha", "en-US"));
+        assertFalse(I18n::string_predicate("Alpha", "equals", "alpha", "en-US", {"strength": "tertiary"}));
+
+        auto mask = I18n::string_predicate_mask(("\u0130stanbul", "Istanbul", NOTHING), "starts-with", "i",
+            "tr-TR");
+        assertEq("buffer<bool>", mask.fullType());
+        assertEq((True, False, False), mask.toList());
     }
 
     pluralFormTest() {

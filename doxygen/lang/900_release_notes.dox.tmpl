@@ -141,7 +141,8 @@
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
       \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
       autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
-      expression-to-expression predicates such as \c @amount \c >= \c @target
+      expression-to-expression predicates such as \c @amount \c >= \c @target, plus ICU-backed locale-sensitive
+      string predicates when a DataProvider expression passes an \c i18n locale options hash
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
       value counting, missing-data cleanup, reshape, Arrow/Parquet roundtrip,
@@ -1990,6 +1991,9 @@ foreach string module_name in (registry.getProcessModules()) {
         negotiation for HTTP/API workflows
       - explicit-locale number parsing/formatting, currency formatting, date/time style and skeleton formatting,
         collation compare/sort-key APIs, and backend version introspection
+      - locale-sensitive \c string_predicate() and \c string_predicate_mask() APIs for \c contains,
+        \c starts-with, \c ends-with, and \c equals checks with ICU collation strength, normalization, and
+        case-level options; DataProvider string predicates can use the same options for row and columnar filtering
       - thread-local locale controls and explicit locale-context capture/apply helpers using the
         \c LOCALE_CONTROL functional domain; catalog file APIs use \c FILESYSTEM
       - \c qore-i18n tool for AST-based extraction, catalog statistics, pseudolocalization, and simple PO

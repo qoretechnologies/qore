@@ -137,7 +137,9 @@ DataFrame RowMask or dense `ColumnarResult` masks:
 - `in`
 - `not in`
 - null checks
-- case-sensitive string predicates: `contains`, `starts-with`, `ends-with`
+- string predicates: `contains`, `starts-with`, `ends-with`, including legacy
+  bool ignore-case handling and ICU-backed locale options such as
+  `{"locale": "tr-TR"}` or `{"locale": "en-US", "strength": "primary"}`
 - BufferColumns `like`, `=~`, and `!~` pattern predicates
 - `&&`, `||`, and `!`
 
@@ -226,8 +228,6 @@ targets are:
 - more DPQL expression forms lowered to dense masks when they can preserve
   generic expression semantics without hidden row materialization
 - wider vectorized analytics outputs
-- extending dense string predicate lowering to case-folded and locale-sensitive
-  forms where benchmarks show a payoff and semantics can be documented clearly
 - direct packed-column support in more DBI drivers
 - more direct Arrow C Data consumers in binary modules that need libqore-level
   columnar interchange without linking against Arrow C++; module-grpc already

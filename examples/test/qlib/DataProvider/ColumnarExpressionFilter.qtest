@@ -28,6 +28,7 @@
 %requires QUnit
 %requires DataProvider
 %requires dataframe
+%requires i18n
 
 %exec-class ColumnarExpressionFilterTest
 
@@ -40,6 +41,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("computed field comparison ColumnarResult filter", \computedFieldComparisonBufferColumns());
         addTestCase("truthy and inRange DataFrame filter", \truthyAndRangeDataFrame());
         addTestCase("string transform ColumnarResult filter", \stringTransformBufferColumns());
+        addTestCase("locale string predicate filters", \localeStringPredicateFilters());
 
         set_return_value(main());
     }
@@ -51,6 +53,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
             "target": new buffer<float64>((60.0, 90.0, 130.0, 150.0)),
             "score": new buffer<int64>((88, 90, 85, 97)),
             "status": new buffer<string>(("Active", "inactive", "VIP", "active")),
+            "city": new buffer<string>(("\u0130stanbul", "Istanbul", "Ankara", "Izmir")),
             "flag": new buffer<bool>((True, False, True, False)),
         };
     }
@@ -185,5 +188,28 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         ColumnarResult filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
 
         assertEq((1, 4), columnarIds(filtered));
+    }
+
+    private localeStringPredicateFilters() {
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": DP_OP_STARTS_WITH,
+            "args": (
+                <DataProviderFieldReference>{"field": "city"},
+                "i",
+                {"value": {"locale": "tr-TR"}},
+            ),
+        };
+
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+
+        DataFrame::DataFrame df(makeColumns());
+        DataFrame::DataFrame filtered_df = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq((1,), dataframeIds(filtered_df),
+            "DataFrameBlock filter uses locale-sensitive string predicate masks");
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash(makeColumns(), NOTHING);
+        ColumnarResult filtered_columns = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((1,), columnarIds(filtered_columns),
+            "BufferColumns filter uses locale-sensitive string predicate masks");
     }
 }

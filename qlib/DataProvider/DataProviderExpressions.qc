@@ -45,6 +45,57 @@ auto sub dp_eval_arg(hash<auto> rec, hash<DataProviderExpression> exp, int index
     return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[index], template_context);
 }
 
+#! Returns locale-sensitive string predicate options from an argument value, if present
+*hash<auto> sub dp_get_string_predicate_locale_options(auto value, string op) {
+    if (!exists value || value.typeCode() != NT_HASH) {
+        return;
+    }
+    if (!value.hasKey("locale") || !exists value.locale || value.locale.typeCode() != NT_STRING) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf(
+            "third argument to %y must be a bool ignore-case flag or a locale options hash with a string "
+            "`locale` key; got %y", op, value);
+    }
+    return value;
+}
+
+#! Evaluates a locale-sensitive string predicate with an on-demand i18n dependency
+bool sub dp_eval_locale_string_predicate(softstring value, string op, softstring needle, hash<auto> options) {
+    try {
+        load_module("i18n");
+    } catch (hash<ExceptionInfo> ex) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf(
+            "locale-sensitive string predicate %y requires the i18n module; failed to load it: %s: %s",
+            op, ex.err, ex.desc);
+    }
+    return call_function_args("I18n::string_predicate",
+        (string(value), op, string(needle), string(options.locale), options));
+}
+
+#! Evaluates a string predicate while preserving legacy bool ignore-case semantics
+bool sub dp_eval_string_predicate(hash<auto> rec, hash<DataProviderExpression> exp, string op, *hash<auto> tc) {
+    softstring str = dp_eval_arg(rec, exp, 0, tc);
+    softstring chars = dp_eval_arg(rec, exp, 1, tc);
+    auto options = exp.args.size() > 2 ? dp_eval_arg(rec, exp, 2, tc) : False;
+    *hash<auto> locale_options = dp_get_string_predicate_locale_options(options, op);
+    if (locale_options) {
+        return dp_eval_locale_string_predicate(str, op, chars, locale_options);
+    }
+    if (options) {
+        str = str.upr();
+        chars = chars.upr();
+    }
+
+    switch (op) {
+        case DP_OP_CONTAINS:
+            return str.contains(chars);
+        case DP_OP_STARTS_WITH:
+            return str.startsWith(chars);
+        case DP_OP_ENDS_WITH:
+            return str.endsWith(chars);
+    }
+    throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("unsupported string predicate operator %y", op);
+}
+
 #! Extended expression implementations for data providers
 /** @since DataProvider 3.3
 */
@@ -341,7 +392,7 @@ public const ExtendedExpressionImplementations = {
             "symbol": "startsWith",
             "render_template": "$arg[0].startsWith($arg[1], $arg[2])",
             "groups": "Comparison",
-            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType, DataProviderSignatureBoolType),
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType, DataProviderSignatureAnyType),
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "String Value",
@@ -355,22 +406,18 @@ public const ExtendedExpressionImplementations = {
                     "desc": "The characters to check at the beginning of the first argument",
                 },
                 <DataProviderArgInfo>{
-                    "display_name": "Ignore Case?",
-                    "short_desc": "If True then case is ignored (default: True)",
-                    "desc": "If `True` then case will be ignored when checking the string; default: `True`",
+                    "display_name": "Case / Locale Options",
+                    "short_desc": "Bool ignore-case flag or locale options hash",
+                    "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
+                        "a string `locale` key and is evaluated with locale-sensitive ICU collation; supported "
+                        "options include `strength`, `normalization`, and `case_level`. Default: `True`",
                     "default_value": True,
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            softstring str = dp_eval_arg(rec, exp, 0, tc);
-            softstring chars = dp_eval_arg(rec, exp, 1, tc);
-            if (dp_eval_arg(rec, exp, 2, tc)) {
-                str = str.upr();
-                chars = chars.upr();
-            }
-            return str.startsWith(chars);
+            return dp_eval_string_predicate(rec, exp, DP_OP_STARTS_WITH, tc);
         },
     },
     DP_OP_ENDS_WITH: {
@@ -383,7 +430,7 @@ public const ExtendedExpressionImplementations = {
             "symbol": "endsWith",
             "render_template": "$arg[0].endsWith($arg[1], $arg[2])",
             "groups": "Comparison",
-            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType, DataProviderSignatureBoolType),
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType, DataProviderSignatureAnyType),
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "String Value",
@@ -397,22 +444,18 @@ public const ExtendedExpressionImplementations = {
                     "desc": "The characters to check at the end of the first argument",
                 },
                 <DataProviderArgInfo>{
-                    "display_name": "Ignore Case?",
-                    "short_desc": "If True then case is ignored (default: True)",
-                    "desc": "If `True` then case will be ignored; default: `True`",
+                    "display_name": "Case / Locale Options",
+                    "short_desc": "Bool ignore-case flag or locale options hash",
+                    "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
+                        "a string `locale` key and is evaluated with locale-sensitive ICU collation; supported "
+                        "options include `strength`, `normalization`, and `case_level`. Default: `True`",
                     "default_value": True,
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            softstring str = dp_eval_arg(rec, exp, 0, tc);
-            softstring chars = dp_eval_arg(rec, exp, 1, tc);
-            if (dp_eval_arg(rec, exp, 2, tc)) {
-                str = str.upr();
-                chars = chars.upr();
-            }
-            return str.endsWith(chars);
+            return dp_eval_string_predicate(rec, exp, DP_OP_ENDS_WITH, tc);
         },
     },
     DP_OP_CONTAINS: {
@@ -426,7 +469,7 @@ public const ExtendedExpressionImplementations = {
             "render_template": "$arg[0] contains $arg[1]",
             "groups": "Comparison",
             "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                DataProviderSignatureBoolType),
+                DataProviderSignatureAnyType),
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "String Value",
@@ -440,22 +483,18 @@ public const ExtendedExpressionImplementations = {
                     "desc": "The characters to check if they are anywhere in the first argument",
                 },
                 <DataProviderArgInfo>{
-                    "display_name": "Ignore Case?",
-                    "short_desc": "If True then case is ignored (default: True)",
-                    "desc": "If `True` then case will be ignored; default: `True`",
+                    "display_name": "Case / Locale Options",
+                    "short_desc": "Bool ignore-case flag or locale options hash",
+                    "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
+                        "a string `locale` key and is evaluated with locale-sensitive ICU collation; supported "
+                        "options include `strength`, `normalization`, and `case_level`. Default: `True`",
                     "default_value": True,
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            softstring str = dp_eval_arg(rec, exp, 0, tc);
-            softstring chars = dp_eval_arg(rec, exp, 1, tc);
-            if (dp_eval_arg(rec, exp, 2, tc)) {
-                str = str.upr();
-                chars = chars.upr();
-            }
-            return str.contains(chars);
+            return dp_eval_string_predicate(rec, exp, DP_OP_CONTAINS, tc);
         },
     },
     DP_OP_LIST_CONTAINS: {
@@ -501,7 +540,7 @@ public const ExtendedExpressionImplementations = {
             "render_template": "$arg[0] contains-any $arg[1]",
             "groups": "Comparison",
             "args": (DataProviderSignatureStringType, DataProviderSignatureListType,
-                DataProviderSignatureBoolType),
+                DataProviderSignatureAnyType),
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "String Value",
@@ -515,9 +554,11 @@ public const ExtendedExpressionImplementations = {
                     "desc": "The strings to check if at least one is in the first argument",
                 },
                 <DataProviderArgInfo>{
-                    "display_name": "Ignore Case?",
-                    "short_desc": "If True then case is ignored (default: True)",
-                    "desc": "If `True` then case will be ignored; default: `True`",
+                    "display_name": "Case / Locale Options",
+                    "short_desc": "Bool ignore-case flag or locale options hash",
+                    "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
+                        "a string `locale` key and each substring is evaluated with locale-sensitive ICU collation; "
+                        "supported options include `strength`, `normalization`, and `case_level`. Default: `True`",
                     "default_value": True,
                 },
             ),
@@ -526,7 +567,17 @@ public const ExtendedExpressionImplementations = {
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             string str = dp_eval_arg(rec, exp, 0, tc);
             *list<auto> elems = dp_eval_arg(rec, exp, 1, tc);
-            if (dp_eval_arg(rec, exp, 2, tc)) {
+            auto options = exp.args.size() > 2 ? dp_eval_arg(rec, exp, 2, tc) : False;
+            *hash<auto> locale_options = dp_get_string_predicate_locale_options(options, DP_OP_CONTAINS_ANY);
+            if (locale_options) {
+                foreach softstring chars in (elems) {
+                    if (dp_eval_locale_string_predicate(str, DP_OP_CONTAINS, chars, locale_options)) {
+                        return True;
+                    }
+                }
+                return False;
+            }
+            if (options) {
                 str = str.upr();
                 elems = map $1.upr(), elems;
             }
