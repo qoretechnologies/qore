@@ -111,12 +111,11 @@ class DataFrameSolutionsTest inherits QUnit::Test {
             "fields": "feature1,feature2,feature3",
             "window_size": 6,
         });
-        hash<auto> scaled = scaler.processRecordsShape(features, DataProviderShape::DataFrameBlock);
-        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(scaled),
-            "standard scaler emits bulk hash-of-lists output");
-        assertEq(6, AbstractDataProcessor::shapeRecordCount(scaled, DataProviderShape::HashOfLists),
+        DataFrame::DataFrame scaled_events = scaler.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(scaled_events),
+            "standard scaler preserves DataFrameBlock output");
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(scaled_events, DataProviderShape::DataFrameBlock),
             "standard scaler preserves row count");
-        DataFrame::DataFrame scaled_events(scaled);
         assertEq(6, scaled_events.numRows(), "standard scaler output can be inspected as a DataFrame");
 
         DataProviderML::QoreStandardScalerProcessor flat_scaler({
@@ -150,8 +149,7 @@ class DataFrameSolutionsTest inherits QUnit::Test {
             "window_size": 6,
             "k": 2,
         });
-        hash<auto> cluster_events = kmeans.processRecordsShape(features, DataProviderShape::DataFrameBlock);
-        DataFrame::DataFrame clusters(cluster_events);
+        DataFrame::DataFrame clusters = kmeans.processRecordsShape(features, DataProviderShape::DataFrameBlock);
         assertEq(6, clusters.numRows(), "kmeans output can be inspected as a DataFrame");
         DataFrame::DataFrame cluster_summary = clusters.groupBy(("cluster",)).agg({
             "distance": ("mean", "max"),
@@ -195,8 +193,7 @@ class DataFrameSolutionsTest inherits QUnit::Test {
             "window_size": 6,
             "n_components": 2,
         });
-        hash<auto> pca_events = pca.processRecordsShape(features, DataProviderShape::DataFrameBlock);
-        DataFrame::DataFrame pca_frame(pca_events);
+        DataFrame::DataFrame pca_frame = pca.processRecordsShape(features, DataProviderShape::DataFrameBlock);
         assertEq(6, pca_frame.numRows(), "PCA output can be inspected as a DataFrame");
 
         DataProviderML::QorePCAProcessor flat_pca({
