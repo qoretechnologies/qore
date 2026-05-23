@@ -1115,6 +1115,22 @@ sub invalid_dataframe_api() {
         assertEq(("Carol", "Dave"), contains_filtered.getColumn("name"),
             "DataFrameBlock filter applies DPQL string operators");
 
+        QoreFilterRecordsProcessor string_or_proc({
+            "dpql_where": 'contains(@name, "a") || @amount > 200',
+        });
+        DataFrame::DataFrame string_or_filtered = string_or_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Bob", "Carol", "Dave"), string_or_filtered.getColumn("name"),
+            "DataFrameBlock vectorized string predicates compose with OR masks");
+
+        QoreFilterRecordsProcessor string_not_proc({
+            "dpql_where": '!contains(@name, "a")',
+        });
+        DataFrame::DataFrame string_not_filtered = string_not_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Bob"), string_not_filtered.getColumn("name"),
+            "DataFrameBlock vectorized string predicates compose with NOT masks");
+
         hash<DataProviderExpression> between_expr = <DataProviderExpression>{
             "exp": DP_SEARCH_OP_BETWEEN,
             "args": (<DataProviderFieldReference>{"field": "amount"}, 100, 200),
@@ -1293,6 +1309,27 @@ sub invalid_dataframe_api() {
             "DPQL BufferColumns string fallback preserves BufferColumns shape");
         assertEq((3, 4), string_filtered.getColumn("id").toList(),
             "DPQL BufferColumns string fallback keeps matching rows");
+
+        QoreFilterRecordsProcessor string_mask_proc({
+            "dpql_where": 'startsWith(@name, "D") || @amount > 200',
+        });
+        auto string_mask_filtered = string_mask_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((2, 4), string_mask_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns string predicates build dense masks");
+
+        QoreFilterRecordsProcessor like_proc({
+            "dpql_where": '@name like "%a%" && @id > 1',
+        });
+        auto like_filtered = like_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((3, 4), like_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns LIKE predicates build dense masks");
+
+        QoreFilterRecordsProcessor regex_proc({
+            "dpql_where": '@name =~ /^(A|D)/',
+        });
+        auto regex_filtered = regex_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((1, 4), regex_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns regex predicates build dense masks");
 
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),

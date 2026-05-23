@@ -833,10 +833,10 @@ pipeline.append(new QoreFilterRecordsProcessor({
     \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
     expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
     \c between,
-    \c in, \c notIn, null checks, and boolean combinations compile to DataFrame row masks or dense
-    ColumnarResult \c buffer<bool> masks.  DataFrame string predicates such as \c contains,
-    \c starts-with, and \c ends-with use DataFrame column filtering.  More complex
-    expressions fall back to row-record evaluation while preserving the negotiated shape when possible.
+    \c in, \c notIn, null checks, case-sensitive string predicates, and boolean combinations compile to
+    DataFrame row masks or dense ColumnarResult \c buffer<bool> masks.  BufferColumns input also lowers
+    SQL-like \c like and regular expression predicates to dense masks.  More complex expressions fall back
+    to row-record evaluation while preserving the negotiated shape when possible.
     @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
     @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
     @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" preserve \c DataFrameBlock and
@@ -1182,8 +1182,9 @@ if (errors) {
     - added DataProvider bulk read/create/upsert shape metadata and shaped create/upsert entry points so providers
       can accept \c BufferColumns or \c DataFrameBlock input without row materialization
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
-      \c DataFrameBlock and \c BufferColumns input directly for supported comparisons, boolean combinations, and
-      null checks
+      \c DataFrameBlock and \c BufferColumns input directly for supported comparisons, string predicates,
+      boolean combinations, and null checks; BufferColumns filters also lower \c like and regular expression
+      predicates to dense masks
     - added DPQL string support to @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
       through \c dpql_where and string-valued \c where_cond options so pipeline filters can be configured directly
       with DPQL while retaining the DataFrame and dense BufferColumns fast paths

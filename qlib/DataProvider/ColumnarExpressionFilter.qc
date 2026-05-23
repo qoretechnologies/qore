@@ -137,6 +137,12 @@ public class ColumnarExpressionFilter {
                 in_comparison{"negated"});
         }
 
+        *hash<auto> string_predicate = getStringPredicate(expr, op);
+        if (string_predicate && !string_predicate.ignore_case) {
+            return buildDataFrameStringMask(df, string_predicate.field, string_predicate.op,
+                string_predicate.value);
+        }
+
         *hash<auto> comparison = getDataFrameComparison(expr, op);
         if (!comparison) {
             return;
@@ -220,6 +226,18 @@ public class ColumnarExpressionFilter {
                 in_comparison{"negated"});
         }
 
+        *hash<auto> string_predicate = getStringPredicate(expr, op);
+        if (string_predicate) {
+            return buildBufferStringMask(records, string_predicate.field, string_predicate.op,
+                string_predicate.value, string_predicate.ignore_case);
+        }
+
+        *hash<auto> pattern_predicate = getPatternPredicate(expr, op);
+        if (pattern_predicate) {
+            return buildBufferPatternMask(records, pattern_predicate.field, pattern_predicate.pattern,
+                pattern_predicate.options, pattern_predicate.negated);
+        }
+
         *hash<auto> comparison = getDataFrameComparison(expr, op);
         if (!comparison || !exists comparison.value || comparison.value.typeCode() == NT_NULL) {
             return;
@@ -278,22 +296,98 @@ public class ColumnarExpressionFilter {
         return negated ? records.invertMask(combined) : combined;
     }
 
+    #! Builds a DataFrame row mask for one string predicate that ColumnRef supports directly
+    private static *auto buildDataFrameStringMask(auto df, string field, string op, auto value) {
+        switch (op) {
+            case DP_OP_CONTAINS:
+                return df.column(field).compare("contains", value);
+            case DP_OP_STARTS_WITH:
+                return df.column(field).compare("startswith", value);
+            case DP_OP_ENDS_WITH:
+                return df.column(field).compare("endswith", value);
+        }
+        return;
+    }
+
+    #! Builds a boolean buffer mask for one string predicate
+    private static *auto buildBufferStringMask(auto records, string field, string op, auto value, bool ignore_case) {
+        auto column = records.getColumn(field);
+        if (column.typeCode() != NT_BUFFER && column.typeCode() != NT_LIST) {
+            return;
+        }
+
+        softstring needle = value;
+        if (ignore_case) {
+            needle = needle.upr();
+        }
+
+        list<bool> mask = ();
+        foreach auto raw in (column) {
+            if (!exists raw || raw.typeCode() == NT_NULL) {
+                mask += False;
+                continue;
+            }
+            softstring haystack = raw;
+            if (ignore_case) {
+                haystack = haystack.upr();
+            }
+
+            bool match;
+            switch (op) {
+                case DP_OP_CONTAINS:
+                    match = haystack.contains(needle);
+                    break;
+                case DP_OP_STARTS_WITH:
+                    match = haystack.startsWith(needle);
+                    break;
+                case DP_OP_ENDS_WITH:
+                    match = haystack.endsWith(needle);
+                    break;
+                default:
+                    return;
+            }
+            mask += match;
+        }
+        return new buffer<bool>(cast<list<bool>>(mask));
+    }
+
+    #! Builds a boolean buffer mask for one LIKE or regex predicate
+    private static *auto buildBufferPatternMask(auto records, string field, string pattern, int options,
+            bool negated) {
+        auto column = records.getColumn(field);
+        if (column.typeCode() != NT_BUFFER && column.typeCode() != NT_LIST) {
+            return;
+        }
+
+        list<bool> mask = ();
+        foreach auto raw in (column) {
+            if (!exists raw || raw.typeCode() == NT_NULL) {
+                mask += negated;
+                continue;
+            }
+            softstring value = raw;
+            bool match = regex(value, pattern, options);
+            mask += negated ? !match : match;
+        }
+        return new buffer<bool>(cast<list<bool>>(mask));
+    }
+
     #! Returns the field name for a unary null-check expression, if supported
     private static *string getNullCheckField(hash<DataProviderExpression> expr, string op) {
         if (op != DP_OP_IS_NULL && op != DP_OP_IS_NOT_NULL) {
             return;
         }
-        if (expr.args.size() != 1 || !(expr.args[0] instanceof hash<DataProviderFieldReference>)) {
+        if (expr.args.size() != 1 || !isTopLevelFieldReference(expr.args[0])) {
             return;
         }
         string field = expr.args[0].field;
-        return field.find(".") < 0 ? field : NOTHING;
+        return field;
     }
 
     #! Returns vectorizable between-expression information, if supported
     private static *hash<auto> getBetweenComparison(hash<DataProviderExpression> expr, string op) {
         if (op != DP_SEARCH_OP_BETWEEN || expr.args.size() != 3
-                || !(expr.args[0] instanceof hash<DataProviderFieldReference>)
+                || !isTopLevelFieldReference(expr.args[0])
                 || !isScalarComparisonArg(expr.args[1]) || !isScalarComparisonArg(expr.args[2])) {
             return;
         }
@@ -307,7 +401,7 @@ public class ColumnarExpressionFilter {
     #! Returns vectorizable in/not-in expression information, if supported
     private static *hash<auto> getInComparison(hash<DataProviderExpression> expr, string op) {
         if ((op != DP_SEARCH_OP_IN && op != DP_OP_NOT_IN) || expr.args.size() < 2
-                || !(expr.args[0] instanceof hash<DataProviderFieldReference>)) {
+                || !isTopLevelFieldReference(expr.args[0])) {
             return;
         }
 
@@ -342,6 +436,82 @@ public class ColumnarExpressionFilter {
         };
     }
 
+    #! Returns vectorizable string predicate information, if supported
+    private static *hash<auto> getStringPredicate(hash<DataProviderExpression> expr, string op) {
+        if (op != DP_OP_CONTAINS && op != DP_OP_STARTS_WITH && op != DP_OP_ENDS_WITH) {
+            return;
+        }
+        if (expr.args.size() < 2 || expr.args.size() > 3 || !isTopLevelFieldReference(expr.args[0])
+                || !isScalarComparisonArg(expr.args[1])) {
+            return;
+        }
+
+        bool ignore_case = False;
+        if (expr.args.size() == 3) {
+            if (!isScalarComparisonArg(expr.args[2])) {
+                return;
+            }
+            ignore_case = unwrapComparisonValue(expr.args[2]) ? True : False;
+        }
+
+        return {
+            "field": expr.args[0].field,
+            "op": op,
+            "value": unwrapComparisonValue(expr.args[1]),
+            "ignore_case": ignore_case,
+        };
+    }
+
+    #! Returns vectorizable pattern predicate information, if supported by BufferColumns
+    private static *hash<auto> getPatternPredicate(hash<DataProviderExpression> expr, string op) {
+        if (op == DP_OP_LIKE) {
+            if (expr.args.size() < 2 || expr.args.size() > 3 || !isTopLevelFieldReference(expr.args[0])
+                    || !isScalarComparisonArg(expr.args[1])) {
+                return;
+            }
+            bool ignore_case = False;
+            if (expr.args.size() == 3) {
+                if (!isScalarComparisonArg(expr.args[2])) {
+                    return;
+                }
+                ignore_case = unwrapComparisonValue(expr.args[2]) ? True : False;
+            }
+            string pattern = unwrapComparisonValue(expr.args[1]);
+            string re = regex_subst(pattern, "([.^$+?{}\\[\\]|()\\\\])", "\\\\$1", RE_Global);
+            re = regex_subst(re, "%", ".*", RE_Global);
+            re = regex_subst(re, "_", ".", RE_Global);
+            return {
+                "field": expr.args[0].field,
+                "pattern": "^" + re + "$",
+                "options": ignore_case ? RE_Caseless : 0,
+                "negated": False,
+            };
+        }
+
+        if (op == DP_OP_REGEX_MATCH || op == DP_OP_REGEX_NMATCH) {
+            if (expr.args.size() < 2 || expr.args.size() > 3 || !isTopLevelFieldReference(expr.args[0])
+                    || !isScalarComparisonArg(expr.args[1])) {
+                return;
+            }
+            int opts;
+            if (expr.args.size() == 3) {
+                auto flags = unwrapComparisonValue(expr.args[2]);
+                if (flags.typeCode() != NT_LIST) {
+                    return;
+                }
+                opts = foldl $1 | $2, (map RegexOpts{$1}, flags);
+            }
+            return {
+                "field": expr.args[0].field,
+                "pattern": unwrapComparisonValue(expr.args[1]),
+                "options": opts,
+                "negated": op == DP_OP_REGEX_NMATCH,
+            };
+        }
+
+        return;
+    }
+
     #! Returns vectorizable DataFrame comparison information, if supported
     private static *hash<auto> getDataFrameComparison(hash<DataProviderExpression> expr, string op) {
         if (expr.args.size() != 2) {
@@ -350,10 +520,10 @@ public class ColumnarExpressionFilter {
 
         auto lhs = expr.args[0];
         auto rhs = expr.args[1];
-        if (lhs instanceof hash<DataProviderFieldReference> && isScalarComparisonArg(rhs)) {
+        if (isTopLevelFieldReference(lhs) && isScalarComparisonArg(rhs)) {
             return {"field": lhs.field, "op": op, "value": unwrapComparisonValue(rhs)};
         }
-        if (rhs instanceof hash<DataProviderFieldReference> && isScalarComparisonArg(lhs)) {
+        if (isTopLevelFieldReference(rhs) && isScalarComparisonArg(lhs)) {
             *string inverted_op = invertComparisonOperator(op);
             if (!inverted_op) {
                 return;
@@ -361,6 +531,11 @@ public class ColumnarExpressionFilter {
             return {"field": rhs.field, "op": inverted_op, "value": unwrapComparisonValue(lhs)};
         }
         return;
+    }
+
+    #! Returns True if the argument is a top-level field reference
+    private static bool isTopLevelFieldReference(auto arg) {
+        return arg instanceof hash<DataProviderFieldReference> && arg.field.find(".") < 0;
     }
 
     #! Returns True if the argument can be used as a scalar comparison value
