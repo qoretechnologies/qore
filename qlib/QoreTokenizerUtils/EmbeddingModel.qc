@@ -39,6 +39,8 @@ public hashdecl EmbeddingConfig {
     *string api_key;
     #! ONNX mode: filesystem path to the .onnx model file
     *string model_path;
+    #! ONNX mode: in-memory .onnx model data from a registry or database artifact
+    *binary model_data;
     #! ONNX mode: tokenizer config for input preparation
     *hash<auto> tokenizer_config;
     #! Maximum input tokens (longer inputs are truncated); default 512
@@ -127,8 +129,9 @@ public class EmbeddingModel {
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
-            if (!config.model_path.val()) {
-                throw "EMBEDDING-CONFIG-ERROR", "model_path is required for ONNX mode";
+            if (!config.model_path.val() && !exists config.model_data) {
+                throw "EMBEDDING-CONFIG-ERROR",
+                    "model_path or model_data is required for ONNX mode";
             }
             if (!config.tokenizer_config) {
                 throw "EMBEDDING-CONFIG-ERROR",
@@ -136,7 +139,9 @@ public class EmbeddingModel {
             }
             max_tokens = config.max_tokens;
             pooling_strategy = config.pooling_strategy;
-            onnx_model = new ML::OnnxModel(config.model_path);
+            onnx_model = exists config.model_data
+                ? new ML::OnnxModel(config.model_data)
+                : new ML::OnnxModel(config.model_path);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
     }

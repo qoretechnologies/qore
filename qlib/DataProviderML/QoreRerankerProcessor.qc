@@ -130,9 +130,37 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 "display_name": "Tokenizer Config Path",
                 "short_desc": "Path to tokenizer.json for ONNX mode",
                 "desc": "Filesystem path to a HuggingFace `tokenizer.json` file. "
-                    "Required for `onnx` mode.",
+                    "Required for `onnx` mode unless `registry_model_name` is provided.",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": False,
+            },
+            "registry_model_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Name",
+                "short_desc": "Registry package containing reranker artifacts",
+                "desc": "QoreModelRegistry model/package name containing an ONNX cross-encoder "
+                    "model and a `tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_version": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Version",
+                "short_desc": "Registry model version or latest",
+                "desc": "Optional registry model version ID. Omit or use `latest` to load "
+                    "the most recent package version.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry ONNX Artifact",
+                "short_desc": "Named ONNX artifact in the package",
+                "desc": "Optional named ONNX artifact. Defaults to the package execution "
+                    "entry artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Tokenizer Artifact",
+                "short_desc": "Named tokenizer.json artifact in the package",
+                "desc": "Optional tokenizer artifact name. Defaults to the package manifest's "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
             },
             "max_length": <DataProviderOptionInfo>{
                 "display_name": "Max Sequence Length",
@@ -143,7 +171,7 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 "required": False,
                 "default_value": 512,
             },
-        };
+        } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
     private {
@@ -158,6 +186,9 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
 
         #! The reranker instance
         QoreTokenizerUtils::CrossEncoderReranker reranker;
+
+        #! Registry backend options
+        hash<auto> registry_options;
 
         #! Accumulated records
         list<auto> buffer = ();
@@ -202,21 +233,43 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
             rconfig.url = copts.reranker_url;
             rconfig.api_key = copts.reranker_api_key;
         } else if (reranker_mode == "onnx") {
-            if (!copts.reranker_model_path.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "reranker_model_path is required for ONNX mode";
-            }
-            if (!copts.tokenizer_config_path.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "tokenizer_config_path is required for ONNX mode";
-            }
-            rconfig.model_path = copts.reranker_model_path;
+            registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
+            if (copts.registry_model_name.val()) {
 %ifndef NoJson
-            rconfig.tokenizer_config =
-                parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+                QoreModelRegistry::ModelRegistry registry(registry_options);
+                hash<QoreModelRegistry::ModelVersionInfo> manifest =
+                    registry.getVersionManifest(copts.registry_model_name,
+                        copts.registry_model_version);
+                string artifact_name = copts.registry_model_artifact_name
+                    ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
+                    ?? "model";
+                rconfig.model_data = registry.loadNamedArtifact(copts.registry_model_name,
+                    manifest.version_id, artifact_name);
+                rconfig.tokenizer_config = registry.loadTokenizerConfig(copts.registry_model_name,
+                    manifest.version_id, copts.registry_tokenizer_artifact_name);
 %else
-            throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+                throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
 %endif
+            } else {
+                if (!copts.reranker_model_path.val()) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "reranker_model_path is required for ONNX mode unless "
+                        "registry_model_name is provided";
+                }
+                if (!copts.tokenizer_config_path.val()) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "tokenizer_config_path is required for ONNX mode unless "
+                        "registry_model_name is provided";
+                }
+                rconfig.model_path = copts.reranker_model_path;
+%ifndef NoJson
+                rconfig.tokenizer_config =
+                    parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+%else
+                throw "CONSTRUCTOR-ERROR",
+                    "json module is required for tokenizer config parsing";
+%endif
+            }
         }
 
         reranker = new QoreTokenizerUtils::CrossEncoderReranker(rconfig);

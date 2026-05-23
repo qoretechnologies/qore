@@ -48,6 +48,8 @@ public hashdecl RerankerConfig {
     *string api_key;
     #! ONNX mode: path to the ONNX cross-encoder model
     *string model_path;
+    #! ONNX mode: in-memory .onnx model data from a registry or database artifact
+    *binary model_data;
     #! ONNX mode: tokenizer config for input preparation
     *hash<auto> tokenizer_config;
     #! Maximum sequence length for query+passage pairs; default 512
@@ -135,8 +137,9 @@ public class CrossEncoderReranker {
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
-            if (!config.model_path.val()) {
-                throw "RERANKER-CONFIG-ERROR", "model_path is required for ONNX mode";
+            if (!config.model_path.val() && !exists config.model_data) {
+                throw "RERANKER-CONFIG-ERROR",
+                    "model_path or model_data is required for ONNX mode";
             }
             if (!config.tokenizer_config) {
                 throw "RERANKER-CONFIG-ERROR",
@@ -144,7 +147,9 @@ public class CrossEncoderReranker {
             }
             max_length = config.max_length;
             activation = config.activation;
-            onnx_model = new ML::OnnxModel(config.model_path);
+            onnx_model = exists config.model_data
+                ? new ML::OnnxModel(config.model_data)
+                : new ML::OnnxModel(config.model_path);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
     }

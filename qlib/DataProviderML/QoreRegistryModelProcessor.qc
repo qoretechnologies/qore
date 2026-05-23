@@ -216,7 +216,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         QoreModelRegistry::ModelRegistry registry(reg_opts);
 
         if (copts.tag) {
-            model = registry.loadByTag(model_name, copts.tag);
+            model = registry.loadExecutableByTag(model_name, copts.tag);
             # Get the version ID for reporting
             list<hash<auto>> versions = registry.listVersions(model_name);
             foreach hash<auto> v in (versions) {
@@ -225,7 +225,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 }
             }
         } else {
-            model = registry.load(model_name, copts.version);
+            model = registry.loadExecutable(model_name, copts.version);
             # Determine loaded version
             if (copts.version && copts.version != "latest") {
                 loaded_version = copts.version;

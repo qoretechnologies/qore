@@ -38,7 +38,7 @@
 %endtry
 
 module QoreModelRegistry {
-    version = "2.1.0";
+    version = "2.2.0";
     desc = "user module providing an ML model registry with pluggable storage backends for versioning, tagging, and deployment management";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -68,9 +68,18 @@ module QoreModelRegistry {
     are isolated from other tenants. A single shared registry instance can serve
     multiple independent tenants with full data isolation.
 
-    The artifact storage layer is designed for extensibility: model artifacts are
-    currently stored inline (as files or blobs), but the @ref ArtifactRef abstraction
-    supports future object store backends (e.g., S3/MinIO) without schema changes.
+    The artifact storage layer supports both native Qore \c .qml models and
+    multi-file model packages. A package can contain an ONNX model, HuggingFace
+    \c tokenizer.json, model \c config.json, SafeTensors weights, generation
+    configuration, and other named artifacts. The registry inspects package
+    metadata safely: JSON and SafeTensors headers are parsed, but PyTorch pickle
+    artifacts (\c .pt, \c .pth, \c .bin) are never deserialized or executed.
+
+    Locally executable artifacts use explicit runtime metadata:
+    - native Qore ML artifacts use the \c qore-ml runtime
+    - ONNX artifacts use \c onnxruntime when the \c ml module has ONNX support
+    - SafeTensors/PyTorch source packages are metadata-only until converted to
+      ONNX or connected to an external runtime
 
     @par Single-Tenant Example:
     @code{.py}
@@ -122,7 +131,63 @@ QoreModelRegistry::ModelRegistry admin({"path": "/var/models"});
 list<string> tenants = admin.listTenants();  # ("acme-corp", "globex-inc")
     @endcode
 
+    @par HuggingFace/ONNX Package Example:
+    @code{.py}
+%requires QoreModelRegistry
+
+QoreModelRegistry::ModelRegistry reg({"path": "/var/models"});
+
+# Directory contains model.onnx, tokenizer.json, config.json, etc.
+string vid = reg.registerPackage("/srv/models/bge-small-en", {
+    "name": "bge-small-en",
+    "description": "Embedding model package exported to ONNX",
+    "tags": ("embedding", "production"),
+});
+
+hash<QoreModelRegistry::ModelVersionInfo> manifest =
+    reg.getVersionManifest("bge-small-en", vid);
+printf("runtime=%s tokenizer=%s\n",
+    manifest.runtime, manifest.tokenizer.tokenizer_json);
+
+# Tokenizer utilities and DataProviderML processors can load tokenizer.json
+# directly from the registry without a separate filesystem path.
+hash<auto> tokenizer_config = reg.loadTokenizerConfig("bge-small-en", vid);
+
+# ONNX packages are executable when ONNX Runtime is available.
+object model = reg.loadExecutable("bge-small-en", vid);
+    @endcode
+
+    @par Safe PyTorch Metadata Example:
+    @code{.py}
+string vid = reg.registerPackage("/srv/models/torch-source", {
+    "name": "torch-source",
+});
+
+hash<QoreModelRegistry::ModelVersionInfo> manifest =
+    reg.getVersionManifest("torch-source", vid);
+printf("kind=%s safety=%s executable=%y\n",
+    manifest.artifact_kind, manifest.safety, manifest.executable);
+
+# If the package contains only SafeTensors or PyTorch pickle weights, this
+# throws a descriptive ML-REGISTRY-ERROR instead of attempting unsafe execution.
+reg.loadExecutable("torch-source", vid);
+    @endcode
+
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
+
+    @subsection qoremodelregistry_2_2 QoreModelRegistry Module Version 2.2
+    - Added safe model package registration with @ref QoreModelRegistry::ModelRegistry::registerPackage()
+    - Added named artifact APIs: \c registerNamedArtifact(), \c loadNamedArtifact(),
+      \c listArtifacts(), and \c getVersionManifest()
+    - Added JSON/tokenizer artifact helpers for AI pipelines:
+      \c loadJsonArtifact() and \c loadTokenizerConfig()
+    - Added execution metadata and \c loadExecutable() / \c loadExecutableByTag()
+      for native Qore ML and ONNX packages
+    - Added @ref QoreModelRegistry::ModelArtifactInspector for HuggingFace,
+      ONNX, SafeTensors, and PyTorch package inspection without executing
+      unsafe artifacts
+    - Filesystem and database backends preserve package manifests and named
+      artifact metadata; REST backends can expose equivalent artifact endpoints
 
     @subsection qoremodelregistry_2_0 QoreModelRegistry Module Version 2.0
     - Pluggable storage backends via @ref AbstractModelRegistryBackend

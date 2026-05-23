@@ -65,9 +65,31 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
                 "short_desc": "Path to HuggingFace tokenizer.json file",
                 "desc": "The filesystem path to a HuggingFace `tokenizer.json` configuration "
                     "file. This file defines the vocabulary and tokenization rules used to "
-                    "count tokens accurately for a specific model.",
+                    "count tokens accurately for a specific model. Provide either this option "
+                    "or `tokenizer_model_name` to load the tokenizer from QoreModelRegistry.",
                 "type": AbstractDataProviderTypeMap."string",
-                "required": True,
+            },
+            "tokenizer_model_name": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Model Name",
+                "short_desc": "Registry model containing tokenizer.json",
+                "desc": "The QoreModelRegistry model/package name that contains a "
+                    "`tokenizer.json` artifact. Use this when tokenizer files are registered "
+                    "with the model package instead of deployed separately on the filesystem.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "tokenizer_model_version": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Model Version",
+                "short_desc": "Registry model version or latest",
+                "desc": "Optional model version ID. Omit or use `latest` to load the most "
+                    "recent registered tokenizer package.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Artifact Name",
+                "short_desc": "Named tokenizer artifact in the registry package",
+                "desc": "Optional named artifact to load. Defaults to the package manifest's "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
             },
             "add_special_tokens": <DataProviderOptionInfo>{
                 "display_name": "Add Special Tokens",
@@ -78,7 +100,7 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
                 "type": AbstractDataProviderTypeMap."bool",
                 "default_value": True,
             },
-        };
+        } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
     private {
@@ -86,7 +108,19 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
         string text_field;
 
         #! Path to the tokenizer config
-        string tokenizer_config_path;
+        *string tokenizer_config_path;
+
+        #! Registry model/package containing tokenizer.json
+        *string tokenizer_model_name;
+
+        #! Registry model version
+        *string tokenizer_model_version;
+
+        #! Registry tokenizer artifact name
+        *string tokenizer_artifact_name;
+
+        #! Registry backend options
+        hash<auto> registry_options;
 
         #! Whether to add special tokens
         bool add_special_tokens;
@@ -110,9 +144,14 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
             throw "CONSTRUCTOR-ERROR", "text_field option is required";
         }
         tokenizer_config_path = copts.tokenizer_config_path;
-        if (!tokenizer_config_path.val()) {
-            throw "CONSTRUCTOR-ERROR", "tokenizer_config_path option is required";
+        tokenizer_model_name = copts.tokenizer_model_name;
+        tokenizer_model_version = copts.tokenizer_model_version;
+        tokenizer_artifact_name = copts.tokenizer_artifact_name;
+        if (!tokenizer_config_path.val() && !tokenizer_model_name.val()) {
+            throw "CONSTRUCTOR-ERROR",
+                "tokenizer_config_path or tokenizer_model_name option is required";
         }
+        registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
         add_special_tokens = copts.add_special_tokens ?? True;
         configured = True;
     }
@@ -159,8 +198,14 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
     private ensureTokenCounter() {
         if (!token_counter) {
 %ifndef NoJson
-            hash<auto> tokenizer_config =
-                parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+            hash<auto> tokenizer_config;
+            if (tokenizer_model_name.val()) {
+                QoreModelRegistry::ModelRegistry registry(registry_options);
+                tokenizer_config = registry.loadTokenizerConfig(tokenizer_model_name,
+                    tokenizer_model_version, tokenizer_artifact_name);
+            } else {
+                tokenizer_config = parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+            }
             token_counter = new QoreTokenizerUtils::TokenCounter(tokenizer_config);
 %else
             throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";

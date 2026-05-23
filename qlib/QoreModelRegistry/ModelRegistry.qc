@@ -185,8 +185,7 @@ public class ModelRegistry {
         AbstractModelRegistryBackend::validateModelName(name);
 
         # Generate version ID: timestamp + random hex
-        string version_id = format_date("YYYYMMDDHHmmss", now()) + "_"
-            + get_random_bytes(4).toHex();
+        string version_id = makeVersionId();
 
         # Serialize model
         binary model_data = ML::ml_serialize(model);
@@ -204,11 +203,86 @@ public class ModelRegistry {
             "format": "qml",
             "training_data_hash": options.training_data_hash,
             "tenant_id": backend.getTenantId(),
+            "framework": "qore",
+            "artifact_kind": "executable",
+            "runtime": "qore-ml",
+            "executable": True,
+            "safety": "safe",
+            "artifacts": (<ModelArtifactInfo>{
+                "name": "model",
+                "role": "model",
+                "format": "qml",
+                "size": model_data.size(),
+                "safe_to_parse": True,
+                "executable": True,
+            },),
+            "execution": <ModelExecutionInfo>{
+                "runtime": "qore-ml",
+                "local_executable": True,
+                "entry_artifact": "model",
+                "requires": ("ml",),
+            },
         });
 
         backend.registerVersion(name, model_data, metadata);
 
         return version_id;
+    }
+
+    #! Registers a filesystem model package directory
+    /** Inspects a HuggingFace/PyTorch/ONNX/Qore package directory, registers the
+        primary artifact as the version artifact, and stores companion artifacts
+        by name. PyTorch pickle artifacts are recorded as unsafe/source artifacts
+        and are not executable by Qore.
+
+        @param package_path filesystem directory containing model package files
+        @param options registration options; \c name is required
+
+        @return the version ID string
+
+        @throw ML-REGISTRY-ERROR if the package cannot be inspected or registered
+
+        @since QoreModelRegistry 2.2
+    */
+    string registerPackage(string package_path, hash<auto> options) {
+        *string name = options.name;
+        if (!name.val()) {
+            throw "ML-REGISTRY-ERROR", "required option 'name' not provided";
+        }
+        AbstractModelRegistryBackend::validateModelName(name);
+
+        hash<auto> inspect_options = options + {
+            "version_id": options.version_id.val() ? options.version_id : makeVersionId(),
+        };
+        hash<ModelVersionInfo> metadata =
+            ModelArtifactInspector::inspectDirectory(package_path, name, inspect_options);
+        metadata.tenant_id = backend.getTenantId();
+
+        string primary_name = metadata.execution.entry_artifact
+            ?? (metadata.artifacts ? metadata.artifacts[0].name : "model");
+        string primary_path = package_path + DirSep + primary_name;
+        if (!is_file(primary_path)) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("primary artifact '%s' not found in package '%s'",
+                    primary_name, package_path);
+        }
+
+        binary primary_artifact = ReadOnlyFile::readBinaryFile(primary_path);
+        metadata.file_size = primary_artifact.size();
+        backend.registerVersion(name, primary_artifact, metadata);
+
+        foreach hash<ModelArtifactInfo> artifact_info in (metadata.artifacts) {
+            if (artifact_info.name == primary_name) {
+                continue;
+            }
+            string artifact_path = package_path + DirSep + artifact_info.name;
+            if (is_file(artifact_path)) {
+                backend.registerNamedArtifact(name, metadata.version_id, artifact_info.name,
+                    ReadOnlyFile::readBinaryFile(artifact_path), artifact_info);
+            }
+        }
+
+        return metadata.version_id;
     }
 
     #! Lists all versions of a named model
@@ -239,8 +313,66 @@ public class ModelRegistry {
             version_id = versions.last().version_id;
         }
 
+        hash<ModelVersionInfo> meta = backend.getVersionMetadata(name, version_id);
+        if (meta.format != "qml" && meta.runtime != "qore-ml") {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("model '%s' version '%s' is not a native Qore ML artifact "
+                    "(format=%y, runtime=%y); use loadExecutable(), loadArtifact(), "
+                    "or loadNamedArtifact() according to the version metadata",
+                    name, version_id, meta.format, meta.runtime);
+        }
+
         binary artifact = backend.loadArtifact(name, version_id);
         return ML::ml_deserialize(artifact);
+    }
+
+    #! Loads a model version using its declared execution plan
+    /** Native Qore ML artifacts are deserialized with \c ML::ml_deserialize().
+        ONNX artifacts are loaded into @ref ML::OnnxModel when ONNX Runtime is
+        available. Source-only, weights-only, tokenizer-only, and metadata-only
+        packages raise an informative error.
+
+        @param name the model name
+        @param version_id the version ID to load, or NOTHING/"latest"
+
+        @return an executable Qore object
+
+        @throw ML-REGISTRY-ERROR if the version has no local execution plan
+
+        @since QoreModelRegistry 2.2
+    */
+    object loadExecutable(string name, *string version_id) {
+        if (!version_id.val() || version_id == "latest") {
+            list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
+            if (!versions) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("no versions found for model '%s'", name);
+            }
+            version_id = versions.last().version_id;
+        }
+
+        hash<ModelVersionInfo> meta = backend.getVersionManifest(name, version_id);
+        string runtime = meta.runtime ?? (meta.execution ? meta.execution.runtime : NOTHING)
+            ?? "metadata-only";
+        string entry_artifact = meta.execution ? (meta.execution.entry_artifact ?? "model") : "model";
+
+        if (runtime == "qore-ml" || meta.format == "qml") {
+            return ML::ml_deserialize(backend.loadNamedArtifact(name, version_id, entry_artifact));
+        }
+        if (runtime == "onnxruntime" || meta.format == "onnx") {
+            binary artifact = backend.loadNamedArtifact(name, version_id, entry_artifact);
+            if (meta.execution && meta.execution.config) {
+                return new ML::OnnxModel(artifact,
+                    cast<hash<ML::OnnxSessionConfig>>(meta.execution.config));
+            }
+            return new ML::OnnxModel(artifact);
+        }
+
+        throw "ML-REGISTRY-ERROR",
+            sprintf("model '%s' version '%s' is not locally executable "
+                "(artifact_kind=%y, runtime=%y, safety=%y); convert it to ONNX, "
+                "register a native Qore ML artifact, or configure an external runtime",
+                name, version_id, meta.artifact_kind, runtime, meta.safety);
     }
 
     #! Loads a model artifact as raw binary data (without deserializing)
@@ -264,6 +396,160 @@ public class ModelRegistry {
         }
 
         return backend.loadArtifact(name, version_id);
+    }
+
+    #! Registers an additional named artifact for an existing model version
+    /** @param name the model name
+        @param version_id the version ID
+        @param artifact_name stable artifact name, for example \c "tokenizer.json"
+        @param artifact artifact binary data
+        @param metadata optional artifact metadata
+
+        @since QoreModelRegistry 2.2
+    */
+    nothing registerNamedArtifact(string name, string version_id, string artifact_name,
+            binary artifact, *hash<ModelArtifactInfo> metadata) {
+        if (!artifact_name.val()) {
+            throw "ML-REGISTRY-ERROR", "artifact_name must not be empty";
+        }
+        hash<ModelArtifactInfo> info = metadata ?? <ModelArtifactInfo>{
+            "name": artifact_name,
+            "format": inferArtifactFormat(artifact_name),
+            "size": artifact.size(),
+        };
+        info.name = artifact_name;
+        if (!info.size) {
+            info.size = artifact.size();
+        }
+        if (!info.format.val()) {
+            info.format = inferArtifactFormat(artifact_name);
+        }
+        backend.registerNamedArtifact(name, version_id, artifact_name, artifact, info);
+    }
+
+    #! Loads a named artifact from a model package
+    /** @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name the artifact name
+
+        @return artifact binary data
+
+        @since QoreModelRegistry 2.2
+    */
+    binary loadNamedArtifact(string name, *string version_id, string artifact_name) {
+        if (!version_id.val() || version_id == "latest") {
+            list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
+            if (!versions) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("no versions found for model '%s'", name);
+            }
+            version_id = versions.last().version_id;
+        }
+        return backend.loadNamedArtifact(name, version_id, artifact_name);
+    }
+
+    #! Loads and parses a named JSON artifact from a model package
+    /** @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name the JSON artifact name
+
+        @return parsed JSON hash
+
+        @throw ML-REGISTRY-ERROR if the artifact is not a JSON artifact or cannot be parsed
+
+        @since QoreModelRegistry 2.2
+    */
+    hash<auto> loadJsonArtifact(string name, *string version_id, string artifact_name) {
+%ifdef NoJson
+        throw "ML-REGISTRY-ERROR",
+            "the json module is required to load JSON model artifacts";
+%else
+        binary data = loadNamedArtifact(name, version_id, artifact_name);
+        try {
+            return parse_json(data.toString());
+        } catch (hash<ExceptionInfo> ex) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("could not parse JSON artifact '%s' for model '%s': %s",
+                    artifact_name, name, ex.desc);
+        }
+%endif
+    }
+
+    #! Loads the tokenizer.json artifact for a model package
+    /** If \a artifact_name is omitted, the tokenizer artifact is selected from
+        the version manifest. This lets HuggingFace-style packages be registered
+        once and then reused by token counting, embedding, re-ranking, and other
+        AI pipeline processors without duplicating tokenizer files.
+
+        @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name optional tokenizer artifact name; defaults to the
+            manifest tokenizer entry
+
+        @return parsed tokenizer.json hash
+
+        @throw ML-REGISTRY-ERROR if no tokenizer artifact is available
+
+        @since QoreModelRegistry 2.2
+    */
+    hash<auto> loadTokenizerConfig(string name, *string version_id, *string artifact_name) {
+        hash<ModelVersionInfo> manifest = getVersionManifest(name, version_id);
+        if (!artifact_name.val()) {
+            artifact_name = manifest.tokenizer ? manifest.tokenizer.tokenizer_json : NOTHING;
+        }
+        if (!artifact_name.val()) {
+            foreach hash<ModelArtifactInfo> artifact in (manifest.artifacts) {
+                if (artifact.role == "tokenizer") {
+                    artifact_name = artifact.name;
+                    break;
+                }
+            }
+        }
+        if (!artifact_name.val()) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("model '%s' version '%s' does not contain a tokenizer.json artifact",
+                    name, manifest.version_id);
+        }
+        return loadJsonArtifact(name, manifest.version_id, artifact_name);
+    }
+
+    #! Lists named artifacts for a model version
+    /** @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+
+        @return list of artifact metadata hashes
+
+        @since QoreModelRegistry 2.2
+    */
+    list<hash<ModelArtifactInfo>> listArtifacts(string name, *string version_id) {
+        if (!version_id.val() || version_id == "latest") {
+            list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
+            if (!versions) {
+                return ();
+            }
+            version_id = versions.last().version_id;
+        }
+        return backend.listArtifacts(name, version_id);
+    }
+
+    #! Returns the full model package manifest for a version
+    /** @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+
+        @return version manifest metadata
+
+        @since QoreModelRegistry 2.2
+    */
+    hash<ModelVersionInfo> getVersionManifest(string name, *string version_id) {
+        if (!version_id.val() || version_id == "latest") {
+            list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
+            if (!versions) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("no versions found for model '%s'", name);
+            }
+            version_id = versions.last().version_id;
+        }
+        return backend.getVersionManifest(name, version_id);
     }
 
     #! Tags a specific version of a model
@@ -302,6 +588,32 @@ public class ModelRegistry {
         for (int i = versions.size() - 1; i >= 0; --i) {
             if (versions[i].tags.contains(tag_name)) {
                 return load(name, versions[i].version_id);
+            }
+        }
+        throw "ML-REGISTRY-ERROR",
+            sprintf("no version with tag '%s' found for model '%s'", tag_name, name);
+    }
+
+    #! Loads an executable model version by tag
+    /** This method has the same tag lookup semantics as @ref loadByTag(), but
+        uses @ref loadExecutable() so ONNX packages can be executed and
+        metadata-only PyTorch/HuggingFace packages produce an informative error.
+
+        @param name the model name
+        @param tag_name the tag to search for
+
+        @return the executable model object
+
+        @throw ML-REGISTRY-ERROR if no version with the tag is found or the version
+            has no local execution plan
+
+        @since QoreModelRegistry 2.2
+    */
+    object loadExecutableByTag(string name, string tag_name) {
+        list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
+        for (int i = versions.size() - 1; i >= 0; --i) {
+            if (versions[i].tags.contains(tag_name)) {
+                return loadExecutable(name, versions[i].version_id);
             }
         }
         throw "ML-REGISTRY-ERROR",
@@ -385,6 +697,36 @@ public class ModelRegistry {
             class_name = (class_name =~ x/([^:]+)$/)[0];
         }
         return class_name;
+    }
+
+    #! Private: creates a sortable unique version ID
+    private static string makeVersionId() {
+        return format_date("YYYYMMDDHHmmss", now()) + "_"
+            + get_random_bytes(4).toHex();
+    }
+
+    #! Private: infers an artifact format from a filename
+    private static string inferArtifactFormat(string name) {
+        string lname = name.lwr();
+        if (lname =~ /[.]qml$/) {
+            return "qml";
+        }
+        if (lname =~ /[.]onnx$/) {
+            return "onnx";
+        }
+        if (lname =~ /[.]json$/) {
+            return "json";
+        }
+        if (lname =~ /[.]safetensors$/) {
+            return "safetensors";
+        }
+        if (lname =~ /[.](pt|pth|bin)$/) {
+            return "pytorch-pickle";
+        }
+        if (lname =~ /[.]pt2$/) {
+            return "torch-export";
+        }
+        return "binary";
     }
 }
 

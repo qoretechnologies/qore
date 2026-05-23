@@ -37,7 +37,7 @@
 %requires ml
 
 module QoreTokenizerUtils {
-    version = "1.1.0";
+    version = "1.2.0";
     desc = "user module providing document chunking, token counting, embeddings, and "
         "re-ranking for RAG pipelines";
     author = "Qore Technologies, s.r.o.";
@@ -69,7 +69,10 @@ module QoreTokenizerUtils {
       documents at semantic boundaries detected by embedding similarity
 
     All classes accept a HuggingFace `tokenizer.json` configuration and produce output
-    compatible with any ONNX embedding model or LLM API.
+    compatible with any ONNX embedding model or LLM API. ONNX embedding and
+    re-ranking models can be loaded from either filesystem paths or in-memory
+    binary artifacts, which allows QoreModelRegistry database and REST backends
+    to execute registered ONNX packages without first writing temporary model files.
 
     @par Example: Chunk a document for RAG
     @code{.py}
@@ -88,6 +91,12 @@ foreach hash<auto> chunk in (chunks) {
     @endcode
 
     @section qoretokenizerutilsrelnotes QoreTokenizerUtils Module Release Notes
+
+    @subsection qoretokenizerutils_1_2 QoreTokenizerUtils Module Version 1.2
+    - EmbeddingModel and CrossEncoderReranker can load ONNX models from in-memory
+      \c model_data artifacts as well as filesystem \c model_path values
+    - Enables QoreModelRegistry-backed ONNX execution for DataProviderML processors
+      without temporary files
 
     @subsection qoretokenizerutils_1_1 QoreTokenizerUtils Module Version 1.1
     - Added @ref QoreTokenizerUtils::StructuredDocumentChunker "StructuredDocumentChunker"

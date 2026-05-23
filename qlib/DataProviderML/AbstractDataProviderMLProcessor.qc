@@ -38,6 +38,83 @@ public namespace DataProviderML {
     @since DataProviderML 1.3
 */
 public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractDataProvider {
+    public {
+        #! Shared model registry backend choices for AI processors
+        const ModelRegistryBackendTypes = (
+            <AllowedValueInfo>{"value": "filesystem", "display_name": "Filesystem"},
+            <AllowedValueInfo>{"value": "database", "display_name": "Database (SqlUtil)"},
+            <AllowedValueInfo>{"value": "rest", "display_name": "REST API"},
+        );
+
+        #! Shared constructor options for loading tokenizer/model artifacts from QoreModelRegistry
+        const ModelRegistryConstructorOptions = {
+            "registry_backend_type": <DataProviderOptionInfo>{
+                "display_name": "Registry Backend Type",
+                "short_desc": "Storage backend type for the model registry",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The storage backend used for registry artifacts: `filesystem`, "
+                    "`database`, or `rest`.",
+                "allowed_values": ModelRegistryBackendTypes,
+                "default_value": "filesystem",
+            },
+            "registry_path": <DataProviderOptionInfo>{
+                "display_name": "Registry Path",
+                "short_desc": "Filesystem path to the model registry",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Base directory for filesystem-backed model packages.",
+            },
+            "registry_datasource": <DataProviderOptionInfo>{
+                "display_name": "Registry Datasource",
+                "short_desc": "Database datasource for registry artifacts",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "An AbstractDatasource object for database-backed registry storage.",
+            },
+            "registry_table_prefix": <DataProviderOptionInfo>{
+                "display_name": "Registry Table Prefix",
+                "short_desc": "Table prefix for database registry backend",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Prefix for database registry tables; default is `ml_`.",
+            },
+            "registry_rest_client": <DataProviderOptionInfo>{
+                "display_name": "Registry REST Client",
+                "short_desc": "REST client object for registry artifacts",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "A REST client object with model registry endpoints.",
+            },
+            "registry_rest_base_path": <DataProviderOptionInfo>{
+                "display_name": "Registry REST Base Path",
+                "short_desc": "Base path for registry REST endpoints",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Base URL path for registry REST endpoints.",
+            },
+            "registry_tenant_id": <DataProviderOptionInfo>{
+                "display_name": "Registry Tenant ID",
+                "short_desc": "Tenant identifier for registry access",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Optional tenant identifier to scope registry model artifacts.",
+            },
+        };
+    }
+
+    #! Builds ModelRegistry constructor options from shared processor options
+    /** @param copts checked processor options
+
+        @return constructor options for @ref QoreModelRegistry::ModelRegistry
+
+        @since DataProviderML 1.4
+    */
+    static hash<auto> buildModelRegistryOptions(hash<auto> copts) {
+        return {
+            "backend_type": copts.registry_backend_type ?? "filesystem",
+            "path": copts.registry_path,
+            "datasource": copts.registry_datasource,
+            "table_prefix": copts.registry_table_prefix,
+            "rest_client": copts.registry_rest_client,
+            "rest_base_path": copts.registry_rest_base_path,
+            "tenant_id": copts.registry_tenant_id ?? copts.tenant_id,
+        };
+    }
+
     #! Returns @ref True because this base handles shaped bulk input
     private bool supportsBulkApiImpl() {
         return True;

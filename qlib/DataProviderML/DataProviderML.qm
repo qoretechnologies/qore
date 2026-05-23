@@ -40,7 +40,7 @@
 %requires QoreVisionExtraction
 
 module DataProviderML {
-    version = "1.0";
+    version = "1.4.0";
     desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1192,13 +1192,18 @@ module DataProviderML {
             "cls": "DataProviderML::QoreTokenizeProcessor",
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                QoreTokenizeProcessor::ConstructorOptions{"text_field", "tokenizer_config_path"}, {
+                QoreTokenizeProcessor::ConstructorOptions{"text_field",}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreTokenizeProcessor::ConstructorOptions{"add_special_tokens",}, {
+                QoreTokenizeProcessor::ConstructorOptions{
+                    "tokenizer_config_path", "tokenizer_model_name", "tokenizer_model_version",
+                    "tokenizer_artifact_name", "registry_backend_type", "registry_path",
+                    "registry_datasource", "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id", "add_special_tokens",
+                }, {
                     "loc": "constructor",
                 }
             ),
@@ -1223,13 +1228,19 @@ module DataProviderML {
             "cls": "DataProviderML::QoreChunkTextProcessor",
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                QoreChunkTextProcessor::ConstructorOptions{"text_field", "tokenizer_config_path"}, {
+                QoreChunkTextProcessor::ConstructorOptions{"text_field",}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreChunkTextProcessor::ConstructorOptions{"chunk_size", "chunk_overlap"}, {
+                QoreChunkTextProcessor::ConstructorOptions{
+                    "tokenizer_config_path", "tokenizer_model_name", "tokenizer_model_version",
+                    "tokenizer_artifact_name", "registry_backend_type", "registry_path",
+                    "registry_datasource", "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id", "chunk_size",
+                    "chunk_overlap",
+                }, {
                     "loc": "constructor",
                 }
             ),
@@ -1263,6 +1274,12 @@ module DataProviderML {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreEmbedTextProcessor::ConstructorOptions{
                     "embedding_url", "embedding_model", "embedding_api_key", "window_size",
+                    "embedding_model_path", "tokenizer_config_path", "max_tokens",
+                    "pooling_strategy", "registry_model_name", "registry_model_version",
+                    "registry_model_artifact_name", "registry_tokenizer_artifact_name",
+                    "registry_backend_type", "registry_path", "registry_datasource",
+                    "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id",
                 }, {
                     "loc": "constructor",
                 }
@@ -1336,6 +1353,11 @@ module DataProviderML {
                 QoreRerankerProcessor::ConstructorOptions{
                     "top_k", "reranker_url", "reranker_api_key",
                     "reranker_model_path", "tokenizer_config_path", "max_length",
+                    "registry_model_name", "registry_model_version",
+                    "registry_model_artifact_name", "registry_tokenizer_artifact_name",
+                    "registry_backend_type", "registry_path", "registry_datasource",
+                    "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id",
                 }, {
                     "loc": "constructor",
                 }
@@ -1366,7 +1388,7 @@ module DataProviderML {
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreSemanticChunkProcessor::ConstructorOptions{
-                    "text_field", "tokenizer_config_path", "embedding_mode",
+                    "text_field", "embedding_mode",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -1376,7 +1398,11 @@ module DataProviderML {
                 QoreSemanticChunkProcessor::ConstructorOptions{
                     "chunk_size", "chunk_overlap", "similarity_threshold", "segment_size",
                     "embedding_url", "embedding_model", "embedding_api_key",
-                    "embedding_model_path",
+                    "embedding_model_path", "tokenizer_config_path", "registry_model_name",
+                    "registry_model_version", "registry_model_artifact_name",
+                    "registry_tokenizer_artifact_name", "registry_backend_type",
+                    "registry_path", "registry_datasource", "registry_table_prefix",
+                    "registry_rest_client", "registry_rest_base_path", "registry_tenant_id",
                 }, {
                     "loc": "constructor",
                 }
@@ -1682,10 +1708,52 @@ DataFrame::DataFrame clusters = kmeans.processRecordsShape(
 # clusters has compact analytical columns:
 #   cluster: buffer<int64>
 #   distance: buffer<float64>
-DataFrame::DataFrame summary = clusters.groupBy(("cluster",)).agg({
-    "distance": ("mean", "max"),
-    "cluster": "count",
+    DataFrame::DataFrame summary = clusters.groupBy(("cluster",)).agg({
+        "distance": ("mean", "max"),
+        "cluster": "count",
 });
+    @endcode
+
+    @section dataproviderml_registry_artifacts Registry-Backed AI Artifacts
+
+    Text and ONNX processors can load model package artifacts directly from
+    @ref qoremodelregistryintro "QoreModelRegistry". This avoids scattering
+    \c tokenizer.json and ONNX files across pipeline hosts and keeps the model,
+    tokenizer, and metadata versioned together.
+
+    Processors that support registry-backed artifacts include:
+    - @ref DataProviderML::QoreTokenizeProcessor "tokenize"
+    - @ref DataProviderML::QoreChunkTextProcessor "chunk-text"
+    - @ref DataProviderML::QoreEmbedTextProcessor "embed-text"
+    - @ref DataProviderML::QoreRerankerProcessor "rerank-text"
+    - @ref DataProviderML::QoreSemanticChunkProcessor "semantic-chunk-text"
+    - @ref DataProviderML::QoreRegistryModelProcessor "registry-model"
+
+    @par Registry tokenizer example:
+    @code{.py}
+%requires DataProviderML
+
+DataProviderML::QoreTokenizeProcessor proc({
+    "text_field": "body",
+    "tokenizer_model_name": "bge-small-en",
+    "registry_path": "/var/models",
+});
+
+hash<auto> out = proc.processRecord({"body": "enterprise search"});
+printf("tokens=%d\n", out.body_token_count);
+    @endcode
+
+    @par Registry ONNX embedding example:
+    @code{.py}
+DataProviderML::QoreEmbedTextProcessor proc({
+    "text_field": "chunk_text",
+    "embedding_mode": "onnx",
+    "registry_model_name": "bge-small-en",
+    "registry_path": "/var/models",
+    "window_size": 32,
+});
+
+list<auto> rows = proc.processRecord({"chunk_text": "contract renewal terms"});
     @endcode
 
     @par BufferColumns example:
@@ -1708,6 +1776,15 @@ assert scaled{"event_type"} == ("standard-scaler", "standard-scaler", "standard-
     @endcode
 
     @section dataproviderml_relnotes Release Notes
+
+    @subsection dataproviderml_v1_4 DataProviderML v1.4
+    - Tokenization, chunking, embedding, re-ranking, and semantic chunking processors
+      can load \c tokenizer.json and ONNX artifacts from QoreModelRegistry packages
+    - \c registry-model now uses QoreModelRegistry executable metadata so native Qore
+      ML and ONNX registry packages are supported with descriptive errors for
+      metadata-only PyTorch/HuggingFace packages
+    - Shared registry backend options support filesystem, database, and REST model
+      registry backends for AI pipeline artifacts
 
     @subsection dataproviderml_v1_3 DataProviderML v1.3
     - DataProviderML processors now accept \c DataFrameBlock,

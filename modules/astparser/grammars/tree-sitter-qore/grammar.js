@@ -77,6 +77,8 @@ module.exports = grammar({
     // case < identifier could be comparison value or start of <Type> cast
     [$.primary_expression, $.simple_type],
     [$.primary_expression, $.generic_type],
+    [$.generic_type, $.generic_scoped_identifier],
+    [$.generic_scoped_identifier, $.scoped_identifier],
     [$.primary_expression, $.simple_type, $.generic_type],
     // conditional_declaration in if/while vs as primary_expression
     [$.if_statement, $.primary_expression],
@@ -868,6 +870,7 @@ module.exports = grammar({
     primary_expression: $ => choice(
       $.identifier,
       $.variable_name,
+      $.generic_scoped_identifier,
       $.scoped_identifier,
       $._type_keyword,  // type keywords used as variable names (data, hash, etc.)
       $.literal,
@@ -911,6 +914,7 @@ module.exports = grammar({
     call_expression: $ => prec(PREC.CALL, seq(
       field('function', choice(
         $.identifier,
+        $.generic_scoped_identifier,
         $.scoped_identifier,
         $.member_expression,
         $.index_expression,     // factories{name}(), DataSerializationSupport{ct}(body)
@@ -1434,6 +1438,11 @@ module.exports = grammar({
       commaSep1($.type),
       '>',
     ),
+
+    generic_scoped_identifier: $ => prec.left(seq(
+      $.generic_type,
+      repeat1(seq('::', choice($.identifier, $.generic_type))),
+    )),
 
     wildcard_type: $ => seq(
       '?',

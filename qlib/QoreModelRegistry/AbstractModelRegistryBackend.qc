@@ -43,6 +43,75 @@ public hashdecl ArtifactRef {
     *string key;
 }
 
+#! Hash describing a named artifact in a model package
+/** A model version can contain multiple named artifacts: the primary model,
+    tokenizer files, framework configuration, weights, and execution metadata.
+
+    @since QoreModelRegistry 2.2
+*/
+public hashdecl ModelArtifactInfo {
+    #! Stable artifact name within the version, for example "model" or "tokenizer.json"
+    string name;
+    #! Artifact role: "model", "tokenizer", "config", "weights", "manifest", etc.
+    string role = "model";
+    #! Artifact format: "qml", "onnx", "json", "safetensors", "pytorch-pickle", etc.
+    string format;
+    #! Artifact size in bytes
+    int size;
+    #! Optional SHA-256 checksum
+    *string checksum;
+    #! Whether the artifact can be inspected without executing code
+    bool safe_to_parse = False;
+    #! Whether this artifact can be executed locally by Qore
+    bool executable = False;
+    #! Optional storage reference for remote/object-store backends
+    *hash<ArtifactRef> artifact_ref;
+    #! Optional backend-specific path or object key hint
+    *string path_hint;
+    #! Optional free-form metadata extracted from or associated with the artifact
+    *hash<auto> metadata;
+}
+
+#! Hash describing a tokenizer companion package
+/** @since QoreModelRegistry 2.2
+*/
+public hashdecl TokenizerArtifactInfo {
+    #! Name of the tokenizer.json artifact, if present
+    *string tokenizer_json;
+    #! Name of the tokenizer_config.json artifact, if present
+    *string tokenizer_config_json;
+    #! Name of the special_tokens_map.json artifact, if present
+    *string special_tokens_map_json;
+    #! Name of the generation_config.json artifact, if present
+    *string generation_config_json;
+    #! Maximum model/tokenizer sequence length if known
+    *int model_max_length;
+    #! Whether a chat template is available
+    bool has_chat_template = False;
+    #! Optional special-token IDs and values
+    *hash<auto> special_tokens;
+}
+
+#! Hash describing how a model version can be executed
+/** @since QoreModelRegistry 2.2
+*/
+public hashdecl ModelExecutionInfo {
+    #! Runtime identifier: "qore-ml", "onnxruntime", "external-http", "metadata-only"
+    string runtime = "metadata-only";
+    #! Whether Qore can execute this version in-process
+    bool local_executable = False;
+    #! Name of the primary artifact used by this runtime
+    *string entry_artifact;
+    #! Optional list of required Qore modules or external capabilities
+    list<string> requires = ();
+    #! Optional input schema/tensor metadata
+    *hash<auto> input_schema;
+    #! Optional output schema/tensor metadata
+    *hash<auto> output_schema;
+    #! Optional runtime configuration
+    *hash<auto> config;
+}
+
 #! Hash describing a model version's metadata
 /** @since QoreModelRegistry 2.0
 */
@@ -75,6 +144,38 @@ public hashdecl ModelVersionInfo {
     /** @since QoreModelRegistry 2.1
     */
     *hash<auto> config;
+    #! Source framework name, for example "qore", "onnx", "pytorch", or "huggingface"
+    /** @since QoreModelRegistry 2.2
+    */
+    *string framework;
+    #! Version artifact kind: "executable", "source", "weights-only", "tokenizer-only", "metadata-only", or "external-runtime"
+    /** @since QoreModelRegistry 2.2
+    */
+    *string artifact_kind;
+    #! Preferred runtime: "qore-ml", "onnxruntime", "external-http", or "metadata-only"
+    /** @since QoreModelRegistry 2.2
+    */
+    *string runtime;
+    #! True if this version can be executed locally by Qore
+    /** @since QoreModelRegistry 2.2
+    */
+    bool executable = True;
+    #! Safety classification: "safe", "safe-metadata", "trusted-only", "unsafe-pickle", or "unknown"
+    /** @since QoreModelRegistry 2.2
+    */
+    string safety = "safe";
+    #! Named artifacts in this model package
+    /** @since QoreModelRegistry 2.2
+    */
+    list<hash<ModelArtifactInfo>> artifacts = ();
+    #! Execution plan metadata
+    /** @since QoreModelRegistry 2.2
+    */
+    *hash<ModelExecutionInfo> execution;
+    #! Tokenizer companion metadata
+    /** @since QoreModelRegistry 2.2
+    */
+    *hash<TokenizerArtifactInfo> tokenizer;
 }
 
 #! Options for pruning model versions
@@ -149,6 +250,143 @@ public class AbstractModelRegistryBackend {
         @throw ML-REGISTRY-ERROR if the model or version is not found
     */
     abstract binary loadArtifact(string name, string version_id);
+
+    #! Registers a named artifact for an existing model version
+    /** Default implementation rejects the operation. Backends with package
+        support override this method.
+
+        @param name the model name
+        @param version_id the version ID
+        @param artifact_name the stable artifact name
+        @param artifact the artifact binary payload
+        @param metadata artifact metadata
+
+        @throw ML-REGISTRY-ERROR if named artifacts are not supported by this backend
+
+        @since QoreModelRegistry 2.2
+    */
+    nothing registerNamedArtifact(string name, string version_id, string artifact_name,
+            binary artifact, hash<ModelArtifactInfo> metadata) {
+        throw "ML-REGISTRY-ERROR",
+            sprintf("backend %y does not support named model artifacts",
+                self.className());
+    }
+
+    #! Loads a named artifact by model/version/artifact name
+    /** The default implementation maps artifact name "model" to the legacy
+        single-artifact loader and rejects all other names.
+
+        @param name the model name
+        @param version_id the version ID
+        @param artifact_name the artifact name
+
+        @return the artifact binary payload
+
+        @since QoreModelRegistry 2.2
+    */
+    binary loadNamedArtifact(string name, string version_id, string artifact_name) {
+        if (artifact_name == "model") {
+            return loadArtifact(name, version_id);
+        }
+        throw "ML-REGISTRY-ERROR",
+            sprintf("artifact '%s' not found for model '%s' version '%s'",
+                artifact_name, name, version_id);
+    }
+
+    #! Lists named artifacts for a model version
+    /** The default implementation synthesizes the legacy single artifact from
+        version metadata.
+
+        @param name the model name
+        @param version_id the version ID
+
+        @return list of artifact metadata hashes
+
+        @since QoreModelRegistry 2.2
+    */
+    list<hash<ModelArtifactInfo>> listArtifacts(string name, string version_id) {
+        hash<ModelVersionInfo> meta = getVersionMetadata(name, version_id);
+        if (meta.artifacts) {
+            return meta.artifacts;
+        }
+        return (<ModelArtifactInfo>{
+            "name": "model",
+            "role": "model",
+            "format": meta.format,
+            "size": meta.file_size,
+            "safe_to_parse": meta.format == "qml" || meta.format == "onnx",
+            "executable": meta.format == "qml" || meta.format == "onnx",
+        },);
+    }
+
+    #! Returns package manifest metadata for a model version
+    /** @param name the model name
+        @param version_id the version ID
+
+        @return version metadata plus named artifact and execution metadata
+
+        @since QoreModelRegistry 2.2
+    */
+    hash<ModelVersionInfo> getVersionManifest(string name, string version_id) {
+        return getVersionMetadata(name, version_id);
+    }
+
+    #! Normalizes model version metadata after JSON or REST decoding
+    /** JSON and REST transports preserve hash contents but not Qore hashdecl
+        types. This helper restores nested typed metadata before backend
+        implementations return @ref ModelVersionInfo values.
+
+        @param meta decoded version metadata
+
+        @return typed version metadata
+
+        @since QoreModelRegistry 2.2
+    */
+    static hash<ModelVersionInfo> normalizeVersionInfo(hash<auto> meta) {
+        if (meta.artifact_ref) {
+            meta.artifact_ref = cast<hash<ArtifactRef>>(meta.artifact_ref);
+        }
+        if (meta.artifacts) {
+            meta.artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(meta.artifacts);
+        }
+        if (meta.execution) {
+            meta.execution = cast<hash<ModelExecutionInfo>>(meta.execution);
+        }
+        if (meta.tokenizer) {
+            meta.tokenizer = cast<hash<TokenizerArtifactInfo>>(meta.tokenizer);
+        }
+        return cast<hash<ModelVersionInfo>>(meta);
+    }
+
+    #! Normalizes artifact metadata after JSON or REST decoding
+    /** @param artifact decoded artifact metadata
+
+        @return typed artifact metadata
+
+        @since QoreModelRegistry 2.2
+    */
+    static hash<ModelArtifactInfo> normalizeArtifactInfo(hash<auto> artifact) {
+        if (artifact.artifact_ref) {
+            artifact.artifact_ref = cast<hash<ArtifactRef>>(artifact.artifact_ref);
+        }
+        return cast<hash<ModelArtifactInfo>>(artifact);
+    }
+
+    #! Normalizes a list of artifact metadata hashes
+    /** @param artifacts decoded artifact metadata list
+
+        @return typed artifact metadata list
+
+        @since QoreModelRegistry 2.2
+    */
+    static list<hash<ModelArtifactInfo>> normalizeArtifactInfos(auto artifacts) {
+        list<hash<ModelArtifactInfo>> result();
+        foreach auto artifact in (artifacts) {
+            push result, AbstractModelRegistryBackend::normalizeArtifactInfo(
+                cast<hash<auto>>(artifact));
+        }
+        return result;
+    }
 
     #! Lists all versions of a named model
     /** @param name the model name

@@ -124,7 +124,70 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 "type": AbstractDataProviderTypeMap."*string",
                 "sensitive": True,
             },
-        };
+            "embedding_model_path": <DataProviderOptionInfo>{
+                "display_name": "ONNX Model Path",
+                "short_desc": "Path to a local ONNX embedding model",
+                "desc": "Filesystem path to a local ONNX embedding model. Required for "
+                    "`onnx` mode unless `registry_model_name` is provided.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "tokenizer_config_path": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Config Path",
+                "short_desc": "Path to tokenizer.json for ONNX mode",
+                "desc": "Filesystem path to a HuggingFace `tokenizer.json` file. Required "
+                    "for `onnx` mode unless the tokenizer is loaded from QoreModelRegistry.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "max_tokens": <DataProviderOptionInfo>{
+                "display_name": "Max Tokens",
+                "short_desc": "Maximum tokens for ONNX embedding inputs",
+                "desc": "Maximum number of tokens per text in ONNX mode. Longer inputs are "
+                    "truncated before inference.",
+                "type": AbstractDataProviderTypeMap."int",
+                "default_value": 512,
+            },
+            "pooling_strategy": <DataProviderOptionInfo>{
+                "display_name": "Pooling Strategy",
+                "short_desc": "How token embeddings are pooled",
+                "desc": "Pooling strategy for ONNX embedding outputs: `mean`, `cls`, or `max`.",
+                "type": AbstractDataProviderTypeMap."string",
+                "default_value": "mean",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "mean", "display_name": "Mean"},
+                    <AllowedValueInfo>{"value": "cls", "display_name": "CLS Token"},
+                    <AllowedValueInfo>{"value": "max", "display_name": "Max"},
+                ),
+            },
+            "registry_model_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Name",
+                "short_desc": "Registry package containing ONNX and tokenizer artifacts",
+                "desc": "QoreModelRegistry model/package name to load in ONNX mode. The "
+                    "package must contain an ONNX model artifact and a `tokenizer.json` "
+                    "artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_version": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Version",
+                "short_desc": "Registry model version or latest",
+                "desc": "Optional registry model version ID. Omit or use `latest` to load "
+                    "the most recent package version.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry ONNX Artifact",
+                "short_desc": "Named ONNX artifact in the package",
+                "desc": "Optional named ONNX artifact. Defaults to the package execution "
+                    "entry artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Tokenizer Artifact",
+                "short_desc": "Named tokenizer.json artifact in the package",
+                "desc": "Optional tokenizer artifact name. Defaults to the package manifest's "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
     private {
@@ -145,6 +208,33 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
 
         #! API key (for HTTP mode)
         *string embedding_api_key;
+
+        #! ONNX model path
+        *string embedding_model_path;
+
+        #! ONNX tokenizer path
+        *string tokenizer_config_path;
+
+        #! ONNX maximum input tokens
+        int max_tokens = 512;
+
+        #! ONNX pooling strategy
+        string pooling_strategy = "mean";
+
+        #! Registry model/package name for ONNX mode
+        *string registry_model_name;
+
+        #! Registry model version
+        *string registry_model_version;
+
+        #! Registry ONNX artifact name
+        *string registry_model_artifact_name;
+
+        #! Registry tokenizer artifact name
+        *string registry_tokenizer_artifact_name;
+
+        #! Registry backend options
+        hash<auto> registry_options;
 
         #! Lazy-initialized EmbeddingModel
         *QoreTokenizerUtils::EmbeddingModel emb_model;
@@ -184,6 +274,27 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         embedding_url = copts.embedding_url;
         embedding_model = copts.embedding_model;
         embedding_api_key = copts.embedding_api_key;
+        embedding_model_path = copts.embedding_model_path;
+        tokenizer_config_path = copts.tokenizer_config_path;
+        max_tokens = copts.max_tokens ?? 512;
+        pooling_strategy = copts.pooling_strategy ?? "mean";
+        registry_model_name = copts.registry_model_name;
+        registry_model_version = copts.registry_model_version;
+        registry_model_artifact_name = copts.registry_model_artifact_name;
+        registry_tokenizer_artifact_name = copts.registry_tokenizer_artifact_name;
+        registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
+        if (embedding_mode == "onnx" && !registry_model_name.val()) {
+            if (!embedding_model_path.val()) {
+                throw "CONSTRUCTOR-ERROR",
+                    "embedding_model_path is required for ONNX mode unless "
+                    "registry_model_name is provided";
+            }
+            if (!tokenizer_config_path.val()) {
+                throw "CONSTRUCTOR-ERROR",
+                    "tokenizer_config_path is required for ONNX mode unless "
+                    "registry_model_name is provided";
+            }
+        }
         buffer = ();
         configured = True;
     }
@@ -258,12 +369,37 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
     #! Ensures the EmbeddingModel is initialized (lazy creation to avoid connecting in constructor)
     private ensureEmbeddingModel() {
         if (!emb_model) {
-            emb_model = new QoreTokenizerUtils::EmbeddingModel(<QoreTokenizerUtils::EmbeddingConfig>{
+            hash<QoreTokenizerUtils::EmbeddingConfig> config(<QoreTokenizerUtils::EmbeddingConfig>{
                 "mode": embedding_mode,
                 "url": embedding_url,
                 "model": embedding_model,
                 "api_key": embedding_api_key,
+                "model_path": embedding_model_path,
+                "max_tokens": max_tokens,
+                "pooling_strategy": pooling_strategy,
             });
+            if (embedding_mode == "onnx") {
+%ifndef NoJson
+                if (registry_model_name.val()) {
+                    QoreModelRegistry::ModelRegistry registry(registry_options);
+                    hash<QoreModelRegistry::ModelVersionInfo> manifest =
+                        registry.getVersionManifest(registry_model_name, registry_model_version);
+                    string artifact_name = registry_model_artifact_name
+                        ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
+                        ?? "model";
+                    config.model_data = registry.loadNamedArtifact(registry_model_name,
+                        manifest.version_id, artifact_name);
+                    config.tokenizer_config = registry.loadTokenizerConfig(registry_model_name,
+                        manifest.version_id, registry_tokenizer_artifact_name);
+                } else {
+                    config.tokenizer_config =
+                        parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+                }
+%else
+                throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+%endif
+            }
+            emb_model = new QoreTokenizerUtils::EmbeddingModel(config);
         }
     }
 

@@ -196,6 +196,9 @@
       @ref sglangrestclientintro "SGLang"), e-commerce, CRM, ERP, observability, ML/DataFrame,
       Parquet, ONNX, and gRPC/Protobuf integrations — see
       @ref qore_2_3_0_new_user_modules "New User Modules"
+    - QoreModelRegistry and DataProviderML now support versioned AI model packages
+      with named artifacts, safe HuggingFace/PyTorch metadata inspection,
+      registry-hosted \c tokenizer.json files, and ONNX execution metadata
     - cryptography: new @ref qorecryptointro "QoreCrypto" envelope-encryption module
     - existing modules updated extensively (DataProvider, RestClient, HttpServer,
       WebSocketClient/Handler/Util, Logger, SqlUtil, etc.) — see
@@ -2488,6 +2491,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - vision-extraction pipeline processor for multimodal LLM image analysis
       - processors accept \c DataFrameBlock, \c BufferColumns, and
         \c HashOfLists input shapes through the DataProvider pipeline shape API
+      - tokenize, chunk-text, embed-text, rerank-text, semantic-chunk-text, and
+        registry-model processors can load tokenizer and ONNX artifacts directly
+        from QoreModelRegistry packages
         and emit hash-of-lists event blocks for bulk outputs
       - action catalog integration with the "ML Analytics" app
 
@@ -3161,6 +3167,12 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a filesystem-backed ML model registry for versioning,
         tagging, comparison, and deployment management of trained models
       - multi-tenant support with optional \c tenant_id for tenant-isolated model storage
+      - package-aware registry versions with named artifacts, manifests,
+        tokenizer metadata, execution metadata, and pluggable filesystem/database/REST backends
+      - safe HuggingFace/PyTorch package inspection: JSON and SafeTensors metadata
+        can be parsed, while PyTorch pickle artifacts are recorded but never executed
+      - \c loadExecutable(), \c loadJsonArtifact(), and \c loadTokenizerConfig()
+        simplify local ONNX execution and tokenizer reuse
 
     - @ref qoreocrutilsintro "QoreOcrUtils" module
       - new module providing an OCR abstraction layer with native and HTTP backends
@@ -3223,6 +3235,8 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
       - ONNX backend implemented for EmbeddingModel: batch tokenize, mean-pool, L2-normalize
       - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
+      - EmbeddingModel and CrossEncoderReranker accept in-memory ONNX model artifacts
+        from registries in addition to filesystem paths
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
       - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries
