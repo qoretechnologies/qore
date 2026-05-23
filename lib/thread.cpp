@@ -542,6 +542,32 @@ public:
             stack_limit = stack_start + stack_adjusted_size;
 #endif // #ifdef STACK_DIRECTION_DOWN
 
+#ifdef QORE_HAVE_GET_STACK_SIZE
+            // For non-initial threads, anchor the limit to the true stack
+            // bottom.  stack_start above is captured when this ThreadData is
+            // constructed, which can be far below the thread's true stack top
+            // when significant native code runs first (e.g. cross-Program /
+            // sandboxed execution): deriving the limit from stack_start then
+            // shifts it down by that offset and silently consumes the
+            // QORE_STACK_GUARD margin, letting deep recursion overflow the real
+            // stack before the guard fires.  The initial thread's stack grows
+            // on demand and is handled by the size logic above, so it is left
+            // untouched.
+            if (tid != initial_thread) {
+                size_t real_base = 0;
+                size_t real_size = 0;
+                if (!QorePThreadAttr::getCurrentThreadStackBounds(real_base, real_size) && real_base && real_size
+                        && real_size > stack_guard) {
+                    stack_size = real_size;
+#ifdef STACK_DIRECTION_DOWN
+                    stack_limit = real_base + stack_guard;
+#else
+                    stack_limit = real_base + real_size - stack_guard;
+#endif
+                }
+            }
+#endif // #ifdef QORE_HAVE_GET_STACK_SIZE
+
 #ifdef IA64_64
             // RSE stack grows up
             rse_limit = get_rse_bsp() + stack_adjusted_size;

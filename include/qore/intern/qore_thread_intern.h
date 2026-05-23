@@ -1004,6 +1004,53 @@ public:
         return size;
 #endif
     }
+
+    //! Retrieves the current thread's true stack bounds
+    /** @param base set to the lowest address of the usable stack (the true
+        stack bottom for downward-growing stacks)
+        @param size set to the usable stack size in bytes
+
+        @return 0 on success, -1 if the bounds could not be determined
+
+        This is used to anchor the stack-overflow guard limit to the real stack
+        bottom rather than to the stack position captured when the thread's
+        ThreadData is constructed: that position can be well below the true top
+        when the thread runs significant native code first, which would
+        otherwise silently shrink the QORE_STACK_GUARD margin.
+    */
+    DLLLOCAL static int getCurrentThreadStackBounds(size_t& base, size_t& size) {
+        base = 0;
+        size = 0;
+#ifdef HAVE_PTHREAD_GET_STACKSIZE_NP
+        // Darwin: pthread_get_stackaddr_np() returns the highest address (top);
+        // it is always available alongside pthread_get_stacksize_np()
+        size = pthread_get_stacksize_np(pthread_self());
+        void* top = pthread_get_stackaddr_np(pthread_self());
+        if (!size || !top) {
+            size = 0;
+            return -1;
+        }
+        base = reinterpret_cast<size_t>(top) - size;
+        return 0;
+#elif defined(HAVE_PTHREAD_ATTR_GETSTACK)
+        pthread_attr_t attr;
+        if (pthread_getattr_np(pthread_self(), &attr)) {
+            return -1;
+        }
+        ON_BLOCK_EXIT(pthread_attr_destroy, &attr);
+        void* ptr = nullptr;
+        size_t ssize = 0;
+        // POSIX: pthread_attr_getstack() returns the lowest address of the stack
+        if (pthread_attr_getstack(&attr, &ptr, &ssize) || !ptr || !ssize) {
+            return -1;
+        }
+        base = reinterpret_cast<size_t>(ptr);
+        size = ssize;
+        return 0;
+#else
+        return -1;
+#endif
+    }
 #endif
 };
 
