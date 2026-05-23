@@ -1206,8 +1206,8 @@ if (errors) {
       column containers directly, avoiding intermediate DataFrame construction
     - updated analytics processors, including @ref DataProvider::QoreCorrelationProcessor
       "QoreCorrelationProcessor" and @ref DataProvider::QoreCrossCorrelationProcessor
-      "QoreCrossCorrelationProcessor", to accept \c DataFrameBlock and \c BufferColumns input and emit
-      hash-of-lists event blocks
+      "QoreCrossCorrelationProcessor", to accept \c DataFrameBlock and \c BufferColumns input and preserve
+      shaped rectangular event blocks, including flush-time output from partial windows
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and

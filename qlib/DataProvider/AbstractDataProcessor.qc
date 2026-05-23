@@ -674,6 +674,44 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return to_shape == DataProviderShape::RowRecords ? converted : converted[0];
     }
 
+    #! Emits an optional hash-of-lists result in the requested pipeline shape
+    /** @param data optional hash-of-lists result
+        @param to_shape requested output shape
+        @param enqueue output callback
+
+        @since %DataProvider 3.5
+    */
+    static emitHashListResultShape(*hash<auto> data, DataProviderShape to_shape, code enqueue) {
+        *auto converted = AbstractDataProcessor::convertHashListResultShape(data, to_shape);
+        if (!exists converted) {
+            return;
+        }
+        if (to_shape == DataProviderShape::RowRecords) {
+            map enqueue($1), converted;
+            return;
+        }
+        enqueue(converted);
+    }
+
+    #! Emits an optional list of record hashes in the requested pipeline shape
+    /** @param records optional list of records
+        @param to_shape requested output shape
+        @param enqueue output callback
+
+        @since %DataProvider 3.5
+    */
+    static emitRecordListShape(*list<auto> records, DataProviderShape to_shape, code enqueue) {
+        if (!records) {
+            return;
+        }
+        if (to_shape == DataProviderShape::RowRecords) {
+            map enqueue($1), records;
+            return;
+        }
+        AbstractDataProcessor::emitHashListResultShape(AbstractDataProcessor::recordsToHashList(records), to_shape,
+            enqueue);
+    }
+
     #! Returns the expected type of data to be submitted, if available
     /** This base class method returns @ref nothing; reimplement in subclasses to provide a type
     */

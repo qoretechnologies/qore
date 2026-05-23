@@ -60,8 +60,11 @@ hash<auto> events = proc.processRecordsShape(
 
     \c DataProviderML processors also accept \c BufferColumns input,
     including @ref Qore::SQL::ColumnarResult "ColumnarResult" values
-    produced by SQL queries.  They emit \c HashOfLists event blocks for bulk
-    outputs so downstream shape-aware processors can continue in bulk mode.
+    produced by SQL queries.  Rectangular bulk outputs preserve
+    \c DataFrameBlock or \c BufferColumns shapes when possible so downstream
+    shape-aware processors can continue in columnar bulk mode; processors with
+    naturally row-oriented or multi-output responses keep \c HashOfLists or row
+    compatibility.
 
     @section mlalgorithms Available Algorithms
 

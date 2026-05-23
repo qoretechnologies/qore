@@ -2484,7 +2484,8 @@ foreach string module_name in (registry.getProcessModules()) {
         string-column updates
       - analytics processors, including QoreCorrelationProcessor and
         QoreCrossCorrelationProcessor, accept DataFrameBlock and BufferColumns
-        input and emit hash-of-lists event blocks
+        input and preserve shaped rectangular event blocks, including
+        flush-time output from partial windows
       - record type reflects DataFrame column schema (int, float, string, bool, date)
       - record iterator APIs declare
         <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt>
@@ -2512,7 +2513,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - tokenize, chunk-text, embed-text, rerank-text, semantic-chunk-text, and
         registry-model processors can load tokenizer and ONNX artifacts directly
         from QoreModelRegistry packages
-        and emit hash-of-lists event blocks for bulk outputs
+        and preserve shaped bulk outputs where the result is rectangular
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module

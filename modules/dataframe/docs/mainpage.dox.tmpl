@@ -267,8 +267,9 @@ pipeline.waitDone();
     for simple top-level fields; with ColumnarResult input they rebuild
     projected or updated blocks from referenced column containers. Analytics
     processors, including correlation and cross-correlation processors, accept
-    DataFrameBlock and BufferColumns input and emit hash-of-lists analytics
-    event blocks. Supported compiled filter forms include \c &&, \c ||, \c !,
+    DataFrameBlock and BufferColumns input and preserve those shapes for
+    rectangular event blocks, including flush-time output from partial windows.
+    Supported compiled filter forms include \c &&, \c ||, \c !,
     scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
     scalar comparisons over top-level fields, \c lwr(), \c coalesce(),
     truthy field checks, \c between, \c inRange, \c in, \c not \c in,

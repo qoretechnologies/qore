@@ -1222,6 +1222,20 @@ sub invalid_dataframe_api() {
         assertEq((3, 1), grouped_df.getColumn("orders"), "DataFrameBlock group-by counts records");
         assertEq((395.0, 220.0), grouped_df.getColumn("total"), "DataFrameBlock group-by computes sums");
 
+        DataFrame::DataFrame corr_df({
+            "id": new buffer<int64>((1, 2, 3)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0)),
+        });
+        QoreCorrelationProcessor df_corr_flush({"fields": "id,amount", "window_size": 10});
+        assertNothing(df_corr_flush.processRecordsShape(corr_df, DataProviderShape::DataFrameBlock),
+            "DataFrameBlock correlation buffers partial windows");
+        *list<auto> df_corr_flush_blocks = df_corr_flush.flushAndCollect();
+        assertEq(1, df_corr_flush_blocks.size(), "DataFrameBlock correlation flush emits one shaped block");
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(df_corr_flush_blocks[0]),
+            "DataFrameBlock correlation flush preserves DataFrame shape");
+        assertEq(("correlation",), df_corr_flush_blocks[0].getColumn("event_type"),
+            "DataFrameBlock correlation flush emits event values");
+
         list<auto> callback_rows;
         DataProviderPipeline pipe(<PipelineOptionInfo>{
             "name": "dataframe-shape-pipeline-test",
@@ -1626,6 +1640,16 @@ sub invalid_dataframe_api() {
         assertEq((153.75,), df_stats_block.getColumn("avg"),
             "analytics processors compute windows from DataFrameBlock input");
 
+        QoreRunningStatsProcessor stats_flush({"fields": "amount", "window_size": 10});
+        assertNothing(stats_flush.processRecordsShape(columns, DataProviderShape::BufferColumns),
+            "BufferColumns analytics buffers partial windows");
+        *list<auto> stats_flush_blocks = stats_flush.flushAndCollect();
+        assertEq(1, stats_flush_blocks.size(), "BufferColumns analytics flush emits one shaped block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(stats_flush_blocks[0]),
+            "BufferColumns analytics flush preserves BufferColumns shape");
+        assertEq(("statistics",), stats_flush_blocks[0].getColumn("event_type").toList(),
+            "BufferColumns analytics flush emits event values");
+
         QoreCorrelationProcessor corr({"fields": "id,amount", "window_size": 4});
         assertTrue(corr.supportsInputShape(DataProviderShape::BufferColumns),
             "correlation processor advertises BufferColumns input");
@@ -1636,6 +1660,16 @@ sub invalid_dataframe_api() {
             "correlation processor evaluates dense column values");
         assertEq((4,), corr_block.getColumn("count").toList(),
             "correlation processor counts BufferColumns rows");
+
+        QoreCorrelationProcessor corr_flush({"fields": "id,amount", "window_size": 10});
+        assertNothing(corr_flush.processRecordsShape(columns, DataProviderShape::BufferColumns),
+            "BufferColumns correlation buffers partial windows");
+        *list<auto> corr_flush_blocks = corr_flush.flushAndCollect();
+        assertEq(1, corr_flush_blocks.size(), "BufferColumns correlation flush emits one shaped block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(corr_flush_blocks[0]),
+            "BufferColumns correlation flush preserves BufferColumns shape");
+        assertEq(("correlation",), corr_flush_blocks[0].getColumn("event_type").toList(),
+            "BufferColumns correlation flush emits event values");
 
         QoreCrossCorrelationProcessor xcorr({"field_x": "id", "field_y": "amount", "window_size": 4,
             "max_lag": 1});
@@ -1648,6 +1682,17 @@ sub invalid_dataframe_api() {
             "cross-correlation processor evaluates dense column values");
         assertEq((4,), xcorr_block.getColumn("count").toList(),
             "cross-correlation processor counts BufferColumns rows");
+
+        QoreCrossCorrelationProcessor xcorr_flush({"field_x": "id", "field_y": "amount", "window_size": 10,
+            "max_lag": 1});
+        assertNothing(xcorr_flush.processRecordsShape(columns, DataProviderShape::BufferColumns),
+            "BufferColumns cross-correlation buffers partial windows");
+        *list<auto> xcorr_flush_blocks = xcorr_flush.flushAndCollect();
+        assertEq(1, xcorr_flush_blocks.size(), "BufferColumns cross-correlation flush emits one shaped block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(xcorr_flush_blocks[0]),
+            "BufferColumns cross-correlation flush preserves BufferColumns shape");
+        assertEq(("cross-correlation",), xcorr_flush_blocks[0].getColumn("event_type").toList(),
+            "BufferColumns cross-correlation flush emits event values");
 
         hash<DataProviderExpression> or_expr = <DataProviderExpression>{
             "exp": "||",
