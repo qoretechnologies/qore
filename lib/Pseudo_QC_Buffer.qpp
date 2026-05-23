@@ -35,6 +35,15 @@
 
 //! Methods in this pseudo-class can be executed on @ref buffer "buffer values"
 /**
+    Buffers provide dense, homogeneous storage with source-level types such as
+    \c buffer<int64>, \c buffer<float64>, \c buffer<bool>, \c buffer<string>,
+    and \c buffer<decimal128>.  Nullable element buffers use \c buffer<*T>.
+
+    \c buffer<decimal128> stores exact fixed-scale decimal values as 16-byte
+    unscaled integers.  Use Qore \c number literals, for example \c 12.34n, to
+    avoid converting through binary floating-point values.  Decimal scale is
+    inferred from list construction and \c filled() construction; values assigned
+    later must fit the buffer's scale without losing decimal precision.
  */
 qclass <buffer> [arg=const QoreBufferNode* b = v.get<const QoreBufferNode>();vparent=<value>];
 
@@ -233,6 +242,9 @@ AbstractIterator <buffer>::iterator() [flags=RET_VALUE_ONLY] {
     @code{.py}
 buffer<*int64> values = new buffer<*int64>((10, NOTHING, 30));
 assertEq(40, values.sum());
+
+buffer<decimal128> amounts = new buffer<decimal128>((10.25n, 1.75n));
+assertEq(12n, amounts.sum());
     @endcode
 */
 auto <buffer>::sum() [flags=RET_VALUE_ONLY] {
@@ -241,15 +253,19 @@ auto <buffer>::sum() [flags=RET_VALUE_ONLY] {
 
 //! Returns the arithmetic mean of valid buffer values
 /**
-    @return the arithmetic mean as a floating-point value, or @ref nothing if no valid values exist
+    @return the arithmetic mean as a floating-point value for integer, boolean, and floating-point buffers, a
+    \c number for \c buffer<decimal128>, or @ref nothing if no valid values exist
 
     @par Example:
     @code{.py}
 buffer<float64> temperatures = new buffer<float64>((21.5, 22.5));
 assertEq(22.0, temperatures.mean());
+
+buffer<decimal128> amounts = new buffer<decimal128>((10.25n, 1.75n));
+assertEq(6n, amounts.mean());
     @endcode
 */
-*float <buffer>::mean() [flags=RET_VALUE_ONLY] {
+auto <buffer>::mean() [flags=RET_VALUE_ONLY] {
    return b->mean(xsink);
 }
 

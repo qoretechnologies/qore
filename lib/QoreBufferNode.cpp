@@ -34,6 +34,8 @@
 #include <malloc.h>
 #endif
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -43,6 +45,8 @@
 #include <vector>
 
 static constexpr size_t QORE_BUFFER_ALIGNMENT = 64;
+static constexpr int32_t QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION = 38;
+static constexpr int32_t QORE_BUFFER_DECIMAL128_DEFAULT_SCALE = 0;
 
 static size_t qore_buffer_bitmap_bytes(size_t elements) {
     return ((elements + 63) / 64) * 8;
@@ -61,6 +65,311 @@ static bool qore_buffer_external_storage_supported(QoreBufferElementType element
         default:
             return false;
     }
+}
+
+struct qore_buffer_decimal_parse_result_t {
+    __int128 unscaled = 0;
+    int32_t scale = 0;
+    int32_t precision = 1;
+};
+
+static __int128 qore_buffer_decimal_pow10(int32_t exp) {
+    assert(exp >= 0 && exp <= QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+    __int128 rv = 1;
+    for (int32_t i = 0; i < exp; ++i) {
+        rv *= 10;
+    }
+    return rv;
+}
+
+static __int128 qore_buffer_decimal_abs(__int128 value) {
+    return value < 0 ? -value : value;
+}
+
+static int32_t qore_buffer_decimal_precision(__int128 value) {
+    __int128 v = qore_buffer_decimal_abs(value);
+    int32_t rv = 1;
+    while (v >= 10) {
+        v /= 10;
+        ++rv;
+    }
+    return rv;
+}
+
+static bool qore_buffer_decimal_fits_precision(__int128 value, int32_t precision) {
+    assert(precision > 0 && precision <= QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+    return qore_buffer_decimal_abs(value) < qore_buffer_decimal_pow10(precision);
+}
+
+static QoreBufferDecimal128 qore_buffer_decimal_storage_from_int128(__int128 value) {
+    unsigned __int128 bits = static_cast<unsigned __int128>(value);
+    return QoreBufferDecimal128{static_cast<uint64_t>(bits), static_cast<int64_t>(bits >> 64)};
+}
+
+static __int128 qore_buffer_decimal_storage_to_int128(QoreBufferDecimal128 value) {
+    unsigned __int128 bits = (static_cast<unsigned __int128>(static_cast<uint64_t>(value.high)) << 64)
+        | value.low;
+    return static_cast<__int128>(bits);
+}
+
+static std::string qore_buffer_decimal_to_string(__int128 unscaled, int32_t scale) {
+    bool negative = unscaled < 0;
+    unsigned __int128 value = negative
+        ? static_cast<unsigned __int128>(-unscaled)
+        : static_cast<unsigned __int128>(unscaled);
+
+    std::string digits;
+    do {
+        digits.push_back(static_cast<char>('0' + (value % 10)));
+        value /= 10;
+    } while (value);
+    std::reverse(digits.begin(), digits.end());
+
+    if (scale > 0) {
+        if (static_cast<int32_t>(digits.size()) <= scale) {
+            digits.insert(0, static_cast<size_t>(scale - digits.size() + 1), '0');
+        }
+        digits.insert(digits.end() - scale, '.');
+        while (!digits.empty() && digits.back() == '0') {
+            digits.pop_back();
+        }
+        if (!digits.empty() && digits.back() == '.') {
+            digits.pop_back();
+        }
+    }
+
+    if (negative && digits != "0") {
+        digits.insert(digits.begin(), '-');
+    }
+    return digits;
+}
+
+static int qore_buffer_decimal_value_string(QoreValue value, std::string& str, const char* context,
+        ExceptionSink* xsink) {
+    switch (value.getType()) {
+        case NT_INT:
+            str = std::to_string(value.getAsBigInt());
+            return 0;
+        case NT_NUMBER: {
+            const QoreNumberNode* number = value.get<const QoreNumberNode>();
+            if (!number->ordinary()) {
+                xsink->raiseException("BUFFER-RANGE-ERROR",
+                    "cannot assign non-finite number value to buffer<decimal128> %s", context);
+                return -1;
+            }
+            QoreString tmp;
+            number->getStringRepresentation(tmp);
+            str.assign(tmp.c_str(), tmp.size());
+            return 0;
+        }
+        default:
+            xsink->raiseException("BUFFER-TYPE-ERROR",
+                "cannot assign type '%s' to buffer<decimal128> %s; expected int or number; use number literals "
+                "(for example 1.23n) for exact decimal values", value.getFullTypeName(), context);
+            return -1;
+    }
+}
+
+static int qore_buffer_parse_decimal_string(const std::string& input, qore_buffer_decimal_parse_result_t& out,
+        const char* context, ExceptionSink* xsink) {
+    size_t begin = 0;
+    while (begin < input.size() && std::isspace(static_cast<unsigned char>(input[begin]))) {
+        ++begin;
+    }
+    size_t end = input.size();
+    while (end > begin && std::isspace(static_cast<unsigned char>(input[end - 1]))) {
+        --end;
+    }
+    if (begin == end) {
+        xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign empty decimal value to buffer<decimal128> %s",
+            context);
+        return -1;
+    }
+
+    bool negative = false;
+    size_t pos = begin;
+    if (input[pos] == '+' || input[pos] == '-') {
+        negative = input[pos] == '-';
+        ++pos;
+    }
+
+    bool seen_digit = false;
+    bool seen_dot = false;
+    int64_t fractional_digits = 0;
+    std::string digits;
+    for (; pos < end; ++pos) {
+        unsigned char c = static_cast<unsigned char>(input[pos]);
+        if (std::isdigit(c)) {
+            seen_digit = true;
+            digits.push_back(static_cast<char>(c));
+            if (seen_dot) {
+                ++fractional_digits;
+            }
+            continue;
+        }
+        if (input[pos] == '.' && !seen_dot) {
+            seen_dot = true;
+            continue;
+        }
+        break;
+    }
+
+    if (!seen_digit) {
+        xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
+            "expected at least one digit", input.c_str(), context);
+        return -1;
+    }
+
+    int64_t exponent = 0;
+    if (pos < end && (input[pos] == 'e' || input[pos] == 'E')) {
+        ++pos;
+        bool exponent_negative = false;
+        if (pos < end && (input[pos] == '+' || input[pos] == '-')) {
+            exponent_negative = input[pos] == '-';
+            ++pos;
+        }
+        if (pos == end || !std::isdigit(static_cast<unsigned char>(input[pos]))) {
+            xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
+                "invalid exponent", input.c_str(), context);
+            return -1;
+        }
+        while (pos < end && std::isdigit(static_cast<unsigned char>(input[pos]))) {
+            exponent = (exponent * 10) + (input[pos] - '0');
+            if (exponent > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION * 2) {
+                xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to "
+                    "buffer<decimal128> %s; exponent is too large for decimal128 storage", input.c_str(), context);
+                return -1;
+            }
+            ++pos;
+        }
+        if (exponent_negative) {
+            exponent = -exponent;
+        }
+    }
+
+    if (pos != end) {
+        xsink->raiseException("BUFFER-TYPE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
+            "unexpected character '%c'", input.c_str(), context, input[pos]);
+        return -1;
+    }
+
+    int64_t scale = fractional_digits - exponent;
+    if (scale < 0) {
+        digits.append(static_cast<size_t>(-scale), '0');
+        scale = 0;
+    }
+    if (scale > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION) {
+        xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
+            "scale " QLLD " exceeds decimal128 maximum scale %d", input.c_str(), context, scale,
+            QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+        return -1;
+    }
+
+    size_t first_non_zero = digits.find_first_not_of('0');
+    size_t significant_digits = first_non_zero == std::string::npos ? 1 : digits.size() - first_non_zero;
+    if (significant_digits > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION) {
+        xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
+            "precision " QSD " exceeds decimal128 maximum precision %d", input.c_str(), context,
+            significant_digits, QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+        return -1;
+    }
+
+    __int128 unscaled = 0;
+    for (char c : digits) {
+        unscaled = (unscaled * 10) + (c - '0');
+    }
+    if (negative) {
+        unscaled = -unscaled;
+    }
+
+    out.unscaled = unscaled;
+    out.scale = static_cast<int32_t>(scale);
+    out.precision = static_cast<int32_t>(significant_digits);
+    return 0;
+}
+
+static int qore_buffer_parse_decimal_value(QoreValue value, qore_buffer_decimal_parse_result_t& out,
+        const char* context, ExceptionSink* xsink) {
+    std::string str;
+    if (qore_buffer_decimal_value_string(value, str, context, xsink)) {
+        return -1;
+    }
+    return qore_buffer_parse_decimal_string(str, out, context, xsink);
+}
+
+static int qore_buffer_decimal_rescale(qore_buffer_decimal_parse_result_t& value, int32_t target_precision,
+        int32_t target_scale, const char* context, ExceptionSink* xsink) {
+    assert(target_precision > 0 && target_precision <= QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+    assert(target_scale >= 0 && target_scale <= QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+    if (value.scale < target_scale) {
+        int32_t diff = target_scale - value.scale;
+        __int128 multiplier = qore_buffer_decimal_pow10(diff);
+        __int128 limit = qore_buffer_decimal_pow10(target_precision) - 1;
+        if (qore_buffer_decimal_abs(value.unscaled) > (limit / multiplier)) {
+            xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> "
+                "%s; scaled precision exceeds %d digits",
+                qore_buffer_decimal_to_string(value.unscaled, value.scale).c_str(), context, target_precision);
+            return -1;
+        }
+        value.unscaled *= multiplier;
+        value.scale = target_scale;
+    } else if (value.scale > target_scale) {
+        int32_t diff = value.scale - target_scale;
+        __int128 divisor = qore_buffer_decimal_pow10(diff);
+        if (value.unscaled % divisor) {
+            xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> "
+                "%s with scale %d without losing precision",
+                qore_buffer_decimal_to_string(value.unscaled, value.scale).c_str(), context, target_scale);
+            return -1;
+        }
+        value.unscaled /= divisor;
+        value.scale = target_scale;
+    }
+
+    value.precision = qore_buffer_decimal_precision(value.unscaled);
+    if (!qore_buffer_decimal_fits_precision(value.unscaled, target_precision)) {
+        xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
+            "precision exceeds %d digits", qore_buffer_decimal_to_string(value.unscaled, value.scale).c_str(),
+            context, target_precision);
+        return -1;
+    }
+    return 0;
+}
+
+static int qore_buffer_decimal_checked_add(__int128& target, __int128 value, int32_t precision,
+        const char* context, ExceptionSink* xsink) {
+    __int128 limit = qore_buffer_decimal_pow10(precision) - 1;
+    if ((value > 0 && target > limit - value) || (value < 0 && target < -limit - value)) {
+        xsink->raiseException("BUFFER-RANGE-ERROR", "buffer<decimal128>.%s() result exceeds precision %d",
+            context, precision);
+        return -1;
+    }
+    target += value;
+    return 0;
+}
+
+static int qore_buffer_decimal_validate_metadata(int32_t& precision, int32_t& scale, ExceptionSink* xsink) {
+    if (precision <= 0) {
+        precision = QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION;
+    }
+    if (scale < 0) {
+        scale = QORE_BUFFER_DECIMAL128_DEFAULT_SCALE;
+    }
+    if (precision > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION) {
+        if (xsink) {
+            xsink->raiseException("BUFFER-RANGE-ERROR", "buffer<decimal128> precision %d exceeds maximum "
+                "precision %d", precision, QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+        }
+        return -1;
+    }
+    if (scale > precision) {
+        if (xsink) {
+            xsink->raiseException("BUFFER-RANGE-ERROR", "buffer<decimal128> scale %d exceeds precision %d",
+                scale, precision);
+        }
+        return -1;
+    }
+    return 0;
 }
 
 static int64 qore_buffer_count_nulls_bitmap(const uint8_t* validity, size_t offset, size_t length,
@@ -185,6 +494,8 @@ const char* qore_buffer_element_type_name(QoreBufferElementType element_type) {
             return "bool";
         case QoreBufferElementType::String:
             return "string";
+        case QoreBufferElementType::Decimal128:
+            return "decimal128";
         default:
             return "invalid";
     }
@@ -207,6 +518,8 @@ bool qore_buffer_element_type_from_name(const char* name, QoreBufferElementType&
         element_type = QoreBufferElementType::Bool;
     } else if (!strcmp(name, "string")) {
         element_type = QoreBufferElementType::String;
+    } else if (!strcmp(name, "decimal128")) {
+        element_type = QoreBufferElementType::Decimal128;
     } else {
         element_type = QoreBufferElementType::Invalid;
         return false;
@@ -233,6 +546,9 @@ const QoreTypeInfo* qore_buffer_element_scalar_type_info(QoreBufferElementType e
         case QoreBufferElementType::String:
             rv = nullable ? stringOrNothingTypeInfo : stringTypeInfo;
             break;
+        case QoreBufferElementType::Decimal128:
+            rv = nullable ? numberOrNothingTypeInfo : numberTypeInfo;
+            break;
         default:
             rv = nullable ? anyTypeInfo : autoTypeInfo;
             break;
@@ -256,6 +572,8 @@ size_t qore_buffer_element_storage_size(QoreBufferElementType element_type) {
             return 0;
         case QoreBufferElementType::String:
             return 0;
+        case QoreBufferElementType::Decimal128:
+            return sizeof(QoreBufferDecimal128);
         default:
             return 0;
     }
@@ -272,8 +590,13 @@ bool qore_buffer_element_type_is_float(QoreBufferElementType element_type) {
     return element_type == QoreBufferElementType::Float32 || element_type == QoreBufferElementType::Float64;
 }
 
+bool qore_buffer_element_type_is_decimal(QoreBufferElementType element_type) {
+    return element_type == QoreBufferElementType::Decimal128;
+}
+
 static bool qore_buffer_element_type_is_numeric(QoreBufferElementType element_type) {
-    return qore_buffer_element_type_is_integer(element_type) || qore_buffer_element_type_is_float(element_type);
+    return qore_buffer_element_type_is_integer(element_type) || qore_buffer_element_type_is_float(element_type)
+        || qore_buffer_element_type_is_decimal(element_type);
 }
 
 static bool qore_buffer_op_is_comparison(QoreBufferBinaryOperation op) {
@@ -330,6 +653,7 @@ struct qore_buffer_parse_operand_t {
     bool may_be_null = false;
     bool can_be_int = false;
     bool can_be_float = false;
+    bool can_be_number = false;
     bool can_be_bool = false;
     bool can_be_string = false;
     bool known = false;
@@ -362,27 +686,29 @@ static qore_buffer_parse_operand_t qore_buffer_parse_operand(const QoreTypeInfo*
 
     rv.can_be_int = QoreTypeInfo::parseReturns(typeInfo, NT_INT) != QTI_NOT_EQUAL;
     rv.can_be_float = QoreTypeInfo::parseReturns(typeInfo, NT_FLOAT) != QTI_NOT_EQUAL;
+    rv.can_be_number = QoreTypeInfo::parseReturns(typeInfo, NT_NUMBER) != QTI_NOT_EQUAL;
     rv.can_be_bool = QoreTypeInfo::parseReturns(typeInfo, NT_BOOLEAN) != QTI_NOT_EQUAL;
     rv.can_be_string = QoreTypeInfo::parseReturns(typeInfo, NT_STRING) != QTI_NOT_EQUAL;
     return rv;
 }
 
 static bool qore_buffer_parse_operand_is_numeric_scalar(const qore_buffer_parse_operand_t& operand) {
-    return !operand.is_buffer && (operand.can_be_int || operand.can_be_float);
+    return !operand.is_buffer && (operand.can_be_int || operand.can_be_float || operand.can_be_number);
 }
 
 static bool qore_buffer_parse_operand_is_bool_scalar(const qore_buffer_parse_operand_t& operand) {
-    return !operand.is_buffer && operand.can_be_bool && !operand.can_be_int && !operand.can_be_float;
+    return !operand.is_buffer && operand.can_be_bool && !operand.can_be_int && !operand.can_be_float
+        && !operand.can_be_number;
 }
 
 static bool qore_buffer_parse_operand_is_string_scalar(const qore_buffer_parse_operand_t& operand) {
     return !operand.is_buffer && operand.can_be_string && !operand.can_be_int && !operand.can_be_float
-        && !operand.can_be_bool;
+        && !operand.can_be_number && !operand.can_be_bool;
 }
 
 static bool qore_buffer_parse_operand_is_null_scalar(const qore_buffer_parse_operand_t& operand) {
     return !operand.is_buffer && !operand.can_be_int && !operand.can_be_float && !operand.can_be_bool
-        && !operand.can_be_string && (operand.may_be_nothing || operand.may_be_null);
+        && !operand.can_be_number && !operand.can_be_string && (operand.may_be_nothing || operand.may_be_null);
 }
 
 static bool qore_buffer_parse_operand_is_supported_for_comparison(const qore_buffer_parse_operand_t& buffer_operand,
@@ -467,7 +793,14 @@ const QoreTypeInfo* qore_buffer_binary_op_type(const QoreTypeInfo* leftTypeInfo,
         || (other_operand.is_buffer
             ? qore_buffer_element_type_is_float(other_operand.element_type)
             : other_operand.can_be_float);
-    return qore_get_complex_buffer_type(floating ? QoreBufferElementType::Float64 : QoreBufferElementType::Int64,
+    if (floating) {
+        return qore_get_complex_buffer_type(QoreBufferElementType::Float64, nullable);
+    }
+    bool decimal = qore_buffer_element_type_is_decimal(buffer_operand.element_type)
+        || (other_operand.is_buffer
+            ? qore_buffer_element_type_is_decimal(other_operand.element_type)
+            : other_operand.can_be_number);
+    return qore_get_complex_buffer_type(decimal ? QoreBufferElementType::Decimal128 : QoreBufferElementType::Int64,
         nullable);
 }
 
@@ -485,6 +818,8 @@ static QoreBufferElementType qore_buffer_runtime_operand_element_type(const qore
             return QoreBufferElementType::Int64;
         case NT_FLOAT:
             return QoreBufferElementType::Float64;
+        case NT_NUMBER:
+            return QoreBufferElementType::Decimal128;
         case NT_BOOLEAN:
             return QoreBufferElementType::Bool;
         case NT_STRING:
@@ -584,14 +919,37 @@ static int qore_buffer_validate_runtime_operands(const qore_buffer_runtime_opera
 
 static QoreBufferElementType qore_buffer_arithmetic_result_element_type(const qore_buffer_runtime_operand_t& left,
         const qore_buffer_runtime_operand_t& right) {
-    return qore_buffer_element_type_is_float(qore_buffer_runtime_operand_element_type(left))
-        || qore_buffer_element_type_is_float(qore_buffer_runtime_operand_element_type(right))
-        ? QoreBufferElementType::Float64
-        : QoreBufferElementType::Int64;
+    QoreBufferElementType left_type = qore_buffer_runtime_operand_element_type(left);
+    QoreBufferElementType right_type = qore_buffer_runtime_operand_element_type(right);
+    if (qore_buffer_element_type_is_float(left_type) || qore_buffer_element_type_is_float(right_type)) {
+        return QoreBufferElementType::Float64;
+    }
+    if (qore_buffer_element_type_is_decimal(left_type) || qore_buffer_element_type_is_decimal(right_type)) {
+        return QoreBufferElementType::Decimal128;
+    }
+    return QoreBufferElementType::Int64;
 }
 
 static QoreValue qore_buffer_compute_arithmetic_value(QoreValue left, QoreValue right,
         QoreBufferBinaryOperation op, QoreBufferElementType result_element_type, ExceptionSink* xsink) {
+    if (result_element_type == QoreBufferElementType::Decimal128) {
+        QoreNumberNodeHelper l(left);
+        QoreNumberNodeHelper r(right);
+        switch (op) {
+            case QoreBufferBinaryOperation::Add:
+                return (*l)->doPlus(**r);
+            case QoreBufferBinaryOperation::Subtract:
+                return (*l)->doMinus(**r);
+            case QoreBufferBinaryOperation::Multiply:
+                return (*l)->doMultiply(**r);
+            case QoreBufferBinaryOperation::Divide:
+                return (*l)->doDivideBy(**r, xsink);
+            default:
+                assert(false);
+                return QoreValue();
+        }
+    }
+
     if (result_element_type == QoreBufferElementType::Float64) {
         double l = left.getAsFloat();
         double r = right.getAsFloat();
@@ -653,6 +1011,28 @@ static bool qore_buffer_compute_comparison_value(QoreValue left, QoreValue right
                 return l && !r;
             case QoreBufferBinaryOperation::GreaterThanOrEqual:
                 return l || !r;
+            default:
+                assert(false);
+                return false;
+        }
+    }
+
+    if (left.getType() == NT_NUMBER || right.getType() == NT_NUMBER) {
+        QoreNumberNodeHelper l(left);
+        QoreNumberNodeHelper r(right);
+        switch (op) {
+            case QoreBufferBinaryOperation::Equal:
+                return (*l)->equals(**r);
+            case QoreBufferBinaryOperation::NotEqual:
+                return !(*l)->equals(**r);
+            case QoreBufferBinaryOperation::LessThan:
+                return (*l)->lessThan(**r);
+            case QoreBufferBinaryOperation::LessThanOrEqual:
+                return (*l)->lessThanOrEqual(**r);
+            case QoreBufferBinaryOperation::GreaterThan:
+                return (*l)->greaterThan(**r);
+            case QoreBufferBinaryOperation::GreaterThanOrEqual:
+                return (*l)->greaterThanOrEqual(**r);
             default:
                 assert(false);
                 return false;
@@ -725,6 +1105,56 @@ static bool qore_buffer_compute_comparison_value(QoreValue left, QoreValue right
     }
 }
 
+static int32_t qore_buffer_decimal_operand_scale(const qore_buffer_runtime_operand_t& operand, ExceptionSink* xsink) {
+    if (operand.buffer) {
+        return operand.buffer->getElementType() == QoreBufferElementType::Decimal128
+            ? operand.buffer->getDecimalScale() : 0;
+    }
+    if (operand.scalar.getType() == NT_NUMBER) {
+        qore_buffer_decimal_parse_result_t parsed;
+        if (qore_buffer_parse_decimal_value(operand.scalar, parsed, "scalar operand", xsink)) {
+            return -1;
+        }
+        return parsed.scale;
+    }
+    return 0;
+}
+
+static int32_t qore_buffer_decimal_result_scale(const qore_buffer_runtime_operand_t& left,
+        const qore_buffer_runtime_operand_t& right, QoreBufferBinaryOperation op, ExceptionSink* xsink) {
+    int32_t left_scale = qore_buffer_decimal_operand_scale(left, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    int32_t right_scale = qore_buffer_decimal_operand_scale(right, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    int32_t rv = 0;
+    switch (op) {
+        case QoreBufferBinaryOperation::Add:
+        case QoreBufferBinaryOperation::Subtract:
+            rv = std::max(left_scale, right_scale);
+            break;
+        case QoreBufferBinaryOperation::Multiply:
+            rv = left_scale + right_scale;
+            break;
+        case QoreBufferBinaryOperation::Divide:
+            rv = std::max<int32_t>(std::max(left_scale, right_scale), 10);
+            break;
+        default:
+            rv = std::max(left_scale, right_scale);
+            break;
+    }
+    if (rv > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION) {
+        xsink->raiseException("BUFFER-RANGE-ERROR", "buffer<decimal128> operation '%s' requires scale %d, "
+            "which exceeds maximum decimal128 scale %d", qore_buffer_op_symbol(op), rv,
+            QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+        return -1;
+    }
+    return rv;
+}
+
 QoreValue qore_buffer_binary_op(const QoreValue& left, const QoreValue& right, QoreBufferBinaryOperation op,
         ExceptionSink* xsink) {
     if (!qore_buffer_binary_op_applies(left, right)) {
@@ -744,7 +1174,18 @@ QoreValue qore_buffer_binary_op(const QoreValue& left, const QoreValue& right, Q
         ? QoreBufferElementType::Bool
         : qore_buffer_arithmetic_result_element_type(l, r);
 
-    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(result_element_type, nullable, length), xsink);
+    int32_t result_decimal_scale = 0;
+    if (result_element_type == QoreBufferElementType::Decimal128) {
+        result_decimal_scale = qore_buffer_decimal_result_scale(l, r, op, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+
+    ReferenceHolder<QoreBufferNode> rv(result_element_type == QoreBufferElementType::Decimal128
+        ? new QoreBufferNode(result_element_type, nullable, length, QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION,
+            result_decimal_scale)
+        : new QoreBufferNode(result_element_type, nullable, length), xsink);
     for (size_t i = 0; i < length; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "buffer elementwise operation")) {
             return QoreValue();
@@ -776,6 +1217,7 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
         : AbstractQoreNode(NT_BUFFER, true, false), element_type(element_type),
         nullable_elements(nullable_elements) {
     assert(element_type != QoreBufferElementType::Invalid);
+    normalizeDecimalMetadata();
 }
 
 QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length)
@@ -787,8 +1229,65 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
     }
 }
 
+QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
+        int32_t decimal_precision, int32_t decimal_scale) : QoreBufferNode(element_type, nullable_elements) {
+    if (element_type == QoreBufferElementType::Decimal128) {
+        this->decimal_precision = decimal_precision;
+        this->decimal_scale = decimal_scale;
+        normalizeDecimalMetadata();
+    }
+    resizeStorage(length);
+    if (nullable_elements && length) {
+        memset(validity_buffer.data(), 0xff, validity_buffer.size());
+        null_count = 0;
+    }
+}
+
 QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, const QoreListNode* list,
-        ExceptionSink* xsink) : QoreBufferNode(element_type, nullable_elements, list ? list->size() : 0) {
+        ExceptionSink* xsink) : QoreBufferNode(element_type, nullable_elements, list, xsink,
+        QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION, -1) {
+}
+
+QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, const QoreListNode* list,
+        ExceptionSink* xsink, int32_t decimal_precision, int32_t decimal_scale)
+        : QoreBufferNode(element_type, nullable_elements) {
+    if (element_type == QoreBufferElementType::Decimal128) {
+        this->decimal_precision = decimal_precision;
+        this->decimal_scale = decimal_scale;
+        if (qore_buffer_decimal_validate_metadata(this->decimal_precision, this->decimal_scale,
+                decimal_scale >= 0 ? xsink : nullptr)) {
+            return;
+        }
+        if (decimal_scale < 0 && list) {
+            int32_t inferred_scale = QORE_BUFFER_DECIMAL128_DEFAULT_SCALE;
+            ConstListIterator i(list);
+            while (i.next()) {
+                if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink,
+                        "buffer<decimal128> scale inference")) {
+                    return;
+                }
+                QoreValue value = i.getValue();
+                if (value.isNothing() || value.getType() == NT_NULL) {
+                    continue;
+                }
+                qore_buffer_decimal_parse_result_t parsed;
+                char context[64];
+                snprintf(context, sizeof(context), "element %d", (int)i.index());
+                if (qore_buffer_parse_decimal_value(value, parsed, context, xsink)) {
+                    return;
+                }
+                inferred_scale = std::max(inferred_scale, parsed.scale);
+            }
+            this->decimal_scale = inferred_scale;
+            if (qore_buffer_decimal_validate_metadata(this->decimal_precision, this->decimal_scale, xsink)) {
+                return;
+            }
+        } else {
+            normalizeDecimalMetadata();
+        }
+    }
+
+    resizeStorage(list ? list->size() : 0);
     if (!list) {
         return;
     }
@@ -810,7 +1309,8 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
 
 QoreBufferNode::QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t length)
         : AbstractQoreNode(NT_BUFFER, true, false), element_type(parent->element_type),
-        nullable_elements(parent->nullable_elements), length(length), view_parent(parent), view_offset(offset) {
+        nullable_elements(parent->nullable_elements), decimal_precision(parent->decimal_precision),
+        decimal_scale(parent->decimal_scale), length(length), view_parent(parent), view_offset(offset) {
     assert(parent);
     assert(!parent->isView());
     assert(offset <= parent->length);
@@ -828,12 +1328,30 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
     assert(qore_buffer_external_storage_supported(element_type));
     assert(!length || external_data);
     assert(!length || external_owner);
+    normalizeDecimalMetadata();
 }
 
 QoreBufferNode::~QoreBufferNode() {
     if (view_parent) {
         --view_parent->view_ref_count;
         view_parent->deref(nullptr);
+    }
+}
+
+void QoreBufferNode::normalizeDecimalMetadata() {
+    if (element_type != QoreBufferElementType::Decimal128) {
+        decimal_precision = QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION;
+        decimal_scale = QORE_BUFFER_DECIMAL128_DEFAULT_SCALE;
+        return;
+    }
+    if (decimal_precision <= 0 || decimal_precision > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION) {
+        decimal_precision = QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION;
+    }
+    if (decimal_scale < 0) {
+        decimal_scale = QORE_BUFFER_DECIMAL128_DEFAULT_SCALE;
+    }
+    if (decimal_scale > decimal_precision) {
+        decimal_scale = decimal_precision;
     }
 }
 
@@ -1088,6 +1606,22 @@ void QoreBufferNode::setBoolBit(size_t index, bool value) {
     } else {
         bytes[physical / 8] &= ~mask;
     }
+}
+
+QoreBufferDecimal128 QoreBufferNode::getDecimalStorage(size_t index) const {
+    assert(element_type == QoreBufferElementType::Decimal128);
+    assert(index < length);
+    size_t physical = physicalIndex(index);
+    QoreBufferDecimal128 rv;
+    memcpy(&rv, dataBytes() + (physical * sizeof(rv)), sizeof(rv));
+    return rv;
+}
+
+void QoreBufferNode::setDecimalStorage(size_t index, QoreBufferDecimal128 value) {
+    assert(element_type == QoreBufferElementType::Decimal128);
+    assert(index < length);
+    size_t physical = physicalIndex(index);
+    memcpy(dataBytes() + (physical * sizeof(value)), &value, sizeof(value));
 }
 
 void QoreBufferNode::setNull(size_t index) {
@@ -1423,6 +1957,20 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
             setBoolBit(index, value.getAsBool());
             break;
         }
+        case QoreBufferElementType::Decimal128: {
+            qore_buffer_decimal_parse_result_t parsed;
+            char context[64];
+            snprintf(context, sizeof(context), "element %d", (int)index);
+            if (qore_buffer_parse_decimal_value(value, parsed, context, xsink)
+                    || qore_buffer_decimal_rescale(parsed, decimal_precision, decimal_scale, context, xsink)) {
+                return -1;
+            }
+            if (ensureOwnedStorage(xsink)) {
+                return -1;
+            }
+            setDecimalStorage(index, qore_buffer_decimal_storage_from_int128(parsed.unscaled));
+            break;
+        }
         case QoreBufferElementType::String:
             return setStringValue(index, value, xsink);
         default:
@@ -1466,6 +2014,10 @@ bool QoreBufferNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsi
 bool QoreBufferNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const QoreBufferNode* b = dynamic_cast<const QoreBufferNode*>(v);
     if (!b || element_type != b->element_type || nullable_elements != b->nullable_elements || length != b->length) {
+        return false;
+    }
+    if (element_type == QoreBufferElementType::Decimal128
+            && (decimal_precision != b->decimal_precision || decimal_scale != b->decimal_scale)) {
         return false;
     }
     for (size_t i = 0; i < length; ++i) {
@@ -1514,6 +2066,14 @@ bool QoreBufferNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsi
                         }
                     }
                     break;
+                case QoreBufferElementType::Decimal128: {
+                    QoreBufferDecimal128 l = getDecimalStorage(i);
+                    QoreBufferDecimal128 r = b->getDecimalStorage(i);
+                    if (l.low != r.low || l.high != r.high) {
+                        return false;
+                    }
+                    break;
+                }
                 default:
                     assert(false);
             }
@@ -1539,7 +2099,9 @@ QoreBufferNode* QoreBufferNode::copy(ExceptionSink* xsink) const {
 QoreBufferNode* QoreBufferNode::copy(bool n_nullable_elements, ExceptionSink* xsink) const {
     assert(n_nullable_elements || !nullable_elements);
 
-    QoreBufferNode* rv = new QoreBufferNode(element_type, n_nullable_elements, length);
+    QoreBufferNode* rv = element_type == QoreBufferElementType::Decimal128
+        ? new QoreBufferNode(element_type, n_nullable_elements, length, decimal_precision, decimal_scale)
+        : new QoreBufferNode(element_type, n_nullable_elements, length);
     if (element_type == QoreBufferElementType::String) {
         if (rv->assignStringRange(*this, 0, length, false, xsink)) {
             rv->deref(nullptr);
@@ -1697,6 +2259,10 @@ QoreValue QoreBufferNode::getReferencedEntry(size_t index) const {
             size_t len = static_cast<size_t>(end - begin);
             return QoreValue::makeStringValue(len ? bytes + begin : "", len, QCS_UTF8);
         }
+        case QoreBufferElementType::Decimal128: {
+            __int128 value = qore_buffer_decimal_storage_to_int128(getDecimalStorage(index));
+            return new QoreNumberNode(qore_buffer_decimal_to_string(value, decimal_scale).c_str());
+        }
         default:
             assert(false);
             return QoreValue();
@@ -1733,6 +2299,18 @@ int QoreBufferNode::fill(QoreValue value, ExceptionSink* xsink) {
     }
     if (element_type == QoreBufferElementType::String) {
         return fillString(value, xsink);
+    }
+    if (element_type == QoreBufferElementType::Decimal128 && !(value.isNothing() || value.getType() == NT_NULL)) {
+        qore_buffer_decimal_parse_result_t parsed;
+        if (qore_buffer_parse_decimal_value(value, parsed, "fill value", xsink)) {
+            return -1;
+        }
+        if (decimal_scale == QORE_BUFFER_DECIMAL128_DEFAULT_SCALE && parsed.scale > decimal_scale) {
+            decimal_scale = parsed.scale;
+        }
+        if (qore_buffer_decimal_validate_metadata(decimal_precision, decimal_scale, xsink)) {
+            return -1;
+        }
     }
     for (size_t i = 0; i < length; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "buffer filled construction")) {
@@ -1783,6 +2361,22 @@ QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.sum() is not supported");
         return QoreValue();
     }
+    if (element_type == QoreBufferElementType::Decimal128) {
+        __int128 rv = 0;
+        for (size_t i = 0; i < length; ++i) {
+            if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer sum")) {
+                return QoreValue();
+            }
+            if (isElementNull(i)) {
+                continue;
+            }
+            if (qore_buffer_decimal_checked_add(rv,
+                    qore_buffer_decimal_storage_to_int128(getDecimalStorage(i)), decimal_precision, "sum", xsink)) {
+                return QoreValue();
+            }
+        }
+        return new QoreNumberNode(qore_buffer_decimal_to_string(rv, decimal_scale).c_str());
+    }
     if (qore_buffer_element_type_is_float(element_type)) {
         double rv = 0.0;
         for (size_t i = 0; i < length; ++i) {
@@ -1819,6 +2413,29 @@ QoreValue QoreBufferNode::mean(ExceptionSink* xsink) const {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.mean() is not supported");
         return QoreValue();
     }
+    if (element_type == QoreBufferElementType::Decimal128) {
+        size_t count = 0;
+        __int128 total = 0;
+        for (size_t i = 0; i < length; ++i) {
+            if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer mean")) {
+                return QoreValue();
+            }
+            if (isElementNull(i)) {
+                continue;
+            }
+            if (qore_buffer_decimal_checked_add(total,
+                    qore_buffer_decimal_storage_to_int128(getDecimalStorage(i)), decimal_precision, "mean", xsink)) {
+                return QoreValue();
+            }
+            ++count;
+        }
+        if (!count) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreNumberNode> sum(new QoreNumberNode(qore_buffer_decimal_to_string(total,
+            decimal_scale).c_str()), xsink);
+        return (*sum)->doDivideBy(static_cast<int64>(count), xsink);
+    }
     size_t count = 0;
     double rv = 0.0;
     for (size_t i = 0; i < length; ++i) {
@@ -1842,6 +2459,25 @@ QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
     if (element_type == QoreBufferElementType::String) {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.min() is not supported");
         return QoreValue();
+    }
+    if (element_type == QoreBufferElementType::Decimal128) {
+        bool found = false;
+        __int128 rv = 0;
+        for (size_t i = 0; i < length; ++i) {
+            if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer min")) {
+                return QoreValue();
+            }
+            if (isElementNull(i)) {
+                continue;
+            }
+            __int128 n = qore_buffer_decimal_storage_to_int128(getDecimalStorage(i));
+            if (!found || n < rv) {
+                rv = n;
+            }
+            found = true;
+        }
+        return found ? QoreValue(new QoreNumberNode(qore_buffer_decimal_to_string(rv, decimal_scale).c_str()))
+            : QoreValue();
     }
     bool found = false;
     int64 int_rv = 0;
@@ -1903,6 +2539,25 @@ QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.max() is not supported");
         return QoreValue();
     }
+    if (element_type == QoreBufferElementType::Decimal128) {
+        bool found = false;
+        __int128 rv = 0;
+        for (size_t i = 0; i < length; ++i) {
+            if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer max")) {
+                return QoreValue();
+            }
+            if (isElementNull(i)) {
+                continue;
+            }
+            __int128 n = qore_buffer_decimal_storage_to_int128(getDecimalStorage(i));
+            if (!found || n > rv) {
+                rv = n;
+            }
+            found = true;
+        }
+        return found ? QoreValue(new QoreNumberNode(qore_buffer_decimal_to_string(rv, decimal_scale).c_str()))
+            : QoreValue();
+    }
     bool found = false;
     int64 int_rv = 0;
     double float_rv = 0.0;
@@ -1961,7 +2616,9 @@ QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
 QoreBufferNode* QoreBufferNode::slice(size_t offset, size_t count, ExceptionSink* xsink) const {
     assert(offset <= length);
     assert(count <= length - offset);
-    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(element_type, nullable_elements, count), xsink);
+    ReferenceHolder<QoreBufferNode> rv(element_type == QoreBufferElementType::Decimal128
+        ? new QoreBufferNode(element_type, nullable_elements, count, decimal_precision, decimal_scale)
+        : new QoreBufferNode(element_type, nullable_elements, count), xsink);
 
     if (element_type == QoreBufferElementType::String) {
         if (rv->assignStringRange(*this, offset, count, false, xsink)) {
@@ -2021,7 +2678,9 @@ QoreBufferNode* QoreBufferNode::sliceRange(size_t start, size_t stop, ExceptionS
     }
 
     size_t count = start - stop + 1;
-    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(element_type, nullable_elements, count), xsink);
+    ReferenceHolder<QoreBufferNode> rv(element_type == QoreBufferElementType::Decimal128
+        ? new QoreBufferNode(element_type, nullable_elements, count, decimal_precision, decimal_scale)
+        : new QoreBufferNode(element_type, nullable_elements, count), xsink);
     if (element_type == QoreBufferElementType::String) {
         if (rv->assignStringRange(*this, start, count, true, xsink)) {
             return nullptr;

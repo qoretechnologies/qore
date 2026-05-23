@@ -53,6 +53,16 @@ enum class QoreBufferElementType : uint8_t {
     Float64,
     Bool,
     String,
+    Decimal128,
+};
+
+//! Physical storage for buffer<decimal128> values.
+/** Values are stored as signed two's-complement 128-bit unscaled integers.
+    The owning QoreBufferNode carries the decimal precision and scale metadata.
+ */
+struct QoreBufferDecimal128 {
+    uint64_t low;
+    int64_t high;
 };
 
 //! Elementwise operation supported by dense buffer helpers.
@@ -107,6 +117,12 @@ DLLEXPORT bool qore_buffer_element_type_is_integer(QoreBufferElementType element
     @return true for float32 and float64
  */
 DLLEXPORT bool qore_buffer_element_type_is_float(QoreBufferElementType element_type);
+
+//! Tests whether the buffer element type stores fixed-precision decimal values.
+/** @param element_type the buffer element type
+    @return true for decimal128
+ */
+DLLEXPORT bool qore_buffer_element_type_is_decimal(QoreBufferElementType element_type);
 
 //! Returns true if either operand is a dense buffer value.
 /** @param left the left operand
@@ -183,6 +199,18 @@ public:
      */
     DLLEXPORT QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length);
 
+    //! Creates a buffer with the given length and decimal metadata.
+    /** Decimal metadata is used only for buffer<decimal128>; other element types ignore it.
+        @param element_type the primitive element storage type
+        @param nullable_elements true if individual elements may be NOTHING
+        @param length the number of elements to allocate
+        @param decimal_precision decimal precision for decimal128 buffers; defaults to 38 when <= 0
+        @param decimal_scale decimal scale for decimal128 buffers; defaults to 0 when < 0
+        @throw assert failure if @a element_type is Invalid
+     */
+    DLLEXPORT QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
+        int32_t decimal_precision, int32_t decimal_scale);
+
     //! Creates a buffer from a Qore list.
     /** @param element_type the primitive element storage type
         @param nullable_elements true if individual elements may be NOTHING
@@ -193,6 +221,20 @@ public:
      */
     DLLEXPORT QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, const QoreListNode* list,
         ExceptionSink* xsink);
+
+    //! Creates a buffer from a Qore list with explicit decimal metadata.
+    /** Decimal metadata is used only for buffer<decimal128>; other element types ignore it.
+        @param element_type the primitive element storage type
+        @param nullable_elements true if individual elements may be NOTHING
+        @param list source values; null creates an empty buffer
+        @param xsink exception sink for type, range, allocation, and cancellation errors
+        @param decimal_precision decimal precision for decimal128 buffers; defaults to 38 when <= 0
+        @param decimal_scale decimal scale for decimal128 buffers; infers from @a list when < 0
+        @throw BUFFER-TYPE-ERROR if a source element cannot be stored in the buffer
+        @throw BUFFER-RANGE-ERROR if a source element is outside the element type range
+     */
+    DLLEXPORT QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, const QoreListNode* list,
+        ExceptionSink* xsink, int32_t decimal_precision, int32_t decimal_scale);
 
     //! Wraps immutable external fixed-width storage without copying.
     /** The returned buffer keeps @a owner alive for the lifetime of the buffer
@@ -306,6 +348,20 @@ public:
      */
     DLLEXPORT bool hasNullableElements() const {
         return nullable_elements;
+    }
+
+    //! Returns decimal precision metadata for buffer<decimal128>.
+    /** @return precision in decimal digits; non-decimal buffers return 0
+     */
+    DLLEXPORT int32_t getDecimalPrecision() const {
+        return element_type == QoreBufferElementType::Decimal128 ? decimal_precision : 0;
+    }
+
+    //! Returns decimal scale metadata for buffer<decimal128>.
+    /** @return scale in decimal digits; non-decimal buffers return 0
+     */
+    DLLEXPORT int32_t getDecimalScale() const {
+        return element_type == QoreBufferElementType::Decimal128 ? decimal_scale : 0;
     }
 
     //! Returns a mutable pointer to the raw dense element storage.
@@ -470,6 +526,8 @@ protected:
 private:
     QoreBufferElementType element_type;
     bool nullable_elements;
+    int32_t decimal_precision = 38;
+    int32_t decimal_scale = 0;
     size_t length = 0;
     mutable int64 null_count = 0;
     AlignedByteBuffer data_buffer;
@@ -484,6 +542,7 @@ private:
     DLLLOCAL QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t length);
     DLLLOCAL QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
         const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count);
+    DLLLOCAL void normalizeDecimalMetadata();
     DLLLOCAL bool isView() const {
         return view_parent;
     }
@@ -506,6 +565,8 @@ private:
     DLLLOCAL void setValidityBit(size_t index, bool valid);
     DLLLOCAL bool getBoolBit(size_t index) const;
     DLLLOCAL void setBoolBit(size_t index, bool value);
+    DLLLOCAL QoreBufferDecimal128 getDecimalStorage(size_t index) const;
+    DLLLOCAL void setDecimalStorage(size_t index, QoreBufferDecimal128 value);
     DLLLOCAL void setNull(size_t index);
     DLLLOCAL int assignStringStorage(const std::vector<std::string>& values, const std::vector<uint8_t>& nulls,
         ExceptionSink* xsink);

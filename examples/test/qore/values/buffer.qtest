@@ -15,6 +15,7 @@ class BufferTest inherits QUnit::Test {
         addTestCase("nullable int buffer", \nullableIntBuffer());
         addTestCase("bool buffer", \boolBuffer());
         addTestCase("float buffer", \floatBuffer());
+        addTestCase("decimal128 buffer", \decimalBuffer());
         addTestCase("string buffer", \stringBuffer());
         addTestCase("pseudo methods", \pseudoMethods());
         addTestCase("iteration and slicing", \iterationAndSlicing());
@@ -84,6 +85,39 @@ class BufferTest inherits QUnit::Test {
         assertEq(2.0, f32[1]);
         assertEq(1.25, f64[0]);
         assertEq(2.5, f64[1]);
+    }
+
+    decimalBuffer() {
+        buffer<decimal128> d = new buffer<decimal128>((1.25n, -2.50n, 3n));
+
+        assertEq("buffer<decimal128>", d.fullType());
+        assertEq(3, elements d);
+        assertEq(1.25n, d[0]);
+        assertEq(-2.5n, d[1]);
+        assertEq(3n, d[2]);
+        assertEq((1.25n, -2.5n, 3n), d.toList());
+
+        buffer<*decimal128> nullable = new buffer<*decimal128>((1.20n, NOTHING, 3.40n));
+        assertEq("buffer<*decimal128>", nullable.fullType());
+        assertEq((1.2n, NOTHING, 3.4n), nullable.toList());
+        assertEq(2, nullable.count());
+
+        assertEq(1.75n, d.sum());
+        assertEq(-2.5n, d.min());
+        assertEq(3n, d.max());
+
+        buffer<decimal128> filled = buffer<decimal128>::filled(2, 7.50n);
+        assertEq((7.5n, 7.5n), filled.toList());
+
+        buffer<decimal128> shifted = d + 1.25n;
+        assertEq("buffer<decimal128>", shifted.fullType());
+        assertEq((2.5n, -1.25n, 4.25n), shifted.toList());
+
+        buffer<bool> positive = d > 0n;
+        assertEq((True, False, True), positive.toList());
+
+        buffer<*bool> nullable_cmp = nullable == 1.2n;
+        assertEq((True, NOTHING, False), nullable_cmp.toList());
     }
 
     stringBuffer() {
