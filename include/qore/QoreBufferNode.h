@@ -39,6 +39,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,51 @@ struct QoreBufferDecimal128 {
     uint64_t low;
     int64_t high;
 };
+
+//! Device or accelerator family for external buffer storage.
+/** The values are intentionally provider-neutral.  Device-specific modules
+    keep their own owner object alive through QoreBufferNode and use this
+    descriptor only to identify the memory location to other integrations.
+ */
+enum class QoreBufferDeviceKind : uint8_t {
+    Unknown = 0,
+    Cuda,
+    Rocm,
+    OpenCL,
+    Vulkan,
+    OneAPI,
+    Metal,
+    Java,
+    Other,
+};
+
+//! Describes the location of external device buffer storage.
+struct QoreBufferDeviceInfo {
+    QoreBufferDeviceKind kind = QoreBufferDeviceKind::Unknown;
+    int64_t device_id = -1;
+    std::string name;
+};
+
+//! Copies external device buffer storage into Qore-owned host memory.
+/** The callback is called with storage for the root buffer, not a slice view.
+    It must copy @a length logical elements starting at the beginning of
+    @a device_data into @a host_data.  For nullable buffers, @a host_validity is
+    a Qore/Arrow-compatible validity bitmap destination when @a device_validity
+    is not null; otherwise it is null and libqore fills an all-valid bitmap.
+
+    @param host_data destination host data storage
+    @param host_validity destination host validity bitmap, or nullptr
+    @param length number of logical elements to copy
+    @param device_data source provider-specific device data pointer
+    @param device_validity source provider-specific device validity pointer, or nullptr
+    @param device_info device descriptor supplied when the buffer was wrapped
+    @param owner provider-specific owner object kept alive by the buffer
+    @param xsink exception sink for transfer errors
+    @return 0 on success, non-zero on error
+ */
+using QoreBufferDeviceCopyToHostCallback = int (*)(void* host_data, uint8_t* host_validity, size_t length,
+    const void* device_data, const uint8_t* device_validity, const QoreBufferDeviceInfo& device_info,
+    const void* owner, ExceptionSink* xsink);
 
 //! Elementwise operation supported by dense buffer helpers.
 enum class QoreBufferBinaryOperation : uint8_t {
@@ -331,6 +377,59 @@ public:
         std::shared_ptr<const void> owner, int64_t null_count, int32_t decimal_precision,
         int32_t decimal_scale, ExceptionSink* xsink);
 
+    //! Wraps immutable external device storage without copying.
+    /** The returned buffer keeps @a owner alive for the lifetime of the device
+        storage.  Ordinary host reads require explicit or automatic
+        materialization through @a copy_to_host; Qore write paths materialize and
+        detach the storage into an owned host buffer before modification.
+
+        @param element_type the primitive element storage type; string storage is not supported
+        @param nullable_elements true if individual elements may be NOTHING
+        @param length number of visible elements
+        @param device_data provider-specific device data pointer
+        @param device_validity provider-specific device validity pointer, or nullptr when all elements are valid
+        @param owner shared owner for the device buffers
+        @param null_count number of null values, or -1 when unknown
+        @param device_info provider-neutral device descriptor
+        @param copy_to_host callback used to materialize host storage
+        @param xsink exception sink for validation errors
+        @return a buffer wrapping the device storage, or nullptr on error
+        @throw BUFFER-TYPE-ERROR if @a element_type is unsupported
+        @throw BUFFER-EXTERNAL-STORAGE-ERROR if required pointers, ownership, or callbacks are missing
+     */
+    DLLEXPORT static QoreBufferNode* wrapExternalDeviceStorage(QoreBufferElementType element_type,
+        bool nullable_elements, size_t length, const void* device_data, const uint8_t* device_validity,
+        std::shared_ptr<const void> owner, int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, ExceptionSink* xsink);
+
+    //! Wraps immutable external device storage with decimal metadata.
+    /** This overload is required for \c buffer<decimal128>, whose physical
+        storage is not self-describing.  Non-decimal element types ignore the
+        decimal metadata.
+
+        @param element_type the primitive element storage type; string storage is not supported
+        @param nullable_elements true if individual elements may be NOTHING
+        @param length number of visible elements
+        @param device_data provider-specific device data pointer
+        @param device_validity provider-specific device validity pointer, or nullptr when all elements are valid
+        @param owner shared owner for the device buffers
+        @param null_count number of null values, or -1 when unknown
+        @param device_info provider-neutral device descriptor
+        @param copy_to_host callback used to materialize host storage
+        @param decimal_precision decimal precision for decimal128 buffers; must be 1..38
+        @param decimal_scale decimal scale for decimal128 buffers; must be 0..precision
+        @param xsink exception sink for validation errors
+        @return a buffer wrapping the device storage, or nullptr on error
+        @throw BUFFER-TYPE-ERROR if @a element_type is unsupported
+        @throw BUFFER-RANGE-ERROR if decimal metadata is invalid
+        @throw BUFFER-EXTERNAL-STORAGE-ERROR if required pointers, ownership, or callbacks are missing
+     */
+    DLLEXPORT static QoreBufferNode* wrapExternalDeviceStorage(QoreBufferElementType element_type,
+        bool nullable_elements, size_t length, const void* device_data, const uint8_t* device_validity,
+        std::shared_ptr<const void> owner, int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, int32_t decimal_precision, int32_t decimal_scale,
+        ExceptionSink* xsink);
+
     //! @copydoc AbstractQoreNode::getAsBoolImpl()
     DLLEXPORT virtual bool getAsBoolImpl() const;
 
@@ -456,6 +555,42 @@ public:
      */
     DLLEXPORT bool hasExternalStorage() const;
 
+    //! Tests whether this buffer's storage is backed by immutable external device memory.
+    /** @return true if this buffer or its storage root wraps external device memory
+     */
+    DLLEXPORT bool hasExternalDeviceStorage() const;
+
+    //! Tests whether host storage is immediately available for raw-data readers.
+    /** @return true if an empty buffer or a host data pointer is available without a device transfer
+     */
+    DLLEXPORT bool hasHostStorage() const;
+
+    //! Materializes external device storage into Qore-owned host memory.
+    /** This is a no-op for ordinary host buffers and already-materialized device
+        buffers.  It does not detach device ownership; write paths detach and
+        clear device metadata before modifying the host copy.
+
+        @param xsink exception sink for transfer and cancellation errors
+        @return 0 on success, -1 on error
+        @throw BUFFER-DEVICE-STORAGE-ERROR if the device buffer cannot be copied to host memory
+     */
+    DLLEXPORT int ensureHostStorage(ExceptionSink* xsink) const;
+
+    //! Returns the provider-specific external device data pointer.
+    /** @return the device data pointer, or nullptr if this is not a device-backed buffer
+     */
+    DLLEXPORT const void* getDeviceData() const;
+
+    //! Returns the provider-specific external device validity pointer.
+    /** @return the device validity pointer, or nullptr for non-nullable, all-valid, or host-only buffers
+     */
+    DLLEXPORT const uint8_t* getDeviceValidityData() const;
+
+    //! Returns this buffer's device descriptor.
+    /** @return the device descriptor, or nullptr if this is not a device-backed buffer
+     */
+    DLLEXPORT const QoreBufferDeviceInfo* getDeviceInfo() const;
+
     //! Returns this buffer's complex Qore type.
     /** @return type info for buffer<T> or buffer<*T>
      */
@@ -477,6 +612,14 @@ public:
         @return the element value, or NOTHING if @a index is out of range or the element is null
      */
     DLLEXPORT QoreValue getReferencedEntry(size_t index) const;
+
+    //! Reads an element without transferring ownership from the buffer.
+    /** This overload can materialize external device storage before reading.
+        @param index zero-based element index
+        @param xsink exception sink for device transfer errors
+        @return the element value, or NOTHING if @a index is out of range, the element is null, or an error occurs
+     */
+    DLLEXPORT QoreValue getReferencedEntry(size_t index, ExceptionSink* xsink) const;
 
     //! Stores a value in an existing element.
     /** @param index zero-based element index
@@ -586,6 +729,12 @@ private:
     std::shared_ptr<const void> external_owner;
     const uint8_t* external_data = nullptr;
     const uint8_t* external_validity = nullptr;
+    std::shared_ptr<const void> external_device_owner;
+    const void* external_device_data = nullptr;
+    const uint8_t* external_device_validity = nullptr;
+    QoreBufferDeviceInfo external_device_info;
+    QoreBufferDeviceCopyToHostCallback external_device_copy_to_host = nullptr;
+    mutable std::mutex storage_mutex;
     QoreBufferNode* view_parent = nullptr;
     size_t view_offset = 0;
     mutable std::atomic_int view_ref_count{0};
@@ -594,9 +743,18 @@ private:
     DLLLOCAL QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
         const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count,
         int32_t decimal_precision, int32_t decimal_scale);
+    DLLLOCAL QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
+        const void* device_data, const uint8_t* device_validity, std::shared_ptr<const void> owner,
+        int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, int32_t decimal_precision, int32_t decimal_scale);
     DLLLOCAL static QoreBufferNode* wrapExternalStorageImpl(QoreBufferElementType element_type,
         bool nullable_elements, size_t offset, size_t length, const void* data, const uint8_t* validity,
         std::shared_ptr<const void> owner, int64_t null_count, bool has_decimal_metadata,
+        int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink);
+    DLLLOCAL static QoreBufferNode* wrapExternalDeviceStorageImpl(QoreBufferElementType element_type,
+        bool nullable_elements, size_t length, const void* device_data, const uint8_t* device_validity,
+        std::shared_ptr<const void> owner, int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, bool has_decimal_metadata,
         int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink);
     DLLLOCAL void normalizeDecimalMetadata();
     DLLLOCAL bool isView() const {
@@ -615,6 +773,8 @@ private:
     DLLLOCAL const char* stringBytes() const;
     DLLLOCAL size_t dataByteSize(size_t n_length) const;
     DLLLOCAL void resizeStorage(size_t n_length);
+    DLLLOCAL int materializeDeviceStorageUnlocked(ExceptionSink* xsink);
+    DLLLOCAL int materializeDeviceStorage(ExceptionSink* xsink);
     DLLLOCAL int detachExternalStorage(ExceptionSink* xsink);
     DLLLOCAL int ensureOwnedStorage(ExceptionSink* xsink);
     DLLLOCAL bool getValidityBit(size_t index) const;

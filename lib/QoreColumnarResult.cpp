@@ -425,12 +425,12 @@ static size_t columnar_value_size(QoreValue value) {
     }
 }
 
-static QoreValue columnar_value_at(QoreValue value, size_t index) {
+static QoreValue columnar_value_at(QoreValue value, size_t index, ExceptionSink* xsink) {
     switch (value.getType()) {
         case NT_LIST:
             return value.get<const QoreListNode>()->retrieveEntry(index).refSelf();
         case NT_BUFFER:
-            return value.get<const QoreBufferNode>()->getReferencedEntry(index);
+            return value.get<const QoreBufferNode>()->getReferencedEntry(index, xsink);
         default:
             return QoreValue();
     }
@@ -457,12 +457,12 @@ static size_t columnar_mask_size(QoreValue mask, ExceptionSink* xsink) {
     }
 }
 
-static bool columnar_mask_at(QoreValue mask, size_t index) {
+static bool columnar_mask_at(QoreValue mask, size_t index, ExceptionSink* xsink) {
     switch (mask.getType()) {
         case NT_LIST:
             return mask.get<const QoreListNode>()->retrieveEntry(index).getAsBool();
         case NT_BUFFER: {
-            QoreValue value = mask.get<const QoreBufferNode>()->getReferencedEntry(index);
+            QoreValue value = mask.get<const QoreBufferNode>()->getReferencedEntry(index, xsink);
             return !value.isNullOrNothing() && value.getAsBool();
         }
         default:
@@ -480,7 +480,7 @@ static size_t columnar_mask_count(QoreValue mask, ExceptionSink* xsink) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "counting columnar row mask")) {
             return 0;
         }
-        if (columnar_mask_at(mask, i)) {
+        if (columnar_mask_at(mask, i, xsink)) {
             ++count;
         }
     }
@@ -495,7 +495,7 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
             if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar list column")) {
                 return QoreValue();
             }
-            if (columnar_mask_at(mask, i)) {
+            if (columnar_mask_at(mask, i, xsink)) {
                 rv->push(source->retrieveEntry(i).refSelf(), xsink);
                 if (*xsink) {
                     return QoreValue();
@@ -513,8 +513,8 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
                 if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar string buffer column")) {
                     return QoreValue();
                 }
-                if (columnar_mask_at(mask, i)) {
-                    values->push(source->getReferencedEntry(i), xsink);
+                if (columnar_mask_at(mask, i, xsink)) {
+                    values->push(source->getReferencedEntry(i, xsink), xsink);
                     if (*xsink) {
                         return QoreValue();
                     }
@@ -530,8 +530,8 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
             if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
                 return QoreValue();
             }
-            if (columnar_mask_at(mask, i)) {
-                if (rv->setEntry(out++, source->getReferencedEntry(i), xsink)) {
+            if (columnar_mask_at(mask, i, xsink)) {
+                if (rv->setEntry(out++, source->getReferencedEntry(i, xsink), xsink)) {
                     return QoreValue();
                 }
             }
@@ -568,12 +568,12 @@ static QoreValue columnar_slice_value(QoreValue value, size_t offset, size_t cou
     return QoreValue();
 }
 
-static bool columnar_value_is_null(QoreValue value, size_t index) {
+static bool columnar_value_is_null(QoreValue value, size_t index, ExceptionSink* xsink) {
     switch (value.getType()) {
         case NT_LIST:
             return value.get<const QoreListNode>()->retrieveEntry(index).isNullOrNothing();
         case NT_BUFFER:
-            return value.get<const QoreBufferNode>()->getReferencedEntry(index).isNullOrNothing();
+            return value.get<const QoreBufferNode>()->getReferencedEntry(index, xsink).isNullOrNothing();
         default:
             assert(false);
             return true;
@@ -1394,7 +1394,7 @@ QoreListNode* QoreColumnarResult::toRows(ExceptionSink* xsink) const {
         }
         ReferenceHolder<QoreHashNode> row(new QoreHashNode(autoTypeInfo), xsink);
         for (const Column& column : columns) {
-            row->setKeyValue(column.name.c_str(), columnar_value_at(column.data, r), xsink);
+            row->setKeyValue(column.name.c_str(), columnar_value_at(column.data, r, xsink), xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -1496,8 +1496,11 @@ QoreValue QoreColumnarResult::combineMasks(QoreValue lhs, QoreValue rhs, const c
             return QoreValue();
         }
         bool selected = is_and
-            ? (columnar_mask_at(lhs, i) && columnar_mask_at(rhs, i))
-            : (columnar_mask_at(lhs, i) || columnar_mask_at(rhs, i));
+            ? (columnar_mask_at(lhs, i, xsink) && columnar_mask_at(rhs, i, xsink))
+            : (columnar_mask_at(lhs, i, xsink) || columnar_mask_at(rhs, i, xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
         if (rv->setEntry(i, QoreValue(selected), xsink)) {
             return QoreValue();
         }
@@ -1517,7 +1520,8 @@ QoreValue QoreColumnarResult::invertMask(QoreValue mask, ExceptionSink* xsink) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "inverting columnar row mask")) {
             return QoreValue();
         }
-        if (rv->setEntry(i, QoreValue(!columnar_mask_at(mask, i)), xsink)) {
+        bool selected = !columnar_mask_at(mask, i, xsink);
+        if (*xsink || rv->setEntry(i, QoreValue(selected), xsink)) {
             return QoreValue();
         }
     }
@@ -1537,7 +1541,10 @@ QoreValue QoreColumnarResult::nullMask(const char* name, bool invert, ExceptionS
         if (i && !(i % 100) && qore_check_cancel(xsink, "building columnar null mask")) {
             return QoreValue();
         }
-        bool selected = columnar_value_is_null(column->data, i);
+        bool selected = columnar_value_is_null(column->data, i, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
         if (invert) {
             selected = !selected;
         }

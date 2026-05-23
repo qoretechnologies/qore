@@ -355,7 +355,7 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
             break;
         }
         case NT_BUFFER:
-            val.setValue(seq->get<const QoreBufferNode>()->getReferencedEntry(i), true);
+            val.setValue(seq->get<const QoreBufferNode>()->getReferencedEntry(i, xsink), true);
             break;
     }
     return false;

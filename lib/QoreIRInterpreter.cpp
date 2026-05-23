@@ -13168,7 +13168,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (idx < 0) {
                     return QoreValue();
                 }
-                return left.get<const QoreBufferNode>()->getReferencedEntry(static_cast<size_t>(idx));
+                return left.get<const QoreBufferNode>()->getReferencedEntry(static_cast<size_t>(idx), xsink);
             }
             if (bt == NT_HASH) {
                 // hash[key] is equivalent to hash{key}

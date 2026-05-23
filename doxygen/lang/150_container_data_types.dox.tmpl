@@ -173,10 +173,15 @@ printf("%y\n", l1.fullType());
     - \c float64
     - \c bool
     - \c string
+    - \c decimal128
 
     Nullable buffers use \c buffer<*T>.  A nullable buffer carries a per-element validity bitmap; reading a null
     element returns @ref nothing "NOTHING".  Both @ref null "NULL" and @ref nothing "NOTHING" initialize nullable
     buffer elements as null values.
+
+    \c buffer<decimal128> stores exact fixed-scale decimal values as 16-byte unscaled integers with precision and
+    scale metadata.  Use Qore \c number literals such as \c 12.34n when constructing decimal buffers to avoid
+    converting through binary floating-point values.
 
     @par Examples:
     @code{.py}
@@ -195,6 +200,9 @@ buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
 
 buffer<*string> names = new buffer<*string>(("Alice", NOTHING, "Carol"));
 buffer<string> blanks = buffer<string>::filled(3, "");
+
+buffer<decimal128> amounts = new buffer<decimal128>((12.34n, 56.70n));
+assert amounts.sum() == 69.04n;
 
 foreach float score in (scores) {
     if (exists score) {
@@ -227,6 +235,30 @@ buffer<string> tail = names[1..2];       # buffer<string>(("", "Carol"))
 
     Range slices create independent buffers.  \c view(start, count) creates a zero-copy view sharing storage with the
     source buffer, so assignments through either buffer are visible through the other one.
+
+    @par Storage Ownership:
+    Buffers created in Qore normally own their host memory.  Native modules can also return buffers that wrap
+    immutable external host memory or immutable external device memory.  This is used by Arrow, Parquet, SQL, and
+    accelerator integrations to avoid unnecessary copies while preserving Qore's value semantics:
+    @code{.py}
+buffer<float64> measurements = source.getMeasurements();
+
+if (measurements.deviceStorage()) {
+    measurements.materialize();      # force device-to-host transfer now
+}
+
+if (measurements.externalStorage() || measurements.deviceStorage()) {
+    measurements = measurements.clone();  # owned mutable host copy
+}
+
+assert measurements.hostStorage();
+    @endcode
+
+    Reads that have an exception sink, including indexing, iteration, \c toList(), reductions, ColumnarResult
+    operations, and DataFrame conversion, materialize device-backed buffers when the native provider supplied a
+    copy callback.  Writes detach external storage into an owned host buffer before modification.  Plugin helpers
+    that expose writable raw pointers reject external and device-backed buffers; call \c clone() first when an API
+    requires owned mutable storage.
 
     @par Operators:
     Numeric buffers support elementwise arithmetic with another numeric buffer of the same length or with a scalar

@@ -4151,7 +4151,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64
     } else if (v.getType() == NT_BUFFER) {
         const QoreBufferNode* b = v.get<const QoreBufferNode>();
         if (index >= 0 && static_cast<size_t>(index) < b->size()) {
-            return toBits(b->getReferencedEntry(static_cast<size_t>(index)));
+            return toBits(b->getReferencedEntry(static_cast<size_t>(index), xsink));
         }
     }
     // Unsupported container type or index out of bounds: return NOTHING.

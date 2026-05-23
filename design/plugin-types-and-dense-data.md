@@ -165,9 +165,9 @@ features:
 | Feature | Status | Rationale |
 |---------|--------|-----------|
 | `buffer<string>` / `buffer<*string>` | implemented | Uses offsets + UTF-8 byte storage in `QoreBufferNode` with optional validity bitmap. |
-| `buffer<decimal128>` | deferred | Needs fixed-width decimal representation, precision/scale metadata, overflow rules, and SQL mapping policy. |
-| nested buffers / array columns | deferred | Requires nested offset metadata and more QORD schema work. |
-| GPU/device buffers | deferred | Requires a device-location model and explicit transfer semantics. |
+| `buffer<decimal128>` | implemented | Uses fixed-width signed decimal128 storage with precision/scale metadata and overflow checks. |
+| nested buffers / array columns | implemented for Arrow/DataFrame preservation | Nested Arrow/Parquet columns keep recursive schema metadata and reuse immutable Arrow chunked arrays for round trips; direct nested `buffer<T>` value syntax remains future work. |
+| GPU/device buffers | implemented as provider-owned external storage | `QoreBufferNode` exposes provider-neutral device descriptors, explicit copy-to-host callbacks, Qore storage-inspection methods, and detach-on-write semantics. |
 | native JDBC packed buffers | deferred | Needs JNI-side direct buffer or typed-array extraction per driver. |
 
 Short-term mappings remain:
@@ -176,8 +176,9 @@ Short-term mappings remain:
   a string column.
 - SQL date/time values use Qore date lists unless a driver has a more specific
   dense mapping.
-- SQL `NUMERIC` / `DECIMAL` values use `list<number>` unless a future
-  `buffer<decimal128>` mapping is implemented.
+- SQL `NUMERIC` / `DECIMAL` values use `buffer<decimal128>` when precision and
+  scale fit the fixed-width decimal representation; otherwise they use
+  `list<number>` with decimal schema metadata.
 
 ## Performance and Optimization Status
 

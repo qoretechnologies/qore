@@ -556,7 +556,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
             if (offset < 0) {
                 return QoreValue();
             }
-            return l.get<const QoreBufferNode>()->getReferencedEntry(offset);
+            return l.get<const QoreBufferNode>()->getReferencedEntry(offset, xsink);
         }
     }
 

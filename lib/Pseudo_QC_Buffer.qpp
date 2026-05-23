@@ -146,6 +146,79 @@ bool <buffer>::sizep() [flags=CONSTANT] {
    return true;
 }
 
+//! Returns @ref True if the buffer wraps immutable external host storage
+/**
+    @return @ref True if the buffer uses external host memory owned by another API
+
+    @par Example:
+    @code{.py}
+if (ids.externalStorage()) {
+    ids = ids.clone();  # make an owned mutable copy before passing to a writable plugin
+}
+    @endcode
+*/
+bool <buffer>::externalStorage() [flags=CONSTANT] {
+   return b->hasExternalStorage();
+}
+
+//! Returns @ref True if the buffer wraps immutable external device storage
+/**
+    Device-backed buffers are created by native modules that own accelerator or
+    driver memory.  Ordinary buffer reads materialize host storage when the
+    module supplied a copy callback; writes detach into an owned host buffer.
+
+    @return @ref True if the buffer uses external device memory
+
+    @par Example:
+    @code{.py}
+if (measurements.deviceStorage()) {
+    measurements.materialize();
+}
+    @endcode
+*/
+bool <buffer>::deviceStorage() [flags=CONSTANT] {
+   return b->hasExternalDeviceStorage();
+}
+
+//! Returns @ref True if raw host storage is available without a device transfer
+/**
+    @return @ref True when the buffer is empty, owned by Qore, wraps external
+    host memory, or has already materialized its device storage
+
+    @par Example:
+    @code{.py}
+if (!values.hostStorage()) {
+    values.materialize();
+}
+    @endcode
+*/
+bool <buffer>::hostStorage() [flags=CONSTANT] {
+   return b->hasHostStorage();
+}
+
+//! Materializes external device storage into host memory
+/**
+    This method is a no-op for ordinary host buffers.  It is intended for code
+    that wants to force a device-to-host transfer before passing a buffer to an
+    API that requires raw host pointers.
+
+    @return the same buffer value
+
+    @throw BUFFER-DEVICE-STORAGE-ERROR if a device-backed buffer cannot be copied to host memory
+
+    @par Example:
+    @code{.py}
+buffer<float64> values = source.getMeasurements();
+values.materialize();
+process(values);
+    @endcode
+*/
+auto <buffer>::materialize() {
+   if (b->ensureHostStorage(xsink))
+      return QoreValue();
+   return v.refSelf();
+}
+
 //! Returns the number of non-null elements in the buffer
 /**
     Nullable buffers skip element values that are @ref nothing.

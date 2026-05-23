@@ -1167,6 +1167,9 @@ QoreValue qore_buffer_binary_op(const QoreValue& left, const QoreValue& right, Q
     if (qore_buffer_validate_runtime_operands(l, r, op, xsink)) {
         return QoreValue();
     }
+    if ((l.buffer && l.buffer->ensureHostStorage(xsink)) || (r.buffer && r.buffer->ensureHostStorage(xsink))) {
+        return QoreValue();
+    }
 
     bool comparison = qore_buffer_op_is_comparison(op);
     size_t length = l.buffer ? l.buffer->size() : r.buffer->size();
@@ -1334,6 +1337,23 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
     normalizeDecimalMetadata();
 }
 
+QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
+        const void* device_data, const uint8_t* device_validity, std::shared_ptr<const void> owner,
+        int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, int32_t decimal_precision, int32_t decimal_scale)
+        : AbstractQoreNode(NT_BUFFER, true, false), element_type(element_type),
+        nullable_elements(nullable_elements), decimal_precision(decimal_precision), decimal_scale(decimal_scale),
+        length(length), null_count(null_count), external_device_owner(std::move(owner)),
+        external_device_data(device_data), external_device_validity(device_validity),
+        external_device_info(device_info), external_device_copy_to_host(copy_to_host) {
+    assert(element_type != QoreBufferElementType::Invalid);
+    assert(qore_buffer_external_storage_supported(element_type));
+    assert(!length || external_device_data);
+    assert(!length || external_device_owner);
+    assert(!length || external_device_copy_to_host);
+    normalizeDecimalMetadata();
+}
+
 QoreBufferNode::~QoreBufferNode() {
     if (view_parent) {
         --view_parent->view_ref_count;
@@ -1481,6 +1501,105 @@ QoreBufferNode* QoreBufferNode::wrapExternalStorageImpl(QoreBufferElementType el
     return rv;
 }
 
+QoreBufferNode* QoreBufferNode::wrapExternalDeviceStorage(QoreBufferElementType element_type, bool nullable_elements,
+        size_t length, const void* device_data, const uint8_t* device_validity, std::shared_ptr<const void> owner,
+        int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, ExceptionSink* xsink) {
+    return wrapExternalDeviceStorageImpl(element_type, nullable_elements, length, device_data, device_validity,
+        std::move(owner), null_count, device_info, copy_to_host, false, 0, 0, xsink);
+}
+
+QoreBufferNode* QoreBufferNode::wrapExternalDeviceStorage(QoreBufferElementType element_type, bool nullable_elements,
+        size_t length, const void* device_data, const uint8_t* device_validity, std::shared_ptr<const void> owner,
+        int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, int32_t decimal_precision, int32_t decimal_scale,
+        ExceptionSink* xsink) {
+    return wrapExternalDeviceStorageImpl(element_type, nullable_elements, length, device_data, device_validity,
+        std::move(owner), null_count, device_info, copy_to_host, true, decimal_precision, decimal_scale, xsink);
+}
+
+QoreBufferNode* QoreBufferNode::wrapExternalDeviceStorageImpl(QoreBufferElementType element_type,
+        bool nullable_elements, size_t length, const void* device_data, const uint8_t* device_validity,
+        std::shared_ptr<const void> owner, int64_t null_count, const QoreBufferDeviceInfo& device_info,
+        QoreBufferDeviceCopyToHostCallback copy_to_host, bool has_decimal_metadata, int32_t decimal_precision,
+        int32_t decimal_scale, ExceptionSink* xsink) {
+    if (!xsink) {
+        return nullptr;
+    }
+    if (!qore_buffer_external_storage_supported(element_type)) {
+        xsink->raiseException("BUFFER-TYPE-ERROR",
+            "cannot wrap external device storage for buffer<%s>; only fixed-width numeric and bool buffers are "
+            "supported",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+    if (element_type == QoreBufferElementType::Decimal128) {
+        if (!has_decimal_metadata) {
+            xsink->raiseException("BUFFER-TYPE-ERROR",
+                "cannot wrap external device storage for buffer<decimal128> without decimal precision and scale "
+                "metadata; use the metadata-aware QoreBufferNode::wrapExternalDeviceStorage() overload");
+            return nullptr;
+        }
+        if (decimal_precision <= 0 || decimal_scale < 0) {
+            xsink->raiseException("BUFFER-RANGE-ERROR",
+                "external device buffer<decimal128> storage requires precision 1..%d and scale 0..precision; got "
+                "precision %d, scale %d", QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION, decimal_precision,
+                decimal_scale);
+            return nullptr;
+        }
+        if (qore_buffer_decimal_validate_metadata(decimal_precision, decimal_scale, xsink)) {
+            return nullptr;
+        }
+    } else {
+        decimal_precision = QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION;
+        decimal_scale = QORE_BUFFER_DECIMAL128_DEFAULT_SCALE;
+    }
+    if (length && !device_data) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "cannot wrap non-empty external device buffer<%s> storage without a device data pointer",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+    if (length && !owner) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "cannot wrap non-empty external device buffer<%s> storage without an owner",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+    if (length && !copy_to_host) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "cannot wrap non-empty external device buffer<%s> storage without a copy-to-host callback",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+    if (nullable_elements && !device_validity && null_count > 0) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "external nullable device buffer<%s> storage with null_count " QLLD " requires a validity bitmap",
+            qore_buffer_element_type_name(element_type), null_count);
+        return nullptr;
+    }
+    if (null_count < -1) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "external device buffer<%s> null_count must be >= -1; got " QLLD,
+            qore_buffer_element_type_name(element_type), null_count);
+        return nullptr;
+    }
+    if (nullable_elements && null_count > static_cast<int64>(length)) {
+        xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
+            "external device buffer<%s> null_count " QLLD " exceeds length " QSD,
+            qore_buffer_element_type_name(element_type), null_count, length);
+        return nullptr;
+    }
+    if (nullable_elements && !device_validity) {
+        null_count = 0;
+    } else if (!nullable_elements) {
+        null_count = 0;
+    }
+
+    return new QoreBufferNode(element_type, nullable_elements, length, device_data, device_validity, std::move(owner),
+        null_count, device_info, copy_to_host, decimal_precision, decimal_scale);
+}
+
 QoreBufferNode* QoreBufferNode::storageRoot() {
     return view_parent ? view_parent : this;
 }
@@ -1549,6 +1668,11 @@ void QoreBufferNode::resizeStorage(size_t n_length) {
     external_owner.reset();
     external_data = nullptr;
     external_validity = nullptr;
+    external_device_owner.reset();
+    external_device_data = nullptr;
+    external_device_validity = nullptr;
+    external_device_info = QoreBufferDeviceInfo();
+    external_device_copy_to_host = nullptr;
     length = n_length;
     data_buffer.resize(dataByteSize(length), true);
     if (nullable_elements) {
@@ -1560,8 +1684,84 @@ void QoreBufferNode::resizeStorage(size_t n_length) {
     }
 }
 
+int QoreBufferNode::materializeDeviceStorageUnlocked(ExceptionSink* xsink) {
+    assert(!isView());
+    if (!external_device_data) {
+        return 0;
+    }
+    if (!xsink) {
+        return -1;
+    }
+    if (!external_device_copy_to_host) {
+        xsink->raiseException("BUFFER-DEVICE-STORAGE-ERROR",
+            "cannot materialize external device buffer<%s> storage without a copy-to-host callback",
+            qore_buffer_element_type_name(element_type));
+        return -1;
+    }
+
+    size_t data_size = dataByteSize(length);
+    size_t validity_size = nullable_elements ? qore_buffer_bitmap_bytes(length) : 0;
+    if (data_buffer.size() == data_size
+            && (!nullable_elements || validity_buffer.size() == validity_size)) {
+        return 0;
+    }
+
+    data_buffer.resize(data_size, false);
+    uint8_t* validity_dest = nullptr;
+    if (nullable_elements) {
+        validity_buffer.resize(validity_size, false);
+        if (external_device_validity) {
+            validity_dest = validity_buffer.data();
+        } else if (validity_size) {
+            memset(validity_buffer.data(), 0xff, validity_size);
+            null_count = 0;
+        }
+    } else {
+        validity_buffer.clear();
+        null_count = 0;
+    }
+
+    int rc = external_device_copy_to_host(data_buffer.data(), validity_dest, length,
+        external_device_data, external_device_validity, external_device_info, external_device_owner.get(), xsink);
+    if (rc) {
+        data_buffer.clear();
+        validity_buffer.clear();
+        if (!*xsink) {
+            xsink->raiseException("BUFFER-DEVICE-STORAGE-ERROR",
+                "copy-to-host callback failed while materializing external device buffer<%s> storage",
+                qore_buffer_element_type_name(element_type));
+        }
+        return -1;
+    }
+    if (nullable_elements && external_device_validity && null_count < 0) {
+        null_count = qore_buffer_count_nulls_bitmap(validity_buffer.data(), 0, length, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int QoreBufferNode::materializeDeviceStorage(ExceptionSink* xsink) {
+    QoreBufferNode* root = storageRoot();
+    std::lock_guard<std::mutex> lock(root->storage_mutex);
+    return root->materializeDeviceStorageUnlocked(xsink);
+}
+
 int QoreBufferNode::detachExternalStorage(ExceptionSink* xsink) {
     QoreBufferNode* root = storageRoot();
+    std::lock_guard<std::mutex> lock(root->storage_mutex);
+    if (root->external_device_data) {
+        if (root->materializeDeviceStorageUnlocked(xsink)) {
+            return -1;
+        }
+        root->external_device_owner.reset();
+        root->external_device_data = nullptr;
+        root->external_device_validity = nullptr;
+        root->external_device_info = QoreBufferDeviceInfo();
+        root->external_device_copy_to_host = nullptr;
+        return 0;
+    }
     if (!root->external_data) {
         return 0;
     }
@@ -2066,6 +2266,9 @@ bool QoreBufferNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsi
             && (decimal_precision != b->decimal_precision || decimal_scale != b->decimal_scale)) {
         return false;
     }
+    if (ensureHostStorage(xsink) || b->ensureHostStorage(xsink)) {
+        return false;
+    }
     for (size_t i = 0; i < length; ++i) {
         if (xsink && i && !(i % 100) && qore_check_cancel(xsink, "buffer comparison")) {
             return false;
@@ -2144,6 +2347,9 @@ QoreBufferNode* QoreBufferNode::copy(ExceptionSink* xsink) const {
 
 QoreBufferNode* QoreBufferNode::copy(bool n_nullable_elements, ExceptionSink* xsink) const {
     assert(n_nullable_elements || !nullable_elements);
+    if (ensureHostStorage(xsink)) {
+        return nullptr;
+    }
 
     QoreBufferNode* rv = element_type == QoreBufferElementType::Decimal128
         ? new QoreBufferNode(element_type, n_nullable_elements, length, decimal_precision, decimal_scale)
@@ -2194,7 +2400,7 @@ const QoreTypeInfo* QoreBufferNode::getElementTypeInfo() const {
 }
 
 void* QoreBufferNode::getRawData() {
-    if (!length || hasExternalStorage()) {
+    if (!length || hasExternalStorage() || hasExternalDeviceStorage()) {
         return nullptr;
     }
     if (element_type == QoreBufferElementType::String) {
@@ -2214,6 +2420,9 @@ const void* QoreBufferNode::getRawData() const {
     if (element_type == QoreBufferElementType::String) {
         return nullptr;
     }
+    if (hasExternalDeviceStorage() && !hasHostStorage()) {
+        return nullptr;
+    }
     size_t physical = physicalIndex(0);
     if (element_type == QoreBufferElementType::Bool) {
         return dataBytes() + (physical / 8);
@@ -2223,6 +2432,9 @@ const void* QoreBufferNode::getRawData() const {
 
 const uint8_t* QoreBufferNode::getRawValidityData() const {
     if (!nullable_elements || !length) {
+        return nullptr;
+    }
+    if (hasExternalDeviceStorage() && !hasHostStorage()) {
         return nullptr;
     }
     const uint8_t* bytes = validityBytes();
@@ -2251,6 +2463,32 @@ bool QoreBufferNode::hasExternalStorage() const {
     return storageRoot()->external_data;
 }
 
+bool QoreBufferNode::hasExternalDeviceStorage() const {
+    return storageRoot()->external_device_data;
+}
+
+bool QoreBufferNode::hasHostStorage() const {
+    const QoreBufferNode* root = storageRoot();
+    return !root->length || root->external_data || root->data_buffer.data();
+}
+
+int QoreBufferNode::ensureHostStorage(ExceptionSink* xsink) const {
+    return const_cast<QoreBufferNode*>(storageRoot())->materializeDeviceStorage(xsink);
+}
+
+const void* QoreBufferNode::getDeviceData() const {
+    return storageRoot()->external_device_data;
+}
+
+const uint8_t* QoreBufferNode::getDeviceValidityData() const {
+    return storageRoot()->external_device_validity;
+}
+
+const QoreBufferDeviceInfo* QoreBufferNode::getDeviceInfo() const {
+    const QoreBufferNode* root = storageRoot();
+    return root->external_device_data ? &root->external_device_info : nullptr;
+}
+
 bool QoreBufferNode::isElementNull(size_t index) const {
     if (index >= length || !nullable_elements) {
         return false;
@@ -2259,7 +2497,17 @@ bool QoreBufferNode::isElementNull(size_t index) const {
 }
 
 QoreValue QoreBufferNode::getReferencedEntry(size_t index) const {
-    if (index >= length || isElementNull(index)) {
+    return getReferencedEntry(index, nullptr);
+}
+
+QoreValue QoreBufferNode::getReferencedEntry(size_t index, ExceptionSink* xsink) const {
+    if (index >= length) {
+        return QoreValue();
+    }
+    if (ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
+    if (isElementNull(index)) {
         return QoreValue();
     }
 
@@ -2370,6 +2618,9 @@ int QoreBufferNode::fill(QoreValue value, ExceptionSink* xsink) {
 }
 
 QoreListNode* QoreBufferNode::toList(ExceptionSink* xsink) const {
+    if (ensureHostStorage(xsink)) {
+        return nullptr;
+    }
     ReferenceHolder<QoreListNode> rv(new QoreListNode(getElementTypeInfo()), xsink);
     for (size_t i = 0; i < length; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "buffer toList")) {
@@ -2387,6 +2638,9 @@ size_t QoreBufferNode::countValid(ExceptionSink* xsink) const {
     if (!nullable_elements) {
         return length;
     }
+    if (ensureHostStorage(xsink)) {
+        return 0;
+    }
     if (!isView()) {
         return length - static_cast<size_t>(null_count);
     }
@@ -2403,6 +2657,9 @@ size_t QoreBufferNode::countValid(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
+    if (ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
     if (element_type == QoreBufferElementType::String) {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.sum() is not supported");
         return QoreValue();
@@ -2455,6 +2712,9 @@ QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::mean(ExceptionSink* xsink) const {
+    if (ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
     if (element_type == QoreBufferElementType::String) {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.mean() is not supported");
         return QoreValue();
@@ -2502,6 +2762,9 @@ QoreValue QoreBufferNode::mean(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
+    if (ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
     if (element_type == QoreBufferElementType::String) {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.min() is not supported");
         return QoreValue();
@@ -2581,6 +2844,9 @@ QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
+    if (ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
     if (element_type == QoreBufferElementType::String) {
         xsink->raiseException("BUFFER-OPERATION-ERROR", "buffer<string>.max() is not supported");
         return QoreValue();
@@ -2662,6 +2928,9 @@ QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
 QoreBufferNode* QoreBufferNode::slice(size_t offset, size_t count, ExceptionSink* xsink) const {
     assert(offset <= length);
     assert(count <= length - offset);
+    if (ensureHostStorage(xsink)) {
+        return nullptr;
+    }
     ReferenceHolder<QoreBufferNode> rv(element_type == QoreBufferElementType::Decimal128
         ? new QoreBufferNode(element_type, nullable_elements, count, decimal_precision, decimal_scale)
         : new QoreBufferNode(element_type, nullable_elements, count), xsink);
@@ -2705,7 +2974,7 @@ QoreBufferNode* QoreBufferNode::view(size_t offset, size_t count) const {
 }
 
 bool QoreBufferNode::isUniqueForMutation() const {
-    if (hasExternalStorage()) {
+    if (hasExternalStorage() || hasExternalDeviceStorage()) {
         return false;
     }
     if (isView()) {
@@ -2718,6 +2987,9 @@ bool QoreBufferNode::isUniqueForMutation() const {
 QoreBufferNode* QoreBufferNode::sliceRange(size_t start, size_t stop, ExceptionSink* xsink) const {
     assert(start < length);
     assert(stop < length);
+    if (ensureHostStorage(xsink)) {
+        return nullptr;
+    }
 
     if (start <= stop) {
         return slice(start, stop - start + 1, xsink);

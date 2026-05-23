@@ -184,6 +184,10 @@ class BufferTest inherits QUnit::Test {
         assertEq(False, b.empty());
         assertEq(True, b.val());
         assertEq(True, b.sizep());
+        assertEq(False, b.externalStorage());
+        assertEq(False, b.deviceStorage());
+        assertEq(True, b.hostStorage());
+        assertEq((1, 2, 3), b.materialize().toList());
         assertEq((1, 2, 3), b.toList());
 
         auto clone = b.clone();

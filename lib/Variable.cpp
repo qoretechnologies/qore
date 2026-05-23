@@ -780,7 +780,11 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
 
     buffer_lvalue = b;
     buffer_lvalue_index = index;
-    buffer_lvalue_value = b->getReferencedEntry(index);
+    buffer_lvalue_value = b->getReferencedEntry(index, vl.xsink);
+    if (*vl.xsink) {
+        clearPtr();
+        return -1;
+    }
     resetValue(buffer_lvalue_value, b->getElementTypeInfo());
     return 0;
 }

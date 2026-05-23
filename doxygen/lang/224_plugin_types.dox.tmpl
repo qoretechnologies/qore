@@ -261,6 +261,14 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     - mixed element storage between the result and input buffers;
     - result/input aliasing, because the v1 helper ABI exposes distinct output
       and input frames.
+    - writable external-host or external-device buffers, because the helper ABI
+      exposes raw mutable pointers and Qore must detach immutable provider-owned
+      storage before mutation.
+
+    Read-only dense-buffer helper inputs materialize device-backed buffers to
+    host memory through the provider's copy callback before the helper receives
+    a raw pointer. Writable helper arguments must already be owned host buffers;
+    Qore code can call \c clone() to force an owned mutable copy.
 
     These checks fail before the module helper sees any raw pointer and include
     the module name, operation name, field name, expected type, actual type,

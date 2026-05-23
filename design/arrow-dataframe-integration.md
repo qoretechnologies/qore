@@ -32,7 +32,8 @@ Define these only when the matching APIs and tests are implemented:
 | `QORE_HAVE_COLUMNAR_RESULT_V2` | Implemented: `QoreColumnarResult` exposes recursive schema descriptors and v2 schema APIs. |
 | `QORE_HAVE_ARROW_C_DATA_INTEROP` | libqore can import/export `ColumnarResult` through the Arrow C Data Interface. |
 | `QORE_HAVE_EXTERNAL_BUFFER_STORAGE` | Implemented: `QoreBufferNode` can wrap immutable external fixed-width storage with owner lifetime tracking and detach-on-write mutation. |
-| `QORE_HAVE_DECIMAL128_BUFFER` | `buffer<decimal128>` or equivalent fixed-width decimal storage is available. |
+| `QORE_HAVE_DECIMAL128_BUFFER` | Implemented: `buffer<decimal128>` provides fixed-width decimal storage with precision/scale metadata. |
+| `QORE_HAVE_DEVICE_BUFFER_STORAGE` | Implemented: `QoreBufferNode` can wrap immutable provider-owned device storage with explicit copy-to-host callbacks and detach-on-write mutation. |
 | `QORE_HAVE_ARROW_DATAFRAME_INTEROP` | Implemented: DataFrame exposes in-memory Arrow IPC import/export APIs and ColumnarResult-compatible dense storage paths suitable for module-grpc integration. |
 
 The installed `QoreConfig.cmake` must export equivalent CMake variables so
@@ -91,6 +92,10 @@ where an API exposes conversion details.
   APIs while preserving the flat compatibility schema.
 - Implemented: external immutable fixed-width storage support in
   `QoreBufferNode`, with owner lifetime tracking and copy-on-write mutation.
+- Implemented: external immutable device storage support in `QoreBufferNode`,
+  with provider-neutral device descriptors, explicit copy-to-host callbacks,
+  Qore pseudo-methods for storage inspection/materialization, and
+  detach-on-write mutation.
 - Implemented: decimal and nested schema metadata through recursive
   `ColumnarResult` descriptors; DataFrame and Arrow/Parquet interop preserve
   the logical schema through lossless `auto` storage when dense physical storage
@@ -100,9 +105,8 @@ where an API exposes conversion details.
 - Implemented: DataProvider bulk record iterators expose a shaped accessor so
   native columnar sources can pass `ColumnarResult` and other `BufferColumns`
   blocks through pipelines without forcing the compatibility `hash<list>` view.
-- Not exported in the current feature contract: `QORE_HAVE_ARROW_C_DATA_INTEROP`
-  and `QORE_HAVE_DECIMAL128_BUFFER`.  These macros remain undefined because
-  stable libqore Arrow C Data ABI wrappers and dense `buffer<decimal128>` storage
+- Not exported in the current feature contract: `QORE_HAVE_ARROW_C_DATA_INTEROP`.
+  This macro remains undefined because stable libqore Arrow C Data ABI wrappers
   are not implemented.
 
 ### dataframe
@@ -154,10 +158,9 @@ where an API exposes conversion details.
   fixed-width integer, floating-point, boolean, and safe integer decimal
   columns using C++ external buffer owners.
 - Map `BigDecimal` to decimal128 schema metadata when precision and scale fit.
-  Dense decimal128 buffers remain unavailable until
-  `QORE_HAVE_DECIMAL128_BUFFER` is implemented; decimal values that cannot be
-  represented as fixed-width integers use list storage with recursive schema
-  metadata.
+  Dense decimal128 buffers are available when `QORE_HAVE_DECIMAL128_BUFFER` is
+  defined; decimal values that cannot be represented as fixed-width integers use
+  list storage with recursive schema metadata.
 - Java-side primitive-array/direct-buffer batch extraction is not part of the
   current compatibility contract.  The implemented JDBC path already preserves
   packed Qore buffers for supported fixed-width columns, but still calls JDBC

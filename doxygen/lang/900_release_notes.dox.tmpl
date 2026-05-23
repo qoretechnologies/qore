@@ -1233,8 +1233,8 @@ cargo install tree-sitter-cli@0.26.5
     expose query results with runtime hashdecl metadata.
 
     The new \c buffer<T> type stores \c int8, \c int16, \c int32, \c int64, \c float32, \c float64,
-    \c bool, and \c string values without per-element boxing.  Nullable buffers use \c buffer<*T> and preserve SQL NULL /
-    Qore NOTHING as null elements:
+    \c bool, \c string, and \c decimal128 values without per-element boxing.  Nullable buffers use \c buffer<*T>
+    and preserve SQL NULL / Qore NOTHING as null elements:
     @code{.py}
 buffer<int64> ids = new buffer<int64>((10, 20, 30));
 buffer<int64> zeros = buffer<int64>::sized(1000);
@@ -1243,13 +1243,21 @@ buffer<int64> retry_counts_named = buffer<int64>::filled(size: 1000, value: 3);
 buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
 buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
 buffer<*string> names = new buffer<*string>(("Alice", NOTHING, "Carol"));
+buffer<decimal128> amounts = new buffer<decimal128>((12.34n, 56.70n));
 
 buffer<int64> middle = ids.view(start: 1, count: 2);
 middle[0] = 25;     # updates ids[1]
 
 printf("rows=%d total=%d\n", ids.size(), ids.sum());
+printf("amount=%n\n", amounts.sum());
 list<*float> boxed = scores.toList();
     @endcode
+
+    Native modules can wrap immutable external host or device storage in
+    \c buffer<T> values. Device-backed buffers expose \c deviceStorage(),
+    \c hostStorage(), and \c materialize() so Qore code can make transfer
+    points explicit when an API requires raw host memory. Writes preserve value
+    semantics by detaching provider-owned storage into an owned host buffer.
 
     Buffers support elementwise arithmetic and comparisons. Numeric buffers can be combined with another numeric
     buffer of the same length or with a scalar \c int / \c float value; comparisons produce dense boolean masks and

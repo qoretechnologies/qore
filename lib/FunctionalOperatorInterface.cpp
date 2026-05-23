@@ -92,14 +92,20 @@ bool QoreFunctionalBufferOperator::getNextImpl(ValueOptionalRefHolder& val, Exce
         if (pos == b->size()) {
             return true;
         }
-        val.setValue(b->getReferencedEntry(pos++), true);
+        val.setValue(b->getReferencedEntry(pos++, xsink), true);
+        if (*xsink) {
+            return true;
+        }
         return false;
     }
 
     if (!pos) {
         return true;
     }
-    val.setValue(b->getReferencedEntry(--pos), true);
+    val.setValue(b->getReferencedEntry(--pos, xsink), true);
+    if (*xsink) {
+        return true;
+    }
     return false;
 }
 
