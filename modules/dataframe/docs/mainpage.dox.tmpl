@@ -303,6 +303,26 @@ DataFrame::DataFrame tsv = DataFrame::DataFrame::readCSV("employees.tsv", option
 tsv.writeCSV("employees-copy.tsv", options);
     @endcode
 
+    Parquet I/O accepts typed option hashes for projection, row-group reads,
+    compression, and writer tuning:
+
+    @code{.py}
+hash<DataFrame::ParquetReadOptions> read_options = {
+    "columns": ("id", "dept", "salary"),
+    "use_threads": True,
+};
+DataFrame::DataFrame salary = DataFrame::DataFrame::readParquet(
+    "employees.parquet", read_options);
+
+hash<DataFrame::ParquetWriteOptions> write_options = {
+    "compression": "zstd",
+    "row_group_size": 100000,
+    "use_dictionary": True,
+    "write_statistics": True,
+};
+salary.writeParquet("employees-filtered.parquet", write_options);
+    @endcode
+
     A DataFrame itself is intentionally not generic. Operations such as
     select(), groupBy(), join(), pivot(), and melt() can change the row shape
     at runtime based on selected columns or remote data. Use typed hashdecls
@@ -330,6 +350,8 @@ tsv.writeCSV("employees-copy.tsv", options);
       operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
       @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result
       hashes as @ref DataFrame::DataFrameShape "DataFrameShape",
-      @ref DataFrame::ColumnStats "ColumnStats", and
-      @ref DataFrame::CsvOptions "CsvOptions"
+      @ref DataFrame::ColumnStats "ColumnStats",
+      @ref DataFrame::CsvOptions "CsvOptions",
+      @ref DataFrame::ParquetReadOptions "ParquetReadOptions", and
+      @ref DataFrame::ParquetWriteOptions "ParquetWriteOptions"
 */

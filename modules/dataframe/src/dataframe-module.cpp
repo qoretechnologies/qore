@@ -42,11 +42,15 @@ QoreNamespace DFNS("Qore::DataFrame");
 DLLLOCAL TypedHashDecl* init_hashdecl_DataFrameShape(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ColumnStats(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_CsvOptions(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParquetReadOptions(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParquetWriteOptions(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced via extern in QPP files)
 const TypedHashDecl* hashdeclDataFrameShape;
 const TypedHashDecl* hashdeclColumnStats;
 const TypedHashDecl* hashdeclCsvOptions;
+const TypedHashDecl* hashdeclParquetReadOptions;
+const TypedHashDecl* hashdeclParquetWriteOptions;
 
 static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // Phase 1: Pre-init classes
@@ -59,6 +63,8 @@ static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     hashdeclDataFrameShape = init_hashdecl_DataFrameShape(DFNS);
     hashdeclColumnStats = init_hashdecl_ColumnStats(DFNS);
     hashdeclCsvOptions = init_hashdecl_CsvOptions(DFNS);
+    hashdeclParquetReadOptions = init_hashdecl_ParquetReadOptions(DFNS);
+    hashdeclParquetWriteOptions = init_hashdecl_ParquetWriteOptions(DFNS);
 
     // Phase 3: Add classes with methods
     DFNS.addSystemClass(initDataFrameClass(DFNS));

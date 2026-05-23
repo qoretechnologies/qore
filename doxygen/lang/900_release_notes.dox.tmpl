@@ -1958,14 +1958,19 @@ foreach string module_name in (registry.getProcessModules()) {
         validation, duplicate-column diagnostics, and shared column storage
         where possible
       - streaming CSV reader with type inference from first 100 rows
-      - Parquet I/O via Apache Arrow and Parquet
+      - Parquet I/O via Apache Arrow and Parquet, including top-level column
+        projection, row-group selection, reader batch/thread controls, and
+        writer options for compression, row-group size, dictionary encoding,
+        statistics, threaded column writes, and Arrow schema metadata storage
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
       - ML integration: toMatrix, toVector, fromMatrix for zero-overhead ML algorithm feeding
       - describe() for per-column descriptive statistics (mean, std, quartiles, unique count)
       - DataFrame-returning methods, GroupedDataFrame-returning methods, CSV options, shape()
         results, and describe() statistics now have explicit API metadata types, including
         <tt>DataFrame</tt>, <tt>GroupedDataFrame</tt>, <tt>hash&lt;DataFrameShape&gt;</tt>,
-        <tt>list&lt;hash&lt;ColumnStats&gt;&gt;</tt>, and <tt>hash&lt;CsvOptions&gt;</tt>
+        <tt>list&lt;hash&lt;ColumnStats&gt;&gt;</tt>, <tt>hash&lt;CsvOptions&gt;</tt>,
+        <tt>hash&lt;ParquetReadOptions&gt;</tt>, and
+        <tt>hash&lt;ParquetWriteOptions&gt;</tt>
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O

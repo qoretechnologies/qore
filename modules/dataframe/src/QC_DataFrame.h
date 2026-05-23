@@ -29,6 +29,8 @@ DLLLOCAL QoreClass* initDataFrameClass(QoreNamespace& ns);
 DLLLOCAL extern const TypedHashDecl* hashdeclDataFrameShape;
 DLLLOCAL extern const TypedHashDecl* hashdeclColumnStats;
 DLLLOCAL extern const TypedHashDecl* hashdeclCsvOptions;
+DLLLOCAL extern const TypedHashDecl* hashdeclParquetReadOptions;
+DLLLOCAL extern const TypedHashDecl* hashdeclParquetWriteOptions;
 
 namespace QoreDataFrameNS {
 
@@ -204,10 +206,10 @@ public:
 
     //! Read a Parquet file into a DataFrame
     DLLLOCAL static QoreDataFrame* readParquet(const std::string& path,
-        ExceptionSink* xsink);
+        const QoreHashNode* options, ExceptionSink* xsink);
 
     //! Write this DataFrame to a Parquet file
-    DLLLOCAL void writeParquet(const std::string& path,
+    DLLLOCAL void writeParquet(const std::string& path, const QoreHashNode* options,
         ExceptionSink* xsink) const;
 
     //! Read Arrow IPC stream or file data into a DataFrame

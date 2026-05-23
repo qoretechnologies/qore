@@ -17,9 +17,14 @@
 #include <arrow/util/float16.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
+#include <parquet/properties.h>
 
+#include <algorithm>
+#include <cctype>
 #include <ctime>
 #include <limits>
+#include <set>
+#include <sstream>
 
 namespace QoreDataFrameNS {
 
@@ -79,6 +84,318 @@ static std::shared_ptr<arrow::Buffer> wrapQoreBufferMemory(const uint8_t* data, 
             (void)owner;
             delete buffer;
         });
+}
+
+struct QoreParquetReadOptions {
+    std::vector<std::string> columns;
+    std::vector<int> row_groups;
+    int64_t batch_size = 0;
+    bool has_columns = false;
+    bool has_row_groups = false;
+    bool has_batch_size = false;
+    bool has_use_threads = false;
+    bool use_threads = false;
+};
+
+struct QoreParquetWriteOptions {
+    int64_t row_group_size = 0;
+    parquet::Compression::type compression = parquet::Compression::UNCOMPRESSED;
+    bool has_row_group_size = false;
+    bool has_compression = false;
+    bool has_use_dictionary = false;
+    bool use_dictionary = false;
+    bool has_write_statistics = false;
+    bool write_statistics = false;
+    bool has_use_threads = false;
+    bool use_threads = false;
+    bool store_schema = false;
+};
+
+static std::string qoreParquetLower(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+static std::string qoreParquetStringValue(QoreValue value) {
+    QoreStringValueHelper str(value);
+    return str->c_str();
+}
+
+static bool qoreParquetReadStringListOption(const QoreHashNode* options, const char* key,
+        std::vector<std::string>& out, bool& has_option, ExceptionSink* xsink) {
+    QoreValue value = options->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    has_option = true;
+    if (value.getType() == NT_STRING) {
+        out.push_back(qoreParquetStringValue(value));
+        return true;
+    }
+    if (value.getType() != NT_LIST) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option '%s' expects a string or list of strings, got %s",
+            key, value.getFullTypeName());
+        return false;
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    for (size_t i = 0; i < list->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "parsing Parquet string option list")) {
+            return false;
+        }
+        QoreValue entry = list->retrieveEntry(i);
+        if (entry.isNullOrNothing() || entry.getType() != NT_STRING) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet option '%s' entry " QLLD " expects a string, got %s",
+                key, static_cast<int64>(i), entry.getFullTypeName());
+            return false;
+        }
+        out.push_back(qoreParquetStringValue(entry));
+    }
+    return true;
+}
+
+static bool qoreParquetReadIntListOption(const QoreHashNode* options, const char* key,
+        std::vector<int>& out, bool& has_option, ExceptionSink* xsink) {
+    QoreValue value = options->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    has_option = true;
+    if (value.getType() != NT_LIST) {
+        int64_t v = value.getAsBigInt();
+        if (v < 0 || v > std::numeric_limits<int>::max()) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet option '%s' row group " QLLD " is outside the supported range",
+                key, v);
+            return false;
+        }
+        out.push_back(static_cast<int>(v));
+        return true;
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    for (size_t i = 0; i < list->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "parsing Parquet row-group option list")) {
+            return false;
+        }
+        QoreValue entry = list->retrieveEntry(i);
+        int64_t v = entry.getAsBigInt();
+        if (v < 0 || v > std::numeric_limits<int>::max()) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet option '%s' entry " QLLD " row group " QLLD " is outside the supported range",
+                key, static_cast<int64>(i), v);
+            return false;
+        }
+        out.push_back(static_cast<int>(v));
+    }
+    return true;
+}
+
+static bool qoreParquetReadOptions(const QoreHashNode* options, QoreParquetReadOptions& parsed,
+        ExceptionSink* xsink) {
+    if (!options) {
+        return true;
+    }
+    if (!qoreParquetReadStringListOption(options, "columns", parsed.columns, parsed.has_columns, xsink)
+            || !qoreParquetReadIntListOption(options, "row_groups", parsed.row_groups, parsed.has_row_groups, xsink)) {
+        return false;
+    }
+
+    QoreValue batch_size = options->getKeyValue("batch_size");
+    if (!batch_size.isNullOrNothing()) {
+        parsed.batch_size = batch_size.getAsBigInt();
+        parsed.has_batch_size = true;
+        if (parsed.batch_size <= 0) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet option 'batch_size' must be greater than zero; got " QLLD,
+                parsed.batch_size);
+            return false;
+        }
+    }
+
+    QoreValue use_threads = options->getKeyValue("use_threads");
+    if (!use_threads.isNullOrNothing()) {
+        parsed.use_threads = use_threads.getAsBool();
+        parsed.has_use_threads = true;
+    }
+    return true;
+}
+
+static bool qoreParquetCompressionFromName(const std::string& name,
+        parquet::Compression::type& compression) {
+    std::string lower = qoreParquetLower(name);
+    if (lower == "none" || lower == "uncompressed") {
+        compression = parquet::Compression::UNCOMPRESSED;
+    } else if (lower == "snappy") {
+        compression = parquet::Compression::SNAPPY;
+    } else if (lower == "gzip" || lower == "gz") {
+        compression = parquet::Compression::GZIP;
+    } else if (lower == "brotli" || lower == "br") {
+        compression = parquet::Compression::BROTLI;
+    } else if (lower == "zstd") {
+        compression = parquet::Compression::ZSTD;
+    } else if (lower == "lz4") {
+        compression = parquet::Compression::LZ4;
+    } else if (lower == "lz4_frame" || lower == "lz4-frame") {
+        compression = parquet::Compression::LZ4_FRAME;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static bool qoreParquetWriteOptions(const QoreHashNode* options, QoreParquetWriteOptions& parsed,
+        ExceptionSink* xsink) {
+    if (!options) {
+        return true;
+    }
+
+    QoreValue row_group_size = options->getKeyValue("row_group_size");
+    if (!row_group_size.isNullOrNothing()) {
+        parsed.row_group_size = row_group_size.getAsBigInt();
+        parsed.has_row_group_size = true;
+        if (parsed.row_group_size <= 0) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet option 'row_group_size' must be greater than zero; got " QLLD,
+                parsed.row_group_size);
+            return false;
+        }
+    }
+
+    QoreValue compression = options->getKeyValue("compression");
+    if (!compression.isNullOrNothing()) {
+        std::string codec = qoreParquetStringValue(compression);
+        parsed.has_compression = true;
+        if (!qoreParquetCompressionFromName(codec, parsed.compression)) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "unsupported Parquet compression '%s'; expected one of: none, snappy, gzip, brotli, zstd, lz4, lz4_frame",
+                codec.c_str());
+            return false;
+        }
+    }
+
+    QoreValue use_dictionary = options->getKeyValue("use_dictionary");
+    if (!use_dictionary.isNullOrNothing()) {
+        parsed.use_dictionary = use_dictionary.getAsBool();
+        parsed.has_use_dictionary = true;
+    }
+
+    QoreValue write_statistics = options->getKeyValue("write_statistics");
+    if (!write_statistics.isNullOrNothing()) {
+        parsed.write_statistics = write_statistics.getAsBool();
+        parsed.has_write_statistics = true;
+    }
+
+    QoreValue use_threads = options->getKeyValue("use_threads");
+    if (!use_threads.isNullOrNothing()) {
+        parsed.use_threads = use_threads.getAsBool();
+        parsed.has_use_threads = true;
+    }
+
+    QoreValue store_schema = options->getKeyValue("store_schema");
+    if (!store_schema.isNullOrNothing()) {
+        parsed.store_schema = store_schema.getAsBool();
+    }
+    return true;
+}
+
+static std::string qoreParquetTopLevelName(const std::string& path) {
+    size_t dot = path.find('.');
+    return dot == std::string::npos ? path : path.substr(0, dot);
+}
+
+static std::vector<int> qoreParquetColumnIndicesForNames(
+        const std::unique_ptr<parquet::arrow::FileReader>& reader,
+        const std::vector<std::string>& names, ExceptionSink* xsink) {
+    std::vector<int> indices;
+    std::set<std::string> available;
+    const parquet::SchemaDescriptor* schema = reader->parquet_reader()->metadata()->schema();
+
+    for (int i = 0; i < schema->num_columns(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "collecting Parquet column names")) {
+            return {};
+        }
+        const parquet::ColumnDescriptor* column = schema->Column(i);
+        available.insert(qoreParquetTopLevelName(column->path()->ToDotString()));
+    }
+
+    for (size_t n = 0; n < names.size(); ++n) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "resolving Parquet projected columns")) {
+            return {};
+        }
+        const std::string& name = names[n];
+        bool found = false;
+        for (int i = 0; i < schema->num_columns(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "matching Parquet projected columns")) {
+                return {};
+            }
+            const parquet::ColumnDescriptor* column = schema->Column(i);
+            if (qoreParquetTopLevelName(column->path()->ToDotString()) == name) {
+                found = true;
+                if (std::find(indices.begin(), indices.end(), i) == indices.end()) {
+                    indices.push_back(i);
+                }
+            }
+        }
+        if (!found) {
+            std::ostringstream available_names;
+            size_t i = 0;
+            for (const auto& value : available) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "formatting Parquet column names")) {
+                    return {};
+                }
+                if (i++) {
+                    available_names << ", ";
+                }
+                available_names << value;
+            }
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet file has no top-level column '%s'; available columns: %s",
+                name.c_str(), available_names.str().c_str());
+            return {};
+        }
+    }
+    return indices;
+}
+
+static std::shared_ptr<arrow::Table> qoreParquetReorderTopLevelColumns(
+        const std::shared_ptr<arrow::Table>& table, const std::vector<std::string>& names,
+        ExceptionSink* xsink) {
+    if (names.empty()) {
+        return table;
+    }
+
+    std::vector<int> indices;
+    indices.reserve(names.size());
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "ordering Parquet projected columns")) {
+            return nullptr;
+        }
+        int index = table->schema()->GetFieldIndex(names[i]);
+        if (index < 0) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet projection did not produce top-level column '%s'",
+                names[i].c_str());
+            return nullptr;
+        }
+        if (std::find(indices.begin(), indices.end(), index) == indices.end()) {
+            indices.push_back(index);
+        }
+    }
+
+    auto projected = table->SelectColumns(indices);
+    if (!projected.ok()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "error ordering Parquet projected columns: %s",
+            projected.status().ToString().c_str());
+        return nullptr;
+    }
+    return projected.ValueOrDie();
 }
 
 static QoreBufferElementType arrowTypeToBufferElementType(const std::shared_ptr<arrow::DataType>& type) {
@@ -1622,11 +1939,15 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
 }
 
 QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
-        ExceptionSink* xsink) {
+        const QoreHashNode* options, ExceptionSink* xsink) {
     if (qore_check_cancel(xsink, "reading Parquet file")) {
         return nullptr;
     }
     arrow::MemoryPool* pool = arrow::system_memory_pool();
+    QoreParquetReadOptions read_options;
+    if (!qoreParquetReadOptions(options, read_options, xsink)) {
+        return nullptr;
+    }
 
     // Open file
     auto maybe_infile = arrow::io::ReadableFile::Open(path, pool);
@@ -1656,15 +1977,54 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
             status.ToString().c_str());
         return nullptr;
     }
+    if (read_options.has_use_threads) {
+        reader->set_use_threads(read_options.use_threads);
+    }
+    if (read_options.has_batch_size) {
+        reader->set_batch_size(read_options.batch_size);
+    }
+
+    for (size_t i = 0; i < read_options.row_groups.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "validating Parquet row groups")) {
+            return nullptr;
+        }
+        if (read_options.row_groups[i] >= reader->num_row_groups()) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet row group %d is out of range; file has %d row groups",
+                read_options.row_groups[i], reader->num_row_groups());
+            return nullptr;
+        }
+    }
 
     // Read entire file into Arrow Table
     std::shared_ptr<arrow::Table> table;
-    status = reader->ReadTable(&table);
+    std::vector<int> column_indices;
+    if (read_options.has_columns) {
+        column_indices = qoreParquetColumnIndicesForNames(reader, read_options.columns, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (read_options.has_row_groups && read_options.has_columns) {
+        status = reader->ReadRowGroups(read_options.row_groups, column_indices, &table);
+    } else if (read_options.has_row_groups) {
+        status = reader->ReadRowGroups(read_options.row_groups, &table);
+    } else if (read_options.has_columns) {
+        status = reader->ReadTable(column_indices, &table);
+    } else {
+        status = reader->ReadTable(&table);
+    }
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "error reading Parquet table from '%s': %s", path.c_str(),
             status.ToString().c_str());
         return nullptr;
+    }
+    if (read_options.has_columns) {
+        table = qoreParquetReorderTopLevelColumns(table, read_options.columns, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
 
     // Convert Arrow Table to DataFrame
@@ -1829,12 +2189,16 @@ BinaryNode* QoreDataFrame::toArrowIpc(ExceptionSink* xsink) const {
     return out.release();
 }
 
-void QoreDataFrame::writeParquet(const std::string& path,
+void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* options,
         ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "writing Parquet file")) {
         return;
     }
     arrow::MemoryPool* pool = arrow::system_memory_pool();
+    QoreParquetWriteOptions write_options;
+    if (!qoreParquetWriteOptions(options, write_options, xsink)) {
+        return;
+    }
 
     std::lock_guard<std::mutex> lk(mtx);
 
@@ -1853,8 +2217,40 @@ void QoreDataFrame::writeParquet(const std::string& path,
     }
     auto outfile = maybe_outfile.ValueOrDie();
 
+    parquet::WriterProperties::Builder properties_builder;
+    if (write_options.has_compression) {
+        properties_builder.compression(write_options.compression);
+    }
+    if (write_options.has_use_dictionary) {
+        if (write_options.use_dictionary) {
+            properties_builder.enable_dictionary();
+        } else {
+            properties_builder.disable_dictionary();
+        }
+    }
+    if (write_options.has_write_statistics) {
+        if (write_options.write_statistics) {
+            properties_builder.enable_statistics();
+        } else {
+            properties_builder.disable_statistics();
+        }
+    }
+
+    parquet::ArrowWriterProperties::Builder arrow_properties_builder;
+    if (write_options.has_use_threads) {
+        arrow_properties_builder.set_use_threads(write_options.use_threads);
+    }
+    if (write_options.store_schema) {
+        arrow_properties_builder.store_schema();
+    }
+
+    int64_t row_group_size = write_options.has_row_group_size
+        ? write_options.row_group_size
+        : (table->num_rows() > 0 ? table->num_rows() : 1024);
+
     // Write table
-    auto status = parquet::arrow::WriteTable(*table, pool, outfile, table->num_rows() > 0 ? table->num_rows() : 1024);
+    auto status = parquet::arrow::WriteTable(*table, pool, outfile, row_group_size,
+        properties_builder.build(), arrow_properties_builder.build());
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "error writing Parquet file '%s': %s", path.c_str(),

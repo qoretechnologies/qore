@@ -90,3 +90,54 @@ hashdecl Qore::DataFrame::CsvOptions {
     //! Maximum number of data rows to read
     *int max_rows;
 }
+
+//! Parquet read options
+/** @par Example:
+    @code{.py}
+hash<DataFrame::ParquetReadOptions> options = {
+    "columns": ("order_id", "customer_name", "total"),
+    "use_threads": True,
+};
+DataFrame::DataFrame df = DataFrame::DataFrame::readParquet("orders.parquet", options);
+    @endcode
+
+    @since dataframe 1.0
+*/
+hashdecl Qore::DataFrame::ParquetReadOptions {
+    //! Top-level column names to read; omitted means all columns
+    *list<string> columns;
+    //! Parquet row group numbers to read; omitted means all row groups
+    *list<int> row_groups;
+    //! Number of records read per Arrow batch; omitted uses Arrow defaults
+    *int batch_size;
+    //! Whether Arrow may use worker threads while reading multiple columns
+    *bool use_threads;
+}
+
+//! Parquet write options
+/** @par Example:
+    @code{.py}
+hash<DataFrame::ParquetWriteOptions> options = {
+    "compression": "zstd",
+    "row_group_size": 100000,
+    "use_dictionary": True,
+};
+df.writeParquet("orders.parquet", options);
+    @endcode
+
+    @since dataframe 1.0
+*/
+hashdecl Qore::DataFrame::ParquetWriteOptions {
+    //! Compression codec: "none", "snappy", "gzip", "brotli", "zstd", "lz4", or "lz4_frame"
+    *string compression;
+    //! Maximum rows per Parquet row group
+    *int row_group_size;
+    //! Whether dictionary encoding is enabled globally
+    *bool use_dictionary;
+    //! Whether column statistics are written
+    *bool write_statistics;
+    //! Whether Arrow may use worker threads while writing columns
+    *bool use_threads;
+    //! Whether to store serialized Arrow schema metadata in the Parquet file
+    *bool store_schema;
+}

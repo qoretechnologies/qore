@@ -1695,7 +1695,13 @@ sub invalid_dataframe_api() {
             unlink(tmp_path);
         }
 
-        df.writeParquet(tmp_path);
+        df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 2,
+            "use_dictionary": False,
+            "write_statistics": True,
+            "store_schema": True,
+        });
 
         # Read back
         auto df2 = DataFrame::DataFrame::readParquet(tmp_path);
@@ -1722,6 +1728,26 @@ sub invalid_dataframe_api() {
         list<hash<auto>> schema = columns.schemaV2();
         assertTrue(schema[0].nullable,
             "Parquet nullable Arrow schema metadata is preserved in ColumnarResult");
+
+        DataFrame::DataFrame projected = DataFrame::DataFrame::readParquet(tmp_path, <DataFrame::ParquetReadOptions>{
+            "columns": ("name", "id"),
+            "batch_size": 1,
+            "use_threads": True,
+        });
+        assertEq(("name", "id"), projected.columnNames(),
+            "Parquet read column projection preserves requested top-level column order");
+        assertEq(("Alice", "Bob", "Carol"), projected.getColumn("name"),
+            "Parquet projected string column preserves values");
+        assertEq((1, 2, 3), projected.getColumn("id"),
+            "Parquet projected int column preserves values");
+
+        DataFrame::DataFrame last_group = DataFrame::DataFrame::readParquet(tmp_path, <DataFrame::ParquetReadOptions>{
+            "columns": ("id", "score"),
+            "row_groups": (1,),
+        });
+        assertEq(1, last_group.numRows(), "Parquet row group selection returns selected rows");
+        assertEq(2, last_group.numCols(), "Parquet row group selection preserves projected columns");
+        assertEq((3,), last_group.getColumn("id"), "Parquet row group selection preserves row values");
 
         ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
             "total": (12.34n, NOTHING),

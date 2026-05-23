@@ -1287,21 +1287,32 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
 
 //! Reads a Parquet file into a new DataFrame
 /** @param path the Parquet file path
+    @param options optional ParquetReadOptions hash:
+    - \c columns: top-level column names to read; omitted reads all columns
+    - \c row_groups: row group numbers to read; omitted reads all row groups
+    - \c batch_size: Arrow records per read batch
+    - \c use_threads: enables Arrow threaded column reads
 
     Uses Apache Arrow and Parquet to load typed columnar data from disk.
+    Column projection is pushed down to the Parquet reader, so unselected
+    columns are not decoded.  Row-group selection is also passed to the reader.
 
     @return new DataFrame object with Parquet data
 
     @par Example:
     @code{.py}
-    DataFrame df = DataFrame::readParquet("/data/sales.parquet");
+    hash<ParquetReadOptions> options = {
+        "columns": ("order_id", "customer_name", "total"),
+        "use_threads": True,
+    };
+    DataFrame df = DataFrame::readParquet("/data/sales.parquet", options);
     printf("Loaded %d rows, %d cols\n", df.numRows(), df.numCols());
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened or parsed
 */
-static DataFrame DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
-    QoreDataFrame* result = QoreDataFrame::readParquet(path->c_str(), xsink);
+static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = QoreDataFrame::readParquet(path->c_str(), options, xsink);
     if (!result) {
         return QoreValue();
     }
@@ -1312,18 +1323,30 @@ static DataFrame DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_
 
 //! Writes the DataFrame to a Parquet file
 /** @param path the Parquet file path
+    @param options optional ParquetWriteOptions hash:
+    - \c compression: \c "none", \c "snappy", \c "gzip", \c "brotli", \c "zstd", \c "lz4", or \c "lz4_frame"
+    - \c row_group_size: maximum rows per Parquet row group
+    - \c use_dictionary: enables or disables dictionary encoding globally
+    - \c write_statistics: enables or disables column statistics
+    - \c use_threads: enables Arrow threaded column writes
+    - \c store_schema: stores Arrow schema metadata in the Parquet file
 
     Uses Apache Arrow and Parquet to write typed columnar data to disk.
 
     @par Example:
     @code{.py}
-    df.writeParquet("/data/output.parquet");
+    hash<ParquetWriteOptions> options = {
+        "compression": "zstd",
+        "row_group_size": 100000,
+        "use_dictionary": True,
+    };
+    df.writeParquet("/data/output.parquet", options);
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
 */
-nothing DataFrame::writeParquet(string path) [dom=FILESYSTEM] {
-    df->writeParquet(path->c_str(), xsink);
+nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options) [dom=FILESYSTEM] {
+    df->writeParquet(path->c_str(), options, xsink);
 }
 
 //! Inserts DataFrame rows into a database table
