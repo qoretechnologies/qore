@@ -282,7 +282,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
             "name": ("delta", "echo", "foxtrot"),
             "value": new buffer<int64>((1100, 1200, 1300)),
         });
-        *hash<auto> created = provider.createRecordsBulk(create_columns);
+        *hash<auto> created = provider.createRecordsBulk(create_columns, {"block_size": 2});
         assertEq((11, 12, 13), created.id, "ColumnarResult create returns inserted ids");
         assertEq(("delta", "echo", "foxtrot"), created.name, "ColumnarResult create returns inserted names");
 
@@ -315,7 +315,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
             "name": ("echo-updated", "foxtrot-updated", "golf"),
             "value": new buffer<int64>((2200, 2300, 2400)),
         });
-        *list<string> upserted = provider.upsertRecordsBulk(upsert_columns);
+        *list<string> upserted = provider.upsertRecordsBulk(upsert_columns, {"block_size": 2});
         assertEq(3, upserted.size(), "ColumnarResult upsert returns a result per row");
 
         list<auto> rows = at.selectRows({"orderby": "id"});

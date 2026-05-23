@@ -124,6 +124,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 - \c "key": (required) the column name to return
                 - \c "type": (optional) the data type for the output placeholder buffer (ex:
                   @ref Qore::Type::Number "Type::Number")
+            - \c block_size: maximum rows per bulk insert operation
         */
         const CreateOptions = {
             "returning": <DataProviderOptionInfo>{
@@ -135,6 +136,14 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                     "- `key` (required): the column name to return\n"
                     "- `type` (optional): the data type for the output placeholder buffer (e.g. `number`)",
             },
+            "block_size": <DataProviderOptionInfo>{
+                "display_name": "Block Size",
+                "short_desc": "Maximum rows per bulk insert operation",
+                "type": AbstractDataProviderTypeMap."*int",
+                "desc": "Maximum number of rows to submit in each bulk insert operation. Dense columnar input is "
+                    "sliced by this value before compatibility conversion for DBI drivers that need hash-of-lists "
+                    "bulk data.",
+            },
         };
 
         #! Upsert options; see details below
@@ -144,6 +153,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
               option should be set to the columns to omit in the update clause
+            - \c block_size: maximum rows per bulk upsert operation
         */
         const UpsertOptions = {
             "upsert_strategy": <DataProviderOptionInfo>{
@@ -186,6 +196,14 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "desc": "Allows for an asymmetrical upsert where the complete set of column values is inserted, but "
                     "a smaller set is updated in case the unique key values are present in the target table; the "
                     "value of this option should be set to the columns to omit in the update clause",
+            },
+            "block_size": <DataProviderOptionInfo>{
+                "display_name": "Block Size",
+                "short_desc": "Maximum rows per bulk upsert operation",
+                "type": AbstractDataProviderTypeMap."*int",
+                "desc": "Maximum number of rows to submit in each bulk upsert operation. Dense columnar input is "
+                    "sliced by this value before compatibility conversion for DBI drivers that need hash-of-lists "
+                    "bulk data.",
             },
         };
 
