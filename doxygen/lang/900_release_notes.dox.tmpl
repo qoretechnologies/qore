@@ -2468,8 +2468,11 @@ foreach string module_name in (registry.getProcessModules()) {
         DataFrameBlock, HashOfLists, and RowRecords
       - QoreFilterRecordsProcessor compiles supported DataProvider/DPQL filters
         over DataFrameBlock and BufferColumns values to vectorized DataFrame
-        row masks or dense ColumnarResult boolean masks, including null checks;
-        unsupported expressions fall back to generic row semantics
+        row masks or dense ColumnarResult boolean masks, including computed
+        scalar comparisons, truthy field checks, \c between, \c inRange,
+        \c in, \c not \c in, null checks, selected string predicates, and
+        BufferColumns \c like, \c =~, and \c !~ predicates; unsupported
+        expressions fall back to generic row semantics
       - QoreGroupByProcessor preserves BufferColumns output for ColumnarResult
         inputs when used through shape-aware pipeline flushing
       - QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor, and

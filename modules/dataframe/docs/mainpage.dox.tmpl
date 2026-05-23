@@ -259,8 +259,8 @@ pipeline.submit(employees);
 pipeline.waitDone();
     @endcode
 
-    QoreFilterRecordsProcessor compiles simple DPQL/DataProvider scalar
-    comparisons to DataFrame row masks or dense ColumnarResult boolean masks
+    QoreFilterRecordsProcessor compiles supported DPQL/DataProvider
+    expressions to DataFrame row masks or dense ColumnarResult boolean masks
     when possible. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
     QoreRecordLimitProcessor, QoreSetFieldsProcessor, and
     QoreSearchReplaceProcessor preserve DataFrameBlock and BufferColumns shapes
@@ -269,11 +269,15 @@ pipeline.waitDone();
     processors, including correlation and cross-correlation processors, accept
     DataFrameBlock and BufferColumns input and emit hash-of-lists analytics
     event blocks. Supported compiled filter forms include \c &&, \c ||, \c !,
-    and scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, plus
-    \c isNull and \c isNotNull checks.
-    Predicates that use string operators, field-to-field comparisons, null
-    literal comparisons, or unsupported column containers fall back to the
-    generic row semantics to preserve behavior.
+    scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
+    scalar comparisons over top-level fields, \c lwr(), \c coalesce(),
+    truthy field checks, \c between, \c inRange, \c in, \c not \c in,
+    \c isNull and \c isNotNull checks, case-sensitive \c contains,
+    \c starts-with, and \c ends-with string predicates, and BufferColumns
+    \c like, \c =~, and \c !~ pattern predicates. Unsupported expressions,
+    including expressions whose semantics require row materialization, fall
+    back to generic row evaluation and rebuild the negotiated output shape when
+    possible.
 
     @code{.py}
 ColumnarResult dense_columns = employees.toColumnarResult();
@@ -323,6 +327,25 @@ hash<DataFrame::ParquetWriteOptions> write_options = {
 };
 salary.writeParquet("employees-filtered.parquet", write_options);
     @endcode
+
+    @section dataframe_arrow_copy_behavior Arrow, Parquet, And Copy Behavior
+
+    DataFrame Arrow IPC and Parquet APIs preserve logical schema and values
+    across \c DataFrame, @ref Qore::SQL::ColumnarResult "ColumnarResult", and
+    Apache Arrow. They use zero-copy storage only where ownership, alignment,
+    nullability, and mutability rules make it safe. Mutating a DataFrame column
+    that references external immutable storage detaches that column before
+    writing.
+
+    | Data shape | Import/export behavior |
+    |------------|------------------------|
+    | Fixed-width primitive columns | Preserved as dense buffers and can be zero-copy when host storage is compatible. |
+    | Boolean columns | Preserved as dense boolean buffers; Arrow bitmaps may be copied into Qore-compatible storage. |
+    | Fixed-scale decimal columns | Preserved as \c buffer<decimal128> when precision and scale fit decimal128. |
+    | String and binary columns | Preserve values and schema; variable-width buffers may be copied into Qore-owned storage. |
+    | Date and timestamp columns | Preserve logical values; DataFrame date columns remain list-backed. |
+    | List, fixed-size-list, struct, map, and dictionary-compatible columns | Preserve recursive schema metadata and lossless Qore values in \c auto columns. |
+    | Unsupported physical layouts | Raise an explicit I/O error or copy to a supported representation; they are not silently converted to lossy scalar strings. |
 
     A DataFrame itself is intentionally not generic. Operations such as
     select(), groupBy(), join(), pivot(), and melt() can change the row shape

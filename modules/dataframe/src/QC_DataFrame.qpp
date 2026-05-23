@@ -1229,12 +1229,15 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
 /** @param data an Apache Arrow IPC stream or file-format binary buffer
 
     Loads Arrow columnar data from memory.  Fixed-width Arrow columns such as
-    \c int64, \c double, and \c bool are preserved as dense DataFrame buffers
-    when possible, allowing follow-on \c toColumnarResult() calls to keep packed
-    column storage without materializing row hashes.  String and timestamp
-    columns are converted to DataFrame string and date columns.  Arrow types
-    not natively represented by DataFrame are currently converted through their
-    Arrow scalar string representation.
+    \c int64, \c double, \c bool, and \c decimal128 are preserved as dense
+    DataFrame buffers when possible, allowing follow-on
+    \c toColumnarResult() calls to keep packed column storage without
+    materializing row hashes.  String columns are preserved as string columns,
+    timestamps are converted to DataFrame date columns, and recursive Arrow
+    schemas such as lists, structs, maps, and dictionary-compatible columns are
+    preserved through lossless \c auto columns with ColumnarResult schema
+    metadata.  Unsupported physical Arrow layouts are copied into Qore-owned
+    storage rather than weakening the logical schema.
 
     @return new DataFrame object with Arrow IPC data
 
@@ -1263,10 +1266,14 @@ static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
 //! Writes the DataFrame as an Apache Arrow IPC stream binary
 /** Serializes DataFrame columns to an Arrow IPC stream in memory.  This is the
     preferred interchange format for passing DataFrame data to binary modules
-    such as gRPC/Arrow Flight without touching the filesystem.  Supported
-    DataFrame columns are written as Arrow \c int64, \c double, \c utf8,
-    \c bool, or UTC microsecond \c timestamp columns; heterogeneous \c AUTO
-    columns are skipped because Arrow IPC requires a concrete column type.
+    such as gRPC/Arrow Flight without touching the filesystem.  Primitive
+    numeric, boolean, string, date, and decimal columns are written with their
+    matching Arrow logical types when possible.  DataFrame columns that carry
+    recursive ColumnarResult schema metadata, including list, struct, map, and
+    dictionary-compatible columns, are written with that schema and lossless
+    Qore values.  Dynamic columns without a concrete schema are materialized
+    through the most specific supported Arrow type; values that cannot be
+    represented safely raise \c DATAFRAME-IO-ERROR.
 
     @return an Arrow IPC stream containing the DataFrame schema and data
 
