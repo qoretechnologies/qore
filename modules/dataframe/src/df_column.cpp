@@ -708,10 +708,13 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                 }
                 if (values->isElementNull(i)) {
                     col->null_mask[i] = 1;
-                } else if (!getDataFrameString(values->getReferencedEntry(i, xsink), col->str_data[i])) {
-                    xsink->raiseException("DATAFRAME-ERROR",
-                        "buffer<string> element " QLLD " could not be converted to a DataFrame string", i);
-                    return nullptr;
+                } else {
+                    ValueHolder value(values->getReferencedEntry(i, xsink), xsink);
+                    if (!getDataFrameString(*value, col->str_data[i])) {
+                        xsink->raiseException("DATAFRAME-ERROR",
+                            "buffer<string> element " QLLD " could not be converted to a DataFrame string", i);
+                        return nullptr;
+                    }
                 }
             }
             break;
@@ -733,7 +736,8 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                 if (values->isElementNull(i)) {
                     col->null_mask[i] = 1;
                 } else {
-                    col->setAutoValue(i, values->getReferencedEntry(i, xsink), xsink);
+                    ValueHolder value(values->getReferencedEntry(i, xsink), xsink);
+                    col->setAutoValue(i, *value, xsink);
                     if (*xsink) {
                         return nullptr;
                     }

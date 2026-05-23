@@ -37,6 +37,27 @@ static bool checkArrowColumnStatus(const arrow::Status& status, ExceptionSink* x
     return true;
 }
 
+static std::shared_ptr<arrow::Buffer> wrapBinaryAsArrowBuffer(const BinaryNode* data,
+        ExceptionSink* xsink) {
+    assert(data);
+    if (data->size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Arrow IPC input is too large: " QLLD " bytes exceeds the maximum supported size",
+            static_cast<int64>(data->size()));
+        return nullptr;
+    }
+
+    data->ref();
+    std::shared_ptr<const BinaryNode> owner(data,
+        [](const BinaryNode* owner) { const_cast<BinaryNode*>(owner)->deref(nullptr); });
+    return std::shared_ptr<arrow::Buffer>(
+        new arrow::Buffer(static_cast<const uint8_t*>(data->getPtr()), static_cast<int64_t>(data->size())),
+        [owner = std::move(owner)](arrow::Buffer* buffer) {
+            (void)owner;
+            delete buffer;
+        });
+}
+
 static QoreBufferElementType arrowTypeToBufferElementType(const std::shared_ptr<arrow::DataType>& type) {
     switch (type->id()) {
         case arrow::Type::INT8:
@@ -1527,7 +1548,10 @@ QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
         return nullptr;
     }
 
-    auto buffer = arrow::Buffer::Wrap(static_cast<const uint8_t*>(data->getPtr()), data->size());
+    auto buffer = wrapBinaryAsArrowBuffer(data, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     auto stream_source = std::make_shared<arrow::io::BufferReader>(buffer);
     auto maybe_stream_reader = arrow::ipc::RecordBatchStreamReader::Open(stream_source);
 

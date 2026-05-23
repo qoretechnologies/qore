@@ -1260,9 +1260,9 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
                     delete df;
                     return nullptr;
                 }
-                QoreValue value = src_col.data->dense_buffer->getReferencedEntry(static_cast<size_t>(indices[i]),
-                    xsink);
-                if (buffer->setEntry(static_cast<size_t>(i), value, xsink)) {
+                ValueHolder value(src_col.data->dense_buffer->getReferencedEntry(static_cast<size_t>(indices[i]),
+                    xsink), xsink);
+                if (buffer->setEntry(static_cast<size_t>(i), *value, xsink)) {
                     delete df;
                     return nullptr;
                 }
