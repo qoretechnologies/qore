@@ -200,6 +200,9 @@ static bool write_slot_COMPLEX_LIST_NEW(AOTExprSlotWriteCtx& ctx) {
 //! COMPLEX_BUFFER_NEW: ref1 = type path + optional list initializer expression
 static bool write_slot_COMPLEX_BUFFER_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+        ctx.writer.writeU8(ctx.expr.flags);
+    }
     if (ctx.expr.child_expr.hasNode()) {
         ctx.writer.writeU8(1);
         return write_slot_inline_expr(ctx, ctx.expr.child_expr);

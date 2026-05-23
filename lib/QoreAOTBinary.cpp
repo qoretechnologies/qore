@@ -523,6 +523,14 @@ static bool readDeferredMemberDefault(
         }
         ptr += 1;  // consume tag
         uint8_t kind = QoreAOTBinaryReader::readU8(ptr);
+        QoreComplexBufferInitKind buffer_init_kind = QoreComplexBufferInitKind::Constructor;
+        if (kind == 3 && (reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+            if (ptr + 1 > end) {
+                error = "unexpected end of data reading complex buffer init kind";
+                return false;
+            }
+            buffer_init_kind = static_cast<QoreComplexBufferInitKind>(QoreAOTBinaryReader::readU8(ptr));
+        }
         if (ptr + 8 > end) {
             error = "unexpected end of data reading complex_default type path";
             return false;
@@ -552,6 +560,7 @@ static bool readDeferredMemberDefault(
             args.push_back(arg);
         }
         pim.pending_complex_default_kind = static_cast<int8_t>(kind);
+        pim.pending_complex_buffer_init_kind = static_cast<int8_t>(buffer_init_kind);
         pim.pending_complex_default_path = type_path;
         pim.pending_complex_default_args = std::move(args);
         default_val = QoreValue();
@@ -2269,6 +2278,9 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 }
                 writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
                 writeU8(3); // kind: 3 = complex buffer
+                if ((feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+                    writeU8(static_cast<uint8_t>(ncb->initKind));
+                }
                 uint32_t tlen = static_cast<uint32_t>(type_path.size());
                 writeU32(tlen);
                 writeStringRef(type_path.c_str(), tlen);
@@ -2994,6 +3006,14 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 return QoreValue();
             }
             uint8_t kind = readU8(ptr);
+            QoreComplexBufferInitKind buffer_init_kind = QoreComplexBufferInitKind::Constructor;
+            if (kind == 3 && (getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+                if (ptr + 1 > end) {
+                    error = "unexpected end of data reading complex buffer init kind";
+                    return QoreValue();
+                }
+                buffer_init_kind = static_cast<QoreComplexBufferInitKind>(readU8(ptr));
+            }
             if (ptr + 8 > end) {
                 error = "unexpected end of data reading complex_default type path";
                 return QoreValue();
@@ -3079,7 +3099,8 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 if (parse_args) {
                     buffer_args = QoreValue(parse_args);
                 }
-                NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, buffer_args);
+                NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, buffer_args,
+                    buffer_init_kind);
                 return QoreValue(ncb);
             }
             // kind == 1: complex hash
@@ -10336,7 +10357,8 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                                 buffer_args = QoreValue(parse_args);
                             }
                             NewComplexBufferNode* ncb = new NewComplexBufferNode(
-                                &loc_builtin, cti, buffer_args);
+                                &loc_builtin, cti, buffer_args,
+                                static_cast<QoreComplexBufferInitKind>(pim.pending_complex_buffer_init_kind));
                             pim.default_val = QoreValue(ncb);
                         } else {
                             NewComplexHashNode* nch = new NewComplexHashNode(
@@ -10356,6 +10378,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     }
                 }
                 pim.pending_complex_default_kind = -1;
+                pim.pending_complex_buffer_init_kind = 0;
                 pim.pending_complex_default_path.clear();
             }
 
@@ -10549,6 +10572,15 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                             NewComplexListNode* ncl = new NewComplexListNode(
                                 &loc_builtin, cti, list_args);
                             psm.default_val = QoreValue(ncl);
+                        } else if (psm.pending_complex_default_kind == 3) {
+                            QoreValue buffer_args;
+                            if (parse_args) {
+                                buffer_args = QoreValue(parse_args);
+                            }
+                            NewComplexBufferNode* ncb = new NewComplexBufferNode(
+                                &loc_builtin, cti, buffer_args,
+                                static_cast<QoreComplexBufferInitKind>(psm.pending_complex_buffer_init_kind));
+                            psm.default_val = QoreValue(ncb);
                         } else {
                             NewComplexHashNode* nch = new NewComplexHashNode(
                                 &loc_builtin, cti, parse_args);
@@ -10567,6 +10599,7 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                     }
                 }
                 psm.pending_complex_default_kind = -1;
+                psm.pending_complex_buffer_init_kind = 0;
                 psm.pending_complex_default_path.clear();
             }
 
@@ -10973,7 +11006,8 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                                 buffer_args = QoreValue(parse_args);
                             }
                             phm.default_val = QoreValue(new NewComplexBufferNode(
-                                &loc_builtin, cti, buffer_args));
+                                &loc_builtin, cti, buffer_args,
+                                static_cast<QoreComplexBufferInitKind>(phm.pending_complex_buffer_init_kind)));
                         } else {
                             phm.default_val = QoreValue(new NewComplexHashNode(
                                 &loc_builtin, cti, parse_args));
@@ -10991,6 +11025,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     }
                 }
                 phm.pending_complex_default_kind = -1;
+                phm.pending_complex_buffer_init_kind = 0;
                 phm.pending_complex_default_path.clear();
             }
 
@@ -11227,6 +11262,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             std::string pending_new_class_path;
             std::vector<QoreValue> pending_new_args;
             int8_t pending_complex_default_kind = -1;
+            int8_t pending_complex_buffer_init_kind = 0;
             std::string pending_complex_default_path;
             std::vector<QoreValue> pending_complex_default_args;
             std::vector<uint8_t> pending_expr_tree_blob;
@@ -11335,6 +11371,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             phm.pending_new_class_path = std::move(mi.pending_new_class_path);
             phm.pending_new_args = std::move(mi.pending_new_args);
             phm.pending_complex_default_kind = mi.pending_complex_default_kind;
+            phm.pending_complex_buffer_init_kind = mi.pending_complex_buffer_init_kind;
             phm.pending_complex_default_path = std::move(mi.pending_complex_default_path);
             phm.pending_complex_default_args = std::move(mi.pending_complex_default_args);
             phm.pending_expr_tree_blob = std::move(mi.pending_expr_tree_blob);

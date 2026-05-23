@@ -1179,6 +1179,19 @@ public class MlTest inherits QUnit::Test {
         hash<ML::KMeansResult> r_near1 = km.predict({"x": 10.0, "y": 10.0});
         assertTrue(r_near0.cluster != r_near1.cluster,
             "points near different clusters should have different assignments");
+
+        hash<auto> column_result = km.predictMatrixColumns(((0.0, 0.0), (10.0, 10.0)),
+            {"include_centroid_distances": False});
+        assertEq("buffer<int64>", column_result.cluster.fullType());
+        assertEq("buffer<float64>", column_result.distance.fullType());
+        assertEq(2, column_result.cluster.lsize());
+        assertEq(2, column_result.distance.lsize());
+        assertFalse(exists column_result.centroid_distances);
+
+        hash<auto> full_column_result = km.predictMatrixColumns(((0.0, 0.0), (10.0, 10.0)));
+        assertEq(2, full_column_result.centroid_distances.size());
+        assertEq("buffer<float64>", full_column_result.centroid_distances[0].fullType());
+        assertEq(2, full_column_result.centroid_distances[0].lsize());
     }
 
     kmeansUpdateTest() {
@@ -1368,6 +1381,14 @@ public class MlTest inherits QUnit::Test {
         for (int i = 0; i < results.size(); ++i) {
             assertEq(2, results[i].components.size());
         }
+
+        ML::PCA column_pca({"n_components": 2});
+        hash<auto> column_results = column_pca.fitTransformMatrixColumns(data);
+        assertEq(2, column_results.components.size());
+        assertEq("buffer<float64>", column_results.components[0].fullType());
+        assertEq(30, column_results.components[0].lsize());
+        assertEq("buffer<float64>", column_results.total_explained_variance.fullType());
+        assertEq(30, column_results.total_explained_variance.lsize());
     }
 
     pcaErrorTest() {
@@ -3398,6 +3419,20 @@ public class MlTest inherits QUnit::Test {
         assertTrue(result[0][0] < 0.0);
         # Last point should be positive (above mean)
         assertTrue(result[4][0] > 0.0);
+
+        list<auto> columns = scaler.transformMatrixColumns(data);
+        assertEq(2, columns.size());
+        assertEq("buffer<float64>", columns[0].fullType());
+        assertEq(5, columns[0].lsize());
+        assertFloat(0.0, columns[0][2], 1e-10);
+        assertFloat(0.0, columns[1][2], 1e-10);
+
+        ML::StandardScaler column_scaler();
+        list<auto> fit_columns = column_scaler.fitTransformMatrixColumns(data);
+        assertTrue(column_scaler.isFitted());
+        assertEq(2, fit_columns.size());
+        assertEq("buffer<float64>", fit_columns[0].fullType());
+        assertFloat(0.0, fit_columns[0][2], 1e-10);
     }
 
     stdScalerInverseTest() {

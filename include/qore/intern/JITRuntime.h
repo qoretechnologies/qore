@@ -607,6 +607,10 @@ uint64_t qore_rt_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, uin
     ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_buffer_from_value_by_type_path(const char* type_path, uint64_t value_bits,
     ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_buffer_from_value_kind(const QoreTypeInfo* typeInfo, uint64_t value_bits,
+    int32_t init_kind, ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_buffer_from_value_kind_by_type_path(const char* type_path, uint64_t value_bits,
+    int32_t init_kind, ExceptionSink* xsink);
 
 class VarRefNewObjectNode;
 

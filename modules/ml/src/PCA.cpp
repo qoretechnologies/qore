@@ -198,6 +198,11 @@ QoreListNode* QorePCA::transformMatrix(const MatrixXd& data, ExceptionSink* xsin
     return doTransformMatrix(data, xsink);
 }
 
+QoreHashNode* QorePCA::transformMatrixColumns(const MatrixXd& data, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    return doTransformMatrixColumns(data, xsink);
+}
+
 QoreListNode* QorePCA::fitTransformInternal(const MatrixXd& data, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lk(mtx);
     doFit(data, xsink);
@@ -205,6 +210,15 @@ QoreListNode* QorePCA::fitTransformInternal(const MatrixXd& data, ExceptionSink*
         return nullptr;
     }
     return doTransformMatrix(data, xsink);
+}
+
+QoreHashNode* QorePCA::fitTransformMatrixColumns(const MatrixXd& data, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    doFit(data, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return doTransformMatrixColumns(data, xsink);
 }
 
 QoreListNode* QorePCA::doTransformMatrix(const MatrixXd& data, ExceptionSink* xsink) {
@@ -259,6 +273,62 @@ QoreListNode* QorePCA::doTransformMatrix(const MatrixXd& data, ExceptionSink* xs
         rv->push(h.release(), xsink);
     }
 
+    return rv.release();
+}
+
+QoreHashNode* QorePCA::doTransformMatrixColumns(const MatrixXd& data, ExceptionSink* xsink) {
+    if (!fitted) {
+        xsink->raiseException("ML-PCA-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() before transformMatrixColumns()");
+        return nullptr;
+    }
+    if (data.cols() != n_features) {
+        xsink->raiseException("ML-PCA-ERROR",
+            "input has %d features but model was fitted with %d features",
+            static_cast<int>(data.cols()), n_features);
+        return nullptr;
+    }
+
+    MatrixXd centered = data.rowwise() - mean_vec.transpose();
+    if (scale) {
+        for (int j = 0; j < n_features; ++j) {
+            if (j && !(j % 100) && qore_check_cancel(xsink, "PCA column scaling")) {
+                return nullptr;
+            }
+            centered.col(j) /= stddev_vec(j);
+        }
+    }
+
+    MatrixXd projected = centered * components.transpose();
+    double total_evr = 0.0;
+    for (int i = 0; i < actual_n_components; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "PCA explained variance calculation")) {
+            return nullptr;
+        }
+        total_evr += explained_variance_ratio_vec(i);
+    }
+
+    ReferenceHolder<QoreListNode> component_buffers(
+        eigenMatrixColumnsToFloatBuffers(projected, xsink, "building PCA component buffers"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreBufferNode> total_buffer(
+        qoreFloat64BufferFilled(static_cast<size_t>(data.rows()), total_evr, xsink,
+            "building PCA total variance buffer"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("components", component_buffers.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("total_explained_variance", total_buffer.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     return rv.release();
 }
 

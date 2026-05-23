@@ -85,12 +85,54 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
                     "default: `True` (enabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
+            "output_mode": <DataProviderOptionInfo>{
+                "display_name": "Output Mode",
+                "short_desc": "How to return clustering results",
+                "desc": "Controls the output representation. `events` preserves the existing "
+                    "one-event-per-record structure with nested `record_values` hashes. "
+                    "`dataframe` returns a flat DataFrame block with the input fields, "
+                    "`cluster`, `distance`, and `centroid_distance_<n>` columns, which is "
+                    "faster and easier to use in columnar analytics pipelines; default: "
+                    "`events`",
+                "type": AbstractDataProviderTypeMap."string",
+                "default_value": "events",
+                "example_value": "dataframe",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "events", "display_name": "Event Records"},
+                    <AllowedValueInfo>{"value": "dataframe", "display_name": "DataFrame Columns"},
+                ),
+            },
+            "include_input_fields": <DataProviderOptionInfo>{
+                "display_name": "Include Input Fields",
+                "short_desc": "Whether DataFrame output includes original feature columns",
+                "desc": "When `output_mode` is `dataframe`, include the original input fields "
+                    "alongside cluster assignment columns. Disable this when downstream "
+                    "steps only need clustering results to reduce output size and improve "
+                    "throughput; default: `True`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": True,
+                "example_value": False,
+            },
+            "include_centroid_distances": <DataProviderOptionInfo>{
+                "display_name": "Include Centroid Distances",
+                "short_desc": "Whether DataFrame output includes every centroid distance",
+                "desc": "When `output_mode` is `dataframe`, include `centroid_distance_<n>` "
+                    "columns for each cluster centroid. Disable this when downstream "
+                    "steps only need the winning `cluster` and nearest `distance` values; "
+                    "default: `True`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": True,
+                "example_value": False,
+            },
         };
     }
 
     private {
         #! Configured field names
         list<string> fields;
+
+        #! Output column names for centroid distances
+        list<string> centroid_distance_fields;
 
         #! Configured window size
         int window_size;
@@ -106,6 +148,15 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
 
         #! Accumulated records
         list<hash<auto>> buffer;
+
+        #! Output representation mode
+        string output_mode = "events";
+
+        #! Whether flat DataFrame output includes original feature columns
+        bool include_input_fields = True;
+
+        #! Whether flat DataFrame output includes all per-centroid distances
+        bool include_centroid_distances = True;
 
         #! Whether configured
         bool configured = False;
@@ -132,6 +183,9 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("k must be >= 1; got %d", k);
         }
+        for (int i = 0; i < k; ++i) {
+            push centroid_distance_fields, sprintf("centroid_distance_%d", i);
+        }
         if (window_size < k) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size (%d) must be >= k (%d); KMeans requires at least "
@@ -139,6 +193,13 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
         }
         if (exists copts.online) {
             online = copts.online;
+        }
+        output_mode = copts.output_mode;
+        if (exists copts.include_input_fields) {
+            include_input_fields = copts.include_input_fields;
+        }
+        if (exists copts.include_centroid_distances) {
+            include_centroid_distances = copts.include_centroid_distances;
         }
         buffer = ();
         configured = True;
@@ -190,6 +251,58 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
         return;
     }
 
+    #! Processes shaped records without first materializing row hashes when complete windows are available
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        *auto result = processCompleteShapeWindows(records, shape, k, output_mode == "dataframe");
+        if (exists result) {
+            return result;
+        }
+
+        return processShapeRowsFallback(records, shape, output_mode == "dataframe");
+    }
+
+    #! Processes records in bulk hash-of-lists format
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        *auto result = processCompleteShapeWindows(records, DataProvider::DataProviderShape::HashOfLists, k, False);
+        if (exists result) {
+            return cast<hash<auto>>(result);
+        }
+        *auto fallback = processShapeRowsFallback(records, DataProvider::DataProviderShape::HashOfLists, False);
+        if (!exists fallback) {
+            return;
+        }
+        return cast<hash<auto>>(fallback);
+    }
+
+    #! Uses the row-oriented implementation as a semantics-preserving fallback
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape, bool dataframe_output) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        if (dataframe_output) {
+            return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(bulk);
+        }
+        return bulk;
+    }
+
     #! Processes a window of records through KMeans
     private list<auto> processWindow(list<hash<auto>> records) {
         # extract matrix from fields
@@ -232,6 +345,189 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
             };
         }
         return events;
+    }
+
+    #! Processes complete shaped windows through KMeans
+    private *auto processCompleteShapeWindows(auto records, DataProvider::DataProviderShape shape, int min_size,
+            bool dataframe_output) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreKMeansProcessor: not configured; provide constructor options";
+        }
+        if (buffer) {
+            return;
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (count < min_size || count % window_size) {
+            return;
+        }
+
+        list<list<float>> matrix = matrixFromShape(records, shape);
+        if (dataframe_output && count == window_size) {
+            return processSingleWindowDataFrameResult(records, shape, matrix, count);
+        }
+
+        hash<auto> result;
+        bool copy_input_fields = include_input_fields && shape != DataProvider::DataProviderShape::DataFrameBlock;
+        if (dataframe_output) {
+            result = makeDataFrameResult(records, shape, count);
+        }
+        for (int start = 0; start < count; start += window_size) {
+            list<list<float>> window = count == window_size
+                ? matrix
+                : matrix[start..(start + window_size - 1)];
+            if (dataframe_output) {
+                appendMatrixWindowDataFrameResult(\result, window, start, copy_input_fields);
+            } else {
+                appendMatrixWindowEventResult(\result, window);
+            }
+        }
+        if (dataframe_output) {
+            return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(result);
+        }
+        return result;
+    }
+
+    #! Creates dense DataFrame output columns
+    private hash<auto> makeDataFrameResult(auto records, DataProvider::DataProviderShape shape, int count) {
+        hash<auto> result;
+        addInputFieldsToDataFrameResult(\result, records, shape, count);
+        buffer<int64> clusters = buffer<int64>::sized(count);
+        buffer<float64> distances = buffer<float64>::sized(count);
+        result{"cluster"} = clusters;
+        result{"distance"} = distances;
+        if (include_centroid_distances) {
+            foreach string f in (centroid_distance_fields) {
+                buffer<float64> values = buffer<float64>::sized(count);
+                result{f} = values;
+            }
+        }
+        return result;
+    }
+
+    #! Adds unchanged input columns to a DataFrame result when requested
+    private addInputFieldsToDataFrameResult(reference<hash<auto>> result, auto records,
+            DataProvider::DataProviderShape shape, int count) {
+        if (!include_input_fields) {
+            return;
+        }
+        foreach string f in (fields) {
+            auto values = shape == DataProvider::DataProviderShape::DataFrameBlock
+                ? records.getColumnBuffer(f)
+                : buffer<float64>::sized(count);
+            result{f} = values;
+        }
+    }
+
+    #! Processes a full DataFrame window with native dense column output
+    private auto processSingleWindowDataFrameResult(auto records, DataProvider::DataProviderShape shape,
+            list<list<float>> matrix, int count) {
+        if (!kmeans) {
+            kmeans = new ML::KMeans({"k": k});
+            kmeans.fitMatrix(matrix);
+        } else if (online) {
+            kmeans.updateMatrix(matrix);
+        } else {
+            kmeans = new ML::KMeans({"k": k});
+            kmeans.fitMatrix(matrix);
+        }
+
+        hash<auto> predictions = kmeans.predictMatrixColumns(matrix, {
+            "include_centroid_distances": include_centroid_distances,
+        });
+        hash<auto> result;
+        addInputFieldsToDataFrameResult(\result, records, shape, count);
+        result{"cluster"} = predictions.cluster;
+        result{"distance"} = predictions.distance;
+        if (include_centroid_distances) {
+            list<auto> centroid_columns = predictions.centroid_distances;
+            for (int j = 0; j < centroid_distance_fields.lsize(); ++j) {
+                result{centroid_distance_fields[j]} = centroid_columns[j];
+            }
+        }
+        return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(result);
+    }
+
+    #! Extracts numeric input fields as an ML matrix from a shaped block
+    private list<list<float>> matrixFromShape(auto records, DataProvider::DataProviderShape shape) {
+        if (shape == DataProvider::DataProviderShape::DataFrameBlock) {
+            return cast<list<list<float>>>(records.toMatrix(fields));
+        }
+
+        if (shape == DataProvider::DataProviderShape::BufferColumns) {
+            auto df = DataProvider::AbstractDataProcessor::convertShape(
+                records, shape, DataProvider::DataProviderShape::DataFrameBlock)[0];
+            return cast<list<list<float>>>(df.toMatrix(fields));
+        }
+
+        list<list<float>> matrix;
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        for (int i = 0; i < count; ++i) {
+            list<float> row;
+            foreach string f in (fields) {
+                push row, records{f}[i].toFloat();
+            }
+            push matrix, row;
+        }
+        return matrix;
+    }
+
+    #! Appends one matrix window to a hash-of-lists event result
+    private appendMatrixWindowEventResult(reference<hash<auto>> result, list<list<float>> matrix) {
+        if (!kmeans) {
+            kmeans = new ML::KMeans({"k": k});
+            kmeans.fitMatrix(matrix);
+        } else if (online) {
+            kmeans.updateMatrix(matrix);
+        } else {
+            kmeans = new ML::KMeans({"k": k});
+            kmeans.fitMatrix(matrix);
+        }
+
+        list<hash<ML::KMeansResult>> predictions = kmeans.predictMatrix(matrix);
+        for (int i = 0; i < matrix.lsize(); ++i) {
+            hash<auto> record_values;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                record_values{fields[j]} = matrix[i][j];
+            }
+            push result{"event_type"}, "kmeans-clustering";
+            push result{"cluster"}, predictions[i].cluster;
+            push result{"distance"}, predictions[i].distance;
+            push result{"centroid_distances"}, predictions[i].centroid_distances;
+            push result{"record_values"}, record_values;
+        }
+    }
+
+    #! Appends one matrix window to a flat DataFrame result
+    private appendMatrixWindowDataFrameResult(reference<hash<auto>> result, list<list<float>> matrix, int offset,
+            bool copy_input_fields) {
+        if (!kmeans) {
+            kmeans = new ML::KMeans({"k": k});
+            kmeans.fitMatrix(matrix);
+        } else if (online) {
+            kmeans.updateMatrix(matrix);
+        } else {
+            kmeans = new ML::KMeans({"k": k});
+            kmeans.fitMatrix(matrix);
+        }
+
+        list<hash<ML::KMeansResult>> predictions = kmeans.predictMatrix(matrix);
+        for (int i = 0; i < matrix.lsize(); ++i) {
+            int row = offset + i;
+            if (copy_input_fields) {
+                for (int j = 0; j < fields.lsize(); ++j) {
+                    result{fields[j]}[row] = matrix[i][j];
+                }
+            }
+            result{"cluster"}[row] = predictions[i].cluster;
+            result{"distance"}[row] = predictions[i].distance;
+            if (include_centroid_distances) {
+                for (int j = 0; j < predictions[i].centroid_distances.lsize(); ++j) {
+                    result{centroid_distance_fields[j]}[row] = predictions[i].centroid_distances[j];
+                }
+            }
+        }
     }
 
     #! Supports shaped bulk API

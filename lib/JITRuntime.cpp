@@ -3067,6 +3067,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value_by_type_path(c
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo,
         uint64_t value_bits, ExceptionSink* xsink) {
+    return qore_rt_new_complex_buffer_from_value_kind(typeInfo, value_bits,
+        static_cast<int32_t>(QoreComplexBufferInitKind::Constructor), xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_kind(const QoreTypeInfo* typeInfo,
+        uint64_t value_bits, int32_t init_kind, ExceptionSink* xsink) {
     typeInfo = qore_substitute_type_params_if_needed(typeInfo);
     if (!typeInfo) {
         if (xsink) {
@@ -3078,7 +3084,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value(const QoreTy
 
     QoreValue value = fromBits(value_bits);
     QoreValue init = value.hasNode() ? value.refSelf() : value;
-    QoreBufferNode* result = qore_new_complex_buffer_from_value(typeInfo, init, xsink);
+    QoreBufferNode* result = qore_new_complex_buffer_from_value(typeInfo, init, xsink,
+        static_cast<QoreComplexBufferInitKind>(init_kind));
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
@@ -3089,6 +3096,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_by_type_path
         return toBits(QoreValue());
     }
     return qore_rt_new_complex_buffer_from_value(typeInfo, value_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_kind_by_type_path(const char* type_path,
+        uint64_t value_bits, int32_t init_kind, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(type_path, "NewComplexBuffer", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_buffer_from_value_kind(typeInfo, value_bits, init_kind, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type,
@@ -12913,6 +12929,26 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buff
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_from_value_by_type_path_throwing(
         const char* type_path, uint64_t value_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_complex_buffer_from_value_by_type_path(type_path, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_from_value_kind_throwing(
+        const QoreTypeInfo* typeInfo, uint64_t value_bits, int32_t init_kind, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value_kind(typeInfo, value_bits, init_kind, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_new_complex_buffer_from_value_kind_by_type_path_throwing(const char* type_path, uint64_t value_bits,
+        int32_t init_kind, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value_kind_by_type_path(type_path, value_bits, init_kind,
+        xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

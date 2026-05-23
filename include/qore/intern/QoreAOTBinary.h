@@ -157,8 +157,9 @@ constexpr uint64_t QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS = 1ULL << 49; //!< class/ha
 constexpr uint64_t QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS = 1ULL << 50; //!< hashdecl parent records may preserve parameterized generic parent type paths
 constexpr uint64_t QORE_AOT_FEAT_TYPE_PARAM_BOUNDS = 1ULL << 51; //!< class/hashdecl type parameter records preserve bound type arguments
 constexpr uint64_t QORE_AOT_FEAT_PLUGIN_DISPATCH = 1ULL << 52; //!< IR debug/AOT records may contain plugin dispatch opcodes
+constexpr uint64_t QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND = 1ULL << 53; //!< complex buffer records/slots preserve sized/filled factory kind
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1071,7 +1072,7 @@ enum class AOTExprKind : uint8_t {
     UNARY_MINUS        = 104, //!< Unary minus operator: operand(AOTExprKind)
     LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
     LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)
-    COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: ref1=type_path
+    COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: type_path + init kind in expr streams; ref1=type_path, flags=init kind in slot maps
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -1526,8 +1527,9 @@ class QoreAOTBinaryDeserializer {
         //! (e.g. `hash<ComponentInfo>()`, `hash<string, T>()`, `list<T>()`)
         //! that references a type not yet registered at class-read time.
         //! Resolved in the second pass after all types exist.
-        //! kind: 0=complex list, 1=complex hash, 2=hashdecl
+        //! kind: 0=complex list, 1=complex hash, 2=hashdecl, 3=complex buffer
         int8_t pending_complex_default_kind = -1;
+        int8_t pending_complex_buffer_init_kind = 0;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
         //! Deferred VT_EXPR_TREE default.  Expression trees can reference
@@ -1562,6 +1564,7 @@ class QoreAOTBinaryDeserializer {
         std::string pending_enum_member;
         //! Same deferred-complex-default channel as PendingInstanceMember.
         int8_t pending_complex_default_kind = -1;
+        int8_t pending_complex_buffer_init_kind = 0;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
         //! Same deferred-expression-tree channel as PendingInstanceMember.
@@ -1615,9 +1618,10 @@ class QoreAOTBinaryDeserializer {
         std::vector<QoreValue> pending_new_args;
 
         // Deferred VT_NEW_COMPLEX_DEFAULT: kind 0=complex list,
-        // 1=complex hash, 2=hashdecl.  path is the element/value/hashdecl
+        // 1=complex hash, 2=hashdecl, 3=complex buffer. path is the element/value/hashdecl
         // type path; args are the constructor args (owned).
         int8_t pending_complex_default_kind = -1;
+        int8_t pending_complex_buffer_init_kind = 0;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
 

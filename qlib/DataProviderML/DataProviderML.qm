@@ -164,7 +164,8 @@ module DataProviderML {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreKMeansProcessor::ConstructorOptions{"online",}, {
+                QoreKMeansProcessor::ConstructorOptions{"online", "output_mode", "include_input_fields",
+                    "include_centroid_distances"}, {
                     "loc": "constructor",
                 }
             ),
@@ -197,7 +198,8 @@ module DataProviderML {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QorePCAProcessor::ConstructorOptions{"n_components", "variance_threshold"}, {
+                QorePCAProcessor::ConstructorOptions{"n_components", "variance_threshold", "output_mode",
+                    "include_input_fields"}, {
                     "loc": "constructor",
                 }
             ),
@@ -485,6 +487,10 @@ module DataProviderML {
                 QoreStandardScalerProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreStandardScalerProcessor::ConstructorOptions{"output_mode", "include_input_fields"}, {
                     "loc": "constructor",
                 }
             ),
@@ -1623,6 +1629,15 @@ module DataProviderML {
     produced.  This keeps downstream shape-aware processors in bulk mode while
     preserving the existing row-oriented processor behavior.
 
+    StandardScaler, KMeans, and PCA also support \c output_mode = "dataframe".
+    This mode returns flat DataFrame columns instead of nested event hashes,
+    which is clearer and much faster for analytical pipelines.  The default
+    \c output_mode remains \c "events" for compatibility.  In DataFrame mode,
+    \c include_input_fields = False can omit unchanged input columns when the
+    next step only needs model outputs.  KMeans additionally supports
+    \c include_centroid_distances = False when only the winning \c cluster and
+    nearest \c distance are needed.
+
     @par DataFrameBlock example:
     @code{.py}
 %requires dataframe
@@ -1650,6 +1665,29 @@ hash<auto> events = proc.processRecordsShape(
 # }
     @endcode
 
+    @par Flat DataFrame output example:
+    @code{.py}
+DataProviderML::QoreKMeansProcessor kmeans({
+    "fields": "amount,hour",
+    "window_size": 4,
+    "k": 2,
+    "output_mode": "dataframe",
+    "include_input_fields": False,
+    "include_centroid_distances": False,
+});
+
+DataFrame::DataFrame clusters = kmeans.processRecordsShape(
+    df, DataProviderShape::DataFrameBlock);
+
+# clusters has compact analytical columns:
+#   cluster: buffer<int64>
+#   distance: buffer<float64>
+DataFrame::DataFrame summary = clusters.groupBy(("cluster",)).agg({
+    "distance": ("mean", "max"),
+    "cluster": "count",
+});
+    @endcode
+
     @par BufferColumns example:
     @code{.py}
 %requires DataProviderML
@@ -1675,6 +1713,10 @@ assert scaled{"event_type"} == ("standard-scaler", "standard-scaler", "standard-
     - DataProviderML processors now accept \c DataFrameBlock,
       \c BufferColumns, and \c HashOfLists input shapes through the DataProvider
       shape API and emit \c HashOfLists event blocks for bulk outputs
+    - StandardScaler, KMeans, and PCA can emit flat DataFrame output with dense
+      buffer columns through \c output_mode = "dataframe"; optional slim output
+      flags omit unchanged input columns and KMeans centroid-distance columns
+      for high-throughput analytics
     - added \c AbstractDataProviderMLProcessor as the common shape-aware base
       for DataProviderML processors
 

@@ -1,0 +1,57 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchSolutionEtlDataFrame
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchSolutionEtlDataFrame {
+    constructor() {
+        Bench::BenchRunner r("solution_etl_dataframe");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::solutionRows();
+        if (rows < 100) {
+            rows = 100;
+        }
+
+        DataFrame::DataFrame facts;
+        DataFrame::DataFrame customers;
+        hash<auto> window_spec = {
+            "partition_by": ("region", "segment"),
+            "order_by": ("amount",),
+        };
+
+        r.setup = sub () {
+            facts = DataFrameBench::makeBufferFrame(rows);
+            customers = DataFrameBench::makeCustomerFrame(10000);
+            r.bytes_processed = DataFrameBench::approxBytes(rows) * 4;
+        };
+
+        r.measure = sub () {
+            DataFrame::RowMask selected = (facts.column("status") == "active").intersect(
+                facts.column("score") >= 90.0);
+            DataFrame::DataFrame filtered = facts.filter(selected);
+            DataFrame::DataFrame enriched = filtered.join(customers, ("customer_id",), "left");
+            DataFrame::DataFrame ranked = enriched
+                .withColumn("segment_rank", enriched.rowNumber(window_spec))
+                .withColumn("rolling_amount", enriched.rollingMean("amount", 5, window_spec));
+            DataFrame::DataFrame grouped = ranked.groupBy(("region", "segment")).agg({
+                "amount": ("sum", "mean"),
+                "score": "max",
+                "id": "count",
+            });
+            DataFrame::DataFrame copy = DataFrame::DataFrame::fromColumnarResult(grouped.toColumnarResult());
+            DataFrameBench::verifyRows("solution_etl_dataframe", copy, 1);
+        };
+
+        exit(r.run());
+    }
+}

@@ -8608,29 +8608,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 "NewComplexBuffer invoke expression is not a NewComplexBufferNode");
                     }
                     const QoreTypeInfo* typeInfo = specializeType(ncb->typeInfo);
+                    llvm::Value* init_kind_arg = llvm::ConstantInt::get(i32_type,
+                        static_cast<int32_t>(ncb->initKind));
                     if (aot_mode) {
                         std::string type_path = qore_ir_get_type_path(typeInfo);
                         llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         auto ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, i64_type, ptr_type}, false);
+                                {ptr_type, i64_type, i32_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
-                                "qore_rt_new_complex_buffer_from_value_by_type_path", ft);
+                                "qore_rt_new_complex_buffer_from_value_kind_by_type_path", ft);
                         auto helper_throwing = module.getOrInsertFunction(
-                                "qore_rt_new_complex_buffer_from_value_by_type_path_throwing", ft);
+                                "qore_rt_new_complex_buffer_from_value_kind_by_type_path_throwing", ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {type_path_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                                {type_path_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
                     } else {
                         llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(typeInfo));
                         llvm::Value* type_as_ptr = builder->CreateIntToPtr(type_ptr, ptr_type);
                         auto ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, i64_type, ptr_type}, false);
+                                {ptr_type, i64_type, i32_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
-                                "qore_rt_new_complex_buffer_from_value", ft);
+                                "qore_rt_new_complex_buffer_from_value_kind", ft);
                         auto helper_throwing = module.getOrInsertFunction(
-                                "qore_rt_new_complex_buffer_from_value_throwing", ft);
+                                "qore_rt_new_complex_buffer_from_value_kind_throwing", ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {type_as_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                                {type_as_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
                     }
                 } else if (aot_mode) {
                     QoreValue expr_val = inv->expr;
@@ -12582,28 +12584,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "NewComplexBuffer expression is not a NewComplexBufferNode");
                 }
                 const QoreTypeInfo* typeInfo = specializeType(ncb->typeInfo);
+                llvm::Value* init_kind_arg = llvm::ConstantInt::get(i32_type,
+                    static_cast<int32_t>(ncb->initKind));
                 if (aot_mode) {
                     std::string type_path = qore_ir_get_type_path(typeInfo);
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     auto ncb_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i64_type, ptr_type}, false);
+                            {ptr_type, i64_type, i32_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(
-                            "qore_rt_new_complex_buffer_from_value_by_type_path", ncb_ft);
+                            "qore_rt_new_complex_buffer_from_value_kind_by_type_path", ncb_ft);
                     auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_new_complex_buffer_from_value_by_type_path_throwing", ncb_ft);
+                            "qore_rt_new_complex_buffer_from_value_kind_by_type_path_throwing", ncb_ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
-                            {type_path_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                            {type_path_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
                 } else {
                     llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(typeInfo));
                     llvm::Value* type_as_ptr = builder->CreateIntToPtr(type_ptr, ptr_type);
                     auto ncb_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i64_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer_from_value", ncb_ft);
+                            {ptr_type, i64_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer_from_value_kind", ncb_ft);
                     auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_new_complex_buffer_from_value_throwing", ncb_ft);
+                            "qore_rt_new_complex_buffer_from_value_kind_throwing", ncb_ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
-                            {type_as_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                            {type_as_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
                 }
             } else if (aot_mode) {
                 QoreValue expr_val = ncbinst->expr;

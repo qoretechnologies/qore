@@ -178,6 +178,35 @@ list<list<float>> StandardScaler::transformMatrix(list<list<float>> matrix) {
     return rv.release();
 }
 
+//! Transforms a numeric matrix and returns dense column buffers
+/** @param matrix a list of lists of numeric values
+    @return a list of \c buffer<float64> values, one per matrix column
+
+    @par Example:
+    @code{.py}
+scaler.fitMatrix(training_data);
+list<auto> scaled_cols = scaler.transformMatrixColumns(new_data);
+DataFrame::DataFrame scaled({
+    "scaled_amount": scaled_cols[0],
+    "scaled_score": scaled_cols[1],
+});
+    @endcode
+
+    @throw ML-STANDARD-SCALER-ERROR scaler not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<auto> StandardScaler::transformMatrixColumns(list<list<float>> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = scaler->transform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return eigenMatrixColumnsToFloatBuffers(result, xsink, "building StandardScaler column buffers");
+}
+
 //! Inverse-transforms a single record
 /** @param record a hash with numeric fields
     @return a hash with original-scale values
@@ -296,6 +325,39 @@ list<list<float>> StandardScaler::fitTransformMatrix(list<list<float>> matrix) {
         rv->push(row.release(), xsink);
     }
     return rv.release();
+}
+
+//! Fits the scaler and returns scaled dense column buffers
+/** @param matrix a list of lists of numeric values
+    @return a list of \c buffer<float64> values, one per matrix column
+
+    @par Example:
+    @code{.py}
+list<list<float>> customer_features = (
+    (34.0, 72000.0),
+    (51.0, 118000.0),
+    (28.0, 54000.0),
+);
+list<auto> scaled_cols = scaler.fitTransformMatrixColumns(customer_features);
+DataFrame::DataFrame scaled({
+    "scaled_age": scaled_cols[0],
+    "scaled_income": scaled_cols[1],
+});
+    @endcode
+
+    @throw ML-STANDARD-SCALER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+list<auto> StandardScaler::fitTransformMatrixColumns(list<list<float>> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = scaler->fitTransform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return eigenMatrixColumnsToFloatBuffers(result, xsink, "building StandardScaler column buffers");
 }
 
 //! Returns True if the scaler has been fitted

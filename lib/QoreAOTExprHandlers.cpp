@@ -1922,7 +1922,8 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     if (!type_path || !*type_path) {
         return QoreValue();
     }
-    QoreComplexBufferInitKind init_kind = static_cast<QoreComplexBufferInitKind>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    QoreComplexBufferInitKind init_kind = static_cast<QoreComplexBufferInitKind>(
+        QoreAOTBinaryReader::readU8(ctx.ptr));
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
     QoreValue arg_val;
     if (num_args > 0) {

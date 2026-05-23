@@ -1490,10 +1490,14 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
-    // COMPLEX_HASH_NEW: stringref + u8 num_args + N×classifyAndWriteExpr-encoded args
+    // COMPLEX_HASH_NEW/COMPLEX_LIST_NEW: stringref + u8 num_args + N×encoded args
+    // COMPLEX_BUFFER_NEW recursive expressions always carry an init-kind byte.
     if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW
             || ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
         rdr.readStringRef(p);  // type path
+        if (ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
+            QoreAOTBinaryReader::readU8(p);  // QoreComplexBufferInitKind
+        }
         uint8_t na = QoreAOTBinaryReader::readU8(p);
         for (uint8_t i = 0; i < na; ++i) {
             skipOneExpr(rdr, p, e);  // each arg
@@ -2360,6 +2364,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::COMPLEX_BUFFER_NEW: {
                 // ref1 = type path, followed by one serialized list initializer
                 ref1 = reader.readStringRef(ptr);
+                QoreComplexBufferInitKind init_kind = QoreComplexBufferInitKind::Constructor;
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+                    init_kind = static_cast<QoreComplexBufferInitKind>(QoreAOTBinaryReader::readU8(ptr));
+                }
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 QoreValue arg_val;
                 if (num_args > 0) {
@@ -2382,7 +2390,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     QoreAOTTypeResolver type_resolver(pgm);
                     const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
                     if (ti) {
-                        NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val);
+                        NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val, init_kind);
                         ctx->exprs[i] = toBitsNB(QoreValue(ncb));
                     } else {
                         printd(0, "AOT v2: cannot resolve type '%s' for complex buffer: %s\n",

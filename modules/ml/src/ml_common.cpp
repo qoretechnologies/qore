@@ -152,6 +152,44 @@ QoreListNode* eigenVectorToQoreList(const VectorXd& vec) {
     return rv.release();
 }
 
+QoreListNode* eigenMatrixColumnsToFloatBuffers(const MatrixXd& matrix, ExceptionSink* xsink,
+        const char* context) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index c = 0; c < matrix.cols(); ++c) {
+        if (c && !(c % 100) && qore_check_cancel(xsink, context)) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreBufferNode> buffer(
+            new QoreBufferNode(QoreBufferElementType::Float64, false, static_cast<size_t>(matrix.rows())), xsink);
+        double* values = static_cast<double*>(buffer->getRawData());
+        for (Eigen::Index r = 0; r < matrix.rows(); ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, context)) {
+                return nullptr;
+            }
+            values[r] = matrix(r, c);
+        }
+        rv->push(buffer.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+QoreBufferNode* qoreFloat64BufferFilled(size_t length, double value, ExceptionSink* xsink,
+        const char* context) {
+    ReferenceHolder<QoreBufferNode> buffer(
+        new QoreBufferNode(QoreBufferElementType::Float64, false, length), xsink);
+    double* values = static_cast<double*>(buffer->getRawData());
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, context)) {
+            return nullptr;
+        }
+        values[i] = value;
+    }
+    return buffer.release();
+}
+
 QoreHashNode* eigenRowToQoreHash(const MatrixXd& matrix, Eigen::Index row,
     const std::vector<std::string>& field_names) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);

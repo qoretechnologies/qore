@@ -202,6 +202,25 @@ public namespace AOTExprSerializationMod {
         return \"pseudo dispatch ok\";
     }
 
+    public string sub typedBufferFactories() {
+        buffer<float64> sized = buffer<float64>::sized(size: 3);
+        if (sized.lsize() != 3 || sized.fullType() != \"buffer<float64>\") {
+            return \"bad sized buffer metadata\";
+        }
+        sized[0] = 1.25;
+        sized[2] = 3.75;
+        if (sized[0] != 1.25 || sized[1] != 0.0 || sized[2] != 3.75) {
+            return \"bad sized buffer values\";
+        }
+
+        buffer<int64> filled = buffer<int64>::filled(size: 2, value: 7);
+        if (filled.lsize() != 2 || filled[0] != 7 || filled[1] != 7
+                || filled.fullType() != \"buffer<int64>\") {
+            return \"bad filled buffer values\";
+        }
+        return \"buffer ok\";
+    }
+
     public string sub verify() {
         AOTIssueProgram p(0);
         AOTIssueRestrictedProgram p2(0);
@@ -240,6 +259,10 @@ public namespace AOTExprSerializationMod {
         string pseudo_result = pseudoDotEvalDispatch();
         if (pseudo_result != \"pseudo dispatch ok\") {
             return pseudo_result;
+        }
+        string buffer_result = typedBufferFactories();
+        if (buffer_result != \"buffer ok\") {
+            return buffer_result;
         }
         return \"ok\";
     }

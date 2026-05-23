@@ -736,6 +736,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // path, not only the raw parent hashdecl path, so AOT cold-load can rebuild
     // inherited member type substitutions.
     flags |= QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS;
+    // Complex buffer defaults must preserve whether they came from
+    // buffer<T>(), buffer<T>::sized(), or buffer<T>::filled().
+    flags |= QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND;
     return flags;
 }
 
@@ -12328,6 +12331,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
         id.kind = AOTExprKind::COMPLEX_BUFFER_NEW;
         id.ref1 = getSlotTypePath(ncb->typeInfo);
+        id.flags = static_cast<uint8_t>(ncb->initKind);
         id.child_expr = ncb->args;
         return id;
     }

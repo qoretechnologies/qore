@@ -62,8 +62,14 @@ public:
     //! Transform multiple points
     DLLLOCAL QoreListNode* transformMatrix(const MatrixXd& data, ExceptionSink* xsink);
 
+    //! Transform multiple points as dense column buffers
+    DLLLOCAL QoreHashNode* transformMatrixColumns(const MatrixXd& data, ExceptionSink* xsink);
+
     //! Fit and transform atomically (single lock acquisition)
     DLLLOCAL QoreListNode* fitTransformInternal(const MatrixXd& data, ExceptionSink* xsink);
+
+    //! Fit and transform atomically, returning dense column buffers
+    DLLLOCAL QoreHashNode* fitTransformMatrixColumns(const MatrixXd& data, ExceptionSink* xsink);
 
     //! Get principal component vectors
     DLLLOCAL QoreListNode* getComponents(ExceptionSink* xsink);
@@ -94,6 +100,9 @@ private:
 
     //! Transform matrix implementation (assumes lock is held)
     DLLLOCAL QoreListNode* doTransformMatrix(const MatrixXd& data, ExceptionSink* xsink);
+
+    //! Transform matrix to dense column buffers (assumes lock is held)
+    DLLLOCAL QoreHashNode* doTransformMatrixColumns(const MatrixXd& data, ExceptionSink* xsink);
     int n_components;       // requested (0 = all)
     int actual_n_components = 0; // after fitting
     double variance_threshold;

@@ -30,8 +30,20 @@ def sql_rows() -> int:
     return int(os.environ.get("QORE_BENCH_DF_SQL_ROWS", "20000"))
 
 
+def solution_rows() -> int:
+    return int(os.environ.get("QORE_BENCH_DF_SOLUTION_ROWS", str(default_rows())))
+
+
+def ai_rows() -> int:
+    return int(os.environ.get("QORE_BENCH_DF_AI_ROWS", "20000"))
+
+
 def approx_bytes(rows: int) -> int:
     return rows * 64
+
+
+def approx_analytic_bytes(rows: int) -> int:
+    return rows * 56
 
 
 def status_for(i: int) -> str:
@@ -101,6 +113,37 @@ def make_customer_columns(rows: int) -> dict[str, list[object]]:
         "segment": [segments[i % 3] for i in range(rows)],
         "customer_region": [region_for(i) for i in range(rows)],
         "weight": [float(100 + (i % 25)) / 100.0 for i in range(rows)],
+    }
+
+
+def feature1_for(i: int) -> float:
+    return float((i % 1000) - 500) / 25.0
+
+
+def feature2_for(i: int) -> float:
+    return float(((i * 17) % 1200) - 600) / 30.0
+
+
+def feature3_for(i: int) -> float:
+    return float(((i * 31) % 900) - 450) / 20.0
+
+
+def target_for(i: int) -> float:
+    x1 = feature1_for(i)
+    x2 = feature2_for(i)
+    x3 = feature3_for(i)
+    return (x1 * 1.7) - (x2 * 0.8) + (x3 * 0.35) + float(i % 11) / 10.0
+
+
+def make_analytic_columns(rows: int) -> dict[str, list[object]]:
+    target = [target_for(i) for i in range(rows)]
+    return {
+        "feature1": [feature1_for(i) for i in range(rows)],
+        "feature2": [feature2_for(i) for i in range(rows)],
+        "feature3": [feature3_for(i) for i in range(rows)],
+        "target": target,
+        "label": [1 if value >= 0.0 else 0 for value in target],
+        "cohort": [region_for(i) for i in range(rows)],
     }
 
 
@@ -264,6 +307,75 @@ def add_arrow_cases(df: pd.DataFrame, rows: int, results: dict[str, dict[str, ob
         )
 
 
+def add_solution_cases(results: dict[str, dict[str, object]]) -> None:
+    rows = solution_rows()
+    df = pd.DataFrame(make_columns(rows))
+    customers = pd.DataFrame(make_customer_columns(10000))
+
+    def etl_dataframe() -> None:
+        filtered = df[(df["status"] == "active") & (df["score"] >= 90.0)]
+        enriched = filtered.merge(customers, on="customer_id", how="left")
+        ordered = enriched.sort_values(["region", "segment", "amount"], kind="mergesort").copy()
+        ordered["segment_rank"] = ordered.groupby(["region", "segment"], sort=False).cumcount() + 1
+        ordered["rolling_amount"] = (
+            ordered.groupby(["region", "segment"], sort=False)["amount"]
+            .rolling(5, min_periods=1)
+            .mean()
+            .reset_index(level=[0, 1], drop=True)
+        )
+        grouped = ordered.groupby(["region", "segment"], sort=False).agg(
+            amount_sum=("amount", "sum"),
+            amount_mean=("amount", "mean"),
+            score_max=("score", "max"),
+            id_count=("id", "count"),
+        )
+        if len(grouped) < 1:
+            raise RuntimeError("pandas_solution_etl_dataframe produced no rows")
+
+    results["pandas_solution_etl_dataframe"] = run_case(
+        "pandas_solution_etl_dataframe", 5, 1, approx_bytes(rows) * 4, etl_dataframe
+    )
+
+
+def add_ai_cases(results: dict[str, dict[str, object]]) -> None:
+    try:
+        from sklearn.cluster import KMeans
+        from sklearn.decomposition import PCA
+        from sklearn.preprocessing import StandardScaler
+    except Exception as ex:
+        print(f"sklearn_solution_ai_analytics: skipped (scikit-learn not available: {ex})")
+        return
+
+    rows = max(ai_rows(), 8)
+    df = pd.DataFrame(make_analytic_columns(rows))
+    features = df[["feature1", "feature2", "feature3"]]
+
+    def ai_analytics() -> None:
+        matrix = features.to_numpy()
+        scaled = StandardScaler().fit_transform(matrix)
+        if len(scaled) != rows:
+            raise RuntimeError("sklearn scaler produced too few rows")
+
+        model = KMeans(n_clusters=4, n_init=10, random_state=42)
+        clusters = model.fit_predict(matrix)
+        distances = model.transform(matrix).min(axis=1)
+        summary = pd.DataFrame({"cluster": clusters, "distance": distances}).groupby("cluster").agg(
+            distance_mean=("distance", "mean"),
+            distance_max=("distance", "max"),
+            id_count=("distance", "count"),
+        )
+        if len(summary) < 1:
+            raise RuntimeError("sklearn kmeans produced no clusters")
+
+        components = PCA(n_components=2).fit_transform(matrix)
+        if len(components) != rows:
+            raise RuntimeError("sklearn PCA produced too few rows")
+
+    results["sklearn_solution_ai_analytics"] = run_case(
+        "sklearn_solution_ai_analytics", 3, 1, approx_analytic_bytes(rows) * 3, ai_analytics
+    )
+
+
 def compare_to_qore(qore_path: Path, results: dict[str, dict[str, object]]) -> None:
     qore = json.loads(qore_path.read_text())
     qbench = qore["benchmarks"]
@@ -280,6 +392,8 @@ def compare_to_qore(qore_path: Path, results: dict[str, dict[str, object]]) -> N
         ("SQL write", "dataframe_sql_to_table", "pandas_sql_to_table"),
         ("Arrow IPC roundtrip", "dataframe_arrow_ipc_roundtrip", "pandas_arrow_ipc_roundtrip"),
         ("Parquet roundtrip", "dataframe_parquet_roundtrip", "pandas_parquet_roundtrip"),
+        ("solution ETL", "solution_etl_dataframe", "pandas_solution_etl_dataframe"),
+        ("solution AI", "solution_ai_analytics", "sklearn_solution_ai_analytics"),
     )
 
     print("\ncomparison vs Qore benchmark JSON")
@@ -300,6 +414,7 @@ def main() -> int:
     parser.add_argument("--qore-json", help="compare against a Qore benchmark JSON")
     parser.add_argument("--no-sql", action="store_true", help="skip SQL cases")
     parser.add_argument("--no-arrow", action="store_true", help="skip Arrow IPC and Parquet cases")
+    parser.add_argument("--no-ai", action="store_true", help="skip scikit-learn AI/analytics solution case")
     args = parser.parse_args()
 
     rows = default_rows()
@@ -377,6 +492,9 @@ def main() -> int:
         add_sql_cases(results)
     if not args.no_arrow:
         add_arrow_cases(df, rows, results)
+    add_solution_cases(results)
+    if not args.no_ai:
+        add_ai_cases(results)
 
     suite = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
