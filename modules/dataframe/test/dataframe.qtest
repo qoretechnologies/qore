@@ -1824,6 +1824,34 @@ sub invalid_dataframe_api() {
         assertEq(2, decimal_parquet_schema[0].scale,
             "Parquet preserves decimal scale");
 
+        DataFrame::DataFrame null_dense_df({
+            "id": new buffer<*int64>((NOTHING, 2, NOTHING, 4)),
+            "flag": new buffer<*bool>((True, NOTHING, False, NOTHING)),
+            "name": new buffer<*string>((NOTHING, "Ada", "Bo", NOTHING)),
+            "amount": new buffer<*decimal128>((NOTHING, 12.50n, -3.25n, NOTHING)),
+        });
+        null_dense_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 2,
+        });
+        DataFrame::DataFrame null_dense_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((NOTHING, 2, NOTHING, 4), null_dense_parquet_df.getColumn("id"),
+            "Parquet preserves null-heavy nullable int values");
+        assertEq("buffer<*int64>", null_dense_parquet_df.getColumnBuffer("id").fullType(),
+            "Parquet preserves null-heavy nullable int dense storage");
+        assertEq((True, NOTHING, False, NOTHING), null_dense_parquet_df.getColumn("flag"),
+            "Parquet preserves null-heavy nullable bool values");
+        assertEq("buffer<*bool>", null_dense_parquet_df.getColumnBuffer("flag").fullType(),
+            "Parquet preserves null-heavy nullable bool dense storage");
+        assertEq((NOTHING, "Ada", "Bo", NOTHING), null_dense_parquet_df.getColumn("name"),
+            "Parquet preserves null-heavy nullable string values");
+        assertEq("buffer<*string>", null_dense_parquet_df.getColumnBuffer("name").fullType(),
+            "Parquet preserves null-heavy nullable string dense storage");
+        assertEq((NOTHING, 12.50n, -3.25n, NOTHING), null_dense_parquet_df.getColumn("amount"),
+            "Parquet preserves null-heavy nullable decimal values");
+        assertEq("buffer<*decimal128>", null_dense_parquet_df.getColumnBuffer("amount").fullType(),
+            "Parquet preserves null-heavy nullable decimal dense storage");
+
         ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
             "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
         }, {
@@ -1937,6 +1965,30 @@ sub invalid_dataframe_api() {
         assertEq(2, decimal_ipc_schema[0].scale,
             "Arrow IPC preserves decimal scale");
 
+        DataFrame::DataFrame null_dense_df({
+            "id": new buffer<*int64>((NOTHING, 2, NOTHING, 4)),
+            "flag": new buffer<*bool>((True, NOTHING, False, NOTHING)),
+            "name": new buffer<*string>((NOTHING, "Ada", "Bo", NOTHING)),
+            "amount": new buffer<*decimal128>((NOTHING, 12.50n, -3.25n, NOTHING)),
+        });
+        DataFrame::DataFrame null_dense_ipc_df = DataFrame::DataFrame::fromArrowIpc(null_dense_df.toArrowIpc());
+        assertEq((NOTHING, 2, NOTHING, 4), null_dense_ipc_df.getColumn("id"),
+            "Arrow IPC preserves null-heavy nullable int values");
+        assertEq("buffer<*int64>", null_dense_ipc_df.getColumnBuffer("id").fullType(),
+            "Arrow IPC preserves null-heavy nullable int dense storage");
+        assertEq((True, NOTHING, False, NOTHING), null_dense_ipc_df.getColumn("flag"),
+            "Arrow IPC preserves null-heavy nullable bool values");
+        assertEq("buffer<*bool>", null_dense_ipc_df.getColumnBuffer("flag").fullType(),
+            "Arrow IPC preserves null-heavy nullable bool dense storage");
+        assertEq((NOTHING, "Ada", "Bo", NOTHING), null_dense_ipc_df.getColumn("name"),
+            "Arrow IPC preserves null-heavy nullable string values");
+        assertEq("buffer<*string>", null_dense_ipc_df.getColumnBuffer("name").fullType(),
+            "Arrow IPC preserves null-heavy nullable string dense storage");
+        assertEq((NOTHING, 12.50n, -3.25n, NOTHING), null_dense_ipc_df.getColumn("amount"),
+            "Arrow IPC preserves null-heavy nullable decimal values");
+        assertEq("buffer<*decimal128>", null_dense_ipc_df.getColumnBuffer("amount").fullType(),
+            "Arrow IPC preserves null-heavy nullable decimal dense storage");
+
         ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
             "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
         }, {
@@ -1987,6 +2039,9 @@ sub invalid_dataframe_api() {
             "Arrow IPC preserves sliced nested list values through Arrow storage");
         assertEq(NOTHING, list_ipc_slice_df.getColumn("items")[1],
             "Arrow IPC preserves sliced nested list null values");
+
+        assertThrows("DATAFRAME-IO-ERROR", \DataFrame::DataFrame::fromArrowIpc(), (binary("not an arrow stream"),),
+            "Arrow IPC import rejects invalid payloads with DataFrame I/O diagnostics");
     }
 
     mlIntegrationTest() {
