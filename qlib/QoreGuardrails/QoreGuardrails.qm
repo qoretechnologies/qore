@@ -34,7 +34,7 @@
 %endtry
 
 module QoreGuardrails {
-    version = "1.1.0";
+    version = "1.2.0";
     desc = "user module providing input and output guardrails for AI-powered "
         "chat endpoints including PII detection, prompt injection detection, "
         "topic restriction, and output format enforcement";
@@ -70,6 +70,11 @@ module QoreGuardrails {
       toxicity classification with configurable thresholds
     - @ref QoreGuardrails::HallucinationDetector "HallucinationDetector" --
       LLM-based grounding check against provided source texts
+    - @ref QoreGuardrails::TaskPolicyRule "TaskPolicyRule" --
+      language-independent semantic request policy enforcement
+    - @ref QoreGuardrails::GroundingRule "GroundingRule" --
+      grounded-answer verification against supplied source references with
+      optional citation requirements
     - @ref QoreGuardrails::ActionIntentRule "ActionIntentRule" -- LLM-based
       action-intent classification that fails when the user's phrasing is
       ambiguous or clearly informational, gating destructive tool dispatches
@@ -93,6 +98,16 @@ if (!result.passed) {
     @endcode
 
     @section qoreguardrailsrelnotes QoreGuardrails Module Release Notes
+
+    @subsection qoreguardrails_1_2 QoreGuardrails Module Version 1.2
+    - Added @ref QoreGuardrails::TaskPolicyRule "TaskPolicyRule", a
+      language-independent input guardrail that uses
+      @ref QoreLlmUtils::LlmRequestClassifier "LlmRequestClassifier" to
+      enforce application-defined domain and task policies.
+    - Added @ref QoreGuardrails::GroundingRule "GroundingRule", an output
+      guardrail that verifies answer grounding and optional source citation
+      coverage with @ref QoreLlmUtils::GroundedAnswerVerifier
+      "GroundedAnswerVerifier".
 
     @subsection qoreguardrails_1_1 QoreGuardrails Module Version 1.1
     - Added a self-describing rule-type registry: every rule class now exposes

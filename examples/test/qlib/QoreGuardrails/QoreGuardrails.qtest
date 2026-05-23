@@ -6,6 +6,8 @@
 */
 
 %modern
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
 %requires ../../../../qlib/QoreGuardrails
 %requires Util
 %requires QUnit
@@ -44,6 +46,8 @@ public class QoreGuardrailsTest inherits QUnit::Test {
 
         # Topic Restriction Rule tests
         addTestCase("TopicRestrictionRule - config validation", \topicConfigTest());
+        addTestCase("TaskPolicyRule - no LLM fail-uncertain", \taskPolicyNoLlmTest());
+        addTestCase("GroundingRule - require sources", \groundingRequireSourcesTest());
 
         # GuardrailEngine tests
         addTestCase("GuardrailEngine - basic chain", \engineBasicTest());
@@ -290,6 +294,31 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         assertTrue(r.passed);
     }
 
+    taskPolicyNoLlmTest() {
+        TaskPolicyRule rule(GS_CRITICAL, {
+            "policy_label": "ops-only",
+            "allowed_domains": ("operations",),
+            "blocked_task_categories": ("creative-writing",),
+            "fail_uncertain": True,
+        });
+        hash<GuardrailResult> r = rule.evaluate("write a poem");
+        assertFalse(r.passed);
+        assertEq("task_policy", r.violations[0].rule);
+        assertEq("classifier-unavailable",
+            r.violations[0].metadata.reason_code);
+    }
+
+    groundingRequireSourcesTest() {
+        GroundingRule rule(GS_CRITICAL, {
+            "require_sources": True,
+        });
+        hash<GuardrailResult> r = rule.evaluate("Qorus supports workflows.",
+            {});
+        assertFalse(r.passed);
+        assertEq("grounding", r.violations[0].rule);
+        assertEq("source-required", r.violations[0].metadata.reason_code);
+    }
+
     # ===================== GuardrailEngine Tests =====================
 
     engineBasicTest() {
@@ -433,12 +462,13 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         hash<string, hash<RuleTypeInfo>> reg = GuardrailEngine::getRuleTypeRegistry();
         # Every built-in rule type has an entry
         foreach string t in ("pii", "prompt_injection", "topic_restriction",
-                "output_format", "toxicity", "hallucination", "action_intent") {
+                "output_format", "toxicity", "hallucination", "action_intent",
+                "task_policy", "grounding") {
             assertTrue(exists reg{t}, sprintf("registry must contain %y", t));
             assertEq(t, reg{t}.type,
                 sprintf("registry[%y].type must equal %y", t, t));
         }
-        assertEq(7, reg.size(), "registry must contain exactly 7 built-in rule types");
+        assertEq(9, reg.size(), "registry must contain exactly 9 built-in rule types");
     }
 
     registryEntryShapeTest() {
@@ -499,6 +529,10 @@ public class QoreGuardrailsTest inherits QUnit::Test {
             "toxicity default direction is both");
         assertEq(GD_OUTPUT, reg.hallucination.default_direction,
             "hallucination default direction is output");
+        assertEq(GD_INPUT, reg.task_policy.default_direction,
+            "task_policy default direction is input");
+        assertEq(GD_OUTPUT, reg.grounding.default_direction,
+            "grounding default direction is output");
     }
 
     baseGetConfigSchemaTest() {

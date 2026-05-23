@@ -33,7 +33,7 @@
 %define NoJson
 %endtry
 module QoreLlmUtils {
-    version = "1.0.0";
+    version = "1.1.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
         "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and callback API gateways";
     author = "Qore Technologies, s.r.o.";
@@ -72,6 +72,13 @@ module QoreLlmUtils {
     execution boundary, and redacting protected values from execution errors
     or logs.
 
+    Language-independent safety and grounding helpers are provided by
+    @ref QoreLlmUtils::LlmRequestClassifier "LlmRequestClassifier",
+    @ref QoreLlmUtils::CitationValidator "CitationValidator", and
+    @ref QoreLlmUtils::GroundedAnswerVerifier "GroundedAnswerVerifier".
+    These classes are generic infrastructure: applications supply their own
+    domain policy and authorized source bundles.
+
     @par Example: HTTP mode (OpenAI-compatible)
     @code{.py}
 %modern
@@ -101,6 +108,15 @@ printf("Structured output: %s\n", result.content);
     @endcode
 
     @section qorellmutilsrelnotes QoreLlmUtils Module Release Notes
+
+    @subsection qorellmutils_1_1 QoreLlmUtils Module Version 1.1
+    - Added @ref QoreLlmUtils::LlmRequestClassifier "LlmRequestClassifier",
+      a language-independent semantic classifier for application-defined
+      request policies.
+    - Added @ref QoreLlmUtils::CitationValidator "CitationValidator" and
+      @ref QoreLlmUtils::GroundedAnswerVerifier "GroundedAnswerVerifier" for
+      generic grounded-answer and citation validation workflows using
+      caller-supplied source references.
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
