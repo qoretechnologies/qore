@@ -694,6 +694,31 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
             }
             break;
         }
+        case QoreBufferElementType::Decimal128: {
+            col->type = ColumnType::AUTO;
+            col->auto_data.resize(n);
+            col->columnar_schema.kind = QoreColumnarTypeKind::Decimal128;
+            col->columnar_schema.column_type = QoreColumnarColumnType::Number;
+            col->columnar_schema.buffer_type = QoreBufferElementType::Decimal128;
+            col->columnar_schema.nullable = values->hasNullableElements();
+            col->columnar_schema.precision = values->getDecimalPrecision();
+            col->columnar_schema.scale = values->getDecimalScale();
+            col->has_columnar_schema = true;
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame decimal column from buffer")) {
+                    return nullptr;
+                }
+                if (values->isElementNull(i)) {
+                    col->null_mask[i] = 1;
+                } else {
+                    col->setAutoValue(i, values->getReferencedEntry(i), xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                }
+            }
+            break;
+        }
         default:
             xsink->raiseException("DATAFRAME-ERROR",
                 "unsupported buffer element type '%s' for DataFrame column",

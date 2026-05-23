@@ -39,7 +39,24 @@ struct ColumnarShape {
     const QoreTypeInfo* element_type = autoTypeInfo;
     bool nullable = false;
     bool dense = false;
+    int32_t decimal_precision = 0;
+    int32_t decimal_scale = 0;
 };
+
+static bool columnar_parse_decimal_metadata(const std::string& native_type, int32_t& precision, int32_t& scale);
+
+static bool columnar_decimal_metadata_is_supported(int32_t precision, int32_t scale) {
+    return precision > 0 && precision <= 38 && scale >= 0 && scale <= precision;
+}
+
+static void columnar_shape_set_decimal128(ColumnarShape& shape, int32_t precision, int32_t scale) {
+    shape.column_type = QoreColumnarColumnType::Number;
+    shape.buffer_type = QoreBufferElementType::Decimal128;
+    shape.element_type = numberTypeInfo;
+    shape.dense = true;
+    shape.decimal_precision = precision > 0 ? precision : 38;
+    shape.decimal_scale = scale >= 0 ? scale : 0;
+}
 
 static std::string columnar_lower_type(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -174,6 +191,14 @@ static bool columnar_shape_from_native_type(const std::string& native_type, int6
     }
 
     if (columnar_type_is_one_of(type, {"numeric", "decimal", "number", "sql_numeric", "sql_decimal"})) {
+        int32_t precision = 0;
+        int32_t scale = 0;
+        if (columnar_parse_decimal_metadata(native_type, precision, scale)
+                && columnar_decimal_metadata_is_supported(precision, scale)) {
+            shape = {QoreColumnarColumnType::Number, QoreBufferElementType::Decimal128, numberTypeInfo, false, true,
+                precision, scale};
+            return true;
+        }
         shape = {QoreColumnarColumnType::Number, QoreBufferElementType::Invalid, numberTypeInfo, false, false};
         return true;
     }
@@ -212,6 +237,12 @@ static bool columnar_shape_from_desc(const QoreHashNode* desc, ColumnarShape& sh
     if (columnar_shape_from_native_type(
             columnar_get_desc_string(desc, "native_type"), columnar_get_desc_int(desc, "maxsize"), shape)) {
         shape.nullable = shape.nullable || columnar_get_desc_nullable(desc);
+        int32_t precision = static_cast<int32_t>(columnar_get_desc_int(desc, "precision", shape.decimal_precision));
+        int32_t scale = static_cast<int32_t>(columnar_get_desc_int(desc, "scale", shape.decimal_scale));
+        if (shape.column_type == QoreColumnarColumnType::Number
+                && columnar_decimal_metadata_is_supported(precision, scale)) {
+            columnar_shape_set_decimal128(shape, precision, scale);
+        }
         return true;
     }
 
@@ -374,6 +405,10 @@ static QoreListNode* columnar_make_typed_list(const QoreListNode* source, const 
 static QoreValue columnar_make_column_value(const QoreListNode* source, const ColumnarShape& shape,
         ExceptionSink* xsink) {
     if (shape.dense) {
+        if (shape.buffer_type == QoreBufferElementType::Decimal128) {
+            return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink,
+                shape.decimal_precision > 0 ? shape.decimal_precision : 38, shape.decimal_scale);
+        }
         return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink);
     }
     return columnar_make_typed_list(source, shape.element_type, shape.nullable, xsink);
@@ -575,6 +610,9 @@ static QoreColumnarColumnType columnar_type_from_buffer(QoreBufferElementType bu
     if (buffer_type == QoreBufferElementType::String) {
         return QoreColumnarColumnType::String;
     }
+    if (buffer_type == QoreBufferElementType::Decimal128) {
+        return QoreColumnarColumnType::Number;
+    }
     return QoreColumnarColumnType::Auto;
 }
 
@@ -681,12 +719,26 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_flat(QoreColumnarColu
     schema.buffer_type = buffer_type;
     schema.nullable = nullable;
     schema.native_type = native_type ? native_type : "";
+    if (buffer_type == QoreBufferElementType::Decimal128) {
+        schema.kind = QoreColumnarTypeKind::Decimal128;
+        schema.column_type = QoreColumnarColumnType::Number;
+        schema.precision = 38;
+        schema.scale = 0;
+    }
     return schema;
 }
 
 static QoreColumnarTypeDescriptor columnar_descriptor_from_shape(const ColumnarShape& shape,
         const char* native_type) {
-    return columnar_descriptor_from_flat(shape.column_type, shape.buffer_type, shape.nullable, native_type);
+    QoreColumnarTypeDescriptor schema =
+        columnar_descriptor_from_flat(shape.column_type, shape.buffer_type, shape.nullable, native_type);
+    if (shape.buffer_type == QoreBufferElementType::Decimal128) {
+        schema.kind = QoreColumnarTypeKind::Decimal128;
+        schema.column_type = QoreColumnarColumnType::Number;
+        schema.precision = shape.decimal_precision > 0 ? shape.decimal_precision : 38;
+        schema.scale = shape.decimal_scale;
+    }
+    return schema;
 }
 
 static bool columnar_parse_decimal_metadata(const std::string& native_type, int32_t& precision, int32_t& scale) {
@@ -743,13 +795,13 @@ static QoreHashNode* columnar_descriptor_to_hash(const QoreColumnarTypeDescripto
             return nullptr;
         }
     }
-    if (schema.precision) {
+    if (schema.precision || schema.kind == QoreColumnarTypeKind::Decimal128) {
         h->setKeyValue("precision", static_cast<int64>(schema.precision), xsink);
         if (*xsink) {
             return nullptr;
         }
     }
-    if (schema.scale) {
+    if (schema.scale || schema.kind == QoreColumnarTypeKind::Decimal128) {
         h->setKeyValue("scale", static_cast<int64>(schema.scale), xsink);
         if (*xsink) {
             return nullptr;
@@ -839,6 +891,10 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
             schema.buffer_type = parsed;
             schema.column_type = columnar_type_from_buffer(parsed);
             schema.kind = columnar_kind_from_flat_type(schema.column_type);
+            if (parsed == QoreBufferElementType::Decimal128) {
+                schema.kind = QoreColumnarTypeKind::Decimal128;
+                schema.column_type = QoreColumnarColumnType::Number;
+            }
         }
     }
 
@@ -886,6 +942,21 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
         schema.kind = QoreColumnarTypeKind::Decimal128;
         schema.column_type = QoreColumnarColumnType::Number;
     }
+    if (schema.kind == QoreColumnarTypeKind::Decimal128) {
+        schema.column_type = QoreColumnarColumnType::Number;
+        schema.buffer_type = QoreBufferElementType::Decimal128;
+        if (schema.precision <= 0) {
+            schema.precision = 38;
+        }
+        if (schema.scale < 0) {
+            schema.scale = 0;
+        }
+        if (!columnar_decimal_metadata_is_supported(schema.precision, schema.scale)) {
+            xsink->raiseException("COLUMNAR-SCHEMA-ERROR",
+                "decimal128 column schema requires precision 1..38 and scale 0..precision; got precision %d, "
+                "scale %d", schema.precision, schema.scale);
+        }
+    }
 
     return schema;
 }
@@ -902,6 +973,14 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc(const QoreHashNo
     }
 
     return columnar_descriptor_from_desc_hash(desc, fallback, xsink);
+}
+
+static void columnar_shape_apply_schema(ColumnarShape& shape, const QoreColumnarTypeDescriptor& schema) {
+    if (schema.kind == QoreColumnarTypeKind::Decimal128
+            || schema.buffer_type == QoreBufferElementType::Decimal128) {
+        columnar_shape_set_decimal128(shape, schema.precision > 0 ? schema.precision : 38,
+            schema.scale >= 0 ? schema.scale : 0);
+    }
 }
 
 }
@@ -1076,9 +1155,22 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
             QoreColumnarTypeDescriptor schema = columnar_descriptor_from_flat(
                 columnar_type_from_buffer(buffer->getElementType()), buffer->getElementType(),
                 buffer->hasNullableElements(), native_type.c_str());
+            if (buffer->getElementType() == QoreBufferElementType::Decimal128) {
+                schema.kind = QoreColumnarTypeKind::Decimal128;
+                schema.column_type = QoreColumnarColumnType::Number;
+                schema.precision = buffer->getDecimalPrecision();
+                schema.scale = buffer->getDecimalScale();
+            }
             schema = columnar_descriptor_from_desc(column_desc, schema, xsink);
             if (*xsink) {
                 return nullptr;
+            }
+            if (buffer->getElementType() == QoreBufferElementType::Decimal128) {
+                schema.kind = QoreColumnarTypeKind::Decimal128;
+                schema.column_type = QoreColumnarColumnType::Number;
+                schema.buffer_type = QoreBufferElementType::Decimal128;
+                schema.precision = buffer->getDecimalPrecision();
+                schema.scale = buffer->getDecimalScale();
             }
             if (rv->addColumn(i.getKey(), value.refSelf(), schema, xsink)) {
                 return nullptr;
@@ -1108,6 +1200,7 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
         if (*xsink) {
             return nullptr;
         }
+        columnar_shape_apply_schema(shape, schema);
 
         ValueHolder column_value(columnar_make_column_value(source, shape, xsink), xsink);
         if (*xsink) {

@@ -257,6 +257,31 @@ public:
         bool nullable_elements, size_t length, const void* data, const uint8_t* validity,
         std::shared_ptr<const void> owner, int64_t null_count, ExceptionSink* xsink);
 
+    //! Wraps immutable external fixed-width storage with decimal metadata.
+    /** This overload is required for buffer<decimal128>, whose physical storage
+        is not self-describing. Non-decimal element types ignore the decimal
+        metadata.
+
+        @param element_type the primitive element storage type; string storage is not supported
+        @param nullable_elements true if individual elements may be NOTHING
+        @param length number of visible elements
+        @param data pointer to the external data buffer
+        @param validity pointer to the external validity bitmap, or nullptr when all elements are valid
+        @param owner shared owner for the external data and validity buffers
+        @param null_count number of null values, or -1 to calculate it from @a validity
+        @param decimal_precision decimal precision for decimal128 buffers; must be 1..38
+        @param decimal_scale decimal scale for decimal128 buffers; must be 0..precision
+        @param xsink exception sink for validation and cancellation errors
+        @return a buffer wrapping the external storage, or nullptr on error
+        @throw BUFFER-TYPE-ERROR if @a element_type is unsupported
+        @throw BUFFER-RANGE-ERROR if decimal metadata is invalid
+        @throw BUFFER-EXTERNAL-STORAGE-ERROR if required pointers or ownership are missing
+     */
+    DLLEXPORT static QoreBufferNode* wrapExternalStorage(QoreBufferElementType element_type,
+        bool nullable_elements, size_t length, const void* data, const uint8_t* validity,
+        std::shared_ptr<const void> owner, int64_t null_count, int32_t decimal_precision,
+        int32_t decimal_scale, ExceptionSink* xsink);
+
     //! Wraps immutable external fixed-width storage with an initial element offset.
     /** This overload is intended for Arrow-style arrays where the data and
         validity buffers may have a logical element offset.  The returned buffer
@@ -279,6 +304,32 @@ public:
     DLLEXPORT static QoreBufferNode* wrapExternalStorage(QoreBufferElementType element_type,
         bool nullable_elements, size_t offset, size_t length, const void* data, const uint8_t* validity,
         std::shared_ptr<const void> owner, int64_t null_count, ExceptionSink* xsink);
+
+    //! Wraps immutable external fixed-width storage with an initial element offset and decimal metadata.
+    /** This overload is required for Arrow-style decimal128 arrays, where the
+        raw data buffer carries a logical element offset and decimal precision
+        and scale must be supplied separately.
+
+        @param element_type the primitive element storage type; string storage is not supported
+        @param nullable_elements true if individual elements may be NOTHING
+        @param offset first visible element in the external buffers
+        @param length number of visible elements
+        @param data pointer to the external data buffer
+        @param validity pointer to the external validity bitmap, or nullptr when all elements are valid
+        @param owner shared owner for the external data and validity buffers
+        @param null_count number of null values in the visible range, or -1 to calculate it from @a validity
+        @param decimal_precision decimal precision for decimal128 buffers; must be 1..38
+        @param decimal_scale decimal scale for decimal128 buffers; must be 0..precision
+        @param xsink exception sink for validation and cancellation errors
+        @return a buffer wrapping the external storage, or nullptr on error
+        @throw BUFFER-TYPE-ERROR if @a element_type is unsupported
+        @throw BUFFER-RANGE-ERROR if decimal metadata is invalid
+        @throw BUFFER-EXTERNAL-STORAGE-ERROR if required pointers or ownership are missing
+     */
+    DLLEXPORT static QoreBufferNode* wrapExternalStorage(QoreBufferElementType element_type,
+        bool nullable_elements, size_t offset, size_t length, const void* data, const uint8_t* validity,
+        std::shared_ptr<const void> owner, int64_t null_count, int32_t decimal_precision,
+        int32_t decimal_scale, ExceptionSink* xsink);
 
     //! @copydoc AbstractQoreNode::getAsBoolImpl()
     DLLEXPORT virtual bool getAsBoolImpl() const;
@@ -541,7 +592,12 @@ private:
 
     DLLLOCAL QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t length);
     DLLLOCAL QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
-        const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count);
+        const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count,
+        int32_t decimal_precision, int32_t decimal_scale);
+    DLLLOCAL static QoreBufferNode* wrapExternalStorageImpl(QoreBufferElementType element_type,
+        bool nullable_elements, size_t offset, size_t length, const void* data, const uint8_t* validity,
+        std::shared_ptr<const void> owner, int64_t null_count, bool has_decimal_metadata,
+        int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink);
     DLLLOCAL void normalizeDecimalMetadata();
     DLLLOCAL bool isView() const {
         return view_parent;

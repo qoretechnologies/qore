@@ -53,6 +53,8 @@ static QoreBufferElementType arrowTypeToBufferElementType(const std::shared_ptr<
             return QoreBufferElementType::Float64;
         case arrow::Type::BOOL:
             return QoreBufferElementType::Bool;
+        case arrow::Type::DECIMAL128:
+            return QoreBufferElementType::Decimal128;
         default:
             return QoreBufferElementType::Invalid;
     }
@@ -187,6 +189,7 @@ static QoreColumnarTypeDescriptor arrowTypeToColumnarDescriptor(const std::strin
             auto dec_type = std::static_pointer_cast<arrow::Decimal128Type>(type);
             desc.kind = QoreColumnarTypeKind::Decimal128;
             desc.column_type = QoreColumnarColumnType::Number;
+            desc.buffer_type = QoreBufferElementType::Decimal128;
             desc.precision = dec_type->precision();
             desc.scale = dec_type->scale();
             break;
@@ -1000,6 +1003,12 @@ static QoreBufferNode* tryArrowFixedWidthColumnToDenseBuffer(
     const uint8_t* values = data->buffers[1]->data();
     bool nullable = field->nullable() || chunk->null_count() > 0 || validity;
     std::shared_ptr<const void> owner(chunk, static_cast<const void*>(chunk.get()));
+    if (element_type == QoreBufferElementType::Decimal128) {
+        auto decimal_type = std::static_pointer_cast<arrow::Decimal128Type>(arr->type());
+        return QoreBufferNode::wrapExternalStorage(element_type, nullable, static_cast<size_t>(chunk->offset()),
+            static_cast<size_t>(chunk->length()), values, validity, std::move(owner), chunk->null_count(),
+            decimal_type->precision(), decimal_type->scale(), xsink);
+    }
     return QoreBufferNode::wrapExternalStorage(element_type, nullable, static_cast<size_t>(chunk->offset()),
         static_cast<size_t>(chunk->length()), values, validity, std::move(owner), chunk->null_count(), xsink);
 }

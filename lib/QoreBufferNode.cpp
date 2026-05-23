@@ -61,6 +61,7 @@ static bool qore_buffer_external_storage_supported(QoreBufferElementType element
         case QoreBufferElementType::Float32:
         case QoreBufferElementType::Float64:
         case QoreBufferElementType::Bool:
+        case QoreBufferElementType::Decimal128:
             return true;
         default:
             return false;
@@ -1320,9 +1321,11 @@ QoreBufferNode::QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t len
 }
 
 QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length,
-        const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count)
+        const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count,
+        int32_t decimal_precision, int32_t decimal_scale)
         : AbstractQoreNode(NT_BUFFER, true, false), element_type(element_type),
-        nullable_elements(nullable_elements), length(length), null_count(null_count), external_owner(std::move(owner)),
+        nullable_elements(nullable_elements), decimal_precision(decimal_precision), decimal_scale(decimal_scale),
+        length(length), null_count(null_count), external_owner(std::move(owner)),
         external_data(static_cast<const uint8_t*>(data)), external_validity(validity) {
     assert(element_type != QoreBufferElementType::Invalid);
     assert(qore_buffer_external_storage_supported(element_type));
@@ -1358,13 +1361,35 @@ void QoreBufferNode::normalizeDecimalMetadata() {
 QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType element_type, bool nullable_elements,
         size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner,
         int64_t null_count, ExceptionSink* xsink) {
-    return wrapExternalStorage(element_type, nullable_elements, 0, length, data, validity, std::move(owner),
-        null_count, xsink);
+    return wrapExternalStorageImpl(element_type, nullable_elements, 0, length, data, validity, std::move(owner),
+        null_count, false, 0, 0, xsink);
+}
+
+QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType element_type, bool nullable_elements,
+        size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner,
+        int64_t null_count, int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink) {
+    return wrapExternalStorageImpl(element_type, nullable_elements, 0, length, data, validity, std::move(owner),
+        null_count, true, decimal_precision, decimal_scale, xsink);
 }
 
 QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType element_type, bool nullable_elements,
         size_t offset, size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner,
         int64_t null_count, ExceptionSink* xsink) {
+    return wrapExternalStorageImpl(element_type, nullable_elements, offset, length, data, validity, std::move(owner),
+        null_count, false, 0, 0, xsink);
+}
+
+QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType element_type, bool nullable_elements,
+        size_t offset, size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner,
+        int64_t null_count, int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink) {
+    return wrapExternalStorageImpl(element_type, nullable_elements, offset, length, data, validity, std::move(owner),
+        null_count, true, decimal_precision, decimal_scale, xsink);
+}
+
+QoreBufferNode* QoreBufferNode::wrapExternalStorageImpl(QoreBufferElementType element_type, bool nullable_elements,
+        size_t offset, size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner,
+        int64_t null_count, bool has_decimal_metadata, int32_t decimal_precision, int32_t decimal_scale,
+        ExceptionSink* xsink) {
     if (!xsink) {
         return nullptr;
     }
@@ -1373,6 +1398,27 @@ QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType elemen
             "cannot wrap external storage for buffer<%s>; only fixed-width numeric and bool buffers are supported",
             qore_buffer_element_type_name(element_type));
         return nullptr;
+    }
+    if (element_type == QoreBufferElementType::Decimal128) {
+        if (!has_decimal_metadata) {
+            xsink->raiseException("BUFFER-TYPE-ERROR",
+                "cannot wrap external storage for buffer<decimal128> without decimal precision and scale metadata; "
+                "use the metadata-aware QoreBufferNode::wrapExternalStorage() overload");
+            return nullptr;
+        }
+        if (decimal_precision <= 0 || decimal_scale < 0) {
+            xsink->raiseException("BUFFER-RANGE-ERROR",
+                "external buffer<decimal128> storage requires precision 1..%d and scale 0..precision; got "
+                "precision %d, scale %d", QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION, decimal_precision,
+                decimal_scale);
+            return nullptr;
+        }
+        if (qore_buffer_decimal_validate_metadata(decimal_precision, decimal_scale, xsink)) {
+            return nullptr;
+        }
+    } else {
+        decimal_precision = QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION;
+        decimal_scale = QORE_BUFFER_DECIMAL128_DEFAULT_SCALE;
     }
     if (offset > std::numeric_limits<size_t>::max() - length) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
@@ -1426,7 +1472,7 @@ QoreBufferNode* QoreBufferNode::wrapExternalStorage(QoreBufferElementType elemen
     }
 
     ReferenceHolder<QoreBufferNode> root(new QoreBufferNode(element_type, nullable_elements, root_length, data,
-        validity, std::move(owner), root_null_count), xsink);
+        validity, std::move(owner), root_null_count, decimal_precision, decimal_scale), xsink);
     if (!offset) {
         return root.release();
     }

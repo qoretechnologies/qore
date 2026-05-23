@@ -1191,6 +1191,8 @@ sub invalid_dataframe_api() {
         list<hash<auto>> decimal_schema = decimal_columns.schemaV2();
         assertEq("decimal128", decimal_schema[0].kind,
             "ColumnarResult::schemaV2 preserves decimal logical type");
+        assertEq("buffer<*decimal128>", decimal_columns.getColumn("total").fullType(),
+            "ColumnarResult stores decimal logical columns as dense decimal buffers");
         assertEq(18, decimal_schema[0].precision,
             "ColumnarResult::schemaV2 preserves decimal precision");
         assertEq(2, decimal_schema[0].scale,
@@ -1200,10 +1202,14 @@ sub invalid_dataframe_api() {
             "DataFrame preserves decimal columns as lossless auto values");
         assertEq((12.34n, NOTHING), decimal_df.getColumn("total"),
             "DataFrame preserves decimal Qore number values");
+        assertEq("buffer<*decimal128>", decimal_df.getColumnBuffer("total").fullType(),
+            "DataFrame preserves packed decimal buffers");
         ColumnarResult decimal_roundtrip = decimal_df.toColumnarResult();
         list<hash<auto>> decimal_roundtrip_schema = decimal_roundtrip.schemaV2();
         assertEq("decimal128", decimal_roundtrip_schema[0].kind,
             "DataFrame ColumnarResult round-trip preserves decimal logical type");
+        assertEq("buffer<*decimal128>", decimal_roundtrip.getColumn("total").fullType(),
+            "DataFrame ColumnarResult round-trip preserves packed decimal buffers");
         assertEq(18, decimal_roundtrip_schema[0].precision,
             "DataFrame ColumnarResult round-trip preserves decimal precision");
         assertEq(2, decimal_roundtrip_schema[0].scale,
@@ -1551,6 +1557,8 @@ sub invalid_dataframe_api() {
         DataFrame::DataFrame decimal_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
         assertEq((12.34n, NOTHING), decimal_parquet_df.getColumn("total"),
             "Parquet preserves decimal Qore number values");
+        assertEq("buffer<*decimal128>", decimal_parquet_df.getColumnBuffer("total").fullType(),
+            "Parquet preserves decimal columns as dense buffers");
         list<hash<auto>> decimal_parquet_schema = decimal_parquet_df.toColumnarResult().schemaV2();
         assertEq("decimal128", decimal_parquet_schema[0].kind,
             "Parquet preserves decimal logical type");
@@ -1630,6 +1638,8 @@ sub invalid_dataframe_api() {
         DataFrame::DataFrame decimal_ipc_df = DataFrame::DataFrame::fromArrowIpc(decimal_df.toArrowIpc());
         assertEq((12.34n, NOTHING), decimal_ipc_df.getColumn("total"),
             "Arrow IPC preserves decimal Qore number values");
+        assertEq("buffer<*decimal128>", decimal_ipc_df.getColumnBuffer("total").fullType(),
+            "Arrow IPC preserves decimal columns as dense buffers");
         list<hash<auto>> decimal_ipc_schema = decimal_ipc_df.toColumnarResult().schemaV2();
         assertEq("decimal128", decimal_ipc_schema[0].kind,
             "Arrow IPC preserves decimal logical type");
