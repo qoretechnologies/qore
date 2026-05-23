@@ -15,6 +15,7 @@
 %requires RestClient
 %requires RestClientIo
 %requires QoreLlmTypes
+%requires GeminiBodyShape
 %requires GeminiRestClient
 %requires QoreLlmUtils
 %requires Util
@@ -147,6 +148,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \structuredRepairSchemaCoercionTest());
         addTestCase("LlmRequestClassifier normalizes semantic policy result",
             \requestClassifierSemanticPolicyTest());
+        addTestCase("LlmRequestClassifier block-list mode and reasoning budget",
+            \requestClassifierBlockListModeTest());
         addTestCase("CitationValidator validates supplied source ids",
             \citationValidatorTest());
         addTestCase("GroundedAnswerVerifier combines grounding and citations",
@@ -159,6 +162,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiOpenAiChatCompletionsFacadeTest());
         addTestCase("LlmBackend Gemini schema sanitizer flattens "
             "composition", \geminiSchemaCompositionSanitizerTest());
+        addTestCase("LlmBackend Gemini schema sanitizer strips dialect "
+            "metadata and preserves property names",
+            \geminiSchemaMetadataKeywordSanitizerTest());
+        addTestCase("LlmBackend Gemini response_format metadata is "
+            "stripped from responseSchema",
+            \geminiResponseSchemaMetadataIntegrationTest());
         addTestCase("LlmBackend OpenAI chat facade schema-coerces tool "
             "arguments", \geminiOpenAiToolArgumentSchemaCoercionTest());
         addTestCase("LlmBackend OpenAI chat facade maps abstract Gemini "
@@ -725,6 +734,96 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("blocked-task-category", r.reason_code);
         assertTrue(r.confidence > 0.9);
         assertEq(7, r.usage.total_tokens);
+
+        # The structured-output schema must be a bare JSON Schema object:
+        # it must NOT carry a top-level "name" (or other dialect metadata),
+        # which providers with a strict OpenAPI Schema subset (Gemini)
+        # reject with INVALID_ARGUMENT.  The schema label belongs on the
+        # request wrapper, not inside the schema.
+        hash<auto> output_schema =
+            QoreLlmUtils::LlmRequestClassifier::getOutputSchema();
+        assertEq("object", output_schema.type);
+        assertFalse(output_schema.hasKey("name"),
+            "classifier output schema carries no top-level 'name' metadata");
+        assertTrue(output_schema.properties.hasKey("allowed"),
+            "classifier output schema declares the 'allowed' verdict field");
+        assertTrue(inlist("allowed", output_schema.required),
+            "classifier output schema requires the 'allowed' verdict field");
+    }
+
+    requestClassifierBlockListModeTest() {
+        # Capture the request body the classifier dispatches so we can assert
+        # (1) block-list mode selects a default-allow system prompt, and
+        # (2) classification disables the hidden-reasoning budget so a
+        # "thinking" model cannot starve the small JSON output budget.
+        hash<auto> captured_allow;
+        QoreLlmUtils::LlmBackend allow_backend(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "mode": "callback",
+                "model": "test-model",
+                "api_callback": hash<auto> sub (string m, string p,
+                        hash<auto> body) {
+                    captured_allow = body;
+                    return {
+                        "choices": ({
+                            "message": {"content":
+                                "{\"allowed\":true,\"detected_language\":"
+                                "\"en\",\"domain\":\"qorus\",\"task_category\":"
+                                "\"operations\",\"confidence\":0.95,"
+                                "\"reason_code\":\"classified\",\"reason\":"
+                                "\"in scope\"}"},
+                            "finish_reason": "stop",
+                        },),
+                        "usage": {"total_tokens": 9},
+                    };
+                },
+            });
+        QoreLlmUtils::LlmRequestClassifier allow_classifier(allow_backend, {
+            "policy_label": "qonsole-qorus-qore-only",
+            "default_decision": "allow",
+            "blocked_task_categories": ("creative-writing",),
+        });
+        hash<QoreLlmUtils::LlmRequestClassification> ra =
+            allow_classifier.classify("how many qogs are there?");
+        assertTrue(ra.allowed, "block-list mode allows an in-scope request");
+        assertEq("system", captured_allow.messages[0].role);
+        assertTrue(captured_allow.messages[0].content =~ /ALLOWED by default/,
+            "block-list mode uses a default-allow system prompt");
+        assertEq(0, captured_allow.reasoning_token_budget,
+            "classifier disables the reasoning/thinking budget");
+
+        # The default (allow-list) mode keeps the stricter "allowed only when"
+        # semantics for callers that want a positive-match policy.
+        hash<auto> captured_block;
+        QoreLlmUtils::LlmBackend block_backend(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "mode": "callback",
+                "model": "test-model",
+                "api_callback": hash<auto> sub (string m, string p,
+                        hash<auto> body) {
+                    captured_block = body;
+                    return {
+                        "choices": ({
+                            "message": {"content":
+                                "{\"allowed\":false,\"detected_language\":"
+                                "\"en\",\"domain\":\"unknown\","
+                                "\"task_category\":\"unknown\","
+                                "\"confidence\":0.4,\"reason_code\":"
+                                "\"classification-uncertain\",\"reason\":"
+                                "\"unclear\"}"},
+                            "finish_reason": "stop",
+                        },),
+                        "usage": {"total_tokens": 9},
+                    };
+                },
+            });
+        QoreLlmUtils::LlmRequestClassifier block_classifier(block_backend, {
+            "policy_label": "ops-only",
+            "allowed_domains": ("operations",),
+        });
+        block_classifier.classify("hello");
+        assertTrue(captured_block.messages[0].content =~ /allowed only when/,
+            "default mode keeps allow-list semantics");
     }
 
     citationValidatorTest() {
@@ -1271,6 +1370,103 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "single-dispatch operation argument name is preserved");
         assertFalse(turn_params.properties.operation.hasKey("enum"),
             "Gemini compact tool schema strips enum constraints");
+    }
+
+    geminiSchemaMetadataKeywordSanitizerTest() {
+        # A structured-output schema carrying stray JSON-Schema dialect and
+        # labelling metadata at the schema level, plus properties whose
+        # names collide with stripped schema keywords.  Gemini's
+        # responseSchema rejects the metadata keywords with HTTP 400
+        # "Unknown name", but property names must survive verbatim.
+        hash<auto> schema = {
+            "type": "object",
+            "name": "request_classification",
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "urn:example:rc",
+            "$defs": {"Unused": {"type": "string"}},
+            "properties": {
+                "name": {"type": "string", "format": "uuid"},
+                "format": {"type": "string", "minLength": 2},
+                "allowed": {"type": "boolean"},
+            },
+            "required": ("name", "allowed"),
+        };
+        hash<auto> rv = GeminiBodyShape::sanitizeSchema(schema);
+
+        assertFalse(rv.hasKey("name"),
+            "stray top-level schema 'name' label is stripped");
+        assertFalse(rv.hasKey("$schema"),
+            "JSON-Schema '$schema' dialect keyword is stripped");
+        assertFalse(rv.hasKey("$id"), "'$id' metadata keyword is stripped");
+        assertFalse(rv.hasKey("$defs"), "'$defs' metadata keyword is stripped");
+        assertTrue(rv.properties.hasKey("name"),
+            "a property literally named 'name' is preserved");
+        assertTrue(rv.properties.hasKey("format"),
+            "a property literally named 'format' is preserved");
+        assertTrue(rv.properties.hasKey("allowed"),
+            "other declared properties are preserved");
+        assertFalse(rv.properties.name.hasKey("format"),
+            "the 'format' keyword inside a property schema is still stripped");
+        assertFalse(rv.properties.format.hasKey("minLength"),
+            "the 'minLength' keyword inside a property schema is still stripped");
+        assertEq(("name", "allowed"), rv.required,
+            "the required field list is preserved");
+    }
+
+    geminiResponseSchemaMetadataIntegrationTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": ({"text": "{\"allowed\":true}"},),
+                        },
+                    },),
+                    "usageMetadata": {"totalTokenCount": 5},
+                },
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        # The OpenAI structured-output facade carries the schema label both
+        # on the wrapper (response_format.json_schema.name, valid) and, as
+        # callers like LlmRequestClassifier historically did, as a stray
+        # top-level "name" inside the schema itself (invalid for Gemini).
+        llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": ({"role": "user", "content": "classify"},),
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "request_classification",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "name": "request_classification",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "allowed": {"type": "boolean"},
+                        },
+                        "required": ("allowed",),
+                    },
+                },
+            },
+        });
+
+        hash<auto> gc = gemini_handler.requests[0].body.generationConfig;
+        assertEq("application/json", gc.responseMimeType,
+            "structured output sets the JSON response mime type");
+        assertFalse(gc.responseSchema.hasKey("name"),
+            "responseSchema drops the stray top-level 'name' Gemini rejects");
+        assertTrue(gc.responseSchema.properties.hasKey("name"),
+            "responseSchema preserves a property literally named 'name'");
+        assertTrue(gc.responseSchema.properties.hasKey("allowed"),
+            "responseSchema preserves other declared properties");
+        assertEq(("allowed",), gc.responseSchema.required,
+            "responseSchema preserves the required field list");
     }
 
     geminiOpenAiToolArgumentSchemaCoercionTest() {

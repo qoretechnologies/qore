@@ -156,9 +156,23 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
         hash<auto> rv;
         foreach string key in (keys input) {
             if (GeminiBodyShape::isSchemaKeywordStripped(key)
+                    || GeminiBodyShape::isSchemaMetadataKeyword(key)
                     || (compact
                         && GeminiBodyShape::isCompactSchemaKeywordStripped(key))
                     || GeminiBodyShape::isSchemaCompositionKeyword(key)) {
+                continue;
+            }
+            # "properties" and "patternProperties" are name->schema maps:
+            # their keys are caller-defined field names (or patterns), not
+            # schema keywords, so they must pass through verbatim while only
+            # the mapped schema values are sanitized.  Treating them as an
+            # ordinary schema object would drop any property whose name
+            # collides with a stripped keyword (e.g. a field literally named
+            # "name", "format", or "enum").
+            if ((key == "properties" || key == "patternProperties")
+                    && input{key}.typeCode() == NT_HASH) {
+                rv{key} = GeminiBodyShape::sanitizeSchemaPropertyMap(
+                    cast<hash<auto>>(input{key}), compact, depth + 1);
                 continue;
             }
             rv{key} = GeminiBodyShape::sanitizeSchemaValue(input{key}, compact,
@@ -188,6 +202,28 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
         return rv;
     }
     return value;
+}
+
+#! Sanitizes a JSON-Schema name->schema map, preserving caller-defined keys
+/** Used for \c properties and \c patternProperties, whose keys are
+    application-defined field names (or patterns) rather than schema
+    keywords: the keys pass through unchanged and only the mapped schema
+    values are sanitized.
+
+    @param props the name->schema map to sanitize
+    @param compact whether compact (tool-parameter) stripping is in effect
+    @param depth recursion depth of the map itself
+
+    @return the map with every value sanitized and every key preserved
+*/
+hash<auto> sub sanitizeSchemaPropertyMap(hash<auto> props, bool compact,
+        int depth) {
+    hash<auto> rv;
+    foreach string name in (keys props) {
+        rv{name} = GeminiBodyShape::sanitizeSchemaValue(props{name}, compact,
+            depth + 1, name);
+    }
+    return rv;
 }
 
 bool sub shouldFlattenCompactSchemaProperties(*string field_name, int depth) {
@@ -245,6 +281,33 @@ bool sub isSchemaCompositionKeyword(string key) {
         case "allOf":
         case "anyOf":
         case "oneOf":
+            return True;
+    }
+    return False;
+}
+
+#! True for JSON-Schema dialect/labelling keywords Gemini's schema rejects
+/** Gemini's \c responseSchema and tool \c parameters accept an OpenAPI 3.0
+    Schema subset that has no notion of these JSON-Schema dialect or
+    labelling keywords; sending them yields an \c INVALID_ARGUMENT (HTTP
+    400) "Unknown name" error (e.g. a stray top-level \c "name" on a
+    structured-output schema).  These are stripped only at schema-object
+    positions — never from \c properties keys — so a field literally named
+    \c "name" is preserved.
+
+    @param key the schema-object key under consideration
+
+    @return @ref True if the key is a non-schema metadata keyword to drop
+*/
+bool sub isSchemaMetadataKeyword(string key) {
+    switch (key) {
+        case "name":
+        case "$schema":
+        case "$id":
+        case "$ref":
+        case "$comment":
+        case "$defs":
+        case "definitions":
             return True;
     }
     return False;
