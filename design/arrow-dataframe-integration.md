@@ -105,9 +105,14 @@ where an API exposes conversion details.
 - Implemented: DataProvider bulk record iterators expose a shaped accessor so
   native columnar sources can pass `ColumnarResult` and other `BufferColumns`
   blocks through pipelines without forcing the compatibility `hash<list>` view.
-- Not exported in the current feature contract: `QORE_HAVE_ARROW_C_DATA_INTEROP`.
-  This macro remains undefined because stable libqore Arrow C Data ABI wrappers
-  are not implemented.
+- Implemented: stable libqore Arrow C Data Interface wrappers through
+  `qore_columnar_result_export_arrow_c_data()` and
+  `qore_columnar_result_import_arrow_c_data()`.  Fixed-width primitive,
+  boolean, and decimal128 top-level arrays use zero-copy buffer export/import
+  when host storage is compatible; string and nested list/struct columns use
+  Qore-owned Arrow-compatible buffers or materialized Qore containers.
+  `QORE_HAVE_ARROW_C_DATA_INTEROP` is exported in `qore-version.h` and
+  `QoreConfig.cmake`.
 
 ### dataframe
 
@@ -162,10 +167,11 @@ where an API exposes conversion details.
   `QORE_HAVE_DECIMAL128_BUFFER` is defined and JDBC precision/scale fit
   decimal128; larger decimals keep JDBC precision/scale metadata and use list
   storage.
-- Java-side primitive-array/direct-buffer batch extraction is not part of the
-  current compatibility contract.  The implemented JDBC path now preserves
-  packed Qore buffers for supported fixed-width and decimal128 columns, but
-  still calls JDBC typed getters per cell.
+- Java-side primitive-array batch extraction is implemented for supported JDBC
+  fixed-width numeric, boolean, string, and decimal128 columns.  The C++ path
+  falls back to the existing per-cell typed getters when a result shape includes
+  an unsupported packed column type, so module-jni remains compatible with qore
+  builds that do not expose this feature contract.
 
 ## Verification Checklist
 

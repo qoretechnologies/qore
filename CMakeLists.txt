@@ -2357,6 +2357,21 @@ if (ADDRESS_SANITIZER)
     target_link_options(qore-ir-plugin-registry-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+add_executable(qore-arrow-c-data-smoke EXCLUDE_FROM_ALL
+    examples/test/ir/arrow_c_data_smoke.cpp)
+target_link_libraries(qore-arrow-c-data-smoke PRIVATE libqore)
+target_include_directories(qore-arrow-c-data-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/include)
+if (WIN32 OR MINGW OR MSYS)
+    target_compile_definitions(qore-arrow-c-data-smoke PRIVATE BUILDING_DLL)
+    target_link_libraries(qore-arrow-c-data-smoke PRIVATE ${WINSOCKET_LIBRARIES})
+endif (WIN32 OR MINGW OR MSYS)
+if (ADDRESS_SANITIZER)
+    target_compile_options(qore-arrow-c-data-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(qore-arrow-c-data-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
 add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)

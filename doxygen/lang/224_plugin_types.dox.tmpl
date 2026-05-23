@@ -344,6 +344,17 @@ ColumnarResult filtered_columns = filter.processRecordsShape(
     DataProvider pipeline cases outperform equivalent pandas operations when
     native columnar DBI support is available for SQL reads.
 
+    Native modules that already speak Apache Arrow can interoperate with these
+    dense column blocks through libqore's Arrow C Data Interface wrappers.  The
+    feature macro \c QORE_HAVE_ARROW_C_DATA_INTEROP means
+    \c qore_columnar_result_export_arrow_c_data() and
+    \c qore_columnar_result_import_arrow_c_data() are available.  Fixed-width
+    primitive, boolean, and \c decimal128 top-level arrays can be zero-copy;
+    strings and nested list/struct values preserve schema and values through
+    owned Arrow-compatible buffers or Qore containers.  This is the preferred
+    ABI for binary modules that need columnar interchange but should not link
+    directly against Arrow C++.
+
     @section plugin_types_lowering Lowering Pattern Hooks
 
     Operations can register an optional \c QorePluginLoweringCallback in

@@ -370,6 +370,36 @@ while (True) {
     available, the APIs remain functional, but the compatibility fallback has to convert row-oriented or
     hash-of-list results before downstream code can use dense column operations.
 
+    C++ modules can exchange ColumnarResult values with other columnar runtimes through the
+    <a href="https://arrow.apache.org/docs/format/CDataInterface.html">Arrow C Data Interface</a>
+    without taking a compile-time dependency on Arrow C++.  libqore exports
+    \c qore_columnar_result_export_arrow_c_data() and imports
+    \c qore_columnar_result_import_arrow_c_data(); modules can detect the API
+    with \c QORE_HAVE_ARROW_C_DATA_INTEROP or the matching
+    \c QORE_HAVE_ARROW_C_DATA_INTEROP CMake variable from \c QoreConfig.cmake.
+    Fixed-width numeric, boolean, and \c decimal128 top-level columns are
+    exported and imported as zero-copy \c buffer<T> storage when the source
+    memory is host-accessible and Arrow-compatible.  \c buffer<string> and
+    nested list/struct columns preserve schema and values through
+    Arrow-compatible owned buffers or materialized Qore containers:
+    @code{.cpp}
+ArrowSchema schema = {};
+ArrowArray array = {};
+ExceptionSink xsink;
+
+if (!qore_columnar_result_export_arrow_c_data(result, &schema, &array, &xsink)) {
+    // pass schema + array to an Arrow C Data consumer
+    qore_arrow_array_release(&array);
+    qore_arrow_schema_release(&schema);
+}
+    @endcode
+
+    Imported Arrow C Data objects are consumed on success.  After
+    \c qore_columnar_result_import_arrow_c_data() returns a ColumnarResult, the
+    caller must not release the input \c ArrowSchema or \c ArrowArray manually;
+    libqore keeps the producer-owned memory alive for wrapped fixed-width
+    buffers and releases it when the last imported buffer reference is gone.
+
     The dataframe module can consume and produce ColumnarResult values directly.
     Buffer-backed DataFrame columns are preserved for dense column access and
     columnar export under normal Qore copy-on-write semantics:

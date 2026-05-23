@@ -129,6 +129,12 @@
       dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
       columns; ColumnarResult::fromColumnHash() and ColumnarResult::fromRows() provide explicit
       constructors for projected or row-compatible columnar blocks
+    - C++ modules can import and export ColumnarResult values through the Arrow C Data Interface
+      with \c qore_columnar_result_export_arrow_c_data() and
+      \c qore_columnar_result_import_arrow_c_data(); fixed-width primitive, boolean, and
+      \c decimal128 top-level columns use zero-copy \c buffer<T> storage when host memory is
+      compatible, while string and nested list/struct values preserve schema and values through
+      owned Arrow-compatible buffers or Qore containers
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
       SQL read/write, and DataProvider pipeline cases; the fastest SQL-read
@@ -1316,6 +1322,15 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 buffer<int64> ids = df.getColumnBuffer("id");
 ColumnarResult again = df.toColumnarResult();
     @endcode
+
+    C++ modules can use \c QORE_HAVE_ARROW_C_DATA_INTEROP to detect libqore's
+    Arrow C Data Interface bridge for ColumnarResult.  The bridge allows Arrow,
+    Flight, JDBC, and other binary modules to exchange columnar blocks without
+    depending on Arrow C++ in libqore itself.  Fixed-width primitive, boolean,
+    and \c decimal128 top-level columns are wrapped as \c buffer<T> where
+    possible; strings and nested list/struct values use owned Arrow-compatible
+    buffers or materialized Qore containers so schema and nullability are still
+    preserved.
     @endparblock
 
     @par Experimental Plugin-Type ABI

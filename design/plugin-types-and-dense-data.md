@@ -168,7 +168,7 @@ features:
 | `buffer<decimal128>` | implemented | Uses fixed-width signed decimal128 storage with precision/scale metadata and overflow checks. |
 | nested buffers / array columns | implemented for Arrow/DataFrame preservation | Nested Arrow/Parquet columns keep recursive schema metadata and reuse immutable Arrow chunked arrays for round trips; direct nested `buffer<T>` value syntax remains future work. |
 | GPU/device buffers | implemented as provider-owned external storage | `QoreBufferNode` exposes provider-neutral device descriptors, explicit copy-to-host callbacks, Qore storage-inspection methods, and detach-on-write semantics. |
-| native JDBC packed buffers | implemented for host buffers | module-jni constructs packed Qore buffers from JDBC typed getters for fixed-width numeric, boolean, string, and decimal128 columns; Java-side primitive-array/direct-buffer batch extraction remains a future optimization. |
+| native JDBC packed buffers | implemented for host buffers | module-jni constructs packed Qore buffers for fixed-width numeric, boolean, string, and decimal128 columns and uses Java-side primitive-array batch extraction when built with the new qore feature probes; unsupported shapes fall back to typed getter conversion. |
 
 Short-term mappings remain:
 
@@ -207,6 +207,8 @@ targets are:
 - wider vectorized analytics outputs
 - extending dense string predicate lowering beyond equality/range comparisons where benchmarks show a payoff
 - direct packed-column support in more DBI drivers
+- direct Arrow C Data consumers in binary modules that need libqore-level
+  columnar interchange without linking against Arrow C++
 - benchmark-driven native codegen callbacks for module-owned dense kernels
 
 ## Documentation and Verification Checklist

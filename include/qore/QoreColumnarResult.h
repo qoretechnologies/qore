@@ -33,6 +33,7 @@
 #define _QORE_QORECOLUMNARRESULT_H
 
 #include <qore/Qore.h>
+#include <qore/QoreArrowCData.h>
 #include <qore/QoreBufferNode.h>
 
 #include <cstdint>
@@ -213,5 +214,40 @@ DLLEXPORT QoreColumnarResult* qore_columnar_result_try_from_object(const QoreObj
 //! Creates a columnar result from a hash-of-columns, list-of-rows, or empty value.
 DLLEXPORT QoreColumnarResult* qore_columnar_result_from_value(const QoreValue& value, const QoreHashNode* desc,
     const char* context, ExceptionSink* xsink);
+
+//! Exports a columnar result through the Arrow C Data Interface.
+/** The caller supplies storage for @a schema and @a array and owns the exported
+    Arrow C Data objects after a successful call.  Release them by calling the
+    embedded release callbacks or qore_arrow_schema_release() and
+    qore_arrow_array_release().
+
+    Fixed-width dense Qore buffers are exported without copying when host
+    storage is directly available.  String and nested list/struct columns are
+    exported with Qore-owned Arrow-compatible buffers.
+
+    @return 0 on success, non-zero on error
+    @since %Qore 2.3
+ */
+DLLEXPORT int qore_columnar_result_export_arrow_c_data(const QoreColumnarResult* result, ArrowSchema* schema,
+    ArrowArray* array, ExceptionSink* xsink);
+
+//! Imports an Arrow C Data struct/record batch as a QoreColumnarResult.
+/** On success, this function consumes @a schema and @a array by moving their
+    contents into Qore-owned holders.  The caller must not release the input
+    Arrow C Data objects after a successful import.  Fixed-width primitive and
+    decimal top-level arrays are wrapped without copying; string and nested
+    arrays are materialized into Qore containers.
+
+    @return a new QoreColumnarResult, or nullptr on error
+    @since %Qore 2.3
+ */
+DLLEXPORT QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema, ArrowArray* array,
+    ExceptionSink* xsink);
+
+//! Releases an ArrowSchema if it has a release callback.
+DLLEXPORT void qore_arrow_schema_release(ArrowSchema* schema);
+
+//! Releases an ArrowArray if it has a release callback.
+DLLEXPORT void qore_arrow_array_release(ArrowArray* array);
 
 #endif
