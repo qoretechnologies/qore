@@ -20,6 +20,10 @@ module BulkSqlUtilTestBase {
 %requires ../../../../qlib/BulkSqlUtil
 %requires ../../../../qlib/Schema
 
+%try-module dataframe
+%define NoDataFrame
+%endtry
+
 public class SqlUtilTestSchema inherits AbstractSchema {
     constructor(AbstractDatasource ds, *string dts, *string its) : AbstractSchema(ds, dts, its) {
     }
@@ -75,6 +79,11 @@ public class SqlTestBase inherits QUnit::Test {
 
     constructor(string testName, string testVer, any args, *hash mopts) : Test(testName, testVer, \args, mopts) {
         addTestCase("BulkInsert", \bulkInsertTest());
+        addTestCase("BulkColumnarInsert", \bulkColumnarInsertTest());
+        addTestCase("BulkHashOfBuffersInsert", \bulkHashOfBuffersInsertTest());
+%ifndef NoDataFrame
+        addTestCase("BulkDataFrameInsert", \bulkDataFrameInsertTest());
+%endif
         addTestCase("BulkUpsert", \bulkUpsertTest());
     }
 
@@ -120,6 +129,85 @@ public class SqlTestBase inherits QUnit::Test {
         list l = table.selectRows(("orderby": "id"));
         assertEq(5, l.size());
         map assertEq(insert_data[$#] + crec + expect_data, $1), l;
+    }
+
+    bulkColumnarInsertTest() {
+        if (!table) testSkip("no DB connection");
+        if (table.getDatasource().getDriverName() != "pgsql")
+            testSkip("covered by pgsql bulk tests");
+
+        runSimpleColumnarInsert("qore_bulk_columnar_test", getSimpleColumnarResult());
+    }
+
+    bulkHashOfBuffersInsertTest() {
+        if (!table) testSkip("no DB connection");
+        if (table.getDatasource().getDriverName() != "pgsql")
+            testSkip("covered by pgsql bulk tests");
+
+        runSimpleColumnarInsert("qore_bulk_buffers_test", getSimpleBufferColumns());
+    }
+
+%ifndef NoDataFrame
+    bulkDataFrameInsertTest() {
+        if (!table) testSkip("no DB connection");
+        if (table.getDatasource().getDriverName() != "pgsql")
+            testSkip("covered by pgsql bulk tests");
+
+        runSimpleColumnarInsert("qore_bulk_dataframe_test", new DataFrame::DataFrame(getSimpleBufferColumns()));
+    }
+%endif
+
+    private runSimpleColumnarInsert(string table_name, auto data) {
+        AbstractDatasource ds = table.getDatasource();
+
+        on_success ds.commit();
+        on_error ds.rollback();
+
+        ds.exec(sprintf("drop table if exists %s", table_name));
+        ds.exec(sprintf("create table %s (id bigint primary key, name text, score double precision, active boolean)",
+            table_name));
+        on_exit {
+            try {
+                ds.exec(sprintf("drop table if exists %s", table_name));
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        Table target(ds, getSimpleTableDescription(), table_name);
+        BulkInsertOperation insert(target, {"block_size": 2});
+        assertEq(NOTHING, insert.queueData(data));
+        assertEq(NOTHING, insert.flush());
+
+        list<hash<auto>> rows = ds.selectRows(sprintf("select id, name, score, active from %s order by id",
+            table_name));
+        assertEq(3, rows.size());
+        assertEq({"id": 1, "name": "Ada", "score": 10.5, "active": True}, rows[0]);
+        assertEq({"id": 2, "name": "Ben", "score": 20.25, "active": False}, rows[1]);
+        assertEq({"id": 3, "name": "Cy", "score": 30.75, "active": True}, rows[2]);
+    }
+
+    private static hash<auto> getSimpleTableDescription() {
+        return {
+            "columns": {
+                "id": {"qore_type": "integer"},
+                "name": {"qore_type": "string"},
+                "score": {"qore_type": "float"},
+                "active": {"qore_type": "bool"},
+            },
+        };
+    }
+
+    private static hash<auto> getSimpleBufferColumns() {
+        return {
+            "id": new buffer<int64>((1, 2, 3)),
+            "name": new buffer<string>(("Ada", "Ben", "Cy")),
+            "score": new buffer<float64>((10.5, 20.25, 30.75)),
+            "active": new buffer<bool>((True, False, True)),
+        };
+    }
+
+    private static ColumnarResult getSimpleColumnarResult() {
+        return ColumnarResult::fromColumnHash(getSimpleBufferColumns());
     }
 
     static hash getRows(list l, int start, int end = -1) {

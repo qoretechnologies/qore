@@ -199,6 +199,11 @@ on_error ds.rollback();
             - discard()
         */
         queueData(hash data) {
+            if (isHashOfBuffers(data)) {
+                queueBufferColumns(data, data.firstValue().lsize());
+                return;
+            }
+
             # prepare buffer hash if necessary
             if (!hbuf)
                 setupInitialRowColumns(data);
@@ -385,7 +390,15 @@ on_error ds.rollback();
 
         #! Returns True if the value is a hash of dense column buffers
         private bool isHashOfBuffers(auto data) {
-            return data.typeCode() == NT_HASH && data && data.firstValue().typeCode() == NT_BUFFER;
+            if (data.typeCode() != NT_HASH || !data) {
+                return False;
+            }
+            foreach auto value in (data.iterator()) {
+                if (value.typeCode() != NT_BUFFER) {
+                    return False;
+                }
+            }
+            return True;
         }
 
         #! Queues dense column blocks in block-sized slices to avoid materializing large packed inputs at once
