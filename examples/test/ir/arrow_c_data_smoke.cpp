@@ -468,6 +468,29 @@ int main() {
             || first_sliced_pair->retrieveEntry(1).getAsBigInt() != 4) {
         fail("Arrow C Data top-level offset did not slice nested values", xsink);
     }
+    ValueHolder sliced_customer(sliced_import->getColumnValue("customer", &xsink), &xsink);
+    const QoreHashNode* first_sliced_customer =
+        sliced_customer->get<const QoreListNode>()->retrieveEntry(0).get<const QoreHashNode>();
+    if (!first_sliced_customer || first_sliced_customer->getKeyValue("id").getAsBigInt() != 2
+            || !first_sliced_customer->getKeyValue("name").isNothing()) {
+        fail("Arrow C Data top-level offset did not slice struct values", xsink);
+    }
+    ValueHolder sliced_items(sliced_import->getColumnValue("items", &xsink), &xsink);
+    const QoreListNode* sliced_items_values = sliced_items->get<const QoreListNode>();
+    const QoreListNode* first_sliced_items = sliced_items_values->retrieveEntry(0).get<const QoreListNode>();
+    if (!first_sliced_items || first_sliced_items->size() != 3
+            || first_sliced_items->retrieveEntry(2).getAsBigInt() != 5
+            || !sliced_items_values->retrieveEntry(1).isNothing()) {
+        fail("Arrow C Data top-level offset did not slice list values", xsink);
+    }
+    ValueHolder sliced_attrs(sliced_import->getColumnValue("attrs", &xsink), &xsink);
+    const QoreListNode* sliced_attrs_values = sliced_attrs->get<const QoreListNode>();
+    const QoreHashNode* first_sliced_attrs = sliced_attrs_values->retrieveEntry(0).get<const QoreHashNode>();
+    QoreStringValueHelper sliced_tier(first_sliced_attrs ? first_sliced_attrs->getKeyValue("tier") : QoreValue());
+    if (!first_sliced_attrs || std::strcmp(sliced_tier->c_str(), "silver")
+            || !sliced_attrs_values->retrieveEntry(1).isNothing()) {
+        fail("Arrow C Data top-level offset did not slice map values", xsink);
+    }
 
     int32_t dict_offsets[] = {0, 3, 7};
     const char dict_bytes[] = "redblue";
