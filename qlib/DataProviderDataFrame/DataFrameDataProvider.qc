@@ -27,8 +27,8 @@ public namespace DataProviderDataFrame {
 
 #! Data provider wrapping a DataFrame for record-oriented access
 /** Wraps a \c DataFrame object as a DataProvider,
-    enabling DataFrames to be used in Qorus data pipelines and integrated
-    with other DataProvider-based systems.
+    enabling DataFrames to be used in data pipelines and integrated with
+    other DataProvider-based systems.
 
     @par Example
     @code{.py}

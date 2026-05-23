@@ -238,7 +238,7 @@ public class DpqlParser {
     }
 
     #! Validates search expression rules (only applied in search context)
-    /** Enforces rules about field references and server vs Qorus-only operators
+    /** Enforces rules about field references and server-supported vs local-only operators
         in search expressions (where_cond for find/update/delete).
 
         These rules are ONLY applied when \a server_expressions is provided (search context).
@@ -269,7 +269,7 @@ public class DpqlParser {
             };
         }
 
-        # Walk the expression tree checking server vs Qorus-only operator rules
+        # Walk the expression tree checking server-supported vs local-only operator rules
         validateSearchExprRecursive(exp, server_expressions, \diags, True);
 
         return diags;
@@ -313,8 +313,8 @@ public class DpqlParser {
         if (exp.exp == DP_SEARCH_OP_NOT) {
             bool is_server = server_expressions.hasKey(exp.exp);
             if (!is_server) {
-                # Qorus-only NOT — check for field refs inside
-                checkNoFieldRefsInQorusOp(exp, exp.exp, server_expressions, \diags);
+                # Local-only NOT — check for field refs inside
+                checkNoFieldRefsInLocalOp(exp, exp.exp, server_expressions, \diags);
             } else {
                 # Server NOT — recurse normally
                 foreach auto arg in (exp.args) {
@@ -326,7 +326,7 @@ public class DpqlParser {
             return;
         }
 
-        # For all other expressions: check server vs Qorus-only rules
+        # For all other expressions: check server-supported vs local-only rules
         bool is_server_op = server_expressions.hasKey(exp.exp);
 
         if (is_server_op) {
@@ -361,8 +361,8 @@ public class DpqlParser {
                 }
             }
         } else {
-            # Qorus-only operator
-            # DPQL-E041: Qorus-only op with field ref
+            # Local-only operator
+            # DPQL-E041: local-only op with field ref
             if (expressionHasFieldRef(exp)) {
                 # Find the first field ref for the error message
                 *string field_name = findFirstFieldRef(exp);
@@ -377,7 +377,7 @@ public class DpqlParser {
                 string server_list = server_ops ? server_ops.join(", ") : "(none available)";
                 diags += <DpqlDiagnostic>{
                     "severity": "error",
-                    "message": sprintf("Operator '%s' runs locally in Qorus, not on the data provider "
+                    "message": sprintf("Operator '%s' is evaluated locally, not on the data provider "
                         "server. Field references like '@%s' can only be used with server-supported "
                         "operators (%s). Use a server operator, or remove the field reference.",
                         op_sym, field_name ?? "field", server_list),
@@ -391,8 +391,8 @@ public class DpqlParser {
         }
     }
 
-    #! Checks that a Qorus-only operator subtree contains no field references
-    private checkNoFieldRefsInQorusOp(hash<DataProviderExpression> exp, string parent_op,
+    #! Checks that a local-only operator subtree contains no field references
+    private checkNoFieldRefsInLocalOp(hash<DataProviderExpression> exp, string parent_op,
             hash<string, hash<DataProviderExpressionInfo>> server_expressions,
             reference<list<hash<DpqlDiagnostic>>> diags) {
         foreach auto arg in (exp.args) {
@@ -401,7 +401,7 @@ public class DpqlParser {
                 diags += <DpqlDiagnostic>{
                     "severity": "error",
                     "message": sprintf("Field reference '@%s' cannot appear inside '%s' — this operator "
-                        "is evaluated locally by Qorus after the server query returns. Move the field "
+                        "is evaluated locally after the server query returns. Move the field "
                         "reference to a top-level server operator condition.", arg.field, op_sym),
                     "code": "DPQL-E042",
                     "line": 1,
@@ -410,7 +410,7 @@ public class DpqlParser {
                     "end_column": 1,
                 };
             } else if (arg instanceof hash<DataProviderExpression>) {
-                checkNoFieldRefsInQorusOp(arg, parent_op, server_expressions, \diags);
+                checkNoFieldRefsInLocalOp(arg, parent_op, server_expressions, \diags);
             }
         }
     }

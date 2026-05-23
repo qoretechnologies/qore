@@ -44,7 +44,7 @@ module DataProviderDataFrame {
     @section dataproviderdataframeintro DataProviderDataFrame Module Introduction
 
     Provides DataProvider integration for the @ref dataframe "dataframe" binary module,
-    enabling DataFrames to participate in Qorus data pipelines.
+    enabling DataFrames to participate in DataProvider pipelines.
 
     The module registers a \c dataframe data provider factory that creates DataFrames
     from records and exposes them as searchable data providers.

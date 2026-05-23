@@ -145,8 +145,8 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
     bool server_expression_handling = False;
 
     #! If True, allowed values should be populated from the pipeline input type's field names
-    /** This marker tells Qorus which options should get dynamic field-name allowed values from the
-        preceding pipeline state's output type.
+    /** This marker tells host applications which options should get dynamic field-name allowed values
+        from the preceding pipeline state's output type.
 
         @since %DataProvider 3.4
     */
