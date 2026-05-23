@@ -133,8 +133,9 @@
       with \c qore_columnar_result_export_arrow_c_data() and
       \c qore_columnar_result_import_arrow_c_data(); fixed-width primitive, boolean, and
       \c decimal128 top-level columns use zero-copy \c buffer<T> storage when host memory is
-      compatible, while string and nested list/struct values preserve schema and values through
-      owned Arrow-compatible buffers or Qore containers
+      compatible, including sliced record batches with non-zero top-level offsets, while string,
+      binary, temporal, list, fixed-size-list, struct, map, and dictionary-encoded values preserve
+      schema and values through owned Arrow-compatible buffers or Qore containers
     - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper now support shaped columnar bulk blocks: DB providers can
       return \c ColumnarResult values from \c getShapedValue(), bulk DB writes can accept \c ColumnarResult and
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
@@ -1341,7 +1342,9 @@ ColumnarResult again = df.toColumnarResult();
     Flight, JDBC, and other binary modules to exchange columnar blocks without
     depending on Arrow C++ in libqore itself.  Fixed-width primitive, boolean,
     and \c decimal128 top-level columns are wrapped as \c buffer<T> where
-    possible; strings and nested list/struct values use owned Arrow-compatible
+    possible, including sliced record batches with non-zero top-level offsets;
+    strings, binary values, temporal values, lists, fixed-size lists, structs,
+    maps, and dictionary-encoded Arrow arrays use owned Arrow-compatible
     buffers or materialized Qore containers so schema and nullability are still
     preserved.
     @endparblock

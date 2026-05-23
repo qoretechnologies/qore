@@ -1229,6 +1229,142 @@ static std::string qore_arrow_decimal_format(int32_t precision, int32_t scale) {
     return buffer;
 }
 
+static bool qore_arrow_parse_int_suffix(const char* format, const char* prefix, int32_t& value) {
+    value = 0;
+    if (!format || !prefix) {
+        return false;
+    }
+    size_t prefix_len = std::strlen(prefix);
+    if (std::strncmp(format, prefix, prefix_len)) {
+        return false;
+    }
+    char* end = nullptr;
+    long parsed = std::strtol(format + prefix_len, &end, 10);
+    if (!end || *end || parsed <= 0 || parsed > std::numeric_limits<int32_t>::max()) {
+        return false;
+    }
+    value = static_cast<int32_t>(parsed);
+    return true;
+}
+
+static const char* qore_arrow_time_unit_name(char unit) {
+    switch (unit) {
+        case 's':
+            return "s";
+        case 'm':
+            return "ms";
+        case 'u':
+            return "us";
+        case 'n':
+            return "ns";
+        default:
+            return nullptr;
+    }
+}
+
+static char qore_arrow_time_unit_char(const std::string& unit) {
+    if (unit == "s" || unit == "second") {
+        return 's';
+    }
+    if (unit == "ms" || unit == "milli" || unit == "millisecond") {
+        return 'm';
+    }
+    if (unit == "ns" || unit == "nano" || unit == "nanosecond") {
+        return 'n';
+    }
+    return 'u';
+}
+
+static bool qore_arrow_parse_timestamp_format(const char* format, std::string& unit, std::string& timezone) {
+    unit.clear();
+    timezone.clear();
+    if (!format || std::strncmp(format, "ts", 2) || !format[2] || format[3] != ':') {
+        return false;
+    }
+    const char* unit_name = qore_arrow_time_unit_name(format[2]);
+    if (!unit_name) {
+        return false;
+    }
+    unit = unit_name;
+    timezone = format + 4;
+    return true;
+}
+
+static bool qore_arrow_parse_duration_format(const char* format, std::string& unit) {
+    unit.clear();
+    if (!format || std::strncmp(format, "tD", 2) || !format[2] || format[3]) {
+        return false;
+    }
+    const char* unit_name = qore_arrow_time_unit_name(format[2]);
+    if (!unit_name) {
+        return false;
+    }
+    unit = unit_name;
+    return true;
+}
+
+static bool qore_arrow_parse_time_format(const char* format, std::string& unit) {
+    unit.clear();
+    if (!format || std::strncmp(format, "tt", 2) || !format[2] || format[3]) {
+        return false;
+    }
+    const char* unit_name = qore_arrow_time_unit_name(format[2]);
+    if (!unit_name) {
+        return false;
+    }
+    unit = unit_name;
+    return true;
+}
+
+static int qore_arrow_checked_scale_temporal(int64_t value, int64_t multiplier, int64_t divisor, int64_t& result,
+        ExceptionSink* xsink, const char* context) {
+    if (divisor != 1) {
+        result = value / divisor;
+        return 0;
+    }
+
+    __int128 scaled = static_cast<__int128>(value) * multiplier;
+    if (scaled > std::numeric_limits<int64_t>::max() || scaled < std::numeric_limits<int64_t>::min()) {
+        xsink->raiseException("ARROW-C-DATA-ERROR", "%s temporal value " QLLD " exceeds Qore int64 range",
+            context ? context : "Arrow C Data", value);
+        return -1;
+    }
+    result = static_cast<int64_t>(scaled);
+    return 0;
+}
+
+static int qore_arrow_temporal_to_microseconds(int64_t value, char unit, int64_t& result, ExceptionSink* xsink,
+        const char* context) {
+    switch (unit) {
+        case 's':
+            return qore_arrow_checked_scale_temporal(value, 1000000, 1, result, xsink, context);
+        case 'm':
+            return qore_arrow_checked_scale_temporal(value, 1000, 1, result, xsink, context);
+        case 'n':
+            return qore_arrow_checked_scale_temporal(value, 1, 1000, result, xsink, context);
+        case 'u':
+        default:
+            result = value;
+            return 0;
+    }
+}
+
+static int qore_arrow_microseconds_to_temporal(int64_t value, char unit, int64_t& result, ExceptionSink* xsink,
+        const char* context) {
+    switch (unit) {
+        case 's':
+            return qore_arrow_checked_scale_temporal(value, 1, 1000000, result, xsink, context);
+        case 'm':
+            return qore_arrow_checked_scale_temporal(value, 1, 1000, result, xsink, context);
+        case 'n':
+            return qore_arrow_checked_scale_temporal(value, 1000, 1, result, xsink, context);
+        case 'u':
+        default:
+            result = value;
+            return 0;
+    }
+}
+
 static bool qore_arrow_format_to_buffer_type(const char* format, QoreBufferElementType& element_type,
         int32_t& precision, int32_t& scale) {
     precision = 0;
@@ -1496,6 +1632,191 @@ static int qore_arrow_export_values_as_buffer(const QoreArrowValueSource& source
     return qore_arrow_export_buffer_array(buffer, name, schema, array, xsink, buffer_value.release());
 }
 
+static int qore_arrow_export_binary_array(const QoreArrowValueSource& source,
+        const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
+        ExceptionSink* xsink) {
+    size_t length = source.size();
+    int64_t arrow_length = qore_arrow_int64_length(length, xsink, "binary export");
+    if (*xsink) {
+        return -1;
+    }
+
+    bool fixed = schema_desc.fixed_size > 0;
+    std::vector<uint8_t> validity(schema_desc.nullable ? qore_arrow_bitmap_bytes(length) : 0, 0);
+    std::vector<int64_t> offsets64(fixed ? 0 : length + 1, 0);
+    std::vector<uint8_t> bytes;
+    int64_t current = 0;
+    int64_t null_count = 0;
+
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow binary values")) {
+            return -1;
+        }
+        if (!fixed) {
+            offsets64[i] = current;
+        }
+
+        ValueHolder row(source.get(i, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (row->isNullOrNothing()) {
+            ++null_count;
+            if (fixed) {
+                bytes.resize(bytes.size() + schema_desc.fixed_size, 0);
+            }
+            continue;
+        }
+        if (row->getType() != NT_BINARY) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "binary column '%s' row " QSD " has type '%s'; expected binary or NOTHING",
+                name ? name : "", i, row->getTypeName());
+            return -1;
+        }
+        if (schema_desc.nullable) {
+            qore_arrow_set_bit(validity.data(), i, true);
+        }
+        const BinaryNode* bin = row->get<const BinaryNode>();
+        if (fixed && static_cast<int64_t>(bin->size()) != schema_desc.fixed_size) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "fixed_size_binary column '%s' row " QSD " has " QSD " bytes; expected %d",
+                name ? name : "", i, bin->size(), schema_desc.fixed_size);
+            return -1;
+        }
+        if (!fixed && bin->size() > static_cast<size_t>(std::numeric_limits<int64_t>::max() - current)) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "binary column '%s' exceeds Arrow int64 offset range", name ? name : "");
+            return -1;
+        }
+        const uint8_t* ptr = static_cast<const uint8_t*>(bin->getPtr());
+        bytes.insert(bytes.end(), ptr, ptr + bin->size());
+        if (!fixed) {
+            current += static_cast<int64_t>(bin->size());
+        }
+    }
+
+    if (fixed) {
+        std::string format = "w:" + std::to_string(schema_desc.fixed_size);
+        qore_arrow_init_schema(schema, format.c_str(), name, schema_desc.nullable, 0);
+        QoreArrowArrayPrivate* array_priv = qore_arrow_init_array(array, arrow_length, null_count, 0, 2, 0);
+        if (schema_desc.nullable) {
+            qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+        }
+        qore_arrow_add_owned_buffer(array_priv, 1, std::move(bytes));
+        return 0;
+    }
+
+    offsets64[length] = current;
+    if (current <= std::numeric_limits<int32_t>::max()) {
+        qore_arrow_init_schema(schema, "z", name, schema_desc.nullable, 0);
+        QoreArrowArrayPrivate* array_priv = qore_arrow_init_array(array, arrow_length, null_count, 0, 3, 0);
+        std::vector<uint8_t> offsets((length + 1) * sizeof(int32_t), 0);
+        int32_t* offset_ptr = reinterpret_cast<int32_t*>(offsets.data());
+        for (size_t i = 0; i <= length; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow binary offsets")) {
+                return -1;
+            }
+            offset_ptr[i] = static_cast<int32_t>(offsets64[i]);
+        }
+        if (schema_desc.nullable) {
+            qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+        }
+        qore_arrow_add_owned_buffer(array_priv, 1, std::move(offsets));
+        qore_arrow_add_owned_buffer(array_priv, 2, std::move(bytes));
+        return 0;
+    }
+
+    qore_arrow_init_schema(schema, "Z", name, schema_desc.nullable, 0);
+    QoreArrowArrayPrivate* array_priv = qore_arrow_init_array(array, arrow_length, null_count, 0, 3, 0);
+    std::vector<uint8_t> offsets((length + 1) * sizeof(int64_t), 0);
+    std::memcpy(offsets.data(), offsets64.data(), offsets.size());
+    if (schema_desc.nullable) {
+        qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+    }
+    qore_arrow_add_owned_buffer(array_priv, 1, std::move(offsets));
+    qore_arrow_add_owned_buffer(array_priv, 2, std::move(bytes));
+    return 0;
+}
+
+static int qore_arrow_export_temporal_array(const QoreArrowValueSource& source,
+        const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
+        ExceptionSink* xsink) {
+    size_t length = source.size();
+    int64_t arrow_length = qore_arrow_int64_length(length, xsink, "temporal export");
+    if (*xsink) {
+        return -1;
+    }
+
+    char unit = qore_arrow_time_unit_char(schema_desc.time_unit);
+    std::string format;
+    if (schema_desc.kind == QoreColumnarTypeKind::Duration) {
+        format = "tD";
+        format.push_back(unit);
+    } else {
+        format = "ts";
+        format.push_back(unit);
+        format.push_back(':');
+        format += schema_desc.timezone;
+    }
+
+    qore_arrow_init_schema(schema, format.c_str(), name, schema_desc.nullable, 0);
+    QoreArrowArrayPrivate* array_priv = qore_arrow_init_array(array, arrow_length, 0, 0, 2, 0);
+
+    std::vector<uint8_t> validity(schema_desc.nullable ? qore_arrow_bitmap_bytes(length) : 0, 0);
+    std::vector<uint8_t> data(length * sizeof(int64_t), 0);
+    int64_t* values = reinterpret_cast<int64_t*>(data.data());
+    int64_t null_count = 0;
+
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow temporal values")) {
+            return -1;
+        }
+        ValueHolder row(source.get(i, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (row->isNullOrNothing()) {
+            ++null_count;
+            continue;
+        }
+        if (row->getType() != NT_DATE) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "temporal column '%s' row " QSD " has type '%s'; expected date or NOTHING",
+                name ? name : "", i, row->getTypeName());
+            return -1;
+        }
+        const DateTimeNode* dt = row->get<const DateTimeNode>();
+        bool duration = schema_desc.kind == QoreColumnarTypeKind::Duration;
+        if (duration && !dt->isRelative()) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "duration column '%s' row " QSD " has an absolute date; expected relative date duration",
+                name ? name : "", i);
+            return -1;
+        }
+        if (!duration && dt->isRelative()) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "timestamp column '%s' row " QSD " has a relative date; expected absolute date/time",
+                name ? name : "", i);
+            return -1;
+        }
+        if (schema_desc.nullable) {
+            qore_arrow_set_bit(validity.data(), i, true);
+        }
+        int64_t microseconds = duration ? dt->getRelativeMicroseconds() : dt->getEpochMicrosecondsUTC();
+        if (qore_arrow_microseconds_to_temporal(microseconds, unit, values[i], xsink,
+                "exporting Arrow temporal values")) {
+            return -1;
+        }
+    }
+
+    array->null_count = null_count;
+    if (schema_desc.nullable) {
+        qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+    }
+    qore_arrow_add_owned_buffer(array_priv, 1, std::move(data));
+    return 0;
+}
+
 static int qore_arrow_export_list_array(const QoreArrowValueSource& source,
         const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
         ExceptionSink* xsink) {
@@ -1593,6 +1914,85 @@ static int qore_arrow_export_list_array(const QoreArrowValueSource& source,
         schema->children[0], array->children[0], xsink);
 }
 
+static int qore_arrow_export_fixed_size_list_array(const QoreArrowValueSource& source,
+        const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
+        ExceptionSink* xsink) {
+    if (schema_desc.children.empty()) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "cannot export fixed_size_list column '%s' through Arrow C Data without child schema metadata",
+            name ? name : "");
+        return -1;
+    }
+    if (schema_desc.fixed_size <= 0) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "fixed_size_list column '%s' requires a positive fixed_size", name ? name : "");
+        return -1;
+    }
+
+    size_t length = source.size();
+    int64_t arrow_length = qore_arrow_int64_length(length, xsink, "fixed_size_list export");
+    if (*xsink) {
+        return -1;
+    }
+
+    std::vector<uint8_t> validity(schema_desc.nullable ? qore_arrow_bitmap_bytes(length) : 0, 0);
+    QoreArrowValueVector child_values;
+    int64_t null_count = 0;
+
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow fixed_size_list values")) {
+            return -1;
+        }
+        ValueHolder row(source.get(i, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (row->isNullOrNothing()) {
+            ++null_count;
+            for (int32_t j = 0; j < schema_desc.fixed_size; ++j) {
+                child_values.values.push_back(QoreValue());
+            }
+            continue;
+        }
+        if (row->getType() != NT_LIST) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "fixed_size_list column '%s' row " QSD " has type '%s'; expected list or NOTHING",
+                name ? name : "", i, row->getTypeName());
+            return -1;
+        }
+        const QoreListNode* row_list = row->get<const QoreListNode>();
+        if (static_cast<int32_t>(row_list->size()) != schema_desc.fixed_size) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "fixed_size_list column '%s' row " QSD " has " QSD " values; expected %d",
+                name ? name : "", i, row_list->size(), schema_desc.fixed_size);
+            return -1;
+        }
+        if (schema_desc.nullable) {
+            qore_arrow_set_bit(validity.data(), i, true);
+        }
+        for (size_t j = 0; j < row_list->size(); ++j) {
+            if (j && !(j % 100) && qore_check_cancel(xsink, "collecting Arrow fixed_size_list child values")) {
+                return -1;
+            }
+            child_values.values.push_back(row_list->retrieveEntry(j).refSelf());
+        }
+    }
+
+    std::string format = "+w:" + std::to_string(schema_desc.fixed_size);
+    qore_arrow_init_schema(schema, format.c_str(), name, schema_desc.nullable, 1);
+    QoreArrowArrayPrivate* array_priv = qore_arrow_init_array(array, arrow_length, null_count, 0, 1, 1);
+    if (schema_desc.nullable) {
+        qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+    }
+
+    schema->children[0] = new ArrowSchema{};
+    array->children[0] = new ArrowArray{};
+    QoreArrowVectorValueSource child_source(child_values.values);
+    const std::string& child_name = schema_desc.children[0].name;
+    return qore_arrow_export_values_array(child_source, schema_desc.children[0], child_name.c_str(),
+        schema->children[0], array->children[0], xsink);
+}
+
 static int qore_arrow_export_struct_array(const QoreArrowValueSource& source,
         const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
         ExceptionSink* xsink) {
@@ -1662,6 +2062,124 @@ static int qore_arrow_export_struct_array(const QoreArrowValueSource& source,
     return 0;
 }
 
+static int qore_arrow_export_map_array(const QoreArrowValueSource& source,
+        const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
+        ExceptionSink* xsink) {
+    size_t length = source.size();
+    int64_t arrow_length = qore_arrow_int64_length(length, xsink, "map export");
+    if (*xsink) {
+        return -1;
+    }
+
+    QoreColumnarTypeDescriptor key_desc;
+    key_desc.name = "key";
+    key_desc.kind = QoreColumnarTypeKind::String;
+    key_desc.column_type = QoreColumnarColumnType::String;
+    key_desc.buffer_type = QoreBufferElementType::String;
+    key_desc.nullable = false;
+    if (!schema_desc.children.empty()) {
+        key_desc = schema_desc.children[0];
+        key_desc.name = "key";
+    }
+
+    QoreColumnarTypeDescriptor item_desc;
+    item_desc.name = "item";
+    item_desc.kind = QoreColumnarTypeKind::String;
+    item_desc.column_type = QoreColumnarColumnType::String;
+    item_desc.buffer_type = QoreBufferElementType::String;
+    item_desc.nullable = true;
+    if (schema_desc.children.size() > 1) {
+        item_desc = schema_desc.children[1];
+        item_desc.name = "item";
+    }
+
+    std::vector<uint8_t> validity(schema_desc.nullable ? qore_arrow_bitmap_bytes(length) : 0, 0);
+    std::vector<uint8_t> offsets((length + 1) * sizeof(int32_t), 0);
+    QoreArrowValueVector entries;
+    int64_t current = 0;
+    int64_t null_count = 0;
+
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow map offsets")) {
+            return -1;
+        }
+        if (current > std::numeric_limits<int32_t>::max()) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "map column '%s' exceeds Arrow 32-bit offset range", name ? name : "");
+            return -1;
+        }
+        reinterpret_cast<int32_t*>(offsets.data())[i] = static_cast<int32_t>(current);
+
+        ValueHolder row(source.get(i, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (row->isNullOrNothing()) {
+            ++null_count;
+            continue;
+        }
+        if (row->getType() != NT_HASH) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "map column '%s' row " QSD " has type '%s'; expected hash or NOTHING",
+                name ? name : "", i, row->getTypeName());
+            return -1;
+        }
+        if (schema_desc.nullable) {
+            qore_arrow_set_bit(validity.data(), i, true);
+        }
+
+        ConstHashIterator hi(row->get<const QoreHashNode>());
+        while (hi.next()) {
+            if (current && !(current % 100) && qore_check_cancel(xsink, "collecting Arrow map entries")) {
+                return -1;
+            }
+            if (current > std::numeric_limits<int32_t>::max()) {
+                xsink->raiseException("ARROW-C-DATA-ERROR",
+                    "map column '%s' exceeds Arrow 32-bit offset range", name ? name : "");
+                return -1;
+            }
+            ReferenceHolder<QoreHashNode> entry(new QoreHashNode(autoTypeInfo), xsink);
+            entry->setKeyValue("key", new QoreStringNode(hi.getKey()), xsink);
+            if (*xsink) {
+                return -1;
+            }
+            entry->setKeyValue("item", hi.get().refSelf(), xsink);
+            if (*xsink) {
+                return -1;
+            }
+            entries.values.push_back(entry.release());
+            ++current;
+        }
+    }
+
+    if (current > std::numeric_limits<int32_t>::max()) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "map column '%s' exceeds Arrow 32-bit offset range", name ? name : "");
+        return -1;
+    }
+    reinterpret_cast<int32_t*>(offsets.data())[length] = static_cast<int32_t>(current);
+
+    qore_arrow_init_schema(schema, "+m", name, schema_desc.nullable, 1);
+    QoreArrowArrayPrivate* array_priv = qore_arrow_init_array(array, arrow_length, null_count, 0, 2, 1);
+    if (schema_desc.nullable) {
+        qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+    }
+    qore_arrow_add_owned_buffer(array_priv, 1, std::move(offsets));
+
+    QoreColumnarTypeDescriptor entries_desc;
+    entries_desc.kind = QoreColumnarTypeKind::Struct;
+    entries_desc.column_type = QoreColumnarColumnType::Auto;
+    entries_desc.nullable = false;
+    entries_desc.children.push_back(key_desc);
+    entries_desc.children.push_back(item_desc);
+
+    schema->children[0] = new ArrowSchema{};
+    array->children[0] = new ArrowArray{};
+    QoreArrowVectorValueSource entry_source(entries.values);
+    return qore_arrow_export_struct_array(entry_source, entries_desc, "entries", schema->children[0],
+        array->children[0], xsink);
+}
+
 static int qore_arrow_export_values_array(const QoreArrowValueSource& source,
         const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
         ExceptionSink* xsink) {
@@ -1669,8 +2187,23 @@ static int qore_arrow_export_values_array(const QoreArrowValueSource& source,
         case QoreColumnarTypeKind::List:
         case QoreColumnarTypeKind::LargeList:
             return qore_arrow_export_list_array(source, schema_desc, name, schema, array, xsink);
+        case QoreColumnarTypeKind::FixedSizeList:
+            return qore_arrow_export_fixed_size_list_array(source, schema_desc, name, schema, array, xsink);
         case QoreColumnarTypeKind::Struct:
             return qore_arrow_export_struct_array(source, schema_desc, name, schema, array, xsink);
+        case QoreColumnarTypeKind::Map:
+            return qore_arrow_export_map_array(source, schema_desc, name, schema, array, xsink);
+        case QoreColumnarTypeKind::Binary:
+            return qore_arrow_export_binary_array(source, schema_desc, name, schema, array, xsink);
+        case QoreColumnarTypeKind::Date:
+        case QoreColumnarTypeKind::Timestamp:
+        case QoreColumnarTypeKind::Duration:
+            return qore_arrow_export_temporal_array(source, schema_desc, name, schema, array, xsink);
+        case QoreColumnarTypeKind::Dictionary:
+            if (!schema_desc.children.empty()) {
+                return qore_arrow_export_values_array(source, schema_desc.children[0], name, schema, array, xsink);
+            }
+            return qore_arrow_export_values_as_buffer(source, schema_desc, name, schema, array, xsink);
         case QoreColumnarTypeKind::Bool:
         case QoreColumnarTypeKind::Int:
         case QoreColumnarTypeKind::Float:
@@ -1730,9 +2263,26 @@ static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSch
     if (!schema || !schema->format) {
         return desc;
     }
+    desc.native_type = schema->format;
+
+    if (schema->dictionary) {
+        desc.kind = QoreColumnarTypeKind::Dictionary;
+        desc.column_type = QoreColumnarColumnType::Auto;
+        desc.dictionary_index_type = schema->format;
+        QoreColumnarTypeDescriptor dictionary = qore_arrow_schema_to_descriptor(schema->dictionary, xsink);
+        if (*xsink) {
+            return desc;
+        }
+        if (dictionary.name.empty()) {
+            dictionary.name = "dictionary";
+        }
+        desc.children.push_back(std::move(dictionary));
+        return desc;
+    }
 
     int32_t precision = 0;
     int32_t scale = 0;
+    int32_t fixed_size = 0;
     QoreBufferElementType element_type = QoreBufferElementType::Invalid;
     if (qore_arrow_format_to_buffer_type(schema->format, element_type, precision, scale)) {
         desc.buffer_type = element_type;
@@ -1745,19 +2295,72 @@ static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSch
         return desc;
     }
 
+    std::string unit;
+    std::string timezone;
     if (!std::strcmp(schema->format, "u") || !std::strcmp(schema->format, "U")) {
         desc.kind = QoreColumnarTypeKind::String;
         desc.column_type = QoreColumnarColumnType::String;
         desc.buffer_type = QoreBufferElementType::String;
+    } else if (!std::strcmp(schema->format, "z") || !std::strcmp(schema->format, "Z")
+            || qore_arrow_parse_int_suffix(schema->format, "w:", fixed_size)) {
+        desc.kind = QoreColumnarTypeKind::Binary;
+        desc.column_type = QoreColumnarColumnType::Binary;
+        desc.fixed_size = fixed_size;
+    } else if ((!std::strcmp(schema->format, "C") || !std::strcmp(schema->format, "S")
+            || !std::strcmp(schema->format, "I") || !std::strcmp(schema->format, "L"))) {
+        desc.kind = QoreColumnarTypeKind::Int;
+        desc.column_type = QoreColumnarColumnType::Int;
+    } else if (!std::strcmp(schema->format, "tdD") || !std::strcmp(schema->format, "tdm")) {
+        desc.kind = QoreColumnarTypeKind::Date;
+        desc.column_type = QoreColumnarColumnType::Date;
+        desc.time_unit = !std::strcmp(schema->format, "tdD") ? "s" : "ms";
+    } else if (qore_arrow_parse_timestamp_format(schema->format, unit, timezone)) {
+        desc.kind = QoreColumnarTypeKind::Timestamp;
+        desc.column_type = QoreColumnarColumnType::Date;
+        desc.time_unit = std::move(unit);
+        desc.timezone = std::move(timezone);
+    } else if (qore_arrow_parse_duration_format(schema->format, unit)) {
+        desc.kind = QoreColumnarTypeKind::Duration;
+        desc.column_type = QoreColumnarColumnType::Date;
+        desc.time_unit = std::move(unit);
+    } else if (qore_arrow_parse_time_format(schema->format, unit)) {
+        desc.kind = QoreColumnarTypeKind::Date;
+        desc.column_type = QoreColumnarColumnType::Date;
+        desc.time_unit = std::move(unit);
     } else if (!std::strcmp(schema->format, "+l")) {
         desc.kind = QoreColumnarTypeKind::List;
         desc.column_type = QoreColumnarColumnType::Auto;
     } else if (!std::strcmp(schema->format, "+L")) {
         desc.kind = QoreColumnarTypeKind::LargeList;
         desc.column_type = QoreColumnarColumnType::Auto;
+    } else if (qore_arrow_parse_int_suffix(schema->format, "+w:", fixed_size)) {
+        desc.kind = QoreColumnarTypeKind::FixedSizeList;
+        desc.column_type = QoreColumnarColumnType::Auto;
+        desc.fixed_size = fixed_size;
     } else if (!std::strcmp(schema->format, "+s")) {
         desc.kind = QoreColumnarTypeKind::Struct;
         desc.column_type = QoreColumnarColumnType::Auto;
+    } else if (!std::strcmp(schema->format, "+m")) {
+        desc.kind = QoreColumnarTypeKind::Map;
+        desc.column_type = QoreColumnarColumnType::Auto;
+        if (schema->n_children == 1 && schema->children && schema->children[0] && schema->children[0]->children
+                && schema->children[0]->n_children >= 2 && schema->children[0]->children[0]
+                && schema->children[0]->children[1]) {
+            QoreColumnarTypeDescriptor key = qore_arrow_schema_to_descriptor(schema->children[0]->children[0], xsink);
+            if (*xsink) {
+                return desc;
+            }
+            key.name = "key";
+            key.nullable = false;
+            desc.children.push_back(std::move(key));
+            QoreColumnarTypeDescriptor item = qore_arrow_schema_to_descriptor(schema->children[0]->children[1], xsink);
+            if (*xsink) {
+                return desc;
+            }
+            item.name = "item";
+            desc.children.push_back(std::move(item));
+            return desc;
+        }
     } else {
         desc.kind = QoreColumnarTypeKind::Auto;
         desc.column_type = QoreColumnarColumnType::Auto;
@@ -1793,6 +2396,236 @@ static QoreListNode* qore_arrow_list_to_qore(const ArrowSchema* schema, const Ar
     return rv.release();
 }
 
+static QoreValue qore_arrow_unsigned_value_at(const ArrowSchema* schema, const ArrowArray* array, int64_t physical,
+        ExceptionSink* xsink) {
+    if (array->n_buffers < 2 || (!array->buffers[1] && array->length)) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "Arrow unsigned integer array '%s' has invalid fixed-width buffers",
+            schema->name ? schema->name : "");
+        return QoreValue();
+    }
+    const uint8_t* data = static_cast<const uint8_t*>(array->buffers[1]);
+    if (!std::strcmp(schema->format, "C")) {
+        return static_cast<int64_t>(reinterpret_cast<const uint8_t*>(data)[physical]);
+    }
+    if (!std::strcmp(schema->format, "S")) {
+        return static_cast<int64_t>(reinterpret_cast<const uint16_t*>(data)[physical]);
+    }
+    if (!std::strcmp(schema->format, "I")) {
+        return static_cast<int64_t>(reinterpret_cast<const uint32_t*>(data)[physical]);
+    }
+    if (!std::strcmp(schema->format, "L")) {
+        uint64_t value = reinterpret_cast<const uint64_t*>(data)[physical];
+        if (value <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+            return static_cast<int64_t>(value);
+        }
+        std::string str = std::to_string(value);
+        return new QoreNumberNode(str.c_str());
+    }
+    return QoreValue();
+}
+
+static int qore_arrow_integer_index_at(const ArrowSchema* schema, const ArrowArray* array, int64_t index,
+        int64_t& value, ExceptionSink* xsink) {
+    int64_t physical = array->offset + index;
+    int32_t precision = 0;
+    int32_t scale = 0;
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    if (qore_arrow_format_to_buffer_type(schema->format, element_type, precision, scale)) {
+        if (array->n_buffers < 2 || (!array->buffers[1] && array->length)) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow dictionary index array '%s' has invalid fixed-width buffers",
+                schema->name ? schema->name : "");
+            return -1;
+        }
+        const uint8_t* data = static_cast<const uint8_t*>(array->buffers[1]);
+        switch (element_type) {
+            case QoreBufferElementType::Int8:
+                value = reinterpret_cast<const int8_t*>(data)[physical];
+                return 0;
+            case QoreBufferElementType::Int16:
+                value = reinterpret_cast<const int16_t*>(data)[physical];
+                return 0;
+            case QoreBufferElementType::Int32:
+                value = reinterpret_cast<const int32_t*>(data)[physical];
+                return 0;
+            case QoreBufferElementType::Int64:
+                value = reinterpret_cast<const int64_t*>(data)[physical];
+                return 0;
+            default:
+                break;
+        }
+    }
+
+    if (!std::strcmp(schema->format, "C") || !std::strcmp(schema->format, "S")
+            || !std::strcmp(schema->format, "I") || !std::strcmp(schema->format, "L")) {
+        if (array->n_buffers < 2 || (!array->buffers[1] && array->length)) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow dictionary index array '%s' has invalid fixed-width buffers",
+                schema->name ? schema->name : "");
+            return -1;
+        }
+        const uint8_t* data = static_cast<const uint8_t*>(array->buffers[1]);
+        if (!std::strcmp(schema->format, "C")) {
+            value = reinterpret_cast<const uint8_t*>(data)[physical];
+        } else if (!std::strcmp(schema->format, "S")) {
+            value = reinterpret_cast<const uint16_t*>(data)[physical];
+        } else if (!std::strcmp(schema->format, "I")) {
+            value = reinterpret_cast<const uint32_t*>(data)[physical];
+        } else {
+            uint64_t uvalue = reinterpret_cast<const uint64_t*>(data)[physical];
+            if (uvalue > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+                xsink->raiseException("ARROW-C-DATA-ERROR",
+                    "Arrow dictionary index array '%s' has uint64 index value outside Qore int64 range",
+                    schema->name ? schema->name : "");
+                return -1;
+            }
+            value = static_cast<int64_t>(uvalue);
+        }
+        return 0;
+    }
+
+    xsink->raiseException("ARROW-C-DATA-ERROR",
+        "Arrow dictionary index array '%s' has unsupported index format '%s'",
+        schema->name ? schema->name : "", schema->format ? schema->format : "<null>");
+    return -1;
+}
+
+static QoreValue qore_arrow_binary_value_at(const ArrowSchema* schema, const ArrowArray* array, int64_t physical,
+        ExceptionSink* xsink) {
+    int32_t fixed_size = 0;
+    if (qore_arrow_parse_int_suffix(schema->format, "w:", fixed_size)) {
+        if (array->n_buffers < 2 || (!array->buffers[1] && array->length)) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow fixed_size_binary array '%s' has invalid buffers", schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        if (physical > std::numeric_limits<int64_t>::max() / fixed_size) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow fixed_size_binary array '%s' offset exceeds Arrow int64 range",
+                schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        const uint8_t* bytes = static_cast<const uint8_t*>(array->buffers[1]);
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+        bin->append(bytes + (physical * fixed_size), fixed_size);
+        return bin.release();
+    }
+
+    if (std::strcmp(schema->format, "z") && std::strcmp(schema->format, "Z")) {
+        return QoreValue();
+    }
+    if (array->n_buffers < 3 || !array->buffers[1] || (!array->buffers[2] && array->length)) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "Arrow binary array '%s' has invalid buffers", schema->name ? schema->name : "");
+        return QoreValue();
+    }
+    int64_t begin;
+    int64_t end;
+    if (!std::strcmp(schema->format, "z")) {
+        const int32_t* offsets = static_cast<const int32_t*>(array->buffers[1]);
+        begin = offsets[physical];
+        end = offsets[physical + 1];
+    } else {
+        const int64_t* offsets = static_cast<const int64_t*>(array->buffers[1]);
+        begin = offsets[physical];
+        end = offsets[physical + 1];
+    }
+    if (begin < 0 || end < begin) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "Arrow binary array '%s' has invalid offsets", schema->name ? schema->name : "");
+        return QoreValue();
+    }
+    const char* bytes = static_cast<const char*>(array->buffers[2]);
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+    bin->append(bytes + begin, static_cast<size_t>(end - begin));
+    return bin.release();
+}
+
+static DateTimeNode* qore_arrow_make_absolute_from_microseconds(const AbstractQoreZoneInfo* zone, int64_t value) {
+    int64_t secs = value / 1000000;
+    int us = static_cast<int>(value % 1000000);
+    if (us < 0) {
+        --secs;
+        us += 1000000;
+    }
+    return DateTimeNode::makeAbsolute(zone, secs, us);
+}
+
+static DateTimeNode* qore_arrow_make_relative_from_microseconds(int64_t value) {
+    int64_t secs = value / 1000000;
+    int us = static_cast<int>(value % 1000000);
+    if (us < 0) {
+        --secs;
+        us += 1000000;
+    }
+    return DateTimeNode::makeRelative(0, 0, 0, 0, 0, secs, us);
+}
+
+static QoreValue qore_arrow_temporal_value_at(const ArrowSchema* schema, const ArrowArray* array, int64_t physical,
+        ExceptionSink* xsink) {
+    if (array->n_buffers < 2 || (!array->buffers[1] && array->length)) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "Arrow temporal array '%s' has invalid fixed-width buffers", schema->name ? schema->name : "");
+        return QoreValue();
+    }
+    const uint8_t* data = static_cast<const uint8_t*>(array->buffers[1]);
+
+    if (!std::strcmp(schema->format, "tdD")) {
+        int64_t days = reinterpret_cast<const int32_t*>(data)[physical];
+        return DateTimeNode::makeAbsolute(currentTZ(), days * 86400, 0);
+    }
+    if (!std::strcmp(schema->format, "tdm")) {
+        int64_t ms = reinterpret_cast<const int64_t*>(data)[physical];
+        int64_t microseconds = 0;
+        if (qore_arrow_temporal_to_microseconds(ms, 'm', microseconds, xsink, "importing Arrow date64 value")) {
+            return QoreValue();
+        }
+        return qore_arrow_make_absolute_from_microseconds(currentTZ(), microseconds);
+    }
+
+    std::string unit;
+    std::string timezone;
+    if (qore_arrow_parse_timestamp_format(schema->format, unit, timezone)) {
+        int64_t raw = reinterpret_cast<const int64_t*>(data)[physical];
+        const AbstractQoreZoneInfo* zone = currentTZ();
+        if (!timezone.empty()) {
+            zone = find_create_timezone(timezone.c_str(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        int64_t microseconds = 0;
+        if (qore_arrow_temporal_to_microseconds(raw, schema->format[2], microseconds, xsink,
+                "importing Arrow timestamp value")) {
+            return QoreValue();
+        }
+        return qore_arrow_make_absolute_from_microseconds(zone, microseconds);
+    }
+    if (qore_arrow_parse_duration_format(schema->format, unit)) {
+        int64_t raw = reinterpret_cast<const int64_t*>(data)[physical];
+        int64_t microseconds = 0;
+        if (qore_arrow_temporal_to_microseconds(raw, schema->format[2], microseconds, xsink,
+                "importing Arrow duration value")) {
+            return QoreValue();
+        }
+        return qore_arrow_make_relative_from_microseconds(microseconds);
+    }
+    if (qore_arrow_parse_time_format(schema->format, unit)) {
+        bool wide = schema->format[2] == 'u' || schema->format[2] == 'n';
+        int64_t raw = wide ? reinterpret_cast<const int64_t*>(data)[physical]
+            : reinterpret_cast<const int32_t*>(data)[physical];
+        int64_t microseconds = 0;
+        if (qore_arrow_temporal_to_microseconds(raw, schema->format[2], microseconds, xsink,
+                "importing Arrow time value")) {
+            return QoreValue();
+        }
+        return qore_arrow_make_relative_from_microseconds(microseconds);
+    }
+
+    return QoreValue();
+}
+
 static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray* array, int64_t index,
         ExceptionSink* xsink) {
     if (qore_arrow_array_is_null(array, index)) {
@@ -1800,6 +2633,26 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
     }
 
     int64_t physical = array->offset + index;
+    if (schema->dictionary || array->dictionary) {
+        if (!schema->dictionary || !array->dictionary) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow dictionary array '%s' is missing dictionary schema or array",
+                schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        int64_t dictionary_index = 0;
+        if (qore_arrow_integer_index_at(schema, array, index, dictionary_index, xsink)) {
+            return QoreValue();
+        }
+        if (dictionary_index < 0 || dictionary_index >= array->dictionary->length) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow dictionary array '%s' index " QLLD " out of range (0.." QLLD ")",
+                schema->name ? schema->name : "", dictionary_index, array->dictionary->length - 1);
+            return QoreValue();
+        }
+        return qore_arrow_value_at(schema->dictionary, array->dictionary, dictionary_index, xsink);
+    }
+
     int32_t precision = 0;
     int32_t scale = 0;
     QoreBufferElementType element_type = QoreBufferElementType::Invalid;
@@ -1834,6 +2687,11 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
         }
     }
 
+    if (!std::strcmp(schema->format, "C") || !std::strcmp(schema->format, "S")
+            || !std::strcmp(schema->format, "I") || !std::strcmp(schema->format, "L")) {
+        return qore_arrow_unsigned_value_at(schema, array, physical, xsink);
+    }
+
     if (!std::strcmp(schema->format, "u") || !std::strcmp(schema->format, "U")) {
         if (array->n_buffers < 3 || !array->buffers[1] || (!array->buffers[2] && array->length)) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
@@ -1858,6 +2716,21 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
         }
         const char* bytes = static_cast<const char*>(array->buffers[2]);
         return QoreValue::makeStringValue(bytes + begin, static_cast<size_t>(end - begin), QCS_UTF8);
+    }
+
+    int32_t fixed_size = 0;
+    if (!std::strcmp(schema->format, "z") || !std::strcmp(schema->format, "Z")
+            || qore_arrow_parse_int_suffix(schema->format, "w:", fixed_size)) {
+        return qore_arrow_binary_value_at(schema, array, physical, xsink);
+    }
+
+    std::string unit;
+    std::string timezone;
+    if (!std::strcmp(schema->format, "tdD") || !std::strcmp(schema->format, "tdm")
+            || qore_arrow_parse_timestamp_format(schema->format, unit, timezone)
+            || qore_arrow_parse_duration_format(schema->format, unit)
+            || qore_arrow_parse_time_format(schema->format, unit)) {
+        return qore_arrow_temporal_value_at(schema, array, physical, xsink);
     }
 
     if (!std::strcmp(schema->format, "+l") || !std::strcmp(schema->format, "+L")) {
@@ -1895,6 +2768,41 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
         return list.release();
     }
 
+    if (qore_arrow_parse_int_suffix(schema->format, "+w:", fixed_size)) {
+        if (schema->n_children != 1 || array->n_children != 1 || array->n_buffers < 1) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow fixed_size_list array '%s' has invalid children or buffers",
+                schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+        if (physical > std::numeric_limits<int64_t>::max() / fixed_size) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow fixed_size_list array '%s' child offset exceeds Arrow int64 range",
+                schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        int64_t begin = physical * fixed_size;
+        if (begin > std::numeric_limits<int64_t>::max() - fixed_size) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow fixed_size_list array '%s' child range exceeds Arrow int64 range",
+                schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        int64_t end = begin + fixed_size;
+        for (int64_t i = begin; i < end; ++i) {
+            if (i != begin && !((i - begin) % 100)
+                    && qore_check_cancel(xsink, "importing Arrow fixed_size_list value")) {
+                return QoreValue();
+            }
+            list->push(qore_arrow_value_at(schema->children[0], array->children[0], i, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return list.release();
+    }
+
     if (!std::strcmp(schema->format, "+s")) {
         if (schema->n_children != array->n_children) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
@@ -1916,6 +2824,49 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
         return hash.release();
     }
 
+    if (!std::strcmp(schema->format, "+m")) {
+        if (schema->n_children != 1 || array->n_children != 1 || array->n_buffers < 2 || !array->buffers[1]
+                || !schema->children[0] || !array->children[0] || schema->children[0]->n_children < 2
+                || array->children[0]->n_children < 2) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow map array '%s' has invalid entries child or buffers", schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        const int32_t* offsets = static_cast<const int32_t*>(array->buffers[1]);
+        int64_t begin = offsets[physical];
+        int64_t end = offsets[physical + 1];
+        if (begin < 0 || end < begin) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow map array '%s' has invalid offsets", schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        const ArrowSchema* entries_schema = schema->children[0];
+        const ArrowArray* entries_array = array->children[0];
+        ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+        for (int64_t i = begin; i < end; ++i) {
+            if (i != begin && !((i - begin) % 100) && qore_check_cancel(xsink, "importing Arrow map value")) {
+                return QoreValue();
+            }
+            int64_t entry_index = entries_array->offset + i;
+            ValueHolder key(qore_arrow_value_at(entries_schema->children[0], entries_array->children[0], entry_index,
+                xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreStringValueHelper key_str(*key, QCS_UTF8, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            hash->setKeyValue(key_str->c_str(),
+                qore_arrow_value_at(entries_schema->children[1], entries_array->children[1], entry_index, xsink),
+                xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return hash.release();
+    }
+
     xsink->raiseException("ARROW-C-DATA-ERROR", "unsupported Arrow C Data format '%s' for column '%s'",
         schema->format ? schema->format : "<null>", schema->name ? schema->name : "");
     return QoreValue();
@@ -1923,6 +2874,14 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
 
 static QoreValue qore_arrow_import_top_level_column(const ArrowSchema* schema, const ArrowArray* array,
         std::shared_ptr<const void> owner, const QoreColumnarTypeDescriptor& desc, ExceptionSink* xsink) {
+    if (schema->dictionary || array->dictionary) {
+        ReferenceHolder<QoreListNode> values(qore_arrow_list_to_qore(schema, array, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        return values.release();
+    }
+
     int32_t precision = 0;
     int32_t scale = 0;
     QoreBufferElementType element_type = QoreBufferElementType::Invalid;
@@ -2664,10 +3623,10 @@ QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema
             ", offset " QLLD, array->length, array->offset);
         return nullptr;
     }
-    if (array->offset) {
+    if (array->offset > std::numeric_limits<int64_t>::max() - array->length) {
         xsink->raiseException("ARROW-C-DATA-ERROR",
-            "Arrow C Data import does not support a non-zero top-level struct offset; got offset " QLLD,
-            array->offset);
+            "Arrow C Data import top-level offset " QLLD " and length " QLLD " exceed Arrow int64 range",
+            array->offset, array->length);
         return nullptr;
     }
 
@@ -2692,12 +3651,6 @@ QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema
                 "Arrow C Data import child " QLLD " is missing schema or array", i);
             return nullptr;
         }
-        if (child_array->length != root_array->length) {
-            xsink->raiseException("ARROW-C-DATA-ERROR",
-                "Arrow C Data import child '%s' has length " QLLD ", expected top-level length " QLLD,
-                child_schema->name ? child_schema->name : "", child_array->length, root_array->length);
-            return nullptr;
-        }
         if (child_array->length < 0 || child_array->offset < 0) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
                 "Arrow C Data import child '%s' requires non-negative length and offset; got length " QLLD
@@ -2705,12 +3658,35 @@ QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema
                 child_array->offset);
             return nullptr;
         }
+        int64_t required_child_length = root_array->offset + root_array->length;
+        if (child_array->length < required_child_length) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow C Data import child '%s' has length " QLLD ", but top-level offset " QLLD
+                " and length " QLLD " require at least " QLLD " child values",
+                child_schema->name ? child_schema->name : "", child_array->length, root_array->offset,
+                root_array->length, required_child_length);
+            return nullptr;
+        }
 
         QoreColumnarTypeDescriptor desc = qore_arrow_schema_to_descriptor(child_schema, xsink);
         if (*xsink) {
             return nullptr;
         }
-        ValueHolder column(qore_arrow_import_top_level_column(child_schema, child_array, storage_owner, desc, xsink),
+        ArrowArray adjusted_child = *child_array;
+        if (root_array->offset) {
+            if (child_array->offset > std::numeric_limits<int64_t>::max() - root_array->offset) {
+                xsink->raiseException("ARROW-C-DATA-ERROR",
+                    "Arrow C Data import child '%s' offset " QLLD " plus top-level offset " QLLD
+                    " exceeds Arrow int64 range", child_schema->name ? child_schema->name : "",
+                    child_array->offset, root_array->offset);
+                return nullptr;
+            }
+            adjusted_child.offset = child_array->offset + root_array->offset;
+            adjusted_child.length = root_array->length;
+            adjusted_child.release = nullptr;
+        }
+        ValueHolder column(qore_arrow_import_top_level_column(child_schema,
+            root_array->offset ? &adjusted_child : child_array, storage_owner, desc, xsink),
             xsink);
         if (*xsink) {
             return nullptr;

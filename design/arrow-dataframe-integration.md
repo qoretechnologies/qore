@@ -110,8 +110,11 @@ where an API exposes conversion details.
   `qore_columnar_result_export_arrow_c_data()` and
   `qore_columnar_result_import_arrow_c_data()`.  Fixed-width primitive,
   boolean, and decimal128 top-level arrays use zero-copy buffer export/import
-  when host storage is compatible; string and nested list/struct columns use
-  Qore-owned Arrow-compatible buffers or materialized Qore containers.
+  when host storage is compatible, including sliced record batches with
+  non-zero top-level struct offsets.  String, binary, temporal, list,
+  fixed-size-list, struct, map, and dictionary-encoded columns use Qore-owned
+  Arrow-compatible buffers or materialized Qore containers while preserving
+  recursive schema metadata.
   `QORE_HAVE_ARROW_C_DATA_INTEROP` is exported in `qore-version.h` and
   `QoreConfig.cmake`.
 

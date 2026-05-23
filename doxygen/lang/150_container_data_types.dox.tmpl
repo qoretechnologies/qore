@@ -411,8 +411,10 @@ provider.createRecordsBulk(new_rows);
     \c QORE_HAVE_ARROW_C_DATA_INTEROP CMake variable from \c QoreConfig.cmake.
     Fixed-width numeric, boolean, and \c decimal128 top-level columns are
     exported and imported as zero-copy \c buffer<T> storage when the source
-    memory is host-accessible and Arrow-compatible.  \c buffer<string> and
-    nested list/struct columns preserve schema and values through
+    memory is host-accessible and Arrow-compatible, including sliced Arrow
+    record batches with non-zero top-level offsets.  \c buffer<string>,
+    binary values, temporal values, lists, fixed-size lists, structs, maps, and
+    dictionary-encoded Arrow arrays preserve schema and values through
     Arrow-compatible owned buffers or materialized Qore containers:
     @code{.cpp}
 ArrowSchema schema = {};
