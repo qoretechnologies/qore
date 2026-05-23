@@ -33,6 +33,12 @@ enum class ColumnType : int {
     AUTO,           //!< Heterogeneous (QoreValue)
 };
 
+//! Optional external column storage preserved for zero-copy interchange APIs
+enum class ExternalColumnKind : int {
+    NONE = 0,
+    ARROW_CHUNKED_ARRAY,
+};
+
 //! Returns the string name of a column type
 DLLLOCAL const char* columnTypeName(ColumnType type);
 
@@ -55,6 +61,10 @@ struct ColumnData {
     //! Optional dense source buffer preserved for zero-copy columnar APIs
     QoreBufferNode* dense_buffer = nullptr;
     QoreBufferElementType dense_buffer_type = QoreBufferElementType::Invalid;
+
+    //! Optional immutable external column storage preserved for Arrow-style nested arrays
+    ExternalColumnKind external_column_kind = ExternalColumnKind::NONE;
+    std::shared_ptr<void> external_column_owner;
 
     // Type-specific storage (only one is populated based on type)
     Eigen::VectorXd float_data;
@@ -80,6 +90,12 @@ struct ColumnData {
 
     //! Preserves a referenced dense buffer for zero-copy columnar APIs
     DLLLOCAL void setDenseBufferRef(const QoreBufferNode* buffer);
+
+    //! Preserves immutable external column storage for zero-copy interchange APIs
+    DLLLOCAL void setExternalColumnRef(ExternalColumnKind kind, std::shared_ptr<void> owner);
+
+    //! Clears preserved external column storage
+    DLLLOCAL void clearExternalColumnRef();
 
     //! Stores a referenced Qore value in an AUTO column slot
     DLLLOCAL void setAutoValue(int64_t i, QoreValue value, ExceptionSink* xsink);

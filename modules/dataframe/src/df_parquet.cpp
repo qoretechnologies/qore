@@ -266,6 +266,20 @@ static void setArrowColumnarSchema(ColumnData& data, const std::shared_ptr<arrow
     data.has_columnar_schema = !*xsink;
 }
 
+static bool arrowTypeIsNestedOrDictionary(const std::shared_ptr<arrow::DataType>& type) {
+    switch (type->id()) {
+        case arrow::Type::LIST:
+        case arrow::Type::LARGE_LIST:
+        case arrow::Type::FIXED_SIZE_LIST:
+        case arrow::Type::STRUCT:
+        case arrow::Type::MAP:
+        case arrow::Type::DICTIONARY:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
         const QoreColumnarTypeDescriptor& desc, ExceptionSink* xsink);
 
@@ -1193,6 +1207,10 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
     if (*xsink) {
         return nullptr;
     }
+    if (arrowTypeIsNestedOrDictionary(arr->type())) {
+        cd->setExternalColumnRef(ExternalColumnKind::ARROW_CHUNKED_ARRAY,
+            std::shared_ptr<void>(arr, static_cast<void*>(arr.get())));
+    }
     return cd;
 }
 
@@ -1239,7 +1257,7 @@ static std::shared_ptr<arrow::Array> columnDataToArrowArray(const ColumnData& cd
 static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Column>& columns,
         int64_t n_rows, arrow::MemoryPool* pool, ExceptionSink* xsink) {
     std::vector<std::shared_ptr<arrow::Field>> fields;
-    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    std::vector<std::shared_ptr<arrow::ChunkedArray>> arrays;
 
     size_t column_index = 0;
     for (const auto& col : columns) {
@@ -1258,12 +1276,21 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             if (!field) {
                 return nullptr;
             }
+            if (cd.external_column_kind == ExternalColumnKind::ARROW_CHUNKED_ARRAY
+                    && cd.external_column_owner) {
+                auto chunked = std::static_pointer_cast<arrow::ChunkedArray>(cd.external_column_owner);
+                if (chunked->length() == cd.n_rows && chunked->type()->Equals(field->type())) {
+                    fields.push_back(field);
+                    arrays.push_back(chunked);
+                    continue;
+                }
+            }
             auto arr = columnDataToArrowArray(cd, field->type(), pool, col.name, xsink);
             if (!arr) {
                 return nullptr;
             }
             fields.push_back(field);
-            arrays.push_back(arr);
+            arrays.push_back(std::make_shared<arrow::ChunkedArray>(arr));
             continue;
         }
 
@@ -1292,7 +1319,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                         col.name.c_str(), st.ToString().c_str());
                     return nullptr;
                 }
-                arrays.push_back(arr);
+                arrays.push_back(std::make_shared<arrow::ChunkedArray>(arr));
                 break;
             }
             case ColumnType::FLOAT64: {
@@ -1319,7 +1346,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                         col.name.c_str(), st.ToString().c_str());
                     return nullptr;
                 }
-                arrays.push_back(arr);
+                arrays.push_back(std::make_shared<arrow::ChunkedArray>(arr));
                 break;
             }
             case ColumnType::STRING: {
@@ -1346,7 +1373,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                         col.name.c_str(), st.ToString().c_str());
                     return nullptr;
                 }
-                arrays.push_back(arr);
+                arrays.push_back(std::make_shared<arrow::ChunkedArray>(arr));
                 break;
             }
             case ColumnType::BOOL: {
@@ -1373,7 +1400,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                         col.name.c_str(), st.ToString().c_str());
                     return nullptr;
                 }
-                arrays.push_back(arr);
+                arrays.push_back(std::make_shared<arrow::ChunkedArray>(arr));
                 break;
             }
             case ColumnType::DATE: {
@@ -1401,7 +1428,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                         col.name.c_str(), st.ToString().c_str());
                     return nullptr;
                 }
-                arrays.push_back(arr);
+                arrays.push_back(std::make_shared<arrow::ChunkedArray>(arr));
                 break;
             }
             case ColumnType::AUTO: {

@@ -39,7 +39,8 @@ static void discardAutoData(std::vector<QoreValue>& values, ExceptionSink* xsink
 
 ColumnData::ColumnData(const ColumnData& old)
         : type(old.type), n_rows(old.n_rows), dense_buffer(old.dense_buffer),
-        dense_buffer_type(old.dense_buffer_type), float_data(old.float_data), int_data(old.int_data),
+        dense_buffer_type(old.dense_buffer_type), external_column_kind(old.external_column_kind),
+        external_column_owner(old.external_column_owner), float_data(old.float_data), int_data(old.int_data),
         str_data(old.str_data), bool_data(old.bool_data), date_data(old.date_data),
         auto_data(refAutoData(old.auto_data)), columnar_schema(old.columnar_schema),
         has_columnar_schema(old.has_columnar_schema), null_mask(old.null_mask) {
@@ -50,13 +51,15 @@ ColumnData::ColumnData(const ColumnData& old)
 
 ColumnData::ColumnData(ColumnData&& old) noexcept
         : type(old.type), n_rows(old.n_rows), dense_buffer(old.dense_buffer),
-        dense_buffer_type(old.dense_buffer_type), float_data(std::move(old.float_data)),
+        dense_buffer_type(old.dense_buffer_type), external_column_kind(old.external_column_kind),
+        external_column_owner(std::move(old.external_column_owner)), float_data(std::move(old.float_data)),
         int_data(std::move(old.int_data)), str_data(std::move(old.str_data)),
         bool_data(std::move(old.bool_data)), date_data(std::move(old.date_data)),
         auto_data(std::move(old.auto_data)), columnar_schema(std::move(old.columnar_schema)),
         has_columnar_schema(old.has_columnar_schema), null_mask(std::move(old.null_mask)) {
     old.dense_buffer = nullptr;
     old.dense_buffer_type = QoreBufferElementType::Invalid;
+    old.external_column_kind = ExternalColumnKind::NONE;
     old.has_columnar_schema = false;
 }
 
@@ -76,6 +79,8 @@ ColumnData& ColumnData::operator=(const ColumnData& old) {
         n_rows = old.n_rows;
         dense_buffer = old.dense_buffer;
         dense_buffer_type = old.dense_buffer_type;
+        external_column_kind = old.external_column_kind;
+        external_column_owner = old.external_column_owner;
         float_data = old.float_data;
         int_data = old.int_data;
         str_data = old.str_data;
@@ -101,6 +106,8 @@ ColumnData& ColumnData::operator=(ColumnData&& old) noexcept {
         n_rows = old.n_rows;
         dense_buffer = old.dense_buffer;
         dense_buffer_type = old.dense_buffer_type;
+        external_column_kind = old.external_column_kind;
+        external_column_owner = std::move(old.external_column_owner);
         float_data = std::move(old.float_data);
         int_data = std::move(old.int_data);
         str_data = std::move(old.str_data);
@@ -113,6 +120,7 @@ ColumnData& ColumnData::operator=(ColumnData&& old) noexcept {
 
         old.dense_buffer = nullptr;
         old.dense_buffer_type = QoreBufferElementType::Invalid;
+        old.external_column_kind = ExternalColumnKind::NONE;
         old.has_columnar_schema = false;
     }
     return *this;
@@ -127,6 +135,7 @@ ColumnData::~ColumnData() {
 }
 
 void ColumnData::setDenseBufferRef(const QoreBufferNode* buffer) {
+    clearExternalColumnRef();
     if (dense_buffer) {
         ExceptionSink xsink;
         dense_buffer->deref(&xsink);
@@ -138,6 +147,16 @@ void ColumnData::setDenseBufferRef(const QoreBufferNode* buffer) {
         dense_buffer->ref();
         dense_buffer_type = buffer->getElementType();
     }
+}
+
+void ColumnData::setExternalColumnRef(ExternalColumnKind kind, std::shared_ptr<void> owner) {
+    external_column_kind = owner ? kind : ExternalColumnKind::NONE;
+    external_column_owner = std::move(owner);
+}
+
+void ColumnData::clearExternalColumnRef() {
+    external_column_kind = ExternalColumnKind::NONE;
+    external_column_owner.reset();
 }
 
 QoreBufferNode* ColumnData::refDenseBuffer() const {

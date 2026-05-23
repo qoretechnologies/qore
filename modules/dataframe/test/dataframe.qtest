@@ -1244,6 +1244,22 @@ sub invalid_dataframe_api() {
         assertEq("name", nested_roundtrip_schema[0].children[1].name,
             "DataFrame ColumnarResult round-trip preserves nested child metadata");
 
+        ColumnarResult list_columns = ColumnarResult::fromColumnHash({
+            "items": ((1, 2), (3, 4, 5), NOTHING),
+        }, {
+            "items": {"schema": {
+                "kind": "list",
+                "nullable": True,
+                "children": ({"name": "item", "kind": "int", "nullable": False},),
+            }},
+        });
+        DataFrame::DataFrame list_df = DataFrame::DataFrame::fromColumnarResult(list_columns);
+        assertEq((1, 2), list_df.getColumn("items")[0],
+            "DataFrame preserves nested list values");
+        list<hash<auto>> list_roundtrip_schema = list_df.toColumnarResult().schemaV2();
+        assertEq("list", list_roundtrip_schema[0].kind,
+            "DataFrame ColumnarResult round-trip preserves nested list metadata");
+
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),
             "segment": new buffer<int64>((1, 1, 2, 2)),
@@ -1589,6 +1605,24 @@ sub invalid_dataframe_api() {
             "Parquet preserves nested logical type");
         assertEq("name", nested_parquet_schema[0].children[1].name,
             "Parquet preserves nested child metadata");
+
+        ColumnarResult list_columns = ColumnarResult::fromColumnHash({
+            "items": ((1, 2), (3, 4, 5), NOTHING),
+        }, {
+            "items": {"schema": {
+                "kind": "list",
+                "nullable": True,
+                "children": ({"name": "item", "kind": "int", "nullable": False},),
+            }},
+        });
+        DataFrame::DataFrame list_df = DataFrame::DataFrame::fromColumnarResult(list_columns);
+        list_df.writeParquet(tmp_path);
+        DataFrame::DataFrame list_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((3, 4, 5), list_parquet_df.getColumn("items")[1],
+            "Parquet preserves nested list values");
+        list<hash<auto>> list_parquet_schema = list_parquet_df.toColumnarResult().schemaV2();
+        assertEq("list", list_parquet_schema[0].kind,
+            "Parquet preserves nested list metadata");
     }
 
     arrowIpcTest() {
@@ -1669,6 +1703,23 @@ sub invalid_dataframe_api() {
             "Arrow IPC preserves nested logical type");
         assertEq("name", nested_ipc_schema[0].children[1].name,
             "Arrow IPC preserves nested child metadata");
+
+        ColumnarResult list_columns = ColumnarResult::fromColumnHash({
+            "items": ((1, 2), (3, 4, 5), NOTHING),
+        }, {
+            "items": {"schema": {
+                "kind": "list",
+                "nullable": True,
+                "children": ({"name": "item", "kind": "int", "nullable": False},),
+            }},
+        });
+        DataFrame::DataFrame list_df = DataFrame::DataFrame::fromColumnarResult(list_columns);
+        DataFrame::DataFrame list_ipc_df = DataFrame::DataFrame::fromArrowIpc(list_df.toArrowIpc());
+        assertEq((1, 2), list_ipc_df.getColumn("items")[0],
+            "Arrow IPC preserves nested list values");
+        list<hash<auto>> list_ipc_schema = list_ipc_df.toColumnarResult().schemaV2();
+        assertEq("list", list_ipc_schema[0].kind,
+            "Arrow IPC preserves nested list metadata");
     }
 
     mlIntegrationTest() {
