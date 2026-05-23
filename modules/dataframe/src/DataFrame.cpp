@@ -82,6 +82,30 @@ static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
     return ColumnType::FLOAT64;
 }
 
+static bool getContiguousSelectionRange(const std::vector<int64_t>& indices, int64_t n_rows,
+        int64_t& start, ExceptionSink* xsink) {
+    if (indices.empty()) {
+        start = 0;
+        return true;
+    }
+
+    start = indices[0];
+    if (start < 0 || start >= n_rows || indices.size() > static_cast<size_t>(n_rows - start)) {
+        return false;
+    }
+
+    for (size_t i = 1; i < indices.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking contiguous DataFrame row selection")) {
+            return false;
+        }
+        if (indices[i] != start + static_cast<int64_t>(i)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static ColumnType fastRecordColumnType(QoreValue value) {
     if (value.isNullOrNothing()) {
         return ColumnType::AUTO;
@@ -760,6 +784,9 @@ QoreDataFrame* QoreDataFrame::sliceRows(int64_t start, int64_t count,
         if (new_data && src_col.data->has_columnar_schema) {
             preserveColumnarSchema(*new_data, src_col.name, src_col.data->columnar_schema);
         }
+        if (new_data && src_col.data->external_column_kind != ExternalColumnKind::NONE) {
+            sliceExternalColumnRef(*new_data, *src_col.data, start, count);
+        }
 
         Column col;
         col.name = src_col.name;
@@ -1287,6 +1314,17 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
                 identity_selection = false;
                 break;
             }
+        }
+    }
+    if (!identity_selection) {
+        int64_t contiguous_start = 0;
+        if (getContiguousSelectionRange(indices, n_rows, contiguous_start, xsink)) {
+            delete df;
+            return sliceRows(contiguous_start, count, xsink);
+        }
+        if (*xsink) {
+            delete df;
+            return nullptr;
         }
     }
 

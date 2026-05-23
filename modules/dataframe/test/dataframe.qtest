@@ -1828,6 +1828,13 @@ sub invalid_dataframe_api() {
             "Parquet preserves nested logical type");
         assertEq("name", nested_parquet_schema[0].children[1].name,
             "Parquet preserves nested child metadata");
+        DataFrame::DataFrame nested_parquet_slice = nested_parquet_df.slice(1, 2);
+        nested_parquet_slice.writeParquet(tmp_path);
+        DataFrame::DataFrame nested_parquet_slice_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(2, nested_parquet_slice_df.getColumn("customer")[0].id,
+            "Parquet preserves sliced nested struct values through Arrow storage");
+        assertEq(NOTHING, nested_parquet_slice_df.getColumn("customer")[0].name,
+            "Parquet preserves sliced nested struct null child values");
 
         ColumnarResult list_columns = ColumnarResult::fromColumnHash({
             "items": ((1, 2), (3, 4, 5), NOTHING),
@@ -1846,6 +1853,13 @@ sub invalid_dataframe_api() {
         list<hash<auto>> list_parquet_schema = list_parquet_df.toColumnarResult().schemaV2();
         assertEq("list", list_parquet_schema[0].kind,
             "Parquet preserves nested list metadata");
+        DataFrame::DataFrame list_parquet_slice = list_parquet_df.slice(1, 3);
+        list_parquet_slice.writeParquet(tmp_path);
+        DataFrame::DataFrame list_parquet_slice_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((3, 4, 5), list_parquet_slice_df.getColumn("items")[0],
+            "Parquet preserves sliced nested list values through Arrow storage");
+        assertEq(NOTHING, list_parquet_slice_df.getColumn("items")[1],
+            "Parquet preserves sliced nested list null values");
     }
 
     arrowIpcTest() {
@@ -1926,6 +1940,12 @@ sub invalid_dataframe_api() {
             "Arrow IPC preserves nested logical type");
         assertEq("name", nested_ipc_schema[0].children[1].name,
             "Arrow IPC preserves nested child metadata");
+        DataFrame::DataFrame nested_ipc_slice_df = DataFrame::DataFrame::fromArrowIpc(
+            nested_ipc_df.slice(1, 2).toArrowIpc());
+        assertEq(2, nested_ipc_slice_df.getColumn("customer")[0].id,
+            "Arrow IPC preserves sliced nested struct values through Arrow storage");
+        assertEq(NOTHING, nested_ipc_slice_df.getColumn("customer")[0].name,
+            "Arrow IPC preserves sliced nested struct null child values");
 
         ColumnarResult list_columns = ColumnarResult::fromColumnHash({
             "items": ((1, 2), (3, 4, 5), NOTHING),
@@ -1943,6 +1963,12 @@ sub invalid_dataframe_api() {
         list<hash<auto>> list_ipc_schema = list_ipc_df.toColumnarResult().schemaV2();
         assertEq("list", list_ipc_schema[0].kind,
             "Arrow IPC preserves nested list metadata");
+        DataFrame::DataFrame list_ipc_slice_df = DataFrame::DataFrame::fromArrowIpc(
+            list_ipc_df.slice(1, 3).toArrowIpc());
+        assertEq((3, 4, 5), list_ipc_slice_df.getColumn("items")[0],
+            "Arrow IPC preserves sliced nested list values through Arrow storage");
+        assertEq(NOTHING, list_ipc_slice_df.getColumn("items")[1],
+            "Arrow IPC preserves sliced nested list null values");
     }
 
     mlIntegrationTest() {

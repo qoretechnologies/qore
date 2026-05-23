@@ -641,6 +641,28 @@ static bool arrowTypeIsNestedOrDictionary(const std::shared_ptr<arrow::DataType>
     }
 }
 
+void sliceExternalColumnRef(ColumnData& dest, const ColumnData& src, int64_t start, int64_t count) {
+    if (src.external_column_kind != ExternalColumnKind::ARROW_CHUNKED_ARRAY || !src.external_column_owner) {
+        dest.clearExternalColumnRef();
+        return;
+    }
+
+    auto chunked = std::static_pointer_cast<arrow::ChunkedArray>(src.external_column_owner);
+    if (start < 0 || count < 0 || start > chunked->length() || count > chunked->length() - start) {
+        dest.clearExternalColumnRef();
+        return;
+    }
+
+    auto sliced = chunked->Slice(start, count);
+    if (!sliced || sliced->length() != count || !sliced->type()->Equals(chunked->type())) {
+        dest.clearExternalColumnRef();
+        return;
+    }
+
+    dest.setExternalColumnRef(ExternalColumnKind::ARROW_CHUNKED_ARRAY,
+        std::shared_ptr<void>(sliced, static_cast<void*>(sliced.get())));
+}
+
 static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
         const QoreColumnarTypeDescriptor& desc, ExceptionSink* xsink);
 

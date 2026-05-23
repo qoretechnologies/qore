@@ -157,6 +157,9 @@ DLLLOCAL QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t star
 //! Convert a dense-compatible column to a Qore buffer
 DLLLOCAL QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink);
 
+//! Preserves external storage for a contiguous row slice when supported
+DLLLOCAL void sliceExternalColumnRef(ColumnData& dest, const ColumnData& src, int64_t start, int64_t count);
+
 } // namespace QoreDataFrameNS
 
 #endif // _QORE_DATAFRAME_DF_COLUMN_H
