@@ -1211,10 +1211,10 @@ static bool qore_arrow_parse_decimal_format(const char* format, int32_t& precisi
         return false;
     }
     long s = std::strtol(end + 1, &end, 10);
-    if (!end || *end != ',') {
-        return false;
+    long width = 128;
+    if (end && *end == ',') {
+        width = std::strtol(end + 1, &end, 10);
     }
-    long width = std::strtol(end + 1, &end, 10);
     if ((end && *end) || width != 128 || p <= 0 || p > 38 || s < 0 || s > p) {
         return false;
     }
@@ -1363,15 +1363,14 @@ static int qore_arrow_export_buffer_array(const QoreBufferNode* buffer, const ch
 
     if (buffer->getElementType() == QoreBufferElementType::String) {
         std::vector<uint8_t> validity(buffer->hasNullableElements() ? qore_arrow_bitmap_bytes(length) : 0, 0);
-        std::vector<uint8_t> offsets((length + 1) * sizeof(int64_t), 0);
+        std::vector<int64_t> offsets64(length + 1, 0);
         std::vector<uint8_t> bytes;
-        int64_t* offset_ptr = reinterpret_cast<int64_t*>(offsets.data());
         int64_t current = 0;
         for (size_t i = 0; i < length; ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow string buffer")) {
                 return -1;
             }
-            offset_ptr[i] = current;
+            offsets64[i] = current;
             if (buffer->isElementNull(i)) {
                 continue;
             }
@@ -1396,7 +1395,28 @@ static int qore_arrow_export_buffer_array(const QoreBufferNode* buffer, const ch
             bytes.insert(bytes.end(), ptr, ptr + len);
             current += static_cast<int64_t>(len);
         }
-        offset_ptr[length] = current;
+        offsets64[length] = current;
+        if (current <= std::numeric_limits<int32_t>::max()) {
+            std::vector<uint8_t> offsets((length + 1) * sizeof(int32_t), 0);
+            int32_t* offset_ptr = reinterpret_cast<int32_t*>(offsets.data());
+            for (size_t i = 0; i <= length; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow string offsets")) {
+                    return -1;
+                }
+                offset_ptr[i] = static_cast<int32_t>(offsets64[i]);
+            }
+            schema_priv->format = "u";
+            schema->format = schema_priv->format.c_str();
+            if (buffer->hasNullableElements()) {
+                qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+            }
+            qore_arrow_add_owned_buffer(array_priv, 1, std::move(offsets));
+            qore_arrow_add_owned_buffer(array_priv, 2, std::move(bytes));
+            return 0;
+        }
+
+        std::vector<uint8_t> offsets((length + 1) * sizeof(int64_t), 0);
+        std::memcpy(offsets.data(), offsets64.data(), offsets.size());
         if (buffer->hasNullableElements()) {
             qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
         }

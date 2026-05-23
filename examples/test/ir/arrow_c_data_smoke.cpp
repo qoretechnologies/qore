@@ -188,12 +188,13 @@ int main() {
             || array.n_children != 5) {
         fail("exported root Arrow C Data shape is invalid", xsink);
     }
-    if (std::strcmp(schema.children[0]->format, "l") || std::strcmp(schema.children[1]->format, "U")
+    if (std::strcmp(schema.children[0]->format, "l") || std::strcmp(schema.children[1]->format, "u")
             || std::strcmp(schema.children[2]->format, "d:18,2,128")
             || std::strcmp(schema.children[3]->format, "+s")
             || std::strcmp(schema.children[4]->format, "+l")) {
         fail("exported Arrow child formats are invalid", xsink);
     }
+    schema.children[2]->format = "d:18,2";
 
     ReferenceHolder<QoreColumnarResult> imported(
         qore_columnar_result_import_arrow_c_data(&schema, &array, &xsink), &xsink);
