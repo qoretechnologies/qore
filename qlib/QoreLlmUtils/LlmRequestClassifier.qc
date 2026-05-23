@@ -123,9 +123,17 @@ public class LlmRequestClassifier {
             request.context = ctx;
         }
 
+        # Classification is a compact structured decision that does not
+        # benefit from extended hidden reasoning; disabling the reasoning
+        # budget keeps the (small) output budget available for the JSON
+        # verdict.  This matters on "thinking" models (e.g. Gemini 2.5)
+        # where reasoning tokens are drawn from the same output budget and
+        # can otherwise truncate the response into unparseable JSON.
+        # Providers without a reasoning budget ignore the option.
         hash<LlmCompletionResult> llm_result = backend.complete(
-            getSystemPrompt(), make_json(request, JGF_ADD_FORMATTING),
-            getOutputSchema());
+            getSystemPrompt(policy), make_json(request, JGF_ADD_FORMATTING),
+            getOutputSchema(),
+            <LlmRequestOptions>{"reasoning_token_budget": 0});
         hash<LlmStructuredRepairResult> repaired =
             LlmStructuredRepair::parseJsonObject(llm_result.content);
         if (!repaired.valid) {
@@ -143,10 +151,16 @@ public class LlmRequestClassifier {
     }
 
     #! Returns the JSON schema requested from structured-output capable backends
+    /** The hash is a bare JSON Schema object: it intentionally carries no
+        top-level \c name (or other JSON-Schema dialect metadata).  Such
+        labelling keywords belong on the request wrapper
+        (e.g. OpenAI's \c response_format.json_schema.name), not inside the
+        schema; embedding one here makes providers with a stricter OpenAPI
+        Schema subset (notably Google Gemini's \c responseSchema) reject the
+        request with \c INVALID_ARGUMENT. */
     static hash<auto> getOutputSchema() {
         return {
             "type": "object",
-            "name": "request_classification",
             "properties": {
                 "allowed": {"type": "boolean"},
                 "detected_language": {"type": "string"},
@@ -162,7 +176,38 @@ public class LlmRequestClassifier {
         };
     }
 
-    private static string getSystemPrompt() {
+    #! Builds the classifier system prompt for the supplied policy
+    /** The decision model is selected by the policy's \c default_decision
+        field:
+
+        - \c "allow" — block-list / default-allow mode: the request is
+          allowed unless it clearly belongs to one of the policy's blocked
+          task categories.  Use this when the in-scope surface is large or
+          open-ended and false positives (wrongly blocking legitimate
+          requests) are worse than occasionally allowing an off-topic one.
+          Avoids a brittle allow-list of permitted topics.
+        - any other value (default) — allow-list mode: the request is
+          allowed only when it is within an allowed domain and task and is
+          not blocked; ambiguous requests are refused.
+
+        Both modes are language-independent: the classifier is instructed to
+        classify by meaning in whatever language the request is written, not
+        by English keyword matching. */
+    private static string getSystemPrompt(hash<auto> policy) {
+        if ((policy.default_decision ?? "").lwr() == "allow") {
+            return "You are a semantic request-policy classifier. Classify "
+                "the user request in whatever language it is written. Do not "
+                "answer the request, do not translate it, and do not rely on "
+                "English keyword matching; classify by meaning. The request "
+                "is ALLOWED by default. Set allowed=false ONLY when the "
+                "request clearly and primarily belongs to one of the "
+                "policy's blocked task categories; in that case set "
+                "blocked_category and a high confidence. For everything else "
+                "— including any operational, administrative, technical, "
+                "development, programming, data, or informational request, "
+                "in any language — set allowed=true. When you are unsure, set "
+                "allowed=true. Return only the requested JSON object.";
+        }
         return "You are a semantic request-policy classifier. Classify the "
             "user request in whatever language it is written. Do not answer "
             "the request. Do not translate it. Do not rely on English "
