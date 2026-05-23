@@ -1,0 +1,43 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameAnalyticsBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+%requires DataProvider
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameAnalyticsBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataframe_analytics_buffercolumns");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+        r.setup = sub () {
+            columns = DataFrameBench::makeColumnarResult(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            QoreRunningStatsProcessor stats({"fields": "amount", "window_size": 100});
+            ColumnarResult result = stats.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            int expected = rows / 100;
+            if (result.numRows() != expected) {
+                throw "BENCHMARK-ERROR", sprintf("expected %d analytics rows, got %d",
+                    expected, result.numRows());
+            }
+            if (result.getColumn("avg").fullType() != "buffer<float64>") {
+                throw "BENCHMARK-ERROR", "analytics output did not preserve dense average column";
+            }
+        };
+
+        exit(r.run());
+    }
+}

@@ -375,43 +375,8 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         list<auto> events;
         foreach string field in (fields) {
             auto raw = AbstractDataProvider::getFieldValue(record, field);
-            if (!exists raw) {
-                continue;
-            }
-            int tc = raw.typeCode();
-            float value;
-            if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
-                value = raw.toFloat();
-            } else if (tc == NT_STRING) {
-                if (!regex(raw, "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$")) {
-                    # skip non-numeric string values
-                    continue;
-                }
-                value = raw.toFloat();
-            } else if (tc == NT_BOOLEAN) {
-                value = raw ? 1.0 : 0.0;
-            } else {
-                # skip unsupported types
-                continue;
-            }
-            counts{field}++;
-            if (getAnalyticsMode() == ANALYTICS_MODE_WINDOW) {
-                push buffers{field}, value;
-                if (buffers{field}.lsize() >= window_size) {
-                    window_counts{field}++;
-                    hash<auto> event = analyzeWindow(field, buffers{field}, counts{field});
-                    push events, event;
-                    buffers{field} = ();
-                }
-            } else {
-                # record-level mode: capture historical window before adding current value
-                list<float> history = buffers{field};
-                push buffers{field}, value;
-                if (buffers{field}.lsize() > window_size) {
-                    shift buffers{field};
-                }
-                window_counts{field}++;
-                hash<auto> event = analyzeRecord(field, value, history, counts{field});
+            *auto event = processFieldValue(field, raw);
+            if (exists event) {
                 push events, event;
             }
         }
@@ -422,6 +387,49 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
             return events[0];
         }
         return events;
+    }
+
+    #! Processes one analytics field value
+    private *hash<auto> processFieldValue(string field, auto raw) {
+        if (!exists raw) {
+            return;
+        }
+        int tc = raw.typeCode();
+        float value;
+        if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
+            value = raw.toFloat();
+        } else if (tc == NT_STRING) {
+            if (!regex(raw, "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$")) {
+                # skip non-numeric string values
+                return;
+            }
+            value = raw.toFloat();
+        } else if (tc == NT_BOOLEAN) {
+            value = raw ? 1.0 : 0.0;
+        } else {
+            # skip unsupported types
+            return;
+        }
+        counts{field}++;
+        if (getAnalyticsMode() == ANALYTICS_MODE_WINDOW) {
+            push buffers{field}, value;
+            if (buffers{field}.lsize() >= window_size) {
+                window_counts{field}++;
+                hash<auto> event = analyzeWindow(field, buffers{field}, counts{field});
+                buffers{field} = ();
+                return event;
+            }
+            return;
+        }
+
+        # record-level mode: capture historical window before adding current value
+        list<float> history = buffers{field};
+        push buffers{field}, value;
+        if (buffers{field}.lsize() > window_size) {
+            shift buffers{field};
+        }
+        window_counts{field}++;
+        return analyzeRecord(field, value, history, counts{field});
     }
 
     #! Flushes any remaining buffered data
@@ -461,6 +469,66 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         return AbstractDataProcessor::recordsToHashList(results);
     }
 
+    #! Processes DataFrame or BufferColumns input by reading configured top-level fields directly
+    private *auto processColumnarRecordsShape(auto records, DataProviderShape shape) {
+        hash<auto> columns = getAnalyticsFieldColumns(records, shape);
+        if (!columns) {
+            return;
+        }
+
+        int record_count = AbstractDataProcessor::shapeRecordCount(records, shape);
+        list<auto> results;
+        for (int i = 0; i < record_count; ++i) {
+            foreach string field in (fields) {
+                if (!columns.hasKey(field)) {
+                    continue;
+                }
+                *auto event = processFieldValue(field, columns{field}[i]);
+                if (exists event) {
+                    push results, event;
+                }
+            }
+        }
+        return AbstractDataProcessor::convertHashListResultShape(
+            results ? AbstractDataProcessor::recordsToHashList(results) : NOTHING, shape);
+    }
+
+    #! Returns selected top-level input columns for columnar analytics processing
+    private *hash<auto> getAnalyticsFieldColumns(auto records, DataProviderShape shape) {
+        hash<auto> columns;
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock: {
+                list<string> names = records.columnNames();
+                foreach string field in (fields) {
+                    if (field.find(".") >= 0) {
+                        return;
+                    }
+                    if (names.contains(field)) {
+                        columns{field} = records.getColumn(field);
+                    }
+                }
+                break;
+            }
+            case DataProviderShape::BufferColumns:
+                foreach string field in (fields) {
+                    if (field.find(".") >= 0) {
+                        return;
+                    }
+                    if (AbstractDataProcessor::isColumnarResult(records)) {
+                        if (records.columnNames().contains(field)) {
+                            columns{field} = records.getColumn(field);
+                        }
+                    } else if (records.hasKey(field)) {
+                        columns{field} = records{field};
+                    }
+                }
+                break;
+            default:
+                return;
+        }
+        return columns;
+    }
+
     #! Processes data in an explicitly negotiated shape
     /** Analytics processors need record-wise bulk handling so window state and emitted
         event records are derived from logical rows instead of the hash-of-lists block itself.
@@ -472,10 +540,15 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
             case DataProviderShape::HashOfLists:
                 return processRecordsBulkImpl(records);
             case DataProviderShape::BufferColumns:
-            case DataProviderShape::DataFrameBlock:
+            case DataProviderShape::DataFrameBlock: {
+                *auto shaped_result = processColumnarRecordsShape(records, shape);
+                if (exists shaped_result) {
+                    return shaped_result;
+                }
                 return AbstractDataProcessor::convertHashListResultShape(
                     processRecordsBulkImpl(AbstractDataProcessor::convertShape(
                         records, shape, DataProviderShape::HashOfLists)[0]), shape);
+            }
             case DataProviderShape::RowRecords:
                 return processRecordImpl(records);
         }
