@@ -99,6 +99,25 @@ RowMask ColumnRef::compare(string op, auto value) [flags=RET_VALUE_ONLY] {
 */
 qclass RowMask [arg=QoreDataFrameRowMask* mask; ns=Qore::DataFrame; flags=final];
 
+//! Creates a RowMask from a list of booleans
+/** @param values boolean mask values; \c True selects the row at the same index
+
+    @throw USER-EXCEPTION if construction is cancelled
+
+    @par Example:
+    @code{.py}
+    RowMask first_and_third((True, False, True));
+    DataFrame selected = df.filter(first_and_third);
+    @endcode
+*/
+RowMask::constructor(list<bool> values) {
+    QoreDataFrameRowMask* result = QoreDataFrameRowMask::fromList(values, xsink);
+    if (!result) {
+        return;
+    }
+    self->setPrivate(CID_ROWMASK, result);
+}
+
 //! RowMasks cannot be copied
 /** @throw COPY-ERROR always thrown
 */

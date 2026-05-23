@@ -17,6 +17,18 @@ namespace QoreDataFrameNS {
 QoreDataFrameRowMask::QoreDataFrameRowMask(std::vector<uint8_t> mask) : mask(std::move(mask)) {
 }
 
+QoreDataFrameRowMask* QoreDataFrameRowMask::fromList(const QoreListNode* values, ExceptionSink* xsink) {
+    std::vector<uint8_t> mask;
+    mask.reserve(values->size());
+    for (size_t i = 0; i < values->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame row mask from a list")) {
+            return nullptr;
+        }
+        mask.push_back(values->retrieveEntry(i).getAsBool() ? 1 : 0);
+    }
+    return new QoreDataFrameRowMask(std::move(mask));
+}
+
 static bool validateMaskSizes(size_t lhs_size, size_t rhs_size, const char* operation, ExceptionSink* xsink) {
     if (lhs_size == rhs_size) {
         return true;

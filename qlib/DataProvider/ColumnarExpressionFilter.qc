@@ -138,9 +138,15 @@ public class ColumnarExpressionFilter {
         }
 
         *hash<auto> string_predicate = getStringPredicate(expr, op);
-        if (string_predicate && !string_predicate.ignore_case) {
+        if (string_predicate) {
             return buildDataFrameStringMask(df, string_predicate.field, string_predicate.op,
-                string_predicate.value);
+                string_predicate.value, string_predicate.ignore_case);
+        }
+
+        *hash<auto> pattern_predicate = getPatternPredicate(expr, op);
+        if (pattern_predicate) {
+            return buildDataFramePatternMask(df, pattern_predicate.field, pattern_predicate.pattern,
+                pattern_predicate.options, pattern_predicate.negated);
         }
 
         *hash<auto> comparison = getDataFrameComparison(expr, op);
@@ -297,7 +303,11 @@ public class ColumnarExpressionFilter {
     }
 
     #! Builds a DataFrame row mask for one string predicate that ColumnRef supports directly
-    private static *auto buildDataFrameStringMask(auto df, string field, string op, auto value) {
+    private static *auto buildDataFrameStringMask(auto df, string field, string op, auto value, bool ignore_case) {
+        if (ignore_case) {
+            return buildDataFrameStringListMask(df, field, op, value, True);
+        }
+
         switch (op) {
             case DP_OP_CONTAINS:
                 return df.column(field).compare("contains", value);
@@ -307,6 +317,65 @@ public class ColumnarExpressionFilter {
                 return df.column(field).compare("endswith", value);
         }
         return;
+    }
+
+    #! Builds a DataFrame row mask for one case-insensitive string predicate
+    private static *auto buildDataFrameStringListMask(auto df, string field, string op, auto value, bool ignore_case) {
+        softstring needle = value;
+        if (ignore_case) {
+            needle = needle.upr();
+        }
+
+        list<bool> mask = ();
+        foreach auto raw in (df.column(field).values()) {
+            if (!exists raw || raw.typeCode() == NT_NULL) {
+                mask += False;
+                continue;
+            }
+            softstring haystack = raw;
+            if (ignore_case) {
+                haystack = haystack.upr();
+            }
+
+            bool match;
+            switch (op) {
+                case DP_OP_CONTAINS:
+                    match = haystack.contains(needle);
+                    break;
+                case DP_OP_STARTS_WITH:
+                    match = haystack.startsWith(needle);
+                    break;
+                case DP_OP_ENDS_WITH:
+                    match = haystack.endsWith(needle);
+                    break;
+                default:
+                    return;
+            }
+            mask += match;
+        }
+        return makeDataFrameRowMask(mask);
+    }
+
+    #! Builds a DataFrame row mask for one LIKE or regex predicate
+    private static *auto buildDataFramePatternMask(auto df, string field, string pattern, int options,
+            bool negated) {
+        list<bool> mask = ();
+        foreach auto raw in (df.column(field).values()) {
+            if (!exists raw || raw.typeCode() == NT_NULL) {
+                mask += negated;
+                continue;
+            }
+            softstring value = raw;
+            bool match = regex(value, pattern, options);
+            mask += negated ? !match : match;
+        }
+        return makeDataFrameRowMask(mask);
+    }
+
+    #! Creates a DataFrame RowMask without a compile-time dependency on the dataframe module
+    private static auto makeDataFrameRowMask(list<bool> mask) {
+        load_module("dataframe");
+        return Class::forName("DataFrame::RowMask").newObject(mask);
     }
 
     #! Builds a boolean buffer mask for one string predicate
@@ -493,7 +562,7 @@ public class ColumnarExpressionFilter {
                     || !isScalarComparisonArg(expr.args[1])) {
                 return;
             }
-            int opts;
+            int opts = 0;
             if (expr.args.size() == 3) {
                 auto flags = unwrapComparisonValue(expr.args[2]);
                 if (flags.typeCode() != NT_LIST) {

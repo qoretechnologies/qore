@@ -295,6 +295,9 @@ sub invalid_dataframe_api() {
 
         DataFrame::RowMask not_high = ~high_scores;
         assertEq((False, True, False, True), not_high.toList(), "RowMask ~ inverts predicates");
+        DataFrame::RowMask explicit_mask((True, False, True, False));
+        assertEq(("Alice", "Carol"), df[explicit_mask]["name"],
+            "RowMask constructor accepts explicit boolean masks");
 
         assertEq(high_and_current.toList(), high_scores.intersect(current).toList(),
             "RowMask intersect() matches &");
@@ -1114,6 +1117,21 @@ sub invalid_dataframe_api() {
             DataProviderShape::DataFrameBlock);
         assertEq(("Carol", "Dave"), contains_filtered.getColumn("name"),
             "DataFrameBlock filter applies DPQL string operators");
+
+        QoreFilterRecordsProcessor icase_string_proc({
+            "dpql_where": 'contains(@name, "AL", true) || @name like "D%"',
+        });
+        DataFrame::DataFrame icase_string_filtered = icase_string_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Dave"), icase_string_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports case-insensitive strings and LIKE masks");
+
+        QoreFilterRecordsProcessor regex_proc({
+            "dpql_where": '@name !~ /^(A|B)/',
+        });
+        DataFrame::DataFrame regex_filtered = regex_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), regex_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports regex masks");
 
         QoreFilterRecordsProcessor string_or_proc({
             "dpql_where": 'contains(@name, "a") || @amount > 200',

@@ -33,6 +33,8 @@ class QoreDataFrameRowMask : public AbstractPrivateData {
 public:
     DLLLOCAL explicit QoreDataFrameRowMask(std::vector<uint8_t> mask);
 
+    DLLLOCAL static QoreDataFrameRowMask* fromList(const QoreListNode* values, ExceptionSink* xsink);
+
     DLLLOCAL const std::vector<uint8_t>& getMask() const {
         return mask;
     }
