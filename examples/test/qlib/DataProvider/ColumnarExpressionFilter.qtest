@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires dataframe
+
+%exec-class ColumnarExpressionFilterTest
+
+class ColumnarExpressionFilterTest inherits QUnit::Test {
+    constructor() : Test("ColumnarExpressionFilter", "1.0") {
+        addTestCase("computed numeric DataFrame filter", \computedNumericDataFrame());
+        addTestCase("computed numeric ColumnarResult filter", \computedNumericBufferColumns());
+        addTestCase("truthy and inRange DataFrame filter", \truthyAndRangeDataFrame());
+        addTestCase("string transform ColumnarResult filter", \stringTransformBufferColumns());
+
+        set_return_value(main());
+    }
+
+    private hash<auto> makeColumns() {
+        return {
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((50.0, 100.0, 125.0, 200.0)),
+            "score": new buffer<int64>((88, 90, 85, 97)),
+            "status": new buffer<string>(("Active", "inactive", "VIP", "active")),
+            "flag": new buffer<bool>((True, False, True, False)),
+        };
+    }
+
+    private hash<DataProviderExpression> amountTimesComparison(float factor, float threshold) {
+        return <DataProviderExpression>{
+            "exp": ">=",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "*",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, factor),
+                },
+                threshold,
+            ),
+        };
+    }
+
+    private list<int> dataframeIds(DataFrame::DataFrame df) {
+        return cast<list<int>>(df.getColumn("id"));
+    }
+
+    private list<int> columnarIds(ColumnarResult result) {
+        return cast<list<int>>(result.getColumn("id").toList());
+    }
+
+    private computedNumericDataFrame() {
+        DataFrame::DataFrame df(makeColumns());
+        QoreFilterRecordsProcessor proc({"where_cond": amountTimesComparison(1.5, 150.0)});
+        DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+
+        assertEq((2, 3, 4), dataframeIds(filtered));
+    }
+
+    private computedNumericBufferColumns() {
+        ColumnarResult columns = ColumnarResult::fromColumnHash(makeColumns(), NOTHING);
+        QoreFilterRecordsProcessor proc({"where_cond": amountTimesComparison(1.5, 150.0)});
+        ColumnarResult filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+
+        assertEq((2, 3, 4), columnarIds(filtered));
+    }
+
+    private truthyAndRangeDataFrame() {
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_EXPR_VALUE,
+                    "args": (<DataProviderFieldReference>{"field": "flag"},),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_OP_RANGE,
+                    "args": (<DataProviderFieldReference>{"field": "score"}, 85, 95),
+                },
+            ),
+        };
+        DataFrame::DataFrame df(makeColumns());
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+        DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+
+        assertEq((1, 3), dataframeIds(filtered));
+    }
+
+    private stringTransformBufferColumns() {
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_OP_TO_LOWER,
+                    "args": (<DataProviderFieldReference>{"field": "status"},),
+                },
+                "active",
+            ),
+        };
+        ColumnarResult columns = ColumnarResult::fromColumnHash(makeColumns(), NOTHING);
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+        ColumnarResult filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+
+        assertEq((1, 4), columnarIds(filtered));
+    }
+}

@@ -121,7 +121,12 @@ blocks after evaluating shaped input.
 DataFrame RowMask or dense `ColumnarResult` masks:
 
 - scalar comparisons: `==`, `!=`, `<`, `<=`, `>`, `>=`
+- computed scalar comparisons over top-level fields, including arithmetic
+  expressions such as `@amount * 1.2 >= 100`, `lwr(@status) == "active"`, and
+  `coalesce(@override, @value) > 0`
+- bare truthy field expressions such as `@flag`
 - `between`
+- `inRange` with inclusive lower and exclusive upper bounds
 - `in`
 - `not in`
 - null checks

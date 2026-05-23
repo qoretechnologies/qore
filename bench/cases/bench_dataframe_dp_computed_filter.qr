@@ -1,0 +1,61 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameDpComputedFilter
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+%requires DataProviderDataFrame
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameDpComputedFilter {
+    constructor() {
+        Bench::BenchRunner r("dataframe_dp_computed_filter");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columnar;
+        QoreFilterRecordsProcessor filter({
+            "where_cond": <DataProviderExpression>{
+                "exp": "&&",
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": ">=",
+                        "args": (
+                            <DataProviderExpression>{
+                                "exp": "*",
+                                "args": (<DataProviderFieldReference>{"field": "amount"}, 1.2),
+                            },
+                            1250.0,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_OP_RANGE,
+                        "args": (<DataProviderFieldReference>{"field": "score"}, 90.0, 99.0),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_EXPR_VALUE,
+                        "args": (<DataProviderFieldReference>{"field": "flag"},),
+                    },
+                ),
+            },
+        });
+
+        r.setup = sub () {
+            columnar = DataFrameBench::makeColumnarResult(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            ColumnarResult filtered = filter.processRecordsShape(columnar, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataframe_dp_computed_filter", filtered, 1);
+        };
+
+        exit(r.run());
+    }
+}
