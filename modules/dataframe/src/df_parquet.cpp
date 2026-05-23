@@ -58,6 +58,29 @@ static std::shared_ptr<arrow::Buffer> wrapBinaryAsArrowBuffer(const BinaryNode* 
         });
 }
 
+static size_t qoreDataFrameBitmapBytes(int64_t length, size_t bit_offset = 0) {
+    return (bit_offset + static_cast<size_t>(length) + 7) / 8;
+}
+
+static std::shared_ptr<const QoreBufferNode> refQoreBufferOwner(const QoreBufferNode* buffer) {
+    assert(buffer);
+    buffer->ref();
+    return std::shared_ptr<const QoreBufferNode>(buffer,
+        [](const QoreBufferNode* owner) { const_cast<QoreBufferNode*>(owner)->deref(nullptr); });
+}
+
+static std::shared_ptr<arrow::Buffer> wrapQoreBufferMemory(const uint8_t* data, int64_t size,
+        std::shared_ptr<const QoreBufferNode> owner) {
+    if (!data || !size) {
+        return nullptr;
+    }
+    return std::shared_ptr<arrow::Buffer>(new arrow::Buffer(data, size),
+        [owner = std::move(owner)](arrow::Buffer* buffer) {
+            (void)owner;
+            delete buffer;
+        });
+}
+
 static QoreBufferElementType arrowTypeToBufferElementType(const std::shared_ptr<arrow::DataType>& type) {
     switch (type->id()) {
         case arrow::Type::INT8:
@@ -1235,9 +1258,92 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
     return cd;
 }
 
+static std::shared_ptr<arrow::Array> denseBufferToArrowArray(const ColumnData& cd,
+        const std::shared_ptr<arrow::DataType>& type, const std::string& column_name, ExceptionSink* xsink) {
+    if (!cd.hasDenseBuffer() || cd.n_rows < 0 || cd.dense_buffer->size() != static_cast<size_t>(cd.n_rows)) {
+        return nullptr;
+    }
+
+    QoreBufferElementType expected = arrowTypeToBufferElementType(type);
+    QoreBufferElementType actual = cd.dense_buffer_type;
+    if (expected == QoreBufferElementType::Invalid || actual != expected
+            || actual == QoreBufferElementType::String || actual == QoreBufferElementType::Decimal128) {
+        return nullptr;
+    }
+
+    if (cd.dense_buffer->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    const uint8_t* raw_data = static_cast<const uint8_t*>(cd.dense_buffer->getRawData());
+    if (cd.n_rows && !raw_data) {
+        return nullptr;
+    }
+
+    int64_t offset = 0;
+    size_t data_size = 0;
+    if (actual == QoreBufferElementType::Bool) {
+        offset = static_cast<int64_t>(cd.dense_buffer->getRawDataBitOffset());
+        data_size = qoreDataFrameBitmapBytes(cd.n_rows, static_cast<size_t>(offset));
+    } else {
+        if (cd.dense_buffer->hasNullableElements() && cd.dense_buffer->getRawValidityBitOffset()) {
+            return nullptr;
+        }
+        size_t element_size = qore_buffer_element_storage_size(actual);
+        if (static_cast<uint64_t>(cd.n_rows)
+                > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / element_size) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "DataFrame column '%s' is too large for zero-copy Arrow export",
+                column_name.c_str());
+            return nullptr;
+        }
+        data_size = static_cast<size_t>(cd.n_rows) * element_size;
+    }
+
+    int64_t null_count = 0;
+    std::shared_ptr<arrow::Buffer> validity_buffer;
+    auto owner = refQoreBufferOwner(cd.dense_buffer);
+    if (cd.dense_buffer->hasNullableElements()) {
+        size_t valid_count = cd.dense_buffer->countValid(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        null_count = cd.n_rows - static_cast<int64_t>(valid_count);
+        if (null_count > 0) {
+            size_t validity_bit_offset = cd.dense_buffer->getRawValidityBitOffset();
+            if (actual != QoreBufferElementType::Bool && validity_bit_offset) {
+                return nullptr;
+            }
+            if (actual == QoreBufferElementType::Bool
+                    && validity_bit_offset != static_cast<size_t>(offset)) {
+                return nullptr;
+            }
+            const uint8_t* validity = cd.dense_buffer->getRawValidityData();
+            if (!validity) {
+                return nullptr;
+            }
+            size_t validity_size = qoreDataFrameBitmapBytes(cd.n_rows, validity_bit_offset);
+            validity_buffer = wrapQoreBufferMemory(validity, static_cast<int64_t>(validity_size), owner);
+        }
+    }
+
+    auto data_buffer = wrapQoreBufferMemory(raw_data, static_cast<int64_t>(data_size), owner);
+    std::vector<std::shared_ptr<arrow::Buffer>> buffers = {validity_buffer, data_buffer};
+    auto data = arrow::ArrayData::Make(type, cd.n_rows, std::move(buffers), null_count, offset);
+    return arrow::MakeArray(data);
+}
+
 static std::shared_ptr<arrow::Array> columnDataToArrowArray(const ColumnData& cd,
         const std::shared_ptr<arrow::DataType>& type, arrow::MemoryPool* pool, const std::string& column_name,
         ExceptionSink* xsink) {
+    auto dense_arr = denseBufferToArrowArray(cd, type, column_name, xsink);
+    if (*xsink || dense_arr) {
+        return dense_arr;
+    }
+
     auto builder_result = arrow::MakeBuilder(type, pool);
     if (!builder_result.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
@@ -1317,7 +1423,16 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
 
         switch (cd.type) {
             case ColumnType::INT64: {
-                fields.push_back(arrow::field(col.name, arrow::int64()));
+                auto type = arrow::int64();
+                fields.push_back(arrow::field(col.name, type));
+                auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (dense_arr) {
+                    arrays.push_back(std::make_shared<arrow::ChunkedArray>(dense_arr));
+                    break;
+                }
                 arrow::Int64Builder builder(pool);
                 if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
                         "error reserving Arrow int64 array", col.name)) {
@@ -1344,7 +1459,16 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                 break;
             }
             case ColumnType::FLOAT64: {
-                fields.push_back(arrow::field(col.name, arrow::float64()));
+                auto type = arrow::float64();
+                fields.push_back(arrow::field(col.name, type));
+                auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (dense_arr) {
+                    arrays.push_back(std::make_shared<arrow::ChunkedArray>(dense_arr));
+                    break;
+                }
                 arrow::DoubleBuilder builder(pool);
                 if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
                         "error reserving Arrow float64 array", col.name)) {
@@ -1377,6 +1501,27 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                         "error reserving Arrow string array", col.name)) {
                     return nullptr;
                 }
+                int64_t data_bytes = 0;
+                for (int64_t i = 0; i < cd.n_rows; ++i) {
+                    if (checkParquetCancel(i, "sizing Arrow string array", xsink)) {
+                        return nullptr;
+                    }
+                    if (cd.isNull(i)) {
+                        continue;
+                    }
+                    if (static_cast<uint64_t>(cd.str_data[i].size())
+                            > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - data_bytes) {
+                        xsink->raiseException("DATAFRAME-IO-ERROR",
+                            "DataFrame string column '%s' is too large for Arrow export",
+                            col.name.c_str());
+                        return nullptr;
+                    }
+                    data_bytes += static_cast<int64_t>(cd.str_data[i].size());
+                }
+                if (checkArrowColumnStatus(builder.ReserveData(data_bytes), xsink,
+                        "error reserving Arrow string data", col.name)) {
+                    return nullptr;
+                }
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
                     if (checkParquetCancel(i, "building Arrow string array", xsink)) {
                         return nullptr;
@@ -1398,7 +1543,16 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                 break;
             }
             case ColumnType::BOOL: {
-                fields.push_back(arrow::field(col.name, arrow::boolean()));
+                auto type = arrow::boolean();
+                fields.push_back(arrow::field(col.name, type));
+                auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (dense_arr) {
+                    arrays.push_back(std::make_shared<arrow::ChunkedArray>(dense_arr));
+                    break;
+                }
                 arrow::BooleanBuilder builder(pool);
                 if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
                         "error reserving Arrow boolean array", col.name)) {

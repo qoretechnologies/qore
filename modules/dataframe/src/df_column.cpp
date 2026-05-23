@@ -35,6 +35,24 @@ static void discardAutoData(std::vector<QoreValue>& values, ExceptionSink* xsink
     values.clear();
 }
 
+static bool getBitmapBit(const uint8_t* bytes, size_t bit_offset, int64_t index) {
+    if (!bytes) {
+        return true;
+    }
+    size_t bit = bit_offset + static_cast<size_t>(index);
+    return bytes[bit / 8] & (uint8_t(1) << (bit % 8));
+}
+
+static int checkRawBufferData(const void* data, int64_t n, QoreBufferElementType type, ExceptionSink* xsink) {
+    if (n && !data) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "buffer<%s> has no host data available for DataFrame conversion",
+            qore_buffer_element_type_name(type));
+        return -1;
+    }
+    return 0;
+}
+
 }
 
 ColumnData::ColumnData(const ColumnData& old)
@@ -583,18 +601,36 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
     col->n_rows = n;
     col->null_mask.resize(n, 0);
     col->setDenseBufferRef(values);
+    QoreBufferElementType element_type = values->getElementType();
+    bool all_valid = true;
+    const uint8_t* validity = nullptr;
+    size_t validity_bit_offset = 0;
+    if (values->hasNullableElements()) {
+        all_valid = values->countValid(xsink) == values->size();
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!all_valid) {
+            validity = values->getRawValidityData();
+            validity_bit_offset = values->getRawValidityBitOffset();
+        }
+    }
 
-    switch (values->getElementType()) {
+    switch (element_type) {
         case QoreBufferElementType::Int8:
         case QoreBufferElementType::Int16:
         case QoreBufferElementType::Int32:
         case QoreBufferElementType::Int64: {
             col->type = ColumnType::INT64;
             col->int_data.resize(n);
-            if (!values->hasNullableElements()) {
-                switch (values->getElementType()) {
+            const void* raw_data = values->getRawData();
+            if (checkRawBufferData(raw_data, n, element_type, xsink)) {
+                return nullptr;
+            }
+            if (all_valid) {
+                switch (element_type) {
                     case QoreBufferElementType::Int8: {
-                        const int8_t* src = static_cast<const int8_t*>(values->getRawData());
+                        const int8_t* src = static_cast<const int8_t*>(raw_data);
                         for (int64_t i = 0; i < n; ++i) {
                             if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
                                 return nullptr;
@@ -604,7 +640,7 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                         break;
                     }
                     case QoreBufferElementType::Int16: {
-                        const int16_t* src = static_cast<const int16_t*>(values->getRawData());
+                        const int16_t* src = static_cast<const int16_t*>(raw_data);
                         for (int64_t i = 0; i < n; ++i) {
                             if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
                                 return nullptr;
@@ -614,7 +650,7 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                         break;
                     }
                     case QoreBufferElementType::Int32: {
-                        const int32_t* src = static_cast<const int32_t*>(values->getRawData());
+                        const int32_t* src = static_cast<const int32_t*>(raw_data);
                         for (int64_t i = 0; i < n; ++i) {
                             if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
                                 return nullptr;
@@ -624,7 +660,7 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                         break;
                     }
                     case QoreBufferElementType::Int64: {
-                        const int64_t* src = static_cast<const int64_t*>(values->getRawData());
+                        const int64_t* src = static_cast<const int64_t*>(raw_data);
                         if (n) {
                             std::memcpy(col->int_data.data(), src, n * sizeof(int64_t));
                         }
@@ -633,16 +669,45 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                     default:
                         break;
                 }
+            } else if (element_type == QoreBufferElementType::Int64) {
+                const int64_t* src = static_cast<const int64_t*>(raw_data);
+                if (n) {
+                    std::memcpy(col->int_data.data(), src, n * sizeof(int64_t));
+                }
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
+                        col->null_mask[i] = 1;
+                        col->int_data[i] = 0;
+                    }
+                }
             } else {
                 for (int64_t i = 0; i < n; ++i) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
                         return nullptr;
                     }
-                    if (values->isElementNull(i)) {
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
                         col->null_mask[i] = 1;
                         col->int_data[i] = 0;
                     } else {
-                        col->int_data[i] = values->getReferencedEntry(i, xsink).getAsBigInt();
+                        switch (element_type) {
+                            case QoreBufferElementType::Int8:
+                                col->int_data[i] = static_cast<const int8_t*>(raw_data)[i];
+                                break;
+                            case QoreBufferElementType::Int16:
+                                col->int_data[i] = static_cast<const int16_t*>(raw_data)[i];
+                                break;
+                            case QoreBufferElementType::Int32:
+                                col->int_data[i] = static_cast<const int32_t*>(raw_data)[i];
+                                break;
+                            case QoreBufferElementType::Int64:
+                                col->int_data[i] = static_cast<const int64_t*>(raw_data)[i];
+                                break;
+                            default:
+                                assert(false);
+                        }
                     }
                 }
             }
@@ -652,14 +717,18 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
         case QoreBufferElementType::Float64: {
             col->type = ColumnType::FLOAT64;
             col->float_data.resize(n);
-            if (!values->hasNullableElements()) {
-                if (values->getElementType() == QoreBufferElementType::Float64) {
-                    const double* src = static_cast<const double*>(values->getRawData());
+            const void* raw_data = values->getRawData();
+            if (checkRawBufferData(raw_data, n, element_type, xsink)) {
+                return nullptr;
+            }
+            if (all_valid) {
+                if (element_type == QoreBufferElementType::Float64) {
+                    const double* src = static_cast<const double*>(raw_data);
                     if (n) {
                         std::memcpy(col->float_data.data(), src, n * sizeof(double));
                     }
                 } else {
-                    const float* src = static_cast<const float*>(values->getRawData());
+                    const float* src = static_cast<const float*>(raw_data);
                     for (int64_t i = 0; i < n; ++i) {
                         if (i && !(i % 100)
                                 && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
@@ -668,16 +737,31 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                         col->float_data(i) = src[i];
                     }
                 }
-            } else {
+            } else if (element_type == QoreBufferElementType::Float64) {
+                const double* src = static_cast<const double*>(raw_data);
+                if (n) {
+                    std::memcpy(col->float_data.data(), src, n * sizeof(double));
+                }
                 for (int64_t i = 0; i < n; ++i) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
                         return nullptr;
                     }
-                    if (values->isElementNull(i)) {
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
+                        col->null_mask[i] = 1;
+                        col->float_data(i) = std::numeric_limits<double>::quiet_NaN();
+                    }
+                }
+            } else {
+                const float* src = static_cast<const float*>(raw_data);
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
                         col->null_mask[i] = 1;
                         col->float_data(i) = std::numeric_limits<double>::quiet_NaN();
                     } else {
-                        col->float_data(i) = values->getReferencedEntry(i, xsink).getAsFloat();
+                        col->float_data(i) = src[i];
                     }
                 }
             }
@@ -686,15 +770,20 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
         case QoreBufferElementType::Bool: {
             col->type = ColumnType::BOOL;
             col->bool_data.resize(n);
+            const uint8_t* data = static_cast<const uint8_t*>(values->getRawData());
+            if (checkRawBufferData(data, n, element_type, xsink)) {
+                return nullptr;
+            }
+            size_t data_bit_offset = values->getRawDataBitOffset();
             for (int64_t i = 0; i < n; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
                     return nullptr;
                 }
-                if (values->isElementNull(i)) {
+                if (!all_valid && !getBitmapBit(validity, validity_bit_offset, i)) {
                     col->null_mask[i] = 1;
                     col->bool_data[i] = 0;
                 } else {
-                    col->bool_data[i] = values->getReferencedEntry(i, xsink).getAsBool() ? 1 : 0;
+                    col->bool_data[i] = getBitmapBit(data, data_bit_offset, i) ? 1 : 0;
                 }
             }
             break;
