@@ -158,13 +158,14 @@ where an API exposes conversion details.
   fixed-width integer, floating-point, boolean, and safe integer decimal
   columns using C++ external buffer owners.
 - Map `BigDecimal` to decimal128 schema metadata when precision and scale fit.
-  Dense decimal128 buffers are available when `QORE_HAVE_DECIMAL128_BUFFER` is
-  defined; decimal values that cannot be represented as fixed-width integers use
-  list storage with recursive schema metadata.
+  Implemented: dense decimal128 buffers are used when
+  `QORE_HAVE_DECIMAL128_BUFFER` is defined and JDBC precision/scale fit
+  decimal128; larger decimals keep JDBC precision/scale metadata and use list
+  storage.
 - Java-side primitive-array/direct-buffer batch extraction is not part of the
-  current compatibility contract.  The implemented JDBC path already preserves
-  packed Qore buffers for supported fixed-width columns, but still calls JDBC
-  typed getters per cell.
+  current compatibility contract.  The implemented JDBC path now preserves
+  packed Qore buffers for supported fixed-width and decimal128 columns, but
+  still calls JDBC typed getters per cell.
 
 ## Verification Checklist
 

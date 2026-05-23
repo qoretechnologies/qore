@@ -142,7 +142,7 @@ DataFrame/DataProvider workloads.
 | `module-odbc` | yes | yes | partial, via typed column hash conversion | Native DBI methods are registered. |
 | `module-sqlite3` | no | yes | conversion only | Statement fetch supports columnar blocks; datasource select uses fallback. |
 | `module-sybase` / freetds | no | yes | conversion only | Statement fetch supports columnar blocks; datasource select uses fallback. |
-| `module-jni` / JDBC | wrappers only | wrappers only | driver-dependent fallback | Java wrappers expose the Qore DBI columnar methods; JDBC-native packed buffers are not implemented. |
+| `module-jni` / JDBC | yes | yes | yes for JDBC fixed-width numeric, boolean, string, and decimal128 columns | Builds remain compatible with qore develop through CMake feature probes. |
 
 When applying this work to external modules, check:
 
@@ -168,7 +168,7 @@ features:
 | `buffer<decimal128>` | implemented | Uses fixed-width signed decimal128 storage with precision/scale metadata and overflow checks. |
 | nested buffers / array columns | implemented for Arrow/DataFrame preservation | Nested Arrow/Parquet columns keep recursive schema metadata and reuse immutable Arrow chunked arrays for round trips; direct nested `buffer<T>` value syntax remains future work. |
 | GPU/device buffers | implemented as provider-owned external storage | `QoreBufferNode` exposes provider-neutral device descriptors, explicit copy-to-host callbacks, Qore storage-inspection methods, and detach-on-write semantics. |
-| native JDBC packed buffers | deferred | Needs JNI-side direct buffer or typed-array extraction per driver. |
+| native JDBC packed buffers | implemented for host buffers | module-jni constructs packed Qore buffers from JDBC typed getters for fixed-width numeric, boolean, string, and decimal128 columns; Java-side primitive-array/direct-buffer batch extraction remains a future optimization. |
 
 Short-term mappings remain:
 
