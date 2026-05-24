@@ -4,10 +4,10 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires DataProvider
+%requires ../../../../qlib/DataProvider
 %requires i18n
 
-%requires QUnit
+%requires ../../../../qlib/QUnit.qm
 
 %try-module yaml
 %define NoYaml
@@ -312,10 +312,24 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         # contains any (string)
         assertTrue(eval_expr("contains-any", ("hello world", ("world", "foo"), True)));
         assertFalse(eval_expr("contains-any", ("hello world", ("foo", "bar"), True)));
+        assertTrue(eval_expr("contains-any", ("hello world", "world", "foo")));
+        assertFalse(eval_expr("contains-any", ("hello world", "foo", "bar")));
+        assertTrue(eval_expr("contains-any", ("Hello World", "hello", "foo", True)));
 
         # list contains any
         assertTrue(eval_expr("listContainsAny", ((1, 2, 3), (3, 4, 5))));
         assertFalse(eval_expr("listContainsAny", ((1, 2, 3), (4, 5, 6))));
+        assertTrue(eval_expr("listContainsAny", ((1, 2, 3), 3, 4, 5)));
+        assertFalse(eval_expr("listContainsAny", ((1, 2, 3), 4, 5, 6)));
+
+        assertTrue(DataProviderGenericExpressions{"contains-any"}.varargs);
+        assertTrue(DataProviderGenericExpressions{"listContainsAny"}.varargs);
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('containsAny(@name, "li", "av")');
+        assertTrue(AbstractDataProvider::evalGenericExpression({"name": "Alice"}, exp));
+        assertFalse(AbstractDataProvider::evalGenericExpression({"name": "Bob"}, exp));
+        exp = DataProvider::parseDpqlExpression('listContainsAny(@tags, "trial", "standard")');
+        assertTrue(AbstractDataProvider::evalGenericExpression({"tags": ("vip", "standard")}, exp));
+        assertFalse(AbstractDataProvider::evalGenericExpression({"tags": ("vip", "active")}, exp));
 
         # find in
         assertEq("b", eval_expr("findIn", ("b", ("a", "b", "c"))));

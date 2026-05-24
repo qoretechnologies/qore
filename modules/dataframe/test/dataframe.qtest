@@ -7,14 +7,17 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
+
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/DataProvider
 
 %try-module dataframe
 %define NoDataFrame
 %endtry
 
-%try-module DataProviderDataFrame
+%try-module ../../../qlib/DataProviderDataFrame
 %define NoDataProviderDataFrame
 %endtry
 

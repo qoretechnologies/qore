@@ -96,6 +96,44 @@ bool sub dp_eval_string_predicate(hash<auto> rec, hash<DataProviderExpression> e
     throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("unsupported string predicate operator %y", op);
 }
 
+#! Normalizes one list argument or repeated arguments into a list of values
+/** @since DataProvider 3.5
+*/
+list<auto> sub dp_flatten_any_args(list<auto> values) {
+    if (values.size() == 1 && values[0].typeCode() == NT_LIST) {
+        return values[0];
+    }
+    return values;
+}
+
+#! Evaluates expression arguments and normalizes one list argument or repeated arguments into a list
+/** @since DataProvider 3.5
+*/
+list<auto> sub dp_eval_varargs_list(hash<auto> rec, hash<DataProviderExpression> exp, int start, int end,
+        *hash<auto> tc) {
+    list<auto> values;
+    for (int i = start; i < end; ++i) {
+        push values, dp_eval_arg(rec, exp, i, tc);
+    }
+    return dp_flatten_any_args(values);
+}
+
+#! Evaluates contains-any value arguments and separates an optional bool/locale-options argument
+/** @since DataProvider 3.5
+*/
+hash<auto> sub dp_eval_contains_any_args(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    auto options = False;
+    int end = exp.args.size();
+    if (end > 2) {
+        auto tail = dp_eval_arg(rec, exp, end - 1, tc);
+        if (tail.typeCode() == NT_BOOLEAN || tail.typeCode() == NT_HASH) {
+            options = tail;
+            --end;
+        }
+    }
+    return {"values": dp_eval_varargs_list(rec, exp, 1, end, tc), "options": options};
+}
+
 #! Extended expression implementations for data providers
 /** @since DataProvider 3.3
 */
@@ -410,8 +448,8 @@ public const ExtendedExpressionImplementations = {
                     "short_desc": "Bool ignore-case flag or locale options hash",
                     "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
                         "a string `locale` key and is evaluated with locale-sensitive ICU collation; supported "
-                        "options include `strength`, `normalization`, and `case_level`. Default: `True`",
-                    "default_value": True,
+                        "options include `strength`, `normalization`, and `case_level`. Default: `False`",
+                    "default_value": False,
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."bool",
@@ -448,8 +486,8 @@ public const ExtendedExpressionImplementations = {
                     "short_desc": "Bool ignore-case flag or locale options hash",
                     "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
                         "a string `locale` key and is evaluated with locale-sensitive ICU collation; supported "
-                        "options include `strength`, `normalization`, and `case_level`. Default: `True`",
-                    "default_value": True,
+                        "options include `strength`, `normalization`, and `case_level`. Default: `False`",
+                    "default_value": False,
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."bool",
@@ -487,8 +525,8 @@ public const ExtendedExpressionImplementations = {
                     "short_desc": "Bool ignore-case flag or locale options hash",
                     "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
                         "a string `locale` key and is evaluated with locale-sensitive ICU collation; supported "
-                        "options include `strength`, `normalization`, and `case_level`. Default: `True`",
-                    "default_value": True,
+                        "options include `strength`, `normalization`, and `case_level`. Default: `False`",
+                    "default_value": False,
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."bool",
@@ -539,7 +577,7 @@ public const ExtendedExpressionImplementations = {
             "symbol": "containsAny",
             "render_template": "$arg[0] contains-any $arg[1]",
             "groups": "Comparison",
-            "args": (DataProviderSignatureStringType, DataProviderSignatureListType,
+            "args": (DataProviderSignatureStringType, DataProviderSignatureAnyType,
                 DataProviderSignatureAnyType),
             "arg_info": (
                 <DataProviderArgInfo>{
@@ -551,23 +589,27 @@ public const ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "Strings",
                     "short_desc": "The substrings to search for",
-                    "desc": "The strings to check if at least one is in the first argument",
+                    "desc": "The strings to check if at least one is in the first argument; pass either one list "
+                        "argument or repeated string arguments",
                 },
                 <DataProviderArgInfo>{
                     "display_name": "Case / Locale Options",
                     "short_desc": "Bool ignore-case flag or locale options hash",
                     "desc": "If a bool is supplied, `True` ignores case. If a hash is supplied, it must contain "
                         "a string `locale` key and each substring is evaluated with locale-sensitive ICU collation; "
-                        "supported options include `strength`, `normalization`, and `case_level`. Default: `True`",
-                    "default_value": True,
+                        "supported options include `strength`, `normalization`, and `case_level`. Default: `False`",
+                    "default_value": False,
                 },
             ),
+            "varargs": True,
+            "min_args": 2,
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             string str = dp_eval_arg(rec, exp, 0, tc);
-            *list<auto> elems = dp_eval_arg(rec, exp, 1, tc);
-            auto options = exp.args.size() > 2 ? dp_eval_arg(rec, exp, 2, tc) : False;
+            hash<auto> parsed_args = dp_eval_contains_any_args(rec, exp, tc);
+            list<auto> elems = parsed_args.values;
+            auto options = parsed_args.options;
             *hash<auto> locale_options = dp_get_string_predicate_locale_options(options, DP_OP_CONTAINS_ANY);
             if (locale_options) {
                 foreach softstring chars in (elems) {
@@ -599,7 +641,7 @@ public const ExtendedExpressionImplementations = {
             "symbol": "listContainsAny",
             "render_template": "$arg[0] list-contains-any $arg[1]",
             "groups": "Comparison",
-            "args": (DataProviderSignatureListType, DataProviderSignatureListType),
+            "args": (DataProviderSignatureListType, DataProviderSignatureAnyType),
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "List Value",
@@ -610,14 +652,17 @@ public const ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "Values",
                     "short_desc": "The values to search for",
-                    "desc": "The values to check if at least one is in the first list",
+                    "desc": "The values to check if at least one is in the first list; pass either one list argument "
+                        "or repeated value arguments",
                 },
             ),
+            "varargs": True,
+            "min_args": 2,
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             softlist<auto> l = dp_eval_arg(rec, exp, 0, tc);
-            *list<auto> vals = dp_eval_arg(rec, exp, 1, tc);
+            list<auto> vals = dp_eval_varargs_list(rec, exp, 1, exp.args.size(), tc);
             foreach auto v in (vals) {
                 if (l.contains(v)) {
                     return True;
