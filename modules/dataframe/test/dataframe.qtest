@@ -543,6 +543,13 @@ sub invalid_dataframe_api() {
         # "Carol" and "Dave" contain lowercase 'a'
         assertEq(2, has_a.numRows(), "filter contains");
 
+        auto selected_names = df.filter("name", "in", ("Alice", "Dave"));
+        assertEq((30, 28), selected_names.getColumn("age"),
+            "filter in selects string list values");
+        auto excluded_ages = df.filter("age", "not_in", (25, 35));
+        assertEq(("Alice", "Dave"), excluded_ages.getColumn("name"),
+            "filter not_in excludes numeric list values");
+
         # No matches
         auto none = df.filter("age", ">", 100);
         assertEq(0, none.numRows(), "filter no matches");
@@ -556,6 +563,11 @@ sub invalid_dataframe_api() {
         assertEq(1, nulls.numRows(), "filter is_null");
         auto non_nulls = df2.filter("a", "not_null", 0);
         assertEq(2, non_nulls.numRows(), "filter not_null");
+        auto in_nulls = df2.filter("a", "in", (NOTHING, 3));
+        assertEq((NOTHING, 3), in_nulls.getColumn("a"),
+            "filter in can match null and scalar list values");
+        assertThrows("DATAFRAME-FILTER-ERROR", \df.filter(), ("age", "in", 30),
+            "filter in requires a list value");
     }
 
     sortByTest() {
@@ -2317,6 +2329,27 @@ sub invalid_dataframe_api() {
             });
         assertEq((2, 3), string_filtered.getColumn("id"),
             "Parquet read filters support exact string predicate fallback");
+
+        DataFrame::DataFrame list_filtered = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "id",
+                    "op": "in",
+                    "value": (1, 3),
+                },),
+            });
+        assertEq(("Alice", "Carol"), list_filtered.getColumn("name"),
+            "Parquet read filters support in-list values with statistics pruning");
+        DataFrame::DataFrame list_excluded = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "name",
+                    "op": "not_in",
+                    "value": ("Bob",),
+                },),
+            });
+        assertEq((1, 3), list_excluded.getColumn("id"),
+            "Parquet read filters support not_in list values with exact filtering");
 
         DataFrame::DataFrame no_matches = DataFrame::DataFrame::readParquet(tmp_path,
             <DataFrame::ParquetReadOptions>{

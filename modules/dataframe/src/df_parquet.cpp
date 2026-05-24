@@ -250,6 +250,7 @@ static bool qoreParquetReadIntListOption(const QoreHashNode* options, const char
 
 static bool qoreParquetFilterOperatorValid(const std::string& op) {
     return op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">="
+        || op == "in" || op == "not_in"
         || op == "contains" || op == "startswith" || op == "endswith"
         || op == "is_null" || op == "not_null";
 }
@@ -285,7 +286,7 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
     if (!qoreParquetFilterOperatorValid(out.op)) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "Parquet option 'filters' entry " QLLD " has unsupported operator '%s'; expected one of: "
-            "==, !=, <, <=, >, >=, contains, startswith, endswith, is_null, not_null",
+            "==, !=, <, <=, >, >=, in, not_in, contains, startswith, endswith, is_null, not_null",
             index, out.op.c_str());
         return false;
     }
@@ -296,6 +297,12 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "Parquet option 'filters' entry " QLLD " operator '%s' requires key 'value'",
             index, out.op.c_str());
+        return false;
+    }
+    if ((out.op == "in" || out.op == "not_in") && out.value.getType() != NT_LIST) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option 'filters' entry " QLLD " operator '%s' expects key 'value' to be a list, got %s",
+            index, out.op.c_str(), out.value.getFullTypeName());
         return false;
     }
     return true;
@@ -814,7 +821,8 @@ static bool qoreParquetStatsMayMatchDecimal(const parquet::ColumnDescriptor* col
 
 static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
         const std::shared_ptr<parquet::Statistics>& stats,
-        int64_t row_count, const QoreParquetReadOptions::Filter& filter) {
+        int64_t row_count, const QoreParquetReadOptions::Filter& filter,
+        ExceptionSink* xsink = nullptr) {
     bool cmp_is_null = filter.value.isNullOrNothing();
     bool has_null_count = stats && stats->HasNullCount();
     int64_t null_count = has_null_count ? stats->null_count() : 0;
@@ -826,6 +834,26 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
         return !(has_null_count && null_count == row_count);
     }
     if (cmp_is_null) {
+        return true;
+    }
+    if (filter.op == "in") {
+        if (filter.value.getType() != NT_LIST) {
+            return true;
+        }
+        const QoreListNode* values = filter.value.get<const QoreListNode>();
+        for (size_t i = 0; i < values->size(); ++i) {
+            if (i && !(i % 100) && xsink
+                    && qore_check_cancel(xsink, "checking Parquet list filter statistics")) {
+                return true;
+            }
+            QoreParquetReadOptions::Filter eq_filter{filter.column, "==", values->retrieveEntry(i)};
+            if (qoreParquetStatsMayMatch(column, stats, row_count, eq_filter, xsink)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (filter.op == "not_in") {
         return true;
     }
     if (has_null_count && null_count == row_count) {
@@ -911,7 +939,7 @@ static bool qoreParquetRowGroupMayMatch(const std::unique_ptr<parquet::arrow::Fi
     std::unique_ptr<parquet::RowGroupMetaData> rg = metadata->RowGroup(row_group);
     std::unique_ptr<parquet::ColumnChunkMetaData> chunk = rg->ColumnChunk(column_index);
     return qoreParquetStatsMayMatch(metadata->schema()->Column(column_index), chunk->statistics(),
-        rg->num_rows(), filter);
+        rg->num_rows(), filter, xsink);
 }
 
 static std::vector<int> qoreParquetInitialRowGroups(

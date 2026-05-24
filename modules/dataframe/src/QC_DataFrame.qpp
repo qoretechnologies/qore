@@ -738,8 +738,8 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
 //! Returns a new DataFrame with rows matching the condition
 /** @param column the column name to filter on
     @param op the comparison operator: "==", "!=", "<", "<=", ">", ">=",
-    "contains", "startswith", "endswith", "is_null", "not_null"
-    @param value the value to compare against
+    "in", "not_in", "contains", "startswith", "endswith", "is_null", "not_null"
+    @param value the value to compare against; use a list for "in" and "not_in"
 
     @return new DataFrame object with matching rows
 
@@ -747,6 +747,7 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
     @code{.py}
     DataFrame adults = df.filter("age", ">=", 18);
     DataFrame bobs = df.filter("name", "==", "Bob");
+    DataFrame priority = df.filter("status", "in", ("queued", "running"));
     DataFrame has_score = df.filter("score", "not_null", 0);
     @endcode
 
@@ -1299,7 +1300,7 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     - \c row_groups: row group numbers to read; omitted reads all row groups
     - \c batch_size: Arrow records per read batch
     - \c use_threads: enables Arrow threaded column reads
-    - \c filters: ANDed filter hashes with keys \c column, \c op, and optional \c value
+    - \c filters: ANDed filter hashes with keys \c column, \c op, and optional \c value; \c in and \c not_in use list values
     - \c use_statistics: enables safe row-group pruning with Parquet statistics; default \c True
 
     Uses Apache Arrow and Parquet to load typed columnar data from disk.

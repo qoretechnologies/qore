@@ -497,10 +497,65 @@ static bool qoreDataFrameLessThanOrEqual(QoreValue lhs, QoreValue rhs, Exception
     return !qoreDataFrameLessThan(rhs, lhs, xsink);
 }
 
+static bool qoreDataFrameListContainsValue(const QoreListNode* values, QoreValue value,
+        ExceptionSink* xsink) {
+    assert(values);
+    for (size_t i = 0; i < values->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame list filter values")) {
+            return false;
+        }
+        QoreValue entry = values->retrieveEntry(i);
+        if (value.isNullOrNothing() || entry.isNullOrNothing()) {
+            if (value.isNullOrNothing() && entry.isNullOrNothing()) {
+                return true;
+            }
+            continue;
+        }
+        if (qoreDataFrameSoftEqual(value, entry, xsink)) {
+            return true;
+        }
+        if (*xsink) {
+            return false;
+        }
+    }
+    return false;
+}
+
+static bool qoreDataFrameListContainsString(const QoreListNode* values, const std::string& value,
+        ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(value));
+    return qoreDataFrameListContainsValue(values, QoreValue(*str), xsink);
+}
+
+static bool qoreDataFrameListContainsDateMicros(const QoreListNode* values, int64_t micros,
+        ExceptionSink* xsink) {
+    assert(values);
+    for (size_t i = 0; i < values->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame date list filter values")) {
+            return false;
+        }
+        QoreValue entry = values->retrieveEntry(i);
+        if (entry.getType() != NT_DATE) {
+            continue;
+        }
+        const DateTimeNode* dt = entry.get<const DateTimeNode>();
+        if (!dt->isRelative() && dt->getEpochMicrosecondsUTC() == micros) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool qoreDataFrameAutoCellMatches(QoreValue cell, const std::string& op, QoreValue value,
         ExceptionSink* xsink) {
     if (op == "contains" || op == "startswith" || op == "endswith") {
         return qoreDataFrameStringPredicate(cell, op, value, xsink);
+    }
+    if (op == "in" || op == "not_in") {
+        if (value.getType() != NT_LIST) {
+            return false;
+        }
+        return qoreDataFrameListContainsValue(value.get<const QoreListNode>(), cell, xsink);
     }
     if (op == "==") {
         return qoreDataFrameSoftEqual(cell, value, xsink);
@@ -1670,13 +1725,13 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
     // Validate operator
     static const std::unordered_set<std::string> valid_ops = {
         "==", "!=", "<", "<=", ">", ">=",
-        "contains", "startswith", "endswith",
+        "in", "not_in", "contains", "startswith", "endswith",
         "is_null", "not_null",
     };
     if (!valid_ops.count(op)) {
         xsink->raiseException("DATAFRAME-FILTER-ERROR",
             "unknown filter operator '%s'; valid operators: ==, !=, <, <=, >, >=, "
-            "contains, startswith, endswith, is_null, not_null", op.c_str());
+            "in, not_in, contains, startswith, endswith, is_null, not_null", op.c_str());
         return {};
     }
 
@@ -1699,12 +1754,24 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
     const bool op_le = op == "<=";
     const bool op_gt = op == ">";
     const bool op_ge = op == ">=";
+    const bool op_in = op == "in";
+    const bool op_not_in = op == "not_in";
     const bool op_contains = op == "contains";
     const bool op_startswith = op == "startswith";
     const bool op_endswith = op == "endswith";
     const bool op_is_null = op == "is_null";
     const bool op_not_null = op == "not_null";
     const bool cmp_is_null = value.isNullOrNothing();
+    const QoreListNode* cmp_list = nullptr;
+    if (op_in || op_not_in) {
+        if (value.getType() != NT_LIST) {
+            xsink->raiseException("DATAFRAME-FILTER-ERROR",
+                "filter operator '%s' expects a list value, got %s",
+                op.c_str(), value.getFullTypeName());
+            return {};
+        }
+        cmp_list = value.get<const QoreListNode>();
+    }
     double cmp_float = 0.0;
     int64_t cmp_int = 0;
     bool cmp_bool = false;
@@ -1742,7 +1809,15 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
         }
 
         if (cd.isNull(i)) {
-            mask[i] = (op_is_null || (op_eq && cmp_is_null)) ? 1 : 0;
+            if (op_in || op_not_in) {
+                bool match = qoreDataFrameListContainsValue(cmp_list, QoreValue(), xsink);
+                if (*xsink) {
+                    return {};
+                }
+                mask[i] = (op_in ? match : !match) ? 1 : 0;
+            } else {
+                mask[i] = (op_is_null || (op_eq && cmp_is_null)) ? 1 : 0;
+            }
             continue;
         }
 
@@ -1759,7 +1834,8 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
 
         if (cd.type == ColumnType::FLOAT64) {
             double cell = cd.float_data(i);
-            if (op_eq) { match = cell == cmp_float; }
+            if (op_in || op_not_in) { match = qoreDataFrameListContainsValue(cmp_list, QoreValue(cell), xsink); }
+            else if (op_eq) { match = cell == cmp_float; }
             else if (op_ne) { match = cell != cmp_float; }
             else if (op_lt) { match = cell < cmp_float; }
             else if (op_le) { match = cell <= cmp_float; }
@@ -1767,7 +1843,8 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
             else if (op_ge) { match = cell >= cmp_float; }
         } else if (cd.type == ColumnType::INT64) {
             int64_t cell = cd.int_data[i];
-            if (op_eq) { match = cell == cmp_int; }
+            if (op_in || op_not_in) { match = qoreDataFrameListContainsValue(cmp_list, QoreValue(cell), xsink); }
+            else if (op_eq) { match = cell == cmp_int; }
             else if (op_ne) { match = cell != cmp_int; }
             else if (op_lt) { match = cell < cmp_int; }
             else if (op_le) { match = cell <= cmp_int; }
@@ -1775,7 +1852,8 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
             else if (op_ge) { match = cell >= cmp_int; }
         } else if (cd.type == ColumnType::STRING) {
             const std::string& cell = cd.str_data[i];
-            if (op_eq) { match = cell == cmp_string; }
+            if (op_in || op_not_in) { match = qoreDataFrameListContainsString(cmp_list, cell, xsink); }
+            else if (op_eq) { match = cell == cmp_string; }
             else if (op_ne) { match = cell != cmp_string; }
             else if (op_lt) { match = cell < cmp_string; }
             else if (op_le) { match = cell <= cmp_string; }
@@ -1789,11 +1867,13 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
             }
         } else if (cd.type == ColumnType::BOOL) {
             bool cell = cd.bool_data[i];
-            if (op_eq) { match = cell == cmp_bool; }
+            if (op_in || op_not_in) { match = qoreDataFrameListContainsValue(cmp_list, QoreValue(cell), xsink); }
+            else if (op_eq) { match = cell == cmp_bool; }
             else if (op_ne) { match = cell != cmp_bool; }
-        } else if (cd.type == ColumnType::DATE && value.getType() == NT_DATE) {
+        } else if (cd.type == ColumnType::DATE && ((op_in || op_not_in) || value.getType() == NT_DATE)) {
                 int64_t cell = cd.date_data[i];
-                if (op_eq) { match = cell == cmp_date; }
+                if (op_in || op_not_in) { match = qoreDataFrameListContainsDateMicros(cmp_list, cell, xsink); }
+                else if (op_eq) { match = cell == cmp_date; }
                 else if (op_ne) { match = cell != cmp_date; }
                 else if (op_lt) { match = cell < cmp_date; }
                 else if (op_le) { match = cell <= cmp_date; }
@@ -1807,6 +1887,12 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
             }
         }
 
+        if (*xsink) {
+            return {};
+        }
+        if (op_not_in) {
+            match = !match;
+        }
         if (match) {
             mask[i] = 1;
         }
