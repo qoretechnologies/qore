@@ -149,6 +149,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \requestClassifierSemanticPolicyTest());
         addTestCase("LlmRequestClassifier block-list mode and reasoning budget",
             \requestClassifierBlockListModeTest());
+        addTestCase("ActionIntentClassifier disables reasoning budget",
+            \actionIntentClassifierBudgetTest());
         addTestCase("CitationValidator validates supplied source ids",
             \citationValidatorTest());
         addTestCase("GroundedAnswerVerifier combines grounding and citations",
@@ -748,6 +750,33 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "classifier output schema declares the 'allowed' verdict field");
         assertTrue(inlist("allowed", output_schema.required),
             "classifier output schema requires the 'allowed' verdict field");
+    }
+
+    actionIntentClassifierBudgetTest() {
+        hash<auto> captured;
+        QoreLlmUtils::LlmBackend backend(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "model": "test-model",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                captured = body;
+                return {
+                    "choices": ({
+                        "message": {"content": "INTENT: read-only"},
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {"total_tokens": 3},
+                };
+            },
+        });
+        QoreLlmUtils::ActionIntentClassifier classifier(backend);
+        *string intent = classifier.classify("how do I create a workflow?");
+        assertEq("read-only", intent,
+            "classifier parses the INTENT label");
+        # Intent classification disables hidden reasoning so a thinking model
+        # cannot drain the output budget and return empty content.
+        assertEq(0, captured.reasoning_token_budget,
+            "action-intent classifier disables the reasoning/thinking budget");
     }
 
     requestClassifierBlockListModeTest() {
