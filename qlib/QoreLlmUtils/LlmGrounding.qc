@@ -321,9 +321,17 @@ public class GroundedAnswerVerifier {
             },
         };
 
+        # Grounding verification is a compact structured judgement that does
+        # not benefit from extended hidden reasoning; disabling the reasoning
+        # budget keeps the (small) output budget available for the JSON
+        # verdict.  This matters on "thinking" models (e.g. Gemini 2.5) where
+        # reasoning tokens are drawn from the same output budget and can
+        # otherwise truncate the response to empty/unparseable JSON.
+        # Providers without a reasoning budget ignore the option.
         hash<LlmCompletionResult> llm_result = backend.complete(
             getSystemPrompt(), make_json(request, JGF_ADD_FORMATTING),
-            getOutputSchema());
+            getOutputSchema(),
+            <LlmRequestOptions>{"reasoning_token_budget": 0});
         hash<LlmStructuredRepairResult> repaired =
             LlmStructuredRepair::parseJsonObject(llm_result.content);
         if (!repaired.valid) {
@@ -342,10 +350,13 @@ public class GroundedAnswerVerifier {
     }
 
     #! Returns the JSON schema requested from structured-output capable backends
+    /** A bare JSON Schema object with no top-level \c name (or other dialect
+        metadata): such labelling keywords belong on the request wrapper, and
+        embedding one makes providers with a stricter OpenAPI Schema subset
+        (notably Google Gemini's \c responseSchema) reject the request. */
     static hash<auto> getOutputSchema() {
         return {
             "type": "object",
-            "name": "grounding_verification",
             "properties": {
                 "grounded": {"type": "boolean"},
                 "grounding_score": {"type": "number"},
