@@ -278,7 +278,9 @@ pipeline.waitDone();
     projected or updated blocks from referenced column containers. Analytics
     processors, including correlation and cross-correlation processors, accept
     DataFrameBlock and BufferColumns input and preserve those shapes for
-    rectangular event blocks, including flush-time output from partial windows.
+    rectangular event blocks, including flush-time output from partial windows;
+    top-level configured fields are read from selected columns directly instead
+    of materializing full input blocks as hash-of-lists data.
     Supported compiled filter forms include \c &&, \c ||, \c !,
     scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
     scalar comparisons over top-level fields, expression-to-expression

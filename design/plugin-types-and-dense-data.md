@@ -215,6 +215,9 @@ The implemented hot paths are:
 - horizontal concat
 - DataProvider filter/group/projection/limit/set/search-replace shape
   preservation
+- selected-column DataProvider analytics, correlation, and cross-correlation
+  processing for DataFrame and BufferColumns inputs, avoiding whole-block
+  hash-of-lists materialization when configured fields are top-level columns
 - native DataFrame group-by aggregates for simple `count`, `sum`, `avg`,
   `min`, and `max` specifications, with `avg(field)` lowered to DataFrame
   `mean` and deferred single-block aggregation that deopts safely when mixed or

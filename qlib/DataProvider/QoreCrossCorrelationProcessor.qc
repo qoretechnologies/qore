@@ -357,16 +357,51 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         return processRecordsBulkShape(records, DataProviderShape::HashOfLists);
     }
 
+    #! Processes DataFrame or BufferColumns input from selected top-level columns only
+    private *hash<auto> processColumnarRecordsShape(auto records, DataProviderShape shape, hash<auto> columns) {
+        updatePendingOutputShape(shape);
+        int record_count = AbstractDataProcessor::shapeRecordCount(records, shape);
+        list<auto> results;
+        processing_shaped_bulk = True;
+        on_exit {
+            processing_shaped_bulk = False;
+        }
+        for (int i = 0; i < record_count; ++i) {
+            hash<auto> record;
+            record{field_x} = columns{field_x}[i];
+            record{field_y} = columns{field_y}[i];
+            *auto result = processRecordImpl(record);
+            if (exists result) {
+                if (result.typeCode() == NT_LIST) {
+                    results += result;
+                } else {
+                    push results, result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        return AbstractDataProcessor::recordsToHashList(results);
+    }
+
     #! Processes data in an explicitly negotiated shape
     private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
         switch (shape) {
             case DataProviderShape::HashOfLists:
                 return processRecordsBulkShape(records, shape);
             case DataProviderShape::BufferColumns:
-            case DataProviderShape::DataFrameBlock:
+            case DataProviderShape::DataFrameBlock: {
+                list<string> fields = (field_x, field_y);
+                *hash<auto> columns = AbstractDataProcessor::getTopLevelShapeColumns(records, shape, fields);
+                if (columns && columns.size() == fields.size()) {
+                    return AbstractDataProcessor::convertHashListResultShape(
+                        processColumnarRecordsShape(records, shape, columns), shape);
+                }
                 return AbstractDataProcessor::convertHashListResultShape(
                     processRecordsBulkShape(AbstractDataProcessor::convertShape(
                         records, shape, DataProviderShape::HashOfLists)[0], shape), shape);
+            }
             case DataProviderShape::RowRecords:
                 return processRecordImpl(records);
         }

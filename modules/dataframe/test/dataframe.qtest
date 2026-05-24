@@ -1588,6 +1588,14 @@ sub invalid_dataframe_api() {
             "DataFrame ColumnarResult round-trip preserves duration logical type");
         assertEq("buffer<*int64>", duration_roundtrip.getColumn("elapsed").fullType(),
             "DataFrame ColumnarResult round-trip preserves packed duration buffer");
+        DataFrame::DataFrame converted_temporal_df = AbstractDataProcessor::convertShape(temporal_columns,
+            DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0];
+        assertEq("timestamp", converted_temporal_df.toColumnarResult().schemaV2()[0].kind,
+            "BufferColumns to DataFrameBlock conversion preserves ColumnarResult timestamp schema");
+        DataFrame::DataFrame converted_duration_df = AbstractDataProcessor::convertShape(duration_columns,
+            DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0];
+        assertEq("duration", converted_duration_df.toColumnarResult().schemaV2()[0].kind,
+            "BufferColumns to DataFrameBlock conversion preserves ColumnarResult duration schema");
 
         ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
             "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),

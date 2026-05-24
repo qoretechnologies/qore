@@ -551,38 +551,7 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
 
     #! Returns selected top-level input columns for columnar analytics processing
     private *hash<auto> getAnalyticsFieldColumns(auto records, DataProviderShape shape) {
-        hash<auto> columns;
-        switch (shape) {
-            case DataProviderShape::DataFrameBlock: {
-                list<string> names = records.columnNames();
-                foreach string field in (fields) {
-                    if (field.find(".") >= 0) {
-                        return;
-                    }
-                    if (names.contains(field)) {
-                        columns{field} = records.getColumn(field);
-                    }
-                }
-                break;
-            }
-            case DataProviderShape::BufferColumns:
-                foreach string field in (fields) {
-                    if (field.find(".") >= 0) {
-                        return;
-                    }
-                    if (AbstractDataProcessor::isColumnarResult(records)) {
-                        if (records.columnNames().contains(field)) {
-                            columns{field} = records.getColumn(field);
-                        }
-                    } else if (records.hasKey(field)) {
-                        columns{field} = records{field};
-                    }
-                }
-                break;
-            default:
-                return;
-        }
-        return columns;
+        return AbstractDataProcessor::getTopLevelShapeColumns(records, shape, fields);
     }
 
     #! Processes data in an explicitly negotiated shape

@@ -340,6 +340,11 @@ ColumnarResult filtered_columns = filter.processRecordsShape(
     columns, DataProviderShape::BufferColumns);
     @endcode
 
+    Shape-aware analytics processors use the same columnar path. For top-level
+    configured fields, running analytics, correlation, and cross-correlation
+    processors read only the selected DataFrame or ColumnarResult columns and
+    keep rectangular event output in the negotiated shape.
+
     This is not a promise that every DataFrame operation is zero-copy. Existing
     DataFrame kernels still keep their vector-oriented internal representation
     for joins, groupby, windows, and ML conversion. Dense source buffers are

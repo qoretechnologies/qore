@@ -861,6 +861,8 @@ pipeline.append(new QoreFilterRecordsProcessor({
     Analytics processors, including @ref DataProvider::QoreCorrelationProcessor "QoreCorrelationProcessor" and
     @ref DataProvider::QoreCrossCorrelationProcessor "QoreCrossCorrelationProcessor", accept
     \c DataFrameBlock and \c BufferColumns input directly and emit analytics event records as hash-of-lists blocks.
+    For top-level configured fields, these processors read only the selected DataFrame or dense ColumnarResult
+    columns instead of materializing the full input block as hash-of-lists data.
     Direct calls to \c flushRecords() still return ordinary row records for compatibility.
 
     @section dataprovider_debugging Debugging Data Providers
@@ -1214,7 +1216,8 @@ if (errors) {
     - updated analytics processors, including @ref DataProvider::QoreCorrelationProcessor
       "QoreCorrelationProcessor" and @ref DataProvider::QoreCrossCorrelationProcessor
       "QoreCrossCorrelationProcessor", to accept \c DataFrameBlock and \c BufferColumns input and preserve
-      shaped rectangular event blocks, including flush-time output from partial windows
+      shaped rectangular event blocks, including flush-time output from partial windows; top-level configured
+      fields are read directly from selected columns to avoid full-block hash-of-lists materialization
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and

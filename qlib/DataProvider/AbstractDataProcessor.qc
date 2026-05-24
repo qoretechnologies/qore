@@ -459,12 +459,73 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return AbstractDataProcessor::isColumnarResult(data) || AbstractDataProcessor::isHashOfBuffers(data);
     }
 
+    #! Returns selected top-level columns from a DataFrame or BufferColumns block
+    /** @param data the shaped value
+        @param shape the detected or negotiated shape
+        @param fields top-level field names to read
+
+        @return a hash keyed by field name with column containers, or @ref NOTHING if any field uses dot-notation
+            or \a shape is not a columnar shape
+
+        @since %DataProvider 3.5
+    */
+    static *hash<auto> getTopLevelShapeColumns(auto data, DataProviderShape shape, list<string> fields) {
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return;
+            }
+        }
+
+        hash<auto> columns;
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock: {
+                list<string> names = data.columnNames();
+                foreach string field in (fields) {
+                    if (names.contains(field)) {
+                        columns{field} = data.getColumn(field);
+                    }
+                }
+                return columns;
+            }
+            case DataProviderShape::BufferColumns: {
+                if (AbstractDataProcessor::isColumnarResult(data)) {
+                    list<string> names = data.columnNames();
+                    foreach string field in (fields) {
+                        if (names.contains(field)) {
+                            columns{field} = data.getColumn(field);
+                        }
+                    }
+                    return columns;
+                }
+                if (AbstractDataProcessor::isHashOfBuffers(data)) {
+                    foreach string field in (fields) {
+                        if (data.hasKey(field)) {
+                            columns{field} = data{field};
+                        }
+                    }
+                    return columns;
+                }
+                return;
+            }
+        }
+        return;
+    }
+
     #! Returns the DataFrame class, loading the module into this program if needed
     /** @since %DataProvider 3.5
     */
     static auto getDataFrameClass() {
         load_module("dataframe");
         return Class::forName("DataFrame::DataFrame");
+    }
+
+    #! Builds a DataFrame from a ColumnarResult while preserving columnar schema metadata
+    /** @param data a ColumnarResult-compatible object
+
+        @since %DataProvider 3.5
+    */
+    static auto columnarResultToDataFrame(auto data) {
+        return AbstractDataProcessor::getDataFrameClass().getStaticMethod("fromColumnarResult").call(data);
     }
 
     #! Converts a hash of dense typed buffers to a hash-of-lists block
@@ -640,7 +701,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         }
         if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::DataFrameBlock) {
             if (AbstractDataProcessor::isColumnarResult(data)) {
-                return (AbstractDataProcessor::getDataFrameClass().newObject(data.toColumnHash()),);
+                return (AbstractDataProcessor::columnarResultToDataFrame(data),);
             }
             return (AbstractDataProcessor::getDataFrameClass().newObject(data),);
         }
