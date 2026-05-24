@@ -69,6 +69,45 @@ static size_t qoreDataFrameBitmapBytes(int64_t length, size_t bit_offset = 0) {
     return (bit_offset + static_cast<size_t>(length) + 7) / 8;
 }
 
+static bool qoreDataFrameBitmapGetBit(const uint8_t* bitmap, size_t bit) {
+    return bitmap[bit / 8] & (uint8_t(1) << (bit % 8));
+}
+
+static void qoreDataFrameBitmapSetBit(std::vector<uint8_t>& bitmap, size_t bit) {
+    bitmap[bit / 8] |= uint8_t(1) << (bit % 8);
+}
+
+static std::shared_ptr<arrow::Buffer> copyBitmapRangeToArrowBuffer(const uint8_t* source,
+        size_t source_bit_offset, int64_t length, size_t target_bit_offset, ExceptionSink* xsink,
+        const char* action) {
+    if (!source || length <= 0) {
+        return nullptr;
+    }
+
+    size_t byte_count = qoreDataFrameBitmapBytes(length, target_bit_offset);
+    if (byte_count > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "DataFrame bitmap is too large for zero-copy Arrow export");
+        return nullptr;
+    }
+
+    auto owner = std::make_shared<std::vector<uint8_t>>(byte_count, 0);
+    for (int64_t i = 0; i < length; ++i) {
+        if (checkParquetCancel(i, action, xsink)) {
+            return nullptr;
+        }
+        if (qoreDataFrameBitmapGetBit(source, source_bit_offset + static_cast<size_t>(i))) {
+            qoreDataFrameBitmapSetBit(*owner, target_bit_offset + static_cast<size_t>(i));
+        }
+    }
+
+    return std::shared_ptr<arrow::Buffer>(new arrow::Buffer(owner->data(), static_cast<int64_t>(owner->size())),
+        [owner = std::move(owner)](arrow::Buffer* buffer) {
+            (void)owner;
+            delete buffer;
+        });
+}
+
 static std::shared_ptr<const QoreBufferNode> refQoreBufferOwner(const QoreBufferNode* buffer) {
     assert(buffer);
     buffer->ref();
@@ -117,6 +156,8 @@ struct QoreParquetWriteOptions {
     bool use_dictionary = false;
     bool has_write_statistics = false;
     bool write_statistics = false;
+    bool has_write_page_index = false;
+    bool write_page_index = false;
     bool has_use_threads = false;
     bool use_threads = false;
     bool store_schema = false;
@@ -395,6 +436,12 @@ static bool qoreParquetWriteOptions(const QoreHashNode* options, QoreParquetWrit
     if (!write_statistics.isNullOrNothing()) {
         parsed.write_statistics = write_statistics.getAsBool();
         parsed.has_write_statistics = true;
+    }
+
+    QoreValue write_page_index = options->getKeyValue("write_page_index");
+    if (!write_page_index.isNullOrNothing()) {
+        parsed.write_page_index = write_page_index.getAsBool();
+        parsed.has_write_page_index = true;
     }
 
     QoreValue use_threads = options->getKeyValue("use_threads");
@@ -2224,9 +2271,6 @@ static std::shared_ptr<arrow::Array> denseBufferToArrowArray(const ColumnData& c
         offset = static_cast<int64_t>(cd.dense_buffer->getRawDataBitOffset());
         data_size = qoreDataFrameBitmapBytes(cd.n_rows, static_cast<size_t>(offset));
     } else {
-        if (cd.dense_buffer->hasNullableElements() && cd.dense_buffer->getRawValidityBitOffset()) {
-            return nullptr;
-        }
         size_t element_size = qore_buffer_element_storage_size(actual);
         if (static_cast<uint64_t>(cd.n_rows)
                 > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / element_size) {
@@ -2261,7 +2305,19 @@ static std::shared_ptr<arrow::Array> denseBufferToArrowArray(const ColumnData& c
                 return nullptr;
             }
             size_t validity_size = qoreDataFrameBitmapBytes(cd.n_rows, validity_bit_offset);
-            validity_buffer = wrapQoreBufferMemory(validity, static_cast<int64_t>(validity_size), owner);
+            if (actual != QoreBufferElementType::Bool && validity_bit_offset) {
+                validity_buffer = copyBitmapRangeToArrowBuffer(validity, validity_bit_offset, cd.n_rows, 0,
+                    xsink, "realigning DataFrame validity bitmap for Arrow export");
+            } else if (actual == QoreBufferElementType::Bool && validity_bit_offset != static_cast<size_t>(offset)) {
+                validity_buffer = copyBitmapRangeToArrowBuffer(validity, validity_bit_offset, cd.n_rows,
+                    static_cast<size_t>(offset), xsink,
+                    "realigning DataFrame boolean validity bitmap for Arrow export");
+            } else {
+                validity_buffer = wrapQoreBufferMemory(validity, static_cast<int64_t>(validity_size), owner);
+            }
+            if (*xsink) {
+                return nullptr;
+            }
         }
     }
 
@@ -2908,6 +2964,13 @@ void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* op
             properties_builder.enable_statistics();
         } else {
             properties_builder.disable_statistics();
+        }
+    }
+    if (write_options.has_write_page_index) {
+        if (write_options.write_page_index) {
+            properties_builder.enable_write_page_index();
+        } else {
+            properties_builder.disable_write_page_index();
         }
     }
 

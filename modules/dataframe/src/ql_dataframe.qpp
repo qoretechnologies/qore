@@ -134,6 +134,7 @@ hash<DataFrame::ParquetWriteOptions> options = {
     "compression": "zstd",
     "row_group_size": 100000,
     "use_dictionary": True,
+    "write_page_index": True,
 };
 df.writeParquet("orders.parquet", options);
     @endcode
@@ -149,6 +150,8 @@ hashdecl Qore::DataFrame::ParquetWriteOptions {
     *bool use_dictionary;
     //! Whether column statistics are written
     *bool write_statistics;
+    //! Whether Parquet page-index metadata is written for downstream page-level pruning
+    *bool write_page_index;
     //! Whether Arrow may use worker threads while writing columns
     *bool use_threads;
     //! Whether to store serialized Arrow schema metadata in the Parquet file

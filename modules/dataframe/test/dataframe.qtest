@@ -2239,6 +2239,7 @@ sub invalid_dataframe_api() {
             "row_group_size": 2,
             "use_dictionary": False,
             "write_statistics": True,
+            "write_page_index": True,
             "store_schema": True,
         });
 
@@ -2445,6 +2446,18 @@ sub invalid_dataframe_api() {
         assertEq("buffer<*decimal128>", null_dense_parquet_df.getColumnBuffer("amount").fullType(),
             "Parquet preserves null-heavy nullable decimal dense storage");
 
+        DataFrame::DataFrame sliced_null_dense_df = null_dense_df.slice(1, 4);
+        sliced_null_dense_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+        });
+        DataFrame::DataFrame sliced_null_dense_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((2, NOTHING, 4), sliced_null_dense_parquet_df.getColumn("id"),
+            "Parquet preserves sliced nullable int dense buffers with bitmap offsets");
+        assertEq((NOTHING, False, NOTHING), sliced_null_dense_parquet_df.getColumn("flag"),
+            "Parquet preserves sliced nullable bool dense buffers with bitmap offsets");
+        assertEq((12.50n, -3.25n, NOTHING), sliced_null_dense_parquet_df.getColumn("amount"),
+            "Parquet preserves sliced nullable decimal dense buffers with bitmap offsets");
+
         ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
             "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
         }, {
@@ -2631,6 +2644,15 @@ sub invalid_dataframe_api() {
             "Arrow IPC preserves null-heavy nullable decimal values");
         assertEq("buffer<*decimal128>", null_dense_ipc_df.getColumnBuffer("amount").fullType(),
             "Arrow IPC preserves null-heavy nullable decimal dense storage");
+
+        DataFrame::DataFrame sliced_null_dense_ipc_df = DataFrame::DataFrame::fromArrowIpc(
+            null_dense_df.slice(1, 4).toArrowIpc());
+        assertEq((2, NOTHING, 4), sliced_null_dense_ipc_df.getColumn("id"),
+            "Arrow IPC preserves sliced nullable int dense buffers with bitmap offsets");
+        assertEq((NOTHING, False, NOTHING), sliced_null_dense_ipc_df.getColumn("flag"),
+            "Arrow IPC preserves sliced nullable bool dense buffers with bitmap offsets");
+        assertEq((12.50n, -3.25n, NOTHING), sliced_null_dense_ipc_df.getColumn("amount"),
+            "Arrow IPC preserves sliced nullable decimal dense buffers with bitmap offsets");
 
         ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
             "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),

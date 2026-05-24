@@ -1353,6 +1353,7 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
     - \c row_group_size: maximum rows per Parquet row group
     - \c use_dictionary: enables or disables dictionary encoding globally
     - \c write_statistics: enables or disables column statistics
+    - \c write_page_index: enables or disables Parquet page-index metadata for downstream page-level pruning
     - \c use_threads: enables Arrow threaded column writes
     - \c store_schema: stores Arrow schema metadata in the Parquet file
 
@@ -1364,6 +1365,7 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
         "compression": "zstd",
         "row_group_size": 100000,
         "use_dictionary": True,
+        "write_page_index": True,
     };
     df.writeParquet("/data/output.parquet", options);
     @endcode
