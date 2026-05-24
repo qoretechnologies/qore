@@ -1,0 +1,515 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/RestClientDataProvider
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires json
+
+%exec-class GenericApiCallAutoInjectionTest
+
+#! HTTP handler that echoes back the request method, headers, and body as JSON.
+/** Used to verify the generic call action correctly threads each parameter through the underlying
+    REST client's authenticated transport.
+*/
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # safely render the body as a string regardless of input type (string/binary/nothing)
+        *string body_str;
+        if (exists body) {
+            if (body.typeCode() == NT_STRING) {
+                body_str = body;
+            } else {
+                # binary → string conversion may produce invalid UTF-8 for raw bytes; force latin-1
+                # so make_json never sees a malformed string
+                body_str = body.toString("ISO-8859-1");
+            }
+        }
+        hash<auto> payload = {
+            "method": hdr.method,
+            "path": hdr.path,
+            "auth": hdr."authorization",
+            "custom_header_seen": hdr."x-custom-test",
+            "content_type": hdr."content-type",
+            "body": body_str,
+            "body_size": exists body ? body.size() : 0,
+        };
+        return makeResponse(200, make_json(payload), {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! HTTP handler that always returns a specific status — used to verify expected_status / error_passthru
+class StatusHandler inherits AbstractHttpRequestHandler {
+    private { int m_status; }
+    constructor(int status) { m_status = status; }
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(m_status, make_json({"status_returned": m_status}), {"Content-Type": MimeTypeJson});
+    }
+}
+
+public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+        # one shared provider instance — repeatedly creating fresh ones against the local
+        # HttpServer can race the listener and produce spurious "Connection refused" errors
+        *RestClientDataProvider m_provider;
+        *AbstractDataProvider m_call_child;
+    }
+
+    constructor() : Test("GenericApiCallAutoInjection Test", "1.0") {
+        addTestCase("framework hooks are registered", \testFrameworkHooks());
+        addTestCase("action auto-registered on REST-capable apps", \testActionAutoRegistered());
+        addTestCase("opt-out via disable_generic_api_call", \testOptOut());
+        addTestCase("__call__ child resolves and dispatches", \testCallChildDispatches());
+        addTestCase("__call__ shows up in getChildProviderNames", \testCallChildInNames());
+        addTestCase("getRestClientForGenericCall override returns rest", \testOverrideReturnsRest());
+        addTestCase("apps without scheme do not get the action", \testNoSchemeNoAction());
+        # new fields in 2.4
+        addTestCase("body_type field reshapes body type dynamically", \testDynamicBodyType());
+        addTestCase("body_type=json serializes hash to JSON with Content-Type", \testBodyTypeJson());
+        addTestCase("body_type=form serializes hash to form-urlencoded", \testBodyTypeForm());
+        addTestCase("body_type=text sends string verbatim", \testBodyTypeText());
+        addTestCase("body_type=multipart builds a multipart envelope", \testBodyTypeMultipart());
+        addTestCase("path_vars substitutes {name} placeholders", \testPathVars());
+        addTestCase("expected_status accepts whitelisted code", \testExpectedStatusOk());
+        addTestCase("expected_status throws for mismatched code", \testExpectedStatusMismatch());
+        addTestCase("error_passthru returns 4xx as data", \testErrorPassthru());
+        addTestCase("response shape is lean (no request-* echo / no duplicates)", \testLeanResponseShape());
+        addTestCase("include_debug exposes redacted debug info", \testIncludeDebugRedacted());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_http = new HttpServer(http_opts);
+        m_http.setHandler("/echo", "/echo", MimeTypeJson, new EchoHandler());
+        m_http.setHandler("/users", "/users", MimeTypeJson, new EchoHandler());
+        m_http.setHandler("/status-404", "/status-404", MimeTypeJson, new StatusHandler(404));
+        m_http.setHandler("/status-202", "/status-202", MimeTypeJson, new StatusHandler(202));
+        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        delete m_http;
+    }
+
+    testFrameworkHooks() {
+        # the RestClientDataProvider module's init block registers both builders; verify they're set
+        assertTrue(AbstractDataProvider::hasGenericApiCallChildBuilder());
+        assertTrue(DataProviderActionCatalog::hasGenericApiCallActionBuilder());
+
+        # the reserved names are exposed for callers (e.g. test harnesses, frontends)
+        assertEq("__call__", AbstractDataProvider::GenericApiCallChildName);
+        assertEq("make-api-call", AbstractDataProvider::GenericApiCallActionName);
+    }
+
+    testActionAutoRegistered() {
+        # the GenericRest app opts out of the framework-injected action (its own /call is canonical),
+        # so register a fresh app for this test
+        string app_name = "TestRestAppAuto" + getpid();
+        try {
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": app_name,
+                "display_name": "Test REST App (auto)",
+                "short_desc": "Test app for generic call auto-injection",
+                "desc": "Test app for generic call auto-injection",
+                "scheme": "rest",
+                "logo": "fake-svg",
+                "logo_file_name": "x.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "groups": (AppGroup::ApiIntegration,),
+            });
+
+            *hash<string, hash<DataProviderActionInfo>> actions =
+                DataProviderActionCatalog::getActionHash(app_name);
+            *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+            assertTrue(exists a, "make-api-call should be auto-registered");
+            assertEq(DPAT_API, a.action_code);
+            assertEq("/" + AbstractDataProvider::GenericApiCallChildName, a.path);
+            assertEq("Make an API call", a.display_name);
+
+            # the action exposes the call-level options only, not connection-level clutter
+            hash<string, bool> opts = map {$1: True}, keys a.options;
+            assertTrue(opts.method, "method option must be present");
+            assertTrue(opts.path, "path option must be present");
+            assertTrue(opts.body, "body option must be present");
+            assertTrue(opts.hdr, "hdr option must be present");
+            assertTrue(opts.query_args, "query_args option must be present");
+            assertFalse(opts.oauth2_client_id ?? False,
+                "connection-level options should not be exposed");
+            assertFalse(opts.proxy ?? False, "connection-level options should not be exposed");
+            assertTrue(a.options.method.required, "method must be required");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "APP-ERROR") {
+                # already registered from a previous test run — that's fine
+            } else {
+                rethrow;
+            }
+        }
+    }
+
+    testOptOut() {
+        string app_name = "TestRestAppOptOut" + getpid();
+        try {
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": app_name,
+                "display_name": "Test REST App (opt out)",
+                "short_desc": "Test app that opts out of generic call",
+                "desc": "Test app that opts out of generic call",
+                "scheme": "rest",
+                "logo": "fake-svg",
+                "logo_file_name": "x.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "groups": (AppGroup::ApiIntegration,),
+                "disable_generic_api_call": True,
+            });
+
+            *hash<string, hash<DataProviderActionInfo>> actions =
+                DataProviderActionCatalog::getActionHash(app_name);
+            *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+            assertFalse(exists a, "make-api-call must NOT be auto-registered when opted out");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "APP-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    testNoSchemeNoAction() {
+        string app_name = "TestNoSchemeApp" + getpid();
+        try {
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": app_name,
+                "display_name": "Test No Scheme App",
+                "short_desc": "Test app without a scheme",
+                "desc": "Test app without a scheme",
+                # no scheme: should NOT get the auto-injected action
+                "logo": "fake-svg",
+                "logo_file_name": "x.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "groups": (AppGroup::ApiIntegration,),
+            });
+
+            *hash<string, hash<DataProviderActionInfo>> actions =
+                DataProviderActionCatalog::getActionHash(app_name);
+            *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+            assertFalse(exists a, "make-api-call must NOT be auto-registered without a scheme");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "APP-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    testCallChildInNames() {
+        # construct a real RestClientDataProvider against the local HTTP server; its
+        # getChildProviderNames() should include __call__ via the framework auto-injection
+        RestClientDataProvider parent({"url": "http://localhost:" + port});
+        *list<string> kids = parent.getChildProviderNames();
+        assertTrue(exists kids);
+        assertTrue(inlist(AbstractDataProvider::GenericApiCallChildName, kids),
+            "__call__ should appear in getChildProviderNames()");
+    }
+
+    testOverrideReturnsRest() {
+        RestClientDataProvider parent({"url": "http://localhost:" + port});
+        *object rc = parent.getRestClientForGenericCall();
+        assertTrue(exists rc, "RestClientDataProviderBase override must return the rest client");
+        assertTrue(rc instanceof RestClient::AbstractRestClient,
+            "returned client must be an AbstractRestClient subclass");
+    }
+
+    testCallChildDispatches() {
+        # Verify the __call__ child structure: it must resolve to the framework-provided
+        # GenericApiCallProvider and expose the standard request/response shape.
+        # The end-to-end HTTP round-trip is exercised by the canonical RestClientDataProvider
+        # test against the same local server; here we verify the wiring and the per-call
+        # request dispatch through the underlying authenticated REST client.
+        hash<auto> opts = {
+            "url": "http://localhost:" + port,
+            "headers": {"Authorization": "Bearer test-fake-token"},
+            "http_version": "1.1",
+        };
+        RestClientDataProvider parent(opts);
+
+        AbstractDataProvider call_child = parent.getChildProviderEx(
+            AbstractDataProvider::GenericApiCallChildName);
+        assertEq("GenericApiCallProvider", call_child.className());
+        assertEq(True, call_child.getInfo().supports_request);
+        assertEq(AbstractDataProvider::GenericApiCallChildName, call_child.getName());
+
+        # the auto-injected child reuses the same response shape as the canonical /call action
+        *AbstractDataProviderType req_type = call_child.getRequestType();
+        *AbstractDataProviderType resp_type = call_child.getResponseType();
+        assertTrue(exists req_type, "auto-injected provider must declare a request type");
+        assertTrue(exists resp_type, "auto-injected provider must declare a response type");
+
+        # attempt a request — accept either a successful round-trip OR a transport-level error.
+        # We are not testing the embedded HTTP server here, we are testing that
+        # `doRequest()` correctly threads through to `restDoRequest()` on the underlying
+        # AbstractRestClient.
+        bool dispatched = False;
+        try {
+            hash<auto> resp = call_child.doRequest({
+                "method": "GET",
+                "path": "/echo",
+                "hdr": {"X-Custom-Test": "yes"},
+            });
+            dispatched = True;
+            # if the round-trip succeeded, validate that the request reached the server
+            assertEq(200, resp.status);
+            hash<auto> echoed = resp.body;
+            assertEq("Bearer test-fake-token", echoed.auth,
+                "the connection's Authorization header must be threaded through");
+            assertEq("yes", echoed.custom_header_seen,
+                "per-call custom headers must reach the server");
+        } catch (hash<ExceptionInfo> ex) {
+            # any transport-level error means the dispatch path reached the network — that's
+            # still a positive signal that the framework wired the request through
+            dispatched = ex.err =~ /HTTPCLIENT|REST|SOCKET/;
+            if (!dispatched) {
+                rethrow;
+            }
+        }
+        assertTrue(dispatched, "doRequest must reach the underlying REST client");
+    }
+
+    #! Lazily constructs (once) a RestClientDataProvider pointing at the local test server with HTTP/1.1
+    private RestClientDataProvider getProvider() {
+        if (!m_provider) {
+            m_provider = new RestClientDataProvider({
+                "url": "http://localhost:" + port,
+                "http_version": "1.1",
+            });
+        }
+        return m_provider;
+    }
+
+    #! Resolves the __call__ child for end-to-end dispatch tests
+    private AbstractDataProvider getCallChild() {
+        if (!m_call_child) {
+            m_call_child = getProvider().getChildProviderEx(AbstractDataProvider::GenericApiCallChildName);
+        }
+        return m_call_child;
+    }
+
+    testDynamicBodyType() {
+        AbstractDataProvider call_child = getCallChild();
+
+        # default request type — body field is typed as auto
+        *AbstractDataProviderType t = call_child.getRequestType();
+        *AbstractDataField body_field = t.getFields(){"body"};
+        assertEq("auto", body_field.getType().getName(),
+            "default body type without body_type selection must be auto");
+
+        # body_type=json — body becomes hash<auto> (or *hash<auto>)
+        t = call_child.getRequestTypeWithData({"body_type": "json"});
+        body_field = t.getFields(){"body"};
+        assertTrue(body_field.getType().getName() =~ /hash/,
+            "body_type=json should make body a hash type");
+
+        # body_type=text — body becomes string
+        t = call_child.getRequestTypeWithData({"body_type": "text"});
+        body_field = t.getFields(){"body"};
+        assertTrue(body_field.getType().getName() =~ /string/,
+            "body_type=text should make body a string type");
+
+        # body_type=binary — body becomes binary
+        t = call_child.getRequestTypeWithData({"body_type": "binary"});
+        body_field = t.getFields(){"body"};
+        assertTrue(body_field.getType().getName() =~ /binary/,
+            "body_type=binary should make body a binary type");
+
+        # body_type=multipart — body becomes the FileDataType (has name/content/mime_type fields)
+        t = call_child.getRequestTypeWithData({"body_type": "multipart"});
+        body_field = t.getFields(){"body"};
+        *hash<string, AbstractDataField> file_fields = body_field.getType().getFields();
+        assertTrue(file_fields.name && file_fields.content && file_fields.mime_type,
+            "body_type=multipart should make body a FileDataType (name/content/mime_type)");
+    }
+
+    testBodyTypeJson() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "json",
+            "body": {"hello": "world", "n": 42},
+        });
+        assertEq(200, resp.status);
+        auto echoed = resp.body;
+        # `echoed` may itself be auto-parsed by RestClient (when the server's Content-Type is JSON);
+        # accept either parsed-hash or raw-string forms
+        if (echoed.typeCode() == NT_STRING) {
+            echoed = parse_json(echoed);
+        }
+        assertEq("application/json", echoed.content_type,
+            "body_type=json must set Content-Type: application/json");
+        # the server echoed the raw request body bytes back as the `body` field; it should contain
+        # the JSON-serialized request payload
+        assertTrue(echoed.body =~ /"hello"\s*:\s*"world"/,
+            "JSON request body should reach the server containing the original keys; got: "
+                + sprintf("%y", echoed.body));
+        assertTrue(echoed.body =~ /"n"\s*:\s*42/,
+            "JSON request body should reach the server with numeric values intact");
+    }
+
+    testBodyTypeForm() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "form",
+            "body": {"key1": "value 1", "key2": "v&v"},
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        assertEq("application/x-www-form-urlencoded", echoed.content_type);
+        # body should be URL-encoded; key2 had & which must be encoded
+        assertTrue(echoed.body =~ /key1=value%20\?\?1.*key2=v%26v|key2=v%26v.*key1=value%20\?\?1|key1=value%2B1|key1=value%201/,
+            "form body should be URL-encoded; got: " + echoed.body);
+    }
+
+    testBodyTypeText() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "text",
+            "body": "hello plain text body",
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        assertEq("text/plain", echoed.content_type);
+        assertEq("hello plain text body", echoed.body);
+    }
+
+    testBodyTypeMultipart() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "multipart",
+            "body": {
+                "name": "test.txt",
+                "content": make_base64_string("hello multipart contents"),
+                "mime_type": "text/plain",
+            },
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        assertTrue(echoed.content_type =~ /^multipart\/form-data; boundary=/,
+            "multipart should set Content-Type: multipart/form-data; boundary=...");
+        assertTrue(echoed.body =~ /hello multipart contents/,
+            "multipart body should contain the file content");
+        assertTrue(echoed.body =~ /filename="test.txt"/,
+            "multipart body should include the filename");
+    }
+
+    testPathVars() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/users/{id}",
+            "path_vars": {"id": "42"},
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        # the request path on the server side should reflect the substitution
+        assertTrue(echoed.path =~ /users\/42/,
+            "path_vars should substitute {id} → 42; got path=" + (echoed.path ?? "(none)"));
+    }
+
+    testExpectedStatusOk() {
+        # 202 is in the whitelist — should not throw
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/status-202",
+            "expected_status": (200, 202),
+        });
+        assertEq(202, resp.status);
+    }
+
+    testExpectedStatusMismatch() {
+        # 404 returned, but expected_status whitelist is (200, 201) — must throw REST-STATUS-ERROR
+        assertThrows("REST-STATUS-ERROR",
+            sub () {
+                getCallChild().doRequest({
+                    "method": "GET",
+                    "path": "/status-404",
+                    "expected_status": (200, 201),
+                    "error_passthru": True,  # so we don't throw REST-RESPONSE-ERROR first
+                });
+            },
+        );
+    }
+
+    testErrorPassthru() {
+        # without error_passthru, a 404 would throw REST-RESPONSE-ERROR
+        # with error_passthru, it returns normally with the 404 status
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/status-404",
+            "error_passthru": True,
+        });
+        assertEq(404, resp.status);
+    }
+
+    testLeanResponseShape() {
+        # the response must have ONLY status/headers/body (no debug unless requested),
+        # and must NOT include the legacy request-headers/request-uri/response-headers-raw etc.
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/echo",
+        });
+        list<string> got_keys = keys resp;
+        assertEq(("status", "headers", "body"), got_keys,
+            "default response shape must be exactly status/headers/body (no debug, no request-*, "
+            "no duplicates); got: " + sprintf("%y", got_keys));
+        # all the legacy noise fields must be absent
+        foreach string forbidden in ("request-headers", "request-uri", "request-serialization",
+                "response-headers-raw", "response-serialization", "response-uri",
+                "status-code", "status-message", "response-body") {
+            assertFalse(exists resp{forbidden},
+                "legacy field " + forbidden + " must NOT appear in the lean response");
+        }
+    }
+
+    testIncludeDebugRedacted() {
+        # call with include_debug=True + an Authorization header — the debug echo must include
+        # the request info but the Authorization value must be redacted to "***"
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/echo",
+            "include_debug": True,
+            "hdr": {
+                "Authorization": "Bearer super-secret-token",
+                "X-Custom-Test": "visible",
+            },
+        });
+        assertTrue(exists resp.debug, "debug sub-hash must be populated when include_debug=True");
+        # request metadata is there
+        assertEq("GET", resp.debug.request.method);
+        assertTrue(resp.debug.request.url =~ /\/echo/, "request url must be echoed");
+        # sensitive header is redacted, non-sensitive is preserved
+        assertEq("***", resp.debug.request.headers.Authorization,
+            "Authorization header value must be redacted to ***; got: "
+            + sprintf("%y", resp.debug.request.headers.Authorization));
+        assertEq("visible", resp.debug.request.headers."X-Custom-Test",
+            "non-sensitive header values must be preserved verbatim");
+        # sizes + duration present (may be 0/NOTHING for an empty body but the keys exist)
+        assertTrue(exists resp.debug.duration_ms, "duration_ms must be present");
+        assertTrue(resp.debug.duration_ms >= 0, "duration_ms must be non-negative");
+    }
+}

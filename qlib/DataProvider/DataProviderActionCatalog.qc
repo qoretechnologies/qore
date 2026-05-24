@@ -149,6 +149,20 @@ public hashdecl DataProviderAppInfo {
         @since %DataProvider 3.3
     */
     *bool auto_url;
+
+    #! Disables the framework-injected generic "Make an API call" action for this app
+    /** When @ref False (or unset, the default), the framework automatically registers a `make-api-call`
+        DPAT_API action for every app that declares a connection \c scheme. The action accepts arbitrary
+        method/path/query/headers/body input and dispatches the request through the connection's
+        authenticated REST client.
+
+        Set this to @ref True for apps that should not expose the generic call action — for example,
+        non-REST apps, compliance-sensitive integrations, or apps where the underlying connection does not
+        expose a @c RestClientIo-compatible client.
+
+        @since %DataProvider 3.5
+    */
+    *bool disable_generic_api_call;
 }
 
 #! Data Provider Action Type Codes
@@ -522,6 +536,29 @@ public class DataProviderActionCatalog {
     }
 
     private {
+        #! Static builder callback that constructs the framework-injected `make-api-call` action info hash
+        /** Signature: <tt>hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app)</tt>. The builder is
+            normally registered once by the @c RestClientDataProvider module's init block via
+            @ref setGenericApiCallActionBuilder().
+
+            When the builder is registered, @ref registerApp() automatically calls it for every app that
+            declares a connection \c scheme and does not set @c disable_generic_api_call to @ref True, and
+            registers the returned action through @ref registerAction(). Apps that were registered before the
+            builder was set are processed retroactively when the builder is first registered.
+
+            @since DataProvider 3.5
+        */
+        static *code<hash<DataProviderActionInfo>(hash<DataProviderAppInfo>)> cb_build_generic_api_call_action;
+
+        #! Apps awaiting retroactive `make-api-call` registration once the builder is set
+        /** Keys are app names. Populated by @ref registerApp() when a REST-capable app is registered before
+            the generic API call action builder has been set; drained by @ref setGenericApiCallActionBuilder()
+            and @ref clearGenericApiCallActionBuilder() when the builder becomes available.
+
+            @since DataProvider 3.5
+        */
+        static hash<string, bool> pending_generic_api_call_apps;
+
         #! Mutex for atomic operations
         static Mutex lck();
 
@@ -629,6 +666,150 @@ public class DataProviderActionCatalog {
             appmodmap{app.name}{path} = True;
         }
 
+        bool should_auto_register_generic_call = False;
+        {
+            bool needs_lock = !lck.lockOwner();
+            if (needs_lock) {
+                lck.lock();
+            }
+            on_exit if (needs_lock) {
+                lck.unlock();
+            }
+            if (*hash<DataProviderAppInfo> existing_app = appcache{app.name}) {
+                # ignore if the application has the same definition; framework-managed fields
+                # (auto-set capability flags and the disable_generic_api_call opt-out, which one
+                # caller may set and a duplicate-registration caller may omit) are excluded from
+                # the equality check so duplicate registrations from related modules (e.g.
+                # FtpClientDataProvider + FtpPoller) keep working
+                hash<auto> existing_cmp = existing_app - AppActionFlags - ("disable_generic_api_call",);
+                hash<auto> incoming_cmp = app - AppActionFlags - ("disable_generic_api_call",);
+                if (existing_cmp == incoming_cmp) {
+                    return;
+                }
+                throw "APP-ERROR", sprintf("Application %y already registered: %y", app.name, existing_app);
+            }
+            remove initmap{app};
+
+            # add to cache
+            appcache{app.name} = app;
+
+            # deregister the app automatically if module initialization fails
+            ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterApp(app.name); });
+
+            # decide whether to auto-register the framework-injected "Make an API call" action for this
+            # REST-capable app (apps with a connection scheme that have not opted out via
+            # disable_generic_api_call); the actual action registration is deferred to after the lock is
+            # released because registerAction() acquires the same mutex non-reentrantly
+            if (app.scheme && !app.disable_generic_api_call) {
+                if (cb_build_generic_api_call_action) {
+                    should_auto_register_generic_call = True;
+                } else {
+                    # builder is not yet set — queue the app for retroactive registration when
+                    # setGenericApiCallActionBuilder() is eventually called
+                    pending_generic_api_call_apps{app.name} = True;
+                }
+            }
+        }
+
+        # auto-register the framework-injected "Make an API call" action outside the lock; registerAction()
+        # will re-acquire the lock cleanly. Swallow errors via the helper to avoid breaking app registration
+        # when the builder produces invalid action info.
+        if (should_auto_register_generic_call) {
+            DataProviderActionCatalog::registerGenericApiCallActionForApp(app);
+        }
+    }
+
+    #! Registers the framework-injected `make-api-call` action for the given REST-capable app
+    /** Internal helper; called from @ref registerApp() and from @ref setGenericApiCallActionBuilder() to
+        drain the pending app backlog. Swallows any error to avoid breaking the surrounding app
+        registration when the builder produces invalid action info.
+
+        @note A registration-time factory-class check (introspecting whether the produced provider class
+        has a `rest` member) was considered for filtering out non-REST schemes early but proved unsafe
+        because the factory may not yet be queryable at the moment @ref registerApp() runs (init-order
+        dependent across modules). The framework relies on two simpler signals instead:
+        - explicit @c disable_generic_api_call opt-out on @ref DataProviderAppInfo for known non-REST apps
+        - reflective discovery of the `rest` member in
+          @ref AbstractDataProvider::getRestClientForGenericCallImpl() at execution time; if no client
+          is found, the picker logs @c INVALID-CHILD-PROVIDER and skips the action
+
+        @since DataProvider 3.5
+    */
+    private:internal static registerGenericApiCallActionForApp(hash<DataProviderAppInfo> app) {
+        if (!cb_build_generic_api_call_action) {
+            return;
+        }
+        # do not re-register if the action already exists for this app
+        if (app_actionmap{app.name}{AbstractDataProvider::GenericApiCallActionName}) {
+            return;
+        }
+        try {
+            hash<DataProviderActionInfo> action = call_function_args(cb_build_generic_api_call_action, (app,));
+            DataProviderActionCatalog::registerAction(action);
+        } catch (hash<ExceptionInfo> ex) {
+            # log but do not fail the surrounding registration
+            stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
+                "app %y: %s: %s\n", app.name, ex.err, ex.desc);
+        }
+    }
+
+    #! Sets the static builder used to construct the framework-injected `make-api-call` action info hash
+    /** This setter is normally called once at module initialization time by the @c RestClientDataProvider
+        module. Subsequent calls with the same builder return @ref True; calls with a different builder when
+        a builder is already registered return @ref False without changing the registered builder.
+
+        When the builder is set for the first time, any apps registered earlier that qualified for the
+        generic API call action (REST-capable, not opted out) are processed retroactively.
+
+        @param builder a closure with signature
+        <tt>hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app)</tt> that constructs the
+        action info hash for the framework-injected `make-api-call` action
+
+        @return @ref True if the builder was successfully set (first call) or if the same builder is being
+        re-registered; @ref False if a different builder is already registered
+
+        @since DataProvider 3.5
+    */
+    static bool setGenericApiCallActionBuilder(
+            code<hash<DataProviderActionInfo>(hash<DataProviderAppInfo>)> builder) {
+        list<hash<DataProviderAppInfo>> to_register;
+        {
+            bool needs_lock = !lck.lockOwner();
+            if (needs_lock) {
+                lck.lock();
+            }
+            on_exit if (needs_lock) {
+                lck.unlock();
+            }
+
+            if (cb_build_generic_api_call_action) {
+                return cb_build_generic_api_call_action == builder;
+            }
+            cb_build_generic_api_call_action = builder;
+
+            # snapshot the pending backlog while under the lock; defer the actual registerAction() calls
+            # until after the lock is released, because registerAction() acquires the same mutex
+            foreach string appname in (keys pending_generic_api_call_apps) {
+                if (*hash<DataProviderAppInfo> app = appcache{appname}) {
+                    to_register += app;
+                }
+            }
+            remove pending_generic_api_call_apps;
+        }
+
+        # drain the snapshot outside the lock
+        foreach hash<DataProviderAppInfo> app in (to_register) {
+            DataProviderActionCatalog::registerGenericApiCallActionForApp(app);
+        }
+        return True;
+    }
+
+    #! Clears the registered generic API call action builder
+    /** This method is primarily for testing purposes.
+
+        @since DataProvider 3.5
+    */
+    static clearGenericApiCallActionBuilder() {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -636,20 +817,16 @@ public class DataProviderActionCatalog {
         on_exit if (needs_lock) {
             lck.unlock();
         }
-        if (*hash<DataProviderAppInfo> existing_app = appcache{app.name}) {
-            # ignore if the application has the same definition
-            if ((existing_app - AppActionFlags) == (app - AppActionFlags)) {
-                return;
-            }
-            throw "APP-ERROR", sprintf("Application %y already registered: %y", app.name, existing_app);
-        }
-        remove initmap{app};
 
-        # add to cache
-        appcache{app.name} = app;
+        delete cb_build_generic_api_call_action;
+        remove pending_generic_api_call_apps;
+    }
 
-        # deregister the app automatically if module initialization fails
-        ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterApp(app.name); });
+    #! Returns @ref True if a generic API call action builder is currently registered
+    /** @since DataProvider 3.5
+    */
+    static bool hasGenericApiCallActionBuilder() {
+        return exists cb_build_generic_api_call_action;
     }
 
     #! Returns zero or more module paths for the given application
