@@ -835,9 +835,10 @@ pipeline.append(new QoreFilterRecordsProcessor({
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
     \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
     expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
-    \c between,
-    \c in, \c notIn, null checks, string predicates, and boolean combinations compile to
-    DataFrame row masks or dense ColumnarResult \c buffer<bool> masks; BufferColumns temporal comparisons
+    expression-to-expression comparisons, computed arithmetic and case-folding expressions, \c between, \c inRange,
+    \c in, \c notIn, null checks, string predicates, boolean combinations, and structured strict
+    equality/inequality compile to DataFrame row masks or dense ColumnarResult \c buffer<bool> masks;
+    BufferColumns temporal comparisons
     against Qore/DPQL date literals compare the dense microsecond values without materializing rows.
     String predicates support the legacy
     bool ignore-case argument and, when the \c i18n module is available, a locale options hash such as
@@ -1192,9 +1193,10 @@ if (errors) {
     - added DataProvider bulk read/create/upsert shape metadata and shaped create/upsert entry points so providers
       can accept \c BufferColumns or \c DataFrameBlock input without row materialization
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
-      \c DataFrameBlock and \c BufferColumns input directly for supported comparisons, string predicates,
-      boolean combinations, and null checks; BufferColumns filters also lower temporal date comparisons,
-      \c like, and regular expression predicates to dense masks
+      \c DataFrameBlock and \c BufferColumns input directly for supported scalar, expression-to-expression,
+      and computed \c between / \c in comparisons, structured strict equality/inequality, string predicates,
+      boolean combinations, and null checks; BufferColumns filters also lower temporal date comparisons, \c like,
+      and regular expression predicates to dense masks
     - added DPQL string support to @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
       through \c dpql_where and string-valued \c where_cond options so pipeline filters can be configured directly
       with DPQL while retaining the DataFrame and dense BufferColumns fast paths

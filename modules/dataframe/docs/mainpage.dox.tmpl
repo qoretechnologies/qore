@@ -273,7 +273,9 @@ pipeline.waitDone();
 
     QoreFilterRecordsProcessor compiles supported DPQL/DataProvider
     expressions to DataFrame row masks or dense ColumnarResult boolean masks
-    when possible. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
+    when possible, including computed comparisons, \c between, \c in / \c notIn,
+    structured strict equality/inequality, string predicates, null checks, and
+    boolean combinations. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
     QoreRecordLimitProcessor, QoreSetFieldsProcessor, and
     QoreSearchReplaceProcessor preserve DataFrameBlock and BufferColumns shapes
     for simple top-level fields; with ColumnarResult input they rebuild
@@ -387,7 +389,9 @@ salary.writeParquet("employees-filtered.parquet", write_options);
     - integration with DataProvider pipelines through the \c DataProviderDataFrame
       module, including DataFrame bulk reads, DataFrameBlock propagation,
       BufferColumns propagation for ColumnarResult values, and vectorized
-      DPQL/DataProvider filter masks for supported comparisons
+      DPQL/DataProvider filter masks for supported scalar and computed
+      comparisons, \c between, \c in / \c notIn, structured strict
+      equality/inequality, string predicates, and null checks
     - API metadata and generated Doxygen signatures identify DataFrame-returning
       operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
       @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result

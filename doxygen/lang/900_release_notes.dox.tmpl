@@ -2487,11 +2487,12 @@ foreach string module_name in (registry.getProcessModules()) {
       - QoreFilterRecordsProcessor compiles supported DataProvider/DPQL filters
         over DataFrameBlock and BufferColumns values to vectorized DataFrame
         row masks or dense ColumnarResult boolean masks, including computed
-        scalar comparisons, expression-to-expression comparisons, truthy field
-        checks, \c between, \c inRange, \c in, \c not \c in, null checks,
-        temporal date comparisons, selected string predicates, and BufferColumns
-        \c like, \c =~, and \c !~ predicates; unsupported expressions fall back
-        to generic row semantics
+        scalar comparisons, expression-to-expression comparisons, structured
+        strict equality/inequality, truthy field checks, computed \c between
+        and \c in / \c not \c in forms, \c inRange, null checks, temporal date
+        comparisons, selected string predicates, and BufferColumns \c like,
+        \c =~, and \c !~ predicates; unsupported expressions fall back to
+        generic row semantics
       - QoreGroupByProcessor preserves BufferColumns output for ColumnarResult
         inputs when used through shape-aware pipeline flushing
       - QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor, and

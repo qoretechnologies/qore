@@ -154,12 +154,12 @@ public class ColumnarExpressionFilter {
 
         *hash<auto> between = getBetweenComparison(expr, op);
         if (between) {
-            return buildDataFrameBetweenMask(df, between{"field"}, between{"low"}, between{"high"});
+            return buildDataFrameBetweenMask(df, between{"expr"}, between{"low"}, between{"high"});
         }
 
         *hash<auto> in_comparison = getInComparison(expr, op);
         if (in_comparison) {
-            return buildDataFrameInMask(df, in_comparison{"field"}, in_comparison{"values"},
+            return buildDataFrameInMask(df, in_comparison{"expr"}, in_comparison{"values"},
                 in_comparison{"negated"});
         }
 
@@ -209,9 +209,9 @@ public class ColumnarExpressionFilter {
     }
 
     #! Builds a DataFrame row mask for one between expression, if supported
-    private static *auto buildDataFrameBetweenMask(auto df, string field, auto low, auto high) {
-        auto lower = df.column(field).compare(DP_SEARCH_OP_GE, low);
-        auto upper = df.column(field).compare(DP_SEARCH_OP_LE, high);
+    private static *auto buildDataFrameBetweenMask(auto df, auto value_expr, auto low, auto high) {
+        auto lower = buildDataFrameComputedComparisonMask(df, value_expr, DP_SEARCH_OP_GE, low);
+        auto upper = buildDataFrameComputedComparisonMask(df, value_expr, DP_SEARCH_OP_LE, high);
         return lower.intersect(upper);
     }
 
@@ -223,10 +223,10 @@ public class ColumnarExpressionFilter {
     }
 
     #! Builds a DataFrame row mask for one in/not-in expression, if supported
-    private static *auto buildDataFrameInMask(auto df, string field, list<auto> values, bool negated) {
+    private static *auto buildDataFrameInMask(auto df, auto value_expr, list<auto> values, bool negated) {
         *auto combined;
         foreach auto value in (values) {
-            auto mask = df.column(field).compare(DP_SEARCH_OP_EQ, value);
+            auto mask = buildDataFrameComputedComparisonMask(df, value_expr, DP_SEARCH_OP_EQ, value);
             combined = !exists combined ? mask : combined.unionWith(mask);
         }
         return exists combined ? (negated ? combined.invert() : combined) : NOTHING;
@@ -406,12 +406,12 @@ public class ColumnarExpressionFilter {
 
         *hash<auto> between = getBetweenComparison(expr, op);
         if (between) {
-            return buildBufferBetweenMask(records, between{"field"}, between{"low"}, between{"high"});
+            return buildBufferBetweenMask(records, between{"expr"}, between{"low"}, between{"high"});
         }
 
         *hash<auto> in_comparison = getInComparison(expr, op);
         if (in_comparison) {
-            return buildBufferInMask(records, in_comparison{"field"}, in_comparison{"values"},
+            return buildBufferInMask(records, in_comparison{"expr"}, in_comparison{"values"},
                 in_comparison{"negated"});
         }
 
@@ -466,18 +466,20 @@ public class ColumnarExpressionFilter {
             case DP_SEARCH_OP_LE:
                 return column <= value;
         }
-        return;
+        return compareVectorToMask(column, op, value);
     }
 
     #! Builds a boolean buffer mask for one dense between expression
-    private static *auto buildBufferBetweenMask(auto records, string field, auto low, auto high) {
-        auto column = records.getColumn(field);
-        if (column.typeCode() != NT_BUFFER) {
+    private static *auto buildBufferBetweenMask(auto records, auto value_expr, auto low, auto high) {
+        *auto lower = buildBufferComputedComparisonMask(records, value_expr, DP_SEARCH_OP_GE, low);
+        if (!exists lower) {
             return;
         }
-        low = normalizeColumnarComparisonValue(records, field, low);
-        high = normalizeColumnarComparisonValue(records, field, high);
-        return records.combineMasks(column >= low, column <= high, DP_OP_AND);
+        *auto upper = buildBufferComputedComparisonMask(records, value_expr, DP_SEARCH_OP_LE, high);
+        if (!exists upper) {
+            return;
+        }
+        return records.combineMasks(lower, upper, DP_OP_AND);
     }
 
     #! Builds a boolean buffer mask for an inRange expression, if supported
@@ -494,16 +496,13 @@ public class ColumnarExpressionFilter {
     }
 
     #! Builds a boolean buffer mask for one dense in/not-in expression
-    private static *auto buildBufferInMask(auto records, string field, list<auto> values, bool negated) {
-        auto column = records.getColumn(field);
-        if (column.typeCode() != NT_BUFFER) {
-            return;
-        }
-
+    private static *auto buildBufferInMask(auto records, auto value_expr, list<auto> values, bool negated) {
         *auto combined;
         foreach auto value in (values) {
-            value = normalizeColumnarComparisonValue(records, field, value);
-            auto mask = column == value;
+            *auto mask = buildBufferComputedComparisonMask(records, value_expr, DP_SEARCH_OP_EQ, value);
+            if (!exists mask) {
+                return;
+            }
             combined = !exists combined ? mask : records.combineMasks(combined, mask, DP_OP_OR);
         }
         if (!exists combined) {
@@ -563,6 +562,10 @@ public class ColumnarExpressionFilter {
         *hash<auto> vector = evalBufferExpressionValue(records, value_expr);
         if (!vector || !vector.vector) {
             return;
+        }
+        *string field = getTopLevelFieldReferenceName(value_expr);
+        if (field) {
+            value = normalizeColumnarComparisonValue(records, field, value);
         }
         return compareVectorToMask(vector.value, op, value);
     }
@@ -1099,12 +1102,12 @@ public class ColumnarExpressionFilter {
     #! Returns vectorizable between-expression information, if supported
     private static *hash<auto> getBetweenComparison(hash<DataProviderExpression> expr, string op) {
         if (op != DP_SEARCH_OP_BETWEEN || expr.args.size() != 3
-                || !isTopLevelFieldReference(expr.args[0])
+                || !isVectorizableValueArg(expr.args[0])
                 || !isScalarComparisonArg(expr.args[1]) || !isScalarComparisonArg(expr.args[2])) {
             return;
         }
         return {
-            "field": expr.args[0].field,
+            "expr": expr.args[0],
             "low": unwrapComparisonValue(expr.args[1]),
             "high": unwrapComparisonValue(expr.args[2]),
         };
@@ -1113,7 +1116,7 @@ public class ColumnarExpressionFilter {
     #! Returns vectorizable in/not-in expression information, if supported
     private static *hash<auto> getInComparison(hash<DataProviderExpression> expr, string op) {
         if ((op != DP_SEARCH_OP_IN && op != DP_OP_NOT_IN) || expr.args.size() < 2
-                || !isTopLevelFieldReference(expr.args[0])) {
+                || !isVectorizableValueArg(expr.args[0])) {
             return;
         }
 
@@ -1142,7 +1145,7 @@ public class ColumnarExpressionFilter {
             }
         }
         return {
-            "field": expr.args[0].field,
+            "expr": expr.args[0],
             "values": values,
             "negated": op == DP_OP_NOT_IN,
         };
@@ -1394,6 +1397,21 @@ public class ColumnarExpressionFilter {
     #! Returns True if the argument is a top-level field reference
     private static bool isTopLevelFieldReference(auto arg) {
         return arg instanceof hash<DataProviderFieldReference> && arg.field.find(".") < 0;
+    }
+
+    #! Returns the field name for a top-level field expression, including a value wrapper
+    private static *string getTopLevelFieldReferenceName(auto arg) {
+        if (isTopLevelFieldReference(arg)) {
+            return arg.field;
+        }
+        if (!(arg instanceof hash<DataProviderExpression>)) {
+            return;
+        }
+        string op = OperatorAliasMap{arg.exp} ?? arg.exp;
+        if (op == DP_EXPR_VALUE && arg.args.size() == 1) {
+            return getTopLevelFieldReferenceName(arg.args[0]);
+        }
+        return;
     }
 
     #! Returns True if the argument can be used as a scalar comparison value

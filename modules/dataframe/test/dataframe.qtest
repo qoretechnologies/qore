@@ -1193,6 +1193,39 @@ sub invalid_dataframe_api() {
         assertEq(("Alice", "Carol", "Dave"), not_in_filtered.getColumn("name"),
             "DataFrameBlock vectorized filter supports not-in masks");
 
+        QoreFilterRecordsProcessor computed_between_proc({
+            "dpql_where": '@amount + 10 between 130 and 200',
+        });
+        DataFrame::DataFrame computed_between_filtered = computed_between_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), computed_between_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports computed between masks");
+
+        hash<DataProviderExpression> computed_in_strict_expr = <DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_IN,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_TO_LOWER,
+                            "args": (<DataProviderFieldReference>{"field": "status"},),
+                        },
+                        "active"
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_OP_ABSOLUTE_NE,
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 90),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor computed_in_proc({"where_cond": computed_in_strict_expr});
+        DataFrame::DataFrame computed_in_filtered = computed_in_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), computed_in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports computed in and structured strict inequality masks");
+
         hash<DataProviderExpression> fallback_expr = <DataProviderExpression>{
             "exp": "||",
             "args": (
@@ -1419,6 +1452,38 @@ sub invalid_dataframe_api() {
         assertEq((2, 4), computed_cmp_filtered.getColumn("id").toList(),
             "DPQL BufferColumns expression comparisons build dense masks");
 
+        QoreFilterRecordsProcessor computed_between_proc({
+            "dpql_where": '@amount + @id between 126.0 and 185.0',
+        });
+        auto computed_between_filtered = computed_between_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns);
+        assertEq((3, 4), computed_between_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns computed between expressions build dense masks");
+
+        hash<DataProviderExpression> computed_in_strict_expr = <DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_IN,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_TO_LOWER,
+                            "args": (<DataProviderFieldReference>{"field": "status"},),
+                        },
+                        "active"
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_OP_ABSOLUTE_NE,
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 90.0),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor computed_in_proc({"where_cond": computed_in_strict_expr});
+        auto computed_in_filtered = computed_in_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((3, 4), computed_in_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns computed in expressions and structured strict inequality build dense masks");
+
         date ts1 = date("2026-01-01T00:00:00Z");
         date ts2 = date("2026-01-02T00:00:00Z");
         date ts3 = date("2026-01-03T00:00:00Z");
@@ -1436,6 +1501,14 @@ sub invalid_dataframe_api() {
             DataProviderShape::BufferColumns);
         assertEq((2, 3), temporal_filtered.getColumn("id").toList(),
             "DPQL BufferColumns timestamp predicates build dense temporal masks");
+
+        QoreFilterRecordsProcessor temporal_range_proc({
+            "dpql_where": 'inRange(@created_at, 2026-01-02T00:00:00Z, 2026-01-04T00:00:00Z)',
+        });
+        auto temporal_range_filtered = temporal_range_proc.processRecordsShape(temporal_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 3), temporal_range_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns timestamp inRange predicates normalize dense temporal masks");
 
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),

@@ -218,6 +218,11 @@ The implemented hot paths are:
 - horizontal concat
 - DataProvider filter/group/projection/limit/set/search-replace shape
   preservation
+- DPQL/DataProvider dense-mask lowering for top-level and computed value
+  expressions, including scalar comparisons, expression-to-expression
+  comparisons, structured strict equality/inequality, truthiness, null checks,
+  `between`, `inRange`, `in` / `notIn`, string predicates, LIKE, and regular
+  expression predicates
 - shaped DataProvider analytics outputs for the full
   `AbstractAnalyticsProcessor` family, including running statistics, moving
   average, trend, anomaly, percentile, histogram, rate-of-change, EWMA control
@@ -244,7 +249,8 @@ benchmark showing that the added specialization pays for itself. Good future
 targets are:
 
 - more DPQL expression forms lowered to dense masks when they can preserve
-  generic expression semantics without hidden row materialization
+  generic expression semantics without hidden row materialization, such as
+  conditional, list/hash accessor, and list-membership forms
 - additional type-specific DBI dense mappings, such as driver-native
   high-precision numeric representations where they can be exposed without
   lossy conversion
