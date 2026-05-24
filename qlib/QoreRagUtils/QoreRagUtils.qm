@@ -368,7 +368,7 @@ RagPipeline pipe(
                 return ();
             }
             list<string> texts = map $1.content, chunks;
-            list<list<float>> vectors = embedder.encodeBatch(texts);
+            list<list<float>> vectors = embedder.encodeDocuments(texts);
             list<hash<VectorRecord>> records = ();
             list<string> ids = ();
             for (int i = 0; i < chunks.size(); ++i) {
@@ -486,11 +486,11 @@ RagPipeline pipe(
                     query_vec = cached;
                 } else {
                     ++cache_misses;
-                    query_vec = embedder.encode(embed_query);
+                    query_vec = embedder.encodeQuery(embed_query);
                     embedding_cache.put(embed_query, query_vec);
                 }
             } else {
-                query_vec = embedder.encode(embed_query);
+                query_vec = embedder.encodeQuery(embed_query);
             }
 
             # Step 3: fallback vector-store chain
