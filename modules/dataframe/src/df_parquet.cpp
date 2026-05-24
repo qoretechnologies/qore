@@ -550,6 +550,12 @@ static bool qoreParquetRangeMayMatch(int min_cmp, int max_cmp, const std::string
     return true;
 }
 
+static bool qoreParquetStatsMinMaxExact(const std::shared_ptr<parquet::Statistics>& stats) {
+    std::optional<bool> min_exact = stats->is_min_value_exact();
+    std::optional<bool> max_exact = stats->is_max_value_exact();
+    return !(min_exact && !*min_exact) && !(max_exact && !*max_exact);
+}
+
 template <typename DType, typename T>
 static bool qoreParquetTypedStatsMayMatch(const std::shared_ptr<parquet::Statistics>& stats,
         const QoreParquetReadOptions::Filter& filter, const T& value) {
@@ -568,9 +574,7 @@ static bool qoreParquetStringStatsMayMatch(const std::shared_ptr<parquet::Statis
     if (!stats || !stats->HasMinMax()) {
         return true;
     }
-    std::optional<bool> min_exact = stats->is_min_value_exact();
-    std::optional<bool> max_exact = stats->is_max_value_exact();
-    if ((min_exact && !*min_exact) || (max_exact && !*max_exact)) {
+    if (!qoreParquetStatsMinMaxExact(stats)) {
         return true;
     }
     auto typed = std::static_pointer_cast<parquet::ByteArrayStatistics>(stats);
@@ -578,6 +582,187 @@ static bool qoreParquetStringStatsMayMatch(const std::shared_ptr<parquet::Statis
         qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->min()), value),
         qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->max()), value),
         filter.op);
+}
+
+static bool qoreParquetDateFilterToMicros(QoreValue value, int64_t& micros) {
+    if (value.getType() != NT_DATE) {
+        return false;
+    }
+    const DateTimeNode* dt = value.get<const DateTimeNode>();
+    if (dt->isRelative()) {
+        return false;
+    }
+    micros = dt->getEpochMicrosecondsUTC();
+    return true;
+}
+
+static bool qoreParquetMicrosToLogicalTimeUnit(int64_t micros,
+        parquet::LogicalType::TimeUnit::unit unit, int64_t& value) {
+    switch (unit) {
+        case parquet::LogicalType::TimeUnit::MILLIS:
+            if (micros % 1000) {
+                return false;
+            }
+            value = micros / 1000;
+            return true;
+        case parquet::LogicalType::TimeUnit::MICROS:
+            value = micros;
+            return true;
+        case parquet::LogicalType::TimeUnit::NANOS:
+            if (micros > std::numeric_limits<int64_t>::max() / 1000
+                    || micros < std::numeric_limits<int64_t>::min() / 1000) {
+                return false;
+            }
+            value = micros * 1000;
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool qoreParquetStatsMayMatchTimestamp(const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter,
+        const std::shared_ptr<const parquet::LogicalType>& logical_type) {
+    if (filter.op == "contains" || filter.op == "startswith" || filter.op == "endswith") {
+        return true;
+    }
+
+    int64_t micros = 0;
+    if (!qoreParquetDateFilterToMicros(filter.value, micros)) {
+        return true;
+    }
+
+    auto ts_type = std::static_pointer_cast<const parquet::TimestampLogicalType>(logical_type);
+    int64_t value = 0;
+    if (!qoreParquetMicrosToLogicalTimeUnit(micros, ts_type->time_unit(), value)) {
+        return true;
+    }
+    return qoreParquetTypedStatsMayMatch<parquet::Int64Type>(stats, filter, value);
+}
+
+static bool qoreParquetStatsMayMatchDate32(const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter) {
+    if (filter.op == "contains" || filter.op == "startswith" || filter.op == "endswith") {
+        return true;
+    }
+
+    int64_t micros = 0;
+    if (!qoreParquetDateFilterToMicros(filter.value, micros)) {
+        return true;
+    }
+
+    constexpr int64_t micros_per_day = 86400LL * 1000000LL;
+    if (micros % micros_per_day) {
+        return true;
+    }
+    int64_t days = micros / micros_per_day;
+    if (days < std::numeric_limits<int32_t>::min() || days > std::numeric_limits<int32_t>::max()) {
+        return true;
+    }
+    return qoreParquetTypedStatsMayMatch<parquet::Int32Type>(stats, filter, static_cast<int32_t>(days));
+}
+
+static bool qoreParquetDecimalFilterValue(QoreValue value, int32_t scale, arrow::Decimal128& out) {
+    QoreStringValueHelper str(value);
+    arrow::Decimal128 dec_val;
+    int32_t precision = 0;
+    int32_t value_scale = 0;
+    auto status = arrow::Decimal128::FromString(std::string(str->c_str()), &dec_val, &precision, &value_scale);
+    if (!status.ok()) {
+        return false;
+    }
+    if (value_scale == scale) {
+        out = dec_val;
+        return true;
+    }
+    auto rescaled = dec_val.Rescale(value_scale, scale);
+    if (!rescaled.ok()) {
+        return false;
+    }
+    out = rescaled.ValueOrDie();
+    return true;
+}
+
+static bool qoreParquetDecimalRangeMayMatch(const arrow::Decimal128& min,
+        const arrow::Decimal128& max, const QoreParquetReadOptions::Filter& filter,
+        const arrow::Decimal128& value) {
+    return qoreParquetRangeMayMatch(
+        qoreParquetCompareScalar(min, value),
+        qoreParquetCompareScalar(max, value),
+        filter.op);
+}
+
+template <typename DType>
+static bool qoreParquetIntDecimalStatsMayMatch(const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter, const arrow::Decimal128& value) {
+    if (!stats || !stats->HasMinMax() || !qoreParquetStatsMinMaxExact(stats)) {
+        return true;
+    }
+
+    auto typed = std::static_pointer_cast<parquet::TypedStatistics<DType>>(stats);
+    return qoreParquetDecimalRangeMayMatch(
+        arrow::Decimal128(static_cast<int64_t>(typed->min())),
+        arrow::Decimal128(static_cast<int64_t>(typed->max())),
+        filter, value);
+}
+
+static bool qoreParquetByteArrayDecimalStatsMayMatch(const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter, const arrow::Decimal128& value) {
+    if (!stats || !stats->HasMinMax() || !qoreParquetStatsMinMaxExact(stats)) {
+        return true;
+    }
+
+    auto typed = std::static_pointer_cast<parquet::ByteArrayStatistics>(stats);
+    auto min = arrow::Decimal128::FromBigEndian(typed->min().ptr, typed->min().len);
+    auto max = arrow::Decimal128::FromBigEndian(typed->max().ptr, typed->max().len);
+    if (!min.ok() || !max.ok()) {
+        return true;
+    }
+    return qoreParquetDecimalRangeMayMatch(min.ValueOrDie(), max.ValueOrDie(), filter, value);
+}
+
+static bool qoreParquetFixedLenDecimalStatsMayMatch(const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter, const arrow::Decimal128& value, int32_t length) {
+    if (!stats || !stats->HasMinMax() || !qoreParquetStatsMinMaxExact(stats)
+            || length <= 0 || length > 16) {
+        return true;
+    }
+
+    auto typed = std::static_pointer_cast<parquet::FLBAStatistics>(stats);
+    auto min = arrow::Decimal128::FromBigEndian(typed->min().ptr, length);
+    auto max = arrow::Decimal128::FromBigEndian(typed->max().ptr, length);
+    if (!min.ok() || !max.ok()) {
+        return true;
+    }
+    return qoreParquetDecimalRangeMayMatch(min.ValueOrDie(), max.ValueOrDie(), filter, value);
+}
+
+static bool qoreParquetStatsMayMatchDecimal(const parquet::ColumnDescriptor* column,
+        const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter,
+        const std::shared_ptr<const parquet::LogicalType>& logical_type) {
+    if (filter.op == "contains" || filter.op == "startswith" || filter.op == "endswith") {
+        return true;
+    }
+
+    auto dec_type = std::static_pointer_cast<const parquet::DecimalLogicalType>(logical_type);
+    arrow::Decimal128 value;
+    if (!qoreParquetDecimalFilterValue(filter.value, dec_type->scale(), value)) {
+        return true;
+    }
+
+    switch (column->physical_type()) {
+        case parquet::Type::INT32:
+            return qoreParquetIntDecimalStatsMayMatch<parquet::Int32Type>(stats, filter, value);
+        case parquet::Type::INT64:
+            return qoreParquetIntDecimalStatsMayMatch<parquet::Int64Type>(stats, filter, value);
+        case parquet::Type::BYTE_ARRAY:
+            return qoreParquetByteArrayDecimalStatsMayMatch(stats, filter, value);
+        case parquet::Type::FIXED_LEN_BYTE_ARRAY:
+            return qoreParquetFixedLenDecimalStatsMayMatch(stats, filter, value, column->type_length());
+        default:
+            return true;
+    }
 }
 
 static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
@@ -601,6 +786,26 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
     }
     if (!stats || !stats->HasMinMax()) {
         return true;
+    }
+
+    auto logical_type = column->logical_type();
+    if (logical_type) {
+        switch (logical_type->type()) {
+            case parquet::LogicalType::Type::TIMESTAMP:
+                if (column->physical_type() == parquet::Type::INT64) {
+                    return qoreParquetStatsMayMatchTimestamp(stats, filter, logical_type);
+                }
+                break;
+            case parquet::LogicalType::Type::DATE:
+                if (column->physical_type() == parquet::Type::INT32) {
+                    return qoreParquetStatsMayMatchDate32(stats, filter);
+                }
+                break;
+            case parquet::LogicalType::Type::DECIMAL:
+                return qoreParquetStatsMayMatchDecimal(column, stats, filter, logical_type);
+            default:
+                break;
+        }
     }
 
     switch (column->physical_type()) {

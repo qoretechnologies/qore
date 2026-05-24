@@ -121,7 +121,7 @@ hashdecl Qore::DataFrame::ParquetReadOptions {
     *int batch_size;
     //! Whether Arrow may use worker threads while reading multiple columns
     *bool use_threads;
-    //! ANDed filter hashes with keys "column", "op", and optional "value"; safe forms prune Parquet row groups with statistics, and all forms are applied exactly after the read
+    //! ANDed filter hashes with keys "column", "op", and optional "value"; safe primitive, decimal128, and logical timestamp/date forms prune Parquet row groups with statistics, and all forms are applied exactly after the read
     *list<hash<auto>> filters;
     //! Whether Parquet row-group statistics may be used to prune filters (default True)
     *bool use_statistics;

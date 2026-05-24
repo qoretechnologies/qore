@@ -197,7 +197,7 @@ features:
 | nested buffers / array columns | implemented through recursive column schemas | Nested Arrow/Parquet columns keep recursive schema metadata and reuse immutable Arrow chunked arrays for round trips; direct `buffer<list<...>>` syntax is intentionally outside the primitive `buffer<T>` contract. |
 | GPU/device buffers | implemented as provider-owned external storage | `QoreBufferNode` exposes provider-neutral device descriptors, explicit copy-to-host callbacks, Qore storage-inspection methods, and detach-on-write semantics. |
 | native JDBC packed buffers | implemented for host buffers | module-jni constructs packed Qore buffers for fixed-width numeric, boolean, string, and decimal128 columns and uses Java-side primitive-array batch extraction when built with the new qore feature probes; unsupported shapes fall back to typed getter conversion. |
-| Parquet predicate read filters | implemented | `DataFrame::readParquet()` accepts ANDed `filters` option hashes. Primitive equality/range/null predicates use Parquet row-group statistics where safe, projected reads decode filter-only columns as needed, and every filter is applied exactly after reading so unsupported pushdown forms remain correct. |
+| Parquet predicate read filters | implemented | `DataFrame::readParquet()` accepts ANDed `filters` option hashes. Primitive, decimal128, and logical timestamp/date equality/range/null predicates use Parquet row-group statistics where safe, projected reads decode filter-only columns as needed, and every filter is applied exactly after reading so unsupported pushdown forms remain correct. |
 
 Short-term mappings remain:
 

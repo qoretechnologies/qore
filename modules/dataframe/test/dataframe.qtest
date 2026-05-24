@@ -2331,7 +2331,11 @@ sub invalid_dataframe_api() {
             "total": {"native_type": "decimal(18, 2)", "nullable": True},
         });
         DataFrame::DataFrame decimal_df = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
-        decimal_df.writeParquet(tmp_path);
+        decimal_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 1,
+            "write_statistics": True,
+        });
         DataFrame::DataFrame decimal_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
         assertEq((12.34n, NOTHING), decimal_parquet_df.getColumn("total"),
             "Parquet preserves decimal Qore number values");
@@ -2344,6 +2348,16 @@ sub invalid_dataframe_api() {
             "Parquet preserves decimal precision");
         assertEq(2, decimal_parquet_schema[0].scale,
             "Parquet preserves decimal scale");
+        DataFrame::DataFrame decimal_filtered = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "total",
+                    "op": "==",
+                    "value": 12.34n,
+                },),
+            });
+        assertEq((12.34n,), decimal_filtered.getColumn("total"),
+            "Parquet decimal filters use statistics safely and exact decimal filtering");
 
         date parquet_ts0 = 1969-12-31T23:59:59.123456Z;
         date parquet_ts2 = 2026-01-03T12:30:00.654321Z;
@@ -2353,7 +2367,11 @@ sub invalid_dataframe_api() {
             "created_at": {"native_type": "timestamp with time zone", "nullable": True},
         });
         DataFrame::DataFrame temporal_df = DataFrame::DataFrame::fromColumnarResult(temporal_columns);
-        temporal_df.writeParquet(tmp_path);
+        temporal_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 1,
+            "write_statistics": True,
+        });
         DataFrame::DataFrame temporal_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
         assertEq(get_epoch_microseconds(parquet_ts0),
             get_epoch_microseconds(temporal_parquet_df.getColumn("created_at")[0]),
@@ -2372,6 +2390,29 @@ sub invalid_dataframe_api() {
             "Parquet schema metadata preserves timestamp dense storage");
         assertEq("us", temporal_parquet_schema[0].time_unit,
             "Parquet schema metadata preserves timestamp microsecond units");
+        DataFrame::DataFrame temporal_eq = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "created_at",
+                    "op": "==",
+                    "value": parquet_ts2,
+                },),
+            });
+        assertEq(1, temporal_eq.numRows(),
+            "Parquet timestamp equality filters use logical microsecond statistics safely");
+        assertEq(get_epoch_microseconds(parquet_ts2),
+            get_epoch_microseconds(temporal_eq.getColumn("created_at")[0]),
+            "Parquet timestamp equality filter preserves the matching timestamp");
+        DataFrame::DataFrame temporal_lt = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "created_at",
+                    "op": "<",
+                    "value": 2026-01-04T00:00:00Z,
+                },),
+            });
+        assertEq(2, temporal_lt.numRows(),
+            "Parquet timestamp range filters compare dates in logical storage units");
 
         DataFrame::DataFrame null_dense_df({
             "id": new buffer<*int64>((NOTHING, 2, NOTHING, 4)),

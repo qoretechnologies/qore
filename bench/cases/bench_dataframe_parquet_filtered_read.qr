@@ -1,0 +1,92 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameParquetFilteredRead
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameParquetFilteredRead {
+    constructor() {
+        Bench::BenchRunner r("dataframe_parquet_filtered_read");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        int row_group_size = rows / 100;
+        if (row_group_size <= 0) {
+            row_group_size = 1;
+        }
+        int selected_rows = rows < 100 ? rows : 100;
+        string path = (ENV.TMPDIR ?? "/tmp") + "/qore_df_parquet_filter_bench_" + string(getpid()) + ".parquet";
+        date base = 2026-01-01T00:00:00Z;
+        date cutoff = base + seconds(rows - selected_rows);
+        number total_cutoff = ((rows - selected_rows).toNumber() / 100n);
+
+        on_exit {
+            try {
+                unlink(path);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        r.setup = sub () {
+            list<int> ids;
+            list<date> created_at;
+            list<number> totals;
+
+            for (int i = 0; i < rows; ++i) {
+                push ids, i;
+                push created_at, base + seconds(i);
+                push totals, i.toNumber() / 100n;
+            }
+
+            ColumnarResult columns = ColumnarResult::fromColumnHash({
+                "id": ids,
+                "created_at": created_at,
+                "total": totals,
+            }, {
+                "created_at": {"native_type": "timestamp with time zone", "nullable": False},
+                "total": {"native_type": "decimal(18, 2)", "nullable": False},
+            });
+            DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(columns);
+            df.writeParquet(path, <DataFrame::ParquetWriteOptions>{
+                "compression": "none",
+                "row_group_size": row_group_size,
+                "write_statistics": True,
+            });
+            r.bytes_processed = rows * 32;
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame filtered = DataFrame::DataFrame::readParquet(path,
+                <DataFrame::ParquetReadOptions>{
+                    "columns": ("id", "created_at", "total"),
+                    "filters": ({
+                        "column": "created_at",
+                        "op": ">=",
+                        "value": cutoff,
+                    }, {
+                        "column": "total",
+                        "op": ">=",
+                        "value": total_cutoff,
+                    }),
+                });
+            if (filtered.numRows() != selected_rows) {
+                throw "BENCHMARK-ERROR", sprintf(
+                    "dataframe_parquet_filtered_read expected %d rows, got %d",
+                    selected_rows, filtered.numRows());
+            }
+            if (filtered.getColumn("id")[0] != rows - selected_rows) {
+                throw "BENCHMARK-ERROR", "dataframe_parquet_filtered_read returned an unexpected first row";
+            }
+        };
+
+        exit(r.run());
+    }
+}

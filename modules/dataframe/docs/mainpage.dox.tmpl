@@ -368,10 +368,12 @@ hash<DataFrame::ParquetWriteOptions> write_options = {
 salary.writeParquet("employees-filtered.parquet", write_options);
     @endcode
 
-    Filter predicates are ANDed. Equality and range predicates on primitive
-    columns use Parquet row-group statistics when available; every filter is
-    still applied exactly after reading, so predicates that cannot be pushed
-    down remain correct.
+    Filter predicates are ANDed. Equality and range predicates on primitive,
+    decimal128, and logical timestamp/date columns use Parquet row-group
+    statistics when available and when the comparison value can be represented
+    in the Parquet logical storage unit without ambiguity. Every filter is still
+    applied exactly after reading, so predicates that cannot be pushed down
+    remain correct.
 
     @section dataframe_arrow_copy_behavior Arrow, Parquet, And Copy Behavior
 

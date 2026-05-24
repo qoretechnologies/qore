@@ -360,6 +360,169 @@ static std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
     }
 }
 
+static bool qoreDataFrameStringPredicate(QoreValue cell, const std::string& op, QoreValue value,
+        ExceptionSink* xsink) {
+    QoreStringValueHelper cell_str(cell);
+    QoreStringValueHelper cmp_str(value, cell_str->getEncoding(), xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    std::string lhs(cell_str->c_str(), cell_str->size());
+    std::string rhs(cmp_str->c_str(), cmp_str->size());
+    if (op == "contains") {
+        return lhs.find(rhs) != std::string::npos;
+    }
+    if (op == "startswith") {
+        return lhs.compare(0, rhs.size(), rhs) == 0;
+    }
+    if (op == "endswith") {
+        return lhs.size() >= rhs.size()
+            && lhs.compare(lhs.size() - rhs.size(), rhs.size(), rhs) == 0;
+    }
+    return false;
+}
+
+static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* xsink) {
+    QoreValue l = lhs.isEnum() ? lhs.getEnumMember()->getValue() : lhs;
+    QoreValue r = rhs.isEnum() ? rhs.getEnumMember()->getValue() : rhs;
+    qore_type_t lt = l.getType();
+    qore_type_t rt = r.getType();
+
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
+        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        return *xsink ? false : ls->equalSoft(*rs, xsink);
+    }
+    if (lt == NT_NUMBER) {
+        switch (rt) {
+            case NT_NUMBER:
+                return l.get<const QoreNumberNode>()->equals(*r.get<const QoreNumberNode>());
+            case NT_FLOAT:
+                return l.get<const QoreNumberNode>()->equals(r.getAsFloat());
+            case NT_INT:
+            case NT_BOOLEAN:
+                return l.get<const QoreNumberNode>()->equals(r.getAsBigInt());
+            default: {
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                return l.get<const QoreNumberNode>()->equals(**rn);
+            }
+        }
+    }
+    if (rt == NT_NUMBER) {
+        switch (lt) {
+            case NT_FLOAT:
+                return r.get<const QoreNumberNode>()->equals(l.getAsFloat());
+            case NT_INT:
+            case NT_BOOLEAN:
+                return r.get<const QoreNumberNode>()->equals(l.getAsBigInt());
+            default: {
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                return r.get<const QoreNumberNode>()->equals(**ln);
+            }
+        }
+    }
+    if (lt == NT_FLOAT || rt == NT_FLOAT) {
+        return l.getAsFloat() == r.getAsFloat();
+    }
+    if (lt == NT_INT || rt == NT_INT) {
+        return l.getAsBigInt() == r.getAsBigInt();
+    }
+    if (lt == NT_BOOLEAN || rt == NT_BOOLEAN) {
+        return l.getAsBool() == r.getAsBool();
+    }
+    if (lt == NT_DATE || rt == NT_DATE) {
+        DateTimeValueHelper ld(l);
+        DateTimeValueHelper rd(r);
+        return ld->isEqual(*rd);
+    }
+    return lt == rt && l.getInternalNode() && r.getInternalNode()
+        && l.getInternalNode()->is_equal_soft(r.getInternalNode(), xsink);
+}
+
+static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* xsink) {
+    QoreValue l = lhs.isEnum() ? lhs.getEnumMember()->getValue() : lhs;
+    QoreValue r = rhs.isEnum() ? rhs.getEnumMember()->getValue() : rhs;
+    qore_type_t lt = l.getType();
+    qore_type_t rt = r.getType();
+
+    if (lt == NT_NUMBER) {
+        switch (rt) {
+            case NT_NUMBER:
+                return l.get<const QoreNumberNode>()->lessThan(*r.get<const QoreNumberNode>());
+            case NT_FLOAT:
+                return l.get<const QoreNumberNode>()->lessThan(r.getAsFloat());
+            case NT_BOOLEAN:
+            case NT_INT:
+                return l.get<const QoreNumberNode>()->lessThan(r.getAsBigInt());
+            default: {
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                return l.get<const QoreNumberNode>()->lessThan(**rn);
+            }
+        }
+    }
+    if (rt == NT_NUMBER) {
+        switch (lt) {
+            case NT_FLOAT:
+                return r.get<const QoreNumberNode>()->greaterThan(l.getAsFloat());
+            case NT_BOOLEAN:
+            case NT_INT:
+                return r.get<const QoreNumberNode>()->greaterThan(l.getAsBigInt());
+            default: {
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                return r.get<const QoreNumberNode>()->greaterThan(**ln);
+            }
+        }
+    }
+    if (lt == NT_FLOAT || rt == NT_FLOAT) {
+        return l.getAsFloat() < r.getAsFloat();
+    }
+    if (lt == NT_INT || rt == NT_INT) {
+        return l.getAsBigInt() < r.getAsBigInt();
+    }
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
+        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        return *xsink ? false : ls->compare(*rs) < 0;
+    }
+    if (lt == NT_DATE || rt == NT_DATE) {
+        DateTimeValueHelper ld(l);
+        DateTimeValueHelper rd(r);
+        return DateTime::compareDates(*ld, *rd) < 0;
+    }
+    return l.getAsFloat() < r.getAsFloat();
+}
+
+static bool qoreDataFrameLessThanOrEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* xsink) {
+    return !qoreDataFrameLessThan(rhs, lhs, xsink);
+}
+
+static bool qoreDataFrameAutoCellMatches(QoreValue cell, const std::string& op, QoreValue value,
+        ExceptionSink* xsink) {
+    if (op == "contains" || op == "startswith" || op == "endswith") {
+        return qoreDataFrameStringPredicate(cell, op, value, xsink);
+    }
+    if (op == "==") {
+        return qoreDataFrameSoftEqual(cell, value, xsink);
+    }
+    if (op == "!=") {
+        return !qoreDataFrameSoftEqual(cell, value, xsink);
+    }
+    if (op == "<") {
+        return qoreDataFrameLessThan(cell, value, xsink);
+    }
+    if (op == "<=") {
+        return qoreDataFrameLessThanOrEqual(cell, value, xsink);
+    }
+    if (op == ">") {
+        return qoreDataFrameLessThan(value, cell, xsink);
+    }
+    if (op == ">=") {
+        return qoreDataFrameLessThanOrEqual(value, cell, xsink);
+    }
+    return false;
+}
+
 }
 
 QoreDataFrame::QoreDataFrame() {
@@ -1636,6 +1799,12 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                 else if (op_le) { match = cell <= cmp_date; }
                 else if (op_gt) { match = cell > cmp_date; }
                 else if (op_ge) { match = cell >= cmp_date; }
+        } else if (cd.type == ColumnType::AUTO) {
+            assert(i < static_cast<int64_t>(cd.auto_data.size()));
+            match = qoreDataFrameAutoCellMatches(cd.auto_data[i], op, value, xsink);
+            if (*xsink) {
+                return {};
+            }
         }
 
         if (match) {

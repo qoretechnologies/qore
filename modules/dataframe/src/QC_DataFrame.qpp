@@ -1306,10 +1306,12 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     Column projection is pushed down to the Parquet reader, so unselected
     columns are not decoded unless they are needed by \c filters.  Row-group
     selection is also passed to the reader.  When \c filters is supplied,
-    simple range/equality predicates on primitive columns use Parquet row-group
-    statistics to avoid reading row groups that cannot match.  The filters are
-    always applied exactly after reading, so unsupported statistics pushdown
-    forms fall back to correct in-memory filtering.
+    simple range/equality predicates on primitive, decimal128, and logical
+    timestamp/date columns use Parquet row-group statistics to avoid reading row
+    groups that cannot match when the comparison value maps safely to the
+    Parquet logical storage unit.  The filters are always applied exactly after
+    reading, so unsupported statistics pushdown forms fall back to correct
+    in-memory filtering.
 
     @return new DataFrame object with Parquet data
 
