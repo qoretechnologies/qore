@@ -1793,6 +1793,67 @@ sub invalid_dataframe_api() {
         assertEq((153.75,), df_stats_block.getColumn("avg"),
             "analytics processors compute windows from DataFrameBlock input");
 
+        QoreMovingAverageProcessor moving_avg({"fields": "amount", "window_size": 2});
+        auto moving_block = moving_avg.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(moving_block),
+            "moving-average processor emits BufferColumns events from BufferColumns input");
+        assertEq(("moving-average", "moving-average", "moving-average", "moving-average"),
+            moving_block.getColumn("event_type").toList(),
+            "moving-average processor preserves one event per dense input row");
+        assertEq((90.0, 155.0, 200.0, 152.5), moving_block.getColumn("sma").toList(),
+            "moving-average processor computes dense sliding windows");
+
+        QoreTrendAnalysisProcessor trend({"fields": "amount", "window_size": 4});
+        auto trend_block = trend.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(trend_block),
+            "trend-analysis processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq(("trend",), trend_block.getColumn("event_type"),
+            "trend-analysis processor emits shaped window events");
+
+        QoreAnomalyDetectionProcessor anomaly({"fields": "amount", "window_size": 2, "threshold": 1.0});
+        auto anomaly_block = anomaly.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(anomaly_block),
+            "anomaly-detection processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq(("anomaly", "anomaly", "anomaly", "anomaly"), anomaly_block.getColumn("event_type"),
+            "anomaly-detection processor preserves one event per dense input row");
+
+        QorePercentileProcessor percentile({"fields": "amount", "window_size": 4, "percentiles": "50"});
+        auto percentile_block = percentile.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(percentile_block),
+            "percentile processor emits BufferColumns events from BufferColumns input");
+        assertEq(152.5, percentile_block.getColumn("percentiles")[0].p50,
+            "percentile processor computes window percentiles from dense columns");
+
+        QoreHistogramProcessor histogram({"fields": "amount", "window_size": 4, "n_bins": 2});
+        auto histogram_block = histogram.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(histogram_block),
+            "histogram processor emits BufferColumns events from BufferColumns input");
+        assertEq("histogram", histogram_block.getColumn("event_type")[0],
+            "histogram processor emits shaped distribution events");
+
+        QoreRateOfChangeProcessor rate({"fields": "amount", "window_size": 2, "smoothing": False});
+        auto rate_block = rate.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(rate_block),
+            "rate-of-change processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq((0.0, 130.0, -40.0, -55.0), rate_block.getColumn("rate_of_change"),
+            "rate-of-change processor computes dense row-to-row rates");
+
+        QoreEWMAControlChartProcessor ewma({"fields": "amount", "window_size": 2});
+        auto ewma_block = ewma.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(ewma_block),
+            "EWMA control chart processor emits BufferColumns events from BufferColumns input");
+        assertEq(("ewma-control-chart", "ewma-control-chart", "ewma-control-chart", "ewma-control-chart"),
+            ewma_block.getColumn("event_type").toList(),
+            "EWMA control chart processor preserves one event per dense input row");
+
+        QoreSeasonalityDetectionProcessor seasonality({"fields": "amount", "window_size": 4,
+            "max_period": 1, "min_correlation": 0.0});
+        auto seasonality_block = seasonality.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(seasonality_block),
+            "seasonality-detection processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq(("seasonality-detection",), seasonality_block.getColumn("event_type"),
+            "seasonality-detection processor emits shaped window events");
+
         QoreRunningStatsProcessor stats_flush({"fields": "amount", "window_size": 10});
         assertNothing(stats_flush.processRecordsShape(columns, DataProviderShape::BufferColumns),
             "BufferColumns analytics buffers partial windows");

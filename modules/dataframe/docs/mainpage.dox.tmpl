@@ -278,9 +278,10 @@ pipeline.waitDone();
     QoreSearchReplaceProcessor preserve DataFrameBlock and BufferColumns shapes
     for simple top-level fields; with ColumnarResult input they rebuild
     projected or updated blocks from referenced column containers. Analytics
-    processors, including correlation and cross-correlation processors, accept
-    DataFrameBlock and BufferColumns input and preserve those shapes for
-    rectangular event blocks, including flush-time output from partial windows;
+    processors, including the full AbstractAnalyticsProcessor family plus
+    correlation and cross-correlation processors, accept DataFrameBlock and
+    BufferColumns input and preserve those shapes for rectangular event blocks,
+    including flush-time output from partial windows;
     top-level configured fields are read from selected columns directly instead
     of materializing full input blocks as hash-of-lists data.
     Supported compiled filter forms include \c &&, \c ||, \c !,

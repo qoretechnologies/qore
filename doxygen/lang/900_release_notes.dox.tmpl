@@ -2504,7 +2504,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - analytics processors, including QoreCorrelationProcessor and
         QoreCrossCorrelationProcessor, accept DataFrameBlock and BufferColumns
         input and preserve shaped rectangular event blocks, including
-        flush-time output from partial windows; top-level configured fields are
+        flush-time output from partial windows; this covers the full
+        AbstractAnalyticsProcessor family, and top-level configured fields are
         read directly from selected columns without full-block hash-of-lists
         materialization
       - record type reflects DataFrame column schema (int, float, string, bool, date)

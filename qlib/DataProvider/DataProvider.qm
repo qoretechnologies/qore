@@ -1216,7 +1216,8 @@ if (errors) {
     - updated analytics processors, including @ref DataProvider::QoreCorrelationProcessor
       "QoreCorrelationProcessor" and @ref DataProvider::QoreCrossCorrelationProcessor
       "QoreCrossCorrelationProcessor", to accept \c DataFrameBlock and \c BufferColumns input and preserve
-      shaped rectangular event blocks, including flush-time output from partial windows; top-level configured
+      shaped rectangular event blocks, including flush-time output from partial windows; this covers the full
+      @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" family, and top-level configured
       fields are read directly from selected columns to avoid full-block hash-of-lists materialization
 
     @subsection dataprovider_v3_4 DataProvider v3.4

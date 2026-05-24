@@ -218,6 +218,10 @@ The implemented hot paths are:
 - horizontal concat
 - DataProvider filter/group/projection/limit/set/search-replace shape
   preservation
+- shaped DataProvider analytics outputs for the full
+  `AbstractAnalyticsProcessor` family, including running statistics, moving
+  average, trend, anomaly, percentile, histogram, rate-of-change, EWMA control
+  chart, and seasonality processors
 - selected-column DataProvider analytics, correlation, and cross-correlation
   processing for DataFrame and BufferColumns inputs, avoiding whole-block
   hash-of-lists materialization when configured fields are top-level columns
@@ -241,7 +245,6 @@ targets are:
 
 - more DPQL expression forms lowered to dense masks when they can preserve
   generic expression semantics without hidden row materialization
-- wider vectorized analytics outputs
 - additional type-specific DBI dense mappings, such as driver-native
   high-precision numeric representations where they can be exposed without
   lossy conversion
