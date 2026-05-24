@@ -1474,6 +1474,20 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "the 'minLength' keyword inside a property schema is still stripped");
         assertEq(("name", "allowed"), rv.required,
             "the required field list is preserved");
+
+        # Empty properties map (a no-argument tool's "properties": {}) must
+        # sanitize to a valid empty map, not crash — sanitizeSchemaPropertyMap
+        # builds its result in a typed hash<auto> whose return would throw
+        # RUNTIME-TYPE-ERROR if left unassigned on the empty-loop path.
+        hash<auto> noargs = GeminiBodyShape::sanitizeSchema(
+            {"type": "object", "properties": {}});
+        assertEq("object", noargs.type);
+        assertEq({}, noargs.properties,
+            "empty properties sanitizes to an empty map");
+        hash<auto> noargs_compact = GeminiBodyShape::sanitizeSchema(
+            {"type": "object", "properties": {}}, True);
+        assertEq({}, noargs_compact.properties,
+            "empty properties sanitizes to an empty map in compact mode");
     }
 
     geminiResponseSchemaMetadataIntegrationTest() {
