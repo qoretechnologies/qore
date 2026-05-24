@@ -212,6 +212,10 @@ The implemented hot paths are:
 - horizontal concat
 - DataProvider filter/group/projection/limit/set/search-replace shape
   preservation
+- native DataFrame group-by aggregates for simple `count`, `sum`, `avg`,
+  `min`, and `max` specifications, with `avg(field)` lowered to DataFrame
+  `mean` and deferred single-block aggregation that deopts safely when mixed or
+  additional input arrives
 - native columnar SQL reads for PostgreSQL, MySQL, Oracle, ODBC, SQLite,
   Sybase/FreeTDS, and JDBC
 - SqlUtil/BulkSqlUtil-backed DataFrame SQL writes
