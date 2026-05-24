@@ -390,6 +390,9 @@ public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcesso
             list<list<float>> matrix, int count) {
         hash<auto> result;
         addInputFieldsToDataFrameResult(\result, records, shape, count);
+        if (include_input_fields && shape != DataProvider::DataProviderShape::DataFrameBlock) {
+            copyMatrixInputFields(\result, matrix, 0);
+        }
 
         list<auto> scaled_columns;
         if (!scaler) {
@@ -402,6 +405,16 @@ public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcesso
             result{scaled_fields[j]} = scaled_columns[j];
         }
         return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(result);
+    }
+
+    #! Copies matrix input values to preallocated DataFrame output columns
+    private copyMatrixInputFields(reference<hash<auto>> result, list<list<float>> matrix, int offset) {
+        for (int i = 0; i < matrix.lsize(); ++i) {
+            int row = offset + i;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                result{fields[j]}[row] = matrix[i][j];
+            }
+        }
     }
 
     #! Extracts numeric input fields as an ML matrix from a shaped block

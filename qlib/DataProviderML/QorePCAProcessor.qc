@@ -422,12 +422,25 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
 
         hash<auto> result;
         addInputFieldsToDataFrameResult(\result, records, shape, count);
+        if (include_input_fields && shape != DataProvider::DataProviderShape::DataFrameBlock) {
+            copyMatrixInputFields(\result, matrix, 0);
+        }
         list<auto> component_columns = pca_results.components;
         for (int j = 0; j < component_columns.lsize(); ++j) {
             result{sprintf("component_%d", j)} = component_columns[j];
         }
         result{"total_explained_variance"} = pca_results.total_explained_variance;
         return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(result);
+    }
+
+    #! Copies matrix input values to preallocated DataFrame output columns
+    private copyMatrixInputFields(reference<hash<auto>> result, list<list<float>> matrix, int offset) {
+        for (int i = 0; i < matrix.lsize(); ++i) {
+            int row = offset + i;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                result{fields[j]}[row] = matrix[i][j];
+            }
+        }
     }
 
     #! Extracts numeric input fields as an ML matrix from a shaped block
