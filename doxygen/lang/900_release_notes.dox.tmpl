@@ -128,7 +128,8 @@
       columnar API automatically when available; ColumnarResult values can now be filtered with
       dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
       columns; ColumnarResult::fromColumnHash() and ColumnarResult::fromRows() provide explicit
-      constructors for projected or row-compatible columnar blocks
+      constructors for projected or row-compatible columnar blocks; ColumnarResult::stringPredicateMask()
+      builds dense masks for common string predicates without materializing row hashes
     - C++ modules can import and export ColumnarResult values through the Arrow C Data Interface
       with \c qore_columnar_result_export_arrow_c_data() and
       \c qore_columnar_result_import_arrow_c_data(); fixed-width primitive, boolean, and
@@ -141,8 +142,8 @@
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
       \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
       autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
-      expression-to-expression predicates such as \c @amount \c >= \c @target, plus ICU-backed locale-sensitive
-      string predicates when a DataProvider expression passes an \c i18n locale options hash
+      expression-to-expression predicates such as \c @amount \c >= \c @target, native string predicates, and
+      ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options hash
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
       value counting, missing-data cleanup, reshape, Arrow/Parquet roundtrip,
@@ -1954,9 +1955,10 @@ foreach string module_name in (registry.getProcessModules()) {
         for production ETL and analytics workloads that benefit from keeping
         data columnar instead of materializing row hashes
       - \c ColumnarResult::filter(), \c ColumnarResult::slice(),
-        \c ColumnarResult::combineMasks(), \c ColumnarResult::invertMask(), and
-        \c ColumnarResult::nullMask() provide dense filtering, contiguous
-        slicing, and boolean-mask composition for SQL/DataFrame analytics flows
+        \c ColumnarResult::combineMasks(), \c ColumnarResult::invertMask(),
+        \c ColumnarResult::nullMask(), and \c ColumnarResult::stringPredicateMask()
+        provide dense filtering, contiguous slicing, boolean-mask composition,
+        and native string-predicate masks for SQL/DataFrame analytics flows
       - DataFrame-backed DataProvider searches accept DPQL strings and structured
         \c hash<DataProviderExpression> filters directly while preserving \c DataFrameBlock shape for bulk reads
       - \c DataFrame::concat(axis:1) implements horizontal concat with row-count

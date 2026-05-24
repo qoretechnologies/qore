@@ -1,0 +1,67 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameDpComputedFrameFilter
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+%requires DataProviderDataFrame
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameDpComputedFrameFilter {
+    constructor() {
+        Bench::BenchRunner r("dataframe_dp_computed_frame_filter");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+        QoreFilterRecordsProcessor filter({
+            "where_cond": <DataProviderExpression>{
+                "exp": "&&",
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": ">=",
+                        "args": (
+                            <DataProviderExpression>{
+                                "exp": "*",
+                                "args": (<DataProviderFieldReference>{"field": "amount"}, 1.2),
+                            },
+                            1250.0,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_OP_RANGE,
+                        "args": (<DataProviderFieldReference>{"field": "score"}, 90.0, 99.0),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_OP_STARTS_WITH,
+                        "args": (
+                            <DataProviderExpression>{
+                                "exp": DP_OP_TO_LOWER,
+                                "args": (<DataProviderFieldReference>{"field": "status"},),
+                            },
+                            "act",
+                        ),
+                    },
+                ),
+            },
+        });
+
+        r.setup = sub () {
+            df = DataFrameBench::makeBufferFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame filtered = filter.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+            DataFrameBench::verifyRows("dataframe_dp_computed_frame_filter", filtered, 1);
+        };
+
+        exit(r.run());
+    }
+}

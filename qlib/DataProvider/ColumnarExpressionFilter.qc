@@ -66,6 +66,11 @@ public class ColumnarExpressionFilter {
 
     #! Filters a DataFrame block by one expression
     private static auto filterDataFrameExpression(auto df, hash<DataProviderExpression> expr) {
+        *auto columnar_filtered = filterDataFrameWithBufferMask(df, expr);
+        if (exists columnar_filtered) {
+            return columnar_filtered;
+        }
+
         *auto mask = buildDataFrameMask(df, expr);
         if (exists mask) {
             return df.filter(mask);
@@ -88,6 +93,17 @@ public class ColumnarExpressionFilter {
             return filterDataFrameViaRows(df, expr);
         }
         return applyDataFrameComparison(df, expr, comparison.field, comparison.op, comparison.value);
+    }
+
+    #! Filters a DataFrame through ColumnarResult when the expression has a dense mask implementation
+    private static *auto filterDataFrameWithBufferMask(auto df, hash<DataProviderExpression> expr) {
+        auto records = df.toColumnarResult();
+        *auto mask = buildBufferMask(records, expr);
+        if (!exists mask) {
+            return;
+        }
+
+        return Class::getClass(df).newObject(records.filter(mask).toColumnHash());
     }
 
     #! Builds a vectorized DataFrame row mask, if the expression is supported
@@ -149,13 +165,13 @@ public class ColumnarExpressionFilter {
 
         *hash<auto> string_predicate = getStringPredicate(expr, op);
         if (string_predicate) {
-            return buildDataFrameStringMask(df, string_predicate.field, string_predicate.op,
+            return buildDataFrameStringMask(df, string_predicate.expr, string_predicate.op,
                 string_predicate.value, string_predicate.ignore_case, string_predicate.locale_options);
         }
 
         *hash<auto> pattern_predicate = getPatternPredicate(expr, op);
         if (pattern_predicate) {
-            return buildDataFramePatternMask(df, pattern_predicate.field, pattern_predicate.pattern,
+            return buildDataFramePatternMask(df, pattern_predicate.expr, pattern_predicate.pattern,
                 pattern_predicate.options, pattern_predicate.negated);
         }
 
@@ -201,9 +217,8 @@ public class ColumnarExpressionFilter {
 
     #! Builds a DataFrame row mask for an inRange expression, if supported
     private static *auto buildDataFrameRangeMask(auto df, auto value_expr, auto low, auto high) {
-        hash<auto> column_cache;
-        auto lower = buildDataFrameExpressionComparisonMask(df, value_expr, DP_SEARCH_OP_GE, low, \column_cache);
-        auto upper = buildDataFrameExpressionComparisonMask(df, value_expr, DP_SEARCH_OP_LT, high, \column_cache);
+        auto lower = buildDataFrameComputedComparisonMask(df, value_expr, DP_SEARCH_OP_GE, low);
+        auto upper = buildDataFrameComputedComparisonMask(df, value_expr, DP_SEARCH_OP_LT, high);
         return lower.intersect(upper);
     }
 
@@ -228,29 +243,59 @@ public class ColumnarExpressionFilter {
         list<bool> mask = ();
         int rows = df.shape().rows;
         for (int i = 0; i < rows; ++i) {
-            mask += valueTruthy(evalDataFrameExpressionValue(df, expr.args[0], i, \column_cache));
+            push mask, valueTruthy(evalDataFrameExpressionValue(df, expr.args[0], i, \column_cache));
         }
         return makeDataFrameRowMask(mask);
     }
 
     #! Builds a DataFrame row mask for one computed expression comparison
     private static *auto buildDataFrameComputedComparisonMask(auto df, auto value_expr, string op, auto value) {
+        *auto mask = buildDataFrameBufferComputedComparisonMask(df, value_expr, op, value);
+        if (exists mask) {
+            return mask;
+        }
+
         hash<auto> column_cache;
         return buildDataFrameExpressionComparisonMask(df, value_expr, op, value, \column_cache);
     }
 
     #! Builds a DataFrame row mask for one expression-to-expression comparison
     private static auto buildDataFrameVectorComparisonMask(auto df, auto lhs_expr, string op, auto rhs_expr) {
+        *auto dense_mask = buildDataFrameBufferVectorComparisonMask(df, lhs_expr, op, rhs_expr);
+        if (exists dense_mask) {
+            return dense_mask;
+        }
+
         hash<auto> column_cache;
         list<bool> mask = ();
         int rows = df.shape().rows;
         for (int i = 0; i < rows; ++i) {
-            mask += compareScalar(
+            push mask, compareScalar(
                 evalDataFrameExpressionValue(df, lhs_expr, i, \column_cache),
                 op,
                 evalDataFrameExpressionValue(df, rhs_expr, i, \column_cache));
         }
         return makeDataFrameRowMask(mask);
+    }
+
+    #! Builds a DataFrame row mask through ColumnarResult dense expression evaluation
+    private static *auto buildDataFrameBufferComputedComparisonMask(auto df, auto value_expr, string op, auto value) {
+        auto records = df.toColumnarResult();
+        *auto mask = buildBufferComputedComparisonMask(records, value_expr, op, value);
+        if (exists mask) {
+            return makeDataFrameRowMaskFromMask(mask);
+        }
+        return;
+    }
+
+    #! Builds a DataFrame expression-to-expression row mask through ColumnarResult dense expression evaluation
+    private static *auto buildDataFrameBufferVectorComparisonMask(auto df, auto lhs_expr, string op, auto rhs_expr) {
+        auto records = df.toColumnarResult();
+        *auto mask = buildBufferVectorComparisonMask(records, lhs_expr, op, rhs_expr);
+        if (exists mask) {
+            return makeDataFrameRowMaskFromMask(mask);
+        }
+        return;
     }
 
     #! Builds a DataFrame row mask from one expression compared with a scalar
@@ -259,7 +304,7 @@ public class ColumnarExpressionFilter {
         list<bool> mask = ();
         int rows = df.shape().rows;
         for (int i = 0; i < rows; ++i) {
-            mask += compareScalar(evalDataFrameExpressionValue(df, value_expr, i, \column_cache), op, value);
+            push mask, compareScalar(evalDataFrameExpressionValue(df, value_expr, i, \column_cache), op, value);
         }
         return makeDataFrameRowMask(mask);
     }
@@ -372,13 +417,13 @@ public class ColumnarExpressionFilter {
 
         *hash<auto> string_predicate = getStringPredicate(expr, op);
         if (string_predicate) {
-            return buildBufferStringMask(records, string_predicate.field, string_predicate.op,
+            return buildBufferStringMask(records, string_predicate.expr, string_predicate.op,
                 string_predicate.value, string_predicate.ignore_case, string_predicate.locale_options);
         }
 
         *hash<auto> pattern_predicate = getPatternPredicate(expr, op);
         if (pattern_predicate) {
-            return buildBufferPatternMask(records, pattern_predicate.field, pattern_predicate.pattern,
+            return buildBufferPatternMask(records, pattern_predicate.expr, pattern_predicate.pattern,
                 pattern_predicate.options, pattern_predicate.negated);
         }
 
@@ -557,7 +602,7 @@ public class ColumnarExpressionFilter {
         list<auto> values = ();
         int rows = records.numRows();
         for (int i = 0; i < rows; ++i) {
-            values += evalBufferExpressionValueAt(records, arg, i, \column_cache);
+            push values, evalBufferExpressionValueAt(records, arg, i, \column_cache);
         }
         return {"value": values, "vector": True};
     }
@@ -638,7 +683,7 @@ public class ColumnarExpressionFilter {
         }
         list<bool> mask = ();
         foreach auto raw in (vector) {
-            mask += compareScalar(raw, op, value);
+            push mask, compareScalar(raw, op, value);
         }
         return new buffer<bool>(mask);
     }
@@ -675,7 +720,7 @@ public class ColumnarExpressionFilter {
 
         list<bool> mask = ();
         for (int i = 0; i < lhs.size(); ++i) {
-            mask += compareScalar(lhs[i], op, rhs[i]);
+            push mask, compareScalar(lhs[i], op, rhs[i]);
         }
         return new buffer<bool>(mask);
     }
@@ -687,32 +732,51 @@ public class ColumnarExpressionFilter {
         }
         list<bool> mask = ();
         foreach auto raw in (vector) {
-            mask += valueTruthy(raw);
+            push mask, valueTruthy(raw);
         }
         return new buffer<bool>(mask);
     }
 
     #! Builds a DataFrame row mask for one string predicate that ColumnRef supports directly
-    private static *auto buildDataFrameStringMask(auto df, string field, string op, auto value, bool ignore_case,
+    private static *auto buildDataFrameStringMask(auto df, auto value_expr, string op, auto value, bool ignore_case,
             *hash<auto> locale_options) {
-        if (locale_options) {
-            auto mask = buildLocaleStringPredicateMask(df.column(field).values(), op, value, locale_options);
-            return makeDataFrameRowMask(mask.toList());
+        if (isTopLevelFieldReference(value_expr)) {
+            string field = value_expr.field;
+            if (locale_options) {
+                auto mask = buildLocaleStringPredicateMask(df.column(field).values(), op, value, locale_options);
+                return makeDataFrameRowMask(mask.toList());
+            }
+
+            if (ignore_case) {
+                return buildDataFrameStringListMask(df, field, op, value, True);
+            }
+
+            switch (op) {
+                case DP_OP_CONTAINS:
+                    return df.column(field).compare("contains", value);
+                case DP_OP_STARTS_WITH:
+                    return df.column(field).compare("startswith", value);
+                case DP_OP_ENDS_WITH:
+                    return df.column(field).compare("endswith", value);
+            }
+            return;
         }
 
-        if (ignore_case) {
-            return buildDataFrameStringListMask(df, field, op, value, True);
-        }
+        hash<auto> column_cache;
+        auto values = evalDataFrameExpressionAsList(df, value_expr, \column_cache);
+        *auto mask = buildStringPredicateMask(values, op, value, ignore_case, locale_options);
+        return exists mask ? makeDataFrameRowMaskFromMask(mask) : NOTHING;
+    }
 
-        switch (op) {
-            case DP_OP_CONTAINS:
-                return df.column(field).compare("contains", value);
-            case DP_OP_STARTS_WITH:
-                return df.column(field).compare("startswith", value);
-            case DP_OP_ENDS_WITH:
-                return df.column(field).compare("endswith", value);
+    #! Evaluates a supported DataFrame expression as a list without materializing row hashes
+    private static list<auto> evalDataFrameExpressionAsList(auto df, auto arg,
+            reference<hash<auto>> column_cache) {
+        list<auto> values = ();
+        int rows = df.shape().rows;
+        for (int i = 0; i < rows; ++i) {
+            push values, evalDataFrameExpressionValue(df, arg, i, \column_cache);
         }
-        return;
+        return values;
     }
 
     #! Builds a DataFrame row mask for one case-insensitive string predicate
@@ -725,7 +789,7 @@ public class ColumnarExpressionFilter {
         list<bool> mask = ();
         foreach auto raw in (df.column(field).values()) {
             if (!exists raw || raw.typeCode() == NT_NULL) {
-                mask += False;
+                push mask, False;
                 continue;
             }
             softstring haystack = raw;
@@ -747,25 +811,23 @@ public class ColumnarExpressionFilter {
                 default:
                     return;
             }
-            mask += match;
+            push mask, match;
         }
         return makeDataFrameRowMask(mask);
     }
 
     #! Builds a DataFrame row mask for one LIKE or regex predicate
-    private static *auto buildDataFramePatternMask(auto df, string field, string pattern, int options,
+    private static *auto buildDataFramePatternMask(auto df, auto value_expr, string pattern, int options,
             bool negated) {
-        list<bool> mask = ();
-        foreach auto raw in (df.column(field).values()) {
-            if (!exists raw || raw.typeCode() == NT_NULL) {
-                mask += negated;
-                continue;
-            }
-            softstring value = raw;
-            bool match = regex(value, pattern, options);
-            mask += negated ? !match : match;
+        if (isTopLevelFieldReference(value_expr)) {
+            return makeDataFrameRowMaskFromMask(
+                buildPatternMask(df.column(value_expr.field).values(), pattern, options, negated));
         }
-        return makeDataFrameRowMask(mask);
+
+        hash<auto> column_cache;
+        auto values = evalDataFrameExpressionAsList(df, value_expr, \column_cache);
+        *auto mask = buildPatternMask(values, pattern, options, negated);
+        return exists mask ? makeDataFrameRowMaskFromMask(mask) : NOTHING;
     }
 
     #! Creates a DataFrame RowMask without a compile-time dependency on the dataframe module
@@ -774,16 +836,34 @@ public class ColumnarExpressionFilter {
         return Class::forName("DataFrame::RowMask").newObject(mask);
     }
 
+    #! Creates a DataFrame RowMask from a list<bool> or buffer<bool>
+    private static auto makeDataFrameRowMaskFromMask(auto mask) {
+        return makeDataFrameRowMask(mask.typeCode() == NT_BUFFER ? mask.toList() : mask);
+    }
+
     #! Builds a boolean buffer mask for one string predicate
-    private static *auto buildBufferStringMask(auto records, string field, string op, auto value, bool ignore_case,
+    private static *auto buildBufferStringMask(auto records, auto value_expr, string op, auto value, bool ignore_case,
             *hash<auto> locale_options) {
-        auto column = records.getColumn(field);
-        if (column.typeCode() != NT_BUFFER && column.typeCode() != NT_LIST) {
+        if (isTopLevelFieldReference(value_expr) && !locale_options) {
+            return records.stringPredicateMask(value_expr.field, op, value, ignore_case);
+        }
+
+        *hash<auto> vector = evalBufferExpressionValue(records, value_expr);
+        if (!vector || !vector.vector) {
+            return;
+        }
+        return buildStringPredicateMask(vector.value, op, value, ignore_case, locale_options);
+    }
+
+    #! Builds a boolean buffer mask for one string predicate over a vector
+    private static *auto buildStringPredicateMask(auto values, string op, auto value, bool ignore_case,
+            *hash<auto> locale_options) {
+        if (values.typeCode() != NT_BUFFER && values.typeCode() != NT_LIST) {
             return;
         }
 
         if (locale_options) {
-            return buildLocaleStringPredicateMask(column, op, value, locale_options);
+            return buildLocaleStringPredicateMask(values, op, value, locale_options);
         }
 
         softstring needle = value;
@@ -792,9 +872,9 @@ public class ColumnarExpressionFilter {
         }
 
         list<bool> mask = ();
-        foreach auto raw in (column) {
+        foreach auto raw in (values) {
             if (!exists raw || raw.typeCode() == NT_NULL) {
-                mask += False;
+                push mask, False;
                 continue;
             }
             softstring haystack = raw;
@@ -816,7 +896,7 @@ public class ColumnarExpressionFilter {
                 default:
                     return;
             }
-            mask += match;
+            push mask, match;
         }
         return new buffer<bool>(mask);
     }
@@ -837,22 +917,30 @@ public class ColumnarExpressionFilter {
     }
 
     #! Builds a boolean buffer mask for one LIKE or regex predicate
-    private static *auto buildBufferPatternMask(auto records, string field, string pattern, int options,
+    private static *auto buildBufferPatternMask(auto records, auto value_expr, string pattern, int options,
             bool negated) {
-        auto column = records.getColumn(field);
-        if (column.typeCode() != NT_BUFFER && column.typeCode() != NT_LIST) {
+        *hash<auto> vector = evalBufferExpressionValue(records, value_expr);
+        if (!vector || !vector.vector) {
+            return;
+        }
+        return buildPatternMask(vector.value, pattern, options, negated);
+    }
+
+    #! Builds a boolean buffer mask for one LIKE or regex predicate over a vector
+    private static *auto buildPatternMask(auto values, string pattern, int options, bool negated) {
+        if (values.typeCode() != NT_BUFFER && values.typeCode() != NT_LIST) {
             return;
         }
 
         list<bool> mask = ();
-        foreach auto raw in (column) {
+        foreach auto raw in (values) {
             if (!exists raw || raw.typeCode() == NT_NULL) {
-                mask += negated;
+                push mask, negated;
                 continue;
             }
             softstring value = raw;
             bool match = regex(value, pattern, options);
-            mask += negated ? !match : match;
+            push mask, negated ? !match : match;
         }
         return new buffer<bool>(mask);
     }
@@ -1029,7 +1117,7 @@ public class ColumnarExpressionFilter {
         if (op != DP_OP_CONTAINS && op != DP_OP_STARTS_WITH && op != DP_OP_ENDS_WITH) {
             return;
         }
-        if (expr.args.size() < 2 || expr.args.size() > 3 || !isTopLevelFieldReference(expr.args[0])
+        if (expr.args.size() < 2 || expr.args.size() > 3 || !isVectorizableValueArg(expr.args[0])
                 || !isScalarComparisonArg(expr.args[1])) {
             return;
         }
@@ -1047,8 +1135,15 @@ public class ColumnarExpressionFilter {
             }
         }
 
+        auto value_expr = expr.args[0];
+        *string case_folded_field = getCaseFoldedTopLevelField(value_expr);
+        if (case_folded_field && !locale_options) {
+            value_expr = <DataProviderFieldReference>{"field": case_folded_field};
+            ignore_case = True;
+        }
+
         return {
-            "field": expr.args[0].field,
+            "expr": value_expr,
             "op": op,
             "value": unwrapComparisonValue(expr.args[1]),
             "ignore_case": ignore_case,
@@ -1069,10 +1164,26 @@ public class ColumnarExpressionFilter {
         return value;
     }
 
+    #! Returns the field name for lwr(@field) or upr(@field), when this can be handled as ignore-case matching
+    private static *string getCaseFoldedTopLevelField(auto arg) {
+        if (!(arg instanceof hash<DataProviderExpression>)) {
+            return;
+        }
+
+        string op = OperatorAliasMap{arg.exp} ?? arg.exp;
+        if (op != DP_OP_TO_LOWER && op != DP_OP_TO_UPPER) {
+            return;
+        }
+        if (arg.args.size() != 1 || !isTopLevelFieldReference(arg.args[0])) {
+            return;
+        }
+        return arg.args[0].field;
+    }
+
     #! Returns vectorizable pattern predicate information, if supported by BufferColumns
     private static *hash<auto> getPatternPredicate(hash<DataProviderExpression> expr, string op) {
         if (op == DP_OP_LIKE) {
-            if (expr.args.size() < 2 || expr.args.size() > 3 || !isTopLevelFieldReference(expr.args[0])
+            if (expr.args.size() < 2 || expr.args.size() > 3 || !isVectorizableValueArg(expr.args[0])
                     || !isScalarComparisonArg(expr.args[1])) {
                 return;
             }
@@ -1083,12 +1194,18 @@ public class ColumnarExpressionFilter {
                 }
                 ignore_case = unwrapComparisonValue(expr.args[2]) ? True : False;
             }
+            auto value_expr = expr.args[0];
+            *string case_folded_field = getCaseFoldedTopLevelField(value_expr);
+            if (case_folded_field) {
+                value_expr = <DataProviderFieldReference>{"field": case_folded_field};
+                ignore_case = True;
+            }
             string pattern = unwrapComparisonValue(expr.args[1]);
             string re = regex_subst(pattern, "([.^$+?{}\\[\\]|()\\\\])", "\\\\$1", RE_Global);
             re = regex_subst(re, "%", ".*", RE_Global);
             re = regex_subst(re, "_", ".", RE_Global);
             return {
-                "field": expr.args[0].field,
+                "expr": value_expr,
                 "pattern": "^" + re + "$",
                 "options": ignore_case ? RE_Caseless : 0,
                 "negated": False,
@@ -1096,7 +1213,7 @@ public class ColumnarExpressionFilter {
         }
 
         if (op == DP_OP_REGEX_MATCH || op == DP_OP_REGEX_NMATCH) {
-            if (expr.args.size() < 2 || expr.args.size() > 3 || !isTopLevelFieldReference(expr.args[0])
+            if (expr.args.size() < 2 || expr.args.size() > 3 || !isVectorizableValueArg(expr.args[0])
                     || !isScalarComparisonArg(expr.args[1])) {
                 return;
             }
@@ -1109,7 +1226,7 @@ public class ColumnarExpressionFilter {
                 opts = foldl $1 | $2, (map RegexOpts{$1}, flags);
             }
             return {
-                "field": expr.args[0].field,
+                "expr": expr.args[0],
                 "pattern": unwrapComparisonValue(expr.args[1]),
                 "options": opts,
                 "negated": op == DP_OP_REGEX_NMATCH,

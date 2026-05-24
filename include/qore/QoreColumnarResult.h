@@ -190,6 +190,10 @@ public:
     //! Returns a dense buffer<bool> mask selecting null or non-null values in a column.
     DLLEXPORT QoreValue nullMask(const char* name, bool invert, ExceptionSink* xsink) const;
 
+    //! Returns a dense buffer<bool> mask for a string predicate over a column.
+    DLLEXPORT QoreValue stringPredicateMask(const char* name, const char* op, const QoreStringNode* value,
+        bool ignore_case, ExceptionSink* xsink) const;
+
     //! Returns a referenced column container by name.
     DLLEXPORT QoreValue getColumnValue(const char* name, ExceptionSink* xsink) const;
 

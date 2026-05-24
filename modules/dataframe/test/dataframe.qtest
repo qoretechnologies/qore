@@ -617,6 +617,7 @@ sub invalid_dataframe_api() {
             "segment": new buffer<int64>((1, 1, 2, 2)),
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
             "name": ("Alice", "Bob", "Carol", "Dave"),
+            "code": ("A1", "B2", "C1", "D4"),
         });
 
         auto result = df.toColumnarResult();
@@ -644,6 +645,10 @@ sub invalid_dataframe_api() {
             "ColumnarResult::nullMask selects null dense-buffer rows");
         assertEq((1, 3), nullable_result.filter(nullable_result.nullMask("optional_id", True)).getColumn("id").toList(),
             "ColumnarResult::nullMask can select non-null dense-buffer rows");
+        assertEq((1, 3, 4), result.filter(result.stringPredicateMask("name", "contains", "a", True)).getColumn("id").toList(),
+            "ColumnarResult::stringPredicateMask selects matching string rows");
+        assertEq((1, 3), result.filter(result.stringPredicateMask("code", "contains", 1)).getColumn("id").toList(),
+            "ColumnarResult::stringPredicateMask converts predicate values with softstring rules");
 
         assertThrows("COLUMNAR-RESULT-ERROR", \result.filter(), (new buffer<int64>((1, 0, 1, 0)),),
             "ColumnarResult::filter rejects non-boolean buffers as masks");

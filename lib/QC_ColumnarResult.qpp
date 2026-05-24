@@ -314,3 +314,21 @@ ColumnarResult complete = result.filter(result.nullMask("completed_at", True));
 auto ColumnarResult::nullMask(string name, *bool invert) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return result->nullMask(name->c_str(), invert ? static_cast<bool>(invert) : false, xsink);
 }
+
+//! Returns a dense boolean mask for a string predicate
+/** @param name column name
+    @param op predicate name: \c contains, \c starts-with, or \c ends-with
+    @param value predicate value; non-string values are converted with @ref softstring_type "softstring" rules
+    @param ignore_case when @ref True, compares uppercase forms of both strings
+
+    @return a \c buffer<bool> row mask
+
+    @throw COLUMNAR-RESULT-ERROR if the column does not exist or the predicate is not supported
+
+    @since %Qore 2.3
+*/
+auto ColumnarResult::stringPredicateMask(string name, string op, softstring value, *bool ignore_case)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return result->stringPredicateMask(name->c_str(), op->c_str(), value,
+        ignore_case ? static_cast<bool>(ignore_case) : false, xsink);
+}

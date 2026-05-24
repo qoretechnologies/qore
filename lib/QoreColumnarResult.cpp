@@ -600,6 +600,39 @@ static bool columnar_mask_op_is_and(const char* op, ExceptionSink* xsink) {
     return false;
 }
 
+static bool columnar_string_predicate_matches(QoreValue raw_value, const char* op, const QoreString& needle,
+        bool ignore_case, ExceptionSink* xsink) {
+    if (raw_value.isNullOrNothing()) {
+        return false;
+    }
+
+    QoreStringValueHelper raw(raw_value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    QoreString haystack(**raw);
+    QoreString needle_value(needle);
+    if (ignore_case) {
+        haystack.toupr();
+        needle_value.toupr();
+    }
+
+    if (!strcmp(op, "contains")) {
+        return haystack.bindex(needle_value) >= 0;
+    }
+    if (!strcmp(op, "starts-with")) {
+        return haystack.startsWith(std::string(needle_value.c_str(), needle_value.size()));
+    }
+    if (!strcmp(op, "ends-with")) {
+        return haystack.endsWith(std::string(needle_value.c_str(), needle_value.size()));
+    }
+
+    xsink->raiseException("COLUMNAR-RESULT-ERROR",
+        "unsupported string predicate '%s'; expected contains, starts-with, or ends-with", op);
+    return false;
+}
+
 static QoreColumnarColumnType columnar_type_from_buffer(QoreBufferElementType buffer_type) {
     if (qore_buffer_element_type_is_integer(buffer_type)) {
         return QoreColumnarColumnType::Int;
@@ -3488,6 +3521,33 @@ QoreValue QoreColumnarResult::nullMask(const char* name, bool invert, ExceptionS
             selected = !selected;
         }
         if (rv->setEntry(i, QoreValue(selected), xsink)) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+QoreValue QoreColumnarResult::stringPredicateMask(const char* name, const char* op, const QoreStringNode* value,
+        bool ignore_case, ExceptionSink* xsink) const {
+    assert(xsink);
+    const Column* column = findColumn(name);
+    if (!column) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR", "column '%s' does not exist", name);
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(QoreBufferElementType::Bool, false, row_count), xsink);
+    for (size_t i = 0; i < row_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building columnar string predicate mask")) {
+            return QoreValue();
+        }
+        QoreValue raw = columnar_value_at(column->data, i, xsink);
+        ValueHolder raw_holder(raw, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        bool selected = columnar_string_predicate_matches(raw, op, *value, ignore_case, xsink);
+        if (*xsink || rv->setEntry(i, QoreValue(selected), xsink)) {
             return QoreValue();
         }
     }
