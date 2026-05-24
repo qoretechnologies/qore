@@ -605,6 +605,12 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             assertTrue(exists actions1{"make-api-call"},
                 "first registration (no opt-out) should produce the auto-injected action");
 
+            # before the opt-out flip, the app's supports_apis flag must be True (set by
+            # registerAction when make-api-call was auto-registered)
+            hash<DataProviderAppInfo> cached1 = DataProviderActionCatalog::getAppEx(app_name);
+            assertTrue(cached1.supports_apis,
+                "after registering an auto-injected DPAT_API action, supports_apis must be True");
+
             # 2nd: re-register WITH the opt-out — must flip cached state AND remove the action
             DataProviderActionCatalog::registerApp(
                 cast<hash<DataProviderAppInfo>>(base_app + {"disable_generic_api_call": True}));
@@ -612,6 +618,12 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
                 DataProviderActionCatalog::getActionHash(app_name);
             assertFalse(exists actions2{"make-api-call"},
                 "second registration with opt-out should remove the previously-auto-injected action");
+            # supports_apis must be RECOMPUTED to False — make-api-call was the only DPAT_API
+            # action on this app, so the capability flag must not remain set after removal
+            hash<DataProviderAppInfo> cached2 = DataProviderActionCatalog::getAppEx(app_name);
+            assertFalse(cached2.supports_apis,
+                "after removing the last DPAT_API action, supports_apis must be cleared to False — "
+                "leaving it True would mislead UI capability introspection about the app's surface");
 
             # 3rd: a follow-up duplicate WITHOUT the opt-out must NOT re-add the action — the
             # opt-out is sticky once any caller sets it (OR-merge semantics)

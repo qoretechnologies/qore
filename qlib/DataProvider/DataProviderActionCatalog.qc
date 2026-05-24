@@ -700,11 +700,30 @@ public class DataProviderActionCatalog {
                         # undo that registration now that the caller has signalled the opt-out
                         string mac_name = AbstractDataProvider::GenericApiCallActionName;
                         if (app_actionmap{app.name}{mac_name}) {
+                            int removed_code = app_actionmap{app.name}{mac_name}.action_code;
                             remove app_actionmap{app.name}{mac_name};
                             remove top_actionmap{app.name + "/" + mac_name};
                             if (existing_app.scheme && smap{existing_app.scheme}) {
                                 smap{existing_app.scheme} = map $1, smap{existing_app.scheme},
                                     $1.action != mac_name;
+                            }
+                            # recompute the corresponding capability flag (supports_apis for
+                            # DPAT_API): if no remaining action on this app carries the same
+                            # action_code, clear the flag so the cached app metadata doesn't lie
+                            # about the app's capabilities
+                            *string cap_flag = ActionCodeFlagMap{removed_code};
+                            if (cap_flag) {
+                                bool still_has = False;
+                                foreach hash<DataProviderActionInfo> remaining in
+                                        (app_actionmap{app.name}.values()) {
+                                    if (remaining.action_code == removed_code) {
+                                        still_has = True;
+                                        break;
+                                    }
+                                }
+                                if (!still_has) {
+                                    appcache{app.name}{cap_flag} = False;
+                                }
                             }
                         }
                     }
