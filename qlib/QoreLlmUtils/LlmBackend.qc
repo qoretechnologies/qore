@@ -899,7 +899,9 @@ llm.chatStream(
                 return retry;
             }
         }
-        return rv;
+        # Never return NOTHING (see chatCompletionsStream): coalesce to an
+        # empty hash so the response is always well-typed for callers.
+        return rv ?? {};
     }
 
     #! Streaming OpenAI-compatible chat-completions facade
@@ -949,7 +951,12 @@ llm.chatStream(
                 return retry;
             }
         }
-        return rv;
+        # Never return NOTHING: if the upstream produced no usable response
+        # (e.g. an empty stream — assigning a NOTHING expression to a typed
+        # hash<auto> leaves it NOTHING until this return's type check), return
+        # an empty hash so callers/metadata layers get a well-typed value
+        # instead of a RUNTIME-TYPE-ERROR.
+        return rv ?? {};
     }
 
     private *hash<LlmTelemetryObserver> getTelemetryObserver(
