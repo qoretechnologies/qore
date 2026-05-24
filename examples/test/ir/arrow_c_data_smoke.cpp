@@ -566,6 +566,99 @@ int main() {
         fail("Arrow C Data dictionary schema metadata was not preserved", xsink);
     }
 
+    ReferenceHolder<QoreColumnarResult> manual(new QoreColumnarResult, &xsink);
+    ReferenceHolder<QoreListNode> manual_ts_list(new QoreListNode(autoTypeInfo), &xsink);
+    manual_ts_list->push(new DateTimeNode(nullptr, QoreValue(static_cast<int64>(1700000000LL))), &xsink);
+    manual_ts_list->push(QoreValue(), &xsink);
+    manual_ts_list->push(new DateTimeNode(nullptr, QoreValue(static_cast<int64>(1700000002LL))), &xsink);
+    if (xsink) {
+        fail("manual timestamp list setup failed", xsink);
+    }
+    if (manual->addColumn("created_at", manual_ts_list.release(), QoreColumnarColumnType::Date,
+            QoreBufferElementType::Invalid, true, "timestamp with time zone", &xsink)) {
+        fail("manual timestamp addColumn conversion failed", xsink);
+    }
+
+    ReferenceHolder<QoreListNode> manual_duration_list(new QoreListNode(autoTypeInfo), &xsink);
+    manual_duration_list->push(new DateTimeNode(QoreValue(static_cast<int64>(2))), &xsink);
+    manual_duration_list->push(new DateTimeNode(QoreValue(static_cast<int64>(30))), &xsink);
+    manual_duration_list->push(new DateTimeNode(QoreValue(static_cast<int64>(60))), &xsink);
+    if (xsink) {
+        fail("manual duration list setup failed", xsink);
+    }
+    if (manual->addColumn("elapsed", manual_duration_list.release(), QoreColumnarColumnType::Date,
+            QoreBufferElementType::Invalid, false, "interval", &xsink)) {
+        fail("manual duration addColumn conversion failed", xsink);
+    }
+
+    ReferenceHolder<QoreListNode> manual_amount_list(new QoreListNode(autoTypeInfo), &xsink);
+    manual_amount_list->push(new QoreNumberNode("1.23"), &xsink);
+    manual_amount_list->push(QoreValue(), &xsink);
+    manual_amount_list->push(new QoreNumberNode("4.56"), &xsink);
+    if (xsink) {
+        fail("manual decimal list setup failed", xsink);
+    }
+    QoreColumnarTypeDescriptor manual_amount_schema;
+    manual_amount_schema.kind = QoreColumnarTypeKind::Decimal128;
+    manual_amount_schema.column_type = QoreColumnarColumnType::Number;
+    manual_amount_schema.buffer_type = QoreBufferElementType::Decimal128;
+    manual_amount_schema.nullable = true;
+    manual_amount_schema.precision = 12;
+    manual_amount_schema.scale = 2;
+    manual_amount_schema.native_type = "numeric(12,2)";
+    if (manual->addColumn("amount", manual_amount_list.release(), manual_amount_schema, &xsink)) {
+        fail("manual decimal addColumn conversion failed", xsink);
+    }
+
+    ValueHolder manual_ts(manual->getColumnValue("created_at", &xsink), &xsink);
+    ValueHolder manual_duration(manual->getColumnValue("elapsed", &xsink), &xsink);
+    ValueHolder manual_amount(manual->getColumnValue("amount", &xsink), &xsink);
+    if (xsink || manual_ts->getType() != NT_BUFFER || manual_duration->getType() != NT_BUFFER
+            || manual_amount->getType() != NT_BUFFER) {
+        fail("manual addColumn list conversion did not produce dense buffers", xsink);
+    }
+    const QoreBufferNode* manual_ts_buf = manual_ts->get<const QoreBufferNode>();
+    const QoreBufferNode* manual_duration_buf = manual_duration->get<const QoreBufferNode>();
+    const QoreBufferNode* manual_amount_buf = manual_amount->get<const QoreBufferNode>();
+    if (manual_ts_buf->getElementType() != QoreBufferElementType::Int64
+            || manual_ts_buf->getReferencedEntry(0, &xsink).getAsBigInt() != 1700000000000000LL
+            || !manual_ts_buf->isElementNull(1)
+            || manual_ts_buf->getReferencedEntry(2, &xsink).getAsBigInt() != 1700000002000000LL
+            || manual_duration_buf->getElementType() != QoreBufferElementType::Int64
+            || manual_duration_buf->getReferencedEntry(0, &xsink).getAsBigInt() != 2000000LL
+            || manual_duration_buf->getReferencedEntry(2, &xsink).getAsBigInt() != 60000000LL
+            || manual_amount_buf->getElementType() != QoreBufferElementType::Decimal128
+            || manual_amount_buf->getDecimalPrecision() != 12 || manual_amount_buf->getDecimalScale() != 2
+            || !manual_amount_buf->isElementNull(1)) {
+        fail("manual addColumn dense buffer values or metadata are invalid", xsink);
+    }
+    ValueHolder manual_first_amount(manual_amount_buf->getReferencedEntry(0, &xsink), &xsink);
+    QoreStringValueHelper manual_first_amount_str(*manual_first_amount);
+    if (std::strcmp(manual_first_amount_str->c_str(), "1.23")) {
+        fail("manual addColumn decimal value was not preserved", xsink);
+    }
+
+    ReferenceHolder<QoreListNode> manual_schema(manual->getSchemaV2(&xsink), &xsink);
+    const QoreHashNode* manual_ts_schema = manual_schema->retrieveEntry(0).get<const QoreHashNode>();
+    const QoreHashNode* manual_duration_schema = manual_schema->retrieveEntry(1).get<const QoreHashNode>();
+    const QoreHashNode* manual_amount_schema_hash = manual_schema->retrieveEntry(2).get<const QoreHashNode>();
+    QoreStringValueHelper manual_ts_kind(manual_ts_schema->getKeyValue("kind"));
+    QoreStringValueHelper manual_ts_buffer_type(manual_ts_schema->getKeyValue("buffer_type"));
+    QoreStringValueHelper manual_ts_timezone(manual_ts_schema->getKeyValue("timezone"));
+    QoreStringValueHelper manual_duration_kind(manual_duration_schema->getKeyValue("kind"));
+    QoreStringValueHelper manual_duration_buffer_type(manual_duration_schema->getKeyValue("buffer_type"));
+    QoreStringValueHelper manual_amount_kind(manual_amount_schema_hash->getKeyValue("kind"));
+    if (std::strcmp(manual_ts_kind->c_str(), "timestamp")
+            || std::strcmp(manual_ts_buffer_type->c_str(), "int64")
+            || std::strcmp(manual_ts_timezone->c_str(), "UTC")
+            || std::strcmp(manual_duration_kind->c_str(), "duration")
+            || std::strcmp(manual_duration_buffer_type->c_str(), "int64")
+            || std::strcmp(manual_amount_kind->c_str(), "decimal128")
+            || manual_amount_schema_hash->getKeyValue("precision").getAsBigInt() != 12
+            || manual_amount_schema_hash->getKeyValue("scale").getAsBigInt() != 2) {
+        fail("manual addColumn schema metadata is invalid", xsink);
+    }
+
     qore_cleanup();
     return EXIT_SUCCESS;
 }

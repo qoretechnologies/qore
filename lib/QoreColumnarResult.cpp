@@ -1160,6 +1160,53 @@ static void columnar_shape_apply_schema(ColumnarShape& shape, const QoreColumnar
     }
 }
 
+static bool columnar_dense_shape_from_schema(const QoreColumnarTypeDescriptor& schema, ColumnarShape& shape) {
+    if (!schema.native_type.empty() && columnar_shape_from_native_type(schema.native_type, 0, shape)) {
+        shape.nullable = shape.nullable || schema.nullable;
+
+        if (schema.kind == QoreColumnarTypeKind::Timestamp || schema.kind == QoreColumnarTypeKind::Duration) {
+            columnar_shape_set_temporal(shape, schema.kind,
+                schema.time_unit.empty() ? "us" : schema.time_unit.c_str());
+            shape.nullable = shape.nullable || schema.nullable;
+            if (!schema.timezone.empty()) {
+                shape.timezone = schema.timezone;
+            }
+        } else if (schema.kind == QoreColumnarTypeKind::Date && shape.kind == QoreColumnarTypeKind::Date) {
+            columnar_shape_set_temporal(shape, QoreColumnarTypeKind::Date,
+                schema.time_unit.empty() ? "us" : schema.time_unit.c_str());
+            shape.nullable = shape.nullable || schema.nullable;
+            if (!schema.timezone.empty()) {
+                shape.timezone = schema.timezone;
+            }
+        } else if (schema.kind == QoreColumnarTypeKind::Decimal128
+                || schema.buffer_type == QoreBufferElementType::Decimal128) {
+            columnar_shape_set_decimal128(shape, schema.precision > 0 ? schema.precision : 38,
+                schema.scale >= 0 ? schema.scale : 0);
+            shape.nullable = shape.nullable || schema.nullable;
+        }
+
+        return shape.dense;
+    }
+
+    if (schema.kind == QoreColumnarTypeKind::Date || schema.kind == QoreColumnarTypeKind::Timestamp
+            || schema.kind == QoreColumnarTypeKind::Duration) {
+        columnar_shape_set_temporal(shape, schema.kind, schema.time_unit.empty() ? "us" : schema.time_unit.c_str());
+        shape.nullable = schema.nullable;
+        shape.timezone = schema.timezone;
+        return true;
+    }
+
+    if (schema.kind == QoreColumnarTypeKind::Decimal128
+            || schema.buffer_type == QoreBufferElementType::Decimal128) {
+        columnar_shape_set_decimal128(shape, schema.precision > 0 ? schema.precision : 38,
+            schema.scale >= 0 ? schema.scale : 0);
+        shape.nullable = schema.nullable;
+        return true;
+    }
+
+    return false;
+}
+
 struct QoreArrowSchemaPrivate {
     std::string format;
     std::string name;
@@ -3351,6 +3398,29 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreCo
     }
     if (setRowCount(size, xsink)) {
         return -1;
+    }
+
+    if (data.getType() == NT_LIST) {
+        const QoreListNode* source = data.get<const QoreListNode>();
+        ColumnarShape shape;
+        if (columnar_dense_shape_from_schema(schema, shape)) {
+            if (!shape.nullable) {
+                shape.nullable = columnar_list_has_nulls(source, xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            }
+
+            QoreColumnarTypeDescriptor column_schema = columnar_descriptor_from_shape(shape, schema.native_type.c_str());
+            column_schema.name = schema.name;
+            ValueHolder column_value(columnar_make_column_value(source, shape, xsink), xsink);
+            if (*xsink) {
+                return -1;
+            }
+
+            columns.emplace_back(name, column_schema, column_value.release());
+            return 0;
+        }
     }
 
     columns.emplace_back(name, schema, data_holder.release());
