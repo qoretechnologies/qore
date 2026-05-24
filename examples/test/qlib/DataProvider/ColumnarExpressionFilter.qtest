@@ -45,6 +45,9 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("string transform ColumnarResult filter", \stringTransformBufferColumns());
         addTestCase("computed string predicate filters", \computedStringPredicateFilters());
         addTestCase("locale string predicate filters", \localeStringPredicateFilters());
+        addTestCase("computed numeric function filters", \computedNumericFunctionFilters());
+        addTestCase("computed string function filters", \computedStringFunctionFilters());
+        addTestCase("computed date function filters", \computedDateFunctionFilters());
 
         set_return_value(main());
     }
@@ -56,6 +59,9 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
             "target": new buffer<float64>((60.0, 90.0, 130.0, 150.0)),
             "score": new buffer<int64>((88, 90, 85, 97)),
             "status": new buffer<string>(("Active", "inactive", "VIP", "active")),
+            "name": (" Alice ", "Bob", "Carol", " Dave "),
+            "created": (2026-03-15T10:30:00Z, 2026-01-20T00:00:00Z,
+                2025-11-01T00:00:00Z, 2026-02-28T00:00:00Z),
             "city": new buffer<string>(("\u0130stanbul", "Istanbul", "Ankara", "Izmir")),
             "flag": new buffer<bool>((True, False, True, False)),
         };
@@ -112,6 +118,18 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
 
     private list<int> columnarIds(ColumnarResult result) {
         return cast<list<int>>(result.getColumn("id").toList());
+    }
+
+    private assertShapeFilterIds(hash<DataProviderExpression> expr, list<int> expected, string label) {
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+
+        DataFrame::DataFrame df(makeColumns());
+        assertEq(expected, dataframeIds(proc.processRecordsShape(df, DataProviderShape::DataFrameBlock)),
+            label + " DataFrameBlock");
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash(makeColumns(), NOTHING);
+        assertEq(expected, columnarIds(proc.processRecordsShape(columns, DataProviderShape::BufferColumns)),
+            label + " BufferColumns");
     }
 
     private computedNumericDataFrame() {
@@ -278,5 +296,42 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         ColumnarResult filtered_columns = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
         assertEq((1,), columnarIds(filtered_columns),
             "BufferColumns filter uses locale-sensitive string predicate masks");
+    }
+
+    private computedNumericFunctionFilters() {
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression('round(@amount * 1.2) >= 120 && floor(@score / 10) == 9'),
+            (2, 4),
+            "numeric DPQL functions are evaluated column-wise");
+
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression('ceil((@amount - 1) / 100) >= 2 && abs(@target - @amount) <= 50'),
+            (3, 4),
+            "additional numeric DPQL functions are evaluated column-wise");
+    }
+
+    private computedStringFunctionFilters() {
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression(
+                'trim(@name) == "Alice" || concat(trim(@name), ":", lwr(@status)) == "Dave:active"'),
+            (1, 4),
+            "string DPQL functions are evaluated column-wise");
+
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression('nullif(lwr(@status), "inactive") == null'),
+            (2,),
+            "nullif() is evaluated column-wise");
+    }
+
+    private computedDateFunctionFilters() {
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression('get_year(@created) == 2026 && get_month(@created) >= 2'),
+            (1, 4),
+            "date-part DPQL functions are evaluated column-wise");
+
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression('@created >= 2026-04-01T00:00:00Z - days(60)'),
+            (1, 4),
+            "scalar date arithmetic is evaluated once for column-wise comparison");
     }
 }

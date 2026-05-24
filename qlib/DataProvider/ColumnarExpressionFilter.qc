@@ -338,6 +338,17 @@ public class ColumnarExpressionFilter {
                 }
                 return result;
             }
+            if (isNumericFunction(op)) {
+                return applyNumericFunction(op, evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                    arg.args.size() > 1 ? evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache) : 0);
+            }
+            if (isTrimFunction(op)) {
+                return applyTrimFunction(op, evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                    arg.args.size() > 1 ? evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache) : NOTHING);
+            }
+            if (isDatePartFunction(op)) {
+                return applyDatePartFunction(op, evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache));
+            }
             if (isComparisonOperator(op) && arg.args.size() == 2) {
                 return compareScalar(evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache), op,
                     evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache));
@@ -436,6 +447,13 @@ public class ColumnarExpressionFilter {
                         }
                     }
                     return NOTHING;
+                case DP_FUNC_NULLIF: {
+                    auto value = evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache);
+                    return value == evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache)
+                        ? NOTHING : value;
+                }
+                case DP_FUNC_CONCAT:
+                    return concatValues(evalDataFrameExpressionValues(df, arg.args, row, \column_cache));
                 case DP_OP_TERNARY:
                     return valueTruthy(evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache))
                         ? evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache)
@@ -722,8 +740,23 @@ public class ColumnarExpressionFilter {
             switch (op) {
                 case DP_OP_TO_LOWER:
                 case DP_OP_TO_UPPER:
+                case DP_FUNC_ABS:
+                case DP_FUNC_ROUND:
+                case DP_FUNC_FLOOR:
+                case DP_FUNC_CEIL:
+                case DP_FUNC_TRIM:
+                case DP_FUNC_LTRIM:
+                case DP_FUNC_RTRIM:
+                case DP_FUNC_CONCAT:
+                case DP_FUNC_NULLIF:
                 case DP_FUNC_COALESCE:
                 case DP_OP_TERNARY:
+                case DP_FUNC_GET_YEAR:
+                case DP_FUNC_GET_MONTH:
+                case DP_FUNC_GET_DAY:
+                case DP_FUNC_GET_HOUR:
+                case DP_FUNC_GET_MINUTE:
+                case DP_FUNC_GET_SECOND:
                 case DP_FUNC_INDEX:
                 case DP_FUNC_SLICE:
                 case DP_FUNC_KEY:
@@ -793,7 +826,7 @@ public class ColumnarExpressionFilter {
     private static auto evalBufferExpressionValueAt(auto records, auto arg, int row,
             reference<hash<auto>> column_cache) {
         if (isTopLevelFieldReference(arg)) {
-            return getBufferColumnValues(records, arg.field, \column_cache)[row];
+            return getBufferColumnValueAt(records, arg.field, row, \column_cache);
         }
 
         if (arg instanceof hash<DataProviderExpression>) {
@@ -808,6 +841,19 @@ public class ColumnarExpressionFilter {
                         evalBufferExpressionValueAt(records, arg.args[i], row, \column_cache));
                 }
                 return result;
+            }
+            if (isNumericFunction(op)) {
+                return applyNumericFunction(op, evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                    arg.args.size() > 1 ? evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache) : 0);
+            }
+            if (isTrimFunction(op)) {
+                return applyTrimFunction(op, evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                    arg.args.size() > 1 ? evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache)
+                        : NOTHING);
+            }
+            if (isDatePartFunction(op)) {
+                return applyDatePartFunction(op, evalBufferExpressionValueAt(records, arg.args[0], row,
+                    \column_cache));
             }
             if (isComparisonOperator(op) && arg.args.size() == 2) {
                 return compareScalar(evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache), op,
@@ -907,6 +953,13 @@ public class ColumnarExpressionFilter {
                         }
                     }
                     return NOTHING;
+                case DP_FUNC_NULLIF: {
+                    auto value = evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache);
+                    return value == evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache)
+                        ? NOTHING : value;
+                }
+                case DP_FUNC_CONCAT:
+                    return concatValues(evalBufferExpressionValues(records, arg.args, row, \column_cache));
                 case DP_OP_TERNARY:
                     return valueTruthy(evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache))
                         ? evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache)
@@ -939,12 +992,42 @@ public class ColumnarExpressionFilter {
         return values;
     }
 
-    #! Returns cached ColumnarResult column values for expression evaluation
-    private static auto getBufferColumnValues(auto records, string field, reference<hash<auto>> column_cache) {
+    #! Returns one cached ColumnarResult column value for expression evaluation
+    private static auto getBufferColumnValueAt(auto records, string field, int row,
+            reference<hash<auto>> column_cache) {
         if (!column_cache.hasKey(field)) {
-            column_cache{field} = records.getColumn(field);
+            hash<auto> info;
+            info.values = records.getColumn(field);
+            *hash<auto> schema = getColumnarResultFieldSchema(records, field);
+            if (isDenseTemporalSchema(schema)) {
+                info.schema = schema;
+            }
+            column_cache{field} = info;
         }
-        return column_cache{field};
+        hash<auto> info = column_cache{field};
+        auto value = info.values[row];
+        if (info.hasKey("schema")) {
+            return makeColumnarTemporalDate(value, info.schema);
+        }
+        return value;
+    }
+
+    #! Converts a dense temporal ColumnarResult row value back to Qore date semantics
+    private static auto makeColumnarTemporalDate(auto value, hash<auto> schema) {
+        if (!exists value || value.typeCode() == NT_NULL) {
+            return value;
+        }
+
+        int seconds = value / 1000000;
+        int microseconds = value % 1000000;
+        if (microseconds < 0) {
+            microseconds += 1000000;
+            --seconds;
+        }
+        if (schema.kind == "duration") {
+            return Qore::seconds(seconds) + Qore::microseconds(microseconds);
+        }
+        return localtime(seconds, microseconds);
     }
 
     #! Compares a vector against a scalar and returns a dense boolean mask
@@ -1509,6 +1592,88 @@ public class ColumnarExpressionFilter {
         throw "EXPRESSION-FILTER-ERROR", sprintf("operator %y cannot be used for arithmetic", op);
     }
 
+    #! Applies one numeric DPQL function to a value
+    private static auto applyNumericFunction(string op, auto value, int precision) {
+        switch (op) {
+            case DP_FUNC_ABS:
+                return abs(value);
+            case DP_FUNC_ROUND:
+                return round(value, precision);
+            case DP_FUNC_FLOOR:
+                return int(floor(value));
+            case DP_FUNC_CEIL:
+                return int(ceil(value));
+        }
+        throw "EXPRESSION-FILTER-ERROR", sprintf("operator %y cannot be used as a numeric function", op);
+    }
+
+    #! Applies one trimming DPQL function to a value
+    private static string applyTrimFunction(string op, auto value, *string chars) {
+        string text = value;
+        switch (op) {
+            case DP_FUNC_TRIM:
+                return trim(text, chars);
+            case DP_FUNC_LTRIM:
+                return ltrim(text, chars);
+            case DP_FUNC_RTRIM:
+                return rtrim(text, chars);
+        }
+        throw "EXPRESSION-FILTER-ERROR", sprintf("operator %y cannot be used as a trim function", op);
+    }
+
+    #! Applies one date-part DPQL function to a date value
+    private static int applyDatePartFunction(string op, date value) {
+        switch (op) {
+            case DP_FUNC_GET_YEAR:
+                return get_years(value);
+            case DP_FUNC_GET_MONTH:
+                return get_months(value);
+            case DP_FUNC_GET_DAY:
+                return get_days(value);
+            case DP_FUNC_GET_HOUR:
+                return get_hours(value);
+            case DP_FUNC_GET_MINUTE:
+                return get_minutes(value);
+            case DP_FUNC_GET_SECOND:
+                return get_seconds(value);
+        }
+        throw "EXPRESSION-FILTER-ERROR", sprintf("operator %y cannot be used as a date-part function", op);
+    }
+
+    #! Applies one scalar relative date/time DPQL function
+    private static date applyDateDurationFunction(string op, int value) {
+        switch (op) {
+            case DP_FUNC_YEARS:
+                return Qore::months(value * 12);
+            case DP_FUNC_MONTHS:
+                return Qore::months(value);
+            case DP_FUNC_WEEKS:
+                return Qore::days(value * 7);
+            case DP_FUNC_DAYS:
+                return Qore::days(value);
+            case DP_FUNC_HOURS:
+                return Qore::hours(value);
+            case DP_FUNC_MINUTES:
+                return Qore::minutes(value);
+            case DP_FUNC_SECONDS:
+                return Qore::seconds(value);
+            case DP_FUNC_MILLISECONDS:
+                return Qore::milliseconds(value);
+            case DP_FUNC_MICROSECONDS:
+                return Qore::microseconds(value);
+        }
+        throw "EXPRESSION-FILTER-ERROR", sprintf("operator %y cannot be used as a date duration function", op);
+    }
+
+    #! Concatenates expression values with DPQL concat() semantics
+    private static string concatValues(list<auto> values) {
+        string result;
+        foreach auto value in (values) {
+            result += string(value);
+        }
+        return result;
+    }
+
     #! Returns True if the operator is arithmetic and can be evaluated column-wise
     private static bool isArithmeticOperator(string op) {
         switch (op) {
@@ -1517,6 +1682,43 @@ public class ColumnarExpressionFilter {
             case DP_OP_MULT:
             case DP_OP_DIV:
             case DP_OP_MOD:
+                return True;
+        }
+        return False;
+    }
+
+    #! Returns True if the operator is a numeric DPQL function that can be evaluated column-wise
+    private static bool isNumericFunction(string op) {
+        switch (op) {
+            case DP_FUNC_ABS:
+            case DP_FUNC_ROUND:
+            case DP_FUNC_FLOOR:
+            case DP_FUNC_CEIL:
+                return True;
+        }
+        return False;
+    }
+
+    #! Returns True if the operator is a trimming DPQL function that can be evaluated column-wise
+    private static bool isTrimFunction(string op) {
+        switch (op) {
+            case DP_FUNC_TRIM:
+            case DP_FUNC_LTRIM:
+            case DP_FUNC_RTRIM:
+                return True;
+        }
+        return False;
+    }
+
+    #! Returns True if the operator extracts a date/time part from one value
+    private static bool isDatePartFunction(string op) {
+        switch (op) {
+            case DP_FUNC_GET_YEAR:
+            case DP_FUNC_GET_MONTH:
+            case DP_FUNC_GET_DAY:
+            case DP_FUNC_GET_HOUR:
+            case DP_FUNC_GET_MINUTE:
+            case DP_FUNC_GET_SECOND:
                 return True;
         }
         return False;
@@ -1855,8 +2057,35 @@ public class ColumnarExpressionFilter {
             case DP_OP_TO_LOWER:
             case DP_OP_TO_UPPER:
                 return arg.args.size() == 1 && isVectorizableValueArg(arg.args[0]);
+            case DP_FUNC_ABS:
+            case DP_FUNC_FLOOR:
+            case DP_FUNC_CEIL:
+                return arg.args.size() == 1 && isVectorizableValueArg(arg.args[0]);
+            case DP_FUNC_ROUND:
+                return arg.args.size() >= 1 && arg.args.size() <= 2
+                    && isVectorizableValueArg(arg.args[0])
+                    && (arg.args.size() == 1 || isScalarComparisonArg(arg.args[1]));
+            case DP_FUNC_TRIM:
+            case DP_FUNC_LTRIM:
+            case DP_FUNC_RTRIM:
+                return arg.args.size() >= 1 && arg.args.size() <= 2
+                    && isVectorizableValueArg(arg.args[0])
+                    && (arg.args.size() == 1 || isScalarComparisonArg(arg.args[1]));
+            case DP_FUNC_GET_YEAR:
+            case DP_FUNC_GET_MONTH:
+            case DP_FUNC_GET_DAY:
+            case DP_FUNC_GET_HOUR:
+            case DP_FUNC_GET_MINUTE:
+            case DP_FUNC_GET_SECOND:
+                return arg.args.size() == 1 && isVectorizableValueArg(arg.args[0]);
             case DP_FUNC_COALESCE:
                 return hasVectorizableValueArg(arg.args);
+            case DP_FUNC_NULLIF:
+                return arg.args.size() == 2 && allArgsVectorizableOrScalar(arg.args)
+                    && hasVectorizableRowDependentArg(arg.args);
+            case DP_FUNC_CONCAT:
+                return arg.args.size() >= 1 && allArgsVectorizableOrScalar(arg.args)
+                    && hasVectorizableRowDependentArg(arg.args);
             case DP_FUNC_INDEX:
                 return arg.args.size() == 2 && isVectorizableValueArg(arg.args[0])
                     && isScalarComparisonArg(arg.args[1]);
@@ -1985,8 +2214,76 @@ public class ColumnarExpressionFilter {
 
     #! Returns True if the argument can be used as a scalar comparison value
     private static bool isScalarComparisonArg(auto arg) {
-        return !(arg instanceof hash<DataProviderExpression>)
-            && !(arg instanceof hash<DataProviderFieldReference>);
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return False;
+        }
+        if (arg instanceof hash<DataProviderExpression>) {
+            return isScalarExpressionArg(cast<hash<DataProviderExpression>>(arg));
+        }
+        return True;
+    }
+
+    #! Returns True if an expression can be evaluated once without row data
+    private static bool isScalarExpressionArg(hash<DataProviderExpression> expr) {
+        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
+        if (op == DP_EXPR_VALUE) {
+            return expr.args.size() == 1 && isScalarComparisonArg(expr.args[0]);
+        }
+        if (isArithmeticOperator(op)) {
+            return expr.args.size() >= 2 && allArgsScalar(expr.args);
+        }
+        if (isNumericFunction(op) || isDateDurationFunction(op) || isDatePartFunction(op)) {
+            return expr.args.size() >= 1 && allArgsScalar(expr.args);
+        }
+        if (isTrimFunction(op) || op == DP_OP_TO_LOWER || op == DP_OP_TO_UPPER
+                || op == DP_FUNC_CONCAT || op == DP_FUNC_COALESCE) {
+            return expr.args.size() >= 1 && allArgsScalar(expr.args);
+        }
+        if (op == DP_FUNC_NULLIF) {
+            return expr.args.size() == 2 && allArgsScalar(expr.args);
+        }
+        if (isComparisonOperator(op)) {
+            return expr.args.size() == 2 && allArgsScalar(expr.args);
+        }
+        if (op == DP_OP_AND || op == DP_OP_OR) {
+            return expr.args.size() > 0 && allArgsScalar(expr.args);
+        }
+        if (op == DP_SEARCH_OP_NOT) {
+            return expr.args.size() == 1 && isScalarComparisonArg(expr.args[0]);
+        }
+        if (op == DP_SEARCH_OP_BETWEEN || op == DP_OP_RANGE) {
+            return expr.args.size() == 3 && allArgsScalar(expr.args);
+        }
+        if (op == DP_SEARCH_OP_IN || op == DP_OP_NOT_IN) {
+            return expr.args.size() >= 2 && allArgsScalar(expr.args);
+        }
+        if (op == DP_OP_TERNARY) {
+            return expr.args.size() == 3 && allArgsScalar(expr.args);
+        }
+        if (op == DP_FUNC_INDEX) {
+            return expr.args.size() == 2 && allArgsScalar(expr.args);
+        }
+        if (op == DP_FUNC_SLICE || op == DP_FUNC_KEY) {
+            return expr.args.size() >= 2 && allArgsScalar(expr.args);
+        }
+        return False;
+    }
+
+    #! Returns True if the operator builds a relative date/time scalar
+    private static bool isDateDurationFunction(string op) {
+        switch (op) {
+            case DP_FUNC_YEARS:
+            case DP_FUNC_MONTHS:
+            case DP_FUNC_WEEKS:
+            case DP_FUNC_DAYS:
+            case DP_FUNC_HOURS:
+            case DP_FUNC_MINUTES:
+            case DP_FUNC_SECONDS:
+            case DP_FUNC_MILLISECONDS:
+            case DP_FUNC_MICROSECONDS:
+                return True;
+        }
+        return False;
     }
 
     #! Unwraps serialized literal expression arguments
@@ -1994,7 +2291,112 @@ public class ColumnarExpressionFilter {
         if (arg.typeCode() == NT_HASH && arg.hasKey("value") && !arg.hasKey("field") && !arg.hasKey("exp")) {
             return arg.value;
         }
+        if (arg instanceof hash<DataProviderExpression> && isScalarExpressionArg(cast<hash<DataProviderExpression>>(arg))) {
+            return evalScalarExpressionValue(cast<hash<DataProviderExpression>>(arg));
+        }
         return arg;
+    }
+
+    #! Evaluates a row-independent expression once for vectorized comparisons
+    private static auto evalScalarExpressionValue(hash<DataProviderExpression> expr) {
+        string op = OperatorAliasMap{expr.exp} ?? expr.exp;
+        if (op == DP_EXPR_VALUE) {
+            return unwrapComparisonValue(expr.args[0]);
+        }
+        if (isArithmeticOperator(op)) {
+            auto result = unwrapComparisonValue(expr.args[0]);
+            for (int i = 1; i < expr.args.size(); ++i) {
+                result = applyArithmetic(op, result, unwrapComparisonValue(expr.args[i]));
+            }
+            return result;
+        }
+        if (isNumericFunction(op)) {
+            return applyNumericFunction(op, unwrapComparisonValue(expr.args[0]),
+                expr.args.size() > 1 ? unwrapComparisonValue(expr.args[1]) : 0);
+        }
+        if (isTrimFunction(op)) {
+            return applyTrimFunction(op, unwrapComparisonValue(expr.args[0]),
+                expr.args.size() > 1 ? unwrapComparisonValue(expr.args[1]) : NOTHING);
+        }
+        if (isDateDurationFunction(op)) {
+            return applyDateDurationFunction(op, unwrapComparisonValue(expr.args[0]));
+        }
+        if (isDatePartFunction(op)) {
+            return applyDatePartFunction(op, unwrapComparisonValue(expr.args[0]));
+        }
+        switch (op) {
+            case DP_OP_TO_LOWER: {
+                softstring value = unwrapComparisonValue(expr.args[0]);
+                return value.lwr();
+            }
+            case DP_OP_TO_UPPER: {
+                softstring value = unwrapComparisonValue(expr.args[0]);
+                return value.upr();
+            }
+            case DP_FUNC_COALESCE:
+                foreach auto arg in (expr.args) {
+                    auto value = unwrapComparisonValue(arg);
+                    if (exists value && value !== NULL) {
+                        return value;
+                    }
+                }
+                return NOTHING;
+            case DP_FUNC_NULLIF: {
+                auto value = unwrapComparisonValue(expr.args[0]);
+                return value == unwrapComparisonValue(expr.args[1]) ? NOTHING : value;
+            }
+            case DP_FUNC_CONCAT:
+                return concatValues((map unwrapComparisonValue($1), expr.args));
+            case DP_OP_TERNARY:
+                return valueTruthy(unwrapComparisonValue(expr.args[0]))
+                    ? unwrapComparisonValue(expr.args[1]) : unwrapComparisonValue(expr.args[2]);
+            case DP_FUNC_INDEX:
+                return applyIndexAccessorValue(unwrapComparisonValue(expr.args[0]), unwrapComparisonValue(expr.args[1]));
+            case DP_FUNC_SLICE:
+                return applySliceAccessorValue(unwrapComparisonValue(expr.args[0]),
+                    (map unwrapComparisonValue($1), expr.args[1..]));
+            case DP_FUNC_KEY: {
+                list<string> key_list = ();
+                foreach auto key in (expr.args[1..]) {
+                    push key_list, unwrapComparisonValue(key);
+                }
+                return AbstractDataProvider::applyKeyAccessorImpl(unwrapComparisonValue(expr.args[0]), key_list);
+            }
+            case DP_OP_AND:
+                foreach auto arg in (expr.args) {
+                    if (!valueTruthy(unwrapComparisonValue(arg))) {
+                        return False;
+                    }
+                }
+                return True;
+            case DP_OP_OR:
+                foreach auto arg in (expr.args) {
+                    if (valueTruthy(unwrapComparisonValue(arg))) {
+                        return True;
+                    }
+                }
+                return False;
+            case DP_SEARCH_OP_NOT:
+                return !valueTruthy(unwrapComparisonValue(expr.args[0]));
+            case DP_SEARCH_OP_BETWEEN: {
+                auto value = unwrapComparisonValue(expr.args[0]);
+                return compareScalar(value, DP_SEARCH_OP_GE, unwrapComparisonValue(expr.args[1]))
+                    && compareScalar(value, DP_SEARCH_OP_LE, unwrapComparisonValue(expr.args[2]));
+            }
+            case DP_OP_RANGE: {
+                auto value = unwrapComparisonValue(expr.args[0]);
+                return compareScalar(value, DP_SEARCH_OP_GE, unwrapComparisonValue(expr.args[1]))
+                    && compareScalar(value, DP_SEARCH_OP_LT, unwrapComparisonValue(expr.args[2]));
+            }
+            case DP_SEARCH_OP_IN:
+            case DP_OP_NOT_IN:
+                return evalInPredicate(unwrapComparisonValue(expr.args[0]),
+                    (map unwrapComparisonValue($1), expr.args[1..]), op == DP_OP_NOT_IN);
+        }
+        if (isComparisonOperator(op)) {
+            return compareScalar(unwrapComparisonValue(expr.args[0]), op, unwrapComparisonValue(expr.args[1]));
+        }
+        throw "EXPRESSION-FILTER-ERROR", sprintf("cannot evaluate scalar expression %y", expr.exp);
     }
 
     #! Inverts a comparison operator when the field reference is on the right side
