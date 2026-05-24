@@ -684,11 +684,39 @@ public class DataProviderActionCatalog {
                 hash<auto> existing_cmp = existing_app - AppActionFlags - ("disable_generic_api_call",);
                 hash<auto> incoming_cmp = app - AppActionFlags - ("disable_generic_api_call",);
                 if (existing_cmp == incoming_cmp) {
+                    # OR-merge the disable_generic_api_call opt-out: if EITHER caller sets the
+                    # flag, the cached app stays opted out (the more-restrictive wins). This
+                    # makes the dedupe path order-independent — without it, a duplicate
+                    # registration that adds the opt-out flag would be silently lost if a
+                    # previous registration didn't have it, and the framework-injected
+                    # make-api-call action would remain registered against the caller's intent.
+                    bool incoming_disable = app.disable_generic_api_call ?? False;
+                    bool existing_disable = existing_app.disable_generic_api_call ?? False;
+                    if (incoming_disable && !existing_disable) {
+                        appcache{app.name}.disable_generic_api_call = True;
+                        remove pending_generic_api_call_apps{app.name};
+                        # if the make-api-call action was already auto-registered against the
+                        # cached app (because the original registration didn't carry the opt-out),
+                        # undo that registration now that the caller has signalled the opt-out
+                        string mac_name = AbstractDataProvider::GenericApiCallActionName;
+                        if (app_actionmap{app.name}{mac_name}) {
+                            remove app_actionmap{app.name}{mac_name};
+                            remove top_actionmap{app.name + "/" + mac_name};
+                            if (existing_app.scheme && smap{existing_app.scheme}) {
+                                smap{existing_app.scheme} = map $1, smap{existing_app.scheme},
+                                    $1.action != mac_name;
+                            }
+                        }
+                    }
                     return;
                 }
                 throw "APP-ERROR", sprintf("Application %y already registered: %y", app.name, existing_app);
             }
-            remove initmap{app};
+            # initmap is keyed by app name (string), not by the DataProviderAppInfo hash —
+            # the previous `remove initmap{app}` was a silent no-op (Qore even warns about it
+            # at parse time: "cannot be converted to a string, will always evaluate to an empty
+            # string at runtime"), leaking pending init entries.
+            remove initmap{app.name};
 
             # add to cache
             appcache{app.name} = app;

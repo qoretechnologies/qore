@@ -90,6 +90,8 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             \testMultipartSanitization());
         addTestCase("make-api-call action output_type matches provider's response shape",
             \testActionOutputTypeMatchesProvider());
+        addTestCase("disable_generic_api_call opt-out OR-merges on duplicate registration",
+            \testOptOutMergesAcrossDuplicateRegistration());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -554,6 +556,53 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             "action output_type must NOT have the legacy response-body field");
         assertFalse(exists fields."status-code",
             "action output_type must NOT have the legacy status-code field");
+    }
+
+    testOptOutMergesAcrossDuplicateRegistration() {
+        # simulate the FtpPoller-before-FtpClientDataProvider scenario: first registration sets
+        # no opt-out (action gets auto-injected), then a duplicate registration adds the opt-out
+        # flag — the cached state should flip to opted-out AND the previously-auto-injected
+        # make-api-call action must be removed
+        string app_name = "TestOptOutMerge" + getpid();
+        hash<DataProviderAppInfo> base_app = <DataProviderAppInfo>{
+            "name": app_name,
+            "display_name": "Test Opt-Out Merge",
+            "short_desc": "test",
+            "desc": "test",
+            "scheme": "rest",
+            "logo": "fake-svg",
+            "logo_file_name": "x.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::ApiIntegration,),
+        };
+        try {
+            # 1st: register WITHOUT the opt-out — action gets auto-injected
+            DataProviderActionCatalog::registerApp(base_app);
+            *hash<string, hash<DataProviderActionInfo>> actions1 =
+                DataProviderActionCatalog::getActionHash(app_name);
+            assertTrue(exists actions1{"make-api-call"},
+                "first registration (no opt-out) should produce the auto-injected action");
+
+            # 2nd: re-register WITH the opt-out — must flip cached state AND remove the action
+            DataProviderActionCatalog::registerApp(
+                cast<hash<DataProviderAppInfo>>(base_app + {"disable_generic_api_call": True}));
+            *hash<string, hash<DataProviderActionInfo>> actions2 =
+                DataProviderActionCatalog::getActionHash(app_name);
+            assertFalse(exists actions2{"make-api-call"},
+                "second registration with opt-out should remove the previously-auto-injected action");
+
+            # 3rd: a follow-up duplicate WITHOUT the opt-out must NOT re-add the action — the
+            # opt-out is sticky once any caller sets it (OR-merge semantics)
+            DataProviderActionCatalog::registerApp(base_app);
+            *hash<string, hash<DataProviderActionInfo>> actions3 =
+                DataProviderActionCatalog::getActionHash(app_name);
+            assertFalse(exists actions3{"make-api-call"},
+                "subsequent registration without opt-out must NOT re-add the action — opt-out is sticky");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "APP-ERROR") {
+                rethrow;
+            }
+        }
     }
 
     testIncludeDebugRedacted() {
