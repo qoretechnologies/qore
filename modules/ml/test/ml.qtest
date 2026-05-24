@@ -27,6 +27,8 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/ml"
+
 %requires QUnit
 %requires FsUtil
 %requires ml
