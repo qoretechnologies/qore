@@ -193,7 +193,25 @@ public hashdecl EmbedderConfig {
     #! API key for HTTP-based embedders
     *string api_key;
     #! Output embedding dimension (where the backend supports it)
+    /** When set and smaller than the model's native output dimension, asymmetric/
+        Matryoshka-capable embedders (e.g. SGLang-served Qwen3-Embedding) truncate
+        the native vector to this length and L2-renormalize it (client-side MRL).
+    */
     *int dimension;
+    #! Instruction prefix prepended to \b query texts (asymmetric / instruction-tuned models)
+    /** Instruction-tuned embedders (e.g. Qwen3-Embedding, E5, GTE) expect a
+        task instruction on the query side only; the verbatim prefix is prepended
+        to each text encoded with \c input_type "query" (see
+        @ref AbstractEmbedder::encodeQuery()).  Leave unset for symmetric models.
+        Example (Qwen3): \c "Instruct: Given a user request, retrieve the operation that fulfills it\nQuery:"
+    */
+    *string query_instruction;
+    #! Instruction prefix prepended to \b document/passage texts (asymmetric models)
+    /** Usually unset; some models (e.g. E5) want a \c "passage: " prefix on the
+        document side.  Prepended to each text encoded with \c input_type
+        "document" (see @ref AbstractEmbedder::encodeDocuments()).
+    */
+    *string document_instruction;
     #! Batch size for bulk encoding
     int batch_size = 32;
     #! Default request timeout for HTTP-based embedders (per-call \c opts override takes precedence)
@@ -453,6 +471,64 @@ public class AbstractEmbedder {
     #! Returns the model name in use (informational)
     *string getModel() {
         return NOTHING;
+    }
+
+    #! Encodes a query, signalling the query role for asymmetric/instruction-tuned models
+    /** Forces \c input_type "query" in the per-call opts and delegates to
+        @ref encode().  Asymmetric embedders (e.g. SGLang-served Qwen3-Embedding)
+        prepend @ref EmbedderConfig::query_instruction; symmetric embedders ignore
+        the hint and behave exactly like @ref encode().  The pipeline calls this on
+        the query side so query/document asymmetry is honored end-to-end.
+
+        @param text the query text
+        @param opts optional per-call options (merged; \c input_type is forced to "query")
+
+        @return a dense vector of length @ref getDimension()
+    */
+    list<float> encodeQuery(string text, *hash<auto> opts) {
+        return encode(text, (opts ?? {}) + {"input_type": "query"});
+    }
+
+    #! Encodes documents/passages, signalling the document role for asymmetric models
+    /** Forces \c input_type "document" in the per-call opts and delegates to
+        @ref encodeBatch().  Asymmetric embedders prepend
+        @ref EmbedderConfig::document_instruction (usually unset); symmetric
+        embedders ignore the hint and behave exactly like @ref encodeBatch().
+
+        @param texts the document/passage texts
+        @param opts optional per-call options (merged; \c input_type is forced to "document")
+
+        @return a list of vectors in input order
+    */
+    list<list<float>> encodeDocuments(list<string> texts, *hash<auto> opts) {
+        return encodeBatch(texts, (opts ?? {}) + {"input_type": "document"});
+    }
+
+    #! Truncates a vector to \a dim and L2-renormalizes it (Matryoshka / MRL output reduction)
+    /** Helper for Matryoshka-capable subclasses that emit a larger native
+        dimension than @ref EmbedderConfig::dimension requests.  A no-op when
+        \a dim is @ref NOTHING or not smaller than the vector length.
+
+        @param vec the native vector
+        @param dim the desired output dimension (@ref EmbedderConfig::dimension)
+
+        @return the truncated, renormalized vector (or \a vec unchanged)
+    */
+    private list<float> truncateAndRenormalize(list<float> vec, *int dim) {
+        if (!dim || dim >= vec.size()) {
+            return vec;
+        }
+        list<float> t = vec[0..(dim - 1)];
+        float sumsq = 0.0;
+        foreach float x in (t) {
+            sumsq += x * x;
+        }
+        float n = sqrt(sumsq);
+        list<float> out = ();
+        foreach float x in (t) {
+            push out, n > 0.0 ? x / n : x;
+        }
+        return out;
     }
 
     #! Classifies a backend exception as a permanent model/configuration failure

@@ -84,6 +84,10 @@ class SGLangEmbedderTest inherits QUnit::Test {
             \testNativeShapeMismatch());
         addTestCase("api_key forwarded as Bearer auth",
             \testApiKeyForwarded());
+        addTestCase("encodeQuery prepends query_instruction; documents/plain do not",
+            \testAsymmetricInstructionPrefix());
+        addTestCase("dimension truncates+renormalizes the native vector (MRL)",
+            \testMrlTruncation());
         set_return_value(main());
     }
 
@@ -197,6 +201,59 @@ class SGLangEmbedderTest inherits QUnit::Test {
         assertEq(3, handler.requests.size());
         assertEq("/embed", handler.requests[2].path);
         assertEq(("texts": ("second",)), handler.requests[2].body);
+    }
+
+    # Asymmetric/instruction-tuned models (e.g. Qwen3-Embedding): encodeQuery() must
+    # prepend EmbedderConfig::query_instruction; encodeDocuments() and plain
+    # encodeBatch() must NOT (no document_instruction set) — backward compatible.
+    testAsymmetricInstructionPrefix() {
+        checkModule();
+        installHandler({
+            "/v1/embeddings": {
+                "code": 200,
+                "body": {"data": ({"index": 0, "embedding": (1.0, 2.0, 3.0)},)},
+            },
+        });
+        hash<EmbedderConfig> cfg = <EmbedderConfig>{
+            "backend": "sglang",
+            "url": "http://localhost:" + port,
+            "model": "qwen3-embedding-4b",
+            "query_instruction": "Instruct: do X\nQuery:",
+        };
+        SGLangEmbedder emb(cfg);
+        emb.encodeQuery("how many users");                 # requests[0]
+        emb.encodeDocuments(("list users",));              # requests[1]
+        emb.encodeBatch(("plain",));                       # requests[2]
+        assertEq(("Instruct: do X\nQuery:how many users",), handler.requests[0].body.input);
+        assertEq(("list users",), handler.requests[1].body.input);
+        assertEq(("plain",), handler.requests[2].body.input);
+    }
+
+    # config.dimension smaller than the native vector triggers client-side
+    # Matryoshka (MRL) truncation + L2-renormalization; getDimension() reports it.
+    testMrlTruncation() {
+        checkModule();
+        installHandler({
+            "/v1/embeddings": {
+                "code": 200,
+                "body": {"data": ({"index": 0, "embedding": (3.0, 4.0, 9.0, 12.0)},)},
+            },
+        });
+        hash<EmbedderConfig> cfg = <EmbedderConfig>{
+            "backend": "sglang",
+            "url": "http://localhost:" + port,
+            "model": "qwen3-embedding-4b",
+            "dimension": 2,
+        };
+        SGLangEmbedder emb(cfg);
+        list<list<float>> rv = emb.encodeBatch(("x",));
+        assertEq(2, rv[0].size());                         # truncated 4 -> 2
+        assertEq(2, emb.getDimension());                   # reports configured dim
+        # first 2 of (3,4) -> L2 norm 5 -> (0.6, 0.8)
+        assertTrue(abs(rv[0][0] - 0.6) < 0.0001);
+        assertTrue(abs(rv[0][1] - 0.8) < 0.0001);
+        float norm = sqrt(rv[0][0] * rv[0][0] + rv[0][1] * rv[0][1]);
+        assertTrue(abs(norm - 1.0) < 0.0001);              # renormalized to unit length
     }
 
     testNativeEmbeddingsShape() {
