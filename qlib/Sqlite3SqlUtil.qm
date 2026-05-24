@@ -717,6 +717,10 @@ auto v = c.name;
                     "qore": Type::Int,
                     "ai": True,
                 },
+                "int": {
+                    "qore": Type::Int,
+                    "ai": True,
+                },
                 "text": {
                     "qore": Type::String,
                 },
@@ -1128,8 +1132,8 @@ auto v = c.name;
         }
 
         private AbstractColumn addColumnImpl(string cname, hash<auto> opt, bool nullable = True) {
-            return new Sqlite3Column(cname, opt.native_type, opt.qore_type, opt.size, nullable, opt.default_value,
-                opt.comment, 0);
+            return new Sqlite3Column(cname, opt.native_type, opt.qore_type, nullable, opt.default_value,
+                opt.auto_increment ?? False, opt.pk ?? False);
         }
 
         private setPrimaryKeyUnlocked(AbstractPrimaryKey pk) {

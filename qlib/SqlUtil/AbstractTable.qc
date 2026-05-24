@@ -2730,6 +2730,11 @@ string sql = table.getDropTriggerSql("trig_mytable");
 
             # get native type description
             th = otm{opt.native_type};
+            if (!th) {
+                throw "COLUMN-ERROR", sprintf("%s column %y: native type %y mapped from qore type %y is not "
+                    "registered in the native type map (valid values: %y)", getDesc(), cname, opt.native_type,
+                    opt.qore_type, otm.keys());
+            }
 
             # reset qore type from native type
             opt.qore_type = th.qore;
