@@ -159,7 +159,7 @@ DataFrame/DataProvider workloads.
 | core DBI fallback | compatibility | compatibility | conversion only | Functional baseline for all drivers. |
 | `module-pgsql` | yes | yes | yes for numeric/bool/string-compatible columns | Primary benchmarked native path. |
 | `module-mysql` | yes | yes | partial, via typed column hash conversion | Uses driver result metadata and `ColumnarResult::fromColumnHash()`. |
-| `module-oracle` | yes | yes | yes for integer, floating-point, and integer-like `NUMBER` columns | Native OCI columnar fetch builds packed buffers where safe; arbitrary numeric, string, date, binary, and object columns use the standard columnar conversion path. |
+| `module-oracle` | yes | yes | yes for integer, floating-point, and safe `NUMBER(precision,scale)` columns | Native OCI columnar fetch builds packed buffers where safe, including decimal128 for fitting `NUMBER` metadata; unconstrained numeric, string, date, binary, and object columns use the standard columnar conversion path. |
 | `module-odbc` | yes | yes | partial, via typed column hash conversion | Native DBI methods are registered. |
 | `module-sqlite3` | yes | yes | conversion only | Native DBI methods are registered; values are shaped through libqore columnar conversion. |
 | `module-sybase` / freetds | yes | yes | conversion only | Native DBI methods are registered; values are shaped through libqore columnar conversion. |
