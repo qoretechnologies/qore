@@ -161,7 +161,7 @@ DataFrame/DataProvider workloads.
 | `module-mysql` | yes | yes | yes for integer, floating-point, and safe `DECIMAL(p,s)` / `NUMERIC(p,s)` columns | Native MySQL columnar fetch builds packed int64, float64, and decimal128 buffers where safe; string, date/time, binary, and oversized numeric columns use the standard columnar conversion path. |
 | `module-oracle` | yes | yes | yes for integer, floating-point, and safe `NUMBER(precision,scale)` columns | Native OCI columnar fetch builds packed buffers where safe, including decimal128 for fitting `NUMBER` metadata; unconstrained numeric, string, date, binary, and object columns use the standard columnar conversion path. |
 | `module-odbc` | yes | yes | partial, via typed column hash conversion | Native DBI methods are registered. |
-| `module-sqlite3` | yes | yes | conversion only | Native DBI methods are registered; values are shaped through libqore columnar conversion. |
+| `module-sqlite3` | yes | yes | yes for homogeneous runtime integer and floating-point columns | Native SQLite columnar fetch builds packed buffers for columns whose non-null row values keep a consistent numeric storage class; mixed-type, text, blob, and all-null columns use the standard columnar conversion path. |
 | `module-sybase` / freetds | yes | yes | conversion only | Native DBI methods are registered; values are shaped through libqore columnar conversion. |
 | `module-jni` / JDBC | yes | yes | yes for JDBC fixed-width numeric, boolean, string, and decimal128 columns | Builds remain compatible with qore develop through CMake feature probes. |
 
