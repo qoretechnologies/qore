@@ -504,8 +504,39 @@ public class SGLangEmbedder inherits AbstractEmbedder {
         if (!texts) {
             return ();
         }
-        SGLangRestClient::SGLangRestClientIo client = pickRestClient(opts);
+        # asymmetric / instruction-tuned models (e.g. Qwen3-Embedding): prepend the
+        # role-specific instruction.  encodeQuery()/encodeDocuments() set input_type;
+        # symmetric callers leave it unset, so no prefix is applied (backward compatible).
+        *string instr = (opts.input_type == "query")
+            ? config.query_instruction
+            : ((opts.input_type == "document") ? config.document_instruction : NOTHING);
+        list<string> in_texts = texts;
+        if (instr.val()) {
+            in_texts = ();
+            foreach string t in (texts) {
+                push in_texts, instr + t;
+            }
+        }
 
+        SGLangRestClient::SGLangRestClientIo client = pickRestClient(opts);
+        list<list<float>> raw = encodeRaw(client, in_texts);
+
+        # client-side Matryoshka (MRL) reduction to the configured output dimension
+        # when the model emits a larger native vector (SGLang has no server-side
+        # 'dimensions' param); getDimension() already reports config.dimension
+        if (config.dimension && raw && raw[0].size() > config.dimension) {
+            list<list<float>> truncated = ();
+            foreach list<float> v in (raw) {
+                push truncated, truncateAndRenormalize(v, config.dimension);
+            }
+            return truncated;
+        }
+        return raw;
+    }
+
+    #! Issues the SGLang embedding request (OpenAI-compat or native endpoint, auto-detected)
+    private list<list<float>> encodeRaw(
+            SGLangRestClient::SGLangRestClientIo client, list<string> texts) {
         switch (endpoint_style) {
             case StyleOpenAi:
                 return encodeBatchOpenAi(client, texts);
