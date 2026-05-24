@@ -775,6 +775,24 @@ static QoreBufferElementType arrowTypeToBufferElementType(const std::shared_ptr<
     }
 }
 
+static bool arrowTypeUsesMicrosecondInt64Buffer(const std::shared_ptr<arrow::DataType>& type) {
+    switch (type->id()) {
+        case arrow::Type::TIMESTAMP:
+            return std::static_pointer_cast<arrow::TimestampType>(type)->unit() == arrow::TimeUnit::MICRO;
+        case arrow::Type::DURATION:
+            return std::static_pointer_cast<arrow::DurationType>(type)->unit() == arrow::TimeUnit::MICRO;
+        default:
+            return false;
+    }
+}
+
+static QoreBufferElementType arrowTypeToDenseBufferElementType(const std::shared_ptr<arrow::DataType>& type) {
+    if (arrowTypeUsesMicrosecondInt64Buffer(type)) {
+        return QoreBufferElementType::Int64;
+    }
+    return arrowTypeToBufferElementType(type);
+}
+
 static std::string arrowTimeUnitName(arrow::TimeUnit::type unit) {
     switch (unit) {
         case arrow::TimeUnit::SECOND:
@@ -832,7 +850,7 @@ static QoreColumnarTypeDescriptor arrowTypeToColumnarDescriptor(const std::strin
     desc.name = name;
     desc.nullable = nullable;
     desc.native_type = type->ToString();
-    desc.buffer_type = arrowTypeToBufferElementType(type);
+    desc.buffer_type = arrowTypeToDenseBufferElementType(type);
 
     switch (type->id()) {
         case arrow::Type::BOOL:
@@ -1050,7 +1068,11 @@ static arrow::FieldVector columnarChildrenToArrowFields(const QoreColumnarTypeDe
 
 static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
         const QoreColumnarTypeDescriptor& desc, ExceptionSink* xsink) {
-    if (desc.buffer_type != QoreBufferElementType::Invalid) {
+    if (desc.buffer_type != QoreBufferElementType::Invalid
+            && desc.kind != QoreColumnarTypeKind::Date
+            && desc.kind != QoreColumnarTypeKind::Timestamp
+            && desc.kind != QoreColumnarTypeKind::Duration
+            && desc.kind != QoreColumnarTypeKind::Decimal128) {
         auto type = bufferElementTypeToArrowType(desc.buffer_type);
         if (type) {
             return type;
@@ -1737,7 +1759,7 @@ static QoreBufferNode* tryArrowFixedWidthColumnToDenseBuffer(
         return nullptr;
     }
 
-    QoreBufferElementType element_type = arrowTypeToBufferElementType(arr->type());
+    QoreBufferElementType element_type = arrowTypeToDenseBufferElementType(arr->type());
     if (element_type == QoreBufferElementType::Invalid) {
         return nullptr;
     }
@@ -1796,7 +1818,9 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
         return nullptr;
     }
     if (dense_buffer) {
-        auto cd = buildColumnDataFromBuffer(*dense_buffer, xsink);
+        auto cd = arrowTypeUsesMicrosecondInt64Buffer(arr->type())
+            ? buildColumnDataFromTemporalBuffer(*dense_buffer, xsink)
+            : buildColumnDataFromBuffer(*dense_buffer, xsink);
         if (cd) {
             setArrowColumnarSchema(*cd, field, xsink);
         }
@@ -1957,10 +1981,23 @@ static std::shared_ptr<arrow::Array> denseBufferToArrowArray(const ColumnData& c
         return nullptr;
     }
 
-    QoreBufferElementType expected = arrowTypeToBufferElementType(type);
+    QoreBufferElementType expected = arrowTypeToDenseBufferElementType(type);
     QoreBufferElementType actual = cd.dense_buffer_type;
     if (expected == QoreBufferElementType::Invalid || actual != expected
-            || actual == QoreBufferElementType::String || actual == QoreBufferElementType::Decimal128) {
+            || actual == QoreBufferElementType::String) {
+        return nullptr;
+    }
+    if (actual == QoreBufferElementType::Decimal128) {
+        if (type->id() != arrow::Type::DECIMAL128) {
+            return nullptr;
+        }
+        auto decimal_type = std::static_pointer_cast<arrow::Decimal128Type>(type);
+        if (cd.dense_buffer->getDecimalPrecision() != decimal_type->precision()
+                || cd.dense_buffer->getDecimalScale() != decimal_type->scale()) {
+            return nullptr;
+        }
+    } else if (actual == QoreBufferElementType::Int64 && type->id() != arrow::Type::INT64
+            && !arrowTypeUsesMicrosecondInt64Buffer(type)) {
         return nullptr;
     }
 
@@ -2274,6 +2311,14 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             case ColumnType::DATE: {
                 auto ts_type = arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
                 fields.push_back(arrow::field(col.name, ts_type));
+                auto dense_arr = denseBufferToArrowArray(cd, ts_type, col.name, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (dense_arr) {
+                    arrays.push_back(std::make_shared<arrow::ChunkedArray>(dense_arr));
+                    break;
+                }
                 arrow::TimestampBuilder builder(ts_type, pool);
                 if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
                         "error reserving Arrow timestamp array", col.name)) {

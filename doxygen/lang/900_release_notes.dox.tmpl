@@ -1980,7 +1980,10 @@ foreach string module_name in (registry.getProcessModules()) {
         statistics-based row-group pruning and exact fallback filtering,
         reader batch/thread controls, and writer options for compression,
         row-group size, dictionary encoding, statistics, threaded column
-        writes, and Arrow schema metadata storage
+        writes, and Arrow schema metadata storage; fixed-width primitive,
+        decimal128, and microsecond timestamp/duration columns use dense
+        Arrow-compatible buffers without copying value storage when metadata
+        and null bitmaps allow it
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
       - ML integration: toMatrix, toVector, fromMatrix for zero-overhead ML algorithm feeding
       - describe() for per-column descriptive statistics (mean, std, quartiles, unique count)

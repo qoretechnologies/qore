@@ -2345,6 +2345,34 @@ sub invalid_dataframe_api() {
         assertEq(2, decimal_parquet_schema[0].scale,
             "Parquet preserves decimal scale");
 
+        date parquet_ts0 = 1969-12-31T23:59:59.123456Z;
+        date parquet_ts2 = 2026-01-03T12:30:00.654321Z;
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "created_at": (parquet_ts0, NOTHING, parquet_ts2),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": True},
+        });
+        DataFrame::DataFrame temporal_df = DataFrame::DataFrame::fromColumnarResult(temporal_columns);
+        temporal_df.writeParquet(tmp_path);
+        DataFrame::DataFrame temporal_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(get_epoch_microseconds(parquet_ts0),
+            get_epoch_microseconds(temporal_parquet_df.getColumn("created_at")[0]),
+            "Parquet preserves dense timestamp values");
+        assertEq(NOTHING, temporal_parquet_df.getColumn("created_at")[1],
+            "Parquet preserves dense timestamp null values");
+        assertEq(get_epoch_microseconds(parquet_ts2),
+            get_epoch_microseconds(temporal_parquet_df.getColumn("created_at")[2]),
+            "Parquet preserves later dense timestamp values");
+        assertEq("buffer<*int64>", temporal_parquet_df.getColumnBuffer("created_at").fullType(),
+            "Parquet preserves timestamp columns as dense microsecond buffers");
+        list<hash<auto>> temporal_parquet_schema = temporal_parquet_df.toColumnarResult().schemaV2();
+        assertEq("timestamp", temporal_parquet_schema[0].kind,
+            "Parquet preserves timestamp logical type");
+        assertEq("int64", temporal_parquet_schema[0].buffer_type,
+            "Parquet schema metadata preserves timestamp dense storage");
+        assertEq("us", temporal_parquet_schema[0].time_unit,
+            "Parquet schema metadata preserves timestamp microsecond units");
+
         DataFrame::DataFrame null_dense_df({
             "id": new buffer<*int64>((NOTHING, 2, NOTHING, 4)),
             "flag": new buffer<*bool>((True, NOTHING, False, NOTHING)),
@@ -2485,6 +2513,56 @@ sub invalid_dataframe_api() {
             "Arrow IPC preserves decimal precision");
         assertEq(2, decimal_ipc_schema[0].scale,
             "Arrow IPC preserves decimal scale");
+
+        date ipc_ts0 = 1969-12-31T23:59:59.123456Z;
+        date ipc_ts2 = 2026-01-03T12:30:00.654321Z;
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "created_at": (ipc_ts0, NOTHING, ipc_ts2),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": True},
+        });
+        DataFrame::DataFrame temporal_df = DataFrame::DataFrame::fromColumnarResult(temporal_columns);
+        DataFrame::DataFrame temporal_ipc_df = DataFrame::DataFrame::fromArrowIpc(temporal_df.toArrowIpc());
+        assertEq(get_epoch_microseconds(ipc_ts0), get_epoch_microseconds(temporal_ipc_df.getColumn("created_at")[0]),
+            "Arrow IPC preserves dense timestamp values");
+        assertEq(NOTHING, temporal_ipc_df.getColumn("created_at")[1],
+            "Arrow IPC preserves dense timestamp null values");
+        assertEq(get_epoch_microseconds(ipc_ts2), get_epoch_microseconds(temporal_ipc_df.getColumn("created_at")[2]),
+            "Arrow IPC preserves later dense timestamp values");
+        assertEq("buffer<*int64>", temporal_ipc_df.getColumnBuffer("created_at").fullType(),
+            "Arrow IPC preserves timestamp columns as dense microsecond buffers");
+        list<hash<auto>> temporal_ipc_schema = temporal_ipc_df.toColumnarResult().schemaV2();
+        assertEq("timestamp", temporal_ipc_schema[0].kind,
+            "Arrow IPC preserves timestamp logical type");
+        assertEq("int64", temporal_ipc_schema[0].buffer_type,
+            "Arrow IPC schema metadata preserves timestamp dense storage");
+        assertEq("us", temporal_ipc_schema[0].time_unit,
+            "Arrow IPC schema metadata preserves timestamp microsecond units");
+
+        date ipc_dur0 = 5s + microseconds(123);
+        date ipc_dur2 = 1m + 2s + microseconds(456789);
+        ColumnarResult duration_columns = ColumnarResult::fromColumnHash({
+            "elapsed": (ipc_dur0, NOTHING, ipc_dur2),
+        }, {
+            "elapsed": {"native_type": "interval", "nullable": True},
+        });
+        DataFrame::DataFrame duration_df = DataFrame::DataFrame::fromColumnarResult(duration_columns);
+        DataFrame::DataFrame duration_ipc_df = DataFrame::DataFrame::fromArrowIpc(duration_df.toArrowIpc());
+        assertEq(get_duration_microseconds(ipc_dur0), get_duration_microseconds(duration_ipc_df.getColumn("elapsed")[0]),
+            "Arrow IPC preserves dense duration values");
+        assertEq(NOTHING, duration_ipc_df.getColumn("elapsed")[1],
+            "Arrow IPC preserves dense duration null values");
+        assertEq(get_duration_microseconds(ipc_dur2), get_duration_microseconds(duration_ipc_df.getColumn("elapsed")[2]),
+            "Arrow IPC preserves later dense duration values");
+        assertEq("buffer<*int64>", duration_ipc_df.getColumnBuffer("elapsed").fullType(),
+            "Arrow IPC preserves duration columns as dense microsecond buffers");
+        list<hash<auto>> duration_ipc_schema = duration_ipc_df.toColumnarResult().schemaV2();
+        assertEq("duration", duration_ipc_schema[0].kind,
+            "Arrow IPC preserves duration logical type");
+        assertEq("int64", duration_ipc_schema[0].buffer_type,
+            "Arrow IPC schema metadata preserves duration dense storage");
+        assertEq("us", duration_ipc_schema[0].time_unit,
+            "Arrow IPC schema metadata preserves duration microsecond units");
 
         DataFrame::DataFrame null_dense_df({
             "id": new buffer<*int64>((NOTHING, 2, NOTHING, 4)),

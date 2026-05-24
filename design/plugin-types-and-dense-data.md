@@ -186,7 +186,7 @@ features:
 | Feature | Status | Rationale |
 |---------|--------|-----------|
 | `buffer<string>` / `buffer<*string>` | implemented | Uses offsets + UTF-8 byte storage in `QoreBufferNode` with optional validity bitmap. |
-| `buffer<decimal128>` | implemented | Uses fixed-width signed decimal128 storage with precision/scale metadata and overflow checks. |
+| `buffer<decimal128>` | implemented | Uses fixed-width signed decimal128 storage with precision/scale metadata and overflow checks; Arrow IPC and Parquet import/export can reuse the fixed-width value buffer when precision and scale metadata match. |
 | nested buffers / array columns | implemented through recursive column schemas | Nested Arrow/Parquet columns keep recursive schema metadata and reuse immutable Arrow chunked arrays for round trips; direct `buffer<list<...>>` syntax is intentionally outside the primitive `buffer<T>` contract. |
 | GPU/device buffers | implemented as provider-owned external storage | `QoreBufferNode` exposes provider-neutral device descriptors, explicit copy-to-host callbacks, Qore storage-inspection methods, and detach-on-write semantics. |
 | native JDBC packed buffers | implemented for host buffers | module-jni constructs packed Qore buffers for fixed-width numeric, boolean, string, and decimal128 columns and uses Java-side primitive-array batch extraction when built with the new qore feature probes; unsupported shapes fall back to typed getter conversion. |
@@ -200,7 +200,8 @@ Short-term mappings remain:
   in `ColumnarResult` when columnar metadata or inferred values identify a
   temporal column. Schema metadata marks the logical kind as `date`,
   `timestamp`, or `duration`, stores microsecond time units, and row/list
-  materialization restores Qore `date` values.
+  materialization restores Qore `date` values. Arrow IPC and Parquet can reuse
+  the value buffer directly for microsecond timestamp and duration arrays.
 - SQL `NUMERIC` / `DECIMAL` values use `buffer<decimal128>` when precision and
   scale fit the fixed-width decimal representation; otherwise they use
   `list<number>` with decimal schema metadata.
