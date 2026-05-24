@@ -222,7 +222,10 @@ The implemented hot paths are:
   expressions, including scalar comparisons, expression-to-expression
   comparisons, structured strict equality/inequality, truthiness, null checks,
   `between`, `inRange`, `in` / `notIn`, string predicates, LIKE, and regular
-  expression predicates
+  expression predicates; the dense-mask path also covers `containsAny`,
+  `listContains`, `listContainsAny`, list index/slice accessors, hash key
+  accessors, and structured ternary expressions where the same generic
+  expression semantics can be preserved without row materialization
 - shaped DataProvider analytics outputs for the full
   `AbstractAnalyticsProcessor` family, including running statistics, moving
   average, trend, anomaly, percentile, histogram, rate-of-change, EWMA control
@@ -249,8 +252,9 @@ benchmark showing that the added specialization pays for itself. Good future
 targets are:
 
 - more DPQL expression forms lowered to dense masks when they can preserve
-  generic expression semantics without hidden row materialization, such as
-  conditional, list/hash accessor, and list-membership forms
+  generic expression semantics without hidden row materialization; conditional,
+  list/hash accessor, and list-membership forms are covered, so future work
+  should focus on less common expression families with measured workloads
 - additional type-specific DBI dense mappings, such as driver-native
   high-precision numeric representations where they can be exposed without
   lossy conversion

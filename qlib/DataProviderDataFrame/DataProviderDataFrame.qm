@@ -109,7 +109,8 @@ pipeline.waitDone();
     filter-and-aggregate pipelines can stay columnar until terminal output records are emitted.  The
     \c DataFrameDataProvider also supports DPQL search expressions directly; structured expressions and DPQL string
     searches use the same columnar filter engine as pipeline filters, including supported computed comparisons,
-    \c between, \c in / \c notIn, structured strict equality/inequality, string predicates, null checks, and
+    \c between, \c in / \c notIn, structured strict equality/inequality, \c containsAny and other string
+    predicates, list membership predicates, list/hash accessors, ternary computed values, null checks, and
     boolean combinations.
 
     @section dataproviderdataframe_relnotes DataProviderDataFrame Release Notes
@@ -124,7 +125,8 @@ pipeline.waitDone();
     - DataFrame searches now support DPQL strings and \c hash<DataProviderExpression> values directly; bulk DPQL
       searches preserve \c DataFrameBlock shape through \c getShapedValue() and share the DataProvider dense-mask
       lowering support for computed comparisons, \c between, \c in / \c notIn, structured strict
-      equality/inequality, string predicates, null checks, and boolean combinations
+      equality/inequality, \c containsAny and other string predicates, list membership predicates,
+      list/hash accessors, ternary computed values, null checks, and boolean combinations
     - DataFrames submitted to a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" can remain in
       \c DataFrameBlock shape through DataFrame-aware processors such as
       @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and

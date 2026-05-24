@@ -145,7 +145,8 @@
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
       \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
       autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
-      expression-to-expression predicates such as \c @amount \c >= \c @target, native string predicates, and
+      expression-to-expression predicates such as \c @amount \c >= \c @target, native string predicates including
+      \c containsAny, list membership predicates, list/hash accessors, structured ternary values, and
       ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options hash
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
@@ -2490,8 +2491,9 @@ foreach string module_name in (registry.getProcessModules()) {
         scalar comparisons, expression-to-expression comparisons, structured
         strict equality/inequality, truthy field checks, computed \c between
         and \c in / \c not \c in forms, \c inRange, null checks, temporal date
-        comparisons, selected string predicates, and BufferColumns \c like,
-        \c =~, and \c !~ predicates; unsupported expressions fall back to
+        comparisons, selected string predicates including \c containsAny, list
+        membership predicates, list/hash accessors, structured ternary values,
+        and BufferColumns \c like, \c =~, and \c !~ predicates; unsupported expressions fall back to
         generic row semantics
       - QoreGroupByProcessor preserves BufferColumns output for ColumnarResult
         inputs when used through shape-aware pipeline flushing

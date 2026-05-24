@@ -1154,6 +1154,98 @@ sub invalid_dataframe_api() {
         assertEq(("Alice", "Bob"), string_not_filtered.getColumn("name"),
             "DataFrameBlock vectorized string predicates compose with NOT masks");
 
+        QoreFilterRecordsProcessor contains_any_proc({
+            "dpql_where": 'containsAny(@name, "li", "av")',
+        });
+        DataFrame::DataFrame contains_any_filtered = contains_any_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Dave"), contains_any_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports containsAny string masks");
+
+        DataFrame::DataFrame nested_df(
+            ({"name": "Alice", "amount": 90, "tags": ("vip", "active"), "scores": (95, 91),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"name": "Bob", "amount": 220, "tags": ("trial",), "scores": (88, 84),
+                "payload": {"region": "US", "tier": "silver"}},
+             {"name": "Carol", "amount": 180, "tags": ("vip", "closed"), "scores": (92, 90),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"name": "Dave", "amount": 125, "tags": ("standard",), "scores": (85, 86),
+                "payload": {"region": "APAC", "tier": "bronze"}}));
+
+        QoreFilterRecordsProcessor list_contains_proc({
+            "dpql_where": 'listContains(@tags, "vip")',
+        });
+        DataFrame::DataFrame list_contains_filtered = list_contains_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), list_contains_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports listContains predicates");
+
+        QoreFilterRecordsProcessor list_contains_any_proc({
+            "dpql_where": 'listContainsAny(@tags, "trial", "standard")',
+        });
+        DataFrame::DataFrame list_contains_any_filtered = list_contains_any_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Bob", "Dave"), list_contains_any_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports listContainsAny predicates");
+
+        QoreFilterRecordsProcessor index_proc({
+            "dpql_where": '@scores[0] >= 90',
+        });
+        DataFrame::DataFrame index_filtered = index_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), index_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports list index accessors");
+
+        hash<DataProviderExpression> slice_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_FUNC_SLICE,
+                    "args": (
+                        <DataProviderFieldReference>{"field": "scores"},
+                        <DataProviderRangeSpec>{"start": 0, "end": 1}
+                    ),
+                },
+                (95, 91)
+            ),
+        };
+        QoreFilterRecordsProcessor slice_proc({"where_cond": slice_expr});
+        DataFrame::DataFrame slice_filtered = slice_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice",), slice_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports list slice accessors");
+
+        QoreFilterRecordsProcessor key_proc({
+            "dpql_where": '@payload{region} == "EU"',
+        });
+        DataFrame::DataFrame key_filtered = key_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), key_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports hash key accessors");
+
+        hash<DataProviderExpression> ternary_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_OP_TERNARY,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_GE,
+                            "args": (<DataProviderFieldReference>{"field": "amount"}, 150),
+                        },
+                        "large",
+                        "small"
+                    ),
+                },
+                "large"
+            ),
+        };
+        QoreFilterRecordsProcessor ternary_proc({"where_cond": ternary_expr});
+        DataFrame::DataFrame ternary_filtered = ternary_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Bob", "Carol"), ternary_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports ternary computed values");
+
         hash<DataProviderExpression> between_expr = <DataProviderExpression>{
             "exp": DP_SEARCH_OP_BETWEEN,
             "args": (<DataProviderFieldReference>{"field": "amount"}, 100, 200),
@@ -1423,6 +1515,13 @@ sub invalid_dataframe_api() {
         assertEq((2, 4), string_mask_filtered.getColumn("id").toList(),
             "DPQL BufferColumns string predicates build dense masks");
 
+        QoreFilterRecordsProcessor contains_any_proc({
+            "dpql_where": 'containsAny(@name, "li", "av")',
+        });
+        auto contains_any_filtered = contains_any_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((1, 4), contains_any_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns containsAny predicates build dense masks");
+
         QoreFilterRecordsProcessor like_proc({
             "dpql_where": '@name like "%a%" && @id > 1',
         });
@@ -1483,6 +1582,56 @@ sub invalid_dataframe_api() {
         auto computed_in_filtered = computed_in_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
         assertEq((3, 4), computed_in_filtered.getColumn("id").toList(),
             "DPQL BufferColumns computed in expressions and structured strict inequality build dense masks");
+
+        DataFrame::DataFrame nested_filter_df(
+            ({"id": 1, "name": "Alice", "amount": 90.0, "tags": ("vip", "active"), "scores": (95, 91),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"id": 2, "name": "Bob", "amount": 220.0, "tags": ("trial",), "scores": (88, 84),
+                "payload": {"region": "US", "tier": "silver"}},
+             {"id": 3, "name": "Carol", "amount": 180.0, "tags": ("vip", "closed"), "scores": (92, 90),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"id": 4, "name": "Dave", "amount": 125.0, "tags": ("standard",), "scores": (85, 86),
+                "payload": {"region": "APAC", "tier": "bronze"}}));
+        auto nested_filter_columns = nested_filter_df.toColumnarResult();
+
+        QoreFilterRecordsProcessor nested_list_proc({
+            "dpql_where": 'listContains(@tags, "vip") || listContainsAny(@tags, "trial")',
+        });
+        auto nested_list_filtered = nested_list_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((1, 2, 3), nested_list_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns list membership predicates build dense masks");
+
+        QoreFilterRecordsProcessor nested_accessor_proc({
+            "dpql_where": '@payload{region} == "EU" && @scores[0] >= 90',
+        });
+        auto nested_accessor_filtered = nested_accessor_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((1, 3), nested_accessor_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns nested accessors build dense masks");
+
+        hash<DataProviderExpression> ternary_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_OP_TERNARY,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_GE,
+                            "args": (<DataProviderFieldReference>{"field": "amount"}, 150.0),
+                        },
+                        "large",
+                        "small"
+                    ),
+                },
+                "large"
+            ),
+        };
+        QoreFilterRecordsProcessor ternary_proc({"where_cond": ternary_expr});
+        auto ternary_filtered = ternary_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 3), ternary_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns ternary expressions build dense masks");
 
         date ts1 = date("2026-01-01T00:00:00Z");
         date ts2 = date("2026-01-02T00:00:00Z");

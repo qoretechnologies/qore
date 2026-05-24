@@ -234,8 +234,17 @@ public class ColumnarExpressionFilter {
 
     #! Builds a DataFrame truthiness mask from a field or supported computed expression
     private static *auto buildDataFrameTruthyMask(auto df, hash<DataProviderExpression> expr, string op) {
-        if ((op != DP_EXPR_VALUE && op != DP_OP_HAS_VALUE) || expr.args.size() != 1
-                || !isVectorizableValueArg(expr.args[0])) {
+        auto value_expr;
+        if (op == DP_EXPR_VALUE || op == DP_OP_HAS_VALUE) {
+            if (expr.args.size() != 1) {
+                return;
+            }
+            value_expr = expr.args[0];
+        } else {
+            value_expr = expr;
+        }
+
+        if (!isVectorizableValueArg(value_expr)) {
             return;
         }
 
@@ -243,7 +252,7 @@ public class ColumnarExpressionFilter {
         list<bool> mask = ();
         int rows = df.shape().rows;
         for (int i = 0; i < rows; ++i) {
-            push mask, valueTruthy(evalDataFrameExpressionValue(df, expr.args[0], i, \column_cache));
+            push mask, valueTruthy(evalDataFrameExpressionValue(df, value_expr, i, \column_cache));
         }
         return makeDataFrameRowMask(mask);
     }
@@ -329,7 +338,88 @@ public class ColumnarExpressionFilter {
                 }
                 return result;
             }
+            if (isComparisonOperator(op) && arg.args.size() == 2) {
+                return compareScalar(evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache), op,
+                    evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache));
+            }
             switch (op) {
+                case DP_OP_AND:
+                    foreach auto sub_arg in (arg.args) {
+                        if (!valueTruthy(evalDataFrameExpressionValue(df, sub_arg, row, \column_cache))) {
+                            return False;
+                        }
+                    }
+                    return True;
+                case DP_OP_OR:
+                    foreach auto sub_arg in (arg.args) {
+                        if (valueTruthy(evalDataFrameExpressionValue(df, sub_arg, row, \column_cache))) {
+                            return True;
+                        }
+                    }
+                    return False;
+                case DP_SEARCH_OP_NOT:
+                    return !valueTruthy(evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache));
+                case DP_SEARCH_OP_BETWEEN: {
+                    auto value = evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache);
+                    return compareScalar(value, DP_SEARCH_OP_GE,
+                            evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache))
+                        && compareScalar(value, DP_SEARCH_OP_LE,
+                            evalDataFrameExpressionValue(df, arg.args[2], row, \column_cache));
+                }
+                case DP_OP_RANGE: {
+                    auto value = evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache);
+                    return compareScalar(value, DP_SEARCH_OP_GE,
+                            evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache))
+                        && compareScalar(value, DP_SEARCH_OP_LT,
+                            evalDataFrameExpressionValue(df, arg.args[2], row, \column_cache));
+                }
+                case DP_SEARCH_OP_IN:
+                case DP_OP_NOT_IN:
+                    return evalInPredicate(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValues(df, arg.args[1..], row, \column_cache),
+                        op == DP_OP_NOT_IN);
+                case DP_OP_CONTAINS:
+                case DP_OP_STARTS_WITH:
+                case DP_OP_ENDS_WITH:
+                    return evalStringPredicateValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache), op,
+                        evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache),
+                        arg.args.size() > 2
+                            ? evalDataFrameExpressionValue(df, arg.args[2], row, \column_cache)
+                            : False);
+                case DP_OP_CONTAINS_ANY: {
+                    hash<auto> parsed_args = splitContainsAnyArguments(
+                        evalDataFrameExpressionValues(df, arg.args[1..], row, \column_cache));
+                    return evalStringPredicateValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache), op,
+                        parsed_args.values, parsed_args.options);
+                }
+                case DP_OP_LIST_CONTAINS:
+                    return evalListContainsValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache));
+                case DP_OP_LIST_CONTAINS_ANY:
+                    return evalListContainsAnyValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValues(df, arg.args[1..], row, \column_cache));
+                case DP_OP_LIKE:
+                    return evalLikePredicateValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache),
+                        arg.args.size() > 2
+                            ? evalDataFrameExpressionValue(df, arg.args[2], row, \column_cache)
+                            : False,
+                        False);
+                case DP_OP_REGEX_MATCH:
+                case DP_OP_REGEX_NMATCH:
+                    return evalRegexPredicateValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache),
+                        arg.args.size() > 2
+                            ? evalDataFrameExpressionValue(df, arg.args[2], row, \column_cache)
+                            : (),
+                        op == DP_OP_REGEX_NMATCH);
                 case DP_OP_TO_LOWER: {
                     softstring value = evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache);
                     return value.lwr();
@@ -346,10 +436,36 @@ public class ColumnarExpressionFilter {
                         }
                     }
                     return NOTHING;
+                case DP_OP_TERNARY:
+                    return valueTruthy(evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache))
+                        ? evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache)
+                        : evalDataFrameExpressionValue(df, arg.args[2], row, \column_cache);
+                case DP_FUNC_INDEX:
+                    return applyIndexAccessorValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache));
+                case DP_FUNC_SLICE:
+                    return applySliceAccessorValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValues(df, arg.args[1..], row, \column_cache));
+                case DP_FUNC_KEY:
+                    return applyKeyAccessorValue(
+                        evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache),
+                        evalDataFrameExpressionValues(df, arg.args[1..], row, \column_cache));
             }
         }
 
         return unwrapComparisonValue(arg);
+    }
+
+    #! Evaluates a list of DataFrame expression arguments for one row
+    private static list<auto> evalDataFrameExpressionValues(auto df, list<auto> args, int row,
+            reference<hash<auto>> column_cache) {
+        list<auto> values = ();
+        foreach auto arg in (args) {
+            push values, evalDataFrameExpressionValue(df, arg, row, \column_cache);
+        }
+        return values;
     }
 
     #! Returns cached DataFrame column values for expression evaluation
@@ -545,12 +661,21 @@ public class ColumnarExpressionFilter {
 
     #! Builds a boolean buffer mask from a field or supported computed expression
     private static *auto buildBufferTruthyMask(auto records, hash<DataProviderExpression> expr, string op) {
-        if ((op != DP_EXPR_VALUE && op != DP_OP_HAS_VALUE) || expr.args.size() != 1
-                || !isVectorizableValueArg(expr.args[0])) {
+        auto value_expr;
+        if (op == DP_EXPR_VALUE || op == DP_OP_HAS_VALUE) {
+            if (expr.args.size() != 1) {
+                return;
+            }
+            value_expr = expr.args[0];
+        } else {
+            value_expr = expr;
+        }
+
+        if (!isVectorizableValueArg(value_expr)) {
             return;
         }
 
-        *hash<auto> value = evalBufferExpressionValue(records, expr.args[0]);
+        *hash<auto> value = evalBufferExpressionValue(records, value_expr);
         if (!value || !value.vector) {
             return;
         }
@@ -598,7 +723,25 @@ public class ColumnarExpressionFilter {
                 case DP_OP_TO_LOWER:
                 case DP_OP_TO_UPPER:
                 case DP_FUNC_COALESCE:
+                case DP_OP_TERNARY:
+                case DP_FUNC_INDEX:
+                case DP_FUNC_SLICE:
+                case DP_FUNC_KEY:
+                case DP_OP_LIST_CONTAINS:
+                case DP_OP_LIST_CONTAINS_ANY:
+                case DP_OP_CONTAINS:
+                case DP_OP_CONTAINS_ANY:
+                case DP_OP_STARTS_WITH:
+                case DP_OP_ENDS_WITH:
+                case DP_OP_LIKE:
+                case DP_OP_REGEX_MATCH:
+                case DP_OP_REGEX_NMATCH:
                     return evalBufferExpressionAsList(records, arg);
+            }
+            if (isComparisonOperator(op) || op == DP_OP_AND || op == DP_OP_OR || op == DP_SEARCH_OP_NOT
+                    || op == DP_SEARCH_OP_BETWEEN || op == DP_OP_RANGE || op == DP_SEARCH_OP_IN
+                    || op == DP_OP_NOT_IN) {
+                return evalBufferExpressionAsList(records, arg);
             }
         }
 
@@ -666,7 +809,88 @@ public class ColumnarExpressionFilter {
                 }
                 return result;
             }
+            if (isComparisonOperator(op) && arg.args.size() == 2) {
+                return compareScalar(evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache), op,
+                    evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache));
+            }
             switch (op) {
+                case DP_OP_AND:
+                    foreach auto sub_arg in (arg.args) {
+                        if (!valueTruthy(evalBufferExpressionValueAt(records, sub_arg, row, \column_cache))) {
+                            return False;
+                        }
+                    }
+                    return True;
+                case DP_OP_OR:
+                    foreach auto sub_arg in (arg.args) {
+                        if (valueTruthy(evalBufferExpressionValueAt(records, sub_arg, row, \column_cache))) {
+                            return True;
+                        }
+                    }
+                    return False;
+                case DP_SEARCH_OP_NOT:
+                    return !valueTruthy(evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache));
+                case DP_SEARCH_OP_BETWEEN: {
+                    auto value = evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache);
+                    return compareScalar(value, DP_SEARCH_OP_GE,
+                            evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache))
+                        && compareScalar(value, DP_SEARCH_OP_LE,
+                            evalBufferExpressionValueAt(records, arg.args[2], row, \column_cache));
+                }
+                case DP_OP_RANGE: {
+                    auto value = evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache);
+                    return compareScalar(value, DP_SEARCH_OP_GE,
+                            evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache))
+                        && compareScalar(value, DP_SEARCH_OP_LT,
+                            evalBufferExpressionValueAt(records, arg.args[2], row, \column_cache));
+                }
+                case DP_SEARCH_OP_IN:
+                case DP_OP_NOT_IN:
+                    return evalInPredicate(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValues(records, arg.args[1..], row, \column_cache),
+                        op == DP_OP_NOT_IN);
+                case DP_OP_CONTAINS:
+                case DP_OP_STARTS_WITH:
+                case DP_OP_ENDS_WITH:
+                    return evalStringPredicateValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache), op,
+                        evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache),
+                        arg.args.size() > 2
+                            ? evalBufferExpressionValueAt(records, arg.args[2], row, \column_cache)
+                            : False);
+                case DP_OP_CONTAINS_ANY: {
+                    hash<auto> parsed_args = splitContainsAnyArguments(
+                        evalBufferExpressionValues(records, arg.args[1..], row, \column_cache));
+                    return evalStringPredicateValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache), op,
+                        parsed_args.values, parsed_args.options);
+                }
+                case DP_OP_LIST_CONTAINS:
+                    return evalListContainsValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache));
+                case DP_OP_LIST_CONTAINS_ANY:
+                    return evalListContainsAnyValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValues(records, arg.args[1..], row, \column_cache));
+                case DP_OP_LIKE:
+                    return evalLikePredicateValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache),
+                        arg.args.size() > 2
+                            ? evalBufferExpressionValueAt(records, arg.args[2], row, \column_cache)
+                            : False,
+                        False);
+                case DP_OP_REGEX_MATCH:
+                case DP_OP_REGEX_NMATCH:
+                    return evalRegexPredicateValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache),
+                        arg.args.size() > 2
+                            ? evalBufferExpressionValueAt(records, arg.args[2], row, \column_cache)
+                            : (),
+                        op == DP_OP_REGEX_NMATCH);
                 case DP_OP_TO_LOWER: {
                     softstring value = evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache);
                     return value.lwr();
@@ -683,10 +907,36 @@ public class ColumnarExpressionFilter {
                         }
                     }
                     return NOTHING;
+                case DP_OP_TERNARY:
+                    return valueTruthy(evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache))
+                        ? evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache)
+                        : evalBufferExpressionValueAt(records, arg.args[2], row, \column_cache);
+                case DP_FUNC_INDEX:
+                    return applyIndexAccessorValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache));
+                case DP_FUNC_SLICE:
+                    return applySliceAccessorValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValues(records, arg.args[1..], row, \column_cache));
+                case DP_FUNC_KEY:
+                    return applyKeyAccessorValue(
+                        evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache),
+                        evalBufferExpressionValues(records, arg.args[1..], row, \column_cache));
             }
         }
 
         return unwrapComparisonValue(arg);
+    }
+
+    #! Evaluates a list of ColumnarResult expression arguments for one row
+    private static list<auto> evalBufferExpressionValues(auto records, list<auto> args, int row,
+            reference<hash<auto>> column_cache) {
+        list<auto> values = ();
+        foreach auto arg in (args) {
+            push values, evalBufferExpressionValueAt(records, arg, row, \column_cache);
+        }
+        return values;
     }
 
     #! Returns cached ColumnarResult column values for expression evaluation
@@ -779,7 +1029,7 @@ public class ColumnarExpressionFilter {
     #! Builds a DataFrame row mask for one string predicate that ColumnRef supports directly
     private static *auto buildDataFrameStringMask(auto df, auto value_expr, string op, auto value, bool ignore_case,
             *hash<auto> locale_options) {
-        if (isTopLevelFieldReference(value_expr)) {
+        if (isTopLevelFieldReference(value_expr) && op != DP_OP_CONTAINS_ANY) {
             string field = value_expr.field;
             if (locale_options) {
                 auto mask = buildLocaleStringPredicateMask(df.column(field).values(), op, value, locale_options);
@@ -820,11 +1070,6 @@ public class ColumnarExpressionFilter {
 
     #! Builds a DataFrame row mask for one case-insensitive string predicate
     private static *auto buildDataFrameStringListMask(auto df, string field, string op, auto value, bool ignore_case) {
-        softstring needle = value;
-        if (ignore_case) {
-            needle = needle.upr();
-        }
-
         list<bool> mask = ();
         foreach auto raw in (df.column(field).values()) {
             if (!exists raw || raw.typeCode() == NT_NULL) {
@@ -839,13 +1084,23 @@ public class ColumnarExpressionFilter {
             bool match;
             switch (op) {
                 case DP_OP_CONTAINS:
-                    match = haystack.contains(needle);
-                    break;
                 case DP_OP_STARTS_WITH:
-                    match = haystack.startsWith(needle);
+                case DP_OP_ENDS_WITH: {
+                    softstring needle = value;
+                    if (ignore_case) {
+                        needle = needle.upr();
+                    }
+                    if (op == DP_OP_CONTAINS) {
+                        match = haystack.contains(needle);
+                    } else if (op == DP_OP_STARTS_WITH) {
+                        match = haystack.startsWith(needle);
+                    } else {
+                        match = haystack.endsWith(needle);
+                    }
                     break;
-                case DP_OP_ENDS_WITH:
-                    match = haystack.endsWith(needle);
+                }
+                case DP_OP_CONTAINS_ANY:
+                    match = evalContainsAnyStringValue(haystack, value, ignore_case);
                     break;
                 default:
                     return;
@@ -883,7 +1138,7 @@ public class ColumnarExpressionFilter {
     #! Builds a boolean buffer mask for one string predicate
     private static *auto buildBufferStringMask(auto records, auto value_expr, string op, auto value, bool ignore_case,
             *hash<auto> locale_options) {
-        if (isTopLevelFieldReference(value_expr) && !locale_options) {
+        if (isTopLevelFieldReference(value_expr) && !locale_options && op != DP_OP_CONTAINS_ANY) {
             return records.stringPredicateMask(value_expr.field, op, value, ignore_case);
         }
 
@@ -905,37 +1160,13 @@ public class ColumnarExpressionFilter {
             return buildLocaleStringPredicateMask(values, op, value, locale_options);
         }
 
-        softstring needle = value;
-        if (ignore_case) {
-            needle = needle.upr();
-        }
-
         list<bool> mask = ();
         foreach auto raw in (values) {
             if (!exists raw || raw.typeCode() == NT_NULL) {
                 push mask, False;
                 continue;
             }
-            softstring haystack = raw;
-            if (ignore_case) {
-                haystack = haystack.upr();
-            }
-
-            bool match;
-            switch (op) {
-                case DP_OP_CONTAINS:
-                    match = haystack.contains(needle);
-                    break;
-                case DP_OP_STARTS_WITH:
-                    match = haystack.startsWith(needle);
-                    break;
-                case DP_OP_ENDS_WITH:
-                    match = haystack.endsWith(needle);
-                    break;
-                default:
-                    return;
-            }
-            push mask, match;
+            push mask, evalStringPredicateValue(raw, op, value, ignore_case);
         }
         return new buffer<bool>(mask);
     }
@@ -950,9 +1181,21 @@ public class ColumnarExpressionFilter {
                 "locale-sensitive string predicate %y requires the i18n module; failed to load it: %s: %s",
                 op, ex.err, ex.desc);
         }
-        softstring needle = value;
-        return call_function_args("I18n::string_predicate_mask",
-            (values, op, string(needle), string(locale_options.locale), locale_options));
+        if (op != DP_OP_CONTAINS_ANY) {
+            softstring needle = value;
+            return call_function_args("I18n::string_predicate_mask",
+                (values, op, string(needle), string(locale_options.locale), locale_options));
+        }
+
+        list<bool> mask = ();
+        foreach auto raw in (values) {
+            if (!exists raw || raw.typeCode() == NT_NULL) {
+                push mask, False;
+                continue;
+            }
+            push mask, evalContainsAnyStringValue(raw, value, False, locale_options);
+        }
+        return new buffer<bool>(mask);
     }
 
     #! Builds a boolean buffer mask for one LIKE or regex predicate
@@ -990,6 +1233,225 @@ public class ColumnarExpressionFilter {
             return False;
         }
         return value.val();
+    }
+
+    #! Evaluates an IN or NOT IN predicate using scalar comparison semantics
+    private static bool evalInPredicate(auto value, list<auto> raw_values, bool negated) {
+        list<auto> values = ();
+        if (raw_values.size() == 1 && raw_values[0].typeCode() == NT_LIST) {
+            values = raw_values[0];
+        } else {
+            values = raw_values;
+        }
+        bool matched = False;
+        foreach auto candidate in (values) {
+            if (compareScalar(value, DP_SEARCH_OP_EQ, candidate)) {
+                matched = True;
+                break;
+            }
+        }
+        return negated ? !matched : matched;
+    }
+
+    #! Evaluates a scalar string predicate
+    private static bool evalStringPredicateValue(auto raw, string op, auto value, auto options,
+            *hash<auto> locale_options) {
+        if (!exists raw || raw.typeCode() == NT_NULL) {
+            return False;
+        }
+        if (!locale_options) {
+            locale_options = getLocaleStringPredicateOptions(options, op);
+        }
+        if (locale_options) {
+            if (op == DP_OP_CONTAINS_ANY) {
+                return evalContainsAnyStringValue(raw, value, False, locale_options);
+            }
+            return dp_eval_locale_string_predicate(raw, op, value, locale_options);
+        }
+        if (op == DP_OP_CONTAINS_ANY) {
+            return evalContainsAnyStringValue(raw, value, options ? True : False);
+        }
+
+        softstring haystack = raw;
+        softstring needle = value;
+        if (options) {
+            haystack = haystack.upr();
+            needle = needle.upr();
+        }
+
+        bool match;
+        switch (op) {
+            case DP_OP_CONTAINS:
+                match = haystack.contains(needle);
+                break;
+            case DP_OP_STARTS_WITH:
+                match = haystack.startsWith(needle);
+                break;
+            case DP_OP_ENDS_WITH:
+                match = haystack.endsWith(needle);
+                break;
+            default:
+                throw "EXPRESSION-FILTER-ERROR", sprintf("unsupported string predicate operator %y", op);
+        }
+        return match;
+    }
+
+    #! Evaluates a contains-any string predicate
+    private static bool evalContainsAnyStringValue(auto raw, auto values, bool ignore_case,
+            *hash<auto> locale_options) {
+        if (!exists raw || raw.typeCode() == NT_NULL) {
+            return False;
+        }
+
+        softstring haystack = raw;
+        if (ignore_case && !locale_options) {
+            haystack = haystack.upr();
+        }
+        list<auto> needles = normalizeAnyValueList(values);
+        foreach softstring needle in (needles) {
+            if (locale_options) {
+                if (dp_eval_locale_string_predicate(haystack, DP_OP_CONTAINS, needle, locale_options)) {
+                    return True;
+                }
+                continue;
+            }
+            if (ignore_case) {
+                needle = needle.upr();
+            }
+            if (haystack.contains(needle)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Separates contains-any values from optional bool/locale options
+    private static hash<auto> splitContainsAnyArguments(list<auto> raw_args) {
+        auto options = False;
+        int end = raw_args.size();
+        if (end > 1) {
+            auto tail = raw_args[end - 1];
+            if (tail.typeCode() == NT_BOOLEAN || tail.typeCode() == NT_HASH) {
+                options = tail;
+                --end;
+            }
+        }
+
+        list<auto> value_args = ();
+        for (int i = 0; i < end; ++i) {
+            push value_args, raw_args[i];
+        }
+        return {"values": flattenAnyArgumentList(value_args), "options": options};
+    }
+
+    #! Normalizes a single value or list value into a list
+    private static list<auto> normalizeAnyValueList(auto values) {
+        if (values.typeCode() == NT_LIST) {
+            return values;
+        }
+        return (values,);
+    }
+
+    #! Normalizes varargs or one list argument into a list
+    private static list<auto> flattenAnyArgumentList(list<auto> values) {
+        if (values.size() == 1) {
+            return normalizeAnyValueList(values[0]);
+        }
+        return values;
+    }
+
+    #! Evaluates a list contains predicate
+    private static bool evalListContainsValue(auto raw, auto value) {
+        softlist<auto> list_value = raw;
+        return inlist(value, list_value);
+    }
+
+    #! Evaluates a list contains-any predicate
+    private static bool evalListContainsAnyValue(auto raw, auto values) {
+        softlist<auto> list_value = raw;
+        list<auto> search_values = values.typeCode() == NT_LIST ? flattenAnyArgumentList(values)
+            : normalizeAnyValueList(values);
+        foreach auto value in (search_values) {
+            if (list_value.contains(value)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Evaluates a scalar LIKE predicate
+    private static bool evalLikePredicateValue(auto raw, auto pattern, auto ignore_case, bool negated) {
+        string re = regex_subst(pattern, "([.^$+?{}\\[\\]|()\\\\])", "\\\\$1", RE_Global);
+        re = regex_subst(re, "%", ".*", RE_Global);
+        re = regex_subst(re, "_", ".", RE_Global);
+        return evalRegexPredicateValue(raw, "^" + re + "$", ignore_case ? ("i",) : (), negated);
+    }
+
+    #! Evaluates a scalar regex predicate
+    private static bool evalRegexPredicateValue(auto raw, auto pattern, auto flags, bool negated) {
+        if (!exists raw || raw.typeCode() == NT_NULL) {
+            return negated;
+        }
+        int opts = 0;
+        if (flags.typeCode() == NT_LIST) {
+            opts = foldl $1 | $2, (map RegexOpts{$1}, flags);
+        }
+        softstring value = raw;
+        bool match = regex(value, pattern, opts);
+        return negated ? !match : match;
+    }
+
+    #! Applies index accessor semantics without materializing row hashes
+    private static auto applyIndexAccessorValue(auto value, int index) {
+        if (value.typeCode() == NT_STRING) {
+            int len = value.length();
+            int idx = index >= 0 ? index : len + index;
+            return idx < 0 || idx >= len ? NOTHING : substr(value, idx, 1);
+        }
+        if (value.typeCode() != NT_LIST) {
+            throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to value of "
+                "type %y; expected list or string", index, value.fullType());
+        }
+        int len = value.size();
+        int idx = index >= 0 ? index : len + index;
+        return idx < 0 || idx >= len ? NOTHING : value[idx];
+    }
+
+    #! Applies slice accessor semantics without materializing row hashes
+    private static auto applySliceAccessorValue(auto value, list<auto> items) {
+        if (value.typeCode() != NT_LIST) {
+            throw "INVALID-OPERATION", sprintf("slice accessor applied to non-list value of type %y",
+                value.fullType());
+        }
+        int len = value.size();
+        list<auto> result = ();
+        foreach auto item in (items) {
+            if (item.typeCode() == NT_HASH) {
+                hash<auto> range = item;
+                int start = exists range.start ? (range.start >= 0 ? range.start : len + range.start) : 0;
+                int end = exists range.end ? (range.end >= 0 ? range.end : len + range.end) : len - 1;
+                if (start < 0) start = 0;
+                if (end >= len) end = len - 1;
+                for (int j = start; j <= end; ++j) {
+                    result += value[j];
+                }
+            } else {
+                int idx = item >= 0 ? item : len + item;
+                if (idx >= 0 && idx < len) {
+                    result += value[idx];
+                }
+            }
+        }
+        return result;
+    }
+
+    #! Applies key accessor semantics without materializing row hashes
+    private static auto applyKeyAccessorValue(auto value, list<auto> key_args) {
+        list<string> key_list = ();
+        foreach auto key in (key_args) {
+            push key_list, key;
+        }
+        return AbstractDataProvider::applyKeyAccessorImpl(value, key_list);
     }
 
     #! Compares scalar values using DataProvider comparison semantics
@@ -1153,11 +1615,41 @@ public class ColumnarExpressionFilter {
 
     #! Returns vectorizable string predicate information, if supported
     private static *hash<auto> getStringPredicate(hash<DataProviderExpression> expr, string op) {
-        if (op != DP_OP_CONTAINS && op != DP_OP_STARTS_WITH && op != DP_OP_ENDS_WITH) {
+        if (op != DP_OP_CONTAINS && op != DP_OP_CONTAINS_ANY && op != DP_OP_STARTS_WITH
+                && op != DP_OP_ENDS_WITH) {
             return;
         }
-        if (expr.args.size() < 2 || expr.args.size() > 3 || !isVectorizableValueArg(expr.args[0])
-                || !isScalarComparisonArg(expr.args[1])) {
+        if (expr.args.size() < 2 || !isVectorizableValueArg(expr.args[0])) {
+            return;
+        }
+
+        if (op == DP_OP_CONTAINS_ANY) {
+            list<auto> raw_args = ();
+            for (int i = 1; i < expr.args.size(); ++i) {
+                if (!isScalarComparisonArg(expr.args[i])) {
+                    return;
+                }
+                push raw_args, unwrapComparisonValue(expr.args[i]);
+            }
+            hash<auto> parsed_args = splitContainsAnyArguments(raw_args);
+            *hash<auto> locale_options = getLocaleStringPredicateOptions(parsed_args.options, op);
+            bool ignore_case = locale_options ? False : (parsed_args.options ? True : False);
+            auto value_expr = expr.args[0];
+            *string case_folded_field = getCaseFoldedTopLevelField(value_expr);
+            if (case_folded_field && !locale_options) {
+                value_expr = <DataProviderFieldReference>{"field": case_folded_field};
+                ignore_case = True;
+            }
+            return {
+                "expr": value_expr,
+                "op": op,
+                "value": parsed_args.values,
+                "ignore_case": ignore_case,
+                "locale_options": locale_options,
+            };
+        }
+
+        if (expr.args.size() > 3 || !isScalarComparisonArg(expr.args[1])) {
             return;
         }
 
@@ -1365,11 +1857,78 @@ public class ColumnarExpressionFilter {
                 return arg.args.size() == 1 && isVectorizableValueArg(arg.args[0]);
             case DP_FUNC_COALESCE:
                 return hasVectorizableValueArg(arg.args);
+            case DP_FUNC_INDEX:
+                return arg.args.size() == 2 && isVectorizableValueArg(arg.args[0])
+                    && isScalarComparisonArg(arg.args[1]);
+            case DP_FUNC_SLICE:
+            case DP_FUNC_KEY:
+                return arg.args.size() >= 2 && isVectorizableValueArg(arg.args[0])
+                    && allArgsScalar(arg.args[1..]);
+            case DP_OP_LIST_CONTAINS:
+                return arg.args.size() == 2 && isVectorizableValueArg(arg.args[0])
+                    && (isScalarComparisonArg(arg.args[1]) || isVectorizableValueArg(arg.args[1]));
+            case DP_OP_LIST_CONTAINS_ANY:
+                return arg.args.size() >= 2 && isVectorizableValueArg(arg.args[0])
+                    && allArgsVectorizableOrScalar(arg.args[1..]);
+            case DP_OP_TERNARY:
+                return arg.args.size() == 3 && isVectorizablePredicateArg(arg.args[0])
+                    && isVectorizableValueOrPredicateArg(arg.args[1])
+                    && isVectorizableValueOrPredicateArg(arg.args[2])
+                    && hasVectorizableRowDependentArg(arg.args);
         }
 
         if (isArithmeticOperator(op)) {
             return arg.args.size() >= 2 && hasVectorizableValueArg(arg.args)
                 && allArgsVectorizableOrScalar(arg.args);
+        }
+        return False;
+    }
+
+    #! Returns True if an argument can be evaluated as a column-wise predicate
+    private static bool isVectorizablePredicateArg(auto arg) {
+        if (isTopLevelFieldReference(arg) || isScalarComparisonArg(arg)) {
+            return True;
+        }
+        if (!(arg instanceof hash<DataProviderExpression>)) {
+            return False;
+        }
+
+        string op = OperatorAliasMap{arg.exp} ?? arg.exp;
+        if (op == DP_OP_AND || op == DP_OP_OR) {
+            foreach auto sub_arg in (arg.args) {
+                if (!isVectorizablePredicateArg(sub_arg)) {
+                    return False;
+                }
+            }
+            return arg.args.size() > 0;
+        }
+        if (op == DP_SEARCH_OP_NOT) {
+            return arg.args.size() == 1 && isVectorizablePredicateArg(arg.args[0]);
+        }
+        if (isComparisonOperator(op)) {
+            return arg.args.size() == 2
+                && (isScalarComparisonArg(arg.args[0]) || isVectorizableValueArg(arg.args[0]))
+                && (isScalarComparisonArg(arg.args[1]) || isVectorizableValueArg(arg.args[1]))
+                && (isVectorizableValueArg(arg.args[0]) || isVectorizableValueArg(arg.args[1]));
+        }
+        if (getRangeComparison(arg, op) || getBetweenComparison(arg, op) || getInComparison(arg, op)
+                || getStringPredicate(arg, op) || getPatternPredicate(arg, op)) {
+            return True;
+        }
+        return isVectorizableValueArg(arg);
+    }
+
+    #! Returns True if an argument can be evaluated as a column-wise value or predicate
+    private static bool isVectorizableValueOrPredicateArg(auto arg) {
+        return isScalarComparisonArg(arg) || isVectorizableValueArg(arg) || isVectorizablePredicateArg(arg);
+    }
+
+    #! Returns True if any argument depends on row data
+    private static bool hasVectorizableRowDependentArg(list<auto> args) {
+        foreach auto arg in (args) {
+            if (!isScalarComparisonArg(arg) && (isVectorizableValueArg(arg) || isVectorizablePredicateArg(arg))) {
+                return True;
+            }
         }
         return False;
     }
@@ -1388,6 +1947,16 @@ public class ColumnarExpressionFilter {
     private static bool allArgsVectorizableOrScalar(list<auto> args) {
         foreach auto arg in (args) {
             if (!isScalarComparisonArg(arg) && !isVectorizableValueArg(arg)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Returns True if all arguments are scalar literal/accessor operands
+    private static bool allArgsScalar(list<auto> args) {
+        foreach auto arg in (args) {
+            if (!isScalarComparisonArg(arg)) {
                 return False;
             }
         }

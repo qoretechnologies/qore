@@ -836,7 +836,8 @@ pipeline.append(new QoreFilterRecordsProcessor({
     \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
     expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
     expression-to-expression comparisons, computed arithmetic and case-folding expressions, \c between, \c inRange,
-    \c in, \c notIn, null checks, string predicates, boolean combinations, and structured strict
+    \c in, \c notIn, null checks, string predicates including \c containsAny, list membership predicates,
+    list/hash accessors, ternary computed values, boolean combinations, and structured strict
     equality/inequality compile to DataFrame row masks or dense ColumnarResult \c buffer<bool> masks;
     BufferColumns temporal comparisons
     against Qore/DPQL date literals compare the dense microsecond values without materializing rows.
@@ -1000,6 +1001,16 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
 
     @par Function Calls
     Custom functions can be used: <tt>calculate(\@score, 100)</tt> \c > \c 50
+    Built-in DataProvider functions such as <tt>containsAny(\@name, "li", "av")</tt>,
+    <tt>listContains(\@tags, "vip")</tt>, and
+    <tt>listContainsAny(\@tags, "trial", "standard")</tt> are available when the target provider exposes them.
+    The varargs form is the clearest DPQL syntax for list/string "any" predicates.
+
+    @par Accessors
+    DPQL can access nested values without changing the source record shape:
+    - <tt>\@scores[0] &gt;= 90</tt> - list or string index accessor
+    - <tt>\@scores[0..1]</tt> - list slice accessor
+    - <tt>\@payload{region} == "EU"</tt> - hash key accessor
 
     @par Expression Operators
     Operators that evaluate subexpressions in an operator-controlled context use Qore-style operator syntax
@@ -1036,6 +1047,35 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@age betwe
 # Find records with specific status values
 hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
     '@status in ("pending", "active", "review")');
+    @endcode
+
+    @par Nested Values And Lists
+    @code{.py}
+# Find high-scoring EU records tagged as VIP or trial
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+    '@payload{region} == "EU" && @scores[0] >= 90 && listContainsAny(@tags, "vip", "trial")');
+    @endcode
+
+    @par Structured Ternary Expression
+    @code{.py}
+# Ternary expressions are represented directly as DataProviderExpression hashes
+hash<DataProviderExpression> size_bucket = <DataProviderExpression>{
+    "exp": DP_SEARCH_OP_EQ,
+    "args": (
+        <DataProviderExpression>{
+            "exp": DP_OP_TERNARY,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_GE,
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 150.0),
+                },
+                "large",
+                "small"
+            ),
+        },
+        "large"
+    ),
+};
     @endcode
 
     @par Regex Matching
@@ -1194,7 +1234,8 @@ if (errors) {
       can accept \c BufferColumns or \c DataFrameBlock input without row materialization
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
       \c DataFrameBlock and \c BufferColumns input directly for supported scalar, expression-to-expression,
-      and computed \c between / \c in comparisons, structured strict equality/inequality, string predicates,
+      and computed \c between / \c in comparisons, structured strict equality/inequality, \c containsAny and other
+      string predicates, list membership predicates, list/hash accessors, ternary computed values,
       boolean combinations, and null checks; BufferColumns filters also lower temporal date comparisons, \c like,
       and regular expression predicates to dense masks
     - added DPQL string support to @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
