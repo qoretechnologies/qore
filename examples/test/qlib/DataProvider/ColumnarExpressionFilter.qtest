@@ -41,6 +41,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("computed field comparison DataFrame filter", \computedFieldComparisonDataFrame());
         addTestCase("computed field comparison ColumnarResult filter", \computedFieldComparisonBufferColumns());
         addTestCase("truthy and inRange DataFrame filter", \truthyAndRangeDataFrame());
+        addTestCase("membership DataFrame and ColumnarResult filters", \membershipFilters());
         addTestCase("string transform DataFrame filter", \stringTransformDataFrame());
         addTestCase("string transform ColumnarResult filter", \stringTransformBufferColumns());
         addTestCase("computed string predicate filters", \computedStringPredicateFilters());
@@ -199,6 +200,18 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
 
         assertEq((1, 3), dataframeIds(filtered));
+    }
+
+    private membershipFilters() {
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression('@status in ("Active", "VIP") && @id not in (2, 4)'),
+            (1, 3),
+            "membership DPQL filters are evaluated column-wise");
+
+        assertShapeFilterIds(
+            DataProvider::parseDpqlExpression('@id in (1, 4) || @status not in ("active", "inactive", "VIP")'),
+            (1, 4),
+            "numeric and string membership filters combine with dense masks");
     }
 
     private stringTransformBufferColumns() {
