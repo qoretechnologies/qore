@@ -165,6 +165,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("StandardScaler edge cases", \stdScalerEdgeCasesTest());
         addTestCase("MinMaxScaler basic", \mmScalerBasicTest());
         addTestCase("MinMaxScaler custom range", \mmScalerCustomRangeTest());
+        addTestCase("MinMaxScaler matrix column API", \mmScalerMatrixColumnsTest());
         addTestCase("MinMaxScaler inverse round-trip", \mmScalerInverseTest());
         addTestCase("MinMaxScaler constant feature", \mmScalerConstantFeatureTest());
         addTestCase("MinMaxScaler error cases", \mmScalerErrorTest());
@@ -3561,6 +3562,35 @@ public class MlTest inherits QUnit::Test {
         assertFloat(-1.0, result[0][0], 1e-10);
         assertFloat(0.0, result[1][0], 1e-10);
         assertFloat(1.0, result[2][0], 1e-10);
+    }
+
+    mmScalerMatrixColumnsTest() {
+        list<list<float>> data = ((0.0, 10.0), (5.0, 20.0), (10.0, 30.0));
+
+        ML::MinMaxScaler scaler();
+        scaler.fitMatrix(data);
+        list<auto> columns = scaler.transformMatrixColumns(data);
+
+        assertEq(2, columns.size());
+        assertEq("buffer<float64>", columns[0].fullType());
+        assertEq("buffer<float64>", columns[1].fullType());
+        assertEq(3, columns[0].lsize());
+        assertEq(3, columns[1].lsize());
+        assertFloat(0.0, columns[0][0], 1e-10);
+        assertFloat(0.5, columns[0][1], 1e-10);
+        assertFloat(1.0, columns[0][2], 1e-10);
+        assertFloat(0.0, columns[1][0], 1e-10);
+        assertFloat(0.5, columns[1][1], 1e-10);
+        assertFloat(1.0, columns[1][2], 1e-10);
+
+        ML::MinMaxScaler column_scaler({"feature_min": -1.0, "feature_max": 1.0});
+        list<auto> fit_columns = column_scaler.fitTransformMatrixColumns(data);
+        assertTrue(column_scaler.isFitted());
+        assertEq(2, fit_columns.size());
+        assertEq("buffer<float64>", fit_columns[0].fullType());
+        assertFloat(-1.0, fit_columns[0][0], 1e-10);
+        assertFloat(0.0, fit_columns[0][1], 1e-10);
+        assertFloat(1.0, fit_columns[0][2], 1e-10);
     }
 
     mmScalerInverseTest() {

@@ -144,6 +144,32 @@ class DataFrameSolutionsTest inherits QUnit::Test {
         assertFalse(slim_scaled.columnNames().contains("feature1"),
             "standard scaler slim dataframe output omits input columns");
 
+        DataProviderML::QoreMinMaxScalerProcessor minmax({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "output_mode": "dataframe",
+        });
+        DataFrame::DataFrame normalized = minmax.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertEq(6, normalized.numRows(), "min-max scaler dataframe output preserves row count");
+        assertTrue(normalized.columnNames().contains("scaled_feature1"),
+            "min-max scaler dataframe output exposes normalized columns");
+        assertTrue(normalized.columnNames().contains("feature1"),
+            "min-max scaler dataframe output includes input columns by default");
+
+        DataProviderML::QoreMinMaxScalerProcessor slim_minmax({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "output_mode": "dataframe",
+            "include_input_fields": False,
+        });
+        DataFrame::DataFrame slim_normalized = slim_minmax.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertTrue(slim_normalized.columnNames().contains("scaled_feature1"),
+            "min-max scaler slim dataframe output keeps normalized columns");
+        assertFalse(slim_normalized.columnNames().contains("feature1"),
+            "min-max scaler slim dataframe output omits input columns");
+
         DataProviderML::QoreKMeansProcessor kmeans({
             "fields": "feature1,feature2,feature3",
             "window_size": 6,

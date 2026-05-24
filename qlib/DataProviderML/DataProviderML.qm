@@ -516,7 +516,9 @@ module DataProviderML {
                 "maximum of each field; subsequent windows apply the same normalization. Each "
                 "record receives:\n"
                 "- `scaled_values` — field values converted to the target range\n"
-                "- `record_values` — the original values for comparison",
+                "- `record_values` — the original values for comparison\n\n"
+                "Set `output_mode` to `dataframe` to return flat `scaled_<field>` columns "
+                "for DataFrame analytics pipelines instead of nested event hashes.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreMinMaxScalerProcessor",
@@ -529,6 +531,10 @@ module DataProviderML {
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreMinMaxScalerProcessor::ConstructorOptions{"feature_min", "feature_max"}, {
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreMinMaxScalerProcessor::ConstructorOptions{"output_mode", "include_input_fields"}, {
                     "loc": "constructor",
                 }
             ),
@@ -1656,12 +1662,12 @@ module DataProviderML {
     processors in columnar bulk mode while preserving the existing row-oriented
     processor behavior for single records and compatibility hash-of-lists input.
 
-    StandardScaler, KMeans, and PCA also support \c output_mode = "dataframe".
-    This mode returns flat DataFrame columns instead of nested event hashes,
-    which is clearer and much faster for analytical pipelines.  The default
-    \c output_mode remains \c "events" for compatibility.  In DataFrame mode,
-    \c include_input_fields = False can omit unchanged input columns when the
-    next step only needs model outputs.  KMeans additionally supports
+    StandardScaler, MinMaxScaler, KMeans, and PCA also support
+    \c output_mode = "dataframe".  This mode returns flat DataFrame columns
+    instead of nested event hashes, which is clearer and much faster for
+    analytical pipelines.  The default \c output_mode remains \c "events" for
+    compatibility.  In DataFrame mode, \c include_input_fields = False can omit
+    unchanged input columns when the next step only needs model outputs.  KMeans additionally supports
     \c include_centroid_distances = False when only the winning \c cluster and
     nearest \c distance are needed.
 
@@ -1787,10 +1793,10 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       \c BufferColumns, and \c HashOfLists input shapes through the DataProvider
       shape API and preserve \c DataFrameBlock or \c BufferColumns output shapes
       for bulk event outputs when possible
-    - StandardScaler, KMeans, and PCA can emit flat DataFrame output with dense
-      buffer columns through \c output_mode = "dataframe"; optional slim output
-      flags omit unchanged input columns and KMeans centroid-distance columns
-      for high-throughput analytics
+    - StandardScaler, MinMaxScaler, KMeans, and PCA can emit flat DataFrame
+      output with dense buffer columns through \c output_mode = "dataframe";
+      optional slim output flags omit unchanged input columns and KMeans
+      centroid-distance columns for high-throughput analytics
     - added \c AbstractDataProviderMLProcessor as the common shape-aware base
       for DataProviderML processors
 

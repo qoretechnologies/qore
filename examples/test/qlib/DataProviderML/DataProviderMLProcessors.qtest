@@ -121,6 +121,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("min-max-scaler - basic window", \mmScalerBasicWindow());
         addTestCase("min-max-scaler - custom range", \mmScalerCustomRange());
         addTestCase("min-max-scaler - capabilities", \mmScalerCapabilities());
+        addTestCase("min-max-scaler - DataFrameBlock shape", \mmScalerDataFrameShape());
+        addTestCase("min-max-scaler - BufferColumns dataframe output", \mmScalerBufferColumnsShape());
 
         # Imputer tests
         addTestCase("imputer - mean strategy", \imputerMeanStrategy());
@@ -1515,6 +1517,58 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         hash<DataProviderInfo> info = proc.getInfo();
         assertEq("QoreMinMaxScalerProcessor", info.type);
         assertTrue(info.supports_pipeline_processor);
+        assertTrue(proc.supportsBulkApi());
+        assertTrue(proc.supportsInputShape(DataProviderShape::DataFrameBlock));
+        assertTrue(proc.supportsInputShape(DataProviderShape::BufferColumns));
+        assertTrue(proc.supportsOutputShape(DataProviderShape::DataFrameBlock));
+        assertTrue(proc.supportsOutputShape(DataProviderShape::BufferColumns));
+        assertTrue(proc.supportsOutputShape(DataProviderShape::HashOfLists));
+    }
+
+    mmScalerDataFrameShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataProviderML::QoreMinMaxScalerProcessor proc({
+            "fields": "x,y",
+            "window_size": 3,
+            "output_mode": "dataframe",
+        });
+
+        DataFrame::DataFrame df({
+            "x": (0.0, 5.0, 10.0),
+            "y": (10.0, 20.0, 30.0),
+        });
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertTrue(result.columnNames().contains("scaled_x"));
+        assertTrue(result.columnNames().contains("x"));
+        assertFloat(0.0, result.getColumn("scaled_x")[0], 1e-10);
+        assertFloat(0.5, result.getColumn("scaled_x")[1], 1e-10);
+        assertFloat(1.0, result.getColumn("scaled_x")[2], 1e-10);
+        assertEq("buffer<float64>", result.getColumnBuffer("scaled_x").fullType());
+    }
+
+    mmScalerBufferColumnsShape() {
+        DataProviderML::QoreMinMaxScalerProcessor proc({
+            "fields": "x,y",
+            "window_size": 3,
+            "output_mode": "dataframe",
+            "include_input_fields": False,
+        });
+
+        auto columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 5.0, 10.0)),
+            "y": new buffer<float64>((10.0, 20.0, 30.0)),
+        });
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertTrue(result.columnNames().contains("scaled_x"));
+        assertFalse(result.columnNames().contains("x"));
+        assertFloat(0.5, result.getColumn("scaled_x")[1], 1e-10);
     }
 
     # ===================== Imputer Tests =====================

@@ -2037,6 +2037,8 @@ foreach string module_name in (registry.getProcessModules()) {
         not installed; explicit provider configurations still report provider errors
       - StandardScaler for zero-mean unit-variance feature normalization
       - MinMaxScaler for configurable-range feature scaling
+      - StandardScaler and MinMaxScaler provide dense column-buffer matrix transforms for
+        DataFrame-oriented pipeline output without row-hash materialization
       - Imputer for missing value replacement (mean, median, most_frequent, constant strategies)
       - LogisticRegression for binary and multiclass classification with L2 regularization
       - KNN (k-Nearest Neighbors) for classification and regression by similarity
