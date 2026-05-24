@@ -395,9 +395,25 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         return pairs.join("&");
     }
 
-    #! Generates a random-ish boundary string for multipart body construction
+    #! Generates a token-safe random boundary for multipart body construction
+    /** Returns a boundary value composed only of characters that are safe to interpolate into an
+        unquoted RFC 2046 `boundary=` parameter — base64url charset (A-Z a-z 0-9 - _) prefixed with
+        a recognizable marker. Avoids `/` and `+` (which standard base64 produces and which are in
+        RFC 2045 tspecials, requiring the parameter value to be quoted) and `=` (used for padding).
+
+        Includes 16 bytes of entropy from @c rand() so concurrent calls within the same microsecond
+        don't collide on the timestamp alone — a boundary collision between two interleaved
+        multipart uploads on the same connection would let one upload's body terminate the other's
+        envelope. The timestamp is folded in for human-readable debuggability.
+    */
     static string generateMultipartBoundary() {
-        return "----QoreGenericApiCall" + replace(make_base64_string(string(now_us())), "=", "");
+        binary entropy = binary();
+        for (int i = 0; i < 16; ++i) {
+            entropy += chr(rand() % 256);
+        }
+        string raw = make_base64_string(binary(string(now_us())) + entropy);
+        # base64url-safe normalisation: strip padding, replace +/ with -_
+        return "----QoreGenericApiCall" + replace(replace(replace(raw, "=", ""), "/", "_"), "+", "-");
     }
 
     #! Builds a multipart/form-data body from a FileDataType-shaped input

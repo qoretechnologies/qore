@@ -92,6 +92,8 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             \testActionOutputTypeMatchesProvider());
         addTestCase("disable_generic_api_call opt-out OR-merges on duplicate registration",
             \testOptOutMergesAcrossDuplicateRegistration());
+        addTestCase("multipart boundary is token-safe and unique under tight-loop generation",
+            \testMultipartBoundarySafety());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -556,6 +558,26 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             "action output_type must NOT have the legacy response-body field");
         assertFalse(exists fields."status-code",
             "action output_type must NOT have the legacy status-code field");
+    }
+
+    testMultipartBoundarySafety() {
+        # boundaries must (a) only contain RFC 2046 token-safe characters so the unquoted
+        # `boundary=` parameter does not require quoting, and (b) be unique under tight-loop
+        # generation so concurrent uploads on the same connection cannot collide and let one
+        # multipart envelope terminate inside another
+        hash<string, bool> seen;
+        int n = 200;
+        for (int i = 0; i < n; ++i) {
+            string b = GenericApiCallProvider::generateMultipartBoundary();
+            # token-safe: only A-Z a-z 0-9 - _ (and the leading dashes from the marker prefix)
+            assertFalse(b =~ /[\/+=]/,
+                "boundary must not contain /, +, or = (would require quoting in Content-Type); got "
+                + b);
+            # uniqueness across the batch
+            assertFalse(exists seen{b}, "boundary collision after " + i + " iterations: " + b);
+            seen{b} = True;
+        }
+        assertEq(n, seen.size(), "all " + n + " generated boundaries must be unique");
     }
 
     testOptOutMergesAcrossDuplicateRegistration() {
