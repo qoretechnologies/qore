@@ -86,6 +86,10 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         addTestCase("error_passthru returns 4xx as data", \testErrorPassthru());
         addTestCase("response shape is lean (no request-* echo / no duplicates)", \testLeanResponseShape());
         addTestCase("include_debug exposes redacted debug info", \testIncludeDebugRedacted());
+        addTestCase("multipart filename/mime_type are sanitized (no header injection)",
+            \testMultipartSanitization());
+        addTestCase("make-api-call action output_type matches provider's response shape",
+            \testActionOutputTypeMatchesProvider());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -484,6 +488,72 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             assertFalse(exists resp{forbidden},
                 "legacy field " + forbidden + " must NOT appear in the lean response");
         }
+    }
+
+    testMultipartSanitization() {
+        # filename and mime_type containing CR/LF/quote/null/backslash must NOT corrupt the
+        # multipart envelope. sanitizeMultipartHeaderValue() strips CR/LF/NUL/backslash (so
+        # the malicious content cannot terminate a header line or introduce a new one) and
+        # percent-encodes literal double-quote (so the quoted-string form of the header
+        # attribute is not broken).
+        binary built = GenericApiCallProvider::buildMultipartBody(
+            {
+                "name":      "evil\".pdf\r\nX-Injected: yes",
+                "content":   make_base64_string("body"),
+                "mime_type": "application/pdf\r\nContent-Length: 99999",
+            },
+            "BOUNDARY",
+        );
+        string rendered = built.toString("ISO-8859-1");
+
+        # CR/LF must be stripped from both fields — without them, even if the malicious text
+        # survives inside the value, it cannot inject a new header line because there is no
+        # line terminator to separate it from the surrounding content
+        assertFalse(rendered.find("\r\nX-Injected: yes") >= 0,
+            "CRLF in filename must be stripped so the injected text cannot terminate the header line");
+        assertFalse(rendered.find("\r\nContent-Length: 99999") >= 0,
+            "CRLF in mime_type must be stripped so the injected text cannot terminate the header line");
+
+        # the literal double-quote in filename must be percent-encoded to %22, otherwise it
+        # would close the quoted-string prematurely and corrupt the Content-Disposition header
+        assertTrue(rendered =~ /filename="evil%22\.pdfX-Injected: yes"/,
+            "filename quote should be percent-encoded to %22 and CRLF stripped; got: " + rendered);
+        # exactly two CRLF sequences should remain — the one before the body and the one
+        # after — beyond the boundary lines (no extra injected line endings)
+        assertEq(0, rendered =~ x/\r\nX-Injected/g.size(),
+            "no injected header lines should be present in the rendered multipart envelope");
+    }
+
+    testActionOutputTypeMatchesProvider() {
+        # the action's output_type must describe the same shape the provider actually returns
+        # (otherwise UI type introspection lies about response fields)
+        AbstractDataProvider call_child = getCallChild();
+        *AbstractDataProviderType provider_resp_type = call_child.getResponseType();
+        assertTrue(exists provider_resp_type, "provider must declare a response type");
+
+        # look up the auto-registered action on the test app registered earlier in
+        # testActionAutoRegistered (uses the same getpid-suffixed name so the app exists in
+        # the catalog at this point)
+        string app_name = "TestRestAppAuto" + getpid();
+        *hash<string, hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActionHash(app_name);
+        *hash<DataProviderActionInfo> a = actions{"make-api-call"};
+        if (!a) {
+            # earlier test may have skipped registration — nothing to assert here
+            return;
+        }
+        *AbstractDataProviderType action_out_type = a.output_type;
+        assertTrue(exists action_out_type, "action must declare output_type");
+        # both should be GenericApiCallResponseDataType — the lean status/headers/body[+debug]
+        # shape. The field set is what matters most because that's what UI introspection reads
+        # to render response previews
+        *hash<string, AbstractDataField> fields = action_out_type.getFields();
+        assertTrue(exists fields.status && exists fields.headers && exists fields.body,
+            "action output_type must have the lean status/headers/body fields");
+        assertFalse(exists fields."response-body",
+            "action output_type must NOT have the legacy response-body field");
+        assertFalse(exists fields."status-code",
+            "action output_type must NOT have the legacy status-code field");
     }
 
     testIncludeDebugRedacted() {

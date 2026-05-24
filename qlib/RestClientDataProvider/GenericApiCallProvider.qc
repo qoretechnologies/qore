@@ -150,9 +150,10 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         *string body_type = req.body_type;
         auto body;
         hash<auto> hdr = req.hdr ?? {};
-        # normalize header keys to title case lookups
-        bool has_content_type = (hdr.firstKey() && (map $1.lwr() == "content-type", keys hdr));
-        # use foldl to check case-insensitive presence
+        # case-insensitive scan for an explicit Content-Type on the per-call hdr — when present,
+        # we must NOT overwrite it with the body_type default (the caller is explicitly steering
+        # serialization, e.g. sending JSON body bytes with a custom Content-Type for an API that
+        # wants a non-standard MIME type)
         bool ct_present = False;
         foreach string k in (keys hdr) {
             if (k.lwr() == "content-type") {
@@ -416,8 +417,11 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
                 sprintf("multipart body must be a FileDataType hash (name + content + mime_type); got %y",
                     body.fullType());
         }
-        string filename = body.name ?? "upload";
-        string mime_type = body.mime_type ?? "application/octet-stream";
+        # sanitize values before interpolating into multipart headers — otherwise a CR/LF or `"` in
+        # filename or mime_type could break the envelope (malformed parts) or inject arbitrary
+        # header lines into the multipart body
+        string filename = sanitizeMultipartHeaderValue(body.name ?? "upload");
+        string mime_type = sanitizeMultipartHeaderValue(body.mime_type ?? "application/octet-stream");
         binary content = body.content.typeCode() == NT_BINARY
             ? body.content
             : binary(parse_base64_string(string(body.content)));
@@ -428,6 +432,27 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         msg += content;
         msg += binary(sprintf("\r\n--%s--\r\n", boundary));
         return msg;
+    }
+
+    #! Sanitizes a value for safe interpolation into a multipart Content-Disposition / Content-Type
+    #! header
+    /** Strips CR, LF, and NUL (which would terminate or inject header lines) and replaces literal
+        double-quote with the percent-encoded form `%22` (so the quoted-string form of the header
+        attribute is not broken). Backslashes are also stripped to avoid quoted-string escape
+        ambiguities. Whitespace at the edges is trimmed.
+
+        Matches RFC 7578 §4.2 expectations for the quoted-string form and RFC 9110 §5.6.4 for
+        general header field value safety.
+    */
+    static string sanitizeMultipartHeaderValue(string v) {
+        # remove characters that would terminate the header line or break the multipart envelope
+        v = replace(v, "\r", "");
+        v = replace(v, "\n", "");
+        v = replace(v, chr(0), "");
+        # neutralize quoting characters that would corrupt the quoted-string value
+        v = replace(v, "\\", "");
+        v = replace(v, "\"", "%22");
+        return trim(v);
     }
 
     #! Extracts the body_type value from either the wrapped or unwrapped option format

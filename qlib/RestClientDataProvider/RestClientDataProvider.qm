@@ -182,7 +182,9 @@ module RestClientDataProvider {
                                 "include_debug"},
                             {"groups": ("Response",)},
                         ),
-                    "output_type": RestClientCallResponseDataType,
+                    # output_type MUST match what GenericApiCallProvider actually returns —
+                    # the lean status/headers/body[+debug] shape, not the legacy response type
+                    "output_type": GenericApiCallResponseDataType,
                 };
             },
         );
