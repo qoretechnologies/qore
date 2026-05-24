@@ -2744,7 +2744,14 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         LocalRefHelper<LocalVarValue> helper(this, *ref, lvh.vl.xsink);
-        return helper ? lvh.doLValue(ref, for_remove) : -1;
+        if (!helper || lvh.doLValue(ref, for_remove)) {
+            return -1;
+        }
+        // Preserve the reference variable's target type; the referenced lvalue can be less restrictive.
+        if (val.assigned && refTypeInfo) {
+            lvh.setTypeInfo(refTypeInfo);
+        }
+        return 0;
     }
 
     // note: type info is not stored at runtime for local variables
@@ -2783,9 +2790,17 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove) const {
             return -1;
         }
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvh.vl.xsink);
+        const QoreTypeInfo* effectiveRefTypeInfo = val.assigned ? refTypeInfo : nullptr;
         sl.unlock();
         LocalRefHelper<ClosureVarValue> helper(this, **ref, lvh.vl.xsink);
-        return helper ? lvh.doLValue(*ref, for_remove) : -1;
+        if (!helper || lvh.doLValue(*ref, for_remove)) {
+            return -1;
+        }
+        // Preserve the reference variable's target type; the referenced lvalue can be less restrictive.
+        if (effectiveRefTypeInfo) {
+            lvh.setTypeInfo(effectiveRefTypeInfo);
+        }
+        return 0;
     }
 
     lvh.set(rml);
