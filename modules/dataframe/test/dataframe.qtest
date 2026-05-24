@@ -1212,7 +1212,10 @@ sub invalid_dataframe_api() {
         assertEq(("Alice", "Bob"), fallback_filtered.getColumn("name"),
             "DataFrameBlock filter fallback preserves runtime DataFrame class");
 
-        QoreGroupByProcessor grouper({"group_by": "status", "aggregates": "orders=count(),total=sum(amount)"});
+        QoreGroupByProcessor grouper({
+            "group_by": "status",
+            "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
+        });
         assertTrue(grouper.supportsInputShape(DataProviderShape::DataFrameBlock),
             "group-by processor supports DataFrameBlock input");
         assertNothing(grouper.processRecordsShape(df, DataProviderShape::DataFrameBlock),
@@ -1226,6 +1229,10 @@ sub invalid_dataframe_api() {
             "DataFrameBlock group-by keeps group fields");
         assertEq((3, 1), grouped_df.getColumn("orders"), "DataFrameBlock group-by counts records");
         assertEq((395.0, 220.0), grouped_df.getColumn("total"), "DataFrameBlock group-by computes sums");
+        assertFloatEq(395.0 / 3.0, grouped_df.getColumn("avg_amount")[0], 1e-10,
+            "DataFrameBlock group-by computes averages with native DataFrame mean");
+        assertFloatEq(220.0, grouped_df.getColumn("avg_amount")[1], 1e-10,
+            "DataFrameBlock group-by computes averages with native DataFrame mean");
 
         DataFrame::DataFrame corr_df({
             "id": new buffer<int64>((1, 2, 3)),

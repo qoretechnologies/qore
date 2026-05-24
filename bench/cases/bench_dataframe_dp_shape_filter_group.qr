@@ -44,7 +44,7 @@ class BenchDataFrameDpShapeFilterGroup {
             DataFrame::DataFrame filtered = filter.processRecordsShape(df, DataProviderShape::DataFrameBlock);
             QoreGroupByProcessor grouper({
                 "group_by": "region",
-                "aggregates": "orders=count(),total=sum(amount)",
+                "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
             });
             grouper.processRecordsShape(filtered, DataProviderShape::DataFrameBlock);
             *list<auto> grouped_blocks = grouper.flushAndCollect();

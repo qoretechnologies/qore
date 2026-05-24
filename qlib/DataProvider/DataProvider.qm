@@ -1198,6 +1198,8 @@ if (errors) {
       ColumnarResult expression engine used by shape-aware processors and DataFrame-backed providers
     - updated @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to process hash-of-lists,
       \c BufferColumns, and DataFrame blocks directly and preserve shaped aggregate blocks on pipeline flush
+    - optimized @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to lower \c avg(field)
+      to the native DataFrame \c mean aggregate when the aggregate block can stay columnar
     - updated @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
       @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
       @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" to preserve shaped

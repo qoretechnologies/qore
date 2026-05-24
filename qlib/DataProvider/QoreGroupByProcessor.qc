@@ -627,6 +627,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                 case "count":
                     break;
                 case "sum":
+                case "avg":
                 case "min":
                 case "max":
                     if (!spec.field || !isNativeDataFrameField(spec.field)) {
@@ -655,7 +656,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             return result;
         }
 
-        hash<auto> agg_spec = {spec.field: spec.op};
+        string native_op = spec.op == "avg" ? "mean" : spec.op;
+        hash<auto> agg_spec = {spec.field: native_op};
         auto one = grouped.agg(agg_spec);
         if (spec.output_name != spec.field) {
             one.renameColumn(spec.field, spec.output_name);

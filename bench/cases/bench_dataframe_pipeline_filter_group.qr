@@ -49,7 +49,7 @@ class BenchDataFramePipelineFilterGroup {
             pipe.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
             pipe.append(new QoreGroupByProcessor({
                 "group_by": "region",
-                "aggregates": "orders=count(),total=sum(amount)",
+                "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
             }));
         };
 
