@@ -83,6 +83,7 @@ set(df_module_name "dataframe")
 add_library(${df_module_name} MODULE ${DF_CPP_SRC} ${DF_QPP_SOURCES})
 target_link_libraries(${df_module_name} Eigen3::Eigen)
 target_link_libraries(${df_module_name} Arrow::arrow_shared Parquet::parquet_shared)
+target_include_directories(${df_module_name} PRIVATE ${LLVM_INCLUDE_DIRS})
 add_dependencies(${df_module_name} libqore DF_QPP_GENERATED_FILES)
 
 qore_binary_module_qore(${df_module_name} "${VERSION}" "/${VERSION}")

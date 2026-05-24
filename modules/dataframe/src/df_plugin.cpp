@@ -13,6 +13,7 @@
 #include "QC_DataFrame.h"
 #include "QC_DataFrameExpr.h"
 
+#include <qore/QorePluginLLVM.h>
 #include <qore/QorePluginType.h>
 
 #include <array>
@@ -52,6 +53,7 @@ constexpr uint16_t DATAFRAME_OP_ROW_MASK_AND = 4;
 constexpr uint16_t DATAFRAME_OP_ROW_MASK_OR = 5;
 constexpr uint16_t DATAFRAME_OP_ROW_MASK_XOR = 6;
 constexpr uint16_t DATAFRAME_OP_ROW_MASK_NOT = 7;
+constexpr int DATAFRAME_LLVM_EXTENSION_COUNT = 1;
 
 QoreValue dataframeValueFromBits(uint64_t bits) {
     QoreValue value;
@@ -90,6 +92,71 @@ int64_t dataframeHash(uint64_t value_bits, ExceptionSink*) {
 void dataframeCleanup(uint64_t value_bits) noexcept {
     dataframeDecref(value_bits);
 }
+
+void setLLVMCodegenError(QorePluginLLVMCodegenContext* ctx, const char* msg) {
+    if (ctx && ctx->error_message) {
+        *ctx->error_message = msg;
+    }
+}
+
+llvm::Value* emitDirectUnaryHelper(QorePluginLLVMCodegenContext* ctx, const char* symbol) {
+    if (!ctx || !ctx->builder || !ctx->module || !ctx->qore_value_type || !ctx->pointer_type || !ctx->xsink_value
+            || !ctx->boxed_operands || ctx->num_operands != 1) {
+        setLLVMCodegenError(ctx, "invalid unary dataframe LLVM callback context");
+        return nullptr;
+    }
+    auto* ft = llvm::FunctionType::get(ctx->qore_value_type, {ctx->qore_value_type, ctx->pointer_type}, false);
+    auto helper = ctx->module->getOrInsertFunction(symbol, ft);
+    return ctx->builder->CreateCall(helper, {ctx->boxed_operands[0], ctx->xsink_value});
+}
+
+llvm::Value* emitDirectBinaryHelper(QorePluginLLVMCodegenContext* ctx, const char* symbol) {
+    if (!ctx || !ctx->builder || !ctx->module || !ctx->qore_value_type || !ctx->pointer_type || !ctx->xsink_value
+            || !ctx->boxed_operands || ctx->num_operands != 2) {
+        setLLVMCodegenError(ctx, "invalid binary dataframe LLVM callback context");
+        return nullptr;
+    }
+    auto* ft = llvm::FunctionType::get(ctx->qore_value_type,
+        {ctx->qore_value_type, ctx->qore_value_type, ctx->pointer_type}, false);
+    auto helper = ctx->module->getOrInsertFunction(symbol, ft);
+    return ctx->builder->CreateCall(helper, {ctx->boxed_operands[0], ctx->boxed_operands[1], ctx->xsink_value});
+}
+
+#define DEFINE_DATAFRAME_LLVM_BINARY(NAME, SYMBOL) \
+    llvm::Value* NAME(QorePluginLLVMCodegenContext* ctx) { \
+        return emitDirectBinaryHelper(ctx, SYMBOL); \
+    } \
+    const QorePluginLLVMExtension NAME##_llvm_extension = { \
+        sizeof(QorePluginLLVMExtension), QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION, QORE_PLUGIN_LLVM_CURRENT_MAJOR, NAME \
+    }; \
+    const QorePluginExtension NAME##_extension[] = { \
+        {QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID, &NAME##_llvm_extension, false} \
+    }
+
+#define DEFINE_DATAFRAME_LLVM_UNARY(NAME, SYMBOL) \
+    llvm::Value* NAME(QorePluginLLVMCodegenContext* ctx) { \
+        return emitDirectUnaryHelper(ctx, SYMBOL); \
+    } \
+    const QorePluginLLVMExtension NAME##_llvm_extension = { \
+        sizeof(QorePluginLLVMExtension), QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION, QORE_PLUGIN_LLVM_CURRENT_MAJOR, NAME \
+    }; \
+    const QorePluginExtension NAME##_extension[] = { \
+        {QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID, &NAME##_llvm_extension, false} \
+    }
+
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_subscript_column, "dataframe_subscript_column");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_subscript_row, "dataframe_subscript_row");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_subscript_mask, "dataframe_subscript_mask");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_row_mask_and, "dataframe_row_mask_and");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_row_mask_or, "dataframe_row_mask_or");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_row_mask_xor, "dataframe_row_mask_xor");
+DEFINE_DATAFRAME_LLVM_UNARY(dataframe_llvm_row_mask_not, "dataframe_row_mask_not");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_column_eq, "dataframe_column_eq");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_column_ne, "dataframe_column_ne");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_column_lt, "dataframe_column_lt");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_column_le, "dataframe_column_le");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_column_gt, "dataframe_column_gt");
+DEFINE_DATAFRAME_LLVM_BINARY(dataframe_llvm_column_ge, "dataframe_column_ge");
 
 int dataframeSerialize(uint64_t, QorePluginByteWriteCallback, void*, ExceptionSink* xsink) {
     if (xsink) {
@@ -224,7 +291,8 @@ void initPluginType(QorePluginTypeDescriptor& type, uint16_t local_type_id, cons
 void addBinaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id, const char* operation_name,
         const QoreTypeInfo* primary_type, const QoreTypeInfo* secondary_type, const QoreTypeInfo* return_type,
         QorePluginHelperAbi helper_abi, void (*runtime_helper)(), const char* runtime_helper_symbol,
-        const QorePluginOpcodeInfoExtended* info = nullptr) {
+        const QorePluginOpcodeInfoExtended* info = nullptr, const QorePluginExtension* extensions = nullptr,
+        int num_extensions = 0) {
     QorePluginOperation op = {};
     op.local_id = local_id;
     op.operation_name = operation_name;
@@ -239,12 +307,15 @@ void addBinaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id
     op.runtime_helper = runtime_helper;
     op.runtime_helper_symbol = runtime_helper_symbol;
     op.qdom_domains = QDOM_DEFAULT;
+    op.extensions = extensions;
+    op.num_extensions = num_extensions;
     ops.push_back(op);
 }
 
 void addUnaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id, const char* operation_name,
         const QoreTypeInfo* primary_type, const QoreTypeInfo* return_type, void (*runtime_helper)(),
-        const char* runtime_helper_symbol, const QorePluginOpcodeInfoExtended* info = nullptr) {
+        const char* runtime_helper_symbol, const QorePluginOpcodeInfoExtended* info = nullptr,
+        const QorePluginExtension* extensions = nullptr, int num_extensions = 0) {
     QorePluginOperation op = {};
     op.local_id = local_id;
     op.operation_name = operation_name;
@@ -258,11 +329,14 @@ void addUnaryOperation(std::vector<QorePluginOperation>& ops, uint16_t local_id,
     op.runtime_helper = runtime_helper;
     op.runtime_helper_symbol = runtime_helper_symbol;
     op.qdom_domains = QDOM_DEFAULT;
+    op.extensions = extensions;
+    op.num_extensions = num_extensions;
     ops.push_back(op);
 }
 
 void addColumnComparisonOperations(std::vector<QorePluginOperation>& ops, uint16_t& local_id,
-        const char* operation_name, void (*runtime_helper)(), const char* runtime_helper_symbol) {
+        const char* operation_name, void (*runtime_helper)(), const char* runtime_helper_symbol,
+        const QorePluginExtension* extensions) {
     const QoreTypeInfo* scalar_types[] = {
         bigIntTypeInfo,
         floatTypeInfo,
@@ -277,7 +351,7 @@ void addColumnComparisonOperations(std::vector<QorePluginOperation>& ops, uint16
     for (const QoreTypeInfo* scalar_type : scalar_types) {
         addBinaryOperation(ops, local_id++, operation_name, QC_COLUMNREF->getTypeInfo(), scalar_type,
             QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue, runtime_helper,
-            runtime_helper_symbol);
+            runtime_helper_symbol, nullptr, extensions, DATAFRAME_LLVM_EXTENSION_COUNT);
     }
 }
 
@@ -291,10 +365,12 @@ QorePluginTypeRegistration dataframeRegistration(std::array<QorePluginTypeDescri
 
     addBinaryOperation(ops, DATAFRAME_OP_SUBSCRIPT_COLUMN, "subscript", QC_DATAFRAME->getTypeInfo(), stringTypeInfo,
         autoListTypeInfo, QorePluginHelperAbi::SubscriptValue,
-        reinterpret_cast<void (*)()>(dataframe_subscript_column), "dataframe_subscript_column");
+        reinterpret_cast<void (*)()>(dataframe_subscript_column), "dataframe_subscript_column", nullptr,
+        dataframe_llvm_subscript_column_extension, DATAFRAME_LLVM_EXTENSION_COUNT);
     addBinaryOperation(ops, DATAFRAME_OP_SUBSCRIPT_ROW, "subscript", QC_DATAFRAME->getTypeInfo(), bigIntTypeInfo,
         autoHashTypeInfo, QorePluginHelperAbi::SubscriptValue,
-        reinterpret_cast<void (*)()>(dataframe_subscript_row), "dataframe_subscript_row");
+        reinterpret_cast<void (*)()>(dataframe_subscript_row), "dataframe_subscript_row", nullptr,
+        dataframe_llvm_subscript_row_extension, DATAFRAME_LLVM_EXTENSION_COUNT);
 
     QorePluginOperation slice = {};
     slice.local_id = DATAFRAME_OP_SLICE;
@@ -313,36 +389,40 @@ QorePluginTypeRegistration dataframeRegistration(std::array<QorePluginTypeDescri
 
     addBinaryOperation(ops, DATAFRAME_OP_SUBSCRIPT_MASK, "subscript", QC_DATAFRAME->getTypeInfo(),
         QC_ROWMASK->getTypeInfo(), QC_DATAFRAME->getTypeInfo(), QorePluginHelperAbi::SubscriptValue,
-        reinterpret_cast<void (*)()>(dataframe_subscript_mask), "dataframe_subscript_mask");
+        reinterpret_cast<void (*)()>(dataframe_subscript_mask), "dataframe_subscript_mask", nullptr,
+        dataframe_llvm_subscript_mask_extension, DATAFRAME_LLVM_EXTENSION_COUNT);
 
     QorePluginOpcodeInfoExtended associative_mask = dataframeMaskInfo(true, true);
     QorePluginOpcodeInfoExtended xor_mask = dataframeMaskInfo(true, false);
     addBinaryOperation(ops, DATAFRAME_OP_ROW_MASK_AND, "bit_and", QC_ROWMASK->getTypeInfo(),
         QC_ROWMASK->getTypeInfo(), QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue,
-        reinterpret_cast<void (*)()>(dataframe_row_mask_and), "dataframe_row_mask_and", &associative_mask);
+        reinterpret_cast<void (*)()>(dataframe_row_mask_and), "dataframe_row_mask_and", &associative_mask,
+        dataframe_llvm_row_mask_and_extension, DATAFRAME_LLVM_EXTENSION_COUNT);
     addBinaryOperation(ops, DATAFRAME_OP_ROW_MASK_OR, "bit_or", QC_ROWMASK->getTypeInfo(),
         QC_ROWMASK->getTypeInfo(), QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue,
-        reinterpret_cast<void (*)()>(dataframe_row_mask_or), "dataframe_row_mask_or", &associative_mask);
+        reinterpret_cast<void (*)()>(dataframe_row_mask_or), "dataframe_row_mask_or", &associative_mask,
+        dataframe_llvm_row_mask_or_extension, DATAFRAME_LLVM_EXTENSION_COUNT);
     addBinaryOperation(ops, DATAFRAME_OP_ROW_MASK_XOR, "bit_xor", QC_ROWMASK->getTypeInfo(),
         QC_ROWMASK->getTypeInfo(), QC_ROWMASK->getTypeInfo(), QorePluginHelperAbi::BinaryValue,
-        reinterpret_cast<void (*)()>(dataframe_row_mask_xor), "dataframe_row_mask_xor", &xor_mask);
+        reinterpret_cast<void (*)()>(dataframe_row_mask_xor), "dataframe_row_mask_xor", &xor_mask,
+        dataframe_llvm_row_mask_xor_extension, DATAFRAME_LLVM_EXTENSION_COUNT);
     addUnaryOperation(ops, DATAFRAME_OP_ROW_MASK_NOT, "bit_not", QC_ROWMASK->getTypeInfo(),
         QC_ROWMASK->getTypeInfo(), reinterpret_cast<void (*)()>(dataframe_row_mask_not),
-        "dataframe_row_mask_not");
+        "dataframe_row_mask_not", nullptr, dataframe_llvm_row_mask_not_extension, DATAFRAME_LLVM_EXTENSION_COUNT);
 
     uint16_t local_id = DATAFRAME_OP_ROW_MASK_NOT + 1;
     addColumnComparisonOperations(ops, local_id, "eq", reinterpret_cast<void (*)()>(dataframe_column_eq),
-        "dataframe_column_eq");
+        "dataframe_column_eq", dataframe_llvm_column_eq_extension);
     addColumnComparisonOperations(ops, local_id, "ne", reinterpret_cast<void (*)()>(dataframe_column_ne),
-        "dataframe_column_ne");
+        "dataframe_column_ne", dataframe_llvm_column_ne_extension);
     addColumnComparisonOperations(ops, local_id, "lt", reinterpret_cast<void (*)()>(dataframe_column_lt),
-        "dataframe_column_lt");
+        "dataframe_column_lt", dataframe_llvm_column_lt_extension);
     addColumnComparisonOperations(ops, local_id, "le", reinterpret_cast<void (*)()>(dataframe_column_le),
-        "dataframe_column_le");
+        "dataframe_column_le", dataframe_llvm_column_le_extension);
     addColumnComparisonOperations(ops, local_id, "gt", reinterpret_cast<void (*)()>(dataframe_column_gt),
-        "dataframe_column_gt");
+        "dataframe_column_gt", dataframe_llvm_column_gt_extension);
     addColumnComparisonOperations(ops, local_id, "ge", reinterpret_cast<void (*)()>(dataframe_column_ge),
-        "dataframe_column_ge");
+        "dataframe_column_ge", dataframe_llvm_column_ge_extension);
 
     QorePluginTypeRegistration reg = {};
     reg.module_name = "dataframe";

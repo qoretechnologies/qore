@@ -135,7 +135,9 @@ DataFrame::DataFrame from_second = employees[1..];
     a scalar to get a @ref DataFrame::RowMask "RowMask"; then pass the mask to
     \c frame[mask] or @ref DataFrame::DataFrame::filter(DataFrame::RowMask) "filter(mask)".
     The comparison operators are registered plugin operations and work in AST,
-    IR, and JIT execution:
+    IR, and JIT execution. In JIT/AOT-generated code, the hot subscript,
+    comparison, and mask-composition operators use direct module-helper calls
+    while preserving the same runtime-helper fallback behavior:
 
     @code{.py}
 DataFrame::ColumnRef salary = employees.column("salary");

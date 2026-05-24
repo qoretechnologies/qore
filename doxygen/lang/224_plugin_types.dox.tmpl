@@ -469,6 +469,13 @@ static QorePluginExtension sample_extensions[]{
     should still check \c struct_size before reading newly added fields when
     they need to support older libqore builds.
 
+    The builtin \c dataframe module uses this extension for the hot plugin
+    operators that back column, row, and row-mask subscripts,
+    \c DataFrame::ColumnRef comparisons, and \c DataFrame::RowMask boolean-mask
+    composition. Those operators still keep the same runtime-helper fallback,
+    but JIT/AOT-generated code can call the module helper directly without a
+    registry dispatch on each operation.
+
     @section plugin_types_values Plugin Value Instances
 
     Registered plugin types can wrap module-defined value bits in a first-class

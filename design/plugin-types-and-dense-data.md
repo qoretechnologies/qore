@@ -212,6 +212,9 @@ The implemented hot paths are:
 - direct `ColumnarResult` to/from DataFrame conversion
 - dense boolean mask filtering
 - RowMask predicate composition
+- direct LLVM helper callbacks for DataFrame plugin operators used by column,
+  row, row-mask subscript, ColumnRef comparisons, and RowMask mask composition
+  in JIT/AOT-generated code
 - horizontal concat
 - DataProvider filter/group/projection/limit/set/search-replace shape
   preservation
@@ -245,7 +248,9 @@ targets are:
 - more direct Arrow C Data consumers in binary modules that need libqore-level
   columnar interchange without linking against Arrow C++; module-grpc already
   uses this bridge when built against a qore runtime that exports it
-- benchmark-driven native codegen callbacks for module-owned dense kernels
+- broader benchmark-driven native codegen callbacks for module-owned dense
+  kernels whose work can be inlined or vectorized instead of delegated to a
+  helper function
 
 ## Documentation and Verification Checklist
 

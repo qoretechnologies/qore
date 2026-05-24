@@ -1948,7 +1948,10 @@ foreach string module_name in (registry.getProcessModules()) {
         a \c RowMask, and row masks can filter frames with \c df[mask] or
         \c df.filter(mask); row masks can be composed with \c &, \c |, \c ^,
         and \c ~ or with the named \c intersect(), \c unionWith(),
-        \c symmetricDifference(), and \c invert() methods before filtering
+        \c symmetricDifference(), and \c invert() methods before filtering;
+        the hot column/row/mask subscript, comparison, and mask-composition
+        operators also register direct LLVM helper callbacks for JIT/AOT code
+        while retaining the normal runtime-helper fallback
       - dense columnar interop: DataFrames can be constructed from \c buffer<T>
         columns, expose primitive columns with \c getColumnBuffer(), round-trip
         through \c ColumnarResult with \c toColumnarResult() and
