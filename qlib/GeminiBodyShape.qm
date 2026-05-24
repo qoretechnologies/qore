@@ -218,7 +218,11 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
 */
 hash<auto> sub sanitizeSchemaPropertyMap(hash<auto> props, bool compact,
         int depth) {
-    hash<auto> rv;
+    # Initialized to {} (not left unassigned): an empty props map — e.g. a
+    # no-argument tool's "properties": {} — means the loop never runs, and an
+    # unassigned hash<auto> is NOTHING, which would make this typed return
+    # throw RUNTIME-TYPE-ERROR.
+    hash<auto> rv = {};
     foreach string name in (keys props) {
         rv{name} = GeminiBodyShape::sanitizeSchemaValue(props{name}, compact,
             depth + 1, name);
@@ -232,7 +236,9 @@ bool sub shouldFlattenCompactSchemaProperties(*string field_name, int depth) {
 }
 
 hash<auto> sub flattenCompactSchemaProperties(hash<auto> props) {
-    hash<auto> rv;
+    # {} default for the empty-props case (see sanitizeSchemaPropertyMap):
+    # an unassigned hash<auto> is NOTHING and would fail this typed return.
+    hash<auto> rv = {};
     foreach string key in (keys props) {
         rv{key} = GeminiBodyShape::flattenCompactSchemaProperty(props{key});
     }
