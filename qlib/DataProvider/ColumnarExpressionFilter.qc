@@ -66,14 +66,14 @@ public class ColumnarExpressionFilter {
 
     #! Filters a DataFrame block by one expression
     private static auto filterDataFrameExpression(auto df, hash<DataProviderExpression> expr) {
-        *auto columnar_filtered = filterDataFrameWithBufferMask(df, expr);
-        if (exists columnar_filtered) {
-            return columnar_filtered;
-        }
-
         *auto mask = buildDataFrameMask(df, expr);
         if (exists mask) {
             return df.filter(mask);
+        }
+
+        *auto columnar_filtered = filterDataFrameWithBufferMask(df, expr);
+        if (exists columnar_filtered) {
+            return columnar_filtered;
         }
 
         string op = OperatorAliasMap{expr.exp} ?? expr.exp;
