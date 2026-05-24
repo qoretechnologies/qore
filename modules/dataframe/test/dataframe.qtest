@@ -2285,6 +2285,46 @@ sub invalid_dataframe_api() {
         assertEq(2, last_group.numCols(), "Parquet row group selection preserves projected columns");
         assertEq((3,), last_group.getColumn("id"), "Parquet row group selection preserves row values");
 
+        DataFrame::DataFrame filtered_projection = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "columns": ("name",),
+                "filters": ({
+                    "column": "id",
+                    "op": ">=",
+                    "value": 2,
+                }, {
+                    "column": "score",
+                    "op": "not_null",
+                }),
+            });
+        assertEq(("name",), filtered_projection.columnNames(),
+            "Parquet filtered projection removes filter-only columns");
+        assertEq(("Bob",), filtered_projection.getColumn("name"),
+            "Parquet read filters are applied exactly after row-group pruning");
+
+        DataFrame::DataFrame string_filtered = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "name",
+                    "op": "contains",
+                    "value": "o",
+                },),
+                "use_statistics": False,
+            });
+        assertEq((2, 3), string_filtered.getColumn("id"),
+            "Parquet read filters support exact string predicate fallback");
+
+        DataFrame::DataFrame no_matches = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "id",
+                    "op": ">",
+                    "value": 100,
+                },),
+            });
+        assertEq(0, no_matches.numRows(),
+            "Parquet statistics pruning with exact filtering returns empty DataFrames correctly");
+
         ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
             "total": (12.34n, NOTHING),
         }, {

@@ -1976,9 +1976,11 @@ foreach string module_name in (registry.getProcessModules()) {
         where possible
       - streaming CSV reader with type inference from first 100 rows
       - Parquet I/O via Apache Arrow and Parquet, including top-level column
-        projection, row-group selection, reader batch/thread controls, and
-        writer options for compression, row-group size, dictionary encoding,
-        statistics, threaded column writes, and Arrow schema metadata storage
+        projection, row-group selection, ANDed read filters with safe
+        statistics-based row-group pruning and exact fallback filtering,
+        reader batch/thread controls, and writer options for compression,
+        row-group size, dictionary encoding, statistics, threaded column
+        writes, and Arrow schema metadata storage
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
       - ML integration: toMatrix, toVector, fromMatrix for zero-overhead ML algorithm feeding
       - describe() for per-column descriptive statistics (mean, std, quartiles, unique count)

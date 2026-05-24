@@ -18,9 +18,11 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 #include <parquet/properties.h>
+#include <parquet/statistics.h>
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <ctime>
 #include <limits>
 #include <set>
@@ -87,14 +89,23 @@ static std::shared_ptr<arrow::Buffer> wrapQoreBufferMemory(const uint8_t* data, 
 }
 
 struct QoreParquetReadOptions {
+    struct Filter {
+        std::string column;
+        std::string op;
+        QoreValue value;
+    };
+
     std::vector<std::string> columns;
     std::vector<int> row_groups;
+    std::vector<Filter> filters;
     int64_t batch_size = 0;
     bool has_columns = false;
     bool has_row_groups = false;
+    bool has_filters = false;
     bool has_batch_size = false;
     bool has_use_threads = false;
     bool use_threads = false;
+    bool use_statistics = true;
 };
 
 struct QoreParquetWriteOptions {
@@ -196,13 +207,103 @@ static bool qoreParquetReadIntListOption(const QoreHashNode* options, const char
     return true;
 }
 
+static bool qoreParquetFilterOperatorValid(const std::string& op) {
+    return op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">="
+        || op == "contains" || op == "startswith" || op == "endswith"
+        || op == "is_null" || op == "not_null";
+}
+
+static bool qoreParquetFilterNeedsValue(const std::string& op) {
+    return op != "is_null" && op != "not_null";
+}
+
+static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
+        QoreParquetReadOptions::Filter& out, ExceptionSink* xsink) {
+    QoreValue column = filter->getKeyValue("column");
+    if (column.getType() != NT_STRING) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option 'filters' entry " QLLD " key 'column' expects a string, got %s",
+            index, column.getFullTypeName());
+        return false;
+    }
+    out.column = qoreParquetStringValue(column);
+    if (out.column.empty()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option 'filters' entry " QLLD " key 'column' must not be empty", index);
+        return false;
+    }
+
+    QoreValue op = filter->getKeyValue("op");
+    if (op.getType() != NT_STRING) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option 'filters' entry " QLLD " key 'op' expects a string, got %s",
+            index, op.getFullTypeName());
+        return false;
+    }
+    out.op = qoreParquetStringValue(op);
+    if (!qoreParquetFilterOperatorValid(out.op)) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option 'filters' entry " QLLD " has unsupported operator '%s'; expected one of: "
+            "==, !=, <, <=, >, >=, contains, startswith, endswith, is_null, not_null",
+            index, out.op.c_str());
+        return false;
+    }
+
+    bool value_exists = false;
+    out.value = filter->getKeyValueExistence("value", value_exists);
+    if (qoreParquetFilterNeedsValue(out.op) && !value_exists) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option 'filters' entry " QLLD " operator '%s' requires key 'value'",
+            index, out.op.c_str());
+        return false;
+    }
+    return true;
+}
+
+static bool qoreParquetReadFiltersOption(const QoreHashNode* options,
+        std::vector<QoreParquetReadOptions::Filter>& out, bool& has_option, ExceptionSink* xsink) {
+    QoreValue value = options->getKeyValue("filters");
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    if (value.getType() != NT_LIST) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "Parquet option 'filters' expects a list of filter hashes, got %s",
+            value.getFullTypeName());
+        return false;
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    for (size_t i = 0; i < list->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "parsing Parquet filter option list")) {
+            return false;
+        }
+        QoreValue entry = list->retrieveEntry(i);
+        if (entry.getType() != NT_HASH) {
+            xsink->raiseException("DATAFRAME-IO-ERROR",
+                "Parquet option 'filters' entry " QLLD " expects a hash, got %s",
+                static_cast<int64>(i), entry.getFullTypeName());
+            return false;
+        }
+        QoreParquetReadOptions::Filter filter;
+        if (!qoreParquetReadFilterHash(entry.get<const QoreHashNode>(), static_cast<int64_t>(i), filter, xsink)) {
+            return false;
+        }
+        out.push_back(filter);
+    }
+    has_option = !out.empty();
+    return true;
+}
+
 static bool qoreParquetReadOptions(const QoreHashNode* options, QoreParquetReadOptions& parsed,
         ExceptionSink* xsink) {
     if (!options) {
         return true;
     }
     if (!qoreParquetReadStringListOption(options, "columns", parsed.columns, parsed.has_columns, xsink)
-            || !qoreParquetReadIntListOption(options, "row_groups", parsed.row_groups, parsed.has_row_groups, xsink)) {
+            || !qoreParquetReadIntListOption(options, "row_groups", parsed.row_groups, parsed.has_row_groups, xsink)
+            || !qoreParquetReadFiltersOption(options, parsed.filters, parsed.has_filters, xsink)) {
         return false;
     }
 
@@ -222,6 +323,11 @@ static bool qoreParquetReadOptions(const QoreHashNode* options, QoreParquetReadO
     if (!use_threads.isNullOrNothing()) {
         parsed.use_threads = use_threads.getAsBool();
         parsed.has_use_threads = true;
+    }
+
+    QoreValue use_statistics = options->getKeyValue("use_statistics");
+    if (!use_statistics.isNullOrNothing()) {
+        parsed.use_statistics = use_statistics.getAsBool();
     }
     return true;
 }
@@ -361,6 +467,254 @@ static std::vector<int> qoreParquetColumnIndicesForNames(
         }
     }
     return indices;
+}
+
+static void qoreParquetAppendFilterColumns(std::vector<std::string>& names,
+        const std::vector<QoreParquetReadOptions::Filter>& filters, ExceptionSink* xsink) {
+    for (size_t i = 0; i < filters.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "adding Parquet filter columns")) {
+            return;
+        }
+        const std::string& name = filters[i].column;
+        if (std::find(names.begin(), names.end(), name) == names.end()) {
+            names.push_back(name);
+        }
+    }
+}
+
+static QoreListNode* qoreParquetBuildColumnList(const std::vector<std::string>& names,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building Parquet projection list")) {
+            return nullptr;
+        }
+        list->push(new QoreStringNode(names[i]), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return list.release();
+}
+
+static int qoreParquetUniqueLeafIndexForTopLevelName(
+        const std::unique_ptr<parquet::arrow::FileReader>& reader, const std::string& name,
+        ExceptionSink* xsink) {
+    const parquet::SchemaDescriptor* schema = reader->parquet_reader()->metadata()->schema();
+    int found = -1;
+    for (int i = 0; i < schema->num_columns(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "resolving Parquet filter column statistics")) {
+            return -1;
+        }
+        const parquet::ColumnDescriptor* column = schema->Column(i);
+        if (qoreParquetTopLevelName(column->path()->ToDotString()) != name) {
+            continue;
+        }
+        if (found >= 0) {
+            return -1;
+        }
+        found = i;
+    }
+    return found;
+}
+
+static int qoreParquetCompareStringBytes(const std::string& lhs, const std::string& rhs) {
+    int result = lhs.compare(rhs);
+    return result < 0 ? -1 : result > 0 ? 1 : 0;
+}
+
+template <typename L, typename R>
+static int qoreParquetCompareScalar(const L& lhs, const R& rhs) {
+    return lhs < rhs ? -1 : rhs < lhs ? 1 : 0;
+}
+
+static bool qoreParquetRangeMayMatch(int min_cmp, int max_cmp, const std::string& op) {
+    if (op == "==") {
+        return min_cmp <= 0 && max_cmp >= 0;
+    }
+    if (op == "!=") {
+        return !(min_cmp == 0 && max_cmp == 0);
+    }
+    if (op == "<") {
+        return min_cmp < 0;
+    }
+    if (op == "<=") {
+        return min_cmp <= 0;
+    }
+    if (op == ">") {
+        return max_cmp > 0;
+    }
+    if (op == ">=") {
+        return max_cmp >= 0;
+    }
+    return true;
+}
+
+template <typename DType, typename T>
+static bool qoreParquetTypedStatsMayMatch(const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter, const T& value) {
+    if (!stats || !stats->HasMinMax()) {
+        return true;
+    }
+    auto typed = std::static_pointer_cast<parquet::TypedStatistics<DType>>(stats);
+    return qoreParquetRangeMayMatch(
+        qoreParquetCompareScalar(typed->min(), value),
+        qoreParquetCompareScalar(typed->max(), value),
+        filter.op);
+}
+
+static bool qoreParquetStringStatsMayMatch(const std::shared_ptr<parquet::Statistics>& stats,
+        const QoreParquetReadOptions::Filter& filter, const std::string& value) {
+    if (!stats || !stats->HasMinMax()) {
+        return true;
+    }
+    std::optional<bool> min_exact = stats->is_min_value_exact();
+    std::optional<bool> max_exact = stats->is_max_value_exact();
+    if ((min_exact && !*min_exact) || (max_exact && !*max_exact)) {
+        return true;
+    }
+    auto typed = std::static_pointer_cast<parquet::ByteArrayStatistics>(stats);
+    return qoreParquetRangeMayMatch(
+        qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->min()), value),
+        qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->max()), value),
+        filter.op);
+}
+
+static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
+        const std::shared_ptr<parquet::Statistics>& stats,
+        int64_t row_count, const QoreParquetReadOptions::Filter& filter) {
+    bool cmp_is_null = filter.value.isNullOrNothing();
+    bool has_null_count = stats && stats->HasNullCount();
+    int64_t null_count = has_null_count ? stats->null_count() : 0;
+
+    if (filter.op == "is_null" || (filter.op == "==" && cmp_is_null)) {
+        return !(has_null_count && null_count == 0);
+    }
+    if (filter.op == "not_null" || (filter.op == "!=" && cmp_is_null)) {
+        return !(has_null_count && null_count == row_count);
+    }
+    if (cmp_is_null) {
+        return true;
+    }
+    if (has_null_count && null_count == row_count) {
+        return false;
+    }
+    if (!stats || !stats->HasMinMax()) {
+        return true;
+    }
+
+    switch (column->physical_type()) {
+        case parquet::Type::BOOLEAN:
+            if (filter.op != "==" && filter.op != "!=") {
+                return true;
+            }
+            return qoreParquetTypedStatsMayMatch<parquet::BooleanType>(stats, filter, filter.value.getAsBool());
+        case parquet::Type::INT32: {
+            int64_t value = filter.value.getAsBigInt();
+            if (value < std::numeric_limits<int32_t>::min()) {
+                return filter.op == "!=" || filter.op == ">" || filter.op == ">=";
+            }
+            if (value > std::numeric_limits<int32_t>::max()) {
+                return filter.op == "!=" || filter.op == "<" || filter.op == "<=";
+            }
+            return qoreParquetTypedStatsMayMatch<parquet::Int32Type>(stats, filter,
+                static_cast<int32_t>(value));
+        }
+        case parquet::Type::INT64:
+            return qoreParquetTypedStatsMayMatch<parquet::Int64Type>(stats, filter, filter.value.getAsBigInt());
+        case parquet::Type::FLOAT: {
+            double value = filter.value.getAsFloat();
+            if (std::isnan(value)) {
+                return true;
+            }
+            return qoreParquetTypedStatsMayMatch<parquet::FloatType>(stats, filter, static_cast<float>(value));
+        }
+        case parquet::Type::DOUBLE: {
+            double value = filter.value.getAsFloat();
+            if (std::isnan(value)) {
+                return true;
+            }
+            return qoreParquetTypedStatsMayMatch<parquet::DoubleType>(stats, filter, value);
+        }
+        case parquet::Type::BYTE_ARRAY: {
+            if (filter.op == "contains" || filter.op == "startswith" || filter.op == "endswith") {
+                return true;
+            }
+            QoreStringValueHelper str(filter.value);
+            return qoreParquetStringStatsMayMatch(stats, filter, str->c_str());
+        }
+        default:
+            return true;
+    }
+}
+
+static bool qoreParquetRowGroupMayMatch(const std::unique_ptr<parquet::arrow::FileReader>& reader,
+        int row_group, const QoreParquetReadOptions::Filter& filter, ExceptionSink* xsink) {
+    int column_index = qoreParquetUniqueLeafIndexForTopLevelName(reader, filter.column, xsink);
+    if (*xsink || column_index < 0) {
+        return true;
+    }
+
+    auto metadata = reader->parquet_reader()->metadata();
+    std::unique_ptr<parquet::RowGroupMetaData> rg = metadata->RowGroup(row_group);
+    std::unique_ptr<parquet::ColumnChunkMetaData> chunk = rg->ColumnChunk(column_index);
+    return qoreParquetStatsMayMatch(metadata->schema()->Column(column_index), chunk->statistics(),
+        rg->num_rows(), filter);
+}
+
+static std::vector<int> qoreParquetInitialRowGroups(
+        const std::unique_ptr<parquet::arrow::FileReader>& reader,
+        const QoreParquetReadOptions& options, ExceptionSink* xsink) {
+    if (options.has_row_groups) {
+        return options.row_groups;
+    }
+
+    std::vector<int> row_groups;
+    row_groups.reserve(reader->num_row_groups());
+    for (int i = 0; i < reader->num_row_groups(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building Parquet row-group list")) {
+            return {};
+        }
+        row_groups.push_back(i);
+    }
+    return row_groups;
+}
+
+static std::vector<int> qoreParquetFilteredRowGroups(
+        const std::unique_ptr<parquet::arrow::FileReader>& reader,
+        const QoreParquetReadOptions& options, ExceptionSink* xsink) {
+    std::vector<int> row_groups = qoreParquetInitialRowGroups(reader, options, xsink);
+    if (*xsink) {
+        return {};
+    }
+    if (!options.has_filters || !options.use_statistics) {
+        return row_groups;
+    }
+
+    std::vector<int> selected;
+    selected.reserve(row_groups.size());
+    for (size_t r = 0; r < row_groups.size(); ++r) {
+        if (r && !(r % 100) && qore_check_cancel(xsink, "pruning Parquet row groups with statistics")) {
+            return {};
+        }
+        bool may_match = true;
+        for (size_t f = 0; f < options.filters.size(); ++f) {
+            if (f && !(f % 100) && qore_check_cancel(xsink, "checking Parquet row-group filter statistics")) {
+                return {};
+            }
+            if (!qoreParquetRowGroupMayMatch(reader, row_groups[r], options.filters[f], xsink)) {
+                may_match = false;
+                break;
+            }
+            if (*xsink) {
+                return {};
+            }
+        }
+        if (may_match) {
+            selected.push_back(row_groups[r]);
+        }
+    }
+    return selected;
 }
 
 static std::shared_ptr<arrow::Table> qoreParquetReorderTopLevelColumns(
@@ -2018,20 +2372,44 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         }
     }
 
-    // Read entire file into Arrow Table
-    std::shared_ptr<arrow::Table> table;
-    std::vector<int> column_indices;
+    std::vector<std::string> read_columns;
+    bool has_read_columns = read_options.has_columns;
     if (read_options.has_columns) {
-        column_indices = qoreParquetColumnIndicesForNames(reader, read_options.columns, xsink);
+        read_columns = read_options.columns;
+        if (read_options.has_filters) {
+            qoreParquetAppendFilterColumns(read_columns, read_options.filters, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    std::vector<int> row_groups_to_read;
+    bool read_by_row_group = read_options.has_row_groups
+        || (read_options.has_filters && read_options.use_statistics);
+    if (read_by_row_group) {
+        row_groups_to_read = qoreParquetFilteredRowGroups(reader, read_options, xsink);
         if (*xsink) {
             return nullptr;
         }
     }
-    if (read_options.has_row_groups && read_options.has_columns) {
-        status = reader->ReadRowGroups(read_options.row_groups, column_indices, &table);
-    } else if (read_options.has_row_groups) {
-        status = reader->ReadRowGroups(read_options.row_groups, &table);
-    } else if (read_options.has_columns) {
+
+    // Read requested data into an Arrow Table.  When filters refer to
+    // non-projected columns, those columns are decoded for exact filtering and
+    // removed from the final DataFrame below.
+    std::shared_ptr<arrow::Table> table;
+    std::vector<int> column_indices;
+    if (has_read_columns) {
+        column_indices = qoreParquetColumnIndicesForNames(reader, read_columns, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (read_by_row_group && has_read_columns) {
+        status = reader->ReadRowGroups(row_groups_to_read, column_indices, &table);
+    } else if (read_by_row_group) {
+        status = reader->ReadRowGroups(row_groups_to_read, &table);
+    } else if (has_read_columns) {
         status = reader->ReadTable(column_indices, &table);
     } else {
         status = reader->ReadTable(&table);
@@ -2042,8 +2420,8 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
             status.ToString().c_str());
         return nullptr;
     }
-    if (read_options.has_columns) {
-        table = qoreParquetReorderTopLevelColumns(table, read_options.columns, xsink);
+    if (has_read_columns) {
+        table = qoreParquetReorderTopLevelColumns(table, read_columns, xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -2075,7 +2453,32 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         df->columns.push_back(std::move(col));
     }
 
-    return df;
+    std::unique_ptr<QoreDataFrame> filtered(df);
+    if (read_options.has_filters) {
+        for (size_t i = 0; i < read_options.filters.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "applying Parquet filters")) {
+                return nullptr;
+            }
+            const auto& filter = read_options.filters[i];
+            filtered.reset(filtered->filter(filter.column, filter.op, filter.value, xsink));
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    if (read_options.has_filters && read_options.has_columns) {
+        ReferenceHolder<QoreListNode> projection(qoreParquetBuildColumnList(read_options.columns, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        filtered.reset(filtered->select(*projection, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    return filtered.release();
 }
 
 QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,

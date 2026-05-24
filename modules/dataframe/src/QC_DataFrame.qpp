@@ -1299,10 +1299,17 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     - \c row_groups: row group numbers to read; omitted reads all row groups
     - \c batch_size: Arrow records per read batch
     - \c use_threads: enables Arrow threaded column reads
+    - \c filters: ANDed filter hashes with keys \c column, \c op, and optional \c value
+    - \c use_statistics: enables safe row-group pruning with Parquet statistics; default \c True
 
     Uses Apache Arrow and Parquet to load typed columnar data from disk.
     Column projection is pushed down to the Parquet reader, so unselected
-    columns are not decoded.  Row-group selection is also passed to the reader.
+    columns are not decoded unless they are needed by \c filters.  Row-group
+    selection is also passed to the reader.  When \c filters is supplied,
+    simple range/equality predicates on primitive columns use Parquet row-group
+    statistics to avoid reading row groups that cannot match.  The filters are
+    always applied exactly after reading, so unsupported statistics pushdown
+    forms fall back to correct in-memory filtering.
 
     @return new DataFrame object with Parquet data
 
@@ -1310,6 +1317,15 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     @code{.py}
     hash<ParquetReadOptions> options = {
         "columns": ("order_id", "customer_name", "total"),
+        "filters": ({
+            "column": "status",
+            "op": "==",
+            "value": "complete",
+        }, {
+            "column": "total",
+            "op": ">=",
+            "value": 1000.0,
+        }),
         "use_threads": True,
     };
     DataFrame df = DataFrame::readParquet("/data/sales.parquet", options);

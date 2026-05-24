@@ -96,6 +96,15 @@ hashdecl Qore::DataFrame::CsvOptions {
     @code{.py}
 hash<DataFrame::ParquetReadOptions> options = {
     "columns": ("order_id", "customer_name", "total"),
+    "filters": ({
+        "column": "status",
+        "op": "==",
+        "value": "complete",
+    }, {
+        "column": "total",
+        "op": ">=",
+        "value": 1000.0,
+    }),
     "use_threads": True,
 };
 DataFrame::DataFrame df = DataFrame::DataFrame::readParquet("orders.parquet", options);
@@ -112,6 +121,10 @@ hashdecl Qore::DataFrame::ParquetReadOptions {
     *int batch_size;
     //! Whether Arrow may use worker threads while reading multiple columns
     *bool use_threads;
+    //! ANDed filter hashes with keys "column", "op", and optional "value"; safe forms prune Parquet row groups with statistics, and all forms are applied exactly after the read
+    *list<hash<auto>> filters;
+    //! Whether Parquet row-group statistics may be used to prune filters (default True)
+    *bool use_statistics;
 }
 
 //! Parquet write options
