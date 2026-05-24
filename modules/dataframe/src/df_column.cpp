@@ -53,6 +53,29 @@ static int checkRawBufferData(const void* data, int64_t n, QoreBufferElementType
     return 0;
 }
 
+static void splitMicros(int64_t micros, int64_t& seconds, int& microseconds) {
+    seconds = micros / 1000000;
+    microseconds = static_cast<int>(micros % 1000000);
+    if (microseconds < 0) {
+        --seconds;
+        microseconds += 1000000;
+    }
+}
+
+static bool isDurationColumn(const ColumnData& col) {
+    return col.has_columnar_schema && col.columnar_schema.kind == QoreColumnarTypeKind::Duration;
+}
+
+static DateTimeNode* makeDateFromMicros(int64_t micros, bool duration) {
+    int64_t seconds = 0;
+    int microseconds = 0;
+    splitMicros(micros, seconds, microseconds);
+    if (duration) {
+        return DateTimeNode::makeRelative(0, 0, 0, 0, 0, seconds, microseconds);
+    }
+    return DateTimeNode::makeAbsolute(currentTZ(), seconds, microseconds);
+}
+
 }
 
 ColumnData::ColumnData(const ColumnData& old)
@@ -241,8 +264,7 @@ QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
         case ColumnType::BOOL:
             return QoreValue((bool)bool_data[i]);
         case ColumnType::DATE:
-            return QoreValue(DateTimeNode::makeAbsolute(currentTZ(),
-                date_data[i] / 1000000, (int)(date_data[i] % 1000000)));
+            return QoreValue(makeDateFromMicros(date_data[i], isDurationColumn(*this)));
         case ColumnType::AUTO:
             assert(i < static_cast<int64_t>(auto_data.size()));
             return auto_data[i].refSelf();
@@ -844,8 +866,52 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
     return col;
 }
 
+std::shared_ptr<ColumnData> buildColumnDataFromTemporalBuffer(const QoreBufferNode* values,
+        ExceptionSink* xsink) {
+    if (!values) {
+        return std::make_shared<ColumnData>();
+    }
+    if (values->getElementType() != QoreBufferElementType::Int64) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "dense temporal ColumnarResult columns require buffer<int64> storage; got buffer<%s>",
+            qore_buffer_element_type_name(values->getElementType()));
+        return nullptr;
+    }
+    if (values->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    auto col = std::make_shared<ColumnData>();
+    int64_t n = static_cast<int64_t>(values->size());
+    col->type = ColumnType::DATE;
+    col->n_rows = n;
+    col->date_data.resize(n);
+    col->null_mask.resize(n, 0);
+    col->setDenseBufferRef(values);
+
+    const int64_t* raw = static_cast<const int64_t*>(values->getRawData());
+    if (checkRawBufferData(raw, n, values->getElementType(), xsink)) {
+        return nullptr;
+    }
+    if (n) {
+        std::memcpy(col->date_data.data(), raw, n * sizeof(int64_t));
+    }
+    if (values->hasNullableElements()) {
+        for (int64_t i = 0; i < n; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame temporal column from buffer")) {
+                return nullptr;
+            }
+            if (values->isElementNull(i)) {
+                col->null_mask[i] = 1;
+                col->date_data[i] = 0;
+            }
+        }
+    }
+    return col;
+}
+
 QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
-    if (col.hasDenseBuffer()) {
+    if (col.hasDenseBuffer() && col.type != ColumnType::DATE) {
         return col.dense_buffer->toList(xsink);
     }
 
@@ -869,9 +935,7 @@ QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
                     list->push((bool)col.bool_data[i], xsink);
                     break;
                 case ColumnType::DATE:
-                    list->push(DateTimeNode::makeAbsolute(currentTZ(),
-                        col.date_data[i] / 1000000,
-                        (int)(col.date_data[i] % 1000000)), xsink);
+                    list->push(makeDateFromMicros(col.date_data[i], isDurationColumn(col)), xsink);
                     break;
                 case ColumnType::AUTO:
                     assert(i < static_cast<int64_t>(col.auto_data.size()));
@@ -898,7 +962,7 @@ QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
 
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
-    if (col.hasDenseBuffer()) {
+    if (col.hasDenseBuffer() && col.type != ColumnType::DATE) {
         ReferenceHolder<QoreBufferNode> buffer(col.dense_buffer->slice(
             static_cast<size_t>(start), static_cast<size_t>(count), xsink), xsink);
         if (*xsink) {
@@ -929,9 +993,7 @@ QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
                     list->push((bool)col.bool_data[i], xsink);
                     break;
                 case ColumnType::DATE:
-                    list->push(DateTimeNode::makeAbsolute(currentTZ(),
-                        col.date_data[i] / 1000000,
-                        (int)(col.date_data[i] % 1000000)), xsink);
+                    list->push(makeDateFromMicros(col.date_data[i], isDurationColumn(col)), xsink);
                     break;
                 case ColumnType::AUTO:
                     assert(i < static_cast<int64_t>(col.auto_data.size()));
@@ -965,6 +1027,9 @@ QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) 
             break;
         case ColumnType::STRING:
             element_type = QoreBufferElementType::String;
+            break;
+        case ColumnType::DATE:
+            element_type = QoreBufferElementType::Int64;
             break;
         default:
             xsink->raiseException("DATAFRAME-COLUMN-ERROR",
@@ -1002,6 +1067,9 @@ QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) 
                 break;
             case ColumnType::INT64:
                 value = QoreValue(col.int_data[i]);
+                break;
+            case ColumnType::DATE:
+                value = QoreValue(col.date_data[i]);
                 break;
             case ColumnType::BOOL:
                 value = QoreValue(static_cast<bool>(col.bool_data[i]));

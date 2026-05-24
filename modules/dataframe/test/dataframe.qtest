@@ -1419,6 +1419,24 @@ sub invalid_dataframe_api() {
         assertEq((2, 4), computed_cmp_filtered.getColumn("id").toList(),
             "DPQL BufferColumns expression comparisons build dense masks");
 
+        date ts1 = date("2026-01-01T00:00:00Z");
+        date ts2 = date("2026-01-02T00:00:00Z");
+        date ts3 = date("2026-01-03T00:00:00Z");
+        date ts4 = date("2026-01-04T00:00:00Z");
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "created_at": (ts1, ts2, ts3, ts4),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": False},
+        });
+        QoreFilterRecordsProcessor temporal_proc({
+            "dpql_where": '@created_at >= 2026-01-02T00:00:00Z && @created_at < 2026-01-04T00:00:00Z',
+        });
+        auto temporal_filtered = temporal_proc.processRecordsShape(temporal_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 3), temporal_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns timestamp predicates build dense temporal masks");
+
         hash<auto> raw_buffers = {
             "id": new buffer<int64>((1, 2, 3, 4)),
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
@@ -1508,6 +1526,68 @@ sub invalid_dataframe_api() {
             "DataFrame ColumnarResult round-trip preserves decimal precision");
         assertEq(2, decimal_roundtrip_schema[0].scale,
             "DataFrame ColumnarResult round-trip preserves decimal scale");
+
+        date ts0 = 1969-12-31T23:59:59.123456Z;
+        date ts1 = 2026-01-01T00:00:00.123456Z;
+        date ts3 = 2026-01-03T12:30:00.654321Z;
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "created_at": (ts0, ts1, NOTHING, ts3),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": True},
+        });
+        list<hash<auto>> temporal_schema = temporal_columns.schemaV2();
+        assertEq("timestamp", temporal_schema[0].kind,
+            "ColumnarResult::schemaV2 preserves timestamp logical type");
+        assertEq("buffer<*int64>", temporal_columns.getColumn("created_at").fullType(),
+            "ColumnarResult stores timestamp columns as dense microsecond buffers");
+        assertEq(get_epoch_microseconds(ts0), temporal_columns.getColumn("created_at")[0],
+            "dense timestamp buffer stores pre-epoch UTC epoch microseconds");
+        assertEq(get_epoch_microseconds(ts1), temporal_columns.getColumn("created_at")[1],
+            "dense timestamp buffer stores UTC epoch microseconds");
+        assertEq(get_epoch_microseconds(ts0), get_epoch_microseconds(temporal_columns.toRows()[0].created_at),
+            "ColumnarResult row materialization restores pre-epoch timestamp date values");
+        assertEq(get_epoch_microseconds(ts3), get_epoch_microseconds(temporal_columns.toRows()[3].created_at),
+            "ColumnarResult row materialization restores timestamp date values");
+        DataFrame::DataFrame temporal_df = DataFrame::DataFrame::fromColumnarResult(temporal_columns);
+        assertEq("date", temporal_df.dtypes()[0],
+            "DataFrame consumes dense timestamp columns as date columns");
+        assertEq(get_epoch_microseconds(ts0), get_epoch_microseconds(temporal_df.getColumn("created_at")[0]),
+            "DataFrame date column preserves pre-epoch dense timestamp values");
+        assertEq(get_epoch_microseconds(ts3), get_epoch_microseconds(temporal_df.getColumn("created_at")[3]),
+            "DataFrame date column preserves dense timestamp values");
+        ColumnarResult temporal_roundtrip = temporal_df.toColumnarResult();
+        assertEq("timestamp", temporal_roundtrip.schemaV2()[0].kind,
+            "DataFrame ColumnarResult round-trip preserves timestamp logical type");
+        assertEq("buffer<*int64>", temporal_roundtrip.getColumn("created_at").fullType(),
+            "DataFrame ColumnarResult round-trip preserves packed timestamp buffer");
+
+        date dur0 = 5s + microseconds(123);
+        date dur2 = 1m + 2s + microseconds(456789);
+        ColumnarResult duration_columns = ColumnarResult::fromColumnHash({
+            "elapsed": (dur0, NOTHING, dur2),
+        }, {
+            "elapsed": {"native_type": "interval", "nullable": True},
+        });
+        assertEq("duration", duration_columns.schemaV2()[0].kind,
+            "ColumnarResult::schemaV2 preserves duration logical type");
+        assertEq("buffer<*int64>", duration_columns.getColumn("elapsed").fullType(),
+            "ColumnarResult stores duration columns as dense microsecond buffers");
+        assertEq(get_duration_microseconds(dur0), duration_columns.getColumn("elapsed")[0],
+            "dense duration buffer stores relative microseconds");
+        assertEq(get_duration_microseconds(dur2), duration_columns.getColumn("elapsed")[2],
+            "dense duration buffer preserves larger relative microsecond values");
+        assertEq(get_duration_microseconds(dur0), get_duration_microseconds(duration_columns.toRows()[0].elapsed),
+            "ColumnarResult row materialization restores duration date values");
+        DataFrame::DataFrame duration_df = DataFrame::DataFrame::fromColumnarResult(duration_columns);
+        assertEq("date", duration_df.dtypes()[0],
+            "DataFrame consumes dense duration columns as date columns");
+        assertEq(get_duration_microseconds(dur0), get_duration_microseconds(duration_df.getColumn("elapsed")[0]),
+            "DataFrame date column preserves dense duration values");
+        ColumnarResult duration_roundtrip = duration_df.toColumnarResult();
+        assertEq("duration", duration_roundtrip.schemaV2()[0].kind,
+            "DataFrame ColumnarResult round-trip preserves duration logical type");
+        assertEq("buffer<*int64>", duration_roundtrip.getColumn("elapsed").fullType(),
+            "DataFrame ColumnarResult round-trip preserves packed duration buffer");
 
         ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
             "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),

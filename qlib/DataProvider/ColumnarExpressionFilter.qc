@@ -450,6 +450,7 @@ public class ColumnarExpressionFilter {
         if (column.typeCode() != NT_BUFFER) {
             return;
         }
+        value = normalizeColumnarComparisonValue(records, field, value);
 
         switch (op) {
             case DP_SEARCH_OP_EQ:
@@ -474,6 +475,8 @@ public class ColumnarExpressionFilter {
         if (column.typeCode() != NT_BUFFER) {
             return;
         }
+        low = normalizeColumnarComparisonValue(records, field, low);
+        high = normalizeColumnarComparisonValue(records, field, high);
         return records.combineMasks(column >= low, column <= high, DP_OP_AND);
     }
 
@@ -499,6 +502,7 @@ public class ColumnarExpressionFilter {
 
         *auto combined;
         foreach auto value in (values) {
+            value = normalizeColumnarComparisonValue(records, field, value);
             auto mask = column == value;
             combined = !exists combined ? mask : records.combineMasks(combined, mask, DP_OP_OR);
         }
@@ -506,6 +510,38 @@ public class ColumnarExpressionFilter {
             return;
         }
         return negated ? records.invertMask(combined) : combined;
+    }
+
+    #! Converts Qore date comparison values to dense temporal microseconds for ColumnarResult fields
+    private static auto normalizeColumnarComparisonValue(auto records, string field, auto value) {
+        if (!AbstractDataProcessor::isColumnarResult(records)) {
+            return value;
+        }
+        *hash<auto> schema = getColumnarResultFieldSchema(records, field);
+        if (!isDenseTemporalSchema(schema) || !exists value || value.typeCode() == NT_NULL
+                || value.typeCode() != NT_DATE) {
+            return value;
+        }
+        return schema.kind == "duration" ? get_duration_microseconds(value) : get_epoch_microseconds(value);
+    }
+
+    #! Returns recursive schema metadata for a ColumnarResult field, if available
+    private static *hash<auto> getColumnarResultFieldSchema(auto records, string field) {
+        foreach hash<auto> schema in (records.schemaV2()) {
+            if (schema.name == field) {
+                return schema;
+            }
+        }
+        return;
+    }
+
+    #! Returns True if schema represents dense int64 temporal storage
+    private static bool isDenseTemporalSchema(*hash<auto> schema) {
+        if (!schema) {
+            return False;
+        }
+        return (schema.kind == "date" || schema.kind == "timestamp" || schema.kind == "duration")
+            && (!schema.hasKey("buffer_type") || schema.buffer_type == "int64");
     }
 
     #! Builds a boolean buffer mask from a field or supported computed expression

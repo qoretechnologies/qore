@@ -44,6 +44,9 @@ struct ColumnarShape {
     bool dense = false;
     int32_t decimal_precision = 0;
     int32_t decimal_scale = 0;
+    QoreColumnarTypeKind kind = QoreColumnarTypeKind::Auto;
+    std::string time_unit;
+    std::string timezone;
 };
 
 static bool columnar_parse_decimal_metadata(const std::string& native_type, int32_t& precision, int32_t& scale);
@@ -55,10 +58,21 @@ static bool columnar_decimal_metadata_is_supported(int32_t precision, int32_t sc
 static void columnar_shape_set_decimal128(ColumnarShape& shape, int32_t precision, int32_t scale) {
     shape.column_type = QoreColumnarColumnType::Number;
     shape.buffer_type = QoreBufferElementType::Decimal128;
+    shape.kind = QoreColumnarTypeKind::Decimal128;
     shape.element_type = numberTypeInfo;
     shape.dense = true;
     shape.decimal_precision = precision > 0 ? precision : 38;
     shape.decimal_scale = scale >= 0 ? scale : 0;
+}
+
+static void columnar_shape_set_temporal(ColumnarShape& shape, QoreColumnarTypeKind kind,
+        const char* time_unit = "us") {
+    shape.column_type = QoreColumnarColumnType::Date;
+    shape.buffer_type = QoreBufferElementType::Int64;
+    shape.kind = kind;
+    shape.element_type = dateTypeInfo;
+    shape.dense = true;
+    shape.time_unit = time_unit ? time_unit : "us";
 }
 
 static std::string columnar_lower_type(std::string value) {
@@ -213,8 +227,29 @@ static bool columnar_shape_from_native_type(const std::string& native_type, int6
         return true;
     }
 
-    if (type.find("date") != std::string::npos || type.find("time") != std::string::npos) {
-        shape = {QoreColumnarColumnType::Date, QoreBufferElementType::Invalid, dateTypeInfo, false, false};
+    if (type == "interval" || type == "sql_interval" || type.find("interval ") == 0) {
+        columnar_shape_set_temporal(shape, QoreColumnarTypeKind::Duration);
+        return true;
+    }
+
+    if (type == "date" || type == "sql_date") {
+        columnar_shape_set_temporal(shape, QoreColumnarTypeKind::Date);
+        return true;
+    }
+
+    if (type.find("timestamp") != std::string::npos || type.find("datetime") != std::string::npos
+            || type == "sql_timestamp" || type == "smalldatetime" || type == "datetime2"
+            || type == "datetimeoffset" || type == "timestamptz") {
+        columnar_shape_set_temporal(shape, QoreColumnarTypeKind::Timestamp);
+        if (type.find("time zone") != std::string::npos || type == "timestamptz"
+                || type == "datetimeoffset") {
+            shape.timezone = "UTC";
+        }
+        return true;
+    }
+
+    if (type == "time" || type == "timetz" || type == "sql_time" || type.find("time ") == 0) {
+        columnar_shape_set_temporal(shape, QoreColumnarTypeKind::Date);
         return true;
     }
 
@@ -270,8 +305,8 @@ static bool columnar_shape_from_desc(const QoreHashNode* desc, ColumnarShape& sh
             shape = {QoreColumnarColumnType::String, QoreBufferElementType::String, stringTypeInfo, true, true};
             return true;
         case NT_DATE:
-            shape = {QoreColumnarColumnType::Date, QoreBufferElementType::Invalid, dateTypeInfo,
-                columnar_get_desc_nullable(desc), false};
+            columnar_shape_set_temporal(shape, QoreColumnarTypeKind::Timestamp);
+            shape.nullable = columnar_get_desc_nullable(desc);
             return true;
         case NT_BINARY:
             shape = {QoreColumnarColumnType::Binary, QoreBufferElementType::Invalid, binaryTypeInfo,
@@ -341,7 +376,12 @@ static ColumnarShape columnar_shape_from_kind(ColumnarInferredKind kind, bool nu
         case ColumnarInferredKind::String:
             return {QoreColumnarColumnType::String, QoreBufferElementType::String, stringTypeInfo, nullable, true};
         case ColumnarInferredKind::Date:
-            return {QoreColumnarColumnType::Date, QoreBufferElementType::Invalid, dateTypeInfo, nullable, false};
+            {
+                ColumnarShape shape;
+                columnar_shape_set_temporal(shape, QoreColumnarTypeKind::Timestamp);
+                shape.nullable = nullable;
+                return shape;
+            }
         case ColumnarInferredKind::Binary:
             return {QoreColumnarColumnType::Binary, QoreBufferElementType::Invalid, binaryTypeInfo, nullable, false};
         default:
@@ -407,6 +447,44 @@ static QoreListNode* columnar_make_typed_list(const QoreListNode* source, const 
 
 static QoreValue columnar_make_column_value(const QoreListNode* source, const ColumnarShape& shape,
         ExceptionSink* xsink) {
+    if (shape.column_type == QoreColumnarColumnType::Date && shape.buffer_type == QoreBufferElementType::Int64
+            && (shape.kind == QoreColumnarTypeKind::Date || shape.kind == QoreColumnarTypeKind::Timestamp
+                || shape.kind == QoreColumnarTypeKind::Duration)) {
+        ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(QoreBufferElementType::Int64, shape.nullable,
+            source ? source->size() : 0), xsink);
+        if (!source) {
+            return rv.release();
+        }
+
+        ConstListIterator i(source);
+        while (i.next()) {
+            if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink, "dense temporal column conversion")) {
+                return QoreValue();
+            }
+
+            QoreValue value = i.getValue();
+            if (value.isNothing() || value.getType() == NT_NULL) {
+                if (rv->setEntry(i.index(), QoreValue(), xsink)) {
+                    return QoreValue();
+                }
+                continue;
+            }
+            if (value.getType() != NT_DATE) {
+                xsink->raiseException("COLUMNAR-RESULT-ERROR",
+                    "dense temporal column element %d has type '%s'; expected date or NOTHING",
+                    static_cast<int>(i.index()), value.getTypeName());
+                return QoreValue();
+            }
+            const DateTimeNode* dt = value.get<const DateTimeNode>();
+            int64_t microseconds = shape.kind == QoreColumnarTypeKind::Duration
+                ? dt->getRelativeMicroseconds() : dt->getEpochMicrosecondsUTC();
+            if (rv->setEntry(i.index(), microseconds, xsink)) {
+                return QoreValue();
+            }
+        }
+        return rv.release();
+    }
+
     if (shape.dense) {
         if (shape.buffer_type == QoreBufferElementType::Decimal128) {
             return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink,
@@ -437,6 +515,40 @@ static QoreValue columnar_value_at(QoreValue value, size_t index, ExceptionSink*
         default:
             return QoreValue();
     }
+}
+
+static void columnar_split_microseconds(int64_t micros, int64_t& seconds, int& microseconds) {
+    seconds = micros / 1000000;
+    microseconds = static_cast<int>(micros % 1000000);
+    if (microseconds < 0) {
+        --seconds;
+        microseconds += 1000000;
+    }
+}
+
+static bool columnar_schema_is_temporal(const QoreColumnarTypeDescriptor& schema) {
+    return schema.kind == QoreColumnarTypeKind::Date || schema.kind == QoreColumnarTypeKind::Timestamp
+        || schema.kind == QoreColumnarTypeKind::Duration;
+}
+
+static QoreValue columnar_materialized_value_at(const QoreColumnarResult::Column& column, size_t index,
+        ExceptionSink* xsink) {
+    if (columnar_schema_is_temporal(column.schema) && column.data.getType() == NT_BUFFER) {
+        const QoreBufferNode* buffer = column.data.get<const QoreBufferNode>();
+        if (buffer->getElementType() == QoreBufferElementType::Int64) {
+            QoreValue raw = buffer->getReferencedEntry(index, xsink);
+            if (*xsink || raw.isNullOrNothing()) {
+                return raw;
+            }
+            int64_t seconds = 0;
+            int microseconds = 0;
+            columnar_split_microseconds(raw.getAsBigInt(), seconds, microseconds);
+            return column.schema.kind == QoreColumnarTypeKind::Duration
+                ? QoreValue(DateTimeNode::makeRelative(0, 0, 0, 0, 0, seconds, microseconds))
+                : QoreValue(DateTimeNode::makeAbsolute(currentTZ(), seconds, microseconds));
+        }
+    }
+    return columnar_value_at(column.data, index, xsink);
 }
 
 static size_t columnar_mask_size(QoreValue mask, ExceptionSink* xsink) {
@@ -760,6 +872,9 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_flat(QoreColumnarColu
         schema.column_type = QoreColumnarColumnType::Number;
         schema.precision = 38;
         schema.scale = 0;
+    } else if (column_type == QoreColumnarColumnType::Date
+            && buffer_type == QoreBufferElementType::Int64) {
+        schema.time_unit = "us";
     }
     return schema;
 }
@@ -768,11 +883,22 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_shape(const ColumnarS
         const char* native_type) {
     QoreColumnarTypeDescriptor schema =
         columnar_descriptor_from_flat(shape.column_type, shape.buffer_type, shape.nullable, native_type);
+    if (shape.kind != QoreColumnarTypeKind::Auto) {
+        schema.kind = shape.kind;
+        schema.column_type = columnar_flat_type_from_kind(shape.kind);
+    }
     if (shape.buffer_type == QoreBufferElementType::Decimal128) {
         schema.kind = QoreColumnarTypeKind::Decimal128;
         schema.column_type = QoreColumnarColumnType::Number;
         schema.precision = shape.decimal_precision > 0 ? shape.decimal_precision : 38;
         schema.scale = shape.decimal_scale;
+    }
+    if (shape.kind == QoreColumnarTypeKind::Date || shape.kind == QoreColumnarTypeKind::Timestamp
+            || shape.kind == QoreColumnarTypeKind::Duration) {
+        schema.column_type = QoreColumnarColumnType::Date;
+        schema.buffer_type = QoreBufferElementType::Int64;
+        schema.time_unit = shape.time_unit.empty() ? "us" : shape.time_unit;
+        schema.timezone = shape.timezone;
     }
     return schema;
 }
@@ -993,6 +1119,16 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
                 "scale %d", schema.precision, schema.scale);
         }
     }
+    if (schema.kind == QoreColumnarTypeKind::Date || schema.kind == QoreColumnarTypeKind::Timestamp
+            || schema.kind == QoreColumnarTypeKind::Duration) {
+        schema.column_type = QoreColumnarColumnType::Date;
+        if (schema.buffer_type == QoreBufferElementType::Invalid) {
+            schema.buffer_type = QoreBufferElementType::Int64;
+        }
+        if (schema.time_unit.empty()) {
+            schema.time_unit = "us";
+        }
+    }
 
     return schema;
 }
@@ -1016,6 +1152,11 @@ static void columnar_shape_apply_schema(ColumnarShape& shape, const QoreColumnar
             || schema.buffer_type == QoreBufferElementType::Decimal128) {
         columnar_shape_set_decimal128(shape, schema.precision > 0 ? schema.precision : 38,
             schema.scale >= 0 ? schema.scale : 0);
+    } else if (schema.kind == QoreColumnarTypeKind::Date || schema.kind == QoreColumnarTypeKind::Timestamp
+            || schema.kind == QoreColumnarTypeKind::Duration) {
+        columnar_shape_set_temporal(shape, schema.kind, schema.time_unit.empty() ? "us" : schema.time_unit.c_str());
+        shape.nullable = schema.nullable;
+        shape.timezone = schema.timezone;
     }
 }
 
@@ -3366,7 +3507,7 @@ QoreListNode* QoreColumnarResult::toRows(ExceptionSink* xsink) const {
         }
         ReferenceHolder<QoreHashNode> row(new QoreHashNode(autoTypeInfo), xsink);
         for (const Column& column : columns) {
-            row->setKeyValue(column.name.c_str(), columnar_value_at(column.data, r, xsink), xsink);
+            row->setKeyValue(column.name.c_str(), columnar_materialized_value_at(column, r, xsink), xsink);
             if (*xsink) {
                 return nullptr;
             }

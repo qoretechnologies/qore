@@ -286,7 +286,9 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     converting every cell to a row hash. String columns can also use
     \c buffer<string> or \c buffer<*string> in ColumnarResult and DataFrame
     data paths; \c buffer<decimal128> preserves fixed-scale decimal columns.
-    Nested arrays and structs use recursive ColumnarResult schema metadata and
+    Date, timestamp, and duration columns use \c buffer<int64> microsecond
+    storage when ColumnarResult schema metadata marks them as temporal. Nested
+    arrays and structs use recursive ColumnarResult schema metadata and
     list/hash values; dense-buffer plugin helpers remain numeric-only in the v1
     ABI.
 
@@ -296,18 +298,22 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
 DataFrame df({
     "id": new buffer<int64>((1, 2, 3, 4)),
     "score": new buffer<float64>((95.0, 88.0, 92.0, 75.0)),
-    "completed_at": new buffer<*int64>((1710000000, NOTHING, 1710001200, NOTHING)),
     "active": new buffer<bool>((True, False, True, True)),
     "name": new buffer<*string>(("Alice", "Bob", NOTHING, "Dave")),
 });
 
 ColumnarResult columns = df.toColumnarResult();
+ColumnarResult completed = ColumnarResult::fromColumnHash({
+    "completed_at": (2026-01-01T00:00:00Z, NOTHING, 2026-01-02T00:00:00Z),
+}, {
+    "completed_at": {"kind": "timestamp", "buffer_type": "int64", "nullable": True},
+});
 buffer<bool> selected = columns.combineMasks(
     columns.getColumn("score") >= 90.0,
     columns.getColumn("active") == True,
     "&&");
 DataFrame filtered = DataFrame::fromColumnarResult(columns.filter(selected));
-ColumnarResult incomplete = columns.filter(columns.nullMask("completed_at"));
+ColumnarResult incomplete = completed.filter(completed.nullMask("completed_at"));
 ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
     @endcode
 
@@ -318,9 +324,10 @@ ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
     expression-to-expression comparisons such as \c @score \c >= \c @target
     or \c @amount \c + \c @tax \c >= \c @limit, truthy field checks,
     \c between, \c inRange, \c in, and \c not \c in over dense buffer
-    columns, \c isNull and \c isNotNull checks, case-sensitive string
-    predicates, and BufferColumns \c like, \c =~, and \c !~ predicates.
-    Unsupported expressions fall back to the normal row semantics:
+    columns, temporal comparisons against DPQL date literals, \c isNull and
+    \c isNotNull checks, case-sensitive string predicates, and BufferColumns
+    \c like, \c =~, and \c !~ predicates. Unsupported expressions fall back
+    to the normal row semantics:
 
     @code{.py}
 %requires DataProviderDataFrame

@@ -163,10 +163,12 @@ printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
     @ref buffer "buffer<T>", and
     @ref Qore::SQL::ColumnarResult "ColumnarResult" without first boxing every
     cell into a list. Fixed-scale decimal columns use \c buffer<decimal128>.
-    Nested arrays, fixed-size lists, structs, maps, dictionary-compatible
-    values, and temporal values keep recursive ColumnarResult schema metadata
-    and list/hash/date values; \c buffer<T> remains a primitive dense-vector
-    type. Date columns currently remain list-backed.
+    Date, timestamp, and duration columns use \c buffer<int64> with
+    ColumnarResult schema metadata when they come from dense columnar sources,
+    storing microseconds and materializing Qore \c date values when read as
+    rows or lists. Nested arrays, fixed-size lists, structs, maps, and
+    dictionary-compatible values keep recursive ColumnarResult schema metadata
+    and list/hash values; \c buffer<T> remains a primitive dense-vector type.
 
     @code{.py}
 %requires dataframe
@@ -183,6 +185,14 @@ buffer<*string> names = scores.getColumnBuffer("name");
 ColumnarResult columns = scores.toColumnarResult();
 buffer<float64> dense_scores = columns.getColumn("score");
 buffer<*string> dense_names = columns.getColumn("name");
+
+ColumnarResult timestamps = ColumnarResult::fromColumnHash({
+    "created_at": (2026-01-01T00:00:00Z, 2026-01-02T00:00:00Z),
+}, {
+    "created_at": {"native_type": "timestamp with time zone", "nullable": False},
+});
+buffer<int64> created_at_us = timestamps.getColumn("created_at");
+DataFrame::DataFrame timestamp_df = DataFrame::DataFrame::fromColumnarResult(timestamps);
 
 buffer<bool> high_score = dense_scores >= 90.0;
 buffer<*bool> named = dense_names == "Alice";
@@ -346,7 +356,7 @@ salary.writeParquet("employees-filtered.parquet", write_options);
     | Boolean columns | Preserved as dense boolean buffers; Arrow bitmaps may be copied into Qore-compatible storage. |
     | Fixed-scale decimal columns | Preserved as \c buffer<decimal128> when precision and scale fit decimal128. |
     | String and binary columns | Preserve values and schema; variable-width buffers may be copied into Qore-owned storage. |
-    | Date and timestamp columns | Preserve logical values; DataFrame date columns remain list-backed. |
+    | Date, timestamp, and duration columns | Preserve logical values and use \c buffer<int64> microsecond storage when represented as ColumnarResult/DataFrame dense columns. |
     | List, fixed-size-list, struct, map, and dictionary-compatible columns | Preserve recursive schema metadata and lossless Qore values in \c auto columns. |
     | Unsupported physical layouts | Raise an explicit I/O error or copy to a supported representation; they are not silently converted to lossy scalar strings. |
 

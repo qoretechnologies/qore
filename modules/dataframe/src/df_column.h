@@ -147,6 +147,10 @@ DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* val
 DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* values,
     ExceptionSink* xsink);
 
+//! Build a date/time ColumnData from a dense int64 microsecond buffer
+DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromTemporalBuffer(const QoreBufferNode* values,
+    ExceptionSink* xsink);
+
 //! Convert a column's values to a QoreListNode
 DLLLOCAL QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink);
 

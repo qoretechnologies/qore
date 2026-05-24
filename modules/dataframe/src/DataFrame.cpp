@@ -246,6 +246,8 @@ static QoreBufferElementType bufferTypeFromDataFrameType(ColumnType type) {
             return QoreBufferElementType::Bool;
         case ColumnType::STRING:
             return QoreBufferElementType::String;
+        case ColumnType::DATE:
+            return QoreBufferElementType::Int64;
         default:
             return QoreBufferElementType::Invalid;
     }
@@ -286,10 +288,10 @@ static ColumnType dataFrameTypeFromColumnarSchema(const QoreColumnarTypeDescript
             return ColumnType::STRING;
         case QoreColumnarTypeKind::Date:
         case QoreColumnarTypeKind::Timestamp:
+        case QoreColumnarTypeKind::Duration:
             return ColumnType::DATE;
         case QoreColumnarTypeKind::Number:
         case QoreColumnarTypeKind::Binary:
-        case QoreColumnarTypeKind::Duration:
         case QoreColumnarTypeKind::Decimal128:
         case QoreColumnarTypeKind::List:
         case QoreColumnarTypeKind::LargeList:
@@ -589,7 +591,14 @@ QoreDataFrame* QoreDataFrame::fromColumnarResult(const QoreColumnarResult* resul
                 break;
             }
             case NT_BUFFER:
-                col.data = buildColumnDataFromBuffer(src->data.get<const QoreBufferNode>(), xsink);
+                if ((src->schema.kind == QoreColumnarTypeKind::Date
+                            || src->schema.kind == QoreColumnarTypeKind::Timestamp
+                            || src->schema.kind == QoreColumnarTypeKind::Duration)
+                        && src->data.get<const QoreBufferNode>()->getElementType() == QoreBufferElementType::Int64) {
+                    col.data = buildColumnDataFromTemporalBuffer(src->data.get<const QoreBufferNode>(), xsink);
+                } else {
+                    col.data = buildColumnDataFromBuffer(src->data.get<const QoreBufferNode>(), xsink);
+                }
                 break;
             default:
                 xsink->raiseException("DATAFRAME-ERROR",

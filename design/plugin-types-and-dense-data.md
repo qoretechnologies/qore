@@ -195,8 +195,11 @@ Short-term mappings remain:
 
 - SQL string/text columns use `buffer<string>` or `buffer<*string>` when columnar metadata or inferred values identify
   a string column.
-- SQL date/time values use Qore date lists unless a driver has a more specific
-  dense mapping.
+- SQL date/time and interval values use `buffer<int64>` or `buffer<*int64>`
+  in `ColumnarResult` when columnar metadata or inferred values identify a
+  temporal column. Schema metadata marks the logical kind as `date`,
+  `timestamp`, or `duration`, stores microsecond time units, and row/list
+  materialization restores Qore `date` values.
 - SQL `NUMERIC` / `DECIMAL` values use `buffer<decimal128>` when precision and
   scale fit the fixed-width decimal representation; otherwise they use
   `list<number>` with decimal schema metadata.
@@ -233,9 +236,9 @@ targets are:
 - more DPQL expression forms lowered to dense masks when they can preserve
   generic expression semantics without hidden row materialization
 - wider vectorized analytics outputs
-- additional type-specific DBI dense mappings, such as temporal columns or
-  driver-native high-precision numeric representations where they can be
-  exposed without lossy conversion
+- additional type-specific DBI dense mappings, such as driver-native
+  high-precision numeric representations where they can be exposed without
+  lossy conversion
 - more direct Arrow C Data consumers in binary modules that need libqore-level
   columnar interchange without linking against Arrow C++; module-grpc already
   uses this bridge when built against a qore runtime that exports it

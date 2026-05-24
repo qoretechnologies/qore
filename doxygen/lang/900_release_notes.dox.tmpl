@@ -127,7 +127,10 @@
       native support use a libqore compatibility fallback, and DataFrame::fromQuery() uses the
       columnar API automatically when available; ColumnarResult values can now be filtered with
       dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
-      columns; ColumnarResult::fromColumnHash() and ColumnarResult::fromRows() provide explicit
+      columns; date, timestamp, and interval columns use dense \c buffer<int64> microsecond
+      storage when ColumnarResult schema or DBI metadata identifies a temporal column, while
+      row/list APIs materialize normal Qore \c date values; ColumnarResult::fromColumnHash() and
+      ColumnarResult::fromRows() provide explicit
       constructors for projected or row-compatible columnar blocks; ColumnarResult::stringPredicateMask()
       builds dense masks for common string predicates without materializing row hashes
     - C++ modules can import and export ColumnarResult values through the Arrow C Data Interface
@@ -1346,10 +1349,11 @@ ColumnarResult again = df.toColumnarResult();
     depending on Arrow C++ in libqore itself.  Fixed-width primitive, boolean,
     and \c decimal128 top-level columns are wrapped as \c buffer<T> where
     possible, including sliced record batches with non-zero top-level offsets;
-    strings, binary values, temporal values, lists, fixed-size lists, structs,
-    maps, and dictionary-encoded Arrow arrays use owned Arrow-compatible
-    buffers or materialized Qore containers so schema and nullability are still
-    preserved.
+    temporal values use \c buffer<int64> microsecond storage when represented
+    as temporal ColumnarResult columns; strings, binary values, lists,
+    fixed-size lists, structs, maps, and dictionary-encoded Arrow arrays use
+    owned Arrow-compatible buffers or materialized Qore containers so schema
+    and nullability are still preserved.
     @endparblock
 
     @par Experimental Plugin-Type ABI
@@ -1949,7 +1953,9 @@ foreach string module_name in (registry.getProcessModules()) {
         columns, expose primitive columns with \c getColumnBuffer(), round-trip
         through \c ColumnarResult with \c toColumnarResult() and
         \c fromColumnarResult(), and preserve buffer-backed columns under Qore
-        copy-on-write semantics where possible
+        copy-on-write semantics where possible; temporal ColumnarResult columns
+        use \c buffer<int64> microsecond storage with schema metadata and
+        materialize Qore \c date values when read as rows/lists
       - optimized typed-column construction, dense predicate masks, direct
         ColumnarResult conversion, and native columnar DBI reads are designed
         for production ETL and analytics workloads that benefit from keeping
@@ -2480,8 +2486,9 @@ foreach string module_name in (registry.getProcessModules()) {
         row masks or dense ColumnarResult boolean masks, including computed
         scalar comparisons, expression-to-expression comparisons, truthy field
         checks, \c between, \c inRange, \c in, \c not \c in, null checks,
-        selected string predicates, and BufferColumns \c like, \c =~, and \c !~ predicates; unsupported
-        expressions fall back to generic row semantics
+        temporal date comparisons, selected string predicates, and BufferColumns
+        \c like, \c =~, and \c !~ predicates; unsupported expressions fall back
+        to generic row semantics
       - QoreGroupByProcessor preserves BufferColumns output for ColumnarResult
         inputs when used through shape-aware pipeline flushing
       - QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor, and

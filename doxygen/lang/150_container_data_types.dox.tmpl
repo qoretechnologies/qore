@@ -311,18 +311,21 @@ assert ids.max() == 30;
 
     @par Columnar SQL Results:
     %Qore's DBI layer can return query results as ordered typed columns with the
-    @ref Qore::SQL::ColumnarResult "ColumnarResult" class. Numeric, boolean, and string columns can be represented as dense
-    buffers, which avoids per-cell boxing when loading large result sets into analytics code:
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" class. Numeric, boolean,
+    string, fixed-scale decimal, and temporal columns can be represented as
+    dense buffers, which avoids per-cell boxing when loading large result sets
+    into analytics code:
     @code{.py}
 Datasource ds("pgsql:user/pass@sales%dbhost");
 ColumnarResult result = ds.selectColumnar(
-    "select order_id, customer_name, score, active from order_scores where score >= %v",
+    "select order_id, customer_name, score, active, created_at from order_scores where score >= %v",
     90.0);
 
 buffer<int64> order_ids = result.getColumn("order_id");
 buffer<*string> customer_names = result.getColumn("customer_name");
 buffer<float64> scores = result.getColumn("score");
 buffer<bool> active = result.getColumn("active");
+buffer<*int64> created_at_us = result.getColumn("created_at");
 
 buffer<bool> high_active = result.combineMasks(scores >= 90.0, active == True, "&&");
 ColumnarResult selected = result.filter(high_active);
@@ -343,6 +346,10 @@ ColumnarResult projected = ColumnarResult::fromColumnHash(projected_columns);
     @ref Qore::SQL::ColumnarResult::fromColumnHash() "ColumnarResult::fromColumnHash()" creates a new
     columnar result from existing column containers and references dense buffers directly, which is useful for
     projection and augmentation pipelines that should avoid row materialization.
+    Date, timestamp, and interval columns are represented as \c buffer<int64>
+    or \c buffer<*int64> when their schema is temporal; values are stored as
+    microseconds and materialized back to Qore \c date values by row/list APIs
+    and DataFrame conversion.
 
     Prepared statements can be fetched in blocks without materializing row hashes:
     @code{.py}
