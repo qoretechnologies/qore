@@ -2911,7 +2911,9 @@ BinaryNode* QoreDataFrame::toArrowIpc(ExceptionSink* xsink) const {
     }
     auto sink = maybe_sink.ValueOrDie();
 
-    auto maybe_writer = arrow::ipc::MakeStreamWriter(sink.get(), table->schema());
+    auto write_options = arrow::ipc::IpcWriteOptions::Defaults();
+    write_options.memory_pool = pool;
+    auto maybe_writer = arrow::ipc::MakeStreamWriter(sink.get(), table->schema(), write_options);
     if (!maybe_writer.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "cannot create Arrow IPC stream writer: %s", maybe_writer.status().ToString().c_str());

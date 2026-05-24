@@ -478,7 +478,8 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
             const DateTimeNode* dt = value.get<const DateTimeNode>();
             int64_t microseconds = shape.kind == QoreColumnarTypeKind::Duration
                 ? dt->getRelativeMicroseconds() : dt->getEpochMicrosecondsUTC();
-            if (rv->setEntry(i.index(), microseconds, xsink)) {
+            ValueHolder dense_value(QoreValue(microseconds), xsink);
+            if (rv->setEntry(i.index(), *dense_value, xsink)) {
                 return QoreValue();
             }
         }
@@ -536,13 +537,13 @@ static QoreValue columnar_materialized_value_at(const QoreColumnarResult::Column
     if (columnar_schema_is_temporal(column.schema) && column.data.getType() == NT_BUFFER) {
         const QoreBufferNode* buffer = column.data.get<const QoreBufferNode>();
         if (buffer->getElementType() == QoreBufferElementType::Int64) {
-            QoreValue raw = buffer->getReferencedEntry(index, xsink);
-            if (*xsink || raw.isNullOrNothing()) {
-                return raw;
+            ValueHolder raw(buffer->getReferencedEntry(index, xsink), xsink);
+            if (*xsink || raw->isNullOrNothing()) {
+                return raw.release();
             }
             int64_t seconds = 0;
             int microseconds = 0;
-            columnar_split_microseconds(raw.getAsBigInt(), seconds, microseconds);
+            columnar_split_microseconds(raw->getAsBigInt(), seconds, microseconds);
             return column.schema.kind == QoreColumnarTypeKind::Duration
                 ? QoreValue(DateTimeNode::makeRelative(0, 0, 0, 0, 0, seconds, microseconds))
                 : QoreValue(DateTimeNode::makeAbsolute(currentTZ(), seconds, microseconds));
@@ -577,8 +578,8 @@ static bool columnar_mask_at(QoreValue mask, size_t index, ExceptionSink* xsink)
         case NT_LIST:
             return mask.get<const QoreListNode>()->retrieveEntry(index).getAsBool();
         case NT_BUFFER: {
-            QoreValue value = mask.get<const QoreBufferNode>()->getReferencedEntry(index, xsink);
-            return !value.isNullOrNothing() && value.getAsBool();
+            ValueHolder value(mask.get<const QoreBufferNode>()->getReferencedEntry(index, xsink), xsink);
+            return !value->isNullOrNothing() && value->getAsBool();
         }
         default:
             return false;
@@ -646,7 +647,8 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
                 return QoreValue();
             }
             if (columnar_mask_at(mask, i, xsink)) {
-                if (rv->setEntry(out++, source->getReferencedEntry(i, xsink), xsink)) {
+                ValueHolder value(source->getReferencedEntry(i, xsink), xsink);
+                if (*xsink || rv->setEntry(out++, *value, xsink)) {
                     return QoreValue();
                 }
             }
@@ -688,7 +690,7 @@ static bool columnar_value_is_null(QoreValue value, size_t index, ExceptionSink*
         case NT_LIST:
             return value.get<const QoreListNode>()->retrieveEntry(index).isNullOrNothing();
         case NT_BUFFER:
-            return value.get<const QoreBufferNode>()->getReferencedEntry(index, xsink).isNullOrNothing();
+            return value.get<const QoreBufferNode>()->isElementNull(index);
         default:
             assert(false);
             return true;

@@ -1198,7 +1198,9 @@ QoreValue qore_buffer_binary_op(const QoreValue& left, const QoreValue& right, Q
         bool left_null = false;
         bool right_null = false;
         QoreValue lv = qore_buffer_runtime_operand_value(l, i, left_null);
+        ValueOptionalRefHolder lv_holder(lv, l.buffer && !left_null, xsink);
         QoreValue rv_value = qore_buffer_runtime_operand_value(r, i, right_null);
+        ValueOptionalRefHolder rv_value_holder(rv_value, r.buffer && !right_null, xsink);
         if (left_null || right_null) {
             if ((*rv)->setEntry(i, QoreValue(), xsink)) {
                 return QoreValue();
@@ -1207,9 +1209,10 @@ QoreValue qore_buffer_binary_op(const QoreValue& left, const QoreValue& right, Q
         }
 
         QoreValue value = comparison
-            ? QoreValue(qore_buffer_compute_comparison_value(lv, rv_value, op))
-            : qore_buffer_compute_arithmetic_value(lv, rv_value, op, result_element_type, xsink);
-        if (*xsink || (*rv)->setEntry(i, value, xsink)) {
+            ? QoreValue(qore_buffer_compute_comparison_value(*lv_holder, *rv_value_holder, op))
+            : qore_buffer_compute_arithmetic_value(*lv_holder, *rv_value_holder, op, result_element_type, xsink);
+        ValueHolder value_holder(value, xsink);
+        if (*xsink || (*rv)->setEntry(i, *value_holder, xsink)) {
             return QoreValue();
         }
     }
@@ -2281,17 +2284,23 @@ bool QoreBufferNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsi
                 case QoreBufferElementType::Int8:
                 case QoreBufferElementType::Int16:
                 case QoreBufferElementType::Int32:
-                case QoreBufferElementType::Int64:
-                    if (getReferencedEntry(i).getAsBigInt() != b->getReferencedEntry(i).getAsBigInt()) {
+                case QoreBufferElementType::Int64: {
+                    ValueHolder left(getReferencedEntry(i), xsink);
+                    ValueHolder right(b->getReferencedEntry(i), xsink);
+                    if (left->getAsBigInt() != right->getAsBigInt()) {
                         return false;
                     }
                     break;
+                }
                 case QoreBufferElementType::Float32:
-                case QoreBufferElementType::Float64:
-                    if (getReferencedEntry(i).getAsFloat() != b->getReferencedEntry(i).getAsFloat()) {
+                case QoreBufferElementType::Float64: {
+                    ValueHolder left(getReferencedEntry(i), xsink);
+                    ValueHolder right(b->getReferencedEntry(i), xsink);
+                    if (left->getAsFloat() != right->getAsFloat()) {
                         return false;
                     }
                     break;
+                }
                 case QoreBufferElementType::Bool:
                     if (getBoolBit(i) != b->getBoolBit(i)) {
                         return false;
@@ -2689,7 +2698,8 @@ QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
             if (isElementNull(i)) {
                 continue;
             }
-            rv += getReferencedEntry(i).getAsFloat();
+            ValueHolder value(getReferencedEntry(i), xsink);
+            rv += value->getAsFloat();
         }
         return rv;
     }
@@ -2705,7 +2715,8 @@ QoreValue QoreBufferNode::sum(ExceptionSink* xsink) const {
         if (element_type == QoreBufferElementType::Bool) {
             rv += getBoolBit(i) ? 1 : 0;
         } else {
-            rv += getReferencedEntry(i).getAsBigInt();
+            ValueHolder value(getReferencedEntry(i), xsink);
+            rv += value->getAsBigInt();
         }
     }
     return rv;
@@ -2755,7 +2766,8 @@ QoreValue QoreBufferNode::mean(ExceptionSink* xsink) const {
         if (element_type == QoreBufferElementType::Bool) {
             rv += getBoolBit(i) ? 1.0 : 0.0;
         } else {
-            rv += getReferencedEntry(i).getAsFloat();
+            ValueHolder value(getReferencedEntry(i), xsink);
+            rv += value->getAsFloat();
         }
     }
     return count ? QoreValue(rv / count) : QoreValue();
@@ -2804,7 +2816,8 @@ QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
             case QoreBufferElementType::Int16:
             case QoreBufferElementType::Int32:
             case QoreBufferElementType::Int64: {
-                int64 n = getReferencedEntry(i).getAsBigInt();
+                ValueHolder value(getReferencedEntry(i), xsink);
+                int64 n = value->getAsBigInt();
                 if (!found || n < int_rv) {
                     int_rv = n;
                 }
@@ -2812,7 +2825,8 @@ QoreValue QoreBufferNode::min(ExceptionSink* xsink) const {
             }
             case QoreBufferElementType::Float32:
             case QoreBufferElementType::Float64: {
-                double n = getReferencedEntry(i).getAsFloat();
+                ValueHolder value(getReferencedEntry(i), xsink);
+                double n = value->getAsFloat();
                 if (!found || n < float_rv) {
                     float_rv = n;
                 }
@@ -2886,7 +2900,8 @@ QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
             case QoreBufferElementType::Int16:
             case QoreBufferElementType::Int32:
             case QoreBufferElementType::Int64: {
-                int64 n = getReferencedEntry(i).getAsBigInt();
+                ValueHolder value(getReferencedEntry(i), xsink);
+                int64 n = value->getAsBigInt();
                 if (!found || n > int_rv) {
                     int_rv = n;
                 }
@@ -2894,7 +2909,8 @@ QoreValue QoreBufferNode::max(ExceptionSink* xsink) const {
             }
             case QoreBufferElementType::Float32:
             case QoreBufferElementType::Float64: {
-                double n = getReferencedEntry(i).getAsFloat();
+                ValueHolder value(getReferencedEntry(i), xsink);
+                double n = value->getAsFloat();
                 if (!found || n > float_rv) {
                     float_rv = n;
                 }
@@ -3013,8 +3029,11 @@ QoreBufferNode* QoreBufferNode::sliceRange(size_t start, size_t stop, ExceptionS
         size_t source_index = start - i;
         if (isElementNull(source_index)) {
             rv->setNull(i);
-        } else if (rv->setEntry(i, getReferencedEntry(source_index), xsink)) {
-            return nullptr;
+        } else {
+            ValueHolder value(getReferencedEntry(source_index), xsink);
+            if (rv->setEntry(i, *value, xsink)) {
+                return nullptr;
+            }
         }
     }
     return rv.release();

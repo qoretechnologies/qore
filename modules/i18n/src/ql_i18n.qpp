@@ -1651,10 +1651,11 @@ static QoreBufferNode* i18n_string_predicate_mask_impl(QoreValue values, const Q
             return nullptr;
         }
         QoreValue value = list ? list->retrieveEntry(i) : buffer->getReferencedEntry(i, xsink);
+        ValueOptionalRefHolder value_holder(value, buffer != nullptr, xsink);
         if (*xsink) {
             return nullptr;
         }
-        bool match = i18n_string_predicate_value(value, op, needle, *collator, xsink);
+        bool match = i18n_string_predicate_value(*value_holder, op, needle, *collator, xsink);
         if (*xsink) {
             return nullptr;
         }

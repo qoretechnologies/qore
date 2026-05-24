@@ -1081,7 +1081,8 @@ QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) 
                 assert(false);
                 break;
         }
-        if (buffer->setEntry(static_cast<size_t>(i), value, xsink)) {
+        ValueHolder value_holder(value, xsink);
+        if (buffer->setEntry(static_cast<size_t>(i), *value_holder, xsink)) {
             return nullptr;
         }
     }
