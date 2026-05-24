@@ -266,9 +266,15 @@ public class SGLangRestConnection inherits RestClient::RestConnection {
             "schemes": {
                 "sglang": True,
             },
+            # AbstractConnection::getRealUrl() reverses this map (value -> key) to resolve
+            # the "sglang://" URL to a real transport; mapping BOTH "http" and "https" to
+            # the single "sglang" scheme made that reverse lookup ambiguous, and hash
+            # last-wins resolved "sglang" -> "https", so the connection ping did an
+            # SSL_connect() against the plain-HTTP SGLang server ("packet length too long")
+            # and reported the connection down.  SGLang serves plain HTTP (and the embedder
+            # normalizes sglang:// -> http://), so map the single scheme to http only.
             "base_scheme_map": {
                 "http": "sglang",
-                "https": "sglang",
             },
             "options": RestConnection::ConnectionScheme.options + {
                 "model": <ConnectionOptionInfo>{
