@@ -97,6 +97,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         */
         *code<nothing()> wake_callback;
 
+        #! Callback run by the HTTP server when this SSE stream is disconnected
+        *code<nothing()> close_callback;
+
         #! Maximum time producer/control threads may wait for the stream state lock
         const StateLockTimeoutMs = 5000;
     }
@@ -136,6 +139,20 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         lockState("setWakeCallback");
         on_exit m.unlock();
         wake_callback = cb;
+    }
+
+    #! Sets the callback invoked when the stream is disconnected
+    setCloseCallback(*code<nothing()> cb) {
+        lockState("setCloseCallback");
+        on_exit m.unlock();
+        close_callback = cb;
+    }
+
+    #! Returns the callback invoked when the stream is disconnected
+    *code<nothing()> getCloseCallback() {
+        lockState("getCloseCallback");
+        on_exit m.unlock();
+        return close_callback;
     }
 
     #! Returns the goal of the operation
@@ -182,18 +199,20 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
         notifier.acknowledge();
 
-        # Do not register the client socket for read readiness while an H1 SSE
-        # stream is idle.  A closed peer makes the fd permanently readable, and
-        # this Qore poll operation does not consume from it.  EventNotifier
-        # wakeups are enough to flush queued events; a non-blocking send detects
-        # disconnects when the next event is written.
+        # A client-side close makes the H1 socket readable.  Monitor it as an
+        # extra fd while the main wait remains on the EventNotifier, and use a
+        # non-blocking idle probe to turn EOF/fatal read-side errors into prompt
+        # SSE deregistration instead of waiting for a heartbeat or later write.
+        if (checkPeerClosed()) {
+            return NOTHING;
+        }
 
         # Send queued data through Socket::startPollSend(), keeping all socket
         # I/O in the async poll state machine.
         while (True) {
             if (pending_data) {
                 *hash<SocketPollInfo> info = continueSend();
-                if (state != STATE_STREAMING) {
+                if (state == STATE_DISCONNECTED || state == STATE_ERROR) {
                     return NOTHING;
                 }
                 if (info) {
@@ -234,28 +253,17 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             if (elapsed_ms >= heartbeat_ms) {
                 pending_data = heartbeat_msg;
                 *hash<SocketPollInfo> info = continueSend();
-                if (state != STATE_STREAMING) {
+                if (state == STATE_DISCONNECTED || state == STATE_ERROR) {
                     return NOTHING;
                 }
                 if (info) {
                     return info;
                 }
-                return <SocketPollInfo>{
-                    "events": SOCK_POLLIN,
-                    "socket": notifier,
-                    "poll_timeout_ms": heartbeat_ms,
-                };
+                return getIdlePollInfo(heartbeat_ms);
             }
-            return <SocketPollInfo>{
-                "events": SOCK_POLLIN,
-                "socket": notifier,
-                "poll_timeout_ms": heartbeat_ms - elapsed_ms,
-            };
+            return getIdlePollInfo(heartbeat_ms - elapsed_ms);
         }
-        return <SocketPollInfo>{
-            "events": SOCK_POLLIN,
-            "socket": notifier,
-        };
+        return getIdlePollInfo();
     }
 
     #! Continues the active non-blocking send operation
@@ -319,6 +327,36 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     queueRawString(string data) {
         event_channel.send(data);
         notifier.notify();
+    }
+
+    private hash<SocketPollInfo> getIdlePollInfo(*int poll_timeout_ms) {
+        hash<SocketPollInfo> rv = <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+            "extra_fds": (
+                <ExtraPollFdInfo>{
+                    "fd": sock.getPollableDescriptor(),
+                    "events": SOCK_POLLIN,
+                },
+            ),
+        };
+        if (exists poll_timeout_ms) {
+            rv.poll_timeout_ms = poll_timeout_ms;
+        }
+        return rv;
+    }
+
+    private bool checkPeerClosed() {
+        try {
+            if (sock.checkIdleDataForAsyncPoll() != 0) {
+                state = STATE_DISCONNECTED;
+                return True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            state = STATE_DISCONNECTED;
+            return True;
+        }
+        return False;
     }
 
     #! Formats an SSE event according to the spec

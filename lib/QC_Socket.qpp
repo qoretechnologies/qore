@@ -5908,6 +5908,20 @@ bool Socket::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return socket_exec_is_data_available(self, s, (int)timeout_ms, xsink);
 }
 
+//! Nonblocking idle-data probe for sockets already owned by async poll operations
+/** This method is intended for async poll operations that already received
+    socket readability from the async I/O controller and must distinguish
+    "still idle" from peer close without running a nested poll on the same fd.
+
+    @return 1 if application data is available, 0 if the socket is still idle,
+        -1 if the connection is closed or unusable
+
+    @since %Qore 2.3
+*/
+int Socket::checkIdleDataForAsyncPoll() {
+    return s->checkIdleDataForAsyncPoll(xsink);
+}
+
 //! Returns @ref True or @ref False depending on whether all the data has been written to the socket
 /** With a timeout of zero this method returns immediately.
 
@@ -7636,6 +7650,9 @@ bool Socket::isQuic() [flags=CONSTANT] {
     @param path request path
     @param headers optional request headers
     @param body optional request body
+    @param suppress_wake if @ref True, the request is queued without waking the
+    async I/O controller; the caller must wake the owning poll operation after
+    registering response state
 
     @return the stream ID assigned to this request
 
@@ -7646,7 +7663,8 @@ bool Socket::isQuic() [flags=CONSTANT] {
 
     @since %Qore 2.3
 */
-int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
+int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body,
+        bool suppress_wake = False) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     char body_short_buf[7];
@@ -7654,7 +7672,9 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
             xsink, "QUIC-ERROR")) {
         return -1;
     }
-    int64_t stream_id = s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
+    int64_t stream_id = suppress_wake
+        ? s->submitQuicRequestNoWake(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink)
+        : s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
     return stream_id;
 }
 
@@ -7674,6 +7694,9 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @param method HTTP method (POST, etc.)
     @param path request path
     @param headers optional request headers
+    @param suppress_wake if @ref True, the request is queued without waking the
+    async I/O controller; the caller must wake the owning poll operation after
+    registering response state
 
     @return the stream ID assigned to this request
 
@@ -7681,8 +7704,11 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
 
     @since %Qore 2.3
 */
-int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers) [flags=NAMED_ARGS] {
-    int64_t stream_id = s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
+int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers,
+        bool suppress_wake = False) [flags=NAMED_ARGS] {
+    int64_t stream_id = suppress_wake
+        ? s->submitQuicRequestStreamingNoWake(method->c_str(), path->c_str(), headers, xsink)
+        : s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
     return stream_id;
 }
 

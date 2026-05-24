@@ -2482,7 +2482,7 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::Sse: {
                 HttpSseStreamPollOperation op = result.spop;
                 if (op.isDisconnected()) {
-                    handleSseDisconnect(uh, cinfo);
+                    handleSseDisconnect(uh, cinfo, op);
                 } else {
                     # Re-submit for continued polling (picks up queued events)
                     submitConnectionOp(uh, cinfo);
@@ -3321,7 +3321,8 @@ public class HttpAsyncSocketIoController {
         code never runs on the AsyncSocketIo callback dispatcher worker (which
         would risk deadlocks and bypass per-dispatch context setup).
     */
-    private handleSseDisconnect(string uh, hash<HttpActiveConnectionInfo> cinfo) {
+    private handleSseDisconnect(string uh, hash<HttpActiveConnectionInfo> cinfo,
+            HttpSseStreamPollOperation op) {
         log(LoggerLevel::INFO, "SSE disconnect: %y", uh);
 
         {
@@ -3339,7 +3340,16 @@ public class HttpAsyncSocketIoController {
         }
 
         try {
+            *code<nothing()> stream_close_callback = op.getCloseCallback();
             submitToHandlerPool(cinfo.target, sub () {
+                if (stream_close_callback) {
+                    try {
+                        stream_close_callback();
+                    } catch (hash<ExceptionInfo> ex) {
+                        log(LoggerLevel::ERROR, "SSE close callback threw for %s: %s: %s",
+                            uh, ex.err, ex.desc);
+                    }
+                }
                 try {
                     cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
                 } catch (hash<ExceptionInfo> ex) {

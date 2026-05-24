@@ -267,6 +267,9 @@ struct qore_socketsource_private {
 */
 DLLLOCAL bool qore_on_async_io_thread();
 
+//! Returns true if the calling thread is executing a Qore continuePoll() callback for async I/O
+DLLLOCAL bool qore_in_async_io_continue_poll_worker();
+
 #ifdef DEBUG
 //! Overrides the async I/O thread flag for focused unit tests
 /** @return the previous async I/O thread flag value

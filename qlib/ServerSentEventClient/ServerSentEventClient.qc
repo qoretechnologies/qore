@@ -699,6 +699,13 @@ sse.setEventQueue();
             stop = True;
             # wake up any sleeping threads
             sleep_cond.broadcast();
+            if (hc.isOpen()) {
+                try {
+                    hc.disconnect();
+                } catch (hash<ExceptionInfo> ex) {
+                    # The reader thread may be observing the same close concurrently.
+                }
+            }
             # wait for the event thread to terminate
             waitTidCleared(tid);
             cid = -1;

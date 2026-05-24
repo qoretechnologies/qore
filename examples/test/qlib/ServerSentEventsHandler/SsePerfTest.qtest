@@ -430,6 +430,8 @@ class SsePerfTest inherits QUnit::Test {
                 usleep(50ms);
                 ++retries;
             }
+            assertEq(0, srv.sse.getConnectionIds().size(),
+                sprintf("%d byte payload: server should deregister disconnected client", size));
         }
     }
 

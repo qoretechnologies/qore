@@ -37,31 +37,38 @@
 
 void SocketSyncPoll::assertNotOnIoThread(const char* cname, const char* mname,
         ExceptionSink* xsink) {
-    if (!qore_on_async_io_thread()) {
+    bool on_io_thread = qore_on_async_io_thread();
+    bool in_continue_poll_worker = qore_in_async_io_continue_poll_worker();
+    if (!on_io_thread && !in_continue_poll_worker) {
         return;
     }
-    // A sync Socket API is running on the async I/O controller's
-    // I/O thread.  This would deadlock the controller: the sync wait
-    // primitives block the very thread that is supposed to deliver the
-    // readiness events.  Raise a fail-fast exception with a clear
-    // message so the bug surfaces as close to its origin as possible.
+    const char* where = on_io_thread
+        ? "async I/O controller thread"
+        : "async I/O continuePoll worker";
+
+    // A sync Socket API is running in the async I/O controller's execution
+    // path.  On the I/O thread this can deadlock the controller; from a Qore
+    // continuePoll() worker it can create nested waits that steal readiness
+    // registration from the outer poll operation.  Raise a fail-fast exception
+    // with a clear message so the bug surfaces as close to its origin as
+    // possible.
     //
     // In debug builds we also abort() so the stack trace points directly
     // at the offending call site; in release builds the raised exception
     // is sufficient.
     if (xsink) {
         xsink->raiseException("SOCKET-SYNC-ON-IO-THREAD-ERROR",
-            "synchronous %s::%s() called from the async I/O controller "
-            "thread: this would deadlock the controller; sync socket "
-            "APIs must only be called from handler/worker threads",
-            cname, mname);
+            "synchronous %s::%s() called from the %s: sync socket APIs "
+            "must not be called while async I/O poll operations are being "
+            "driven; use nonblocking poll-operation APIs instead",
+            cname, mname, where);
     }
 #ifdef DEBUG
     fprintf(stderr,
-        "FATAL: sync %s::%s() called from the async I/O controller "
-        "thread: this would deadlock the controller.  Sync socket "
-        "APIs must only be called from handler/worker threads.\n",
-        cname, mname);
-    assert(false && "sync socket API called from async I/O thread");
+        "FATAL: sync %s::%s() called from the %s. Sync socket APIs must "
+        "not be called while async I/O poll operations are being driven; "
+        "use nonblocking poll-operation APIs instead.\n",
+        cname, mname, where);
+    assert(false && "sync socket API called from async I/O execution path");
 #endif
 }

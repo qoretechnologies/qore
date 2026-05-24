@@ -45,6 +45,7 @@
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
+#include "qore/intern/RSection.h"
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreHttpClientObject.h>
 
@@ -296,6 +297,53 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
 
     QoreSimpleValue simple_null(null_value);
     UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
+}
+
+class TestRSectionPriv : public qore_rsection_priv {
+public:
+    DLLLOCAL void setFakeWriter(int tid) {
+        AutoLocker al(l);
+        write_tid = tid;
+    }
+
+    DLLLOCAL void clearFakeWriterAndNotify() {
+        AutoLocker al(l);
+        write_tid = -1;
+        notifyIntern();
+        unlock_signal();
+    }
+};
+
+class TestRSectionLock : public QoreVarRWLock {
+public:
+    DLLLOCAL TestRSectionLock() : QoreVarRWLock(new TestRSectionPriv) {
+    }
+
+    DLLLOCAL void setFakeWriter(int tid) {
+        static_cast<TestRSectionPriv*>(priv)->setFakeWriter(tid);
+    }
+
+    DLLLOCAL void clearFakeWriterAndNotify() {
+        static_cast<TestRSectionPriv*>(priv)->clearFakeWriterAndNotify();
+    }
+
+    DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn) {
+        return static_cast<TestRSectionPriv*>(priv)->tryRSectionLockNotifyWaitRead(rn);
+    }
+};
+
+static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c) {
+    TestRSectionLock lock;
+    RNotifier notifier;
+
+    lock.setFakeWriter(q_gettid() + 1000);
+    int try_result = lock.tryRSectionLockNotifyWaitRead(&notifier);
+    UT_ASSERT_EQ(c, -1, try_result,
+        "tryRSectionLockNotifyWaitRead() reports retry when a writer owns the lock");
+    UT_ASSERT(c, notifier.setp,
+        "tryRSectionLockNotifyWaitRead() registers notification for writer-owned lock");
+    lock.clearFakeWriterAndNotify();
+    UT_ASSERT(c, !notifier.setp, "writer release clears registered notification");
 }
 
 static void ut_asyncio_construction(UnitTestCounters& c) {
@@ -2906,6 +2954,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
+    ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
@@ -2914,6 +2963,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     UnitTestCounters c;
 
     ut_qorevalue_operator_bool_null(c);
+    ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_asyncio_construction(c);
     ut_asyncio_autostop(c);

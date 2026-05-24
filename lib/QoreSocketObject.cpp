@@ -1210,6 +1210,28 @@ static QoreObject* qore_socket_object_make_pollable_wrapper(QoreSocketObject* s)
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), s);
 }
 
+static void qore_socket_object_wake_async_controller(QoreSocketObject* s, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        return;
+    }
+
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    if (*xsink || !sock_obj) {
+        return;
+    }
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctl_priv) {
+        return;
+    }
+    ctl_priv->wakeSocketByObject(*sock_obj, xsink);
+}
+
 static int qore_socket_object_parse_http2_request_headers(const QoreHashNode* headers, std::string& method,
         std::string& path, std::vector<std::pair<std::string, std::string>>& request_headers,
         ExceptionSink* xsink) {
@@ -5380,19 +5402,13 @@ int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_c
 static int32_t qore_socket_object_submit_http2_request(QoreSocketObject* s, const QoreHashNode* headers,
         const void* body, size_t body_len, ExceptionSink* xsink, bool streaming, bool wake_controller) {
     // Fast path: if the caller is already running on the async I/O
-    // controller's I/O thread (ex: an HCIO poll operation's continuePoll
-    // submitting a request as it transitions through state), dispatching
-    // through the controller would deadlock because assertNotOnIoThread() would
-    // raise SOCKET-SYNC-ON-IO-THREAD-ERROR before we even reached the H2
-    // session. But the underlying h2->submitRequest() is a non-blocking
-    // nghttp2 enqueue (no socket I/O happens in the call), so it is safe to
-    // invoke inline on the I/O thread.  This mirrors the same pattern used
-    // by setHttp2StreamStreaming(), sendHttp2StreamDataForAsyncPoll(), and
-    // readHttp2StreamDataForAsyncPoll(); the only socket APIs the I/O
-    // thread is permitted to take are the ones that do not themselves wait
-    // on socket readiness. No wakeIoThread() is needed: we are the I/O
-    // thread; the next continuePoll cycle picks up the new stream.
-    if (qore_on_async_io_thread()) {
+    // controller's I/O thread or in a controller-owned continuePoll worker,
+    // dispatching through the synchronous controller-backed Socket API would
+    // either deadlock or create a nested poll wait.  The underlying
+    // h2->submitRequest() is only a non-blocking nghttp2 enqueue (no socket I/O
+    // happens here), so direct submission is the correct async path.
+    bool on_io_thread = qore_on_async_io_thread();
+    if (on_io_thread || qore_in_async_io_continue_poll_worker()) {
         std::string method;
         std::string path;
         std::vector<std::pair<std::string, std::string>> request_headers;
@@ -5404,8 +5420,18 @@ static int32_t qore_socket_object_submit_http2_request(QoreSocketObject* s, cons
             xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
             return -1;
         }
-        return h2->submitRequest(method.c_str(), path.c_str(), request_headers,
+        int32_t stream_id = h2->submitRequest(method.c_str(), path.c_str(), request_headers,
             body, body_len, xsink, streaming);
+        if (*xsink || stream_id < 0) {
+            return stream_id;
+        }
+        if (wake_controller && !on_io_thread) {
+            qore_socket_object_wake_async_controller(s, xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+        return stream_id;
     }
 
     QoreSocketObjectHttp2EnqueuePollOperation* poller =
@@ -6132,20 +6158,12 @@ void QoreSocketObject::shutdownAllQuicStreamReads() {
 static int64_t qore_socket_object_submit_quic_request(QoreSocketObject* s, const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink,
         bool streaming, bool wake_controller, const char* owner_name) {
-    // Fast path: see qore_socket_object_submit_http2_request for the
-    // full rationale.  In short: when the caller is already on the
-    // async I/O controller's I/O thread (ex: an HCIO H3 poll
-    // operation's continuePoll), dispatching the submission through
-    // the controller would self-deadlock because assertNotOnIoThread()
-    // raises SOCKET-SYNC-ON-IO-THREAD-ERROR. QuicSession::submitRequest
-    // / submitRequestStreaming are non-blocking ngtcp2/nghttp3 enqueues
-    // (no socket I/O happens in the call), so they are safe to invoke
-    // inline on the I/O thread. This mirrors the pattern already used by
-    // sendQuicClientStreamDataForAsyncPoll() etc. The only socket
-    // APIs the I/O thread is permitted to call are the ones that do not
-    // themselves wait on socket readiness. No wakeIoThread() is needed:
-    // we are the I/O thread.
-    if (qore_on_async_io_thread()) {
+    // Fast path: see qore_socket_object_submit_http2_request for the full
+    // rationale.  QuicSession::submitRequest* only enqueues protocol data; it
+    // does not perform socket I/O, so it is safe in the async I/O execution
+    // path and avoids nested synchronous Socket polling.
+    bool on_io_thread = qore_on_async_io_thread();
+    if (on_io_thread || qore_in_async_io_continue_poll_worker()) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(s);
         if (!session) {
             xsink->raiseException("HTTP3-ERROR", "no HTTP/3 session active");
@@ -6153,10 +6171,22 @@ static int64_t qore_socket_object_submit_quic_request(QoreSocketObject* s, const
         }
         strcase_str_map_t header_map;
         qore_socket_object_set_quic_headers(header_map, headers);
+        int64_t stream_id;
         if (streaming) {
-            return session->submitRequestStreaming(method, path, header_map, xsink);
+            stream_id = session->submitRequestStreaming(method, path, header_map, xsink);
+        } else {
+            stream_id = session->submitRequest(method, path, header_map, body, body_len, xsink);
         }
-        return session->submitRequest(method, path, header_map, body, body_len, xsink);
+        if (*xsink || stream_id < 0) {
+            return stream_id;
+        }
+        if (wake_controller && !on_io_thread) {
+            qore_socket_object_wake_async_controller(s, xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+        return stream_id;
     }
 
     return qore_socket_object_exec_quic_enqueue_int(s,
