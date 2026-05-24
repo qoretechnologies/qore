@@ -147,7 +147,8 @@
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
       \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
       autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
-      expression-to-expression predicates such as \c @amount \c >= \c @target, native string predicates including
+      expression-to-expression predicates such as \c @amount \c >= \c @target, numeric, trim/concat/null-handling,
+      case-folding, date-part, and row-independent date arithmetic expressions, native string predicates including
       \c containsAny, list membership predicates, list/hash accessors, structured ternary values, and
       ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options hash
     - the dataframe benchmark suite shows Qore outperforming pandas for the
@@ -2497,8 +2498,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - QoreFilterRecordsProcessor compiles supported DataProvider/DPQL filters
         over DataFrameBlock and BufferColumns values to vectorized DataFrame
         row masks or dense ColumnarResult boolean masks, including computed
-        scalar comparisons, expression-to-expression comparisons, structured
-        strict equality/inequality, truthy field checks, computed \c between
+        scalar comparisons, expression-to-expression comparisons, numeric,
+        trim/concat/null-handling, case-folding, date-part, and row-independent
+        date arithmetic expressions, structured strict equality/inequality,
+        truthy field checks, computed \c between
         and \c in / \c not \c in forms, \c inRange, null checks, temporal date
         comparisons, selected string predicates including \c containsAny, list
         membership predicates, list/hash accessors, structured ternary values,

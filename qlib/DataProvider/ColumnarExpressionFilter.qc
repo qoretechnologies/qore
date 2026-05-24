@@ -1897,7 +1897,7 @@ public class ColumnarExpressionFilter {
         return value;
     }
 
-    #! Returns the field name for lwr(@field) or upr(@field), when this can be handled as ignore-case matching
+    #! Returns the field name for lwr(\@field) or upr(\@field), when this can be handled as ignore-case matching
     private static *string getCaseFoldedTopLevelField(auto arg) {
         if (!(arg instanceof hash<DataProviderExpression>)) {
             return;

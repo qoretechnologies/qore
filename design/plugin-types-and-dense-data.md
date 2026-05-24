@@ -128,6 +128,13 @@ DataFrame RowMask or dense `ColumnarResult` masks:
 - computed scalar comparisons over top-level fields, including arithmetic
   expressions such as `@amount * 1.2 >= 100`, `lwr(@status) == "active"`, and
   `coalesce(@override, @value) > 0`
+- scalar function calls over top-level fields, including numeric functions
+  such as `round(@amount * 1.2)`, `floor(@score / 10)`, `ceil(@amount / 100)`,
+  and `abs(@target - @amount)`, string functions such as `trim(@name)`,
+  `concat(trim(@name), ":", lwr(@status))`, and `nullif(@status, "inactive")`,
+  and date-part functions such as `get_year(@created)` and `get_month(@created)`
+- row-independent scalar expressions on comparison sides, including date
+  arithmetic such as `@created >= 2026-04-01T00:00:00Z - days(60)`
 - expression-to-expression comparisons over top-level fields, including
   field-to-field predicates such as `@amount >= @target` and computed
   predicates such as `@amount + @tax >= @limit`
@@ -225,8 +232,9 @@ The implemented hot paths are:
 - DPQL/DataProvider dense-mask lowering for top-level and computed value
   expressions, including scalar comparisons, expression-to-expression
   comparisons, structured strict equality/inequality, truthiness, null checks,
-  `between`, `inRange`, `in` / `notIn`, string predicates, LIKE, and regular
-  expression predicates; the dense-mask path also covers `containsAny`,
+  scalar numeric, string, null-handling, date-part, and row-independent date
+  arithmetic expressions, `between`, `inRange`, `in` / `notIn`, string
+  predicates, LIKE, and regular expression predicates; the dense-mask path also covers `containsAny`,
   `listContains`, `listContainsAny`, list index/slice accessors, hash key
   accessors, and structured ternary expressions where the same generic
   expression semantics can be preserved without row materialization

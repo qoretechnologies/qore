@@ -273,10 +273,11 @@ pipeline.waitDone();
 
     QoreFilterRecordsProcessor compiles supported DPQL/DataProvider
     expressions to DataFrame row masks or dense ColumnarResult boolean masks
-    when possible, including computed comparisons, \c between, \c in / \c notIn,
-    structured strict equality/inequality, \c containsAny and other string
-    predicates, list membership predicates, list/hash accessors, ternary computed
-    values, null checks, and boolean combinations. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
+    when possible, including computed comparisons, arithmetic and scalar
+    function calls, \c between, \c in / \c notIn, structured strict
+    equality/inequality, \c containsAny and other string predicates, list
+    membership predicates, list/hash accessors, ternary computed values, null
+    checks, and boolean combinations. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
     QoreRecordLimitProcessor, QoreSetFieldsProcessor, and
     QoreSearchReplaceProcessor preserve DataFrameBlock and BufferColumns shapes
     for simple top-level fields; with ColumnarResult input they rebuild
@@ -291,8 +292,13 @@ pipeline.waitDone();
     scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
     scalar comparisons over top-level fields, expression-to-expression
     comparisons such as \c @amount \c >= \c @target or
-    \c @amount \c + \c @tax \c >= \c @limit, \c lwr(), \c coalesce(),
-    truthy field checks, \c between, \c inRange, \c in, \c not \c in,
+    \c @amount \c + \c @tax \c >= \c @limit, scalar functions including
+    \c abs(), \c round(), \c floor(), \c ceil(), \c lwr(), \c upr(),
+    \c trim(), \c ltrim(), \c rtrim(), \c concat(), \c coalesce(),
+    \c nullif(), and date-part functions such as \c get_year() and
+    \c get_month(), row-independent scalar expressions such as
+    \c 2026-04-01T00:00:00Z \c - \c days(60), truthy field checks,
+    \c between, \c inRange, \c in, \c not \c in,
     \c isNull and \c isNotNull checks, case-sensitive \c contains,
     \c containsAny, \c starts-with, and \c ends-with string predicates,
     \c listContains and \c listContainsAny membership predicates, list index,
@@ -306,7 +312,8 @@ pipeline.waitDone();
     @code{.py}
 ColumnarResult dense_columns = employees.toColumnarResult();
 hash<DataProviderExpression> high_value = DataProvider::parseDpqlExpression(
-    "@salary >= 90000.0 && @active == true");
+    "round(@salary * 1.05) >= 90000.0 && trim(@status) == \"active\""
+        + " && @created >= 2026-04-01T00:00:00Z - days(60)");
 
 DataProviderPipeline dense_pipeline(<PipelineOptionInfo>{
     "name": "dense-filter",

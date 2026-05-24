@@ -835,7 +835,8 @@ pipeline.append(new QoreFilterRecordsProcessor({
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
     \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
     expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
-    expression-to-expression comparisons, computed arithmetic and case-folding expressions, \c between, \c inRange,
+    expression-to-expression comparisons, computed arithmetic, numeric function, trim/concat/null-handling,
+    case-folding, date-part, and row-independent date arithmetic expressions, \c between, \c inRange,
     \c in, \c notIn, null checks, string predicates including \c containsAny, list membership predicates,
     list/hash accessors, ternary computed values, boolean combinations, and structured strict
     equality/inequality compile to DataFrame row masks or dense ColumnarResult \c buffer<bool> masks;
@@ -1234,8 +1235,9 @@ if (errors) {
       can accept \c BufferColumns or \c DataFrameBlock input without row materialization
     - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
       \c DataFrameBlock and \c BufferColumns input directly for supported scalar, expression-to-expression,
-      and computed \c between / \c in comparisons, structured strict equality/inequality, \c containsAny and other
-      string predicates, list membership predicates, list/hash accessors, ternary computed values,
+      and computed \c between / \c in comparisons, numeric function calls, trim/concat/null-handling functions,
+      date-part functions, row-independent date arithmetic, structured strict equality/inequality,
+      \c containsAny and other string predicates, list membership predicates, list/hash accessors, ternary computed values,
       boolean combinations, and null checks; BufferColumns filters also lower temporal date comparisons, \c like,
       and regular expression predicates to dense masks
     - added DPQL string support to @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
