@@ -14,6 +14,7 @@ class HttpWebSocketPollOperationBaseTest inherits QUnit::Test {
         addTestCase("basic construction", \basicConstructionTest());
         addTestCase("send methods", \sendMethodsTest());
         addTestCase("recv empty", \recvEmptyTest());
+        addTestCase("frame callback dispatch", \frameCallbackDispatchTest());
         addTestCase("state transitions", \stateTransitionsTest());
         addTestCase("close handshake", \closeHandshakeTest());
         addTestCase("loopback text", \loopbackTextTest());
@@ -191,6 +192,46 @@ class HttpWebSocketPollOperationBaseTest inherits QUnit::Test {
         # No data sent, no frames available
         assertFalse(op.hasReceivedFrames());
         assertEq(NOTHING, op.getReceivedFrame());
+
+        pair.client.close();
+        pair.server.close();
+    }
+
+    frameCallbackDispatchTest() {
+        hash<auto> pair = createSocketPair();
+        HttpWebSocketPollOperation op(pair.server);
+
+        bool called = False;
+        bool callback_seen_data = False;
+        op.setFrameCallback(sub () {
+            called = True;
+            callback_seen_data = op.hasReceivedFrames();
+        });
+
+        pair.client.send(encodeClientFrame(WS_OP_TEXT, binary("callback")));
+
+        int attempts = 0;
+        while (!op.hasReceivedFrames() && attempts < 50) {
+            auto poll_info = op.continuePoll();
+            if (!exists poll_info) {
+                break;
+            }
+            ++attempts;
+            if (!op.hasReceivedFrames()) {
+                usleep(10ms);
+            }
+        }
+
+        assertTrue(op.hasReceivedFrames(), "continuePoll should decode a frame");
+        assertFalse(called, "frame callback must not run from continuePoll()");
+
+        op.onPollComplete();
+        assertTrue(called, "frame callback should run from onPollComplete()");
+        assertTrue(callback_seen_data, "callback should observe queued frame data");
+
+        *hash<auto> recv_frame = op.getReceivedFrame();
+        assertEq("text", recv_frame.type);
+        assertEq("callback", recv_frame.data);
 
         pair.client.close();
         pair.server.close();

@@ -217,8 +217,19 @@ static thread_local bool inside_continue_poll_batch = false;
 //! making such operations promptly interruptible on cancel/shutdown.
 static thread_local std::string current_continue_poll_owner;
 
+//! True while a dispatcher worker is executing a Qore poll operation's continuePoll().
+/** Sync socket APIs are illegal here as well as on the I/O thread: they can
+    create nested controller waits on the same fd and corrupt/delay the parent
+    poll registration.
+*/
+static thread_local bool in_async_continue_poll_worker = false;
+
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
+}
+
+bool qore_in_async_io_continue_poll_worker() {
+    return in_async_continue_poll_worker;
 }
 
 #ifdef DEBUG
@@ -1132,20 +1143,24 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                         // concurrent on the worker pool.
                         AutoLocker cpl(qore_continue_poll_lock);
 
-                        // Publish this op's owner for the duration of its
-                        // continuePoll() so any nested submit() (e.g. a
-                        // blocking waitForNotifier()) inherits it as a cancel
-                        // scope — see current_continue_poll_owner.  RAII so an
-                        // exception cannot leave it dangling.
-                        struct CPOwnerGuard {
+                        // Publish the Qore continuePoll() worker context so
+                        // nested submits inherit the cancel scope and sync
+                        // socket APIs fail fast instead of creating nested fd
+                        // polling on a controller-owned socket.
+                        struct CPContextGuard {
                             std::string prev;
-                            CPOwnerGuard(const std::string& o) : prev(current_continue_poll_owner) {
+                            bool prev_in_worker;
+                            CPContextGuard(const std::string& o)
+                                    : prev(current_continue_poll_owner),
+                                    prev_in_worker(in_async_continue_poll_worker) {
                                 current_continue_poll_owner = o;
+                                in_async_continue_poll_worker = true;
                             }
-                            ~CPOwnerGuard() {
+                            ~CPContextGuard() {
                                 current_continue_poll_owner = prev;
+                                in_async_continue_poll_worker = prev_in_worker;
                             }
-                        } cpo_guard(async_item.owner);
+                        } cp_context_guard(async_item.owner);
 
                         ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
                             &work_xsink);

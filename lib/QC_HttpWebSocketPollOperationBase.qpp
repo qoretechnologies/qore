@@ -359,9 +359,6 @@ void HttpWebSocketPollOperationPriv::abort(ExceptionSink* xsink) {
     ws_state = WsState::CLOSED;
     releaseSendOp(xsink);
     releaseRecvOp(xsink);
-    if (frame_callback) {
-        frame_callback->execValue(nullptr, xsink).discard(xsink);
-    }
 }
 
 QoreValue HttpWebSocketPollOperationPriv::getOutput() const {
@@ -561,9 +558,6 @@ void HttpWebSocketPollOperationPriv::pushRecvFrame(const char* type, AbstractQor
     recv_queue->push(xsink, h.release());
     ++frames_pushed_in_cycle;
     last_recv_activity_ms = q_clock_getmillis();
-    if (!*xsink && frame_callback) {
-        frame_callback->execValue(nullptr, xsink).discard(xsink);
-    }
 }
 
 void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const char* reason,
@@ -575,9 +569,6 @@ void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const cha
     recv_queue->push(xsink, h.release());
     ++frames_pushed_in_cycle;
     last_recv_activity_ms = q_clock_getmillis();
-    if (!*xsink && frame_callback) {
-        frame_callback->execValue(nullptr, xsink).discard(xsink);
-    }
 }
 
 void HttpWebSocketPollOperationPriv::queueSendText(const QoreStringNode* text, ExceptionSink* xsink) {
@@ -643,10 +634,24 @@ void HttpWebSocketPollOperationPriv::queueSendRawFrame(const BinaryNode* data, E
 }
 
 void HttpWebSocketPollOperationPriv::setFrameCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
+    AutoLocker al(m);
     if (frame_callback) {
         frame_callback->deref(xsink);
     }
     frame_callback = cb;
+}
+
+void HttpWebSocketPollOperationPriv::dispatchFrameCallback(ExceptionSink* xsink) {
+    ReferenceHolder<ResolvedCallReferenceNode> cb(xsink);
+    {
+        AutoLocker al(m);
+        if (frame_callback) {
+            cb = frame_callback->refRefSelf();
+        }
+    }
+    if (cb) {
+        ValueHolder rv(cb->execValue(nullptr, xsink), xsink);
+    }
 }
 
 void HttpWebSocketPollOperationPriv::drainSendQueue(ExceptionSink* xsink) {
@@ -751,9 +756,6 @@ void HttpWebSocketPollOperationPriv::setError(ExceptionSink* xsink) {
             error_info->setKeyValue("desc",
                 desc.getReferencedValue(), &save_xsink);
         }
-    }
-    if (frame_callback) {
-        frame_callback->execValue(nullptr, xsink).discard(xsink);
     }
 }
 
@@ -1076,9 +1078,9 @@ nothing HttpWebSocketPollOperationBase::sendRawFrame(binary frame_data) [flags=N
     priv->queueSendRawFrame(frame_data, xsink);
 }
 
-//! Sets the frame callback, called on the I/O thread when a frame is received
-/** The callback must be fast (e.g., signal a condition variable) — it runs on
-    the I/O thread and blocks further poll processing.
+//! Sets the frame callback, called from onPollComplete() when a frame is received
+/** The callback is dispatched by the async I/O controller on a callback worker,
+    after the I/O thread has pushed received frames to the internal queue.
 
     Pass @ref nothing to clear the callback.
 
@@ -1145,10 +1147,11 @@ nothing HttpWebSocketPollOperationBase::setEchoMode(bool enabled) [flags=NAMED_A
 
 //! Called by the I/O controller when frames have been pushed during continuePoll
 /** Override in subclasses to process received frames on a worker thread.
-    The default implementation does nothing.
+    Subclasses overriding this method must call the base implementation to
+    dispatch any callback registered with @ref setFrameCallback().
 
     @since %Qore 2.3
 */
 nothing HttpWebSocketPollOperationBase::onPollComplete() {
-    // Default: no-op; subclasses override to drain recv_queue
+    priv->dispatchFrameCallback(xsink);
 }

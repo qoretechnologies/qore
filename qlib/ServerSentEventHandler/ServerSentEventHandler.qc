@@ -195,6 +195,35 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         return keys ch;
     }
 
+    #! Removes a registered connection and runs connection-close hooks
+    /** Called by async HTTP server teardown when the transport has detected that
+        the peer closed the SSE stream.
+
+        @param cid the SSE connection ID
+    */
+    deregisterConnection(softstring cid) {
+        *ServerSentEventConnection conn;
+        {
+            rwl.writeLock();
+            on_exit rwl.writeUnlock();
+            conn = removeConnectionLocked(cid);
+        }
+        if (!conn) {
+            return;
+        }
+
+        try {
+            conn.connectionClosed();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("Exception closing ServerSentEvent connection %y: %s", cid, get_exception_string(ex));
+        }
+        try {
+            deregisterConnectionImpl(conn);
+        } catch (hash<ExceptionInfo> ex) {
+            logError("Exception deregistering ServerSentEvent connection %y: %s", cid, get_exception_string(ex));
+        }
+    }
+
     #! Legacy synchronous SSE handler entry point (no longer used)
     /** The HttpServer no longer uses synchronous dedicated handlers. SSE connections
         are managed by the async I/O controller via @ref setupAsyncSseConnection().
@@ -478,8 +507,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     #! Called when a connection is removed from the connection map
-    private removeConnectionLocked(string cid) {
-        remove ch{cid};
+    private *ServerSentEventConnection removeConnectionLocked(string cid) {
+        return remove ch{cid};
     }
 
     #! Resend all events since the given event

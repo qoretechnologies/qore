@@ -132,6 +132,11 @@ void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
     }
 }
 
+static bool is_no_narrow_container_type(const QoreTypeInfo* ti) {
+    return ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
+        || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo;
+}
+
 int qore_gvar_ref_u::write(ExceptionSink* xsink) const {
     if (_refptr & 1) {
         xsink->raiseException("ACCESS-ERROR", "attempt to write to read-only imported global variable '%s'",
@@ -2906,7 +2911,14 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         LocalRefHelper<LocalVarValue> helper(this, *ref, lvh.vl.xsink);
-        return helper ? lvh.doLValue(ref, for_remove) : -1;
+        if (!helper || lvh.doLValue(ref, for_remove)) {
+            return -1;
+        }
+        // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
+        if (val.assigned && is_no_narrow_container_type(refTypeInfo)) {
+            lvh.setTypeInfo(refTypeInfo);
+        }
+        return 0;
     }
 
     // note: type info is not stored at runtime for local variables
@@ -2945,9 +2957,18 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove) const {
             return -1;
         }
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvh.vl.xsink);
+        const QoreTypeInfo* effectiveRefTypeInfo = val.assigned && is_no_narrow_container_type(refTypeInfo)
+            ? refTypeInfo : nullptr;
         sl.unlock();
         LocalRefHelper<ClosureVarValue> helper(this, **ref, lvh.vl.xsink);
-        return helper ? lvh.doLValue(*ref, for_remove) : -1;
+        if (!helper || lvh.doLValue(*ref, for_remove)) {
+            return -1;
+        }
+        // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
+        if (effectiveRefTypeInfo) {
+            lvh.setTypeInfo(effectiveRefTypeInfo);
+        }
+        return 0;
     }
 
     lvh.set(rml);

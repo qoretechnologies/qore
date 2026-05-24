@@ -1145,9 +1145,9 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Socket", "startPollQuicSendResponse",
             ("session_id", "stream_id", "status_code", "headers", "body"));
         assertNamedClassMethodVariantCount("Socket", "submitQuicRequest",
-            ("method", "path", "headers", "body"));
+            ("method", "path", "headers", "body", "suppress_wake"));
         assertNamedClassMethodVariantCount("Socket", "submitQuicRequestStreaming",
-            ("method", "path", "headers"));
+            ("method", "path", "headers", "suppress_wake"));
         assertNamedClassMethodVariantCount("Socket", "sendQuicClientStreamData",
             ("stream_id", "body", "end_stream"));
         assertNamedClassMethodVariantCount("Socket", "waitForQuicClientStreamDrain",
