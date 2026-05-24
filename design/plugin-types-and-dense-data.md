@@ -212,7 +212,8 @@ The implemented hot paths are:
 - horizontal concat
 - DataProvider filter/group/projection/limit/set/search-replace shape
   preservation
-- native PostgreSQL columnar SQL reads
+- native columnar SQL reads for PostgreSQL, MySQL, Oracle, ODBC, SQLite,
+  Sybase/FreeTDS, and JDBC
 - SqlUtil/BulkSqlUtil-backed DataFrame SQL writes
 
 The benchmark suite lives under `bench/`. On the measured local setup with a
@@ -228,7 +229,9 @@ targets are:
 - more DPQL expression forms lowered to dense masks when they can preserve
   generic expression semantics without hidden row materialization
 - wider vectorized analytics outputs
-- direct packed-column support in more DBI drivers
+- additional type-specific DBI dense mappings, such as temporal columns or
+  driver-native high-precision numeric representations where they can be
+  exposed without lossy conversion
 - more direct Arrow C Data consumers in binary modules that need libqore-level
   columnar interchange without linking against Arrow C++; module-grpc already
   uses this bridge when built against a qore runtime that exports it
