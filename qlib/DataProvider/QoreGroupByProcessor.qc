@@ -137,8 +137,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         #! Runtime DataFrame class captured from DataFrameBlock input for shape-preserving flushes
         *Class pending_dataframe_class;
 
-        #! Native DataFrame aggregate result for simple single-block DataFrameBlock inputs
-        *auto pending_dataframe_native_result;
+        #! Native DataFrame aggregate input for simple single-block DataFrameBlock inputs
+        *auto pending_dataframe_native_input;
 
         #! Flag indicating if the processor has been configured
         bool configured = False;
@@ -271,6 +271,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
     #! Accumulates a record into the appropriate group
     private *auto processRecordImpl(auto record) {
         updatePendingOutputShape(DataProviderShape::RowRecords);
+        materializePendingNativeInput();
         accumulateRecord(record);
         # accumulation only — never emit during processRecord
         return;
@@ -446,13 +447,37 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
         pending_output_shape_set = False;
         remove pending_dataframe_class;
-        remove pending_dataframe_native_result;
+        remove pending_dataframe_native_input;
+    }
+
+    #! Converts deferred native DataFrame input into the regular accumulator before mixed input is processed
+    private materializePendingNativeInput() {
+        if (!exists pending_dataframe_native_input) {
+            return;
+        }
+        auto input = pending_dataframe_native_input;
+        remove pending_dataframe_native_input;
+        accumulateHashOfLists(input.toColumnHash());
+    }
+
+    #! Builds a native DataFrame aggregate result from deferred single-block input
+    private *auto buildPendingNativeResult() {
+        if (!exists pending_dataframe_native_input) {
+            return;
+        }
+        *auto result = tryNativeDataFrameAggregate(pending_dataframe_native_input);
+        if (exists result) {
+            return result;
+        }
+        materializePendingNativeInput();
+        return;
     }
 
     #! Emits one record per group with computed aggregates for direct row-record callers
     private *list<auto> flushRecordsImpl() {
-        if (exists pending_dataframe_native_result) {
-            auto result = pending_dataframe_native_result;
+        *auto native_result = buildPendingNativeResult();
+        if (exists native_result) {
+            auto result = native_result;
             clearAccumulatedState();
             return result.toRecords();
         }
@@ -467,8 +492,9 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
     #! Emits accumulated results in the negotiated pipeline shape when possible
     private flushImpl(code enqueue) {
-        if (exists pending_dataframe_native_result) {
-            auto result = pending_dataframe_native_result;
+        *auto native_result = buildPendingNativeResult();
+        if (exists native_result) {
+            auto result = native_result;
             DataProviderShape output_shape = pending_output_shape;
             clearAccumulatedState();
 
@@ -535,17 +561,16 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             case DataProviderShape::DataFrameBlock:
                 updatePendingOutputShape(DataProviderShape::DataFrameBlock);
                 pending_dataframe_class = Class::getClass(records);
-                if (!groups.size() && !exists pending_dataframe_native_result) {
-                    *auto native_result = tryNativeDataFrameAggregate(records);
-                    if (exists native_result) {
-                        pending_dataframe_native_result = native_result;
-                        return;
-                    }
+                if (!groups.size() && !exists pending_dataframe_native_input && canUseNativeDataFrameAggregate()) {
+                    pending_dataframe_native_input = records;
+                    return;
                 }
+                materializePendingNativeInput();
                 accumulateHashOfLists(records.toColumnHash());
                 return;
             case DataProviderShape::HashOfLists:
                 updatePendingOutputShape(DataProviderShape::HashOfLists);
+                materializePendingNativeInput();
                 if (!accumulateColumnBlock(records)) {
                     accumulateHashOfLists(records);
                 }
@@ -553,19 +578,20 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             case DataProviderShape::BufferColumns:
                 updatePendingOutputShape(DataProviderShape::BufferColumns);
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    if (!groups.size() && !exists pending_dataframe_native_result) {
+                    if (!groups.size() && !exists pending_dataframe_native_input && canUseNativeDataFrameAggregate()) {
                         auto df = AbstractDataProcessor::getDataFrameClass().newObject(records.toColumnHash());
-                        *auto native_result = tryNativeDataFrameAggregate(df);
-                        if (exists native_result) {
-                            pending_dataframe_native_result = native_result;
-                            return;
-                        }
+                        pending_dataframe_native_input = df;
+                        return;
                     }
+                    materializePendingNativeInput();
                     if (!accumulateColumnarResult(records)) {
                         accumulateHashOfLists(AbstractDataProcessor::recordsToHashList(records.toRows()));
                     }
-                } else if (!accumulateColumnBlock(records)) {
-                    accumulateHashOfLists(AbstractDataProcessor::bufferColumnsToHashList(records));
+                } else {
+                    materializePendingNativeInput();
+                    if (!accumulateColumnBlock(records)) {
+                        accumulateHashOfLists(AbstractDataProcessor::bufferColumnsToHashList(records));
+                    }
                 }
                 return;
             case DataProviderShape::RowRecords:

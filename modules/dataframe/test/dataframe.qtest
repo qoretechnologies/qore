@@ -1234,6 +1234,34 @@ sub invalid_dataframe_api() {
         assertFloatEq(220.0, grouped_df.getColumn("avg_amount")[1], 1e-10,
             "DataFrameBlock group-by computes averages with native DataFrame mean");
 
+        QoreGroupByProcessor multi_grouper({
+            "group_by": "status",
+            "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
+        });
+        DataFrame::DataFrame first_group_block({
+            "status": ("active", "inactive"),
+            "amount": (90.0, 220.0),
+        });
+        DataFrame::DataFrame second_group_block({
+            "status": ("active", "active"),
+            "amount": (125.0, 180.0),
+        });
+        assertNothing(multi_grouper.processRecordsShape(first_group_block, DataProviderShape::DataFrameBlock),
+            "first native-compatible DataFrameBlock group-by block is deferred");
+        assertNothing(multi_grouper.processRecordsShape(second_group_block, DataProviderShape::DataFrameBlock),
+            "second native-compatible DataFrameBlock group-by block deopts without losing the first block");
+        *list<auto> multi_grouped_blocks = multi_grouper.flushAndCollect();
+        assertEq(1, multi_grouped_blocks.size(), "multi-block DataFrameBlock group-by flush emits one block");
+        auto multi_grouped_df = multi_grouped_blocks[0].sortBy(("status",));
+        assertEq(("active", "inactive"), multi_grouped_df.getColumn("status"),
+            "multi-block DataFrameBlock group-by keeps group fields");
+        assertEq((3, 1), multi_grouped_df.getColumn("orders"),
+            "multi-block DataFrameBlock group-by counts records from all blocks");
+        assertEq((395.0, 220.0), multi_grouped_df.getColumn("total"),
+            "multi-block DataFrameBlock group-by sums records from all blocks");
+        assertFloatEq(395.0 / 3.0, multi_grouped_df.getColumn("avg_amount")[0], 1e-10,
+            "multi-block DataFrameBlock group-by averages records from all blocks");
+
         DataFrame::DataFrame corr_df({
             "id": new buffer<int64>((1, 2, 3)),
             "amount": new buffer<float64>((90.0, 220.0, 180.0)),
