@@ -150,6 +150,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \requestClassifierSemanticPolicyTest());
         addTestCase("LlmRequestClassifier block-list mode and reasoning budget",
             \requestClassifierBlockListModeTest());
+        addTestCase("ActionIntentClassifier disables reasoning budget",
+            \actionIntentClassifierBudgetTest());
         addTestCase("CitationValidator validates supplied source ids",
             \citationValidatorTest());
         addTestCase("GroundedAnswerVerifier combines grounding and citations",
@@ -751,6 +753,33 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "classifier output schema requires the 'allowed' verdict field");
     }
 
+    actionIntentClassifierBudgetTest() {
+        hash<auto> captured;
+        QoreLlmUtils::LlmBackend backend(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "model": "test-model",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                captured = body;
+                return {
+                    "choices": ({
+                        "message": {"content": "INTENT: read-only"},
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {"total_tokens": 3},
+                };
+            },
+        });
+        QoreLlmUtils::ActionIntentClassifier classifier(backend);
+        *string intent = classifier.classify("how do I create a workflow?");
+        assertEq("read-only", intent,
+            "classifier parses the INTENT label");
+        # Intent classification disables hidden reasoning so a thinking model
+        # cannot drain the output budget and return empty content.
+        assertEq(0, captured.reasoning_token_budget,
+            "action-intent classifier disables the reasoning/thinking budget");
+    }
+
     requestClassifierBlockListModeTest() {
         # Capture the request body the classifier dispatches so we can assert
         # (1) block-list mode selects a default-allow system prompt, and
@@ -877,6 +906,41 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(0.88, r.grounding_score);
         assertEq(1.0, r.citation_coverage);
         assertEq(7, r.usage.total_tokens);
+
+        # Grounding verification disables hidden reasoning so a thinking model
+        # cannot starve the (small) JSON output budget and truncate the verdict
+        # to empty/unparseable JSON.  Capture the dispatched body to confirm.
+        hash<auto> captured;
+        QoreLlmUtils::LlmBackend cap_backend(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "model": "test-model",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                captured = body;
+                return {
+                    "choices": ({
+                        "message": {"content":
+                            "{\"grounded\":true,\"grounding_score\":0.9,"
+                            "\"supported_claims\":[],\"unsupported_claims\":[],"
+                            "\"missing_citations\":[],\"reason\":\"ok\"}"},
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {"total_tokens": 5},
+                };
+            },
+        });
+        QoreLlmUtils::GroundedAnswerVerifier cap_verifier(cap_backend, {
+            "require_sources": True,
+            "require_citations": False,
+            "min_grounding_score": 0.5,
+        });
+        cap_verifier.verify("Qorus has three services.", sources);
+        assertEq(0, captured.reasoning_token_budget,
+            "grounding verifier disables the reasoning/thinking budget");
+        hash<auto> gschema =
+            QoreLlmUtils::GroundedAnswerVerifier::getOutputSchema();
+        assertFalse(gschema.hasKey("name"),
+            "grounding output schema carries no top-level 'name' metadata");
     }
 
     geminiChatRequestAndTextResponseTest() {

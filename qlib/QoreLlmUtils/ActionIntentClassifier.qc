@@ -240,7 +240,13 @@ public class ActionIntentClassifier {
             + "\nClassify this message:\n\n" + user_message;
         hash<LlmCompletionResult> result;
         try {
-            result = backend.complete(StandaloneSystemPrompt, user_prompt);
+            # Intent classification is a compact label decision that needs no
+            # extended hidden reasoning; disabling the reasoning budget keeps
+            # the output budget available for the label so a "thinking" model
+            # (e.g. Gemini 2.5) cannot drain it and return empty content.
+            # Providers without a reasoning budget ignore the option.
+            result = backend.complete(StandaloneSystemPrompt, user_prompt,
+                NOTHING, <LlmRequestOptions>{"reasoning_token_budget": 0});
         } catch () {
             # Backend unavailable / malformed response — caller must decide
             # how to proceed without a classification
