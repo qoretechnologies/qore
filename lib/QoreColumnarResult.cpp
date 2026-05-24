@@ -1449,6 +1449,21 @@ static char qore_arrow_time_unit_char(const std::string& unit) {
     return 'u';
 }
 
+static std::string qore_arrow_temporal_format_from_schema(const QoreColumnarTypeDescriptor& schema_desc) {
+    char unit = qore_arrow_time_unit_char(schema_desc.time_unit);
+    if (schema_desc.kind == QoreColumnarTypeKind::Duration) {
+        std::string format = "tD";
+        format.push_back(unit);
+        return format;
+    }
+
+    std::string format = "ts";
+    format.push_back(unit);
+    format.push_back(':');
+    format += schema_desc.timezone;
+    return format;
+}
+
 static bool qore_arrow_parse_timestamp_format(const char* format, std::string& unit, std::string& timezone) {
     unit.clear();
     timezone.clear();
@@ -1621,7 +1636,8 @@ static int64_t qore_arrow_int64_length(size_t length, ExceptionSink* xsink, cons
 }
 
 static int qore_arrow_export_buffer_array(const QoreBufferNode* buffer, const char* name, ArrowSchema* schema,
-        ArrowArray* array, ExceptionSink* xsink, QoreValue keep_alive = QoreValue()) {
+        ArrowArray* array, ExceptionSink* xsink, QoreValue keep_alive = QoreValue(),
+        const char* format_override = nullptr, bool schema_nullable = false) {
     if (buffer->ensureHostStorage(xsink)) {
         keep_alive.discard(xsink);
         return -1;
@@ -1644,7 +1660,9 @@ static int qore_arrow_export_buffer_array(const QoreBufferNode* buffer, const ch
 
     std::string decimal_format;
     const char* format = nullptr;
-    if (buffer->getElementType() == QoreBufferElementType::Decimal128) {
+    if (format_override) {
+        format = format_override;
+    } else if (buffer->getElementType() == QoreBufferElementType::Decimal128) {
         decimal_format = qore_arrow_decimal_format(buffer->getDecimalPrecision(), buffer->getDecimalScale());
         format = decimal_format.c_str();
     } else {
@@ -1658,7 +1676,7 @@ static int qore_arrow_export_buffer_array(const QoreBufferNode* buffer, const ch
     }
 
     QoreArrowSchemaPrivate* schema_priv = qore_arrow_init_schema(schema, format, name,
-        buffer->hasNullableElements(), 0);
+        schema_nullable || buffer->hasNullableElements(), 0);
     if (!decimal_format.empty()) {
         schema_priv->format = decimal_format;
         schema->format = schema_priv->format.c_str();
@@ -1763,6 +1781,84 @@ static int qore_arrow_export_buffer_array(const QoreBufferNode* buffer, const ch
     } else {
         array_priv->buffers[1] = data;
     }
+    return 0;
+}
+
+static int qore_arrow_export_temporal_buffer_array(const QoreBufferNode* buffer,
+        const QoreColumnarTypeDescriptor& schema_desc, const char* name, ArrowSchema* schema, ArrowArray* array,
+        ExceptionSink* xsink, QoreValue keep_alive = QoreValue()) {
+    if (buffer->getElementType() != QoreBufferElementType::Int64) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "temporal column '%s' requires buffer<int64> storage for Arrow C Data export; got buffer<%s>",
+            name ? name : "", qore_buffer_element_type_name(buffer->getElementType()));
+        keep_alive.discard(xsink);
+        return -1;
+    }
+
+    std::string format = qore_arrow_temporal_format_from_schema(schema_desc);
+    char unit = qore_arrow_time_unit_char(schema_desc.time_unit);
+    if (unit == 'u') {
+        return qore_arrow_export_buffer_array(buffer, name, schema, array, xsink, std::move(keep_alive),
+            format.c_str(), schema_desc.nullable);
+    }
+
+    if (buffer->ensureHostStorage(xsink)) {
+        keep_alive.discard(xsink);
+        return -1;
+    }
+    size_t length = buffer->size();
+    int64_t arrow_length = qore_arrow_int64_length(length, xsink, "temporal buffer export");
+    if (*xsink) {
+        keep_alive.discard(xsink);
+        return -1;
+    }
+
+    int64_t null_count = buffer->hasNullableElements()
+        ? static_cast<int64_t>(length - buffer->countValid(xsink))
+        : 0;
+    if (*xsink) {
+        keep_alive.discard(xsink);
+        return -1;
+    }
+
+    qore_arrow_init_schema(schema, format.c_str(), name,
+        schema_desc.nullable || buffer->hasNullableElements(), 0);
+    QoreArrowArrayPrivate* array_priv = qore_arrow_init_array(array, arrow_length, null_count, 0, 2, 0);
+    if (!keep_alive.isNothing()) {
+        array_priv->refs.push_back(keep_alive);
+        keep_alive = QoreValue();
+    }
+
+    std::vector<uint8_t> validity(null_count > 0 ? qore_arrow_bitmap_bytes(length) : 0, 0);
+    std::vector<uint8_t> data(length * sizeof(int64_t), 0);
+    int64_t* values = reinterpret_cast<int64_t*>(data.data());
+    const int64_t* raw = static_cast<const int64_t*>(buffer->getRawData());
+    if (length && !raw) {
+        xsink->raiseException("ARROW-C-DATA-ERROR",
+            "cannot export temporal column '%s' through Arrow C Data without host storage", name ? name : "");
+        return -1;
+    }
+
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "exporting Arrow temporal buffer values")) {
+            return -1;
+        }
+        if (buffer->isElementNull(i)) {
+            continue;
+        }
+        if (null_count > 0) {
+            qore_arrow_set_bit(validity.data(), i, true);
+        }
+        if (qore_arrow_microseconds_to_temporal(raw[i], unit, values[i], xsink,
+                "exporting Arrow temporal buffer values")) {
+            return -1;
+        }
+    }
+
+    if (null_count > 0) {
+        qore_arrow_add_owned_buffer(array_priv, 0, std::move(validity));
+    }
+    qore_arrow_add_owned_buffer(array_priv, 1, std::move(data));
     return 0;
 }
 
@@ -2493,10 +2589,16 @@ static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSch
         desc.column_type = QoreColumnarColumnType::Date;
         desc.time_unit = std::move(unit);
         desc.timezone = std::move(timezone);
+        if (qore_arrow_time_unit_char(desc.time_unit) == 'u') {
+            desc.buffer_type = QoreBufferElementType::Int64;
+        }
     } else if (qore_arrow_parse_duration_format(schema->format, unit)) {
         desc.kind = QoreColumnarTypeKind::Duration;
         desc.column_type = QoreColumnarColumnType::Date;
         desc.time_unit = std::move(unit);
+        if (qore_arrow_time_unit_char(desc.time_unit) == 'u') {
+            desc.buffer_type = QoreBufferElementType::Int64;
+        }
     } else if (qore_arrow_parse_time_format(schema->format, unit)) {
         desc.kind = QoreColumnarTypeKind::Date;
         desc.column_type = QoreColumnarColumnType::Date;
@@ -3085,6 +3187,20 @@ static QoreValue qore_arrow_import_top_level_column(const ArrowSchema* schema, c
         }
         return new QoreBufferNode(QoreBufferElementType::String, desc.nullable || array->null_count > 0,
             *values, xsink);
+    }
+
+    if ((desc.kind == QoreColumnarTypeKind::Timestamp || desc.kind == QoreColumnarTypeKind::Duration)
+            && qore_arrow_time_unit_char(desc.time_unit) == 'u') {
+        if (array->n_buffers < 2 || (!array->buffers[1] && array->length)) {
+            xsink->raiseException("ARROW-C-DATA-ERROR",
+                "Arrow temporal array '%s' has invalid buffers", schema->name ? schema->name : "");
+            return QoreValue();
+        }
+        bool nullable = desc.nullable || array->null_count > 0 || (array->n_buffers > 0 && array->buffers[0]);
+        return QoreBufferNode::wrapExternalStorage(QoreBufferElementType::Int64, nullable,
+            static_cast<size_t>(array->offset), static_cast<size_t>(array->length), array->buffers[1],
+            array->n_buffers > 0 ? static_cast<const uint8_t*>(array->buffers[0]) : nullptr,
+            owner, array->null_count, xsink);
     }
 
     ReferenceHolder<QoreListNode> values(qore_arrow_list_to_qore(schema, array, xsink), xsink);
@@ -3777,8 +3893,15 @@ int qore_columnar_result_export_arrow_c_data(const QoreColumnarResult* result, A
         int rc;
         if (column->data.getType() == NT_BUFFER) {
             const QoreBufferNode* buffer = column->data.get<const QoreBufferNode>();
-            rc = qore_arrow_export_buffer_array(buffer, column->name.c_str(), schema->children[i],
-                array->children[i], xsink, column->data.refSelf());
+            if (column->schema.kind == QoreColumnarTypeKind::Date
+                    || column->schema.kind == QoreColumnarTypeKind::Timestamp
+                    || column->schema.kind == QoreColumnarTypeKind::Duration) {
+                rc = qore_arrow_export_temporal_buffer_array(buffer, column->schema, column->name.c_str(),
+                    schema->children[i], array->children[i], xsink, column->data.refSelf());
+            } else {
+                rc = qore_arrow_export_buffer_array(buffer, column->name.c_str(), schema->children[i],
+                    array->children[i], xsink, column->data.refSelf(), nullptr, column->schema.nullable);
+            }
         } else if (column->data.getType() == NT_LIST) {
             QoreArrowListValueSource source(column->data.get<const QoreListNode>());
             rc = qore_arrow_export_values_array(source, column->schema, column->name.c_str(),

@@ -137,9 +137,11 @@
       with \c qore_columnar_result_export_arrow_c_data() and
       \c qore_columnar_result_import_arrow_c_data(); fixed-width primitive, boolean, and
       \c decimal128 top-level columns use zero-copy \c buffer<T> storage when host memory is
-      compatible, including sliced record batches with non-zero top-level offsets, while string,
-      binary, temporal, list, fixed-size-list, struct, map, and dictionary-encoded values preserve
-      schema and values through owned Arrow-compatible buffers or Qore containers
+      compatible, including sliced record batches with non-zero top-level offsets; microsecond
+      timestamp and duration arrays also map directly to \c buffer<int64> while preserving Arrow
+      temporal schema, while string, binary, list, fixed-size-list, struct, map, and
+      dictionary-encoded values preserve schema and values through owned Arrow-compatible buffers
+      or Qore containers
     - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper now support shaped columnar bulk blocks: DB providers can
       return \c ColumnarResult values from \c getShapedValue(), bulk DB writes can accept \c ColumnarResult and
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
@@ -1345,16 +1347,18 @@ ColumnarResult again = df.toColumnarResult();
     @endcode
 
     C++ modules can use \c QORE_HAVE_ARROW_C_DATA_INTEROP to detect libqore's
-    Arrow C Data Interface bridge for ColumnarResult.  The bridge allows Arrow,
+    Arrow C Data Interface bridge for ColumnarResult and
+    \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS to detect dense temporal buffer
+    support.  The bridge allows Arrow,
     Flight, JDBC, and other binary modules to exchange columnar blocks without
     depending on Arrow C++ in libqore itself.  Fixed-width primitive, boolean,
     and \c decimal128 top-level columns are wrapped as \c buffer<T> where
     possible, including sliced record batches with non-zero top-level offsets;
-    temporal values use \c buffer<int64> microsecond storage when represented
-    as temporal ColumnarResult columns; strings, binary values, lists,
-    fixed-size lists, structs, maps, and dictionary-encoded Arrow arrays use
-    owned Arrow-compatible buffers or materialized Qore containers so schema
-    and nullability are still preserved.
+    microsecond timestamp and duration arrays also map directly to
+    \c buffer<int64> while preserving temporal Arrow schema; strings, binary
+    values, lists, fixed-size lists, structs, maps, and dictionary-encoded
+    Arrow arrays use owned Arrow-compatible buffers or materialized Qore
+    containers so schema and nullability are still preserved.
     @endparblock
 
     @par Experimental Plugin-Type ABI

@@ -270,18 +270,24 @@ int main() {
     }
 
     ReferenceHolder<QoreListNode> ts_list(new QoreListNode(autoTypeInfo), &xsink);
-    ts_list->push(DateTimeNode::makeAbsolute(currentTZ(), 1700000000, 123456), &xsink);
+    ts_list->push(QoreValue(static_cast<int64>(1700000000123456LL)), &xsink);
     ts_list->push(QoreValue(), &xsink);
-    ts_list->push(DateTimeNode::makeAbsolute(currentTZ(), 1700000002, 42), &xsink);
+    ts_list->push(QoreValue(static_cast<int64>(1700000002000042LL)), &xsink);
     if (xsink) {
         fail("timestamp list setup failed", xsink);
+    }
+    ReferenceHolder<QoreBufferNode> ts_buffer(
+        new QoreBufferNode(QoreBufferElementType::Int64, true, *ts_list, &xsink), &xsink);
+    if (xsink) {
+        fail("timestamp buffer setup failed", xsink);
     }
     QoreColumnarTypeDescriptor ts_schema;
     ts_schema.kind = QoreColumnarTypeKind::Timestamp;
     ts_schema.column_type = QoreColumnarColumnType::Date;
+    ts_schema.buffer_type = QoreBufferElementType::Int64;
     ts_schema.nullable = true;
     ts_schema.time_unit = "us";
-    if (result->addColumn("ts", ts_list.release(), ts_schema, &xsink)) {
+    if (result->addColumn("ts", ts_buffer.release(), ts_schema, &xsink)) {
         fail("adding timestamp column failed", xsink);
     }
 
@@ -332,7 +338,7 @@ int main() {
             || imported_amount->getType() != NT_BUFFER || imported_customer->getType() != NT_LIST
             || imported_items->getType() != NT_LIST || imported_pair->getType() != NT_LIST
             || imported_attrs->getType() != NT_LIST || imported_blob->getType() != NT_LIST
-            || imported_ts->getType() != NT_LIST) {
+            || imported_ts->getType() != NT_BUFFER) {
         fail("imported columns have invalid value types", xsink);
     }
 
@@ -409,11 +415,11 @@ int main() {
         fail("imported binary values were not preserved", xsink);
     }
 
-    const QoreListNode* ts_values = imported_ts->get<const QoreListNode>();
-    QoreValue first_ts_value = ts_values->retrieveEntry(0);
-    QoreValue second_ts_value = ts_values->retrieveEntry(1);
-    if (first_ts_value.getType() != NT_DATE || !second_ts_value.isNothing()
-            || first_ts_value.get<const DateTimeNode>()->getEpochMicrosecondsUTC() != 1700000000123456LL) {
+    const QoreBufferNode* ts_buf = imported_ts->get<const QoreBufferNode>();
+    if (!ts_buf->hasExternalStorage() || ts_buf->getElementType() != QoreBufferElementType::Int64
+            || ts_buf->getReferencedEntry(0, &xsink).getAsBigInt() != 1700000000123456LL
+            || !ts_buf->isElementNull(1)
+            || ts_buf->getReferencedEntry(2, &xsink).getAsBigInt() != 1700000002000042LL) {
         fail("imported timestamp values were not preserved", xsink);
     }
 
@@ -432,6 +438,7 @@ int main() {
     QoreStringValueHelper attrs_kind(attrs_schema_hash->getKeyValue("kind"));
     QoreStringValueHelper blob_kind(blob_schema_hash->getKeyValue("kind"));
     QoreStringValueHelper ts_kind(ts_schema_hash->getKeyValue("kind"));
+    QoreStringValueHelper ts_buffer_type(ts_schema_hash->getKeyValue("buffer_type"));
     if (xsink || std::strcmp(amount_kind->c_str(), "decimal128")
             || std::strcmp(customer_kind->c_str(), "struct")
             || std::strcmp(items_kind->c_str(), "list")
@@ -439,6 +446,7 @@ int main() {
             || std::strcmp(attrs_kind->c_str(), "map")
             || std::strcmp(blob_kind->c_str(), "binary")
             || std::strcmp(ts_kind->c_str(), "timestamp")
+            || std::strcmp(ts_buffer_type->c_str(), "int64")
             || pair_schema_hash->getKeyValue("fixed_size").getAsBigInt() != 2) {
         fail("imported schemaV2 metadata is invalid", xsink);
     }
@@ -490,6 +498,12 @@ int main() {
     if (!first_sliced_attrs || std::strcmp(sliced_tier->c_str(), "silver")
             || !sliced_attrs_values->retrieveEntry(1).isNothing()) {
         fail("Arrow C Data top-level offset did not slice map values", xsink);
+    }
+    ValueHolder sliced_ts(sliced_import->getColumnValue("ts", &xsink), &xsink);
+    const QoreBufferNode* sliced_ts_buf = sliced_ts->get<const QoreBufferNode>();
+    if (!sliced_ts_buf || !sliced_ts_buf->isElementNull(0)
+            || sliced_ts_buf->getReferencedEntry(1, &xsink).getAsBigInt() != 1700000002000042LL) {
+        fail("Arrow C Data top-level offset did not slice timestamp values", xsink);
     }
 
     int32_t dict_offsets[] = {0, 3, 7};

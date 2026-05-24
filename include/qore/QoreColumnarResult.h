@@ -226,10 +226,12 @@ DLLEXPORT QoreColumnarResult* qore_columnar_result_from_value(const QoreValue& v
     qore_arrow_array_release().
 
     Fixed-width dense Qore buffers are exported without copying when host
-    storage is directly available.  String, binary, temporal, list,
-    fixed-size-list, struct, and map columns are exported with Qore-owned
-    Arrow-compatible buffers when the source data is not already Arrow
-    compatible.  Dictionary columns are exported as their decoded value type.
+    storage is directly available.  Microsecond timestamp and duration columns
+    backed by \c buffer<int64> are exported with Arrow temporal schemas without
+    copying value storage.  String, binary, list, fixed-size-list, struct, and
+    map columns are exported with Qore-owned Arrow-compatible buffers when the
+    source data is not already Arrow compatible.  Dictionary columns are
+    exported as their decoded value type.
 
     @return 0 on success, non-zero on error
     @since %Qore 2.3
@@ -240,12 +242,13 @@ DLLEXPORT int qore_columnar_result_export_arrow_c_data(const QoreColumnarResult*
 //! Imports an Arrow C Data struct/record batch as a QoreColumnarResult.
 /** On success, this function consumes @a schema and @a array by moving their
     contents into Qore-owned holders.  The caller must not release the input
-    Arrow C Data objects after a successful import.  Fixed-width primitive and
-    decimal top-level arrays are wrapped without copying, including when the
-    top-level struct/record batch has a non-zero offset.  String top-level
-    arrays are materialized as \c buffer<string>; binary, temporal, list,
-    fixed-size-list, struct, map, and dictionary arrays are materialized into
-    Qore containers while preserving recursive schema metadata.
+    Arrow C Data objects after a successful import.  Fixed-width primitive,
+    decimal, and microsecond timestamp/duration top-level arrays are wrapped
+    without copying, including when the top-level struct/record batch has a
+    non-zero offset.  String top-level arrays are materialized as
+    \c buffer<string>; binary, list, fixed-size-list, struct, map, and
+    dictionary arrays are materialized into Qore containers while preserving
+    recursive schema metadata.
 
     @return a new QoreColumnarResult, or nullptr on error
     @since %Qore 2.3

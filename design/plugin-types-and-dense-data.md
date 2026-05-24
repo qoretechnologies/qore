@@ -201,7 +201,9 @@ Short-term mappings remain:
   temporal column. Schema metadata marks the logical kind as `date`,
   `timestamp`, or `duration`, stores microsecond time units, and row/list
   materialization restores Qore `date` values. Arrow IPC and Parquet can reuse
-  the value buffer directly for microsecond timestamp and duration arrays.
+  the value buffer directly for microsecond timestamp and duration arrays, and
+  the Arrow C Data bridge maps the same schemas to zero-copy `buffer<int64>`
+  top-level columns when host memory is available.
 - SQL `NUMERIC` / `DECIMAL` values use `buffer<decimal128>` when precision and
   scale fit the fixed-width decimal representation; otherwise they use
   `list<number>` with decimal schema metadata.

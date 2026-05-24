@@ -369,10 +369,13 @@ ColumnarResult filtered_columns = filter.processRecordsShape(
     \c qore_columnar_result_export_arrow_c_data() and
     \c qore_columnar_result_import_arrow_c_data() are available.  Fixed-width
     primitive, boolean, and \c decimal128 top-level arrays can be zero-copy,
-    including sliced record batches with non-zero top-level offsets.  Strings,
-    binary values, temporal values, lists, fixed-size lists, structs, maps, and
-    dictionary-encoded Arrow arrays preserve schema and values through owned
-    Arrow-compatible buffers or Qore containers.  This is the preferred ABI for
+    including sliced record batches with non-zero top-level offsets.  Builds
+    with \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS also map microsecond
+    timestamp and duration arrays directly to \c buffer<int64> while preserving
+    temporal Arrow schema.  Strings, binary values, lists, fixed-size lists,
+    structs, maps, and dictionary-encoded Arrow arrays preserve schema and
+    values through owned Arrow-compatible buffers or Qore containers.  This is
+    the preferred ABI for
     binary modules that need columnar interchange but should not link directly
     against Arrow C++.
 
