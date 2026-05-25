@@ -217,6 +217,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("registry-model - input map row output",
             \registryModelOnnxInputMapRowOutput());
         addTestCase("tokenize - registry tokenizer", \tokenizeRegistryTokenizer());
+        addTestCase("tokenize - DataFrameBlock shape", \tokenizeDataFrameShape());
+        addTestCase("tokenize - BufferColumns shape", \tokenizeBufferColumnsShape());
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
         addTestCase("embed-text - DataFrameBlock ONNX shape", \embedTextDataFrameOnnxShape());
         addTestCase("embed-text - BufferColumns ONNX shape", \embedTextBufferColumnsOnnxShape());
@@ -1423,6 +1425,15 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             testSkip("token embedding ONNX test model not found at: " + model_path);
             return True;
         }
+        string tokenizer_path = getTokenizerConfigPath();
+        if (!is_file(tokenizer_path)) {
+            testSkip("tokenizer test data not found at: " + tokenizer_path);
+            return True;
+        }
+        return False;
+    }
+
+    private bool skipTokenizerFixture() {
         string tokenizer_path = getTokenizerConfigPath();
         if (!is_file(tokenizer_path)) {
             testSkip("tokenizer test data not found at: " + tokenizer_path);
@@ -3044,6 +3055,68 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         hash<auto> result = proc.processRecord({"body": "hello world"});
         assertTrue(result.body_token_count > 0,
             "token count should be produced from registry tokenizer artifact");
+    }
+
+    tokenizeDataFrameShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        if (skipTokenizerFixture()) {
+            return;
+        }
+
+        DataProviderML::QoreTokenizeProcessor proc({
+            "text_field": "body",
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "add_special_tokens": False,
+        });
+
+        DataFrame::DataFrame df({
+            "id": (1, 2),
+            "body": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result),
+            "tokenize should preserve DataFrameBlock output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq((1, 2), result.getColumn("id"));
+
+        list<int> counts = result.getColumn("body_token_count");
+        assertEq(2, counts.lsize());
+        foreach int count in (counts) {
+            assertTrue(count > 0, "token count should be positive for non-empty text");
+        }
+    }
+
+    tokenizeBufferColumnsShape() {
+        if (skipTokenizerFixture()) {
+            return;
+        }
+
+        DataProviderML::QoreTokenizeProcessor proc({
+            "text_field": "body",
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "add_special_tokens": False,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "body": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "tokenize should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        assertEq((1, 2), result.getColumn("id").toList());
+
+        list<auto> counts = result.getColumn("body_token_count").toList();
+        assertEq(2, counts.lsize());
+        foreach int count in (counts) {
+            assertTrue(count > 0, "token count should be positive for non-empty text");
+        }
     }
 
     chunkTextRegistryTokenizer() {

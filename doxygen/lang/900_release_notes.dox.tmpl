@@ -2573,11 +2573,12 @@ foreach string module_name in (registry.getProcessModules()) {
       - shaped ONNX inputs smaller than the configured \c window_size, and final
         remainder windows, are processed directly as tensor batches instead of
         falling back through row buffering
-      - embed-text and rerank-text preserve \c DataFrameBlock,
+      - tokenize, embed-text, and rerank-text preserve \c DataFrameBlock,
         \c BufferColumns, and \c HashOfLists inputs by reading top-level text
-        columns directly; embed-text appends an \c embedding column, and
-        rerank-text emits top-k rows with \c reranker_score and
-        \c reranker_rank columns without per-row hash materialization
+        columns directly; tokenize appends a token-count column, embed-text
+        appends an \c embedding column, and rerank-text emits top-k rows with
+        \c reranker_score and \c reranker_rank columns without per-row hash
+        materialization
       - embed-text and rerank-text accept \c onnx_session_config and inherit
         QoreModelRegistry package execution config for ONNX Runtime provider,
         threading, and graph-optimization settings
