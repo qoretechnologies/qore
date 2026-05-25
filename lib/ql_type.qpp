@@ -52,9 +52,15 @@ static QoreHashNode* auto_cast_hash(const QoreHashNode* h) {
     while (i.next()) {
         const char* key = i.getKey();
         const QoreValue val = i.get();
-        hash_priv->setKeyValueIntern(key, auto_cast(val));
-
-        const QoreTypeInfo* ctype = val.getTypeInfo();
+        // type-strip the stored value first, then infer the container's
+        // common value type from the stripped value -- otherwise the outer
+        // hash claims a complexTypeInfo (e.g. hash<hash<Foo>>) that no
+        // longer matches what is actually stored (e.g. hash<auto>), and
+        // shape-preserving iterators / typed assignments downstream fail
+        // strict type checks
+        QoreValue new_val = auto_cast(val);
+        const QoreTypeInfo* ctype = new_val.getTypeInfo();
+        hash_priv->setKeyValueIntern(key, new_val);
 
         if (i.first()) {
             if (ctype && ctype != anyTypeInfo) {
@@ -67,7 +73,7 @@ static QoreHashNode* auto_cast_hash(const QoreHashNode* h) {
     }
 
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
-    if (vtype && vtype != anyTypeInfo) {
+    if (vcommon && vtype && vtype != anyTypeInfo) {
         hash_priv->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
 
@@ -85,9 +91,9 @@ static QoreListNode* auto_cast_list(const QoreListNode* l) {
     ConstListIterator i(l);
     while (i.next()) {
         const QoreValue val = i.getValue();
-        list_priv->pushIntern(auto_cast(val));
-
-        const QoreTypeInfo* ctype = val.getTypeInfo();
+        QoreValue new_val = auto_cast(val);
+        const QoreTypeInfo* ctype = new_val.getTypeInfo();
+        list_priv->pushIntern(new_val);
 
         if (!i.index()) {
             if (ctype && ctype != anyTypeInfo) {
@@ -100,7 +106,7 @@ static QoreListNode* auto_cast_list(const QoreListNode* l) {
     }
 
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
-    if (vtype && vtype != anyTypeInfo) {
+    if (vcommon && vtype && vtype != anyTypeInfo) {
         list_priv->complexTypeInfo = qore_get_complex_list_type(vtype);
     }
 
