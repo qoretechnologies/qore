@@ -305,7 +305,8 @@ Tools:
   diagnostics.
 - `qore-onnx validate`: implemented for model loadability, tensor metadata, and
   provider-policy checks.
-- `qore-onnx package`: pending.
+- `qore-onnx package`: implemented for deterministic flat package assembly,
+  companion artifact classification, SHA-256 checksums, and manifest metadata.
 - `qore-onnx benchmark`: implemented for generated or JSON-provided inputs and
   latency summaries.
 - `qore-onnx optimize`: implemented for optimized ONNX/ORT artifact creation

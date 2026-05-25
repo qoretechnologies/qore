@@ -49,7 +49,15 @@ class QoreOnnxCli {
             "input": "i,input=s",
             "json": "J,json",
             "keep_output": "keep-output",
+            "include_companions": "include-companions!",
+            "include_external_data": "include-external-data!",
+            "manifest": "manifest!",
+            "manifest_name": "manifest-name=s",
             "method": "m,method=s",
+            "no_include_companions": "no-include-companions",
+            "no_include_external_data": "no-include-external-data",
+            "no_manifest": "no-manifest",
+            "no_validate": "no-validate",
             "nodes_to_exclude": "nodes-to-exclude=s",
             "nodes_to_quantize": "nodes-to-quantize=s",
             "op_types": "op-types=s",
@@ -99,6 +107,9 @@ class QoreOnnxCli {
                     break;
                 case "optimize":
                     optimize(opts);
+                    break;
+                case "package":
+                    packageModel(opts);
                     break;
                 default:
                     stderr.printf("qore-onnx: unsupported command %y\n", command);
@@ -166,6 +177,17 @@ class QoreOnnxCli {
             buildOptimizationOptions(opts)), opts);
     }
 
+    private static nothing packageModel(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string output_dir = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!input_path.val() || !output_dir.val()) {
+            stderr.printf("qore-onnx: package requires input and output directory paths\n");
+            usage(2);
+        }
+        writeResult(QoreOnnxTools::OnnxPackageTools::createPackage(input_path, output_dir,
+            buildPackageOptions(opts)), opts);
+    }
+
     private static nothing requireInput(string command, *string input_path) {
         if (!input_path.val()) {
             stderr.printf("qore-onnx: %s requires an input model path\n", command);
@@ -192,6 +214,7 @@ class QoreOnnxCli {
         if (exists opts.dry_run) qopts.dry_run = opts.dry_run;
         if (exists opts.force) qopts.force = opts.force;
         if (exists opts.validate) qopts.validate = opts.validate;
+        if (exists opts.no_validate) qopts.validate = False;
         return qopts;
     }
 
@@ -228,7 +251,28 @@ class QoreOnnxCli {
         if (exists opts.ort_format) oopts.ort_format = opts.ort_format;
         if (exists opts.force) oopts.force = opts.force;
         if (exists opts.validate) oopts.validate = opts.validate;
+        if (exists opts.no_validate) oopts.validate = False;
         return oopts;
+    }
+
+    private static hash<QoreOnnxTools::OnnxPackageOptions> buildPackageOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxPackageOptions> popts =
+            <QoreOnnxTools::OnnxPackageOptions>{};
+        if (opts.session_config.val()) {
+            popts.session_config = buildSessionConfig(opts);
+        }
+        if (exists opts.force) popts.force = opts.force;
+        if (exists opts.include_companions) popts.include_companions = opts.include_companions;
+        if (exists opts.no_include_companions) popts.include_companions = False;
+        if (exists opts.include_external_data) popts.include_external_data = opts.include_external_data;
+        if (exists opts.no_include_external_data) popts.include_external_data = False;
+        if (exists opts.manifest) popts.write_manifest = opts.manifest;
+        if (exists opts.no_manifest) popts.write_manifest = False;
+        if (opts.manifest_name.val()) popts.manifest_name = opts.manifest_name;
+        if (exists opts.validate) popts.validate = opts.validate;
+        if (exists opts.no_validate) popts.validate = False;
+        return popts;
     }
 
     private static hash<auto> readJsonFile(string path) {
@@ -258,6 +302,7 @@ class QoreOnnxCli {
         printf("  qore-onnx validate [--session-config PATH] [--json] INPUT.onnx\n");
         printf("  qore-onnx benchmark [OPTIONS] INPUT.onnx\n");
         printf("  qore-onnx optimize [OPTIONS] INPUT.onnx OUTPUT.onnx\n");
+        printf("  qore-onnx package [OPTIONS] INPUT.onnx|PACKAGE_DIR OUTPUT_DIR\n");
         printf("  qore-onnx quantize [OPTIONS] INPUT.onnx OUTPUT.onnx\n\n");
         printf("Common options:\n");
         printf("  --session-config PATH            JSON OnnxSessionConfig hash\n");
@@ -271,6 +316,13 @@ class QoreOnnxCli {
         printf("  --ort-format                     Save optimized artifact in ORT format\n");
         printf("  --force                          Overwrite output file\n");
         printf("  --no-validate                    Skip loading the output model after optimization\n\n");
+        printf("Package options:\n");
+        printf("  --manifest-name NAME             Manifest filename, default qore-onnx-package.json\n");
+        printf("  --no-manifest                    Do not write a package manifest\n");
+        printf("  --no-include-companions          Skip tokenizer/config companion files\n");
+        printf("  --no-include-external-data       Skip common ONNX external-data files\n");
+        printf("  --force                          Allow existing output directory files\n");
+        printf("  --no-validate                    Skip ONNX package validation\n\n");
         printf("Quantize options:\n");
         printf("  --method dynamic|static          Quantization method, default dynamic\n");
         printf("  --python PATH                    Python executable, default QORE_ONNX_PYTHON or python3\n");

@@ -30,6 +30,10 @@
 %requires FsUtil
 %requires Util
 
+%try-module json
+%define NoJson
+%endtry
+
 module QoreOnnxTools {
     version = "1.0.0";
     desc = "user module providing ONNX deployment tooling helpers";
@@ -103,6 +107,7 @@ qore-onnx inspect --json /models/customer-score.onnx
 qore-onnx validate /models/customer-score.onnx
 qore-onnx benchmark --runs 100 /models/customer-score.onnx
 qore-onnx optimize /models/customer-score.onnx /models/customer-score-opt.onnx
+qore-onnx package /models/customer-score.onnx /srv/model-packages/customer-score
 qore-onnx quantize --method dynamic --weight-type QInt8 \
     /models/customer-score.onnx /models/customer-score-int8.onnx
 qore-onnx quantize --method static --calibration-data calibration.json \
@@ -115,4 +120,6 @@ qore-onnx quantize --method static --calibration-data calibration.json \
     - Initial release with ONNX Runtime Python quantization orchestration
     - Added dependency diagnostics and dry-run planning for quantization
     - Added ONNX model inspection, validation, optimization, and benchmark helpers
+    - Added deterministic ONNX package assembly with companion artifact
+      classification and manifest generation
 */
