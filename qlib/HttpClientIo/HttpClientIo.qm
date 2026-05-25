@@ -361,6 +361,17 @@ public namespace HttpClientIo {
 
         #! HTTP/2-only: timing info (NOTHING for HTTP/1.1 and HTTP/3)
         *hash<auto> timing;
+
+        #! The effective request URL that produced this response, after following any redirects
+        /** When the request was redirected (301, 302, 303, 307, 308), this is the
+            final URL whose response is returned here; with no redirect it is the
+            originally-requested URL.  Callers should resolve relative references
+            (links in an HTML body, etc.) against this URL rather than the URL they
+            originally requested, exactly as a browser does.  In \c redirect_passthru
+            mode (redirects returned to the caller instead of being followed) this is
+            the requested URL that returned the redirect response.
+        */
+        *string effective_url;
     }
 
     #! Unified error info for HTTP client operations
