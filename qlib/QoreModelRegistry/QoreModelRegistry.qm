@@ -365,6 +365,9 @@ reg.loadExecutable("torch-source", vid);
     - ModelExecutableAdapter now reports compatible Qore tensor storage dtypes
       for ONNX \c float16, \c bfloat16, unsigned integer, and string inputs and
       accepts those storage dtypes in \c runFeatureTensor() / \c runTensors()
+    - ModelExecutableAdapter tensor execution reuses \c ML::OnnxIoBinding for
+      stable ONNX input/output signatures and reports binding diagnostics in
+      provider diagnostics
 
     @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
     - ONNX model packages now expose task-aware execution-plan metadata through

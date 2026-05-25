@@ -43,6 +43,18 @@ public class ModelExecutableAdapter {
 
         #! Runtime identifier such as \c "qore-ml" or \c "onnxruntime"
         string runtime;
+
+        #! Reusable ONNX Runtime I/O binding for tensor execution
+        *ML::OnnxIoBinding tensor_binding;
+
+        #! Output-name signature for the current reusable binding
+        *string tensor_binding_output_signature;
+
+        #! Protects the bind-inputs/run sequence for the reusable binding
+        Mutex tensor_binding_mutex();
+
+        #! Number of tensor runs executed through the reusable binding
+        int tensor_binding_run_count = 0;
     }
 
     #! Creates an execution adapter around a loaded model object
@@ -180,7 +192,13 @@ public class ModelExecutableAdapter {
             throw "ML-REGISTRY-ERROR",
                 "runTensors() requires an ONNX Runtime model";
         }
-        return model.runTensors(inputs, output_names);
+        tensor_binding_mutex.lock();
+        on_exit tensor_binding_mutex.unlock();
+
+        ML::OnnxIoBinding binding = getTensorBindingUnlocked(output_names);
+        binding.bindInputs(inputs: inputs);
+        ++tensor_binding_run_count;
+        return binding.run(tensors: True);
     }
 
     #! Runs a feature matrix through the wrapped model
@@ -245,7 +263,7 @@ public class ModelExecutableAdapter {
                     "instead of runFeatureMatrixTensors()", tensor_name);
         }
         ML::Tensor input(convertFeatureMatrixForTensorDtype(matrix, dtype, tensor_name), NOTHING, dtype);
-        return model.runTensors({tensor_name: input}, output_names);
+        return runTensors({tensor_name: input}, output_names);
     }
 
     #! Runs a dense feature tensor through an ONNX model and returns ML::Tensor outputs
@@ -280,7 +298,7 @@ public class ModelExecutableAdapter {
                 sprintf("input tensor %y expects dtype %y, but the supplied tensor has dtype %y",
                     tensor_name, dtype, input.getDtype());
         }
-        return model.runTensors({tensor_name: input}, output_names);
+        return runTensors({tensor_name: input}, output_names);
     }
 
     #! Returns the ML::Tensor dtype expected by an ONNX input tensor
@@ -336,6 +354,7 @@ public class ModelExecutableAdapter {
             rv{"available_providers"} = ML::ml_get_onnx_providers();
             rv{"inputs"} = info.inputs;
             rv{"outputs"} = info.outputs;
+            rv{"io_binding"} = getTensorBindingDiagnostics();
         }
 
         return rv;
@@ -393,6 +412,58 @@ public class ModelExecutableAdapter {
             throw "ML-REGISTRY-ERROR", "ONNX model has no input tensors";
         }
         return inputs[0].name;
+    }
+
+    #! Returns a reusable tensor-path I/O binding for the requested output selection
+    private ML::OnnxIoBinding getTensorBindingUnlocked(*list<string> output_names) {
+        string signature = outputNamesSignature(output_names);
+        if (!exists tensor_binding || tensor_binding_output_signature != signature) {
+            tensor_binding = model.createBinding();
+            tensor_binding_output_signature = signature;
+            bindTensorOutputsUnlocked(cast<ML::OnnxIoBinding>(tensor_binding), output_names);
+        }
+        return cast<ML::OnnxIoBinding>(tensor_binding);
+    }
+
+    #! Binds selected outputs or all outputs to ONNX Runtime-managed memory
+    private bindTensorOutputsUnlocked(ML::OnnxIoBinding binding, *list<string> output_names) {
+        if (!exists output_names) {
+            binding.bindOutputs();
+            return;
+        }
+
+        hash<auto> seen;
+        foreach string name in (output_names) {
+            if (seen.hasKey(name)) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("duplicate ONNX output name %y; output names must be unique", name);
+            }
+            seen{name} = True;
+            binding.bindOutput(name: name);
+        }
+    }
+
+    #! Returns a stable output-name signature for binding reuse
+    private static string outputNamesSignature(*list<string> output_names) {
+        return exists output_names ? sprintf("%y", output_names) : "<all>";
+    }
+
+    #! Returns reusable I/O binding diagnostics for ONNX tensor execution
+    private hash<auto> getTensorBindingDiagnostics() {
+        tensor_binding_mutex.lock();
+        on_exit tensor_binding_mutex.unlock();
+
+        hash<auto> rv = {
+            "enabled": True,
+            "initialized": exists tensor_binding,
+            "run_count": tensor_binding_run_count,
+        };
+        if (exists tensor_binding) {
+            ML::OnnxIoBinding binding = cast<ML::OnnxIoBinding>(tensor_binding);
+            rv.output_signature = tensor_binding_output_signature;
+            rv.bound_outputs = binding.getBoundOutputNames();
+        }
+        return rv;
     }
 
     #! Resolves the ML::Tensor storage dtype needed for the ONNX input tensor

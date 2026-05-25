@@ -1201,6 +1201,12 @@ class ModelRegistryTest inherits QUnit::Test {
             "provider diagnostics should include ONNX Runtime providers");
         assertEq("X", diagnostics.inputs[0].name,
             "provider diagnostics should include input tensor metadata");
+        assertTrue(diagnostics.io_binding.initialized,
+            "adapter tensor execution should initialize reusable I/O binding");
+        assertEq(3, diagnostics.io_binding.run_count,
+            "adapter tensor execution should use reusable I/O binding for tensor runs");
+        assertEq(("Y",), diagnostics.io_binding.bound_outputs,
+            "adapter reusable I/O binding should track selected output bindings");
     }
 
     executableAdapterOnnxStorageDtypesTest() {

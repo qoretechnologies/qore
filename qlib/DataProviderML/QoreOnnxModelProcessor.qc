@@ -276,6 +276,15 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         #! ONNX model instance
         ML::OnnxModel model;
 
+        #! Reusable ONNX Runtime I/O binding for tensor output paths
+        *ML::OnnxIoBinding io_binding;
+
+        #! Protects the bind-inputs/run sequence for the reusable binding
+        Mutex io_binding_mutex();
+
+        #! Number of tensor runs executed through the reusable binding
+        int io_binding_run_count = 0;
+
         #! Output representation mode
         string output_mode = "events";
 
@@ -451,6 +460,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             "inputs": model.getInputInfo(),
             "outputs": model.getOutputInfo(),
             "inference_stats": model.getInferenceStats(),
+            "io_binding": getIoBindingDiagnostics(),
         };
         if (finish_profile) {
             *string profile_path = model.endProfiling();
@@ -560,7 +570,57 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
     #! Runs tensor-preserving ONNX inference with the configured output selection
     private hash<auto> runModelTensors(hash<auto> inputs) {
-        return model.runTensors(inputs, output_names);
+        io_binding_mutex.lock();
+        on_exit io_binding_mutex.unlock();
+
+        ML::OnnxIoBinding binding = getIoBindingUnlocked();
+        binding.bindInputs(inputs: inputs);
+        ++io_binding_run_count;
+        return binding.run(tensors: True);
+    }
+
+    #! Returns the reusable tensor-path I/O binding, creating and binding outputs once
+    private ML::OnnxIoBinding getIoBindingUnlocked() {
+        if (!exists io_binding) {
+            io_binding = model.createBinding();
+            bindIoOutputsUnlocked(cast<ML::OnnxIoBinding>(io_binding));
+        }
+        return cast<ML::OnnxIoBinding>(io_binding);
+    }
+
+    #! Binds selected outputs or all outputs to ONNX Runtime-managed memory
+    private bindIoOutputsUnlocked(ML::OnnxIoBinding binding) {
+        if (!exists output_names) {
+            binding.bindOutputs();
+            return;
+        }
+
+        hash<auto> seen;
+        foreach string name in (output_names) {
+            if (seen.hasKey(name)) {
+                throw "PROCESSOR-ERROR",
+                    sprintf("duplicate ONNX output name %y; output names must be unique", name);
+            }
+            seen{name} = True;
+            binding.bindOutput(name: name);
+        }
+    }
+
+    #! Returns reusable I/O binding diagnostics for optimized tensor output paths
+    private hash<auto> getIoBindingDiagnostics() {
+        io_binding_mutex.lock();
+        on_exit io_binding_mutex.unlock();
+
+        hash<auto> rv = {
+            "enabled": True,
+            "initialized": exists io_binding,
+            "run_count": io_binding_run_count,
+        };
+        if (exists io_binding) {
+            ML::OnnxIoBinding binding = cast<ML::OnnxIoBinding>(io_binding);
+            rv.bound_outputs = binding.getBoundOutputNames();
+        }
+        return rv;
     }
 
     #! Processes a window of records through the ONNX model

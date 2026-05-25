@@ -1956,6 +1956,10 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       buffer inputs are sliced as tensor views across \c window_size batches
       and row-aligned tensor outputs are concatenated before compact column
       conversion so dense output buffers survive multi-window scoring
+    - \c onnx-model and registry-backed ONNX tensor execution reuse
+      \c ML::OnnxIoBinding for stable shaped windows, avoiding repeated output
+      binding setup and exposing binding diagnostics through
+      \c getDiagnostics()
     - \c onnx-model and \c registry-model support compact \c output_mode values
       \c "columns", \c "dataframe", and \c "tensor"; dense input columns with
       the expected ONNX dtype use a direct tensor path to avoid row matrix

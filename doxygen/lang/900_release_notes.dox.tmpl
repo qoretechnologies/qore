@@ -3311,6 +3311,10 @@ foreach string module_name in (registry.getProcessModules()) {
         infer registry-backed ONNX mode from \c embedding and \c reranker plans
       - QoreModelRegistry ModelExecutableAdapter ONNX execution methods accept
         selected output names for registry-backed multi-output ONNX packages
+      - DataProviderML ONNX processors and QoreModelRegistry ModelExecutableAdapter
+        tensor execution paths reuse \c ML::OnnxIoBinding for stable input/output
+        signatures and expose binding diagnostics for optimized registry-backed
+        inference
       - ONNX package manifests now expose a complete deployment contract for
         model registry users: \c opset, producer metadata,
         \c minimum_onnxruntime_version, tensor input/output contracts,

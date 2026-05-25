@@ -141,8 +141,9 @@ Implementation notes:
 
 ## Phase 3: OrtValue, I/O Binding, and Zero-Copy Execution
 
-Status: core APIs implemented; dataframe/Arrow/device binding integration remains
-in later phases.
+Status: completed for raw APIs and DataProviderML/registry stable tensor paths;
+Arrow and provider-owned device binding integration remains deferred to the
+Arrow/device-buffer work.
 
 Expose ONNX Runtime binding primitives so Qore can avoid unnecessary host/device
 copies and repeated tensor reconstruction.
@@ -163,8 +164,8 @@ Supported bindings:
   outputs.
 - `buffer<T>`: implemented for inputs when the ONNX element type maps directly
   to the Qore dense buffer type.
-- dataframe dense columns: deferred to the DataProviderML/dataframe integration
-  phase.
+- dataframe dense columns: implemented through DataProviderML dense tensor
+  paths with reusable I/O binding for stable shaped windows.
 - Arrow buffers when layout is compatible: deferred to Arrow-backed tensor and
   dataframe interchange work.
 - provider-owned device buffers: deferred until device buffer ownership and
@@ -173,10 +174,12 @@ Supported bindings:
 Acceptance checks:
 
 - Tests cover reusable input binding, ONNX Runtime-managed output allocation,
-  run options, and Qore-preallocated numeric output tensors.
+  run options, Qore-preallocated numeric output tensors, DataProviderML
+  compact-column binding diagnostics, and registry adapter binding diagnostics.
 - Benchmarks must still compare nested lists, tensors, DataFrame dense columns,
   and I/O binding.
-- DataProviderML must still use binding reuse for stable shapes.
+- DataProviderML and QoreModelRegistry tensor execution paths reuse
+  `ML::OnnxIoBinding` for stable shaped windows and expose binding diagnostics.
 
 ## Phase 4: Offline Graph Optimization and ORT Format
 

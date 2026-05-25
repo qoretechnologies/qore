@@ -1905,6 +1905,14 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(11.0, outputs[4], 1e-5);
+
+        hash<auto> diagnostics = proc.getDiagnostics();
+        assertTrue(diagnostics.io_binding.initialized,
+            "DataProviderML ONNX compact tensor path should initialize reusable I/O binding");
+        assertEq(1, diagnostics.io_binding.run_count,
+            "single-window compact tensor path should run through reusable I/O binding once");
+        assertEq(("Y",), diagnostics.io_binding.bound_outputs,
+            "reusable I/O binding should bind model outputs for compact tensor path");
 %endif
     }
 
