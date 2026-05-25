@@ -404,6 +404,22 @@ public class MlTest inherits QUnit::Test {
         assertEq((2, 2), from_columns.getShape());
         assertEq(((1.0, 2.0), (3.0, 4.0)), from_columns.toList());
 
+        ML::Tensor reshaped = from_columns.reshape((4, 1));
+        assertEq((4, 1), reshaped.getShape());
+        assertEq(((1.0,), (2.0,), (3.0,), (4.0,)), reshaped.toList());
+
+        ML::Tensor row_slice = from_columns.sliceRows(offset: 1, count: 1);
+        assertEq((1, 2), row_slice.getShape());
+        assertEq(((3.0, 4.0),), row_slice.toList());
+
+        ML::Tensor copied_slice = from_columns.sliceRows(offset: 0, count: 1, zero_copy: False);
+        assertEq((1, 2), copied_slice.getShape());
+        assertEq(((1.0, 2.0),), copied_slice.toList());
+
+        ML::Tensor concatenated = ML::Tensor::concatRows((copied_slice, row_slice));
+        assertEq((2, 2), concatenated.getShape());
+        assertEq(((1.0, 2.0), (3.0, 4.0)), concatenated.toList());
+
         ML::Tensor int8_tensor(data: (-1, 0, 1), dtype: "int8");
         assertEq("int8", int8_tensor.getDtype());
         assertEq("buffer<int8>", int8_tensor.getBuffer().fullType());
@@ -416,6 +432,9 @@ public class MlTest inherits QUnit::Test {
 
         assertThrows("ML-TENSOR-ERROR", sub() {
             ML::Tensor bad(data: new buffer<*float64>((1.0, NOTHING)));
+        });
+        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
+            ML::Tensor bad(data: new buffer<string>(("x",)));
         });
         assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
             ML::Tensor bad(data: (1.0, 2.0, 3.0), shape: (2, 2));
@@ -431,6 +450,15 @@ public class MlTest inherits QUnit::Test {
                 new buffer<float32>((1.0, 2.0)),
                 new buffer<float64>((3.0, 4.0)),
             ), "float32");
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = from_columns.reshape((3,));
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = from_columns.sliceRows(offset: 1, count: 5);
+        });
+        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
+            ML::Tensor bad = ML::Tensor::concatRows((from_columns, from_buffer));
         });
     }
 

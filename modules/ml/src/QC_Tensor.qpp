@@ -116,6 +116,62 @@ static Tensor Tensor::fromColumns(list<auto> columns, *string dtype) [flags=RET_
     return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
 }
 
+//! Concatenates row-major Tensors along the first dimension
+/** @param tensors list of tensors with the same dtype, rank, and all dimensions
+        after the first dimension equal
+
+    @return a Tensor with all rows from \a tensors appended in list order
+
+    This method is intended for building ONNX mini-batches from already-dense
+    tensor batches without converting through nested Qore lists.
+
+    @throw ML-TENSOR-ERROR if \a tensors is empty or contains non-Tensor values
+    @throw ML-TENSOR-SHAPE-ERROR if ranks or trailing dimensions differ
+    @throw ML-TENSOR-DTYPE-ERROR if tensor dtypes differ
+*/
+static Tensor Tensor::concatRows(list<Tensor> tensors) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::concatRows(tensors, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Creates a Tensor view with a different shape
+/** @param shape new tensor shape; the element count must match the current tensor
+
+    @return a Tensor that shares the same dense backing buffer
+
+    @throw ML-TENSOR-SHAPE-ERROR if \a shape does not match the element count
+*/
+Tensor Tensor::reshape(list<int> shape) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(tensor->reshape(shape, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Returns a contiguous slice of rows along the first dimension
+/** @param offset first row to include
+    @param count number of rows to include
+    @param zero_copy when True, return a view over the existing backing buffer;
+        when False, copy the selected row range into a new buffer
+
+    @return a Tensor with the same rank and trailing dimensions and \a count
+        rows in the first dimension
+
+    @throw ML-TENSOR-SHAPE-ERROR if the tensor is scalar or the requested range
+        is outside the tensor's first dimension
+*/
+Tensor Tensor::sliceRows(int offset, int count, bool zero_copy = True) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(tensor->sliceRows(offset, count, zero_copy, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
 //! Returns the tensor dtype
 /** @return dtype name such as \c float32, \c float64, \c int64, or \c bool
 */

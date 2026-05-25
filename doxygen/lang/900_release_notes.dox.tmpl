@@ -2060,6 +2060,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - ML::Tensor::fromColumns() packs equal-length dense column buffers into
         row-major tensors for multi-feature model inputs without row hash or
         nested list materialization
+      - ML::Tensor::reshape(), ML::Tensor::sliceRows(), and
+        ML::Tensor::concatRows() support zero-copy tensor reshaping, row slicing,
+        and native mini-batch assembly for model execution
       - ONNX inference supports float, double, int8, int16, int32, int64, and bool
         tensor input/output conversion
       - OnnxModel automatic provider selection falls back to CPU when an advertised

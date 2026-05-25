@@ -59,6 +59,15 @@ public:
     DLLLOCAL static QoreTensor* fromColumns(const QoreListNode* columns, const QoreStringNode* dtype,
         ExceptionSink* xsink);
 
+    //! Concatenates row-major tensors along their first dimension.
+    DLLLOCAL static QoreTensor* concatRows(const QoreListNode* tensors, ExceptionSink* xsink);
+
+    //! Creates a zero-copy tensor with a different shape.
+    DLLLOCAL QoreTensor* reshape(const QoreListNode* shape, ExceptionSink* xsink) const;
+
+    //! Creates a tensor containing a contiguous range of first-dimension rows.
+    DLLLOCAL QoreTensor* sliceRows(int64_t offset, int64_t count, bool zero_copy, ExceptionSink* xsink) const;
+
     //! Returns the underlying buffer with a new reference.
     DLLLOCAL QoreBufferNode* refBuffer() const;
 

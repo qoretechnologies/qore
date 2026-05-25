@@ -27,6 +27,7 @@
 
 #include "QC_Tensor.h"
 
+#include <cstring>
 #include <limits>
 #include <vector>
 
@@ -98,6 +99,68 @@ int packDenseColumns(QoreBufferNode& output, const std::vector<const QoreBufferN
         }
     }
     return 0;
+}
+
+class TensorRefList {
+public:
+    ~TensorRefList() {
+        ExceptionSink xsink;
+        for (QoreTensor* tensor : refs) {
+            tensor->deref(&xsink);
+        }
+    }
+
+    int add(QoreValue value, size_t index, ExceptionSink* xsink) {
+        if (value.getType() != NT_OBJECT) {
+            xsink->raiseException("ML-TENSOR-ERROR",
+                "concatRows() list element %zu is type '%s'; expected ML::Tensor",
+                index, value.getFullTypeName());
+            return -1;
+        }
+
+        QoreObject* obj = value.get<QoreObject>();
+        QoreTensor* tensor = static_cast<QoreTensor*>(obj->getReferencedPrivateData(CID_TENSOR, xsink));
+        if (*xsink) {
+            return -1;
+        }
+        if (!tensor) {
+            xsink->raiseException("ML-TENSOR-ERROR",
+                "concatRows() list element %zu is not an ML::Tensor", index);
+            return -1;
+        }
+        refs.push_back(tensor);
+        return 0;
+    }
+
+    const std::vector<QoreTensor*>& values() const {
+        return refs;
+    }
+
+private:
+    std::vector<QoreTensor*> refs;
+};
+
+int64_t tensorTrailingElementCount(const std::vector<int64_t>& shape, ExceptionSink* xsink) {
+    if (shape.empty()) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "row tensor operation requires a tensor with rank >= 1");
+        return -1;
+    }
+
+    int64_t count = 1;
+    for (size_t i = 1; i < shape.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "validating tensor row shape")) {
+            return -1;
+        }
+        int64_t dim = shape[i];
+        if (dim && count > std::numeric_limits<int64_t>::max() / dim) {
+            xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+                "tensor row width overflows int64");
+            return -1;
+        }
+        count *= dim;
+    }
+    return count;
 }
 
 }
@@ -278,17 +341,25 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
     ReferenceHolder<QoreBufferNode> buffer_holder(xsink);
     if (data.getType() == NT_BUFFER) {
         const QoreBufferNode* source = data.get<const QoreBufferNode>();
+        QoreBufferElementType source_type = source->getElementType();
+        if (source_type == QoreBufferElementType::String || source_type == QoreBufferElementType::Decimal128
+                || source_type == QoreBufferElementType::Invalid) {
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "tensor dtype '%s' is not supported for ML tensors yet; use numeric or bool tensor data",
+                qore_buffer_element_type_name(source_type));
+            return nullptr;
+        }
         if (source->hasNullableElements()) {
             xsink->raiseException("ML-TENSOR-ERROR",
                 "cannot create a tensor from '%s' because nullable buffer elements cannot be represented in model "
                 "tensors; remove or impute nulls first", data.getFullTypeName());
             return nullptr;
         }
-        if (element_type != QoreBufferElementType::Invalid && source->getElementType() != element_type) {
+        if (element_type != QoreBufferElementType::Invalid && source_type != element_type) {
             xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
                 "tensor dtype '%s' does not match source buffer type '%s'",
                 qore_buffer_element_type_name(element_type),
-                qore_buffer_element_type_name(source->getElementType()));
+                qore_buffer_element_type_name(source_type));
             return nullptr;
         }
         if (shape.empty()) {
@@ -475,6 +546,166 @@ QoreTensor* QoreTensor::fromColumns(const QoreListNode* columns_arg, const QoreS
         static_cast<int64_t>(rows),
         static_cast<int64_t>(width),
     });
+}
+
+QoreTensor* QoreTensor::concatRows(const QoreListNode* tensors_arg, ExceptionSink* xsink) {
+    if (!tensors_arg || tensors_arg->empty()) {
+        xsink->raiseException("ML-TENSOR-ERROR", "concatRows() requires at least one ML::Tensor");
+        return nullptr;
+    }
+
+    TensorRefList tensor_refs;
+    for (size_t i = 0; i < tensors_arg->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "validating tensor rows")) {
+            return nullptr;
+        }
+        if (tensor_refs.add(tensors_arg->retrieveEntry(i), i, xsink)) {
+            return nullptr;
+        }
+    }
+
+    const std::vector<QoreTensor*>& tensors = tensor_refs.values();
+    const std::vector<int64_t>& first_shape = tensors.front()->getShape();
+    int64_t row_width = tensorTrailingElementCount(first_shape, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    QoreBufferElementType element_type = tensors.front()->getElementType();
+    int64_t total_rows = 0;
+    for (size_t i = 0; i < tensors.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "validating tensor row compatibility")) {
+            return nullptr;
+        }
+        const QoreTensor* tensor = tensors[i];
+        const std::vector<int64_t>& shape = tensor->getShape();
+        if (shape.size() != first_shape.size()) {
+            xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+                "concatRows() tensor %zu has rank %zu; expected rank %zu",
+                i, shape.size(), first_shape.size());
+            return nullptr;
+        }
+        if (tensor->getElementType() != element_type) {
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "concatRows() tensor %zu has dtype '%s'; expected '%s'", i,
+                qore_buffer_element_type_name(tensor->getElementType()),
+                qore_buffer_element_type_name(element_type));
+            return nullptr;
+        }
+        for (size_t dim = 1; dim < shape.size(); ++dim) {
+            if (dim && !(dim % 100) && qore_check_cancel(xsink, "validating tensor trailing dimensions")) {
+                return nullptr;
+            }
+            if (shape[dim] != first_shape[dim]) {
+                xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+                    "concatRows() tensor %zu dimension %zu is " QLLD "; expected " QLLD,
+                    i, dim, shape[dim], first_shape[dim]);
+                return nullptr;
+            }
+        }
+        if (shape[0] && total_rows > std::numeric_limits<int64_t>::max() - shape[0]) {
+            xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "concatRows() row count overflows int64");
+            return nullptr;
+        }
+        total_rows += shape[0];
+    }
+
+    if (row_width && total_rows > std::numeric_limits<int64_t>::max() / row_width) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "concatRows() element count overflows int64");
+        return nullptr;
+    }
+    int64_t total_elements_i64 = total_rows * row_width;
+    if (static_cast<uint64_t>(total_elements_i64) > std::numeric_limits<size_t>::max()) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "concatRows() tensor element count overflows size_t");
+        return nullptr;
+    }
+    size_t total_elements = static_cast<size_t>(total_elements_i64);
+
+    ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(element_type, false, total_elements), xsink);
+    size_t output_offset = 0;
+    for (size_t i = 0; i < tensors.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "concatenating tensor rows")) {
+            return nullptr;
+        }
+        const QoreBufferNode* input = tensors[i]->getBuffer();
+        if (input->hasNullableElements()) {
+            xsink->raiseException("ML-TENSOR-ERROR",
+                "concatRows() tensor %zu contains nullable elements; model tensors do not support nulls", i);
+            return nullptr;
+        }
+        if (input->ensureHostStorage(xsink)) {
+            return nullptr;
+        }
+        size_t input_size = input->size();
+        if (element_type == QoreBufferElementType::Bool) {
+            for (size_t j = 0; j < input_size; ++j) {
+                if (j && !(j % 100) && qore_check_cancel(xsink, "concatenating bool tensor rows")) {
+                    return nullptr;
+                }
+                if ((*buffer)->setEntry(output_offset + j, input->getReferencedEntry(j, xsink), xsink)) {
+                    return nullptr;
+                }
+            }
+        } else if (input_size) {
+            size_t element_size = qore_buffer_element_storage_size(element_type);
+            std::memcpy(static_cast<uint8_t*>((*buffer)->getRawData()) + (output_offset * element_size),
+                input->getRawData(), input_size * element_size);
+        }
+        output_offset += input_size;
+    }
+
+    std::vector<int64_t> shape = first_shape;
+    shape[0] = total_rows;
+    return new QoreTensor(buffer.release(), std::move(shape));
+}
+
+QoreTensor* QoreTensor::reshape(const QoreListNode* shape_arg, ExceptionSink* xsink) const {
+    std::vector<int64_t> n_shape;
+    if (parseShape(shape_arg, n_shape, xsink)) {
+        return nullptr;
+    }
+    int64_t new_count = shapeElementCount(n_shape, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (new_count != static_cast<int64_t>(buffer->size())) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "reshape() shape expects " QLLD " elements, but tensor has %zu",
+            new_count, buffer->size());
+        return nullptr;
+    }
+    return new QoreTensor(buffer, std::move(n_shape));
+}
+
+QoreTensor* QoreTensor::sliceRows(int64_t offset, int64_t count, bool zero_copy, ExceptionSink* xsink) const {
+    const std::vector<int64_t>& old_shape = getShape();
+    int64_t row_width = tensorTrailingElementCount(old_shape, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    int64_t rows = old_shape[0];
+    if (offset < 0 || count < 0 || offset > rows || count > rows - offset) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "sliceRows() requested offset " QLLD " and count " QLLD " for tensor with " QLLD " rows",
+            offset, count, rows);
+        return nullptr;
+    }
+
+    int64_t element_offset_i64 = offset * row_width;
+    int64_t element_count_i64 = count * row_width;
+    assert(element_offset_i64 >= 0 && element_count_i64 >= 0);
+    size_t element_offset = static_cast<size_t>(element_offset_i64);
+    size_t element_count = static_cast<size_t>(element_count_i64);
+
+    ReferenceHolder<QoreBufferNode> n_buffer(
+        zero_copy ? buffer->view(element_offset, element_count) : buffer->slice(element_offset, element_count, xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::vector<int64_t> n_shape = old_shape;
+    n_shape[0] = count;
+    return new QoreTensor(n_buffer.release(), std::move(n_shape));
 }
 
 QoreBufferNode* QoreTensor::refBuffer() const {

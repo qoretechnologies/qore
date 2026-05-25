@@ -399,6 +399,12 @@ if (caps.has_onnx) {
         df.getColumnBuffer("debt_ratio"),
         df.getColumnBuffer("history_months"),
     ), "float32");
+
+    # Reshape and row-slice tensors without materializing nested lists.
+    Qore::ML::Tensor flat = features.reshape((features.size(),));
+    Qore::ML::Tensor first_batch = features.sliceRows(offset: 0, count: 128);
+    Qore::ML::Tensor next_batch = features.sliceRows(offset: 128, count: 128);
+    Qore::ML::Tensor combined = Qore::ML::Tensor::concatRows((first_batch, next_batch));
 }
     @endcode
 
@@ -752,6 +758,10 @@ if (!caps.has_onnx) {
     - Added @ref Qore::ML::Tensor::fromColumns() "Tensor::fromColumns()" to
       pack equal-length dense column buffers into a row-major tensor without
       row hash or nested list materialization
+    - Added @ref Qore::ML::Tensor::reshape() "Tensor::reshape()",
+      @ref Qore::ML::Tensor::sliceRows() "Tensor::sliceRows()", and
+      @ref Qore::ML::Tensor::concatRows() "Tensor::concatRows()" for
+      zero-copy tensor reshaping, row slicing, and native batch assembly
     - ONNX tensor conversion now supports float, double, int8, int16, int32,
       int64, and bool inputs and outputs
     - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now
