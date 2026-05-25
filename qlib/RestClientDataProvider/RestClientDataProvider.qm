@@ -200,9 +200,11 @@ module RestClientDataProvider {
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "generic-rest-logo.svg",
             "groups": (DataProvider::AppGroup::ApiIntegration,),
-            # disable the framework-injected generic call action for this app — the "call" action below
-            # is the canonical generic call for the standalone "GenericRest" app, and the framework's
-            # auto-injection would duplicate it
+            # GenericRest is the one semantic exception to the framework's positive REST detection:
+            # this app already exposes a canonical /call action below, and the auto-injected
+            # make-api-call would duplicate it. Non-REST apps (Db, FTP, MongoDB, etc.) do NOT need
+            # this flag — they are automatically excluded by the predicate that walks the connection
+            # scheme's `cls` hierarchy for RestClient::RestConnection.
             "disable_generic_api_call": True,
         });
 

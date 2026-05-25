@@ -24,8 +24,10 @@ provider requires zero per-provider boilerplate.
 - Replacing per-API typed actions. The hand-written `create-message`,
   `list-models`, etc. remain the primary actions; `make-api-call` is the
   escape hatch for endpoints that don't yet have a first-class wrapper.
-- Wrapping non-REST connections (DB, FTP, MongoDB, WebSocket). These opt out
-  via `disable_generic_api_call: True`.
+- Wrapping non-REST connections (DB, FTP, MongoDB, WebSocket). These are
+  automatically excluded by the positive REST predicate
+  (`DataProviderActionCatalog::isRestScheme()`) — no per-app opt-out
+  needed; see [Gating: positive REST detection](#gating-positive-rest-detection).
 - Supporting pagination, retries, streaming responses, or per-call OAuth2 scope
   overrides. Each is a future extension; see [Open Issues](#open-issues).
 
@@ -98,31 +100,55 @@ provider's own list when `hasGenericApiCallChild()` is true.
 ### Auto-registered `make-api-call` action
 
 `DataProviderActionCatalog::registerApp()` is modified to also register a
-`make-api-call` action whenever the app declares a connection `scheme` and
-has not set `disable_generic_api_call: True`. The action's full
-`DataProviderActionInfo` is produced by a builder closure registered via
-`setGenericApiCallActionBuilder()`.
+`make-api-call` action whenever
+`isRestScheme(app.scheme) && !app.disable_generic_api_call` — see
+[Gating: positive REST detection](#gating-positive-rest-detection). The
+action's full `DataProviderActionInfo` is produced by a builder closure
+registered via `setGenericApiCallActionBuilder()`.
 
 A small backlog mechanism handles module load order: if an app is
 registered before the builder is set, the app is queued in
 `pending_generic_api_call_apps` and processed when the builder is eventually
-registered.
+registered. The REST predicate is re-evaluated at drain time so apps whose
+scheme verdict has since changed (e.g. ConnectionProvider was loaded after
+the app) are handled correctly.
 
 Reference: `qlib/DataProvider/DataProviderActionCatalog.qc`, search for
 `registerGenericApiCallActionForApp` and `setGenericApiCallActionBuilder`.
 
-### Opt-out
+### Gating: positive REST detection
 
-`DataProviderAppInfo.disable_generic_api_call: bool` — when `True`, the
-catalog skips auto-registration for that app. Set on Db, FTP, WebSocket,
-Memcached, MongoDB, Redis, SSE, Filesystem, and the standalone `GenericRest`
-app (whose own `/call` action would otherwise duplicate `make-api-call`).
-Future non-REST apps should set this in their `registerApp()` call.
+The framework injects `make-api-call` iff the app's connection scheme is
+REST-derived — i.e. the scheme's `ConnectionSchemeInfo.cls` inherits
+`RestClient::RestConnection`. This is **positive detection**, not an opt-out
+denylist: a future non-REST app (Cassandra, gRPC transport, etc.) that
+forgets to set `disable_generic_api_call` does **not** get a broken action —
+the predicate rejects it on the basis of its connection class hierarchy
+alone.
 
-The catalog's app-equality check (used to dedupe duplicate registrations from
-related modules — e.g. `FtpClientDataProvider` + `FtpPoller`) excludes
-`disable_generic_api_call` from comparison, so one caller setting the opt-out
-and another omitting it does not break duplicate-registration.
+The predicate is implemented in
+`DataProviderActionCatalog::isRestScheme()`. Because the DataProvider
+module cannot `%requires ConnectionProvider` (which would form a cycle —
+ConnectionProvider already `%requires(reexport) DataProvider`), the
+`ConnectionSchemeCache::getSchemeEx()` lookup is late-bound via a callback
+hook (`setSchemeLookupCallback()`) that ConnectionProvider registers at its
+own init time. From there, the predicate walks the connection class
+hierarchy by *name* (`Class::getClassHierarchy()` → looking for
+`"RestClient::RestConnection"`), so no RestClient symbol import is
+required either.
+
+The one explicit opt-out today is **GenericRest** (`scheme: "rest"`),
+which is itself `RestConnection`-derived but ships its own canonical
+`/call` action; auto-injecting `make-api-call` would duplicate it.
+Future apps may set `disable_generic_api_call: True` for similar
+semantic reasons (e.g. compliance-sensitive integrations where a
+free-form API surface is undesirable). **Non-REST apps do not need this
+flag** — they are filtered by the predicate.
+
+The catalog's app-equality check (used to dedupe duplicate registrations
+from related modules — e.g. `FtpClientDataProvider` + `FtpPoller`)
+excludes `disable_generic_api_call` from comparison so one caller setting
+the opt-out and another omitting it does not break duplicate-registration.
 
 ## Generic-call implementation (RestClientDataProvider module)
 

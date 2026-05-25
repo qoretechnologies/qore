@@ -66,9 +66,6 @@ module DbDataProvider {
             "logo_file_name": "db-logo.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (DataProvider::AppGroup::Databases,),
-            # database connections do not expose a REST client; skip the framework-injected
-            # "Make an API call" action
-            "disable_generic_api_call": True,
         });
 
         # register all supported actions
@@ -658,9 +655,6 @@ public sub registerDbVendorApp(hash<DbVendorInfo> vendor) {
         "groups": (DataProvider::AppGroup::Databases,),
         "connection_options": conn_opts,
         "auto_url": True,
-        # database connections do not expose a REST client; skip the framework-injected
-        # "Make an API call" action
-        "disable_generic_api_call": True,
         # store default driver and JDBC JAR for backend URL construction
         "info": {
             "default_driver": driver_values[0].value,

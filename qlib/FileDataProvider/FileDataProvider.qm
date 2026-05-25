@@ -55,9 +55,6 @@ module FileDataProvider {
             "logo_file_name": "generic-filesystem-logo.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (DataProvider::AppGroup::FileSystem,),
-            # filesystem connections do not expose a REST client; skip the framework-injected
-            # "Make an API call" action
-            "disable_generic_api_call": True,
         });
 
         # register all supported actions

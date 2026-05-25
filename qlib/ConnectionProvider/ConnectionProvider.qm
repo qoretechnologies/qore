@@ -40,6 +40,21 @@ module ConnectionProvider {
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
     license = "MIT";
+    init = sub () {
+        # Register the late-bound scheme-lookup callback for DataProvider's framework-injected
+        # `make-api-call` action gating. DataProvider's isRestScheme() predicate uses this hook to
+        # walk the connection class hierarchy for RestClient::RestConnection without a hard import
+        # back from DataProvider to ConnectionProvider (which would form a cycle since
+        # ConnectionProvider already %requires(reexport) DataProvider).
+        #
+        # The callback returns the ConnectionSchemeInfo hash for a given scheme name, or throws if
+        # the scheme is unknown. DataProvider catches and treats unknown-scheme as "non-REST"
+        # (conservative default).
+        DataProvider::DataProviderActionCatalog::setSchemeLookupCallback(
+            *hash<auto> sub (string scheme) {
+                return ConnectionProvider::ConnectionSchemeCache::getSchemeEx(scheme);
+            });
+    };
 }
 
 /** @mainpage ConnectionProvider Module

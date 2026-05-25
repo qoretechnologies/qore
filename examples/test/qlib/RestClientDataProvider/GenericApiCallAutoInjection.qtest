@@ -13,9 +13,23 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ConnectionProvider
 %requires json
 
 %exec-class GenericApiCallAutoInjectionTest
+
+#! A connection-class stub that has NO `RestClient::RestConnection` in its hierarchy.
+/** Used to register a non-REST scheme in the test harness so we can prove the positive REST
+    predicate correctly rejects non-REST apps even without an explicit @c disable_generic_api_call
+    opt-out. The test never instantiates this class — it only feeds the @c Class reflection
+    object into a @c ConnectionSchemeInfo via @c Class::forName().
+
+    @note Inheriting from @c AbstractConnectionWithInfo would tie the stub to a much larger
+    constructor surface; the predicate only walks @c cls.getClassHierarchy() looking for the
+    @c RestClient::RestConnection pathname, so a free-standing stub is sufficient.
+*/
+public class FakeNonRestConnection {
+}
 
 #! HTTP handler that echoes back the request method, headers, and body as JSON.
 /** Used to verify the generic call action correctly threads each parameter through the underlying
@@ -74,6 +88,11 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         addTestCase("__call__ shows up in getChildProviderNames", \testCallChildInNames());
         addTestCase("getRestClientForGenericCall override returns rest", \testOverrideReturnsRest());
         addTestCase("apps without scheme do not get the action", \testNoSchemeNoAction());
+        # positive REST detection: non-REST schemes must be silently rejected even when the app
+        # author forgets to set disable_generic_api_call. This is the key behavioural difference
+        # vs. the original opt-out denylist design.
+        addTestCase("non-REST scheme is silently skipped (no explicit opt-out needed)",
+            \testNonRestSchemeSilentlySkipped());
         # new fields in 2.4
         addTestCase("body_type field reshapes body type dynamically", \testDynamicBodyType());
         addTestCase("body_type=json serializes hash to JSON with Content-Type", \testBodyTypeJson());
@@ -121,6 +140,12 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         # the RestClientDataProvider module's init block registers both builders; verify they're set
         assertTrue(AbstractDataProvider::hasGenericApiCallChildBuilder());
         assertTrue(DataProviderActionCatalog::hasGenericApiCallActionBuilder());
+
+        # ConnectionProvider's init block registers the scheme-lookup callback used by
+        # isRestScheme() — without it the positive REST predicate cannot resolve any scheme and
+        # would silently reject every app. Make sure it's wired up.
+        assertTrue(DataProviderActionCatalog::hasSchemeLookupCallback(),
+            "scheme lookup callback must be registered by ConnectionProvider at init");
 
         # the reserved names are exposed for callers (e.g. test harnesses, frontends)
         assertEq("__call__", AbstractDataProvider::GenericApiCallChildName);
@@ -221,6 +246,69 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "APP-ERROR") {
                 rethrow;
+            }
+        }
+    }
+
+    testNonRestSchemeSilentlySkipped() {
+        # This is the key proof of the inversion: a brand-new app whose connection scheme is not
+        # RestConnection-derived MUST NOT get the auto-injected make-api-call action — even when
+        # the author forgets the disable_generic_api_call flag. Under the original opt-out denylist
+        # such an app would receive a broken action that fails at click-time.
+        string scheme_name = "fake-non-rest-" + getpid();
+        string app_name = "TestNonRestApp" + getpid();
+        try {
+            # register a scheme whose cls is a plain Qore class that does NOT inherit
+            # RestClient::RestConnection — this is the predicate's discriminator
+            ConnectionProvider::ConnectionSchemeCache::registerScheme(scheme_name,
+                <ConnectionProvider::ConnectionSchemeInfo>{
+                    "display_name": "Fake non-REST scheme",
+                    "short_desc": "Test fixture: not a REST connection",
+                    "desc": "Test fixture: not a REST connection",
+                    "cls": Class::forName("FakeNonRestConnection"),
+                    "schemes": {scheme_name: True},
+                });
+
+            try {
+                DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                    "name": app_name,
+                    "display_name": "Test Non-REST App",
+                    "short_desc": "Test app with a non-REST scheme",
+                    "desc": "Test app with a non-REST scheme",
+                    "scheme": scheme_name,
+                    # deliberately NO disable_generic_api_call here — the predicate must reject
+                    # this app on the basis of its scheme class hierarchy alone
+                    "logo": "fake-svg",
+                    "logo_file_name": "x.svg",
+                    "logo_mime_type": MimeTypeSvg,
+                    "groups": (AppGroup::ApiIntegration,),
+                });
+
+                *hash<string, hash<DataProviderActionInfo>> actions =
+                    DataProviderActionCatalog::getActionHash(app_name);
+                *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+                assertFalse(exists a,
+                    "non-REST scheme (cls does NOT inherit RestClient::RestConnection) must NOT "
+                    "auto-register make-api-call — the positive predicate is the load-bearing gate");
+
+                # the cached app's supports_apis capability must NOT have been set, because the
+                # auto-injected DPAT_API action was never registered for it
+                hash<DataProviderAppInfo> cached = DataProviderActionCatalog::getAppEx(app_name);
+                assertFalse(cached.supports_apis ?? False,
+                    "supports_apis must be False when no DPAT_API actions are registered against "
+                    "the app — a True value here would falsely advertise REST capability");
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "APP-ERROR") {
+                    rethrow;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # scheme may already be registered from a prior test run — that's fine
+            if (ex.err != "SCHEME-ERROR" && ex.err != "CONNECTION-SCHEME-ERROR") {
+                # any other failure is real
+                if (ex.err != "APP-ERROR") {
+                    rethrow;
+                }
             }
         }
     }
