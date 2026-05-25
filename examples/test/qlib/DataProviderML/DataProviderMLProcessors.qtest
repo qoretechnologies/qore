@@ -334,7 +334,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     static string createTokenOnnxRegistryPackage(string dir, string model_name,
-            string model_path, string task) {
+            string model_path, string task, *hash<auto> execution_plan) {
         string package_dir = dir + DirSep + model_name + "_pkg";
         mkdir_ex(package_dir, 0755, True);
         DataProviderMLProcessorsTest::writeBinaryFile(package_dir + DirSep + "model.onnx",
@@ -344,11 +344,15 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         DataProviderMLProcessorsTest::writeTextFile(package_dir + DirSep + "tokenizer_config.json",
             "{\"model_max_length\":128}");
         QoreModelRegistry::ModelRegistry registry({"path": dir});
-        return registry.registerPackage(package_dir, {
+        hash<auto> options = {
             "name": model_name,
             "task": task,
             "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
-        });
+        };
+        if (execution_plan) {
+            options.execution_plan = execution_plan;
+        }
+        return registry.registerPackage(package_dir, options);
     }
 
     static hash<auto> makeDynamicInt64SequenceInput(string name) {
@@ -3920,13 +3924,17 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         }
 
         string vid = DataProviderMLProcessorsTest::createTokenOnnxRegistryPackage(
-            dir, "embed-plan-model", getTokenEmbeddingModelPath(), "embedding");
+            dir, "embed-plan-model", getTokenEmbeddingModelPath(), "embedding", {
+                "type": "onnx/embedding",
+                "output_names": ("last_hidden_state",),
+            });
 
         QoreModelRegistry::ModelRegistry registry({"path": dir});
         hash<QoreModelRegistry::ModelVersionInfo> manifest =
             registry.getVersionManifest("embed-plan-model", vid);
         assertEq("embedding", manifest.execution.task);
         assertEq("onnx/embedding", manifest.execution.plan.type);
+        assertEq(("last_hidden_state",), manifest.execution.plan.output_names);
 
         DataProviderML::QoreEmbedTextProcessor proc({
             "text_field": "body",
@@ -4074,13 +4082,17 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         }
 
         string vid = DataProviderMLProcessorsTest::createTokenOnnxRegistryPackage(
-            dir, "rerank-plan-model", getTokenRerankerModelPath(), "reranker");
+            dir, "rerank-plan-model", getTokenRerankerModelPath(), "reranker", {
+                "type": "onnx/reranker",
+                "logits_output_name": "logits",
+            });
 
         QoreModelRegistry::ModelRegistry registry({"path": dir});
         hash<QoreModelRegistry::ModelVersionInfo> manifest =
             registry.getVersionManifest("rerank-plan-model", vid);
         assertEq("reranker", manifest.execution.task);
         assertEq("onnx/reranker", manifest.execution.plan.type);
+        assertEq("logits", manifest.execution.plan.logits_output_name);
 
         DataProviderML::QoreRerankerProcessor proc({
             "query_field": "query",

@@ -732,6 +732,16 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                         registry.getVersionManifest(registry_model_name, registry_model_version);
                     AbstractDataProviderMLProcessor::validateRegistryExecutionTask(
                         manifest, "embedding", "embed-text", embedding_mode_inferred);
+                    if (!output_names) {
+                        *list<string> plan_output_names =
+                            AbstractDataProviderMLProcessor::getRegistryExecutionPlanOutputNames(
+                                manifest, ("hidden_state_output_name", "hidden_state_output",
+                                    "last_hidden_state_output_name", "last_hidden_state_output",
+                                    "embedding_output_name", "embedding_output"));
+                        if (plan_output_names) {
+                            config.output_names = plan_output_names;
+                        }
+                    }
                     string artifact_name = registry_model_artifact_name
                         ?? AbstractDataProviderMLProcessor::getRegistryExecutionPlanArtifactName(
                             manifest)

@@ -174,6 +174,52 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         return NOTHING;
     }
 
+    #! Returns output tensor names declared by a registry execution plan
+    /** @param manifest model registry version manifest
+        @param plan_keys task-specific output-name keys to consult in addition
+            to generic \c output_names and \c output_name keys
+
+        @return selected output tensor names, or @ref NOTHING when no safe
+            selection is declared
+
+        @since DataProviderML 1.4
+    */
+    static *list<string> getRegistryExecutionPlanOutputNames(
+            hash<QoreModelRegistry::ModelVersionInfo> manifest,
+            list<string> plan_keys = ()) {
+        if (!manifest.execution) {
+            return NOTHING;
+        }
+
+        if (manifest.execution.plan) {
+            hash<auto> plan = manifest.execution.plan;
+            list<string> candidate_keys = ("output_names", "output_name") + plan_keys;
+            *list<string> names = getExecutionPlanOutputNamesValue(plan, candidate_keys);
+            if (names) {
+                return names;
+            }
+
+            foreach string section in (("output", "postprocess")) {
+                if (!plan.hasKey(section) || plan{section}.typeCode() != NT_HASH) {
+                    continue;
+                }
+                hash<auto> subplan = plan{section};
+                names = getExecutionPlanOutputNamesValue(
+                    subplan, ("names", "name", "output_names", "output_name") + plan_keys);
+                if (names) {
+                    return names;
+                }
+            }
+
+            names = getSingleOutputSchemaName(plan.output_schema);
+            if (names) {
+                return names;
+            }
+        }
+
+        return getSingleOutputSchemaName(manifest.execution.output_schema);
+    }
+
     #! Verifies a registry execution plan task for a task-aware processor
     /** @param manifest model registry version manifest
         @param expected_task task required by the processor
@@ -201,6 +247,37 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
                     processor_name, manifest.name, manifest.version_id, expected_task,
                     expected_task);
         }
+    }
+
+    #! Reads output names from a hash using candidate keys
+    private static *list<string> getExecutionPlanOutputNamesValue(hash<auto> data,
+            list<string> candidate_keys) {
+        foreach string key in (candidate_keys) {
+            if (!data.hasKey(key)) {
+                continue;
+            }
+            list<string> names = DataProvider::AbstractDataProvider::parseFieldList(data{key});
+            if (names) {
+                return names;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns a single output name from schema metadata when it is unambiguous
+    private static *list<string> getSingleOutputSchemaName(*auto output_schema) {
+        if (!exists output_schema || output_schema.typeCode() != NT_HASH) {
+            return NOTHING;
+        }
+        if (!output_schema.hasKey("tensors") || output_schema.tensors.typeCode() != NT_LIST
+                || output_schema.tensors.lsize() != 1) {
+            return NOTHING;
+        }
+        auto tensor = output_schema.tensors[0];
+        if (tensor.typeCode() != NT_HASH || !tensor.name.val()) {
+            return NOTHING;
+        }
+        return (string(tensor.name),);
     }
 
     #! Records the shape of accumulated input for shape-preserving flushes

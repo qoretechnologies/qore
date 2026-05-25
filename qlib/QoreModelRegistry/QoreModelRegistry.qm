@@ -148,6 +148,7 @@ string vid = reg.registerPackage("/srv/models/bge-small-en", {
     "task": "embedding",
     "execution_plan": {
         "type": "onnx/embedding",
+        "output_names": ("last_hidden_state",),
         "pooling": "mean",
         "normalize": True,
     },
@@ -163,6 +164,7 @@ printf("runtime=%s task=%s tokenizer=%s\n",
 #   manifest.task == "embedding"
 #   manifest.execution.plan.type == "onnx/embedding"
 #   manifest.execution.plan.artifact_name == "model.onnx"
+#   manifest.execution.plan.output_names == ("last_hidden_state",)
 
 # Tokenizer utilities and DataProviderML processors can load tokenizer.json
 # and companion tokenizer_config.json settings directly from the registry

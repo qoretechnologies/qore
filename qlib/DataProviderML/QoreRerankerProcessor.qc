@@ -299,6 +299,15 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                         copts.registry_model_version);
                 AbstractDataProviderMLProcessor::validateRegistryExecutionTask(
                     manifest, "reranker", "rerank-text", reranker_mode_inferred);
+                if (!output_names) {
+                    *list<string> plan_output_names =
+                        AbstractDataProviderMLProcessor::getRegistryExecutionPlanOutputNames(
+                            manifest, ("logits_output_name", "logits_output",
+                                "scores_output", "score_output"));
+                    if (plan_output_names) {
+                        rconfig.output_names = plan_output_names;
+                    }
+                }
                 string artifact_name = copts.registry_model_artifact_name
                     ?? AbstractDataProviderMLProcessor::getRegistryExecutionPlanArtifactName(
                         manifest)

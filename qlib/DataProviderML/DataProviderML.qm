@@ -1963,8 +1963,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       QoreModelRegistry package execution config for ONNX Runtime provider,
       threading, and graph-optimization settings
     - \c embed-text and \c rerank-text accept \c output_names for local and
-      registry-backed ONNX execution so multi-output embedding and reranker
-      models do not materialize unused tensors
+      registry-backed ONNX execution, and inherit selected output names from
+      registry execution plans, so multi-output embedding and reranker models
+      do not materialize unused tensors
     - \c embed-text and \c rerank-text can infer local ONNX mode from
       QoreModelRegistry task-aware execution plans, so packages registered with
       \c task = "embedding" or \c task = "reranker" do not require duplicate
