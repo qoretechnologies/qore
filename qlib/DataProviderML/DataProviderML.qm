@@ -1701,10 +1701,10 @@ module DataProviderML {
     scoring.  \c output_mode = "columns" or \c "dataframe" returns model output
     tensors as flat dense output columns, while \c output_mode = "tensor"
     returns raw @ref Qore::ML::Tensor "ML::Tensor" outputs for callers that can
-    consume tensor data directly.  When a complete input window is a single
-    dense column already stored with the model's expected dtype, the processor
-    can build the input tensor directly from that column instead of
-    materializing row hashes or row matrices.
+    consume tensor data directly.  When shaped input columns are already stored
+    with the model's expected dtype, the processor can build the input tensor
+    directly from those columns and slice tensor views for each \c window_size
+    batch instead of materializing row hashes or row matrices.
     Multi-column dense feature frames use @ref Qore::ML::Tensor::fromColumns()
     "ML::Tensor::fromColumns()" to pack top-level numeric buffer columns into
     model tensors in native code.  Shaped ONNX inputs smaller than
@@ -1918,12 +1918,13 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       ML and ONNX registry packages are supported with descriptive errors for
       metadata-only PyTorch/HuggingFace packages
     - \c onnx-model and registry-backed ONNX inference use tensor execution for
-      complete \c DataFrameBlock, \c BufferColumns, and \c HashOfLists windows,
-      preserving bulk pipeline shapes without per-row inference calls
+      \c DataFrameBlock, \c BufferColumns, and \c HashOfLists windows,
+      preserving bulk pipeline shapes without per-row inference calls; dense
+      buffer inputs are sliced as tensor views across \c window_size batches
     - \c onnx-model and \c registry-model support compact \c output_mode values
-      \c "columns", \c "dataframe", and \c "tensor"; single-column dense input
-      with the expected ONNX dtype uses a direct tensor path to avoid row matrix
-      materialization
+      \c "columns", \c "dataframe", and \c "tensor"; dense input columns with
+      the expected ONNX dtype use a direct tensor path to avoid row matrix
+      materialization across all windowed batches
     - \c onnx-model and registry-backed ONNX \c registry-model processors accept
       \c output_names to request selected ONNX outputs only; this avoids
       materializing unused labels, scores, logits, or embeddings in multi-output

@@ -731,19 +731,14 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             return processMappedShapeWindows(records, shape, count);
         }
 
-        if (count <= window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
+        if (isTensorOutputMode() || isColumnOutputMode()) {
             *ML::Tensor direct_input = inputTensorFromDenseColumns(records, shape, count, fields, input_dtype);
             if (exists direct_input) {
-                hash<auto> outputs = runModelTensors({input_tensor: direct_input});
                 if (isTensorOutputMode()) {
-                    return outputs;
+                    return processDenseTensorShapeWindows(direct_input, count);
                 }
 
-                hash<auto> result;
-                foreach string okey in (keys outputs) {
-                    appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), count, True);
-                }
-                return result;
+                return processDenseColumnShapeWindows(direct_input, records, shape, count);
             }
         }
 
@@ -785,19 +780,14 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
     #! Processes complete shaped windows for models with multiple mapped input tensors
     private hash<auto> processMappedShapeWindows(auto records, DataProvider::DataProviderShape shape, int count) {
-        if (count <= window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
+        if (isTensorOutputMode() || isColumnOutputMode()) {
             *hash<auto> direct_inputs = inputTensorsFromMappedDenseColumns(records, shape, count);
             if (exists direct_inputs) {
-                hash<auto> outputs = runModelTensors(direct_inputs);
                 if (isTensorOutputMode()) {
-                    return outputs;
+                    return processMappedDenseTensorShapeWindows(direct_inputs, count);
                 }
 
-                hash<auto> result;
-                foreach string okey in (keys outputs) {
-                    appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), count, True);
-                }
-                return result;
+                return processMappedDenseColumnShapeWindows(direct_inputs, records, shape, count);
             }
         }
 
@@ -1158,6 +1148,111 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
         appendColumnValues(\result, name,
             DataProvider::AbstractDataProcessor::repeatValue(nested, row_count));
+    }
+
+    #! Runs one dense tensor input window and returns tensor outputs
+    private hash<auto> runDenseTensorWindow(ML::Tensor input, int start, int count, bool single_window) {
+        ML::Tensor window = single_window && count == input.getShape()[0]
+            ? input
+            : input.sliceRows(start, count);
+        return runModelTensors({input_tensor: window});
+    }
+
+    #! Runs dense tensor input windows and returns compact column output
+    private hash<auto> processDenseColumnShapeWindows(ML::Tensor input, auto records,
+            DataProvider::DataProviderShape shape, int count) {
+        hash<auto> result;
+        addInputFieldColumns(\result, records, shape, ());
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            int window_count = end - start;
+            bool single_window = start == 0 && end == count;
+            hash<auto> outputs = runDenseTensorWindow(input, start, window_count, single_window);
+            foreach string okey in (keys outputs) {
+                appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), window_count,
+                    single_window);
+            }
+        }
+        return result;
+    }
+
+    #! Runs dense tensor input windows and returns tensor output
+    private hash<auto> processDenseTensorShapeWindows(ML::Tensor input, int count) {
+        if (count <= window_size) {
+            return runDenseTensorWindow(input, 0, count, True);
+        }
+
+        list<hash<auto>> windows;
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            push windows, runDenseTensorWindow(input, start, end - start, False);
+        }
+        return {
+            "row_count": count,
+            "window_size": window_size,
+            "windows": windows,
+        };
+    }
+
+    #! Runs one mapped dense tensor input window
+    private hash<auto> runMappedDenseTensorWindow(hash<auto> dense_inputs, int start, int count,
+            bool single_window) {
+        hash<auto> inputs;
+        foreach string tensor_name in (keys dense_inputs) {
+            ML::Tensor input = cast<ML::Tensor>(dense_inputs{tensor_name});
+            inputs{tensor_name} = single_window && count == input.getShape()[0]
+                ? input
+                : input.sliceRows(start, count);
+        }
+        return runModelTensors(inputs);
+    }
+
+    #! Runs mapped dense tensor input windows and returns compact column output
+    private hash<auto> processMappedDenseColumnShapeWindows(hash<auto> dense_inputs, auto records,
+            DataProvider::DataProviderShape shape, int count) {
+        hash<auto> result;
+        addInputFieldColumns(\result, records, shape, ());
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            int window_count = end - start;
+            bool single_window = start == 0 && end == count;
+            hash<auto> outputs = runMappedDenseTensorWindow(dense_inputs, start, window_count, single_window);
+            foreach string okey in (keys outputs) {
+                appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), window_count,
+                    single_window);
+            }
+        }
+        return result;
+    }
+
+    #! Runs mapped dense tensor input windows and returns tensor output
+    private hash<auto> processMappedDenseTensorShapeWindows(hash<auto> dense_inputs, int count) {
+        if (count <= window_size) {
+            return runMappedDenseTensorWindow(dense_inputs, 0, count, True);
+        }
+
+        list<hash<auto>> windows;
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            push windows, runMappedDenseTensorWindow(dense_inputs, start, end - start, False);
+        }
+        return {
+            "row_count": count,
+            "window_size": window_size,
+            "windows": windows,
+        };
     }
 
     #! Appends list values to a compact output column
