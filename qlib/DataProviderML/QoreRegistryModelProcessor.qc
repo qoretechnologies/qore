@@ -490,6 +490,22 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             return;
         }
 
+        if (count == window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
+            *ML::Tensor direct_input = inputTensorFromSingleDenseColumn(records, shape, count);
+            if (exists direct_input) {
+                hash<auto> outputs = model.runFeatureTensor(direct_input, input_tensor);
+                if (isTensorOutputMode()) {
+                    return outputs;
+                }
+
+                hash<auto> result;
+                foreach string okey in (keys outputs) {
+                    appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), count, True);
+                }
+                return result;
+            }
+        }
+
         list<list<float>> matrix = matrixFromShape(records, shape);
         if (isTensorOutputMode()) {
             return processTensorShapeWindows(matrix, count);
@@ -534,6 +550,39 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             cast<enum<DataProvider::DataProviderShape>>(DataProvider::DataProviderShape::BufferColumns),
             cast<enum<DataProvider::DataProviderShape>>(shape));
         return shape == DataProvider::DataProviderShape::RowRecords ? converted : converted[0];
+    }
+
+    private *ML::Tensor inputTensorFromSingleDenseColumn(auto records, DataProvider::DataProviderShape shape,
+            int count) {
+        if (fields.lsize() != 1 || fields[0].find(".") >= 0) {
+            return;
+        }
+
+        *auto column;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                column = records.getColumnBuffer(fields[0]);
+                break;
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    column = records.getColumn(fields[0]);
+                } else if (records.hasKey(fields[0])) {
+                    column = records{fields[0]};
+                }
+                break;
+            case DataProvider::DataProviderShape::HashOfLists:
+                if (records.hasKey(fields[0])) {
+                    column = records{fields[0]};
+                }
+                break;
+        }
+
+        string dtype = model.getOnnxInputTensorDtype(input_tensor);
+        if (!exists column || column.typeCode() != NT_BUFFER
+                || column.fullType() != sprintf("buffer<%s>", dtype)) {
+            return;
+        }
+        return new ML::Tensor(column, (count, 1), dtype);
     }
 
     #! Extracts numeric input fields as a model matrix from a shaped block

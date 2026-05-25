@@ -1671,6 +1671,15 @@ module DataProviderML {
     \c include_centroid_distances = False when only the winning \c cluster and
     nearest \c distance are needed.
 
+    ONNX processors also support compact output modes for high-throughput
+    scoring.  \c output_mode = "columns" or \c "dataframe" returns model output
+    tensors as flat dense output columns, while \c output_mode = "tensor"
+    returns raw @ref Qore::ML::Tensor "ML::Tensor" outputs for callers that can
+    consume tensor data directly.  When a complete input window is a single
+    dense column already stored with the model's expected dtype, the processor
+    can build the input tensor directly from that column instead of
+    materializing row hashes or row matrices.
+
     @par DataFrameBlock example:
     @code{.py}
 %requires dataframe
@@ -1772,6 +1781,7 @@ DataProviderML::QoreRegistryModelProcessor proc({
     "version": "production",
     "fields": ("income", "debt_ratio", "history_months"),
     "window_size": 1024,
+    "output_mode": "columns",
 });
 
 DataFrame::DataFrame batch({
@@ -1781,7 +1791,7 @@ DataFrame::DataFrame batch({
 });
 
 auto scored = proc.processRecordsShape(batch, DataProviderShape::DataFrameBlock);
-list<auto> predictions = scored.getColumn("prediction");
+list<auto> probabilities = scored.getColumn("probabilities");
     @endcode
 
     @par BufferColumns example:
@@ -1815,6 +1825,10 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     - \c onnx-model and registry-backed ONNX inference use tensor execution for
       complete \c DataFrameBlock, \c BufferColumns, and \c HashOfLists windows,
       preserving bulk pipeline shapes without per-row inference calls
+    - \c onnx-model and \c registry-model support compact \c output_mode values
+      \c "columns", \c "dataframe", and \c "tensor"; single-column dense input
+      with the expected ONNX dtype uses a direct tensor path to avoid row matrix
+      materialization
     - Shared registry backend options support filesystem, database, and REST model
       registry backends for AI pipeline artifacts
 

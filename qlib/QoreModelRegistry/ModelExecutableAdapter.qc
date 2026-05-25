@@ -207,6 +207,58 @@ public class ModelExecutableAdapter {
         return model.runTensors({tensor_name: input});
     }
 
+    #! Runs a dense feature tensor through an ONNX model and returns ML::Tensor outputs
+    /** This method is the lowest-copy registry execution path for callers that
+        already have a dense, correctly typed @ref Qore::ML::Tensor. It avoids
+        materializing row lists before invoking ONNX Runtime.
+
+        @param input dense input tensor
+        @param input_tensor optional ONNX input tensor name; when omitted, the
+            first model input is used
+
+        @return output hash where each value is an @ref Qore::ML::Tensor
+
+        @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX model, the
+            model has no input tensors, or the input tensor dtype does not match
+            the selected ONNX input
+
+        @since QoreModelRegistry 2.3
+    */
+    hash<auto> runFeatureTensor(ML::Tensor input, *string input_tensor) {
+        if (!isOnnx()) {
+            throw "ML-REGISTRY-ERROR",
+                "runFeatureTensor() requires an ONNX Runtime model";
+        }
+
+        string tensor_name = resolveOnnxInputTensor(input_tensor);
+        string dtype = resolveOnnxInputTensorDtype(tensor_name);
+        if (input.getDtype() != dtype) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("input tensor %y expects dtype %y, but the supplied tensor has dtype %y",
+                    tensor_name, dtype, input.getDtype());
+        }
+        return model.runTensors({tensor_name: input});
+    }
+
+    #! Returns the ML::Tensor dtype expected by an ONNX input tensor
+    /** @param input_tensor optional ONNX input tensor name; when omitted, the
+            first model input is used
+
+        @return dtype name such as \c float32, \c float64, \c int64, or \c bool
+
+        @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX model, the
+            model has no input tensors, or the input tensor type is unsupported
+
+        @since QoreModelRegistry 2.3
+    */
+    string getOnnxInputTensorDtype(*string input_tensor) {
+        if (!isOnnx()) {
+            throw "ML-REGISTRY-ERROR",
+                "getOnnxInputTensorDtype() requires an ONNX Runtime model";
+        }
+        return resolveOnnxInputTensorDtype(resolveOnnxInputTensor(input_tensor));
+    }
+
     #! Returns execution-provider and tensor metadata diagnostics
     /** The returned hash is intentionally untyped so new runtime-specific
         diagnostics can be added without changing the adapter API.

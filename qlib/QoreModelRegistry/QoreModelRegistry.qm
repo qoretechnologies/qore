@@ -167,6 +167,8 @@ QoreModelRegistry::ModelExecutableAdapter adapter =
     reg.loadExecutableAdapter("bge-small-en", vid);
 hash<auto> outputs = adapter.runFeatureMatrix(((1.0, 2.0, 3.0),), NOTHING);
 hash<auto> tensor_outputs = adapter.runFeatureMatrixTensors(((1.0, 2.0, 3.0),), NOTHING);
+ML::Tensor dense_input(new buffer<float32>((1.0, 2.0, 3.0)), (1, 3), "float32");
+hash<auto> dense_outputs = adapter.runFeatureTensor(dense_input, NOTHING);
 printf("provider=%s\n", adapter.getProviderDiagnostics().active_provider);
     @endcode
 
@@ -229,6 +231,10 @@ reg.loadExecutable("torch-source", vid);
     - Added @ref QoreModelRegistry::ModelExecutableAdapter::runFeatureMatrixTensors()
       for registry-backed ONNX inference that returns @ref Qore::ML::Tensor "ML::Tensor"
       outputs
+    - Added @ref QoreModelRegistry::ModelExecutableAdapter::runFeatureTensor() and
+      @ref QoreModelRegistry::ModelExecutableAdapter::getOnnxInputTensorDtype() so
+      registry-backed ONNX callers can pass correctly typed dense tensors without
+      materializing row matrices first
     - Added provider diagnostics through
       @ref QoreModelRegistry::ModelExecutableAdapter::getProviderDiagnostics()
     - Added \c loadTokenizerPackageConfig() to load \c tokenizer.json together

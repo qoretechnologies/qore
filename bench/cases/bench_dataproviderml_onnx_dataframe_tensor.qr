@@ -35,7 +35,7 @@ class BenchDataProviderMlOnnxDataFrameTensor {
         });
 
         r.setup = sub () {
-            frame = OnnxBench::makeFrame(rows);
+            frame = OnnxBench::makeFloat32Frame(rows);
             r.bytes_processed = OnnxBench::approxBytes(rows);
         };
 

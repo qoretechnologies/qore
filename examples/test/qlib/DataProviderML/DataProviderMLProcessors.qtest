@@ -1406,7 +1406,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0, 5.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0)),
         });
         auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
@@ -1434,7 +1434,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0, 5.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0)),
         });
         auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
@@ -1463,7 +1463,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0, 5.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0)),
         });
         hash<auto> result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertTrue(result.Y instanceof ML::Tensor, "tensor output should expose ML::Tensor values");
@@ -2313,7 +2313,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0)),
         });
         auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
@@ -2369,7 +2369,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0)),
         });
         auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
@@ -2421,7 +2421,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0)),
         });
         hash<auto> result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertTrue(result.Y instanceof ML::Tensor, "registry tensor output should expose ML::Tensor values");

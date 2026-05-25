@@ -87,6 +87,14 @@ public namespace OnnxBench {
         return new DataFrame::DataFrame({"x": input});
     }
 
+    public DataFrame::DataFrame sub makeFloat32Frame(int rows) {
+        buffer<float32> input = buffer<float32>::sized(rows);
+        for (int i = 0; i < rows; ++i) {
+            input[i] = i.toFloat();
+        }
+        return new DataFrame::DataFrame({"x": input});
+    }
+
     public list<hash<auto>> sub makeRecords(int rows) {
         list<hash<auto>> records;
         for (int i = 0; i < rows; ++i) {
