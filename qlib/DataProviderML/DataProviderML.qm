@@ -1898,6 +1898,30 @@ list<auto> events = generator.processRecord({
 printf("reply=%s\n", events[0].prediction.text);
     @endcode
 
+    @par Registry causal-LM compact column example:
+    @code{.py}
+DataProviderML::QoreRegistryModelProcessor generator({
+    "registry_path": "/var/models",
+    "model_name": "customer-reply-lm",
+    "tag": "production",
+    "prompt_field": "prompt",
+    "output_mode": "columns",
+    "include_input_fields": True,
+    "max_new_tokens": 64,
+});
+
+auto prompts = ColumnarResult::fromColumnHash({
+    "prompt": (
+        "Draft a renewal summary for Acme:",
+        "Draft a renewal summary for Globex:",
+    ),
+});
+
+auto replies = generator.processRecordsShape(prompts,
+    DataProviderShape::BufferColumns);
+list<string> generated = replies.getColumn("generated_text").toList();
+    @endcode
+
     @par BufferColumns example:
     @code{.py}
 %requires DataProviderML
@@ -1981,6 +2005,12 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       capability reporting; while stateful KV-cache reuse is not yet exposed,
       causal-LM execution requests only the logits tensor when the output name
       is known so unused present-key/value cache tensors are not materialized
+    - \c registry-model \c causal-lm packages support compact
+      \c output_mode = "columns" and \c output_mode = "dataframe" generation
+      output, returning prompt-aligned columns such as \c generated_text,
+      \c generated_token_ids, \c input_token_count,
+      \c generated_token_count, and \c finish_reason without materializing
+      per-row event or prediction hashes
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used

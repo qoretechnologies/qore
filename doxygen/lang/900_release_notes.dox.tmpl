@@ -3327,7 +3327,9 @@ foreach string module_name in (registry.getProcessModules()) {
         execution plans with registry tokenizer loading, \c input_ids and
         \c attention_mask tensor construction, greedy decoding, stop-token
         handling, generated token metadata, and explicit KV-cache capability
-        reporting
+        reporting; compact \c columns and \c dataframe output modes return
+        prompt-aligned generated text and token metadata without per-row event
+        hash materialization
       - QoreOnnxTools and \c qore-onnx compare can compare two ONNX/ORT
         artifacts for output compatibility and optional latency differences
 

@@ -839,7 +839,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     #! Converts compact output columns to the negotiated DataProvider shape
     private auto convertColumnOutputShape(hash<auto> columns, DataProvider::DataProviderShape shape) {
         if (shape == DataProvider::DataProviderShape::BufferColumns) {
-            return columns;
+            return ColumnarResult::fromColumnHash(columns);
         }
         list<auto> converted = DataProvider::AbstractDataProcessor::convertShape(
             columns,

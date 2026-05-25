@@ -790,13 +790,13 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         if (!model.isOnnx() || buffer) {
             return;
         }
-        if (execution_task == "causal-lm") {
-            return;
-        }
-
         int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
         if (!count) {
             return;
+        }
+
+        if (execution_task == "causal-lm") {
+            return processCausalLmShapeWindows(records, shape, count);
         }
 
         if (exists input_map) {
@@ -910,7 +910,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     private auto convertColumnOutputShape(hash<auto> columns, DataProvider::DataProviderShape shape) {
         if (shape == DataProvider::DataProviderShape::BufferColumns) {
-            return columns;
+            return ColumnarResult::fromColumnHash(columns);
         }
         list<auto> converted = DataProvider::AbstractDataProcessor::convertShape(
             columns,
@@ -1092,9 +1092,11 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "registry-model task 'causal-lm' builds tokenizer tensors from 'prompt_field'; "
                 "do not set 'input_map'";
         }
-        if (output_mode != "events") {
+        if (isTensorOutputMode()) {
             throw "CONSTRUCTOR-ERROR",
-                "registry-model task 'causal-lm' currently supports output_mode 'events' only";
+                "registry-model task 'causal-lm' supports output_mode 'events', 'columns', "
+                "and 'dataframe'; raw tensor output is not supported because generation "
+                "runs an iterative tokenizer/decoder loop";
         }
 
         if (exists copts.prompt_field && copts.prompt_field.val()) {
@@ -1296,6 +1298,185 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             push events, event;
         }
         return events;
+    }
+
+    #! Processes shaped causal-LM input without materializing row event hashes for compact output
+    private hash<auto> processCausalLmShapeWindows(auto records,
+            DataProvider::DataProviderShape shape, int count) {
+        list<string> prompts = causalLmPromptsFromShape(records, shape, count);
+        hash<auto> result;
+
+        if (isColumnOutputMode()) {
+            addCausalLmInputColumns(\result, records, shape, prompts);
+            appendCausalLmColumnPredictions(\result, prompts);
+            return result;
+        }
+
+        appendCausalLmEventColumns(\result, prompts);
+        return result;
+    }
+
+    #! Reads causal-LM prompt strings directly from a shaped column block when possible
+    private list<string> causalLmPromptsFromShape(auto records,
+            DataProvider::DataProviderShape shape, int count) {
+        if (prompt_field.find(".") < 0) {
+            *auto column = causalLmPromptColumnFromShape(records, shape);
+            if (exists column) {
+                return QoreRegistryModelProcessor::columnToStrings(column, count, prompt_field);
+            }
+        }
+
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        list<string> prompts;
+        foreach auto row in (rows) {
+            push prompts, string(DataProvider::AbstractDataProvider::getFieldValue(row, prompt_field));
+        }
+        return prompts;
+    }
+
+    #! Reads the top-level causal-LM prompt column from a shaped block
+    private *auto causalLmPromptColumnFromShape(auto records,
+            DataProvider::DataProviderShape shape) {
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                if (records.columnNames().contains(prompt_field)) {
+                    return records.getColumn(prompt_field);
+                }
+                break;
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    if (records.columnNames().contains(prompt_field)) {
+                        return records.getColumn(prompt_field);
+                    }
+                } else if (records.hasKey(prompt_field)) {
+                    return records{prompt_field};
+                }
+                break;
+            case DataProvider::DataProviderShape::HashOfLists:
+                if (records.hasKey(prompt_field)) {
+                    return records{prompt_field};
+                }
+                break;
+        }
+        return NOTHING;
+    }
+
+    #! Converts a shaped column to string values using row-mode value semantics
+    private static list<string> columnToStrings(auto column, int count, string field) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        if (values.lsize() != count) {
+            throw "PROCESSOR-SHAPE-ERROR",
+                sprintf("text field %y has %d values but the shaped block has %d rows",
+                    field, values.lsize(), count);
+        }
+
+        list<string> rv;
+        foreach auto value in (values) {
+            push rv, value.toString();
+        }
+        return rv;
+    }
+
+    #! Adds original causal-LM input fields to compact column output when requested
+    private addCausalLmInputColumns(reference<hash<auto>> result, auto records,
+            DataProvider::DataProviderShape shape, list<string> prompts) {
+        if (!include_input_fields) {
+            return;
+        }
+
+        foreach string field in (fields) {
+            if (field.find(".") >= 0 || result.hasKey(field)) {
+                continue;
+            }
+            if (field == prompt_field) {
+                result{field} = prompts;
+                continue;
+            }
+            *auto column = topLevelColumnFromShape(records, shape, field);
+            if (exists column) {
+                result{field} = column;
+            }
+        }
+    }
+
+    #! Reads a top-level field column from a shaped block
+    private *auto topLevelColumnFromShape(auto records,
+            DataProvider::DataProviderShape shape, string field) {
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                if (records.columnNames().contains(field)) {
+                    return records.getColumn(field);
+                }
+                break;
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    if (records.columnNames().contains(field)) {
+                        return records.getColumn(field);
+                    }
+                } else if (records.hasKey(field)) {
+                    return records{field};
+                }
+                break;
+            case DataProvider::DataProviderShape::HashOfLists:
+                if (records.hasKey(field)) {
+                    return records{field};
+                }
+                break;
+        }
+        return NOTHING;
+    }
+
+    #! Appends compact causal-LM generation columns
+    private appendCausalLmColumnPredictions(reference<hash<auto>> result, list<string> prompts) {
+        int count = prompts.lsize();
+        list<string> texts;
+        list<list<int>> generated_token_ids;
+        buffer<int64> input_token_counts = buffer<int64>::sized(count);
+        buffer<int64> generated_token_counts = buffer<int64>::sized(count);
+        list<string> finish_reasons;
+
+        for (int i = 0; i < count; ++i) {
+            hash<auto> prediction = generateCausalLmText(prompts[i]);
+            push texts, prediction.text;
+            push generated_token_ids, prediction.generated_token_ids;
+            input_token_counts[i] = prediction.input_token_count;
+            generated_token_counts[i] = prediction.generated_token_count;
+            push finish_reasons, prediction.finish_reason;
+
+            if (include_diagnostics) {
+                push result{"kv_cache"}, prediction.kv_cache;
+                push result{"last_outputs"}, prediction.last_outputs;
+                push result{"inference_stats"}, model.getInferenceStats();
+            }
+        }
+
+        result.generated_text = texts;
+        result.generated_token_ids = generated_token_ids;
+        result.input_token_count = input_token_counts;
+        result.generated_token_count = generated_token_counts;
+        result.finish_reason = finish_reasons;
+    }
+
+    #! Appends event-mode hash-of-lists output for shaped causal-LM input
+    private appendCausalLmEventColumns(reference<hash<auto>> result, list<string> prompts) {
+        foreach string prompt in (prompts) {
+            hash<auto> prediction = generateCausalLmText(prompt);
+            hash<auto> record_values = {
+                prompt_field: prompt,
+            };
+
+            push result{"event_type"}, "registry-model";
+            push result{"model_name"}, model_name;
+            push result{"version_id"}, loaded_version;
+            push result{"record_values"}, record_values;
+            push result{"execution_provider"}, execution_provider;
+            push result{"provider_diagnostics"}, provider_diagnostics;
+            if (include_diagnostics) {
+                push result{"inference_stats"}, model.getInferenceStats();
+            }
+            push result{"prediction"}, prediction;
+        }
     }
 
     #! Generates text using greedy decoding for an ONNX causal language model

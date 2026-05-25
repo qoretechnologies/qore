@@ -221,6 +221,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             \registryModelOnnxSequenceClassificationPlanOutput());
         addTestCase("registry-model - ONNX causal LM task output",
             \registryModelOnnxCausalLmPlanOutput());
+        addTestCase("registry-model - ONNX causal LM compact columns",
+            \registryModelOnnxCausalLmColumnOutput());
         addTestCase("registry-model - DataFrameBlock tensor path",
             \registryModelOnnxDataFrameTensorPath());
         addTestCase("registry-model - DataFrameBlock multi-column tensor path",
@@ -3093,6 +3095,56 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq((1, 1, 8), results[0].prediction.last_outputs.logits.shape);
         assertFalse(results[0].prediction.last_outputs.hasKey("present.0"),
             "unused cache outputs should not be materialized when only logits are needed");
+    }
+
+    registryModelOnnxCausalLmColumnOutput() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_causal_lm_columns_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string vid = DataProviderMLProcessorsTest::createCausalLmRegistryPackage(
+            dir, "tiny-causal-lm-columns");
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "tiny-causal-lm-columns",
+            "version": vid,
+            "window_size": 2,
+            "output_mode": "columns",
+            "include_input_fields": True,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "prompt": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "causal-lm compact output should preserve BufferColumns shape");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        assertEq(("hello world", "enterprise ai"), result.getColumn("prompt").toList());
+
+        list<auto> texts = result.getColumn("generated_text").toList();
+        assertEq(2, texts.lsize());
+        foreach string text in (texts) {
+            assertTrue(text.find("hello") >= 0,
+                sprintf("generated compact text should decode token ID 4; got %y", text));
+        }
+
+        list<auto> token_ids = result.getColumn("generated_token_ids");
+        assertEq((4, 4), token_ids[0]);
+        assertEq((4, 4), token_ids[1]);
+        assertEq((2, 2), result.getColumn("generated_token_count").toList());
+        assertEq(("length", "length"), result.getColumn("finish_reason").toList());
+        assertFalse(result.columnNames().contains("prediction"),
+            "compact causal-lm output should not materialize per-row prediction hashes");
     }
 
     registryModelOnnxDataFrameTensorPath() {
