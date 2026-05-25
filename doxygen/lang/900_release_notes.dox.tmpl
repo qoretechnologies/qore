@@ -2559,6 +2559,9 @@ foreach string module_name in (registry.getProcessModules()) {
         from QoreModelRegistry packages
       - onnx-model and registry-model processors use tensor execution for complete
         shaped ONNX windows and preserve shaped bulk outputs where the result is rectangular
+      - onnx-model and registry-model processors support explicit \c input_map
+        configuration for ONNX models with multiple named input tensors, and compact
+        \c output_mode values for dense column or raw tensor outputs
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module
@@ -3238,7 +3241,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - \c loadExecutable(), \c loadJsonArtifact(), \c loadTokenizerConfig(), and
         \c loadTokenizerPackageConfig() simplify local ONNX execution and tokenizer reuse
       - ModelExecutableAdapter provides row-major and tensor ONNX feature-matrix
-        execution plus provider diagnostics for registry-backed inference
+        execution, explicit multi-input \c runTensors() calls, and provider
+        diagnostics for registry-backed inference
       - ONNX session configuration is stored in execution metadata, and packages
         with adjacent external-data artifacts are materialized automatically for
         session creation

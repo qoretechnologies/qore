@@ -169,6 +169,10 @@ hash<auto> outputs = adapter.runFeatureMatrix(((1.0, 2.0, 3.0),), NOTHING);
 hash<auto> tensor_outputs = adapter.runFeatureMatrixTensors(((1.0, 2.0, 3.0),), NOTHING);
 ML::Tensor dense_input(new buffer<float32>((1.0, 2.0, 3.0)), (1, 3), "float32");
 hash<auto> dense_outputs = adapter.runFeatureTensor(dense_input, NOTHING);
+hash<auto> mapped_outputs = adapter.runTensors({
+    "input_ids": ML::Tensor(data: ((101, 7592, 102),), dtype: "int64"),
+    "attention_mask": ML::Tensor(data: ((1, 1, 1),), dtype: "int64"),
+});
 printf("provider=%s\n", adapter.getProviderDiagnostics().active_provider);
     @endcode
 
@@ -235,6 +239,8 @@ reg.loadExecutable("torch-source", vid);
       @ref QoreModelRegistry::ModelExecutableAdapter::getOnnxInputTensorDtype() so
       registry-backed ONNX callers can pass correctly typed dense tensors without
       materializing row matrices first
+    - Added @ref QoreModelRegistry::ModelExecutableAdapter::runTensors() for
+      registry-backed ONNX models with one or more explicitly named input tensors
     - Added provider diagnostics through
       @ref QoreModelRegistry::ModelExecutableAdapter::getProviderDiagnostics()
     - Added \c loadTokenizerPackageConfig() to load \c tokenizer.json together

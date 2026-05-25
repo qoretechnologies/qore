@@ -158,6 +158,23 @@ public class ModelExecutableAdapter {
         return {"prediction": model.predict(inputs)};
     }
 
+    #! Runs ONNX inference with explicit tensor inputs and returns ML::Tensor outputs
+    /** @param inputs tensor-name hash where each value is an @ref Qore::ML::Tensor
+
+        @return output hash where each value is an @ref Qore::ML::Tensor
+
+        @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX Runtime model
+
+        @since QoreModelRegistry 2.3
+    */
+    hash<auto> runTensors(hash<auto> inputs) {
+        if (!isOnnx()) {
+            throw "ML-REGISTRY-ERROR",
+                "runTensors() requires an ONNX Runtime model";
+        }
+        return model.runTensors(inputs);
+    }
+
     #! Runs a feature matrix through the wrapped model
     /** ONNX models receive the matrix as a single input tensor. Native models
         use \c predictMatrix() and return the result under \c prediction.

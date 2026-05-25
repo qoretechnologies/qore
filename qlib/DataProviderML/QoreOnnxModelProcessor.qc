@@ -76,9 +76,10 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 "short_desc": "Record fields to feed into the model",
                 "desc": "A comma-separated list of numeric field names from the input records "
                     "to pass to the model as input features; the fields are provided to the "
-                    "model in the order listed; for example: \"feature1,feature2,feature3\"",
+                    "model in the order listed; for example: \"feature1,feature2,feature3\". "
+                    "Use either `fields` for a single ONNX input tensor or `input_map` for "
+                    "models with multiple input tensors",
                 "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
-                "required": True,
                 "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
@@ -100,6 +101,17 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                     "for models with multiple inputs; if not specified, the model's first "
                     "input is used automatically, which is correct for most models",
                 "type": AbstractDataProviderTypeMap."*string",
+            },
+            "input_map": <DataProviderOptionInfo>{
+                "display_name": "Input Tensor Field Map",
+                "short_desc": "Map ONNX input tensors to record fields",
+                "desc": "A hash mapping ONNX input tensor names to field lists. Use this for "
+                    "models with multiple inputs, for example `{\"ids\": \"token_ids\", "
+                    "\"mask\": \"attention_mask\"}` or `{ \"features\": (\"x\", \"y\") }`. "
+                    "When `input_map` is set, each mapped tensor is built from its configured "
+                    "fields and `input_tensor` is ignored.",
+                "type": AbstractDataProviderTypeMap."*hash",
+                "example_value": {"X": ("x", "y")},
             },
             "output_mode": <DataProviderOptionInfo>{
                 "display_name": "Output Mode",
@@ -206,6 +218,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         #! Input tensor name
         *string input_tensor;
 
+        #! Optional mapping of ONNX input tensor names to field lists
+        *hash<string, list<string>> input_map;
+
+        #! Dtype per ONNX input tensor
+        hash<string, string> input_dtypes;
+
         #! Input tensor dtype for ML::Tensor construction
         string input_dtype = "float32";
 
@@ -235,9 +253,18 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        fields = ();
+        if (exists copts.fields) {
+            fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        }
+        if (exists copts.input_map) {
+            input_map = QoreOnnxModelProcessor::parseInputMap(copts.input_map);
+            fields = QoreOnnxModelProcessor::mergeInputMapFields(fields, input_map);
+        }
         if (!fields) {
-            throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
+            throw "CONSTRUCTOR-ERROR",
+                "no valid input field names provided; set 'fields' for a single input tensor "
+                "or 'input_map' for one or more ONNX input tensors";
         }
         window_size = copts.window_size;
         if (window_size < 1) {
@@ -305,10 +332,27 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             }
             input_tensor = inputs[0].name;
         }
+        bool found_input_tensor = False;
         foreach hash<ML::OnnxTensorInfo> info in (model.getInputInfo()) {
+            input_dtypes{info.name} = QoreOnnxModelProcessor::onnxTypeToTensorDtype(info.type);
             if (info.name == input_tensor) {
-                input_dtype = QoreOnnxModelProcessor::onnxTypeToTensorDtype(info.type);
-                break;
+                input_dtype = input_dtypes{info.name};
+                found_input_tensor = True;
+            }
+        }
+        if (!found_input_tensor) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("ONNX model does not have an input tensor named %y; available inputs: %y",
+                    input_tensor, keys input_dtypes);
+        }
+        if (exists input_map) {
+            hash<string, list<string>> imap = input_map;
+            foreach string tensor_name in (keys imap) {
+                if (!input_dtypes.hasKey(tensor_name)) {
+                    throw "CONSTRUCTOR-ERROR",
+                        sprintf("input_map references unknown ONNX input tensor %y; available inputs: %y",
+                            tensor_name, keys input_dtypes);
+                }
             }
         }
 
@@ -328,6 +372,36 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             case "bool": return "bool";
         }
         return "float32";
+    }
+
+    #! Parses the input tensor to field-list mapping
+    private static hash<string, list<string>> parseInputMap(hash<auto> raw_map) {
+        hash<string, list<string>> rv;
+        foreach auto i in (raw_map.pairIterator()) {
+            list<string> tensor_fields = DataProvider::AbstractDataProvider::parseFieldList(i.value);
+            if (!tensor_fields) {
+                throw "CONSTRUCTOR-ERROR",
+                    sprintf("input_map entry %y does not contain any valid field names", i.key);
+            }
+            rv{i.key} = tensor_fields;
+        }
+        return rv;
+    }
+
+    #! Merges single-input fields with all mapped input fields for record metadata
+    private static list<string> mergeInputMapFields(list<string> base, *hash<string, list<string>> mapped) {
+        list<string> rv = base;
+        if (!exists mapped) {
+            return rv;
+        }
+        foreach auto i in (mapped.pairIterator()) {
+            foreach string field in (i.value) {
+                if (!rv.contains(field)) {
+                    push rv, field;
+                }
+            }
+        }
+        return rv;
     }
 
     #! Returns the name of this data provider
@@ -374,6 +448,10 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
     #! Processes a window of records through the ONNX model
     private list<auto> processWindow(list<hash<auto>> records) {
+        if (exists input_map) {
+            return processMappedRecordWindow(records);
+        }
+
         # Build a matrix from fields: list of list of float
         list<list<float>> matrix;
         foreach hash<auto> rec in (records) {
@@ -406,6 +484,44 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                     model_output{okey} = oval;
                 }
             }
+            push events, <OnnxInferenceEventInfo>{
+                "event_type": "onnx-model",
+                "model_path": model_path,
+                "execution_provider": model.getProviderInfo(),
+                "record_values": record_values,
+                "model_output": model_output,
+            };
+        }
+        return events;
+    }
+
+    #! Processes one row-oriented window with mapped ONNX input tensors
+    private list<auto> processMappedRecordWindow(list<hash<auto>> records) {
+        hash<auto> outputs = runMappedTensorWindow(matricesFromRecordInputMap(records), 0, True);
+        int count = records.lsize();
+
+        hash<auto> output_values;
+        foreach string okey in (keys outputs) {
+            output_values{okey} = tensorOutputToRows(cast<ML::Tensor>(outputs{okey}), count);
+        }
+
+        list<auto> events;
+        for (int i = 0; i < count; ++i) {
+            hash<auto> record_values;
+            foreach string f in (fields) {
+                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+            }
+
+            hash<auto> model_output;
+            foreach string okey in (keys output_values) {
+                auto oval = output_values{okey};
+                if (oval.typeCode() == NT_LIST && oval.lsize() == count) {
+                    model_output{okey} = oval[i];
+                } else {
+                    model_output{okey} = oval;
+                }
+            }
+
             push events, <OnnxInferenceEventInfo>{
                 "event_type": "onnx-model",
                 "model_path": model_path,
@@ -492,8 +608,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             return;
         }
 
+        if (exists input_map) {
+            return processMappedShapeWindows(records, shape, count);
+        }
+
         if (count == window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
-            *ML::Tensor direct_input = inputTensorFromSingleDenseColumn(records, shape, count);
+            *ML::Tensor direct_input = inputTensorFromSingleDenseColumn(records, shape, count, fields, input_dtype);
             if (exists direct_input) {
                 hash<auto> outputs = model.runTensors({input_tensor: direct_input});
                 if (isTensorOutputMode()) {
@@ -534,6 +654,33 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         return result;
     }
 
+    #! Processes complete shaped windows for models with multiple mapped input tensors
+    private hash<auto> processMappedShapeWindows(auto records, DataProvider::DataProviderShape shape, int count) {
+        hash<auto> mapped_matrices = matricesFromInputMap(records, shape);
+        if (isTensorOutputMode()) {
+            return processMappedTensorShapeWindows(mapped_matrices, count);
+        }
+
+        list<list<float>> record_matrix = matrixFromShape(records, shape);
+        hash<auto> result;
+        if (isColumnOutputMode()) {
+            addInputFieldColumns(\result, records, shape, record_matrix);
+            for (int start = 0; start < count; start += window_size) {
+                hash<auto> outputs = runMappedTensorWindow(mapped_matrices, start, count == window_size);
+                foreach string okey in (keys outputs) {
+                    appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), window_size,
+                        count == window_size);
+                }
+            }
+            return result;
+        }
+
+        for (int start = 0; start < count; start += window_size) {
+            appendMappedTensorWindowEventResult(\result, mapped_matrices, record_matrix, start);
+        }
+        return result;
+    }
+
     #! True when compact column output is configured
     private bool isColumnOutputMode() {
         return output_mode == "columns" || output_mode == "dataframe";
@@ -558,41 +705,47 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
     #! Creates a dense input tensor directly from a single matching column when possible
     private *ML::Tensor inputTensorFromSingleDenseColumn(auto records, DataProvider::DataProviderShape shape,
-            int count) {
-        if (fields.lsize() != 1 || fields[0].find(".") >= 0) {
+            int count, list<string> tensor_fields, string dtype) {
+        if (tensor_fields.lsize() != 1 || tensor_fields[0].find(".") >= 0) {
             return;
         }
 
         *auto column;
         switch (shape) {
             case DataProvider::DataProviderShape::DataFrameBlock:
-                column = records.getColumnBuffer(fields[0]);
+                column = records.getColumnBuffer(tensor_fields[0]);
                 break;
             case DataProvider::DataProviderShape::BufferColumns:
                 if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
-                    column = records.getColumn(fields[0]);
-                } else if (records.hasKey(fields[0])) {
-                    column = records{fields[0]};
+                    column = records.getColumn(tensor_fields[0]);
+                } else if (records.hasKey(tensor_fields[0])) {
+                    column = records{tensor_fields[0]};
                 }
                 break;
             case DataProvider::DataProviderShape::HashOfLists:
-                if (records.hasKey(fields[0])) {
-                    column = records{fields[0]};
+                if (records.hasKey(tensor_fields[0])) {
+                    column = records{tensor_fields[0]};
                 }
                 break;
         }
 
         if (!exists column || column.typeCode() != NT_BUFFER
-                || column.fullType() != sprintf("buffer<%s>", input_dtype)) {
+                || column.fullType() != sprintf("buffer<%s>", dtype)) {
             return;
         }
-        return new ML::Tensor(column, (count, 1), input_dtype);
+        return new ML::Tensor(column, (count, 1), dtype);
     }
 
     #! Extracts numeric input fields as a model matrix from a shaped block
     private list<list<float>> matrixFromShape(auto records, DataProvider::DataProviderShape shape) {
+        return matrixFromShapeFields(records, shape, fields);
+    }
+
+    #! Extracts selected numeric input fields as a model matrix from a shaped block
+    private list<list<float>> matrixFromShapeFields(auto records, DataProvider::DataProviderShape shape,
+            list<string> tensor_fields) {
         if (shape == DataProvider::DataProviderShape::DataFrameBlock) {
-            return cast<list<list<float>>>(records.toMatrix(fields));
+            return cast<list<list<float>>>(records.toMatrix(tensor_fields));
         }
 
         if (shape == DataProvider::DataProviderShape::BufferColumns) {
@@ -600,15 +753,49 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 records,
                 cast<enum<DataProvider::DataProviderShape>>(shape),
                 cast<enum<DataProvider::DataProviderShape>>(DataProvider::DataProviderShape::DataFrameBlock))[0];
-            return cast<list<list<float>>>(df.toMatrix(fields));
+            return cast<list<list<float>>>(df.toMatrix(tensor_fields));
         }
 
         list<list<float>> matrix;
         int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
         for (int i = 0; i < count; ++i) {
             list<float> row;
-            foreach string f in (fields) {
+            foreach string f in (tensor_fields) {
                 push row, records{f}[i].toFloat();
+            }
+            push matrix, row;
+        }
+        return matrix;
+    }
+
+    #! Extracts each configured ONNX input tensor matrix from a shaped block
+    private hash<auto> matricesFromInputMap(auto records, DataProvider::DataProviderShape shape) {
+        hash<auto> rv;
+        hash<string, list<string>> imap = input_map;
+        foreach string tensor_name in (keys imap) {
+            rv{tensor_name} = matrixFromShapeFields(records, shape, imap{tensor_name});
+        }
+        return rv;
+    }
+
+    #! Extracts each configured ONNX input tensor matrix from row records
+    private hash<auto> matricesFromRecordInputMap(list<hash<auto>> records) {
+        hash<auto> rv;
+        hash<string, list<string>> imap = input_map;
+        foreach string tensor_name in (keys imap) {
+            rv{tensor_name} = matrixFromRecordFields(records, imap{tensor_name});
+        }
+        return rv;
+    }
+
+    #! Extracts selected numeric input fields as a model matrix from row records
+    private static list<list<float>> matrixFromRecordFields(list<hash<auto>> records,
+            list<string> tensor_fields) {
+        list<list<float>> matrix;
+        foreach hash<auto> rec in (records) {
+            list<float> row;
+            foreach string f in (tensor_fields) {
+                push row, DataProvider::AbstractDataProvider::getFieldValue(rec, f).toFloat();
             }
             push matrix, row;
         }
@@ -672,6 +859,40 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             hash<auto> record_values;
             for (int j = 0; j < fields.lsize(); ++j) {
                 record_values{fields[j]} = matrix[i][j];
+            }
+            hash<auto> model_output;
+            foreach string okey in (keys output_values) {
+                auto oval = output_values{okey};
+                if (oval.typeCode() == NT_LIST && oval.lsize() == count) {
+                    model_output{okey} = oval[i];
+                } else {
+                    model_output{okey} = oval;
+                }
+            }
+            push result{"event_type"}, "onnx-model";
+            push result{"model_path"}, model_path;
+            push result{"execution_provider"}, model.getProviderInfo();
+            push result{"record_values"}, record_values;
+            push result{"model_output"}, model_output;
+        }
+    }
+
+    #! Appends one mapped tensor inference window to a hash-of-lists event result
+    private appendMappedTensorWindowEventResult(reference<hash<auto>> result, hash<auto> mapped_matrices,
+            list<list<float>> record_matrix, int start) {
+        hash<auto> outputs = runMappedTensorWindow(mapped_matrices, start, False);
+        int count = window_size;
+
+        hash<auto> output_values;
+        foreach string okey in (keys outputs) {
+            output_values{okey} = tensorOutputToRows(cast<ML::Tensor>(outputs{okey}), count);
+        }
+
+        for (int i = 0; i < count; ++i) {
+            int row = start + i;
+            hash<auto> record_values;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                record_values{fields[j]} = record_matrix[row][j];
             }
             hash<auto> model_output;
             foreach string okey in (keys output_values) {
@@ -762,6 +983,37 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             "window_size": window_size,
             "windows": windows,
         };
+    }
+
+    #! Runs shaped inference with mapped input tensors and returns raw tensor outputs
+    private hash<auto> processMappedTensorShapeWindows(hash<auto> mapped_matrices, int count) {
+        if (count == window_size) {
+            return runMappedTensorWindow(mapped_matrices, 0, True);
+        }
+
+        list<hash<auto>> windows;
+        for (int start = 0; start < count; start += window_size) {
+            push windows, runMappedTensorWindow(mapped_matrices, start, False);
+        }
+        return {
+            "row_count": count,
+            "window_size": window_size,
+            "windows": windows,
+        };
+    }
+
+    #! Runs one mapped input tensor window
+    private hash<auto> runMappedTensorWindow(hash<auto> mapped_matrices, int start, bool single_window) {
+        hash<auto> inputs;
+        hash<string, list<string>> imap = input_map;
+        foreach string tensor_name in (keys imap) {
+            list<list<float>> matrix = cast<list<list<float>>>(mapped_matrices{tensor_name});
+            list<list<float>> window = single_window
+                ? matrix
+                : matrix[start..(start + window_size - 1)];
+            inputs{tensor_name} = new ML::Tensor(window, NOTHING, input_dtypes{tensor_name});
+        }
+        return model.runTensors(inputs);
     }
 
     #! Converts a tensor output to row-addressable values where possible

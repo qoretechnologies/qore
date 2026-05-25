@@ -370,10 +370,15 @@ module DataProviderML {
                 "groups": (AppGroup::Analytics,),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     QoreOnnxModelProcessor::ConstructorOptions{
-                        "model_path", "fields", "window_size",
+                        "model_path", "window_size",
                     }, {
                         "preselected": True,
                         "required": True,
+                        "loc": "constructor",
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    QoreOnnxModelProcessor::ConstructorOptions{"fields", "input_map"}, {
+                        "preselected": True,
                         "loc": "constructor",
                     }
                 ) + DataProviderActionCatalog::getActionOptionFromFields(
@@ -381,7 +386,7 @@ module DataProviderML {
                         "input_tensor", "execution_providers",
                         "cuda_device_id", "intra_op_threads",
                         "inter_op_threads", "graph_optimization_level",
-                        "log_severity",
+                        "log_severity", "output_mode", "include_input_fields",
                     }, {
                         "loc": "constructor",
                     }
@@ -408,15 +413,20 @@ module DataProviderML {
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
-                    "registry_path", "model_name", "fields", "window_size",
+                    "registry_path", "model_name", "window_size",
                 }, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRegistryModelProcessor::ConstructorOptions{"fields", "input_map"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
-                    "version", "tag", "tenant_id",
+                    "version", "tag", "tenant_id", "input_tensor", "output_mode", "include_input_fields",
                 }, {
                     "loc": "constructor",
                 }
@@ -1680,6 +1690,13 @@ module DataProviderML {
     can build the input tensor directly from that column instead of
     materializing row hashes or row matrices.
 
+    ONNX models with multiple input tensors can use \c input_map instead of
+    \c fields.  The map key is the ONNX input tensor name and the value is one
+    field name or an ordered field list for that tensor.  This keeps token ID,
+    attention mask, segment ID, feature, and side-channel inputs explicit and
+    avoids relying on a single merged feature matrix.  \c input_tensor is
+    ignored when \c input_map is configured.
+
     @par DataFrameBlock example:
     @code{.py}
 %requires dataframe
@@ -1794,6 +1811,26 @@ auto scored = proc.processRecordsShape(batch, DataProviderShape::DataFrameBlock)
 list<auto> probabilities = scored.getColumn("probabilities");
     @endcode
 
+    @par Multi-input ONNX example:
+    @code{.py}
+DataProviderML::QoreRegistryModelProcessor proc({
+    "registry_path": "/var/models",
+    "model_name": "text-classifier-onnx",
+    "tag": "production",
+    "input_map": {
+        "input_ids": "token_ids",
+        "attention_mask": "attention_mask",
+        "token_type_ids": "segment_ids",
+    },
+    "window_size": 256,
+    "output_mode": "columns",
+    "include_input_fields": False,
+});
+
+auto logits = proc.processRecordsShape(token_batches,
+    DataProviderShape::DataFrameBlock);
+    @endcode
+
     @par BufferColumns example:
     @code{.py}
 %requires DataProviderML
@@ -1829,6 +1866,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       \c "columns", \c "dataframe", and \c "tensor"; single-column dense input
       with the expected ONNX dtype uses a direct tensor path to avoid row matrix
       materialization
+    - \c onnx-model and \c registry-model support \c input_map for ONNX models
+      that require multiple named input tensors; the action catalog no longer
+      requires \c fields when \c input_map is used
     - Shared registry backend options support filesystem, database, and REST model
       registry backends for AI pipeline artifacts
 
