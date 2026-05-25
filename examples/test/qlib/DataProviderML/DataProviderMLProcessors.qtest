@@ -181,6 +181,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
 
         # RegistryModel tests
         addTestCase("registry-model - field parsing", \registryModelFieldParsing());
+        addTestCase("registry-model - ONNX package inference", \registryModelOnnxPackageInference());
         addTestCase("tokenize - registry tokenizer", \tokenizeRegistryTokenizer());
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
 
@@ -207,6 +208,21 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         File f();
         f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
         f.write(data);
+    }
+
+    static cleanupDir(string dir) {
+        if (!is_dir(dir)) {
+            return;
+        }
+        Dir d();
+        d.chdir(dir);
+        foreach string subdir in (d.listDirs()) {
+            DataProviderMLProcessorsTest::cleanupDir(dir + DirSep + subdir);
+        }
+        foreach string f in (d.listFiles()) {
+            unlink(dir + DirSep + f);
+        }
+        rmdir(dir);
     }
 
     static string minimalTokenizerJson() {
@@ -2074,7 +2090,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         string dir = tmp_location() + DirSep + "reg_model_test_" + get_random_bytes(4).toHex();
         mkdir_ex(dir, 0755, True);
         on_exit {
-            system("rm -rf " + dir);
+            DataProviderMLProcessorsTest::cleanupDir(dir);
         }
 
         # Create and register a model
@@ -2112,12 +2128,59 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq("target", parsed3[2]);
     }
 
+    registryModelOnnxPackageInference() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_test_" + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string package_dir = dir + DirSep + "linear_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(getTestModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "linear-onnx",
+            "description": "test ONNX package",
+        });
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "linear-onnx",
+            "version": vid,
+            "fields": "x",
+            "window_size": 3,
+        });
+
+        list<auto> results;
+        foreach hash<auto> rec in (({"x": 1.0}, {"x": 2.0}, {"x": 3.0})) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(3, results.size(), "registry ONNX processor should emit one event per record");
+        assertEq("registry-model", results[0].event_type);
+        assertEq("linear-onnx", results[0].model_name);
+        assertEq(vid, results[0].version_id);
+        assertTrue(results[0].prediction.hasKey("Y"), "ONNX output should be returned as prediction hash");
+        assertTrue(abs(3.0 - results[0].prediction.Y.toFloat()) < 0.01,
+            sprintf("expected first ONNX prediction ~3.0, got %y", results[0].prediction.Y));
+        assertTrue(abs(7.0 - results[2].prediction.Y.toFloat()) < 0.01,
+            sprintf("expected third ONNX prediction ~7.0, got %y", results[2].prediction.Y));
+    }
+
     tokenizeRegistryTokenizer() {
         string dir = tmp_location() + DirSep + "tokenize_registry_test_"
             + get_random_bytes(4).toHex();
         mkdir_ex(dir, 0755, True);
         on_exit {
-            system("rm -rf " + dir);
+            DataProviderMLProcessorsTest::cleanupDir(dir);
         }
 
         DataProviderMLProcessorsTest::createTokenizerRegistryPackage(dir, "tok-model");
@@ -2138,7 +2201,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             + get_random_bytes(4).toHex();
         mkdir_ex(dir, 0755, True);
         on_exit {
-            system("rm -rf " + dir);
+            DataProviderMLProcessorsTest::cleanupDir(dir);
         }
 
         DataProviderMLProcessorsTest::createTokenizerRegistryPackage(dir, "chunk-model");

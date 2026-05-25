@@ -72,6 +72,7 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("dataProviderFactory", \dataProviderFactoryTest());
         addTestCase("filesystemBackendDirect", \filesystemBackendDirectTest());
         addTestCase("namedArtifacts", \namedArtifactsTest());
+        addTestCase("executableAdapterNative", \executableAdapterNativeTest());
         addTestCase("modelPackageInspection", \modelPackageInspectionTest());
         addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
         addTestCase("restBackendCacheInvalidation", \restBackendCacheInvalidationTest());
@@ -1054,6 +1055,35 @@ class ModelRegistryTest inherits QUnit::Test {
             "manifest should include named artifact metadata");
         assertThrows("ML-REGISTRY-ERROR", \registry.loadNamedArtifact(),
             ("artifact-model", vid, "../bad"));
+    }
+
+    executableAdapterNativeTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        ML::KMeans km({"k": 2, "seed": 42});
+        km.fit((
+            {"x": 1.0, "y": 1.0},
+            {"x": 1.1, "y": 1.1},
+            {"x": 5.0, "y": 5.0},
+            {"x": 5.1, "y": 5.1},
+        ));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.register(km, {"name": "adapter-kmeans"});
+
+        QoreModelRegistry::ModelExecutableAdapter adapter =
+            registry.loadExecutableAdapter("adapter-kmeans", vid);
+        assertEq("qore-ml", adapter.getRuntime(), "native model runtime should be qore-ml");
+        assertFalse(adapter.isOnnx(), "native model should not be reported as ONNX");
+        assertEq(vid, adapter.getVersionId(), "adapter should expose loaded version ID");
+
+        hash<ML::KMeansResult> prediction = adapter.predict({"x": 1.0, "y": 1.0});
+        assertTrue(prediction.hasKey("cluster"), "native adapter predict should call predict()");
+
+        hash<auto> batch = adapter.runFeatureMatrix(((1.0, 1.0), (5.0, 5.0)), NOTHING);
+        assertTrue(batch.hasKey("prediction"), "native matrix adapter result should have prediction key");
+        assertEq(2, batch.prediction.size(), "native matrix adapter should return two predictions");
     }
 
     modelPackageInspectionTest() {

@@ -22,15 +22,16 @@
 */
 
 #! Main DataProviderML namespace
-public namespace DataProviderML;
+public namespace DataProviderML {
 
 #! Pipeline processor that loads a pre-trained model from the model registry and runs inference
 /** Loads a trained ML model from a @ref QoreModelRegistry::ModelRegistry "ModelRegistry"
-    by name (and optional version/tag), then applies \c predict() to each window of records.
+    by name (and optional version/tag), then applies the registry execution adapter to
+    each window of records.
 
     The model is loaded once at construction time and reused for all subsequent windows.
-    Supports any model type that provides a \c predict() method (KMeans, LinearRegression,
-    IsolationForest, etc.).
+    Supports native Qore ML models and ONNX Runtime model packages loaded through the
+    registry.
 
     @par Example:
     @code{.py}
@@ -144,10 +145,21 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Input Fields",
                 "short_desc": "Fields to use as model input features",
-                "type": AbstractDataProviderTypeMap."list",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "desc": "List of field names from each record to pass as input "
-                    "features to the model's `predict()` method.",
+                    "features to the model. Native Qore ML models receive a record "
+                    "hash with these fields. ONNX models receive the fields as a "
+                    "row-major feature matrix under `input_tensor`.",
                 "required": True,
+                "input_field_names": True,
+            },
+            "input_tensor": <DataProviderOptionInfo>{
+                "display_name": "Input Tensor Name",
+                "short_desc": "ONNX model input tensor name",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Name of the ONNX input tensor to receive the feature matrix. "
+                    "When omitted, the first input tensor from the ONNX model metadata "
+                    "is used. This option is ignored for native Qore ML models.",
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -160,8 +172,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     }
 
     private {
-        #! The loaded model object
-        object model;
+        #! The loaded model execution adapter
+        QoreModelRegistry::ModelExecutableAdapter model;
 
         #! Model name (for output events)
         string model_name;
@@ -171,6 +183,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
         #! Input field names
         list<string> fields;
+
+        #! Optional ONNX input tensor name
+        *string input_tensor;
 
         #! Window size
         int window_size = 100;
@@ -194,6 +209,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
         model_name = copts.model_name;
         fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        input_tensor = copts.input_tensor;
         if (copts.window_size) {
             window_size = copts.window_size;
         }
@@ -216,25 +232,11 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         QoreModelRegistry::ModelRegistry registry(reg_opts);
 
         if (copts.tag) {
-            model = registry.loadExecutableByTag(model_name, copts.tag);
-            # Get the version ID for reporting
-            list<hash<auto>> versions = registry.listVersions(model_name);
-            foreach hash<auto> v in (versions) {
-                if (v.tags.contains(copts.tag)) {
-                    loaded_version = v.version_id;
-                }
-            }
+            model = registry.loadExecutableAdapterByTag(model_name, copts.tag);
+            loaded_version = model.getVersionId();
         } else {
-            model = registry.loadExecutable(model_name, copts.version);
-            # Determine loaded version
-            if (copts.version && copts.version != "latest") {
-                loaded_version = copts.version;
-            } else {
-                list<hash<auto>> versions = registry.listVersions(model_name);
-                if (versions) {
-                    loaded_version = versions.last().version_id;
-                }
-            }
+            model = registry.loadExecutableAdapter(model_name, copts.version);
+            loaded_version = model.getVersionId();
         }
 
         configured = True;
@@ -293,6 +295,10 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     }
 
     private list<auto> processWindow(list<hash<auto>> records) {
+        if (model.isOnnx()) {
+            return processOnnxWindow(records);
+        }
+
         list<auto> events();
 
         foreach hash<auto> rec in (records) {
@@ -316,4 +322,47 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
         return events;
     }
+
+    private list<auto> processOnnxWindow(list<hash<auto>> records) {
+        list<list<float>> matrix;
+        foreach hash<auto> rec in (records) {
+            list<float> row;
+            foreach string f in (fields) {
+                push row, DataProvider::AbstractDataProvider::getFieldValue(rec, f).toFloat();
+            }
+            push matrix, row;
+        }
+
+        hash<auto> outputs = model.runFeatureMatrix(matrix, input_tensor);
+
+        list<auto> events;
+        for (int i = 0; i < records.lsize(); ++i) {
+            hash<auto> record_values;
+            foreach string f in (fields) {
+                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+            }
+
+            hash<auto> model_output;
+            foreach string okey in (keys outputs) {
+                auto oval = outputs{okey};
+                if (oval.typeCode() == NT_LIST && oval.lsize() == records.lsize()) {
+                    model_output{okey} = oval[i];
+                } else {
+                    model_output{okey} = oval;
+                }
+            }
+
+            push events, <RegistryModelEventInfo>{
+                "event_type": "registry-model",
+                "model_name": model_name,
+                "version_id": loaded_version,
+                "record_values": record_values,
+                "prediction": model_output,
+            };
+        }
+
+        return events;
+    }
 }
+
+} # namespace DataProviderML

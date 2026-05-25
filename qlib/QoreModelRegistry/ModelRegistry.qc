@@ -375,6 +375,25 @@ public class ModelRegistry {
                 name, version_id, meta.artifact_kind, runtime, meta.safety);
     }
 
+    #! Loads a model version and wraps it in a uniform execution adapter
+    /** This method preserves @ref loadExecutable() behavior while exposing a
+        stable adapter API for consumers that need to handle native Qore ML and
+        ONNX Runtime models without branching on the concrete model class.
+
+        @param name the model name
+        @param version_id the version ID to load, or NOTHING/"latest"
+
+        @return a @ref ModelExecutableAdapter for the loaded model
+
+        @throw ML-REGISTRY-ERROR if the version has no local execution plan
+
+        @since QoreModelRegistry 2.3
+    */
+    ModelExecutableAdapter loadExecutableAdapter(string name, *string version_id) {
+        hash<ModelVersionInfo> manifest = getVersionManifest(name, version_id);
+        return new ModelExecutableAdapter(loadExecutable(name, manifest.version_id), manifest);
+    }
+
     #! Loads a model artifact as raw binary data (without deserializing)
     /** @param name the model name
         @param version_id the version ID to load, or NOTHING/"latest" for the most recent
@@ -614,6 +633,31 @@ public class ModelRegistry {
         for (int i = versions.size() - 1; i >= 0; --i) {
             if (versions[i].tags.contains(tag_name)) {
                 return loadExecutable(name, versions[i].version_id);
+            }
+        }
+        throw "ML-REGISTRY-ERROR",
+            sprintf("no version with tag '%s' found for model '%s'", tag_name, name);
+    }
+
+    #! Loads an executable model version by tag and wraps it in an adapter
+    /** @param name the model name
+        @param tag_name the tag to search for
+
+        @return a @ref ModelExecutableAdapter for the latest matching version
+
+        @throw ML-REGISTRY-ERROR if no version with the tag is found or the version
+            has no local execution plan
+
+        @since QoreModelRegistry 2.3
+    */
+    ModelExecutableAdapter loadExecutableAdapterByTag(string name, string tag_name) {
+        list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
+        for (int i = versions.size() - 1; i >= 0; --i) {
+            if (versions[i].tags.contains(tag_name)) {
+                hash<ModelVersionInfo> manifest =
+                    getVersionManifest(name, versions[i].version_id);
+                return new ModelExecutableAdapter(loadExecutable(name, manifest.version_id),
+                    manifest);
             }
         }
         throw "ML-REGISTRY-ERROR",
