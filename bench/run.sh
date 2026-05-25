@@ -46,6 +46,7 @@ environment:
                            End-to-end ETL solution row count (default: QORE_BENCH_DF_ROWS)
   QORE_BENCH_DF_AI_ROWS    End-to-end AI/analytics solution row count (default: 20000)
   QORE_BENCH_ONNX_ROWS     ONNX inference benchmark row count (default: 10000)
+  QORE_BENCH_TEXT_ROWS     DataProviderML tokenizer/text model row count (default: 2000)
   QORE_DB_CONNSTR_PGSQL    enables optional PostgreSQL DataFrame SQL cases
 EOF
     exit 1

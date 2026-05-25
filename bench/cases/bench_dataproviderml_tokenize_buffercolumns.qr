@@ -1,0 +1,45 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlTokenizeBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlTokenizeBufferColumns {
+    constructor() {
+        if (!OnnxBench::canRunTokenizer()) {
+            printf("dataproviderml_tokenize_buffercolumns: skipped (tokenizer fixture not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_tokenize_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = OnnxBench::textRows();
+        ColumnarResult columns;
+        DataProviderML::QoreTokenizeProcessor proc({
+            "text_field": "body",
+            "tokenizer_config_path": OnnxBench::tokenizerPath(),
+            "add_special_tokens": False,
+        });
+
+        r.setup = sub () {
+            columns = ColumnarResult::fromColumnHash(OnnxBench::makeTextColumnHash(rows));
+            r.bytes_processed = OnnxBench::approxTextBytes(rows);
+        };
+
+        r.measure = sub () {
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            OnnxBench::verifyTokenColumns("dataproviderml_tokenize_buffercolumns", result, rows);
+        };
+
+        exit(r.run());
+    }
+}
