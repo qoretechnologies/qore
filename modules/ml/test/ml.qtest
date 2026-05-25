@@ -144,6 +144,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel load and metadata", \onnxLoadTest());
         addTestCase("OnnxModel inference", \onnxInferenceTest());
         addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
+        addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
@@ -2959,6 +2960,30 @@ public class MlTest inherits QUnit::Test {
         return False;
     }
 
+    private string getMultiInputModelPath() {
+        string dir = get_script_dir();
+        string path = dir + "/../../modules/ml/test/data/test_multi_input.onnx";
+        if (!is_file(path)) {
+            path = dir + "/../../../modules/ml/test/data/test_multi_input.onnx";
+        }
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/test_multi_input.onnx";
+        }
+        return path;
+    }
+
+    private bool skipMultiInputOnnx() {
+        if (skipOnnx()) {
+            return True;
+        }
+        string path = getMultiInputModelPath();
+        if (!is_file(path)) {
+            testSkip("multi-input ONNX model not found at: " + path);
+            return True;
+        }
+        return False;
+    }
+
     onnxLoadTest() {
         if (skipOnnx()) {
             return;
@@ -3029,6 +3054,33 @@ public class MlTest inherits QUnit::Test {
         assertFloat(7.0, y_vals[2][0], 1e-5);
         assertFloat(1.0, y_vals[3][0], 1e-5);
         assertFloat(-1.0, y_vals[4][0], 1e-5);
+    }
+
+    onnxMultiInputTensorInferenceTest() {
+        if (skipMultiInputOnnx()) {
+            return;
+        }
+
+        ML::OnnxModel model(getMultiInputModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        ML::Tensor a(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1));
+        ML::Tensor b(data: new buffer<float32>((0.5, 1.0, 1.5)), shape: (3, 1));
+        hash<auto> result = model.runTensors({"A": a, "B": b});
+        assertTrue(result.hasKey("Y"));
+
+        ML::Tensor y = result.Y;
+        assertEq("float32", y.getDtype());
+        assertEq((3, 1), y.getShape());
+        list<auto> y_vals = y.toList();
+        assertFloat(6.0, y_vals[0][0], 1e-5);
+        assertFloat(12.0, y_vals[1][0], 1e-5);
+        assertFloat(18.0, y_vals[2][0], 1e-5);
+
+        hash<auto> list_result = model.run({
+            "A": ((1.0,), (2.0,), (3.0,)),
+            "B": ((0.5,), (1.0,), (1.5,)),
+        });
+        assertFloat(6.0, list_result.Y[0], 1e-5);
+        assertFloat(18.0, list_result.Y[2], 1e-5);
     }
 
     onnxBatchTest() {
