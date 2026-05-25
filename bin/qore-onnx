@@ -25,6 +25,7 @@
 %modern
 
 %requires QoreOnnxTools
+%requires ml
 %requires Util
 
 %try-module json
@@ -38,6 +39,7 @@ class QoreOnnxCli {
         const Version = "1.0.0";
         const Opts = {
             "activation_type": "activation-type=s",
+            "benchmark_inputs": "benchmark-inputs=s",
             "calibration_data": "calibration-data=s",
             "calibration_method": "calibration-method=s",
             "dry_run": "dry-run",
@@ -46,16 +48,21 @@ class QoreOnnxCli {
             "help": "h,help",
             "input": "i,input=s",
             "json": "J,json",
+            "keep_output": "keep-output",
             "method": "m,method=s",
             "nodes_to_exclude": "nodes-to-exclude=s",
             "nodes_to_quantize": "nodes-to-quantize=s",
             "op_types": "op-types=s",
+            "ort_format": "ort-format",
             "output": "o,output=s",
             "per_channel": "per-channel",
             "python": "python=s",
             "reduce_range": "reduce-range",
+            "runs": "runs=i",
+            "session_config": "session-config=s",
             "validate": "validate!",
             "version": "V,version",
+            "warmup_runs": "warmup-runs=i",
             "weight_type": "weight-type=s",
         };
     }
@@ -80,6 +87,18 @@ class QoreOnnxCli {
                     break;
                 case "check-python":
                     checkPython(opts);
+                    break;
+                case "inspect":
+                    inspect(opts);
+                    break;
+                case "validate":
+                    validate(opts);
+                    break;
+                case "benchmark":
+                    benchmark(opts);
+                    break;
+                case "optimize":
+                    optimize(opts);
                     break;
                 default:
                     stderr.printf("qore-onnx: unsupported command %y\n", command);
@@ -113,6 +132,47 @@ class QoreOnnxCli {
         exit(result.available ? 0 : 1);
     }
 
+    private static nothing inspect(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("inspect", input_path);
+        writeResult(QoreOnnxTools::OnnxModelTools::inspect(input_path,
+            buildSessionConfig(opts)), opts);
+    }
+
+    private static nothing validate(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("validate", input_path);
+        hash<QoreOnnxTools::OnnxValidationResult> result =
+            QoreOnnxTools::OnnxModelTools::validate(input_path, buildSessionConfig(opts));
+        writeResult(result, opts);
+        exit(result.valid ? 0 : 1);
+    }
+
+    private static nothing benchmark(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("benchmark", input_path);
+        writeResult(QoreOnnxTools::OnnxModelTools::benchmark(input_path,
+            buildBenchmarkOptions(opts)), opts);
+    }
+
+    private static nothing optimize(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string output_path = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!input_path.val() || !output_path.val()) {
+            stderr.printf("qore-onnx: optimize requires input and output paths\n");
+            usage(2);
+        }
+        writeResult(QoreOnnxTools::OnnxModelTools::optimize(input_path, output_path,
+            buildOptimizationOptions(opts)), opts);
+    }
+
+    private static nothing requireInput(string command, *string input_path) {
+        if (!input_path.val()) {
+            stderr.printf("qore-onnx: %s requires an input model path\n", command);
+            usage(2);
+        }
+    }
+
     private static hash<QoreOnnxTools::OnnxQuantizationOptions> buildQuantOptions(
             hash<auto> opts) {
         hash<QoreOnnxTools::OnnxQuantizationOptions> qopts =
@@ -135,6 +195,50 @@ class QoreOnnxCli {
         return qopts;
     }
 
+    private static *hash<ML::OnnxSessionConfig> buildSessionConfig(hash<auto> opts) {
+        if (!opts.session_config.val()) {
+            return NOTHING;
+        }
+        return cast<hash<ML::OnnxSessionConfig>>(readJsonFile(opts.session_config));
+    }
+
+    private static hash<QoreOnnxTools::OnnxBenchmarkOptions> buildBenchmarkOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxBenchmarkOptions> bopts =
+            <QoreOnnxTools::OnnxBenchmarkOptions>{};
+        if (exists opts.runs) bopts.runs = opts.runs;
+        if (exists opts.warmup_runs) bopts.warmup_runs = opts.warmup_runs;
+        if (exists opts.keep_output) bopts.keep_output = opts.keep_output;
+        if (opts.session_config.val()) {
+            bopts.session_config = buildSessionConfig(opts);
+        }
+        if (opts.benchmark_inputs.val()) {
+            bopts.inputs = cast<hash<auto>>(readJsonFile(opts.benchmark_inputs));
+        }
+        return bopts;
+    }
+
+    private static hash<QoreOnnxTools::OnnxOptimizationOptions> buildOptimizationOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxOptimizationOptions> oopts =
+            <QoreOnnxTools::OnnxOptimizationOptions>{};
+        if (opts.session_config.val()) {
+            oopts.session_config = buildSessionConfig(opts);
+        }
+        if (exists opts.ort_format) oopts.ort_format = opts.ort_format;
+        if (exists opts.force) oopts.force = opts.force;
+        if (exists opts.validate) oopts.validate = opts.validate;
+        return oopts;
+    }
+
+    private static hash<auto> readJsonFile(string path) {
+%ifdef NoJson
+        throw "QORE-ONNX-ERROR", "the json module is required for JSON input options";
+%else
+        return parse_json(ReadOnlyFile::readTextFile(path));
+%endif
+    }
+
     private static nothing writeResult(auto result, hash<auto> opts) {
         if (opts.json) {
 %ifdef NoJson
@@ -150,7 +254,23 @@ class QoreOnnxCli {
     private static nothing usage(int rc) {
         printf("Usage:\n");
         printf("  qore-onnx check-python [--python PATH] [--json]\n");
+        printf("  qore-onnx inspect [--session-config PATH] [--json] INPUT.onnx\n");
+        printf("  qore-onnx validate [--session-config PATH] [--json] INPUT.onnx\n");
+        printf("  qore-onnx benchmark [OPTIONS] INPUT.onnx\n");
+        printf("  qore-onnx optimize [OPTIONS] INPUT.onnx OUTPUT.onnx\n");
         printf("  qore-onnx quantize [OPTIONS] INPUT.onnx OUTPUT.onnx\n\n");
+        printf("Common options:\n");
+        printf("  --session-config PATH            JSON OnnxSessionConfig hash\n");
+        printf("  --json                           Emit JSON output\n\n");
+        printf("Benchmark options:\n");
+        printf("  --runs N                         Timed inference runs, default 10\n");
+        printf("  --warmup-runs N                  Warmup inference runs, default 1\n");
+        printf("  --benchmark-inputs PATH          JSON input hash; generated when omitted\n");
+        printf("  --keep-output                    Include the final output in benchmark results\n\n");
+        printf("Optimize options:\n");
+        printf("  --ort-format                     Save optimized artifact in ORT format\n");
+        printf("  --force                          Overwrite output file\n");
+        printf("  --no-validate                    Skip loading the output model after optimization\n\n");
         printf("Quantize options:\n");
         printf("  --method dynamic|static          Quantization method, default dynamic\n");
         printf("  --python PATH                    Python executable, default QORE_ONNX_PYTHON or python3\n");
@@ -166,7 +286,6 @@ class QoreOnnxCli {
         printf("  --dry-run                        Print the execution plan only\n");
         printf("  --force                          Overwrite output file\n");
         printf("  --no-validate                    Skip loading the output model after quantization\n");
-        printf("  --json                           Emit JSON output\n");
         exit(rc);
     }
 }

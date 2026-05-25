@@ -50,6 +50,20 @@ module QoreOnnxTools {
     repeatable tool invocations, records metadata, and reports missing Python
     dependencies with actionable installation guidance.
 
+    @par Inspection, Validation, and Benchmark Example
+    @code{.q}
+hash<auto> inspection =
+    QoreOnnxTools::OnnxModelTools::inspect("/models/customer-score.onnx");
+hash<QoreOnnxTools::OnnxValidationResult> validation =
+    QoreOnnxTools::OnnxModelTools::validate("/models/customer-score.onnx");
+hash<QoreOnnxTools::OnnxBenchmarkResult> benchmark =
+    QoreOnnxTools::OnnxModelTools::benchmark(
+        "/models/customer-score.onnx",
+        <QoreOnnxTools::OnnxBenchmarkOptions>{"runs": 100});
+printf("inputs=%y valid=%y avg=%fms\n",
+    inspection.inputs, validation.valid, benchmark.average_ms);
+    @endcode
+
     @par Dynamic Quantization Example
     @code{.q}
 hash<QoreOnnxTools::OnnxQuantizationResult> info =
@@ -85,6 +99,10 @@ QoreOnnxTools::OnnxQuantizer::quantize(
     @par CLI Examples
     @code{.sh}
 qore-onnx check-python --python /opt/onnx/bin/python3
+qore-onnx inspect --json /models/customer-score.onnx
+qore-onnx validate /models/customer-score.onnx
+qore-onnx benchmark --runs 100 /models/customer-score.onnx
+qore-onnx optimize /models/customer-score.onnx /models/customer-score-opt.onnx
 qore-onnx quantize --method dynamic --weight-type QInt8 \
     /models/customer-score.onnx /models/customer-score-int8.onnx
 qore-onnx quantize --method static --calibration-data calibration.json \
@@ -96,4 +114,5 @@ qore-onnx quantize --method static --calibration-data calibration.json \
     @subsection qoreonnxtools_1_0 QoreOnnxTools Module Version 1.0
     - Initial release with ONNX Runtime Python quantization orchestration
     - Added dependency diagnostics and dry-run planning for quantization
+    - Added ONNX model inspection, validation, optimization, and benchmark helpers
 */

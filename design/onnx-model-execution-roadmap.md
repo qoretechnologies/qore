@@ -299,11 +299,15 @@ Tools:
 - `qore-onnx check-python`: implemented for dependency diagnostics.
 - `qore-onnx quantize`: implemented for dynamic/static quantization
   orchestration and dry-run planning.
-- `qore-onnx inspect`: pending.
-- `qore-onnx validate`: pending.
+- `qore-onnx inspect`: implemented for model metadata and provider
+  diagnostics.
+- `qore-onnx validate`: implemented for model loadability, tensor metadata, and
+  provider-policy checks.
 - `qore-onnx package`: pending.
-- `qore-onnx benchmark`: pending.
-- `qore-onnx optimize`: pending.
+- `qore-onnx benchmark`: implemented for generated or JSON-provided inputs and
+  latency summaries.
+- `qore-onnx optimize`: implemented for optimized ONNX/ORT artifact creation
+  through the ml module.
 
 Acceptance checks:
 

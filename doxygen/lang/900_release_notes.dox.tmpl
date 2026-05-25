@@ -3285,7 +3285,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - OnnxQuantizer checks Python ONNX Runtime quantization dependencies and reports actionable installation guidance
       - supports dynamic quantization and static quantization orchestration with JSON calibration records
       - dry-run planning records the command, source model metadata, and selected options without invoking external tooling
-      - the new \c qore-onnx command exposes dependency checks and quantization planning/execution from the shell
+      - OnnxModelTools adds ONNX model inspection, validation, optimized artifact creation, and generated-input benchmarking
+      - the new \c qore-onnx command exposes dependency checks, inspection, validation, benchmarking, optimization, and quantization from the shell
 
     - @ref qoreragtypesintro "QoreRagTypes" module
       - new module providing the provider-neutral hashdecls and abstract embedder /

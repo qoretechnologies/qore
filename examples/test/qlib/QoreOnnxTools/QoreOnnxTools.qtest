@@ -39,6 +39,9 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         addTestCase("Dynamic quantization dry run", \dynamicQuantizationDryRunTest());
         addTestCase("Static quantization requires calibration", \staticRequiresCalibrationTest());
         addTestCase("Missing quantization dependency message", \missingDependencyMessageTest());
+        addTestCase("ONNX model inspection and validation", \modelInspectionValidationTest());
+        addTestCase("ONNX benchmark with generated inputs", \modelBenchmarkTest());
+        addTestCase("ONNX optimization helper", \modelOptimizationTest());
         set_return_value(main());
     }
 
@@ -101,5 +104,48 @@ class QoreOnnxToolsTest inherits QUnit::Test {
                     "method": "dynamic",
                 });
         });
+    }
+
+    modelInspectionValidationTest() {
+        hash<auto> inspection = QoreOnnxTools::OnnxModelTools::inspect(getTestModelPath());
+        assertEq(getTestModelPath(), inspection.path);
+        assertTrue(inspection.size > 0);
+        assertEq("qore-ml-test", inspection.info.producer_name);
+        assertEq("X", inspection.inputs[0].name);
+        assertEq("Y", inspection.outputs[0].name);
+
+        hash<QoreOnnxTools::OnnxValidationResult> validation =
+            QoreOnnxTools::OnnxModelTools::validate(getTestModelPath());
+        assertTrue(validation.valid);
+        assertEq(0, validation.issues.size());
+        assertTrue(exists validation.inspection);
+        assertEq("CPUExecutionProvider", validation.provider_report.active_provider);
+    }
+
+    modelBenchmarkTest() {
+        hash<QoreOnnxTools::OnnxBenchmarkResult> result =
+            QoreOnnxTools::OnnxModelTools::benchmark(getTestModelPath(),
+                <QoreOnnxTools::OnnxBenchmarkOptions>{
+                    "warmup_runs": 1,
+                    "runs": 2,
+                });
+        assertEq(2, result.runs);
+        assertEq(2, result.latencies_ms.size());
+        assertTrue(result.average_ms >= 0.0);
+        assertTrue(result.inputs.hasKey("X"));
+        assertTrue(result.stats.run_count >= 3);
+    }
+
+    modelOptimizationTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        string output_path = dir.path + DirSep + "optimized.onnx";
+        hash<QoreOnnxTools::OnnxOptimizationResult> result =
+            QoreOnnxTools::OnnxModelTools::optimize(getTestModelPath(), output_path);
+        assertEq(getTestModelPath(), result.input_path);
+        assertEq(output_path, result.output_path);
+        assertTrue(is_file(output_path));
+        assertFalse(result.ort_format);
+        assertTrue(result.validation.valid);
+        assertEq("ONNX", result.optimization.output_format);
     }
 }
