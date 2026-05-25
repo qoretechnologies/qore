@@ -2946,7 +2946,7 @@ qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime;Logge
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/SmtpClient.qm" "ConnectionProvider;MailMessage;Mime")
-qore_user_module("qlib/WebSocketHandler.qm" "AsyncSocketIo;HttpServerUtil;WebSocketUtil;Logger")
+qore_user_module("qlib/WebSocketHandler.qm" "AsyncApi;AsyncSocketIo;HttpServerUtil;WebSocketUtil;Logger")
 qore_user_module("qlib/WebUtil.qm" "HttpServerUtil;Mime;Util")
 
 # base 5 modules
@@ -2958,7 +2958,7 @@ qore_user_module("qlib/OracleSqlUtilBase.qm" "SqlUtil;Util;DataProvider")
 qore_user_module("qlib/PgsqlSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/Sqlite3SqlUtil.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/XdbcFirebirdSqlUtilBase.qm" "SqlUtil;DataProvider")
-qore_user_module("qlib/WebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;DataProvider;AsyncSocketIo")
+qore_user_module("qlib/WebSocketClient.qm" "AsyncApi;ConnectionProvider;Util;WebSocketUtil;DataProvider;AsyncSocketIo")
 qore_user_module("qlib/TableMapper.qm" "MapperUtil;Mapper;SqlUtil;DataProvider")
 qore_user_module("qlib/DbDataProvider" "DataProvider;SqlUtil;BulkSqlUtil;ConnectionProvider")
 qore_user_module("qlib/FtpPoller.qm" "FtpPollerUtil;Util;DataProvider")

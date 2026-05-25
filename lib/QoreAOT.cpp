@@ -370,6 +370,10 @@ static std::string getLibqoreDir() {
 // `ir_func->name` before LLVM function lookup.
 static std::string aotSymbolPrefix(const char* compile_module);
 
+// Forward decl - implementation follows aotSymbolPrefix below.
+static bool isAOTCompilableMethodVariant(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant);
+
 //! Generate a unique variant key that includes parameter types to distinguish overloads
 /** Format: "name(type1,type2,...)" - uses type paths for parameter types
     @param name the base function/method name
@@ -2829,6 +2833,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             QoreFunctionIterator vit(*mfb);
             while (vit.next()) {
                 const AbstractQoreFunctionVariant* variant = vit.getVariant();
+                if (!isAOTCompilableMethodVariant(meth, variant)) {
+                    continue;
+                }
                 UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
                 if (!uvb || !uvb->hasBody()) {
                     continue;
@@ -5312,6 +5319,29 @@ static std::string aotSymbolPrefix(const char* compile_module) {
     return std::string("_qaot_") + sanitizeCIdentifier(compile_module) + "_";
 }
 
+//! Returns true for user variants that should be compiled for this method.
+/**
+    A child class can contain a local method shell whose variant is actually a
+    concrete parent variant installed while resolving an abstract sibling base.
+    Compiling that inherited variant under the child method key either creates a
+    duplicate body or, when the parent was loaded from source-stripped AOT, a
+    metadata-only method with no body. Let class deserialization rebuild the
+    inherited relationship from the base hierarchy instead.
+*/
+static bool isAOTCompilableMethodVariant(const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    if (!method || !variant || !variant->isUser()) {
+        return false;
+    }
+    const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(variant);
+    const QoreMethod* owner = mvb->method();
+    if (owner == method) {
+        return true;
+    }
+    const QoreClass* method_class = method->getClass();
+    const QoreClass* owner_class = owner->getClass();
+    return !(method_class && owner_class && method_class->getClass(owner_class->getID()));
+}
+
 //! Phase 4 slice 5: extract a filename basename without extension.
 //! `/tmp/foo/bar.qc` -> `bar`, `AsyncSocketIo.qm` -> `AsyncSocketIo`.
 static std::string fileBasenameNoExt(const std::string& path) {
@@ -6950,6 +6980,35 @@ static std::string stripIncludeDirectives(const std::string& src) {
     return out;
 }
 
+static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
+        qore_program_private* pp, const char* cancel_context) {
+    std::vector<std::string> all_deps;
+    std::unordered_set<std::string> dep_seen;
+    auto add_dep = [&](const std::string& feat) {
+        if (feat != "qore" && dep_seen.insert(feat).second) {
+            all_deps.push_back(feat);
+        }
+    };
+
+    size_t i = 0;
+    for (const auto& feat : pp->featureList) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
+            return false;
+        }
+        add_dep(feat);
+        ++i;
+    }
+    for (const auto& feat : pp->userFeatureList) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
+            return false;
+        }
+        add_dep(feat);
+        ++i;
+    }
+    serializeDependencies(writer, all_deps);
+    return true;
+}
+
 // Phase 4 slice 10i: emit the per-file `.qo` artifact for one source
 // file after the shared batch QoreProgram has been parsed.  Factored
 // out of compileScriptFile so compileScriptFilesBatch can reuse it
@@ -7042,6 +7101,16 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             return false;
         }
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
+
+        // Every script fragment carries the full program-wide dependency set.
+        // This is conservative but harmless: already-loaded modules are no-ops,
+        // and per-fragment partitioning would require tracking which file's
+        // parse actually loaded each module.
+        if (!serializeProgramFeatureDependencies(writer, pp,
+                "AOT batch script dependency serialization")) {
+            error = "operation cancelled during AOT script dependency serialization";
+            return false;
+        }
 
         std::string ns_error;
         if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
@@ -7735,6 +7804,16 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             return false;
         }
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
+
+        // Every script fragment carries the full program-wide dependency set.
+        // This is conservative but harmless: already-loaded modules are no-ops,
+        // and per-fragment partitioning would require tracking which file's
+        // parse actually loaded each module.
+        if (!serializeProgramFeatureDependencies(writer, pp,
+                "AOT script dependency serialization")) {
+            error = "operation cancelled during AOT script dependency serialization";
+            return false;
+        }
 
         std::string ns_error;
         if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,

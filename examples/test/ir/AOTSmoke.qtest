@@ -134,6 +134,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testIgnoredSelfReturningMethodResultReleasesLocals());
         addTestCase("AOT background self call releases self",
             \testBackgroundSelfCallReleasesSelf());
+        addTestCase("AOT background self call dispatches to derived private method",
+            \testBackgroundSelfCallDispatchesDerivedPrivateMethod());
         addTestCase("AOT background self call releases self argument",
             \testBackgroundSelfCallReleasesSelfArgument());
         addTestCase("AOT background argv releases object member argument",
@@ -174,9 +176,13 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT method calls", \testMethodCalls());
         addTestCase("AOT inherited overload dot-eval dispatch",
             \testInheritedOverloadDotEvalDispatch());
+        addTestCase("AOT optional val guard overload dispatch",
+            \testOptionalValGuardOverloadDispatch());
         addTestCase("AOT implicit self copy method call", \testImplicitSelfCopyMethodCall());
         addTestCase("AOT abstract sibling private:internal member context",
             \testAbstractSiblingPrivateInternalMemberContext());
+        addTestCase("AOT abstract sibling inherited overload dispatch",
+            \testAbstractSiblingInheritedOverloadDispatch());
         addTestCase("AOT object member store private access checks",
             \testObjectMemberStorePrivateAccessChecks());
         addTestCase("AOT hash operations", \testHashOps());
@@ -3341,6 +3347,35 @@ printf(\"destroyed=%d\\n\", destroyed);
             "AOT background self calls must release the spawned thread's self reference after thread exit");
     }
 
+    testBackgroundSelfCallDispatchesDerivedPrivateMethod() {
+        string code = "%modern
+
+class A {
+    private f() {
+        printf(\"A\\n\");
+    }
+
+    public g() {
+        background f();
+    }
+}
+
+class B inherits A {
+    private f() {
+        printf(\"B\\n\");
+    }
+}
+
+B b();
+b.g();
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background private self-call dispatch regression fully precompiled: " + result.compile_out);
+        assertEq("B\n", result.run_out,
+            "AOT background self calls must preserve virtual dispatch to derived private methods");
+    }
+
     testBackgroundSelfCallReleasesSelfArgument() {
         string code = "%modern
 
@@ -4335,6 +4370,38 @@ exit(0);
             "inherited overload dot-eval output matches interpreter");
     }
 
+    testOptionalValGuardOverloadDispatch() {
+        # Regression: a *T local guarded by .val() must still dispatch to a T
+        # overload when the runtime value is present.  The same inline assignment
+        # shape must coerce NULL to NOTHING before pseudo-method dispatch.
+        string code = "%modern
+public auto sub work(string data) {
+    return \"got string: \" + data;
+}
+
+public nothing sub work(null data) {
+}
+
+auto x = NULL;
+bool b1 = (*string v1 = NULL).val();
+bool b2 = (*string v2 = x).val();
+printf(\"%y:%s:%y:%s\\n\", b1, v1.type(), b2, v2.type());
+
+hash<auto> row = {\"f\": \"payload\"};
+string f = \"f\";
+if ((*string v = row{f}).val()) {
+    printf(\"%y\\n\", work(v));
+}
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "optional val guard overload dispatch all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "optional val guard overload dispatch output matches interpreter");
+    }
+
     testImplicitSelfCopyMethodCall() {
         # Regression for Issue3637: implicit self copy() has no QoreMethod
         # identity, so AOT must reconstruct it as an implicit copy call and
@@ -4395,6 +4462,41 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "abstract sibling internal member context output matches interpreter");
+    }
+
+    testAbstractSiblingInheritedOverloadDispatch() {
+        # Resolving an abstract variant from a sibling parent synthesizes a
+        # local method after AOT class preparation.  That synthesized method
+        # still needs inherited overloads from the concrete sibling parent.
+        string code = "%modern
+class AbstractBase {
+    abstract auto get(string key);
+    abstract hash<auto> get(*list<auto> key_list);
+}
+class ConcreteBase {
+    auto get(string key) {
+        return \"key:\" + key;
+    }
+    hash<auto> get(*list<auto> key_list) {
+        return key_list ? {\"count\": key_list.size()} : {\"all\": True};
+    }
+}
+class Derived inherits AbstractBase, ConcreteBase {
+}
+Derived d();
+printf(\"%y\\n\", d.get(NOTHING));
+printf(\"%y\\n\", d.get((\"a\", \"b\")));
+printf(\"%y\\n\", d.get(\"x\"));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "abstract sibling inherited overload dispatch compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "abstract sibling inherited overload dispatch all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "abstract sibling inherited overload dispatch output matches interpreter");
     }
 
     testObjectMemberStorePrivateAccessChecks() {

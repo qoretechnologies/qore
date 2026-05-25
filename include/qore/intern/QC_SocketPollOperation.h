@@ -1882,6 +1882,25 @@ public:
     */
     DLLLOCAL void setMaxRequestBodySize(int64_t size);
 
+    //! Drains per-session lifecycle events accumulated since the last call
+    /** Surfaces, to the H3 server poll operation (and thence the controller),
+        the QUIC streams the peer reset and the sessions that closed, so a
+        persistent dedicated handler thread bound to a multiplexed connection is
+        torn down when its stream is abandoned or its session closes — not only
+        on full listener shutdown.  Thread-safe (acquires the socket lock).
+
+        @param resets appended with (session_id, stream_id) for each peer reset
+        @param closed appended with session_id for each newly-closed session
+    */
+    DLLLOCAL void takeSessionLifecycleEvents(std::vector<std::pair<int64_t, int64_t>>& resets,
+            std::vector<int64_t>& closed) {
+        AutoLocker al(sock->priv->m);
+        resets.insert(resets.end(), lifecycle_peer_resets_.begin(), lifecycle_peer_resets_.end());
+        lifecycle_peer_resets_.clear();
+        closed.insert(closed.end(), lifecycle_closed_sessions_.begin(), lifecycle_closed_sessions_.end());
+        lifecycle_closed_sessions_.clear();
+    }
+
 private:
     //! Cached completed stream with session ID and session pointer (for peer address extraction)
     struct CachedStream {
@@ -1937,6 +1956,18 @@ private:
 
     //! Clean up closed sessions (called periodically, not every poll cycle)
     DLLLOCAL void cleanupClosedSessions();
+
+    //! Accumulate peer-reset and session-close events into the lifecycle buffers
+    /** Iterates all sessions on the I/O thread (socket lock held), draining each
+        session's one-shot peer-reset reports and detecting newly-closed sessions.
+        Cheap to fold into the existing per-session passes in continuePoll().
+    */
+    DLLLOCAL void collectSessionLifecycleEvents();
+
+    //! Per-session lifecycle events accumulated during continuePoll(), drained by
+    //! takeSessionLifecycleEvents().  Protected by sock->priv->m.
+    std::vector<std::pair<int64_t, int64_t>> lifecycle_peer_resets_;  //!< (session_id, stream_id)
+    std::vector<int64_t> lifecycle_closed_sessions_;                  //!< session_ids
 
     //! Poll cycle counter for periodic cleanup scheduling
     //! With up to 10K sessions, iterating all sessions every poll cycle is O(n);

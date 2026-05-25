@@ -204,7 +204,7 @@ public:
             root(old.root),
             pub(old.builtin ? true : false),
             builtin(old.builtin),
-            imported(old.imported),
+            imported(old.imported || (!old.root && !old.builtin)),
             class_handler(old.class_handler) {
         if (!old.from_modules.empty()) {
             from_modules = old.from_modules;

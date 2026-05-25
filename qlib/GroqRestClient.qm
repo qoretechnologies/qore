@@ -115,11 +115,14 @@ public namespace GroqRestClient {
 public class GroqRestClientBase {
     public {
         #! Default Groq REST API URL
-        /** Groq's API is rooted at \c /openai on its production host;
-            the OpenAI-compatible endpoints live at e.g.
-            \c /openai/v1/chat/completions.
+        /** Groq's API host serves OpenAI-compatible endpoints at
+            \c /openai/v1/... — the \c /openai prefix is part of the
+            base path, not the host.  We carry it on \c default_path
+            (rather than on the URL) so HTTPClient prepends \c /openai
+            for relative paths (e.g. ping \c models becomes
+            \c /openai/v1/models).
         */
-        const DefaultUrl = "https://api.groq.com/openai";
+        const DefaultUrl = "https://api.groq.com";
 
         #! Default Groq API version
         const DefaultApiVersion = "v1";
@@ -128,7 +131,7 @@ public class GroqRestClientBase {
         const DefaultOptions = {
             "url": DefaultUrl,
             "api": DefaultApiVersion,
-            "default_path": "/" + DefaultApiVersion,
+            "default_path": "/openai/" + DefaultApiVersion,
         };
     }
 
@@ -138,7 +141,7 @@ public class GroqRestClientBase {
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
         if (opts.api) {
-            rv.default_path = "/" + opts.api;
+            rv.default_path = "/openai/" + opts.api;
         }
         if (rv.apikey) {
             rv.token = rv.apikey;
@@ -176,9 +179,11 @@ GroqRestClient rest(opts);
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
             : RestClient(GroqRestClientBase::getOptions(opts), True) {
-        if (validator instanceof NullRestSchemaValidator) {
-            setConnectionPath(getString(opts, "api") ?? DefaultApiVersion);
-        }
+        # NOTE: do NOT call setConnectionPath() here — the base URL has no
+        # path component, so HTTPClient promotes `default_path`
+        # (\c /openai/<api>) into the connection path automatically.
+        # Calling setConnectionPath() with just the api version would
+        # discard the \c /openai prefix and break pings/relative requests.
     }
 }
 
@@ -199,7 +204,11 @@ public class GroqRestClientIo inherits RestClientIo::RestClientIo, GroqRestClien
 public class GroqRestConnection inherits RestClient::RestConnection {
     public {
         #! Default Groq REST API URL
-        const DefaultUrl = "groq://api.groq.com/openai";
+        /** The \c /openai prefix is carried on \c default_path
+            (\c /openai/v1) rather than on the URL, so HTTPClient
+            applies it for relative paths like the ping \c models.
+        */
+        const DefaultUrl = "groq://api.groq.com";
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -258,7 +267,7 @@ public class GroqRestConnection inherits RestClient::RestConnection {
             "Accept": MimeTypeJson,
         };
 
-        #! Default Groq ping path (relative to /v1, /openai/v1/models on Groq)
+        #! Default Groq ping path (relative; resolves to /openai/v1/models on Groq)
         const DefaultPingPath = "models";
     }
 

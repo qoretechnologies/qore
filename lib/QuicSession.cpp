@@ -4460,6 +4460,9 @@ int QuicSession::h3StopSendingCallback(nghttp3_conn* /* conn */, int64_t stream_
         // still raise QUIC-STREAM-RESET after streamCloseCallback() has erased
         // the stream from streams_.
         session->peer_reset_streams_[stream_id] = app_error_code;
+        // One-shot report so the H3 server poll operation can tear down a
+        // persistent dedicated handler thread bound to this (now abandoned) stream.
+        session->pending_peer_reset_reports_.push_back(stream_id);
     }
     int rv = ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream
@@ -4489,6 +4492,8 @@ int QuicSession::h3ResetStreamCallback(nghttp3_conn* /* conn */, int64_t stream_
         }
         // Also record the reset for sendStreamData() — see h3StopSendingCallback()
         session->peer_reset_streams_[stream_id] = app_error_code;
+        // One-shot report for persistent-session teardown — see h3StopSendingCallback()
+        session->pending_peer_reset_reports_.push_back(stream_id);
     }
     int rv = ngtcp2_conn_shutdown_stream_write(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream

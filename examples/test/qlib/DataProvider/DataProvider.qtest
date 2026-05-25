@@ -3116,7 +3116,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Test DPAT_PIPELINE_PROCESSOR constant
         {
-            assertEq(10, DPAT_PIPELINE_PROCESSOR);
+            assertEq(10, cast<int>(DPAT_PIPELINE_PROCESSOR));
             assertEq("supports_pipeline_processors", ActionCodeFlagMap{DPAT_PIPELINE_PROCESSOR});
             assertEq("supports_pipeline_processor", ActionAttrMap{DPAT_PIPELINE_PROCESSOR});
             assertEq("PIPELINE_PROCESSOR", ActionNameMap{DPAT_PIPELINE_PROCESSOR});

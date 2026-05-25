@@ -52,7 +52,13 @@
 
 #! Echo WebSocket connection — echoes back text and binary messages exactly
 class EchoWsConnection inherits WebSocketConnection {
-    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    public {
+        #! Shared queue signalled when the server-side handler detects close
+        Queue closed_signal;
+    }
+
+    constructor(WebSocketHandler handler, Queue closed_signal) : WebSocketConnection(handler) {
+        self.closed_signal = closed_signal;
     }
 
     gotMessage(string msg) {
@@ -62,11 +68,17 @@ class EchoWsConnection inherits WebSocketConnection {
     gotMessage(binary msg) {
         send(msg);
     }
+
+    #! Server-side close hook — fired when the handler detects the connection
+    #! is closed (clean close frame, transport reset, or connection close).
+    connectionClosed() {
+        closed_signal.push("closed");
+    }
 }
 
 #! Sends an initial message from registered(), before the first client frame arrives
 class RegisteredSendWsConnection inherits EchoWsConnection {
-    constructor(WebSocketHandler handler) : EchoWsConnection(handler) {
+    constructor(WebSocketHandler handler, Queue closed_signal) : EchoWsConnection(handler, closed_signal) {
     }
 
     registered() {
@@ -78,10 +90,13 @@ class RegisteredSendWsConnection inherits EchoWsConnection {
 class EchoWsHandler inherits WebSocketHandler {
     public {
         bool debug_output = False;
+        #! Signalled by EchoWsConnection::connectionClosed() so tests can wait
+        #! deterministically for server-side close detection.
+        Queue closed_signal();
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
-        return new EchoWsConnection(self);
+        return new EchoWsConnection(self, closed_signal);
     }
 
     logError(string fmt) {
@@ -111,7 +126,7 @@ class EchoWsHandler inherits WebSocketHandler {
 
 class RegisteredSendWsHandler inherits EchoWsHandler {
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
-        return new RegisteredSendWsConnection(self);
+        return new RegisteredSendWsConnection(self, closed_signal);
     }
 }
 
@@ -784,6 +799,11 @@ l50Xb2GWQesIt9k5jF5IOw==
         WebSocketClient wsc = createH3Client(cb, setup.port);
         assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
 
+        # Drain any prior server-side close signals
+        while (!ws_handler.closed_signal.empty()) {
+            ws_handler.closed_signal.get();
+        }
+
         # Confirm connection works
         wsc.send("pre-abort-test");
         int rv = msg_wg.wait(30s);
@@ -792,6 +812,12 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Force-delete the client without sending a close frame
         # This simulates abnormal disconnect (network drop, client crash)
         delete wsc;
+
+        # The server-side WS handler must detect the abrupt disconnect (its
+        # connectionClosed() hook fires) — i.e. the parked stream consumer wakes
+        # via the transport close path rather than hanging.  Deterministic wait.
+        assertEq("closed", ws_handler.closed_signal.get(30s),
+            "server detected abnormal disconnect (handler woke, not hung)");
 
         # Verify server is still operational — connect a new client and echo
         WaitGroup wg2();

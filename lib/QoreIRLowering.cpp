@@ -5788,6 +5788,9 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         if (is_weak && store_result.isValid()) {
             return store_result;
         }
+        if (assign->needsReturnValue()) {
+            return loadVarRef(left_var, error, "assignment result", assign->getLeft());
+        }
     } else if (assign->getLeft().hasNode()) {
         // Fast path: const-key hash subscript → LoadLocal + HashKeyStore (no EXPR_TREE)
         const VarRefNode* container_var = nullptr;

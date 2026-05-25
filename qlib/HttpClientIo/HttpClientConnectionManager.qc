@@ -887,6 +887,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 continue;
             }
 
+            # Expose the effective (post-redirect) URL that produced this
+            # response.  `url` is the final scheme://host[:port] and `path` is
+            # the final path after any redirects, so callers can resolve
+            # relative references against the final location like a browser.
+            resp.effective_url = url + (path =~ /^\// ? path : "/" + path);
             return resp;
         }
     }
@@ -2441,7 +2446,18 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         if (conn.isDraining()) {
-            log(LoggerLevel::DEBUG, "connection %d is draining (GOAWAY received)", conn.getConnectionId());
+            int outstanding = conn.getOutstandingStreamCount();
+            if (!outstanding) {
+                log(LoggerLevel::DEBUG,
+                    "connection %d drained after GOAWAY; removing from pool",
+                    conn.getConnectionId());
+                try { conn.close(); } catch () {}
+                removeConnectionFromPool(key, conn);
+                return;
+            }
+            log(LoggerLevel::DEBUG,
+                "connection %d is draining (GOAWAY received, outstanding=%d)",
+                conn.getConnectionId(), outstanding);
         }
 
         try {
@@ -2937,9 +2953,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             list<HttpClientConnection> live = ();
             foreach HttpClientConnection conn in (pool{key}) {
-                # Evict only definitively dead connections — not those that
-                # are merely at capacity (which would drop in-flight streams)
-                bool dead = conn.isClosed();
+                # Evict only definitively unavailable connections — not those
+                # that are merely at capacity (which would drop in-flight streams).
+                bool dead = isConnectionEvictableAtCheckout(conn);
                 if (!dead) {
                     HttpClientPollOperation op = conn.getPollOperation();
                     dead = op.isClosed() || op.hasError();

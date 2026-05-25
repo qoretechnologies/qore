@@ -494,6 +494,20 @@ public:
     */
     DLLLOCAL bool isStreamRemoteClosed(int32_t stream_id) const;
 
+    //! Drains the stream IDs reset by the peer since the last call (one-shot)
+    /** Lets the H2 server poll operation surface peer RST_STREAMs to the
+        controller so a persistent dedicated handler thread bound to the
+        connection is released when the client abandons a stream (rather than
+        only on full connection close).  Mirrors
+        @ref QuicSession::takePendingPeerResetReports().
+    */
+    DLLLOCAL std::vector<int32_t> takePendingPeerResetReports() {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        std::vector<int32_t> rv;
+        rv.swap(pending_peer_reset_reports);
+        return rv;
+    }
+
     //! Remove stream from map (cleanup after handler finishes)
     /** @param stream_id the stream to remove
         @since %Qore 2.3
@@ -791,6 +805,12 @@ private:
         Mirrors @ref QuicSession::peer_reset_streams_.
     */
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
+
+    //! Stream IDs reset by the peer, awaiting one-shot reporting to the H2 poll
+    //! operation for persistent-session teardown.  Pushed in onStreamCloseCallback()
+    //! (error_code!=0); drained by takePendingPeerResetReports().  Accessed under m.
+    //! Mirrors @ref QuicSession::pending_peer_reset_reports_.
+    std::vector<int32_t> pending_peer_reset_reports;
 
     struct DataProviderContext {
         nghttp2_data_provider provider{};

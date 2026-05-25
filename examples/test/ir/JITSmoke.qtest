@@ -81,6 +81,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("int post-increment", \testJitIntPostIncrement());
         addTestCase("int post-decrement", \testJitIntPostDecrement());
         addTestCase("ternary operator", \testJitTernary());
+        addTestCase("inline optional assignment NULL dot-eval",
+            \testInlineOptionalAssignmentNullDotEval());
         # DotEval double-evaluation regression tests
         addTestCase("dot-eval method call single eval", \testJitDotEvalSingleEval());
         addTestCase("dot-eval invoke path single eval", \testJitDotEvalInvokeSingleEval());
@@ -1296,6 +1298,20 @@ printf(\"%d:%d:%d\\n\", ternary_test(5), ternary_test(0), ternary_test(-3));
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
             assertEq("10:20:20", result, sprintf("ternary operator %s", mode));
+        }
+    }
+
+    testInlineOptionalAssignmentNullDotEval() {
+        string code = "%modern
+auto x = NULL;
+bool b1 = (*string v1 = NULL).val();
+bool b2 = (*string v2 = x).val();
+printf(\"%y:%s:%y:%s\\n\", b1, v1.type(), b2, v2.type());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("False:nothing:False:nothing", result,
+                sprintf("inline optional assignment NULL dot-eval %s", mode));
         }
     }
 

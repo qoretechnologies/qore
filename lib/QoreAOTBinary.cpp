@@ -156,6 +156,8 @@
 
 static thread_local std::string qore_aot_expr_serialization_error;
 
+extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
 static bool qorePluginQordTrace() {
     return std::getenv("QORE_PLUGIN_QORD_TRACE") != nullptr;
 }
@@ -4345,6 +4347,132 @@ static inline bool shouldSkipByCompileFile(const char* item_file, const char* co
     return strcmp(item_file, compile_file) != 0;
 }
 
+//! Returns true for user variants that should be emitted for this method.
+/**
+    Abstract-method resolution can install a concrete parent variant into a
+    child class's local method map when a sibling base satisfies the abstract
+    contract.  That variant remains owned by the parent QoreMethod; serializing
+    it as a child method creates a source-stripped AOT variant with signature
+    metadata but no executable body.  The child relationship is derived from
+    the base hierarchy, so AOT must let deserialization rebuild it instead.
+*/
+static bool isAOTSerializableMethodVariant(const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    if (!method || !variant || !variant->isUser()) {
+        return false;
+    }
+    const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(variant);
+    const QoreMethod* owner = mvb->method();
+    if (owner == method) {
+        return true;
+    }
+    const QoreClass* method_class = method->getClass();
+    const QoreClass* owner_class = owner->getClass();
+    return !(method_class && owner_class && method_class->getClass(owner_class->getID()));
+}
+
+//! Collect function names that have native AOT slot maps in this binary.
+static bool collectAOTSlotMapFunctionNames(const QoreAOTBinaryReader& reader,
+        std::unordered_set<std::string>& slot_map_names, bool& found_section, std::string& error) {
+    found_section = false;
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
+    if (!sec) {
+        return true;
+    }
+    found_section = true;
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        return true;
+    }
+    const uint8_t* end = ptr + sec->size;
+    if (ptr + sizeof(uint32_t) > end) {
+        return true;
+    }
+
+    uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
+    for (uint32_t i = 0; i < num_funcs && ptr + sizeof(uint32_t) <= end; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT slot map name collection")) {
+            error = "operation cancelled during AOT slot map name collection";
+            return false;
+        }
+        const uint8_t* entry_start = ptr;
+        uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
+        const uint8_t* entry_end = ptr + entry_size;
+        if (entry_end < ptr || entry_end > end) {
+            break;
+        }
+        if (const char* name = reader.readStringRef(ptr)) {
+            if (*name) {
+                slot_map_names.insert(name);
+            }
+        }
+        ptr = entry_end;
+        if (ptr <= entry_start) {
+            break;
+        }
+    }
+    return true;
+}
+
+static std::string getAOTMethodVariantKey(const QoreClass* qc, const char* method_name, bool is_static,
+        const AbstractQoreFunctionVariant* variant) {
+    std::string key;
+    if (const char* class_path = qc ? qc->getPath() : nullptr) {
+        if (class_path[0] == ':' && class_path[1] == ':') {
+            class_path += 2;
+        }
+        key = class_path;
+    }
+    key += "::";
+    if (is_static) {
+        key += "_static_";
+    }
+    key += method_name ? method_name : "";
+    return getVariantKey(key.c_str(), variant);
+}
+
+static MethodVariantBase* findInheritedConcreteMethodVariant(const BCList* scl, const QoreClass* origin_class,
+        const char* method_name, MethodVariantBase* variant, std::unordered_set<const QoreClass*>& visited) {
+    for (auto& i : *scl) {
+        const QoreClass* nqc = (*i).sclass;
+        if (!nqc || nqc == origin_class || !visited.insert(nqc).second) {
+            continue;
+        }
+
+        qore_class_private* npriv = qore_class_private::get(*const_cast<QoreClass*>(nqc));
+        QoreMethod* m = npriv->parseFindLocalMethod(method_name);
+        if (m) {
+            MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+            MethodVariantBase* ov = f->parseHasVariantWithSignature(variant, npriv->ahm.relaxed_match);
+            if (ov && !ov->isAbstract()) {
+                return ov;
+            }
+        }
+        if (npriv->scl) {
+            MethodVariantBase* ov = findInheritedConcreteMethodVariant(npriv->scl, origin_class, method_name,
+                variant, visited);
+            if (ov) {
+                return ov;
+            }
+        }
+    }
+    return nullptr;
+}
+
+static bool hasInheritedConcreteMethodVariant(QoreClass* qc, const char* method_name, MethodVariantBase* variant) {
+    if (!qc || !method_name || !*method_name || !variant) {
+        return false;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    if (!priv->scl) {
+        return false;
+    }
+    std::unordered_set<const QoreClass*> visited;
+    MethodVariantBase* inherited = findInheritedConcreteMethodVariant(priv->scl, qc, method_name, variant, visited);
+    return inherited && inherited != variant;
+}
+
 //! Recursively collect all user-defined items from the namespace tree
 /** @param state the state object to collect items into
     @param ns the namespace to collect from
@@ -4510,6 +4638,12 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     // Collect user global variables
     for (auto& vi : ns->var_list.vmap) {
         Var* var = vi.second;
+        if (var->isImported()) {
+            // Imported globals belong to dependency modules.  Serializing them
+            // here would make the downstream AOT module deserialize a private
+            // local slot instead of binding to the dependency's live storage.
+            continue;
+        }
         if (!var->isBuiltin()) {
             // Filter out globals from reexported dependencies
             const char* var_module = var->getModuleName();
@@ -5966,7 +6100,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
-                if (v->isUser()) {
+                if (isAOTSerializableMethodVariant(method, v)) {
                     ++num_variants;
                 }
             }
@@ -5979,7 +6113,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
-                if (v->isUser()) {
+                if (isAOTSerializableMethodVariant(method, v)) {
                     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
                     // write access + flags before the signature
                     writer.writeU8(static_cast<uint8_t>(mvb->getAccess()));
@@ -11707,6 +11841,17 @@ bool QoreAOTBinaryDeserializer::deserializeGlobals(std::string& error) {
             return false;
         }
 
+        Var* existing_var = ns_list[ns_idx]->var_list.runtimeFindVar(name);
+        if (existing_var) {
+            if (existing_var->isImported()) {
+                printd(5, "AOT deser: reusing imported global var '%s' instead of creating local copy\n",
+                    name);
+                continue;
+            }
+            error = "duplicate global variable '" + std::string(name) + "'";
+            return false;
+        }
+
         const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
         if (!error.empty()) {
             error = "cannot resolve type '" + std::string(type_path ? type_path : "(null)") +
@@ -12288,6 +12433,11 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     };
     uint64_t local_alloc_us = 0, local_sig_us = 0, local_add_us = 0;
     uint64_t local_variants = 0;
+    bool has_slot_map_section = false;
+    std::unordered_set<std::string> slot_map_names;
+    if (!collectAOTSlotMapFunctionNames(reader, slot_map_names, has_slot_map_section, error)) {
+        return false;
+    }
 
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t class_idx = QoreAOTBinaryReader::readU32(ptr);
@@ -12481,6 +12631,18 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             if (skip_class) {
                 delete mvb;
                 continue;
+            }
+
+            if (has_slot_map_section && !is_static && !is_constructor && !is_destructor && !is_copy
+                    && !is_abstract) {
+                std::string variant_key = getAOTMethodVariantKey(qc, method_name, false, mvb);
+                if (slot_map_names.find(variant_key) == slot_map_names.end()
+                        && hasInheritedConcreteMethodVariant(qc, method_name, mvb)) {
+                    printd(2, "AOT deser: skipping stale inherited method shell '%s::%s' without native slot '%s'\n",
+                        qc->getName(), method_name ? method_name : "", variant_key.c_str());
+                    delete mvb;
+                    continue;
+                }
             }
 
             // Note: QCF_USES_EXTRA_ARGS flag is handled by the overridden hasVarargs()
@@ -12808,7 +12970,38 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         if (!priv->scl || priv->ahm.empty()) {
             continue;
         }
+        std::unordered_set<std::string> existing_methods;
+        existing_methods.reserve(priv->hm.size());
+        size_t method_count = 0;
+        for (auto& mi : priv->hm) {
+            if (++method_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
+                error = "operation cancelled during AOT abstract method inheritance restore";
+                return false;
+            }
+            existing_methods.insert(mi.first);
+        }
+
         priv->ahm.parseInit(*priv, priv->scl);
+
+        // Abstract resolution can synthesize a local method on this class
+        // after commitClassesPrepare() has already run parseAddAncestors().
+        // Give those synthesized methods the same inherited overload list
+        // source parsing would attach during initializeHierarchy().
+        method_count = 0;
+        for (auto& mi : priv->hm) {
+            if (++method_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
+                error = "operation cancelled during AOT abstract method inheritance restore";
+                return false;
+            }
+            if (existing_methods.find(mi.first) == existing_methods.end()
+                    && strcmp(mi.second->getName(), "constructor")
+                    && strcmp(mi.second->getName(), "destructor")
+                    && strcmp(mi.second->getName(), "copy")) {
+                priv->parseAddAncestors(mi.second);
+            }
+        }
         addAOTInheritedInternalMemberContexts(priv);
         // parseResolveAbstract() is a no-op once this flag is true; set it
         // so any later source-parse pass in the same Program doesn't

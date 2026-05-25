@@ -565,6 +565,37 @@ public:
     //! Returns the close cause; @ref CloseReason::Open if still open.
     DLLLOCAL CloseReason getCloseReason() const;
 
+    //! Drains the stream IDs reset/stop-sent by the peer since the last call
+    /** One-shot reporting channel for the H3 server poll operation: each peer
+        RESET_STREAM / STOP_SENDING is recorded once (in h3ResetStreamCallback()
+        / h3StopSendingCallback()) and returned here so the controller can tear
+        down a persistent dedicated handler thread bound to a multiplexed
+        connection when the client abandons the stream (e.g. a timed-out
+        request).  Protected by mtx_.
+    */
+    DLLLOCAL std::vector<int64_t> takePendingPeerResetReports() {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        std::vector<int64_t> rv;
+        rv.swap(pending_peer_reset_reports_);
+        return rv;
+    }
+
+    //! Returns true exactly once, after the session has closed
+    /** Lets the H3 server poll operation report a per-session close to the
+        controller exactly once, so a persistent dedicated handler thread on a
+        multiplexed connection is released on session close — not only on full
+        listener shutdown.  mtx_ is recursive, so the inner isClosed() relock
+        is safe.
+    */
+    DLLLOCAL bool reportCloseIfNew() {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        if (close_reported_ || !isClosed()) {
+            return false;
+        }
+        close_reported_ = true;
+        return true;
+    }
+
     //! Mark session as closed — wakes all handler threads waiting for stream data/drain
     /** Called by abort() before removing the session from the socket map.
         Thread-safe: uses atomic store + signals all CVs.
@@ -1361,6 +1392,17 @@ private:
         the poll operation transitions to SENT (alongside closed_streams_).
     */
     std::unordered_map<int64_t, uint64_t> peer_reset_streams_;
+
+    //! Stream IDs reset/stop-sent by the peer, awaiting one-shot reporting
+    /** Pushed alongside @ref peer_reset_streams_ in h3StopSendingCallback() and
+        h3ResetStreamCallback(); drained by @ref takePendingPeerResetReports() so
+        the H3 server poll operation can surface peer resets to the controller
+        (persistent-session teardown on multiplexed connections).  Protected by mtx_.
+    */
+    std::vector<int64_t> pending_peer_reset_reports_;
+
+    //! True once a session close has been reported via @ref reportCloseIfNew().  Protected by mtx_.
+    bool close_reported_ = false;
 
     //! Queue of completed stream IDs
     std::queue<int64_t> completed_streams_;

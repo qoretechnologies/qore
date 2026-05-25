@@ -5731,6 +5731,14 @@ bool QoreSocketObject::isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) 
     return !h2 || h2->isStreamRemoteClosed(stream_id);
 }
 
+std::vector<int32_t> QoreSocketObject::takeHttp2PeerResetReportsForAsyncPoll() {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        return {};
+    }
+    return h2->takePendingPeerResetReports();
+}
+
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
     ExceptionSink xsink;
     int rc = waitForHttp2StreamDrain(stream_id, timeout_ms, &xsink);

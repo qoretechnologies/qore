@@ -149,6 +149,8 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         hash<auto> resp = mgr.request(url, "GET", "/redirect/1");
         assertEq(200, resp.status_code, "should follow single redirect to 200");
         assertEq("final destination", resp.body, "should reach final destination");
+        assertEq(url + "/redirect/0", resp.effective_url,
+            "effective_url should be the final post-redirect URL");
 
         mgr.closeAll();
     }
@@ -194,6 +196,8 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         hash<auto> resp = mgr.request(url, "GET", "/redirect-abs");
         assertEq(200, resp.status_code, "should follow absolute URL redirect");
         assertEq("reached target", resp.body, "should reach target via absolute redirect");
+        assertEq(url + "/target", resp.effective_url,
+            "effective_url should be the absolute redirect target");
 
         mgr.closeAll();
     }

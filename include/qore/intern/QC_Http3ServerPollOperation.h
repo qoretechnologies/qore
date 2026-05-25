@@ -207,6 +207,34 @@ public:
         return result;
     }
 
+    //! Registers a Queue to receive the persistent-session close signal
+    /** Bound to a QUIC session: when the peer resets a stream on that session or
+        the session closes, continuePoll() pushes a \c {"type":"close"} hash to
+        this Queue — the same I/O-thread Queue-push path used for stream data —
+        so a persistent dedicated handler thread parked on the Queue is released
+        and runs its teardown on the binding thread.  The QoreObject ref that
+        keeps the Queue alive is held in the QPP layer's
+        \c persistent_session_queue_objs member hash.
+
+        @param session_id the QUIC session ID
+        @param queue the C++ QoreQueue pointer (not ref'd here)
+    */
+    DLLLOCAL void registerPersistentSessionQueue(int64_t session_id, Queue* queue) {
+        AutoLocker al(op_lock);
+        persistent_session_queues_[session_id] = queue;
+    }
+
+    //! Deregisters the persistent-session close Queue for a session
+    /** Erases the C++ map entry under op_lock; the QPP layer drops the
+        QoreObject ref only after this returns, so a concurrent continuePoll()
+        delivery on the I/O thread either sees the entry (Queue still alive via
+        the held ref) or sees nothing.
+    */
+    DLLLOCAL void deregisterPersistentSessionQueue(int64_t session_id) {
+        AutoLocker al(op_lock);
+        persistent_session_queues_.erase(session_id);
+    }
+
     // --- Accessors ---
 
     DLLLOCAL bool isClosed() const {
@@ -339,6 +367,15 @@ private:
     //! Stream keys with data available (populated by continuePoll, consumed by controller)
     std::vector<std::string> data_ready_streams;
 
+    //! Persistent-session close-delivery Queues (session_id -> C++ Queue*)
+    /** Bound via registerPersistentSessionQueue(); continuePoll() pushes a
+        {"type":"close"} hash on peer stream reset / session close.  The Queue
+        objects are ref'd at the QoreObject level in the QPP layer
+        (persistent_session_queue_objs) so the raw pointers stay valid across the
+        I/O-thread push.  Protected by op_lock.
+    */
+    std::unordered_map<int64_t, Queue*> persistent_session_queues_;
+
     //! Lock for the pending-cert staging slot (separate from op_lock and the
     //! socket's priv->m so that setPendingCertificate() never contends with I/O)
     mutable QoreThreadLock pending_cert_lock;
@@ -363,6 +400,12 @@ private:
 
     //! Check stream queues and populate data_ready_streams
     DLLLOCAL void checkStreamQueues();
+
+    //! Deliver read_op's per-session lifecycle events to bound persistent-session
+    //! Queues.  Drains peer-reset + session-close events from read_op and pushes
+    //! {"type":"close"} to any persistent_session_queues_ entry for the affected
+    //! session.  Called from continuePoll() under op_lock (I/O thread).
+    DLLLOCAL void deliverSessionLifecycleEvents();
 
     //! Apply any staged cert/key swap; runs on the I/O thread before op_lock
     DLLLOCAL void applyPendingCertificate();

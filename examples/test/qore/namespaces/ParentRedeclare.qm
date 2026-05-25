@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module ParentRedeclare {
+    version = "1.0";
+    desc = "parented Program public namespace redeclare test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ParentRedeclareNs {
+    public const SharedPort = 8001;
+    public const SharedName = "parent-api";
+
+    public class SharedClass {
+    }
+
+    public enum SharedEnum : string {
+        Value = "value",
+    }
+}

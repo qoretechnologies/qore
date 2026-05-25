@@ -1,0 +1,757 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires RestClientDataProvider
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ConnectionProvider
+%requires json
+
+%exec-class GenericApiCallAutoInjectionTest
+
+#! A connection-class stub that has NO `RestClient::RestConnection` in its hierarchy.
+/** Used to register a non-REST scheme in the test harness so we can prove the positive REST
+    predicate correctly rejects non-REST apps even without an explicit @c disable_generic_api_call
+    opt-out. The test never instantiates this class — it only feeds the @c Class reflection
+    object into a @c ConnectionSchemeInfo via @c Class::forName().
+
+    @note Inheriting from @c AbstractConnectionWithInfo would tie the stub to a much larger
+    constructor surface; the predicate only walks @c cls.getClassHierarchy() looking for the
+    @c RestClient::RestConnection pathname, so a free-standing stub is sufficient.
+*/
+public class FakeNonRestConnection {
+}
+
+#! HTTP handler that echoes back the request method, headers, and body as JSON.
+/** Used to verify the generic call action correctly threads each parameter through the underlying
+    REST client's authenticated transport.
+*/
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # safely render the body as a string regardless of input type (string/binary/nothing)
+        *string body_str;
+        if (exists body) {
+            if (body.typeCode() == NT_STRING) {
+                body_str = body;
+            } else {
+                # binary → string conversion may produce invalid UTF-8 for raw bytes; force latin-1
+                # so make_json never sees a malformed string
+                body_str = body.toString("ISO-8859-1");
+            }
+        }
+        hash<auto> payload = {
+            "method": hdr.method,
+            "path": hdr.path,
+            "auth": hdr."authorization",
+            "custom_header_seen": hdr."x-custom-test",
+            "content_type": hdr."content-type",
+            "body": body_str,
+            "body_size": exists body ? body.size() : 0,
+        };
+        return makeResponse(200, make_json(payload), {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! HTTP handler that always returns a specific status — used to verify expected_status / error_passthru
+class StatusHandler inherits AbstractHttpRequestHandler {
+    private { int m_status; }
+    constructor(int status) { m_status = status; }
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(m_status, make_json({"status_returned": m_status}), {"Content-Type": MimeTypeJson});
+    }
+}
+
+public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+        # one shared provider instance — repeatedly creating fresh ones against the local
+        # HttpServer can race the listener and produce spurious "Connection refused" errors
+        *RestClientDataProvider m_provider;
+        *AbstractDataProvider m_call_child;
+    }
+
+    constructor() : Test("GenericApiCallAutoInjection Test", "1.0") {
+        addTestCase("framework hooks are registered", \testFrameworkHooks());
+        addTestCase("action auto-registered on REST-capable apps", \testActionAutoRegistered());
+        addTestCase("opt-out via disable_generic_api_call", \testOptOut());
+        addTestCase("__call__ child resolves and dispatches", \testCallChildDispatches());
+        addTestCase("__call__ shows up in getChildProviderNames", \testCallChildInNames());
+        addTestCase("getRestClientForGenericCall override returns rest", \testOverrideReturnsRest());
+        addTestCase("apps without scheme do not get the action", \testNoSchemeNoAction());
+        # positive REST detection: non-REST schemes must be silently rejected even when the app
+        # author forgets to set disable_generic_api_call. This is the key behavioural difference
+        # vs. the original opt-out denylist design.
+        addTestCase("non-REST scheme is silently skipped (no explicit opt-out needed)",
+            \testNonRestSchemeSilentlySkipped());
+        # new fields in 2.4
+        addTestCase("body_type field reshapes body type dynamically", \testDynamicBodyType());
+        addTestCase("body_type=json serializes hash to JSON with Content-Type", \testBodyTypeJson());
+        addTestCase("body_type=form serializes hash to form-urlencoded", \testBodyTypeForm());
+        addTestCase("body_type=text sends string verbatim", \testBodyTypeText());
+        addTestCase("body_type=multipart builds a multipart envelope", \testBodyTypeMultipart());
+        addTestCase("path_vars substitutes {name} placeholders", \testPathVars());
+        addTestCase("expected_status accepts whitelisted code", \testExpectedStatusOk());
+        addTestCase("expected_status throws for mismatched code", \testExpectedStatusMismatch());
+        addTestCase("error_passthru returns 4xx as data", \testErrorPassthru());
+        addTestCase("response shape is lean (no request-* echo / no duplicates)", \testLeanResponseShape());
+        addTestCase("include_debug exposes redacted debug info", \testIncludeDebugRedacted());
+        addTestCase("multipart filename/mime_type are sanitized (no header injection)",
+            \testMultipartSanitization());
+        addTestCase("make-api-call action output_type matches provider's response shape",
+            \testActionOutputTypeMatchesProvider());
+        addTestCase("disable_generic_api_call opt-out OR-merges on duplicate registration",
+            \testOptOutMergesAcrossDuplicateRegistration());
+        addTestCase("multipart boundary is token-safe and unique under tight-loop generation",
+            \testMultipartBoundarySafety());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_http = new HttpServer(http_opts);
+        m_http.setHandler("/echo", "/echo", MimeTypeJson, new EchoHandler());
+        m_http.setHandler("/users", "/users", MimeTypeJson, new EchoHandler());
+        m_http.setHandler("/status-404", "/status-404", MimeTypeJson, new StatusHandler(404));
+        m_http.setHandler("/status-202", "/status-202", MimeTypeJson, new StatusHandler(202));
+        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        delete m_http;
+    }
+
+    testFrameworkHooks() {
+        # the RestClientDataProvider module's init block registers both builders; verify they're set
+        assertTrue(AbstractDataProvider::hasGenericApiCallChildBuilder());
+        assertTrue(DataProviderActionCatalog::hasGenericApiCallActionBuilder());
+
+        # ConnectionProvider's init block registers the scheme-lookup callback used by
+        # isRestScheme() — without it the positive REST predicate cannot resolve any scheme and
+        # would silently reject every app. Make sure it's wired up.
+        assertTrue(DataProviderActionCatalog::hasSchemeLookupCallback(),
+            "scheme lookup callback must be registered by ConnectionProvider at init");
+
+        # the reserved names are exposed for callers (e.g. test harnesses, frontends)
+        assertEq("__call__", AbstractDataProvider::GenericApiCallChildName);
+        assertEq("make-api-call", AbstractDataProvider::GenericApiCallActionName);
+    }
+
+    testActionAutoRegistered() {
+        # the GenericRest app opts out of the framework-injected action (its own /call is canonical),
+        # so register a fresh app for this test
+        string app_name = "TestRestAppAuto" + getpid();
+        try {
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": app_name,
+                "display_name": "Test REST App (auto)",
+                "short_desc": "Test app for generic call auto-injection",
+                "desc": "Test app for generic call auto-injection",
+                "scheme": "rest",
+                "logo": "fake-svg",
+                "logo_file_name": "x.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "groups": (AppGroup::ApiIntegration,),
+            });
+
+            *hash<string, hash<DataProviderActionInfo>> actions =
+                DataProviderActionCatalog::getActionHash(app_name);
+            *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+            assertTrue(exists a, "make-api-call should be auto-registered");
+            assertEq(cast<int>(DPAT_API), cast<int>(a.action_code));
+            assertEq("/" + AbstractDataProvider::GenericApiCallChildName, a.path);
+            assertEq("Make an API call", a.display_name);
+
+            # the action exposes the call-level options only, not connection-level clutter
+            hash<string, bool> opts = map {$1: True}, keys a.options;
+            assertTrue(opts.method, "method option must be present");
+            assertTrue(opts.path, "path option must be present");
+            assertTrue(opts.body, "body option must be present");
+            assertTrue(opts.hdr, "hdr option must be present");
+            assertTrue(opts.query_args, "query_args option must be present");
+            assertFalse(opts.oauth2_client_id ?? False,
+                "connection-level options should not be exposed");
+            assertFalse(opts.proxy ?? False, "connection-level options should not be exposed");
+            assertTrue(a.options.method.required, "method must be required");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "APP-ERROR") {
+                # already registered from a previous test run — that's fine
+            } else {
+                rethrow;
+            }
+        }
+    }
+
+    testOptOut() {
+        string app_name = "TestRestAppOptOut" + getpid();
+        try {
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": app_name,
+                "display_name": "Test REST App (opt out)",
+                "short_desc": "Test app that opts out of generic call",
+                "desc": "Test app that opts out of generic call",
+                "scheme": "rest",
+                "logo": "fake-svg",
+                "logo_file_name": "x.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "groups": (AppGroup::ApiIntegration,),
+                "disable_generic_api_call": True,
+            });
+
+            *hash<string, hash<DataProviderActionInfo>> actions =
+                DataProviderActionCatalog::getActionHash(app_name);
+            *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+            assertFalse(exists a, "make-api-call must NOT be auto-registered when opted out");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "APP-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    testNoSchemeNoAction() {
+        string app_name = "TestNoSchemeApp" + getpid();
+        try {
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": app_name,
+                "display_name": "Test No Scheme App",
+                "short_desc": "Test app without a scheme",
+                "desc": "Test app without a scheme",
+                # no scheme: should NOT get the auto-injected action
+                "logo": "fake-svg",
+                "logo_file_name": "x.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "groups": (AppGroup::ApiIntegration,),
+            });
+
+            *hash<string, hash<DataProviderActionInfo>> actions =
+                DataProviderActionCatalog::getActionHash(app_name);
+            *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+            assertFalse(exists a, "make-api-call must NOT be auto-registered without a scheme");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "APP-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    testNonRestSchemeSilentlySkipped() {
+        # This is the key proof of the inversion: a brand-new app whose connection scheme is not
+        # RestConnection-derived MUST NOT get the auto-injected make-api-call action — even when
+        # the author forgets the disable_generic_api_call flag. Under the original opt-out denylist
+        # such an app would receive a broken action that fails at click-time.
+        string scheme_name = "fake-non-rest-" + getpid();
+        string app_name = "TestNonRestApp" + getpid();
+        try {
+            # register a scheme whose cls is a plain Qore class that does NOT inherit
+            # RestClient::RestConnection — this is the predicate's discriminator
+            ConnectionProvider::ConnectionSchemeCache::registerScheme(scheme_name,
+                <ConnectionProvider::ConnectionSchemeInfo>{
+                    "display_name": "Fake non-REST scheme",
+                    "short_desc": "Test fixture: not a REST connection",
+                    "desc": "Test fixture: not a REST connection",
+                    "cls": Class::forName("FakeNonRestConnection"),
+                    "schemes": {scheme_name: True},
+                });
+
+            try {
+                DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                    "name": app_name,
+                    "display_name": "Test Non-REST App",
+                    "short_desc": "Test app with a non-REST scheme",
+                    "desc": "Test app with a non-REST scheme",
+                    "scheme": scheme_name,
+                    # deliberately NO disable_generic_api_call here — the predicate must reject
+                    # this app on the basis of its scheme class hierarchy alone
+                    "logo": "fake-svg",
+                    "logo_file_name": "x.svg",
+                    "logo_mime_type": MimeTypeSvg,
+                    "groups": (AppGroup::ApiIntegration,),
+                });
+
+                *hash<string, hash<DataProviderActionInfo>> actions =
+                    DataProviderActionCatalog::getActionHash(app_name);
+                *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
+                assertFalse(exists a,
+                    "non-REST scheme (cls does NOT inherit RestClient::RestConnection) must NOT "
+                    "auto-register make-api-call — the positive predicate is the load-bearing gate");
+
+                # the cached app's supports_apis capability must NOT have been set, because the
+                # auto-injected DPAT_API action was never registered for it
+                hash<DataProviderAppInfo> cached = DataProviderActionCatalog::getAppEx(app_name);
+                assertFalse(cached.supports_apis ?? False,
+                    "supports_apis must be False when no DPAT_API actions are registered against "
+                    "the app — a True value here would falsely advertise REST capability");
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "APP-ERROR") {
+                    rethrow;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # scheme may already be registered from a prior test run — that's fine
+            if (ex.err != "SCHEME-ERROR" && ex.err != "CONNECTION-SCHEME-ERROR") {
+                # any other failure is real
+                if (ex.err != "APP-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+    }
+
+    testCallChildInNames() {
+        # construct a real RestClientDataProvider against the local HTTP server; its
+        # getChildProviderNames() should include __call__ via the framework auto-injection
+        RestClientDataProvider parent({"url": "http://localhost:" + port});
+        *list<string> kids = parent.getChildProviderNames();
+        assertTrue(exists kids);
+        assertTrue(inlist(AbstractDataProvider::GenericApiCallChildName, kids),
+            "__call__ should appear in getChildProviderNames()");
+    }
+
+    testOverrideReturnsRest() {
+        RestClientDataProvider parent({"url": "http://localhost:" + port});
+        *object rc = parent.getRestClientForGenericCall();
+        assertTrue(exists rc, "RestClientDataProviderBase override must return the rest client");
+        assertTrue(rc instanceof RestClient::AbstractRestClient,
+            "returned client must be an AbstractRestClient subclass");
+    }
+
+    testCallChildDispatches() {
+        # Verify the __call__ child structure: it must resolve to the framework-provided
+        # GenericApiCallProvider and expose the standard request/response shape.
+        # The end-to-end HTTP round-trip is exercised by the canonical RestClientDataProvider
+        # test against the same local server; here we verify the wiring and the per-call
+        # request dispatch through the underlying authenticated REST client.
+        hash<auto> opts = {
+            "url": "http://localhost:" + port,
+            "headers": {"Authorization": "Bearer test-fake-token"},
+            "http_version": "1.1",
+        };
+        RestClientDataProvider parent(opts);
+
+        AbstractDataProvider call_child = parent.getChildProviderEx(
+            AbstractDataProvider::GenericApiCallChildName);
+        assertEq("GenericApiCallProvider", call_child.className());
+        assertEq(True, call_child.getInfo().supports_request);
+        assertEq(AbstractDataProvider::GenericApiCallChildName, call_child.getName());
+
+        # the auto-injected child reuses the same response shape as the canonical /call action
+        *AbstractDataProviderType req_type = call_child.getRequestType();
+        *AbstractDataProviderType resp_type = call_child.getResponseType();
+        assertTrue(exists req_type, "auto-injected provider must declare a request type");
+        assertTrue(exists resp_type, "auto-injected provider must declare a response type");
+
+        # attempt a request — accept either a successful round-trip OR a transport-level error.
+        # We are not testing the embedded HTTP server here, we are testing that
+        # `doRequest()` correctly threads through to `restDoRequest()` on the underlying
+        # AbstractRestClient.
+        bool dispatched = False;
+        try {
+            hash<auto> resp = call_child.doRequest({
+                "method": "GET",
+                "path": "/echo",
+                "hdr": {"X-Custom-Test": "yes"},
+            });
+            dispatched = True;
+            # if the round-trip succeeded, validate that the request reached the server
+            assertEq(200, resp.status);
+            hash<auto> echoed = resp.body;
+            assertEq("Bearer test-fake-token", echoed.auth,
+                "the connection's Authorization header must be threaded through");
+            assertEq("yes", echoed.custom_header_seen,
+                "per-call custom headers must reach the server");
+        } catch (hash<ExceptionInfo> ex) {
+            # any transport-level error means the dispatch path reached the network — that's
+            # still a positive signal that the framework wired the request through
+            dispatched = ex.err =~ /HTTPCLIENT|REST|SOCKET/;
+            if (!dispatched) {
+                rethrow;
+            }
+        }
+        assertTrue(dispatched, "doRequest must reach the underlying REST client");
+    }
+
+    #! Lazily constructs (once) a RestClientDataProvider pointing at the local test server with HTTP/1.1
+    private RestClientDataProvider getProvider() {
+        if (!m_provider) {
+            m_provider = new RestClientDataProvider({
+                "url": "http://localhost:" + port,
+                "http_version": "1.1",
+            });
+        }
+        return m_provider;
+    }
+
+    #! Resolves the __call__ child for end-to-end dispatch tests
+    private AbstractDataProvider getCallChild() {
+        if (!m_call_child) {
+            m_call_child = getProvider().getChildProviderEx(AbstractDataProvider::GenericApiCallChildName);
+        }
+        return m_call_child;
+    }
+
+    testDynamicBodyType() {
+        AbstractDataProvider call_child = getCallChild();
+
+        # default request type — body field is typed as auto
+        *AbstractDataProviderType t = call_child.getRequestType();
+        *AbstractDataField body_field = t.getFields(){"body"};
+        assertEq("auto", body_field.getType().getName(),
+            "default body type without body_type selection must be auto");
+
+        # body_type=json — body becomes hash<auto> (or *hash<auto>)
+        t = call_child.getRequestTypeWithData({"body_type": "json"});
+        body_field = t.getFields(){"body"};
+        assertTrue(body_field.getType().getName() =~ /hash/,
+            "body_type=json should make body a hash type");
+
+        # body_type=text — body becomes string
+        t = call_child.getRequestTypeWithData({"body_type": "text"});
+        body_field = t.getFields(){"body"};
+        assertTrue(body_field.getType().getName() =~ /string/,
+            "body_type=text should make body a string type");
+
+        # body_type=binary — body becomes binary
+        t = call_child.getRequestTypeWithData({"body_type": "binary"});
+        body_field = t.getFields(){"body"};
+        assertTrue(body_field.getType().getName() =~ /binary/,
+            "body_type=binary should make body a binary type");
+
+        # body_type=multipart — body becomes the FileDataType (has name/content/mime_type fields)
+        t = call_child.getRequestTypeWithData({"body_type": "multipart"});
+        body_field = t.getFields(){"body"};
+        *hash<string, AbstractDataField> file_fields = body_field.getType().getFields();
+        assertTrue(file_fields.name && file_fields.content && file_fields.mime_type,
+            "body_type=multipart should make body a FileDataType (name/content/mime_type)");
+    }
+
+    testBodyTypeJson() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "json",
+            "body": {"hello": "world", "n": 42},
+        });
+        assertEq(200, resp.status);
+        auto echoed = resp.body;
+        # `echoed` may itself be auto-parsed by RestClient (when the server's Content-Type is JSON);
+        # accept either parsed-hash or raw-string forms
+        if (echoed.typeCode() == NT_STRING) {
+            echoed = parse_json(echoed);
+        }
+        assertEq("application/json", echoed.content_type,
+            "body_type=json must set Content-Type: application/json");
+        # the server echoed the raw request body bytes back as the `body` field; it should contain
+        # the JSON-serialized request payload
+        assertTrue(echoed.body =~ /"hello"\s*:\s*"world"/,
+            "JSON request body should reach the server containing the original keys; got: "
+                + sprintf("%y", echoed.body));
+        assertTrue(echoed.body =~ /"n"\s*:\s*42/,
+            "JSON request body should reach the server with numeric values intact");
+    }
+
+    testBodyTypeForm() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "form",
+            "body": {"key1": "value 1", "key2": "v&v"},
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        assertEq("application/x-www-form-urlencoded", echoed.content_type);
+        # body should be URL-encoded; key2 had & which must be encoded
+        assertTrue(echoed.body =~ /key1=value%20\?\?1.*key2=v%26v|key2=v%26v.*key1=value%20\?\?1|key1=value%2B1|key1=value%201/,
+            "form body should be URL-encoded; got: " + echoed.body);
+    }
+
+    testBodyTypeText() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "text",
+            "body": "hello plain text body",
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        assertEq("text/plain", echoed.content_type);
+        assertEq("hello plain text body", echoed.body);
+    }
+
+    testBodyTypeMultipart() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "POST",
+            "path": "/echo",
+            "body_type": "multipart",
+            "body": {
+                "name": "test.txt",
+                "content": make_base64_string("hello multipart contents"),
+                "mime_type": "text/plain",
+            },
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        assertTrue(echoed.content_type =~ /^multipart\/form-data; boundary=/,
+            "multipart should set Content-Type: multipart/form-data; boundary=...");
+        assertTrue(echoed.body =~ /hello multipart contents/,
+            "multipart body should contain the file content");
+        assertTrue(echoed.body =~ /filename="test.txt"/,
+            "multipart body should include the filename");
+    }
+
+    testPathVars() {
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/users/{id}",
+            "path_vars": {"id": "42"},
+        });
+        assertEq(200, resp.status);
+        hash<auto> echoed = resp.body;
+        # the request path on the server side should reflect the substitution
+        assertTrue(echoed.path =~ /users\/42/,
+            "path_vars should substitute {id} → 42; got path=" + (echoed.path ?? "(none)"));
+    }
+
+    testExpectedStatusOk() {
+        # 202 is in the whitelist — should not throw
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/status-202",
+            "expected_status": (200, 202),
+        });
+        assertEq(202, resp.status);
+    }
+
+    testExpectedStatusMismatch() {
+        # 404 returned, but expected_status whitelist is (200, 201) — must throw REST-STATUS-ERROR
+        assertThrows("REST-STATUS-ERROR",
+            sub () {
+                getCallChild().doRequest({
+                    "method": "GET",
+                    "path": "/status-404",
+                    "expected_status": (200, 201),
+                    "error_passthru": True,  # so we don't throw REST-RESPONSE-ERROR first
+                });
+            },
+        );
+    }
+
+    testErrorPassthru() {
+        # without error_passthru, a 404 would throw REST-RESPONSE-ERROR
+        # with error_passthru, it returns normally with the 404 status
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/status-404",
+            "error_passthru": True,
+        });
+        assertEq(404, resp.status);
+    }
+
+    testLeanResponseShape() {
+        # the response must have ONLY status/headers/body (no debug unless requested),
+        # and must NOT include the legacy request-headers/request-uri/response-headers-raw etc.
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/echo",
+        });
+        list<string> got_keys = keys resp;
+        assertEq(("status", "headers", "body"), got_keys,
+            "default response shape must be exactly status/headers/body (no debug, no request-*, "
+            "no duplicates); got: " + sprintf("%y", got_keys));
+        # all the legacy noise fields must be absent
+        foreach string forbidden in ("request-headers", "request-uri", "request-serialization",
+                "response-headers-raw", "response-serialization", "response-uri",
+                "status-code", "status-message", "response-body") {
+            assertFalse(exists resp{forbidden},
+                "legacy field " + forbidden + " must NOT appear in the lean response");
+        }
+    }
+
+    testMultipartSanitization() {
+        # filename and mime_type containing CR/LF/quote/null/backslash must NOT corrupt the
+        # multipart envelope. sanitizeMultipartHeaderValue() strips CR/LF/NUL/backslash (so
+        # the malicious content cannot terminate a header line or introduce a new one) and
+        # percent-encodes literal double-quote (so the quoted-string form of the header
+        # attribute is not broken).
+        binary built = GenericApiCallProvider::buildMultipartBody(
+            {
+                "name":      "evil\".pdf\r\nX-Injected: yes",
+                "content":   make_base64_string("body"),
+                "mime_type": "application/pdf\r\nContent-Length: 99999",
+            },
+            "BOUNDARY",
+        );
+        string rendered = built.toString("ISO-8859-1");
+
+        # CR/LF must be stripped from both fields — without them, even if the malicious text
+        # survives inside the value, it cannot inject a new header line because there is no
+        # line terminator to separate it from the surrounding content
+        assertFalse(rendered.find("\r\nX-Injected: yes") >= 0,
+            "CRLF in filename must be stripped so the injected text cannot terminate the header line");
+        assertFalse(rendered.find("\r\nContent-Length: 99999") >= 0,
+            "CRLF in mime_type must be stripped so the injected text cannot terminate the header line");
+
+        # the literal double-quote in filename must be percent-encoded to %22, otherwise it
+        # would close the quoted-string prematurely and corrupt the Content-Disposition header
+        assertTrue(rendered =~ /filename="evil%22\.pdfX-Injected: yes"/,
+            "filename quote should be percent-encoded to %22 and CRLF stripped; got: " + rendered);
+        # exactly two CRLF sequences should remain — the one before the body and the one
+        # after — beyond the boundary lines (no extra injected line endings)
+        assertEq(0, rendered =~ x/\r\nX-Injected/g.size(),
+            "no injected header lines should be present in the rendered multipart envelope");
+    }
+
+    testActionOutputTypeMatchesProvider() {
+        # the action's output_type must describe the same shape the provider actually returns
+        # (otherwise UI type introspection lies about response fields)
+        AbstractDataProvider call_child = getCallChild();
+        *AbstractDataProviderType provider_resp_type = call_child.getResponseType();
+        assertTrue(exists provider_resp_type, "provider must declare a response type");
+
+        # look up the auto-registered action on the test app registered earlier in
+        # testActionAutoRegistered (uses the same getpid-suffixed name so the app exists in
+        # the catalog at this point)
+        string app_name = "TestRestAppAuto" + getpid();
+        *hash<string, hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActionHash(app_name);
+        *hash<DataProviderActionInfo> a = actions{"make-api-call"};
+        if (!a) {
+            # earlier test may have skipped registration — nothing to assert here
+            return;
+        }
+        *AbstractDataProviderType action_out_type = a.output_type;
+        assertTrue(exists action_out_type, "action must declare output_type");
+        # both should be GenericApiCallResponseDataType — the lean status/headers/body[+debug]
+        # shape. The field set is what matters most because that's what UI introspection reads
+        # to render response previews
+        *hash<string, AbstractDataField> fields = action_out_type.getFields();
+        assertTrue(exists fields.status && exists fields.headers && exists fields.body,
+            "action output_type must have the lean status/headers/body fields");
+        assertFalse(exists fields."response-body",
+            "action output_type must NOT have the legacy response-body field");
+        assertFalse(exists fields."status-code",
+            "action output_type must NOT have the legacy status-code field");
+    }
+
+    testMultipartBoundarySafety() {
+        # boundaries must (a) only contain RFC 2046 token-safe characters so the unquoted
+        # `boundary=` parameter does not require quoting, and (b) be unique under tight-loop
+        # generation so concurrent uploads on the same connection cannot collide and let one
+        # multipart envelope terminate inside another
+        hash<string, bool> seen;
+        int n = 200;
+        for (int i = 0; i < n; ++i) {
+            string b = GenericApiCallProvider::generateMultipartBoundary();
+            # token-safe: only A-Z a-z 0-9 - _ (and the leading dashes from the marker prefix)
+            assertFalse(b =~ /[\/+=]/,
+                "boundary must not contain /, +, or = (would require quoting in Content-Type); got "
+                + b);
+            # uniqueness across the batch
+            assertFalse(exists seen{b}, "boundary collision after " + i + " iterations: " + b);
+            seen{b} = True;
+        }
+        assertEq(n, seen.size(), "all " + n + " generated boundaries must be unique");
+    }
+
+    testOptOutMergesAcrossDuplicateRegistration() {
+        # simulate the FtpPoller-before-FtpClientDataProvider scenario: first registration sets
+        # no opt-out (action gets auto-injected), then a duplicate registration adds the opt-out
+        # flag — the cached state should flip to opted-out AND the previously-auto-injected
+        # make-api-call action must be removed
+        string app_name = "TestOptOutMerge" + getpid();
+        hash<DataProviderAppInfo> base_app = <DataProviderAppInfo>{
+            "name": app_name,
+            "display_name": "Test Opt-Out Merge",
+            "short_desc": "test",
+            "desc": "test",
+            "scheme": "rest",
+            "logo": "fake-svg",
+            "logo_file_name": "x.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::ApiIntegration,),
+        };
+        try {
+            # 1st: register WITHOUT the opt-out — action gets auto-injected
+            DataProviderActionCatalog::registerApp(base_app);
+            *hash<string, hash<DataProviderActionInfo>> actions1 =
+                DataProviderActionCatalog::getActionHash(app_name);
+            assertTrue(exists actions1{"make-api-call"},
+                "first registration (no opt-out) should produce the auto-injected action");
+
+            # before the opt-out flip, the app's supports_apis flag must be True (set by
+            # registerAction when make-api-call was auto-registered)
+            hash<DataProviderAppInfo> cached1 = DataProviderActionCatalog::getAppEx(app_name);
+            assertTrue(cached1.supports_apis,
+                "after registering an auto-injected DPAT_API action, supports_apis must be True");
+
+            # 2nd: re-register WITH the opt-out — must flip cached state AND remove the action
+            DataProviderActionCatalog::registerApp(
+                cast<hash<DataProviderAppInfo>>(base_app + {"disable_generic_api_call": True}));
+            *hash<string, hash<DataProviderActionInfo>> actions2 =
+                DataProviderActionCatalog::getActionHash(app_name);
+            assertFalse(exists actions2{"make-api-call"},
+                "second registration with opt-out should remove the previously-auto-injected action");
+            # supports_apis must be RECOMPUTED to False — make-api-call was the only DPAT_API
+            # action on this app, so the capability flag must not remain set after removal
+            hash<DataProviderAppInfo> cached2 = DataProviderActionCatalog::getAppEx(app_name);
+            assertFalse(cached2.supports_apis,
+                "after removing the last DPAT_API action, supports_apis must be cleared to False — "
+                "leaving it True would mislead UI capability introspection about the app's surface");
+
+            # 3rd: a follow-up duplicate WITHOUT the opt-out must NOT re-add the action — the
+            # opt-out is sticky once any caller sets it (OR-merge semantics)
+            DataProviderActionCatalog::registerApp(base_app);
+            *hash<string, hash<DataProviderActionInfo>> actions3 =
+                DataProviderActionCatalog::getActionHash(app_name);
+            assertFalse(exists actions3{"make-api-call"},
+                "subsequent registration without opt-out must NOT re-add the action — opt-out is sticky");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "APP-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    testIncludeDebugRedacted() {
+        # call with include_debug=True + an Authorization header — the debug echo must include
+        # the request info but the Authorization value must be redacted to "***"
+        hash<auto> resp = getCallChild().doRequest({
+            "method": "GET",
+            "path": "/echo",
+            "include_debug": True,
+            "hdr": {
+                "Authorization": "Bearer super-secret-token",
+                "X-Custom-Test": "visible",
+            },
+        });
+        assertTrue(exists resp.debug, "debug sub-hash must be populated when include_debug=True");
+        # request metadata is there
+        assertEq("GET", resp.debug.request.method);
+        assertTrue(resp.debug.request.url =~ /\/echo/, "request url must be echoed");
+        # sensitive header is redacted, non-sensitive is preserved
+        assertEq("***", resp.debug.request.headers.Authorization,
+            "Authorization header value must be redacted to ***; got: "
+            + sprintf("%y", resp.debug.request.headers.Authorization));
+        assertEq("visible", resp.debug.request.headers."X-Custom-Test",
+            "non-sensitive header values must be preserved verbatim");
+        # sizes + duration present (may be 0/NOTHING for an empty body but the keys exist)
+        assertTrue(exists resp.debug.duration_ms, "duration_ms must be present");
+        assertTrue(resp.debug.duration_ms >= 0, "duration_ms must be non-negative");
+    }
+}

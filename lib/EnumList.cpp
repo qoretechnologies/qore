@@ -161,9 +161,12 @@ void EnumList::assimilate(EnumList& n, qore_ns_private& ns,
             parse_error(*qore_enum_decl_private::get(*i->second)->getParseLocation(), "hashdecl '%s' has already " \
                 "been defined in namespace '%s'", i->first, ns.name.c_str());
             n.remove(i);
-        } else if (ns.enumList.find(i->first)) {
-            parse_error(*qore_enum_decl_private::get(*i->second)->getParseLocation(), "enum '%s' has already " \
-                "been defined in namespace '%s'", i->first, ns.name.c_str());
+        } else if (QoreEnumDecl* existing = ns.enumList.find(i->first)) {
+            if (!(ns.imported && qore_enum_decl_private::get(*existing)->isPublic()
+                && qore_enum_decl_private::get(*i->second)->isPublic())) {
+                parse_error(*qore_enum_decl_private::get(*i->second)->getParseLocation(), "enum '%s' has already " \
+                    "been defined in namespace '%s'", i->first, ns.name.c_str());
+            }
             n.remove(i);
         } else if (find(i->first)) {
             parse_error(*qore_enum_decl_private::get(*i->second)->getParseLocation(), "enum '%s' is already " \
