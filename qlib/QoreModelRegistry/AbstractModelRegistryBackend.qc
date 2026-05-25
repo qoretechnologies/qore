@@ -176,6 +176,14 @@ public hashdecl ModelVersionInfo {
     /** @since QoreModelRegistry 2.2
     */
     *hash<TokenizerArtifactInfo> tokenizer;
+    #! Optimized ONNX/ORT deployment artifacts derived from named artifacts
+    /** @since QoreModelRegistry 2.4
+    */
+    list<hash<ModelArtifactInfo>> optimized_artifacts = ();
+    #! Quantized ONNX deployment artifacts derived from named artifacts
+    /** @since QoreModelRegistry 2.4
+    */
+    list<hash<ModelArtifactInfo>> quantized_artifacts = ();
 }
 
 #! Options for pruning model versions
@@ -348,6 +356,14 @@ public class AbstractModelRegistryBackend {
         }
         if (meta.artifacts) {
             meta.artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(meta.artifacts);
+        }
+        if (meta.optimized_artifacts) {
+            meta.optimized_artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(
+                meta.optimized_artifacts);
+        }
+        if (meta.quantized_artifacts) {
+            meta.quantized_artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(
+                meta.quantized_artifacts);
         }
         if (meta.execution) {
             meta.execution = cast<hash<ModelExecutionInfo>>(meta.execution);

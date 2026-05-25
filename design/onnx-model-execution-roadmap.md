@@ -180,7 +180,9 @@ Acceptance checks:
 
 ## Phase 4: Offline Graph Optimization and ORT Format
 
-Status: raw ML APIs implemented; registry metadata integration remains pending.
+Status: completed for raw ML APIs, registry optimized/quantized artifact
+metadata, and named optimized-artifact loading with provider compatibility
+checks.
 
 Add first-class support for optimized ONNX artifacts and ORT format artifacts.
 
@@ -207,8 +209,11 @@ Acceptance checks:
 
 - Optimized ONNX and ORT artifacts are loaded and compared against golden
   vectors in `modules/ml/test/ml.qtest`.
-- Hardware-specific optimized model metadata and mismatched-provider rejection
-  remain registry-level work.
+- Optimized and quantized artifacts are exposed in derived manifest metadata as
+  `optimized_artifacts` and `quantized_artifacts`.
+- Named optimized/quantized ONNX artifacts can be loaded through registry APIs;
+  hardware-specific optimized artifact metadata rejects incompatible provider
+  requests before execution.
 
 ## Phase 5: Profiling and Observability
 

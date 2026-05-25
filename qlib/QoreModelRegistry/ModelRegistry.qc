@@ -389,6 +389,68 @@ public class ModelRegistry {
         return new ModelExecutableAdapter(loadExecutable(name, manifest.version_id), manifest);
     }
 
+    #! Loads a named ONNX deployment artifact as an executable model
+    /** This method is intended for optimized and quantized ONNX/ORT artifacts
+        registered on a model version.  It uses the artifact's deployment
+        metadata as the default ONNX Runtime session configuration and rejects
+        explicit provider requests that do not match hardware-specific optimized
+        artifact metadata.
+
+        @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name named ONNX/ORT artifact to load
+        @param session_config optional ONNX Runtime session configuration
+
+        @return executable @ref ML::OnnxModel object
+
+        @throw ML-REGISTRY-ERROR if the artifact is missing, is not executable
+            ONNX/ORT, or provider metadata does not match the requested provider
+
+        @since QoreModelRegistry 2.4
+    */
+    object loadOnnxArtifactExecutable(string name, *string version_id, string artifact_name,
+            *hash<ML::OnnxSessionConfig> session_config) {
+        hash<ModelVersionInfo> manifest = getVersionManifest(name, version_id);
+        hash<ModelArtifactInfo> artifact = findArtifactInfo(manifest, artifact_name);
+        if (!artifact.executable || (artifact.format != "onnx" && artifact.format != "ort")) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("artifact '%s' for model '%s' version '%s' is not an executable "
+                    "ONNX/ORT deployment artifact (role=%y, format=%y)",
+                    artifact_name, name, manifest.version_id, artifact.role, artifact.format);
+        }
+
+        hash<ML::OnnxSessionConfig> config =
+            buildOnnxArtifactSessionConfig(artifact, session_config);
+        validateOnnxArtifactProviderRequest(name, manifest.version_id, artifact, config);
+
+        object model = new ML::OnnxModel(
+            backend.loadNamedArtifact(name, manifest.version_id, artifact_name), config);
+        validateOnnxArtifactEffectiveProvider(name, manifest.version_id, artifact,
+            model.getEffectiveProviderReport());
+        return model;
+    }
+
+    #! Loads a named ONNX deployment artifact and wraps it in an adapter
+    /** @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name named ONNX/ORT artifact to load
+        @param session_config optional ONNX Runtime session configuration
+
+        @return model executable adapter
+
+        @since QoreModelRegistry 2.4
+    */
+    ModelExecutableAdapter loadOnnxArtifactAdapter(string name, *string version_id,
+            string artifact_name, *hash<ML::OnnxSessionConfig> session_config) {
+        hash<ModelVersionInfo> manifest = getVersionManifest(name, version_id);
+        if (manifest.execution) {
+            manifest.execution.entry_artifact = artifact_name;
+        }
+        return new ModelExecutableAdapter(
+            loadOnnxArtifactExecutable(name, manifest.version_id, artifact_name,
+                session_config), manifest);
+    }
+
     #! Loads a model artifact as raw binary data (without deserializing)
     /** @param name the model name
         @param version_id the version ID to load, or NOTHING/"latest" for the most recent
@@ -494,6 +556,8 @@ public class ModelRegistry {
                 },
                 "optimization": result.optimization,
                 "validation": result.validation,
+                "deployment": makeOnnxDeploymentMetadata(result.ort_format ? "ORT" : "ONNX",
+                    opts.session_config, result.optimization.provider_report, True),
             },
         };
         backend.registerNamedArtifact(name, meta.version_id, artifact_name, data, info);
@@ -554,6 +618,9 @@ public class ModelRegistry {
                     "method": result.method,
                 },
                 "quantization": result,
+                "deployment": makeOnnxDeploymentMetadata("ONNX", NOTHING,
+                    result.quantized_model ? result.quantized_model.provider_report : NOTHING,
+                    False),
             },
         };
         backend.registerNamedArtifact(name, meta.version_id, artifact_name, data, info);
@@ -724,7 +791,7 @@ public class ModelRegistry {
             }
             version_id = versions.last().version_id;
         }
-        return backend.getVersionManifest(name, version_id);
+        return addDerivedArtifactLists(backend.getVersionManifest(name, version_id));
     }
 
     #! Tags a specific version of a model
@@ -903,6 +970,155 @@ public class ModelRegistry {
     private static string makeVersionId() {
         return format_date("YYYYMMDDHHmmss", now()) + "_"
             + get_random_bytes(4).toHex();
+    }
+
+    #! Private: adds derived optimized/quantized artifact lists to a manifest
+    private static hash<ModelVersionInfo> addDerivedArtifactLists(hash<ModelVersionInfo> meta) {
+        list<hash<ModelArtifactInfo>> optimized();
+        list<hash<ModelArtifactInfo>> quantized();
+        foreach hash<ModelArtifactInfo> artifact in (meta.artifacts) {
+            if (artifact.role == "optimized_model") {
+                push optimized, artifact;
+            } else if (artifact.role == "quantized_model") {
+                push quantized, artifact;
+            }
+        }
+        meta.optimized_artifacts = optimized;
+        meta.quantized_artifacts = quantized;
+        return meta;
+    }
+
+    #! Private: finds a named artifact in a manifest
+    private static hash<ModelArtifactInfo> findArtifactInfo(hash<ModelVersionInfo> meta,
+            string artifact_name) {
+        validatePackageArtifactName(artifact_name);
+        foreach hash<ModelArtifactInfo> artifact in (meta.artifacts) {
+            if (artifact.name == artifact_name) {
+                return artifact;
+            }
+        }
+        throw "ML-REGISTRY-ERROR",
+            sprintf("artifact '%s' not found for model '%s' version '%s'",
+                artifact_name, meta.name, meta.version_id);
+    }
+
+    #! Private: builds deployment metadata for ONNX/ORT artifacts
+    private static hash<auto> makeOnnxDeploymentMetadata(string model_format,
+            *hash<ML::OnnxSessionConfig> session_config, *hash<auto> provider_report,
+            bool hardware_specific) {
+        hash<auto> rv = {
+            "model_format": model_format,
+            "hardware_specific": hardware_specific,
+        };
+        if (session_config) {
+            rv.session_config = session_config;
+        }
+        if (provider_report) {
+            rv.provider_report = provider_report;
+            if (provider_report.active_provider.val()) {
+                rv.active_provider = provider_report.active_provider;
+            }
+            if (exists provider_report.requested_providers) {
+                rv.requested_providers = provider_report.requested_providers;
+            }
+            if (exists provider_report.available_providers) {
+                rv.available_providers = provider_report.available_providers;
+            }
+        }
+        return rv;
+    }
+
+    #! Private: builds the ONNX session config for a named deployment artifact
+    private static hash<ML::OnnxSessionConfig> buildOnnxArtifactSessionConfig(
+            hash<ModelArtifactInfo> artifact, *hash<ML::OnnxSessionConfig> session_config) {
+        hash<ML::OnnxSessionConfig> config = <ML::OnnxSessionConfig>{"providers": ()};
+        if (session_config) {
+            config = session_config;
+        } else if (artifact.metadata && artifact.metadata.deployment
+                && artifact.metadata.deployment.session_config) {
+            config = cast<hash<ML::OnnxSessionConfig>>(
+                artifact.metadata.deployment.session_config);
+        }
+        if (artifact.format == "ort") {
+            config.load_model_format = "ORT";
+        }
+        return config;
+    }
+
+    #! Private: rejects provider requests incompatible with a deployment artifact
+    private static nothing validateOnnxArtifactProviderRequest(string name, string version_id,
+            hash<ModelArtifactInfo> artifact, hash<ML::OnnxSessionConfig> config) {
+        if (!artifact.metadata || !artifact.metadata.deployment
+                || !artifact.metadata.deployment.hardware_specific) {
+            return;
+        }
+        *string expected = artifact.metadata.deployment.active_provider;
+        if (!expected.val()) {
+            return;
+        }
+        *string requested = getExplicitPrimaryProvider(config);
+        if (requested.val() && requested != expected) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("artifact '%s' for model '%s' version '%s' was optimized for "
+                    "ONNX Runtime provider %s, but the requested session uses %s",
+                    artifact.name, name, version_id, expected, requested);
+        }
+    }
+
+    #! Private: verifies the effective provider after loading an optimized artifact
+    private static nothing validateOnnxArtifactEffectiveProvider(string name, string version_id,
+            hash<ModelArtifactInfo> artifact, hash<auto> provider_report) {
+        if (!artifact.metadata || !artifact.metadata.deployment
+                || !artifact.metadata.deployment.hardware_specific) {
+            return;
+        }
+        *string expected = artifact.metadata.deployment.active_provider;
+        *string actual = provider_report.active_provider;
+        if (expected.val() && actual.val() && actual != expected) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("artifact '%s' for model '%s' version '%s' was optimized for "
+                    "ONNX Runtime provider %s, but the loaded session uses %s",
+                    artifact.name, name, version_id, expected, actual);
+        }
+    }
+
+    #! Private: returns the explicitly requested primary ONNX provider, if any
+    private static *string getExplicitPrimaryProvider(hash<ML::OnnxSessionConfig> config) {
+        if (!exists config.providers) {
+            return NOTHING;
+        }
+        if (!config.providers) {
+            return "CPUExecutionProvider";
+        }
+        return normalizeOnnxProviderName(config.providers[0].name);
+    }
+
+    #! Private: normalizes common ONNX Runtime provider aliases
+    private static string normalizeOnnxProviderName(string name) {
+        string trimmed = trim(name);
+        switch (trimmed) {
+            case "CPU":
+            case "CPUExecutionProvider":
+                return "CPUExecutionProvider";
+            case "CUDA":
+            case "CUDAExecutionProvider":
+                return "CUDAExecutionProvider";
+            case "TensorRT":
+            case "Tensorrt":
+            case "TensorrtExecutionProvider":
+                return "TensorrtExecutionProvider";
+            case "OpenVINO":
+            case "OpenVINOExecutionProvider":
+                return "OpenVINOExecutionProvider";
+            case "DirectML":
+            case "DmlExecutionProvider":
+                return "DmlExecutionProvider";
+            case "CoreML":
+            case "CoreMLExecutionProvider":
+                return "CoreMLExecutionProvider";
+            default:
+                return trimmed;
+        }
     }
 
     #! Private: infers an artifact format from a filename

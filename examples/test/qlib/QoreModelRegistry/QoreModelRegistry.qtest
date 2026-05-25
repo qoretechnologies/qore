@@ -1313,7 +1313,31 @@ class ModelRegistryTest inherits QUnit::Test {
         assertEq("onnx-optimization", info.metadata.lineage.type);
         assertEq(vid, info.metadata.lineage.source_version_id);
         assertEq("model.onnx", info.metadata.lineage.source_artifact);
+        assertTrue(info.metadata.deployment.hardware_specific,
+            "optimized artifacts should record provider-specific deployment metadata");
+        assertEq("CPUExecutionProvider", info.metadata.deployment.active_provider);
         assertTrue(info.metadata.validation.valid);
+
+        QoreModelRegistry::ModelExecutableAdapter opt_adapter =
+            registry.loadOnnxArtifactAdapter("onnx-opt-linear", vid,
+                "model.optimized.onnx", NOTHING);
+        hash<auto> optimized_rows = opt_adapter.runFeatureMatrix(((4.0,),), NOTHING);
+        assertTrue(abs(9.0 - optimized_rows.Y[0].toFloat()) < 1e-5,
+            sprintf("expected optimized ONNX output 9.0, got %y", optimized_rows.Y[0]));
+
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            registry.loadOnnxArtifactExecutable("onnx-opt-linear", vid,
+                "model.optimized.onnx",
+                <ML::OnnxSessionConfig>{
+                    "providers": (<ML::OnnxProviderConfig>{"name": "CUDA"},),
+                });
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-opt-linear", vid);
+        assertEq(1, manifest.optimized_artifacts.size(),
+            "optimized artifact should be exposed in derived manifest metadata");
+        assertEq("model.optimized.onnx", manifest.optimized_artifacts[0].name);
 
         list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
             registry.listArtifacts("onnx-opt-linear", vid);

@@ -176,6 +176,26 @@ hash<auto> mapped_outputs = adapter.runTensors({
     "attention_mask": ML::Tensor(data: ((1, 1, 1),), dtype: "int64"),
 });
 printf("provider=%s\n", adapter.getProviderDiagnostics().active_provider);
+
+# Create and register a provider-specific optimized deployment artifact.
+hash<QoreModelRegistry::ModelArtifactInfo> opt =
+    reg.registerOptimizedOnnxArtifact("bge-small-en", vid, "model.cpu.ort", {
+        "ort_format": True,
+        "session_config": <ML::OnnxSessionConfig>{"providers": ()},
+    });
+
+# The manifest exposes optimized_artifacts and quantized_artifacts as derived
+# deployment metadata lists.
+manifest = reg.getVersionManifest("bge-small-en", vid);
+printf("optimized artifact=%s provider=%s\n",
+    manifest.optimized_artifacts[0].name,
+    manifest.optimized_artifacts[0].metadata.deployment.active_provider);
+
+# Loading a named optimized artifact checks provider compatibility before
+# execution, so hardware-specific ORT artifacts are not silently used with the
+# wrong provider.
+QoreModelRegistry::ModelExecutableAdapter optimized =
+    reg.loadOnnxArtifactAdapter("bge-small-en", vid, "model.cpu.ort", NOTHING);
     @endcode
 
     @par DataProvider Package Registration Example:
@@ -240,6 +260,11 @@ reg.loadExecutable("torch-source", vid);
     - Added @ref QoreModelRegistry::ModelRegistry::registerQuantizedOnnxArtifact()
       to create quantized ONNX artifacts with source version/artifact lineage and
       ONNX Runtime dependency diagnostics
+    - Added \c optimized_artifacts and \c quantized_artifacts manifest lists plus
+      @ref QoreModelRegistry::ModelRegistry::loadOnnxArtifactExecutable() and
+      @ref QoreModelRegistry::ModelRegistry::loadOnnxArtifactAdapter() for named
+      optimized/quantized ONNX deployment artifacts with provider compatibility
+      checks
 
     @subsection qoremodelregistry_2_3 QoreModelRegistry Module Version 2.3
     - Added @ref QoreModelRegistry::ModelExecutableAdapter::runFeatureMatrixTensors()

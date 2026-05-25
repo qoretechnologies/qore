@@ -3276,6 +3276,9 @@ foreach string module_name in (registry.getProcessModules()) {
         node, and session event through QoreOnnxTools and \c qore-onnx profile
       - DataProviderML ONNX processors expose provider diagnostics, inference
         counters, and optional profile summaries through \c getDiagnostics()
+      - QoreModelRegistry exposes optimized and quantized ONNX deployment
+        artifact lists and can load named optimized/quantized ONNX artifacts
+        with provider compatibility checks
 
     - @ref qoreocrutilsintro "QoreOcrUtils" module
       - new module providing an OCR abstraction layer with native and HTTP backends
