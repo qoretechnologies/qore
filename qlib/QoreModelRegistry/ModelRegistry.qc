@@ -637,6 +637,122 @@ public class ModelRegistry {
         return info;
     }
 
+    #! Inspects an ONNX model version or named ONNX/ORT artifact
+    /** The selected artifact is materialized with any declared external-data
+        companions before @ref QoreOnnxTools::OnnxModelTools::inspect() is
+        called.  When \a artifact_name is omitted, the version's execution
+        entry artifact is inspected.
+
+        @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name optional named artifact; defaults to the entry artifact
+        @param session_config optional ONNX Runtime session configuration
+
+        @return ONNX inspection metadata
+
+        @since QoreModelRegistry 2.5
+    */
+    hash<auto> inspectOnnxVersion(string name, *string version_id,
+            *string artifact_name, *hash<ML::OnnxSessionConfig> session_config) {
+        hash<ModelVersionInfo> meta = getVersionManifest(name, version_id);
+        string selected = resolveOnnxArtifactName(name, meta, artifact_name);
+        hash<ModelArtifactInfo> artifact = findArtifactInfo(meta, selected);
+        FsUtil::TmpDir dir("qore-model-registry-onnx-inspect-", "");
+        string path = materializeOnnxPackage(name, meta.version_id, meta, selected, dir.path);
+        return QoreOnnxTools::OnnxModelTools::inspect(path,
+            buildOnnxActionSessionConfig(meta, artifact, session_config));
+    }
+
+    #! Validates an ONNX model version or named ONNX/ORT artifact
+    /** @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name optional named artifact; defaults to the entry artifact
+        @param session_config optional ONNX Runtime session configuration
+
+        @return structured ONNX validation diagnostics
+
+        @since QoreModelRegistry 2.5
+    */
+    hash<QoreOnnxTools::OnnxValidationResult> validateOnnxVersion(string name,
+            *string version_id, *string artifact_name,
+            *hash<ML::OnnxSessionConfig> session_config) {
+        hash<ModelVersionInfo> meta = getVersionManifest(name, version_id);
+        string selected = resolveOnnxArtifactName(name, meta, artifact_name);
+        hash<ModelArtifactInfo> artifact = findArtifactInfo(meta, selected);
+        FsUtil::TmpDir dir("qore-model-registry-onnx-validate-", "");
+        string path = materializeOnnxPackage(name, meta.version_id, meta, selected, dir.path);
+        return QoreOnnxTools::OnnxModelTools::validate(path,
+            buildOnnxActionSessionConfig(meta, artifact, session_config));
+    }
+
+    #! Benchmarks an ONNX model version or named ONNX/ORT artifact
+    /** @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name optional named artifact; defaults to the entry artifact
+        @param options optional benchmark options
+
+        @return benchmark result
+
+        @since QoreModelRegistry 2.5
+    */
+    hash<QoreOnnxTools::OnnxBenchmarkResult> benchmarkOnnxVersion(string name,
+            *string version_id, *string artifact_name,
+            *hash<QoreOnnxTools::OnnxBenchmarkOptions> options) {
+        hash<ModelVersionInfo> meta = getVersionManifest(name, version_id);
+        string selected = resolveOnnxArtifactName(name, meta, artifact_name);
+        hash<ModelArtifactInfo> artifact = findArtifactInfo(meta, selected);
+        FsUtil::TmpDir dir("qore-model-registry-onnx-bench-", "");
+        string path = materializeOnnxPackage(name, meta.version_id, meta, selected, dir.path);
+        hash<QoreOnnxTools::OnnxBenchmarkOptions> opts =
+            options ?? <QoreOnnxTools::OnnxBenchmarkOptions>{};
+        if (!opts.session_config) {
+            opts.session_config = buildOnnxActionSessionConfig(meta, artifact, NOTHING);
+        }
+        return QoreOnnxTools::OnnxModelTools::benchmark(path, opts);
+    }
+
+    #! Compares the entry ONNX artifacts of two versions of the same model
+    /** @param name the model name
+        @param source_version_id source version ID
+        @param candidate_version_id candidate version ID
+        @param options optional comparison options
+
+        @return ONNX output/latency comparison result
+
+        @since QoreModelRegistry 2.5
+    */
+    hash<QoreOnnxTools::OnnxCompareResult> compareOnnxVersions(string name,
+            string source_version_id, string candidate_version_id,
+            *hash<QoreOnnxTools::OnnxCompareOptions> options) {
+        hash<ModelVersionInfo> source_meta = getVersionManifest(name, source_version_id);
+        hash<ModelVersionInfo> candidate_meta = getVersionManifest(name, candidate_version_id);
+        string source_artifact = requireOnnxEntryArtifact(name, source_meta);
+        string candidate_artifact = requireOnnxEntryArtifact(name, candidate_meta);
+        return compareOnnxMaterializedArtifacts(name, source_meta, source_artifact,
+            candidate_meta, candidate_artifact, options);
+    }
+
+    #! Compares two ONNX/ORT artifacts attached to one model version
+    /** @param name the model name
+        @param version_id version ID, or NOTHING/"latest"
+        @param source_artifact_name source artifact name
+        @param candidate_artifact_name candidate artifact name
+        @param options optional comparison options
+
+        @return ONNX output/latency comparison result
+
+        @since QoreModelRegistry 2.5
+    */
+    hash<QoreOnnxTools::OnnxCompareResult> compareOnnxVersionArtifacts(string name,
+            *string version_id, string source_artifact_name, string candidate_artifact_name,
+            *hash<QoreOnnxTools::OnnxCompareOptions> options) {
+        hash<ModelVersionInfo> meta = getVersionManifest(name, version_id);
+        resolveOnnxArtifactName(name, meta, source_artifact_name);
+        resolveOnnxArtifactName(name, meta, candidate_artifact_name);
+        return compareOnnxMaterializedArtifacts(name, meta, source_artifact_name, meta,
+            candidate_artifact_name, options);
+    }
+
     #! Loads a named artifact from a model package
     /** @param name the model name
         @param version_id the version ID, or NOTHING/"latest"
@@ -1036,6 +1152,74 @@ public class ModelRegistry {
             }
         }
         return rv;
+    }
+
+    #! Private: resolves and validates an ONNX or ORT artifact name
+    private static string resolveOnnxArtifactName(string name, hash<ModelVersionInfo> meta,
+            *string artifact_name) {
+        string selected = artifact_name.val()
+            ? artifact_name
+            : requireOnnxEntryArtifact(name, meta);
+        hash<ModelArtifactInfo> artifact = findArtifactInfo(meta, selected);
+        if (artifact.format != "onnx" && artifact.format != "ort") {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("artifact '%s' for model '%s' version '%s' is not an ONNX/ORT "
+                    "artifact (role=%y, format=%y)", selected, name, meta.version_id,
+                    artifact.role, artifact.format);
+        }
+        return selected;
+    }
+
+    #! Private: builds an ONNX session config for registry action methods
+    private static hash<ML::OnnxSessionConfig> buildOnnxActionSessionConfig(
+            hash<ModelVersionInfo> meta, hash<ModelArtifactInfo> artifact,
+            *hash<ML::OnnxSessionConfig> session_config) {
+        hash<ML::OnnxSessionConfig> config;
+        if (session_config) {
+            config = session_config;
+        } else if (artifact.metadata && artifact.metadata.deployment
+                && artifact.metadata.deployment.session_config) {
+            config = cast<hash<ML::OnnxSessionConfig>>(
+                artifact.metadata.deployment.session_config);
+        } else if (meta.execution && meta.execution.config) {
+            config = cast<hash<ML::OnnxSessionConfig>>(meta.execution.config);
+        } else {
+            config = <ML::OnnxSessionConfig>{"providers": ()};
+        }
+        if (artifact.format == "ort") {
+            config.load_model_format = "ORT";
+        }
+        return config;
+    }
+
+    #! Private: compares two already-resolved registry ONNX artifacts
+    private hash<QoreOnnxTools::OnnxCompareResult> compareOnnxMaterializedArtifacts(
+            string name, hash<ModelVersionInfo> source_meta, string source_artifact,
+            hash<ModelVersionInfo> candidate_meta, string candidate_artifact,
+            *hash<QoreOnnxTools::OnnxCompareOptions> options) {
+        hash<ModelArtifactInfo> source_info = findArtifactInfo(source_meta, source_artifact);
+        hash<ModelArtifactInfo> candidate_info =
+            findArtifactInfo(candidate_meta, candidate_artifact);
+        FsUtil::TmpDir dir("qore-model-registry-onnx-compare-", "");
+        string source_dir = dir.path + DirSep + "source";
+        string candidate_dir = dir.path + DirSep + "candidate";
+        mkdir_ex(source_dir, 0700, True);
+        mkdir_ex(candidate_dir, 0700, True);
+        string source_path = materializeOnnxPackage(name, source_meta.version_id,
+            source_meta, source_artifact, source_dir);
+        string candidate_path = materializeOnnxPackage(name, candidate_meta.version_id,
+            candidate_meta, candidate_artifact, candidate_dir);
+        hash<QoreOnnxTools::OnnxCompareOptions> opts =
+            options ?? <QoreOnnxTools::OnnxCompareOptions>{};
+        if (!opts.source_session_config) {
+            opts.source_session_config =
+                buildOnnxActionSessionConfig(source_meta, source_info, NOTHING);
+        }
+        if (!opts.candidate_session_config) {
+            opts.candidate_session_config =
+                buildOnnxActionSessionConfig(candidate_meta, candidate_info, NOTHING);
+        }
+        return QoreOnnxTools::OnnxModelTools::compare(source_path, candidate_path, opts);
     }
 
     #! Private: builds the ONNX session config for a named deployment artifact

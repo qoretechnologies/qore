@@ -40,6 +40,22 @@ public hashdecl OnnxPackageOptions {
     string manifest_name = "qore-onnx-package.json";
     #! Optional ONNX Runtime session configuration for inspection and validation
     *hash<ML::OnnxSessionConfig> session_config;
+    #! Optional task identifier to store in the package manifest
+    *string task;
+    #! Optional ONNX opset version to store in the package manifest
+    *int opset;
+    #! Optional minimum ONNX Runtime version required by deployment policy
+    *string minimum_onnxruntime_version;
+    #! Optional dynamic-axis metadata keyed by tensor name
+    *hash<auto> dynamic_axes;
+    #! Optional preprocessing contract metadata
+    *hash<auto> preprocess;
+    #! Optional postprocessing contract metadata
+    *hash<auto> postprocess;
+    #! Optional benchmark metadata
+    *hash<auto> benchmarks;
+    #! Optional golden validation vectors
+    *list<hash<auto>> golden_vectors;
 }
 
 #! Metadata for a packaged artifact
@@ -74,12 +90,44 @@ public hashdecl OnnxPackageResult {
     string framework;
     #! Runtime classification
     string runtime;
+    #! Model task identifier
+    *string task;
+    #! ONNX opset version, when supplied
+    *int opset;
+    #! Producer framework/tool metadata, when known
+    *string producer;
+    #! Minimum ONNX Runtime version required by deployment policy, when declared
+    *string minimum_onnxruntime_version;
     #! Artifact safety classification
     string safety;
     #! Primary package artifact name
     string entry_artifact;
     #! True if the package is executable locally by ONNX Runtime
     bool executable;
+    #! ONNX input tensor contract, when known
+    *list<hash<auto>> inputs;
+    #! ONNX output tensor contract, when known
+    *list<hash<auto>> outputs;
+    #! Dynamic-axis metadata keyed by tensor name, when known
+    *hash<auto> dynamic_axes;
+    #! ONNX external-data artifact names required by the entry artifact
+    *list<string> external_data;
+    #! Version-level preprocessing contract metadata
+    *hash<auto> preprocess;
+    #! Version-level postprocessing contract metadata
+    *hash<auto> postprocess;
+    #! Execution contract metadata
+    *hash<auto> execution;
+    #! ONNX Runtime provider deployment diagnostics and policy metadata
+    *hash<auto> providers;
+    #! Optimized ONNX/ORT deployment artifacts
+    list<hash<auto>> optimized_artifacts = ();
+    #! Quantized ONNX deployment artifacts
+    list<hash<auto>> quantized_artifacts = ();
+    #! Benchmark metadata supplied by callers
+    *hash<auto> benchmarks;
+    #! Golden input/output vectors supplied for deployment validation
+    *list<hash<auto>> golden_vectors;
     #! Sorted artifact metadata
     list<hash<OnnxPackageArtifactInfo>> artifacts;
     #! Optional manifest path written to disk
@@ -136,14 +184,41 @@ public class OnnxPackageTools {
         artifacts = sortArtifacts(artifacts);
 
         hash<OnnxPackageArtifactInfo> primary = selectPrimaryArtifact(artifacts);
+        string runtime = inferRuntime(primary);
+        string task = inferTask(opts.task, artifacts, runtime);
+        *list<hash<auto>> inputs = primary.metadata && exists primary.metadata.inputs
+            ? cast<list<hash<auto>>>(primary.metadata.inputs)
+            : NOTHING;
+        *list<hash<auto>> outputs = primary.metadata && exists primary.metadata.outputs
+            ? cast<list<hash<auto>>>(primary.metadata.outputs)
+            : NOTHING;
+        *hash<auto> dynamic_axes = opts.dynamic_axes ?? buildDynamicAxes(inputs, outputs);
+        *hash<auto> providers = buildProviderInfo(primary);
+        *string producer = primary.metadata && primary.metadata.info
+            ? primary.metadata.info.producer_name
+            : NOTHING;
         hash<OnnxPackageResult> result = <OnnxPackageResult>{
             "source_path": source_path,
             "output_dir": output_dir,
             "framework": inferFramework(artifacts),
-            "runtime": inferRuntime(primary),
+            "runtime": runtime,
+            "task": task,
+            "opset": opts.opset,
+            "producer": producer,
+            "minimum_onnxruntime_version": opts.minimum_onnxruntime_version,
             "safety": inferSafety(artifacts),
             "entry_artifact": primary.name,
             "executable": primary.format == "onnx",
+            "inputs": inputs,
+            "outputs": outputs,
+            "dynamic_axes": dynamic_axes,
+            "external_data": buildExternalDataList(artifacts),
+            "preprocess": opts.preprocess,
+            "postprocess": opts.postprocess,
+            "execution": buildExecutionInfo(runtime, task, primary, inputs, outputs, opts),
+            "providers": providers,
+            "benchmarks": opts.benchmarks,
+            "golden_vectors": opts.golden_vectors,
             "artifacts": artifacts,
         };
 
@@ -329,9 +404,27 @@ public class OnnxPackageTools {
         manifest.manifest_version = 1;
         manifest.framework = result.framework;
         manifest.runtime = result.runtime;
+        manifest.task = result.task;
         manifest.safety = result.safety;
         manifest.entry_artifact = result.entry_artifact;
         manifest.executable = result.executable;
+        manifest.execution = result.execution;
+        manifest.optimized_artifacts = result.optimized_artifacts;
+        manifest.quantized_artifacts = result.quantized_artifacts;
+        if (result.opset) manifest.opset = result.opset;
+        if (result.producer.val()) manifest.producer = result.producer;
+        if (result.minimum_onnxruntime_version.val()) {
+            manifest.minimum_onnxruntime_version = result.minimum_onnxruntime_version;
+        }
+        if (result.inputs) manifest.inputs = result.inputs;
+        if (result.outputs) manifest.outputs = result.outputs;
+        if (result.dynamic_axes) manifest.dynamic_axes = result.dynamic_axes;
+        if (result.external_data) manifest.external_data = result.external_data;
+        if (result.preprocess) manifest.preprocess = result.preprocess;
+        if (result.postprocess) manifest.postprocess = result.postprocess;
+        if (result.providers) manifest.providers = result.providers;
+        if (result.benchmarks) manifest.benchmarks = result.benchmarks;
+        if (result.golden_vectors) manifest.golden_vectors = result.golden_vectors;
         list<hash<auto!>> artifacts();
         foreach hash<OnnxPackageArtifactInfo> artifact in (result.artifacts) {
             hash<auto!> portable;
@@ -355,6 +448,184 @@ public class OnnxPackageTools {
             };
         }
         return manifest;
+    }
+
+    private static string inferTask(*string requested_task,
+            list<hash<OnnxPackageArtifactInfo>> artifacts, string runtime) {
+        if (requested_task.val()) {
+            return normalizeTask(requested_task);
+        }
+        if (runtime != "onnxruntime") {
+            return "raw";
+        }
+        string hints = "";
+        foreach hash<OnnxPackageArtifactInfo> artifact in (artifacts) {
+            hints += " " + artifact.name.lwr() + " " + artifact.role.lwr();
+            if (artifact.metadata) {
+                if (artifact.metadata.model_type.val()) {
+                    hints += " " + string(artifact.metadata.model_type).lwr();
+                }
+                if (artifact.metadata.architectures) {
+                    foreach auto arch in (artifact.metadata.architectures) {
+                        hints += " " + string(arch).lwr();
+                    }
+                }
+            }
+        }
+        if (hints =~ /(rerank|ranker|cross[-_ ]?encoder)/) {
+            return "reranker";
+        }
+        if (hints =~ /(embedding|embedder|sentence[-_ ]?transformer|bge|e5|minilm|mpnet)/) {
+            return "embedding";
+        }
+        if (hints =~ /(tok(en)?[-_ ]?classification|for[-_ ]?token[-_ ]?classification)/) {
+            return "token-classification";
+        }
+        if (hints =~ /(sequence[-_ ]?classification|for[-_ ]?sequence[-_ ]?classification|classifier)/) {
+            return "sequence-classification";
+        }
+        if (hints =~ /(regression|regressor)/) {
+            return "regression";
+        }
+        if (hints =~ /(encoder[-_ ]?decoder|seq2seq|bart|t5)/) {
+            return "encoder-decoder";
+        }
+        if (hints =~ /(causal[-_ ]?lm|for[-_ ]?causal[-_ ]?lm|text[-_ ]?generation|gpt|llama|mistral|qwen)/) {
+            return "causal-lm";
+        }
+        return "raw";
+    }
+
+    private static string normalizeTask(string task) {
+        string t = task.lwr();
+        t =~ s/^onnx[\/:]//;
+        t =~ s/_/-/g;
+        switch (t) {
+            case "raw":
+            case "classification":
+            case "regression":
+            case "embedding":
+            case "reranker":
+            case "token-classification":
+            case "sequence-classification":
+            case "encoder-decoder":
+            case "causal-lm":
+                return t;
+            case "text-classification":
+                return "sequence-classification";
+            case "feature-extraction":
+            case "sentence-embedding":
+            case "sentence-transformer":
+                return "embedding";
+            case "ranking":
+            case "cross-encoder":
+                return "reranker";
+            case "text-generation":
+            case "causal-language-modeling":
+                return "causal-lm";
+            case "seq2seq":
+                return "encoder-decoder";
+        }
+        throw "QORE-ONNX-TOOLS-ERROR",
+            sprintf("unsupported ONNX task %y; valid tasks are: raw, classification, "
+                "regression, embedding, reranker, token-classification, "
+                "sequence-classification, encoder-decoder, and causal-lm", task);
+    }
+
+    private static *hash<auto> buildDynamicAxes(*list<hash<auto>> inputs,
+            *list<hash<auto>> outputs) {
+        hash<auto> rv;
+        addDynamicAxes(\rv, inputs);
+        addDynamicAxes(\rv, outputs);
+        return rv ? rv : NOTHING;
+    }
+
+    private static nothing addDynamicAxes(reference<hash<auto>> rv,
+            *list<hash<auto>> tensors) {
+        if (!tensors) {
+            return;
+        }
+        foreach hash<auto> tensor in (tensors) {
+            if (!tensor.name.val() || !tensor.shape) {
+                continue;
+            }
+            list<int> axes();
+            for (int i = 0; i < tensor.shape.size(); ++i) {
+                if (tensor.shape[i] <= 0) {
+                    push axes, i;
+                }
+            }
+            if (axes) {
+                rv{tensor.name} = axes;
+            }
+        }
+    }
+
+    private static *list<string> buildExternalDataList(
+            list<hash<OnnxPackageArtifactInfo>> artifacts) {
+        list<string> rv();
+        foreach hash<OnnxPackageArtifactInfo> artifact in (artifacts) {
+            if (artifact.role == "external_data" && !rv.contains(artifact.name)) {
+                push rv, artifact.name;
+            }
+        }
+        return rv ? rv : NOTHING;
+    }
+
+    private static hash<auto> buildExecutionInfo(string runtime, string task,
+            hash<OnnxPackageArtifactInfo> primary, *list<hash<auto>> inputs,
+            *list<hash<auto>> outputs, hash<OnnxPackageOptions> opts) {
+        hash<auto> plan = cast<hash<auto>>({
+            "type": runtime == "onnxruntime" ? "onnx/" + task : runtime + "/" + task,
+            "task": task,
+            "artifact_name": primary.name,
+        });
+        hash<auto> rv = {
+            "runtime": runtime,
+            "task": task,
+            "local_executable": runtime == "onnxruntime",
+            "entry_artifact": primary.name,
+            "plan": plan,
+            "requires": runtime == "onnxruntime" ? ("ml",) : (),
+        };
+        if (inputs) {
+            rv.input_schema = {"tensors": inputs};
+            rv.plan.input_schema = rv.input_schema;
+        }
+        if (outputs) {
+            rv.output_schema = {"tensors": outputs};
+            rv.plan.output_schema = rv.output_schema;
+        }
+        if (opts.preprocess) {
+            rv.preprocess = opts.preprocess;
+        }
+        if (opts.postprocess) {
+            rv.postprocess = opts.postprocess;
+        }
+        if (opts.session_config) {
+            rv.config = opts.session_config;
+        }
+        return rv;
+    }
+
+    private static *hash<auto> buildProviderInfo(hash<OnnxPackageArtifactInfo> primary) {
+        if (!primary.metadata) {
+            return NOTHING;
+        }
+        hash<auto> provider_info;
+        if (primary.metadata.provider_report) {
+            provider_info.provider_report = primary.metadata.provider_report;
+            if (primary.metadata.provider_report.active_provider.val()) {
+                provider_info.active_provider = primary.metadata.provider_report.active_provider;
+            }
+            if (exists primary.metadata.provider_report.available_providers) {
+                provider_info.available_providers = primary.metadata.provider_report.available_providers;
+            }
+            if (exists primary.metadata.provider_report.requested_providers) {
+                provider_info.requested_providers = primary.metadata.provider_report.requested_providers;
+            }
+        }
+        return provider_info ? provider_info : NOTHING;
     }
 
     private static list<hash<OnnxPackageArtifactInfo>> sortArtifacts(

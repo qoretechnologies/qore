@@ -108,12 +108,21 @@ public class ModelArtifactInspector {
                     "model, tokenizer, or metadata artifact", path);
         }
 
-        hash<ModelArtifactInfo> primary = selectPrimaryArtifact(artifacts);
+        *hash<auto> package_manifest = findPackageManifest(artifacts);
+        hash<ModelArtifactInfo> primary = selectPrimaryArtifact(artifacts, package_manifest);
         hash<TokenizerArtifactInfo> tokenizer = buildTokenizerInfo(artifacts);
-        string framework = inferFramework(artifacts);
-        string runtime = inferRuntime(primary);
+        *string manifest_framework = package_manifest ? package_manifest.framework : NOTHING;
+        *string manifest_runtime = package_manifest ? package_manifest.runtime : NOTHING;
+        *string manifest_safety = package_manifest ? package_manifest.safety : NOTHING;
+        *int manifest_opset = package_manifest ? package_manifest.opset : NOTHING;
+        *string manifest_task = package_manifest ? package_manifest.task : NOTHING;
+        *string manifest_producer = package_manifest ? package_manifest.producer : NOTHING;
+        *string manifest_min_ort = package_manifest
+            ? package_manifest.minimum_onnxruntime_version : NOTHING;
+        string framework = options.framework ?? manifest_framework ?? inferFramework(artifacts);
+        string runtime = manifest_runtime ?? inferRuntime(primary);
         string artifact_kind = inferArtifactKind(primary, artifacts);
-        string safety = inferPackageSafety(artifacts);
+        string safety = manifest_safety ?? inferPackageSafety(artifacts);
         *hash<auto> option_plan;
         if (exists options.execution_plan) {
             option_plan = cast<hash<auto>>(options.execution_plan);
@@ -129,7 +138,8 @@ public class ModelArtifactInspector {
                         normalized_plan_task);
             }
         }
-        string task = inferExecutionTask(plan_task ?? options.task, artifacts, runtime);
+        string task = inferExecutionTask(plan_task ?? options.task ?? manifest_task,
+            artifacts, runtime);
         *hash<auto> input_schema;
         *hash<auto> output_schema;
         if (primary.format == "onnx" && primary.metadata) {
@@ -148,11 +158,41 @@ public class ModelArtifactInspector {
         *hash<auto> preprocess;
         if (exists options.preprocess) {
             preprocess = cast<hash<auto>>(options.preprocess);
+        } else if (package_manifest && package_manifest.preprocess) {
+            preprocess = cast<hash<auto>>(package_manifest.preprocess);
         }
         *hash<auto> postprocess;
         if (exists options.postprocess) {
             postprocess = cast<hash<auto>>(options.postprocess);
+        } else if (package_manifest && package_manifest.postprocess) {
+            postprocess = cast<hash<auto>>(package_manifest.postprocess);
         }
+        *list<hash<auto>> inputs = primary.metadata && exists primary.metadata.inputs
+            ? cast<list<hash<auto>>>(primary.metadata.inputs)
+            : NOTHING;
+        *list<hash<auto>> outputs = primary.metadata && exists primary.metadata.outputs
+            ? cast<list<hash<auto>>>(primary.metadata.outputs)
+            : NOTHING;
+        *hash<auto> provider_info = buildProviderInfo(primary, package_manifest);
+        *hash<auto> validation = options.validation
+            ?? (package_manifest ? package_manifest.validation : NOTHING)
+            ?? (primary.metadata ? primary.metadata.validation : NOTHING);
+        *hash<auto> benchmarks;
+        if (exists options.benchmarks) {
+            benchmarks = cast<hash<auto>>(options.benchmarks);
+        } else if (package_manifest && package_manifest.benchmarks) {
+            benchmarks = cast<hash<auto>>(package_manifest.benchmarks);
+        }
+        *list<hash<auto>> golden_vectors;
+        if (exists options.golden_vectors) {
+            golden_vectors = cast<list<hash<auto>>>(options.golden_vectors);
+        } else if (package_manifest && package_manifest.golden_vectors) {
+            golden_vectors = cast<list<hash<auto>>>(package_manifest.golden_vectors);
+        }
+        *hash<auto> dynamic_axes = options.dynamic_axes
+            ?? (package_manifest ? package_manifest.dynamic_axes : NOTHING)
+            ?? buildDynamicAxes(inputs, outputs);
+        *list<string> external_data = buildExternalDataList(artifacts, primary);
 
         return cast<hash<ModelVersionInfo>>({
             "version_id": options.version_id,
@@ -169,6 +209,22 @@ public class ModelArtifactInspector {
             "artifact_kind": artifact_kind,
             "runtime": runtime,
             "task": task,
+            "opset": options.opset ?? manifest_opset,
+            "producer": options.producer
+                ?? manifest_producer
+                ?? (primary.metadata ? primary.metadata.producer_name : NOTHING),
+            "minimum_onnxruntime_version": options.minimum_onnxruntime_version
+                ?? manifest_min_ort,
+            "inputs": inputs,
+            "outputs": outputs,
+            "dynamic_axes": dynamic_axes,
+            "external_data": external_data,
+            "preprocess": preprocess,
+            "postprocess": postprocess,
+            "providers": provider_info,
+            "validation": validation,
+            "benchmarks": benchmarks,
+            "golden_vectors": golden_vectors,
             "executable": runtime == "qore-ml" || runtime == "onnxruntime",
             "safety": safety,
             "artifacts": artifacts,
@@ -194,6 +250,7 @@ public class ModelArtifactInspector {
     static bool isSupportedPackageFile(string name) {
         string lname = name.lwr();
         return lname == "config.json"
+            || lname == "qore-onnx-package.json"
             || lname == "tokenizer.json"
             || lname == "tokenizer_config.json"
             || lname == "generation_config.json"
@@ -258,6 +315,9 @@ public class ModelArtifactInspector {
         if (lname == "config.json") {
             return "config";
         }
+        if (lname == "qore-onnx-package.json") {
+            return "manifest";
+        }
         if (format == "safetensors" || format == "pytorch-pickle") {
             return "weights";
         }
@@ -305,6 +365,12 @@ public class ModelArtifactInspector {
             result.inputs = info.inputs;
             result.outputs = info.outputs;
             result.active_provider = info.active_provider;
+            result.available_providers = info.available_providers;
+            result.requested_providers = info.requested_providers;
+            result.provider_diagnostics = info.provider_diagnostics;
+            result.cpu_fallback_used = info.cpu_fallback_used;
+            result.provider_report = model.getEffectiveProviderReport();
+            result.validation = QoreOnnxTools::OnnxModelTools::validate(path, config);
         } catch (hash<ExceptionInfo> ex) {
             result.error = sprintf("%s: %s", ex.err, ex.desc);
         }
@@ -366,6 +432,25 @@ public class ModelArtifactInspector {
             result.architectures = json.architectures;
             result.torch_dtype = json.torch_dtype;
             result.transformers_version = json.transformers_version;
+        } else if (name == "qore-onnx-package.json") {
+            result.manifest_version = json.manifest_version;
+            result.framework = json.framework;
+            result.runtime = json.runtime;
+            result.safety = json.safety;
+            result.entry_artifact = json.entry_artifact;
+            result.executable = json.executable;
+            result.task = json.task;
+            result.opset = json.opset;
+            result.producer = json.producer;
+            result.minimum_onnxruntime_version = json.minimum_onnxruntime_version;
+            result.dynamic_axes = json.dynamic_axes;
+            result.preprocess = json.preprocess;
+            result.postprocess = json.postprocess;
+            result.execution = json.execution;
+            result.providers = json.providers;
+            result.validation = json.validation;
+            result.benchmarks = json.benchmarks;
+            result.golden_vectors = json.golden_vectors;
         } else if (name == "tokenizer_config.json") {
             result.model_max_length = json.model_max_length;
             result.has_chat_template = exists json.chat_template && json.chat_template.val();
@@ -426,7 +511,14 @@ public class ModelArtifactInspector {
 %endif
 
     private static hash<ModelArtifactInfo> selectPrimaryArtifact(
-            list<hash<ModelArtifactInfo>> artifacts) {
+            list<hash<ModelArtifactInfo>> artifacts, *hash<auto> package_manifest) {
+        if (package_manifest && package_manifest.entry_artifact.val()) {
+            foreach hash<ModelArtifactInfo> a in (artifacts) {
+                if (a.name == package_manifest.entry_artifact) {
+                    return a;
+                }
+            }
+        }
         foreach string format in ("qml", "onnx", "safetensors", "torch-export", "pytorch-pickle") {
             foreach hash<ModelArtifactInfo> a in (artifacts) {
                 if (a.role == "model" && a.format == format) {
@@ -440,6 +532,94 @@ public class ModelArtifactInspector {
             }
         }
         return artifacts[0];
+    }
+
+    private static *hash<auto> findPackageManifest(list<hash<ModelArtifactInfo>> artifacts) {
+        foreach hash<ModelArtifactInfo> a in (artifacts) {
+            if (a.role == "manifest" && a.metadata) {
+                return a.metadata;
+            }
+        }
+        return NOTHING;
+    }
+
+    private static *hash<auto> buildProviderInfo(hash<ModelArtifactInfo> primary,
+            *hash<auto> package_manifest) {
+        if (package_manifest && package_manifest.providers) {
+            return cast<hash<auto>>(package_manifest.providers);
+        }
+        if (!primary.metadata) {
+            return NOTHING;
+        }
+        hash<auto> provider_info;
+        if (primary.metadata.provider_report) {
+            provider_info.provider_report = primary.metadata.provider_report;
+            if (primary.metadata.provider_report.active_provider.val()) {
+                provider_info.active_provider = primary.metadata.provider_report.active_provider;
+            }
+            if (exists primary.metadata.provider_report.available_providers) {
+                provider_info.available_providers = primary.metadata.provider_report.available_providers;
+            }
+            if (exists primary.metadata.provider_report.requested_providers) {
+                provider_info.requested_providers = primary.metadata.provider_report.requested_providers;
+            }
+        } else if (primary.metadata.active_provider.val()) {
+            provider_info.active_provider = primary.metadata.active_provider;
+        }
+        if (exists primary.metadata.provider_diagnostics) {
+            provider_info.diagnostics = primary.metadata.provider_diagnostics;
+        }
+        if (exists primary.metadata.cpu_fallback_used) {
+            provider_info.cpu_fallback_used = primary.metadata.cpu_fallback_used;
+        }
+        return provider_info ? provider_info : NOTHING;
+    }
+
+    private static *hash<auto> buildDynamicAxes(*list<hash<auto>> inputs,
+            *list<hash<auto>> outputs) {
+        hash<auto> rv;
+        addDynamicAxes(\rv, inputs);
+        addDynamicAxes(\rv, outputs);
+        return rv ? rv : NOTHING;
+    }
+
+    private static nothing addDynamicAxes(reference<hash<auto>> rv,
+            *list<hash<auto>> tensors) {
+        if (!tensors) {
+            return;
+        }
+        foreach hash<auto> tensor in (tensors) {
+            if (!tensor.name.val() || !tensor.shape) {
+                continue;
+            }
+            list<int> axes();
+            for (int i = 0; i < tensor.shape.size(); ++i) {
+                if (tensor.shape[i] <= 0) {
+                    push axes, i;
+                }
+            }
+            if (axes) {
+                rv{tensor.name} = axes;
+            }
+        }
+    }
+
+    private static *list<string> buildExternalDataList(list<hash<ModelArtifactInfo>> artifacts,
+            hash<ModelArtifactInfo> primary) {
+        list<string> rv();
+        foreach hash<ModelArtifactInfo> artifact in (artifacts) {
+            if (artifact.role == "external_data" && !rv.contains(artifact.name)) {
+                push rv, artifact.name;
+            }
+        }
+        if (primary.metadata && primary.metadata.external_data_files) {
+            foreach string name in (primary.metadata.external_data_files) {
+                if (!rv.contains(name)) {
+                    push rv, name;
+                }
+            }
+        }
+        return rv ? rv : NOTHING;
     }
 
     private static hash<TokenizerArtifactInfo> buildTokenizerInfo(

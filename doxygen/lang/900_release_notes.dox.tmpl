@@ -3288,6 +3288,15 @@ foreach string module_name in (registry.getProcessModules()) {
         execution-plan metadata through \c task, \c execution.task, and
         \c execution.plan; DataProviderML \c embed-text and \c rerank-text can
         infer registry-backed ONNX mode from \c embedding and \c reranker plans
+      - ONNX package manifests now expose a complete deployment contract for
+        model registry users: \c opset, producer metadata,
+        \c minimum_onnxruntime_version, tensor input/output contracts,
+        dynamic axes, external-data files, preprocessing/postprocessing
+        metadata, provider diagnostics, validation diagnostics, benchmark
+        metadata, and golden vectors
+      - QoreModelRegistry adds packaged ONNX action methods to inspect,
+        validate, benchmark, and compare registered ONNX model versions while
+        automatically materializing external-data companion artifacts
       - DataProviderML \c registry-model event output applies \c regression,
         \c classification, and \c sequence-classification execution plans to
         produce stable task fields while preserving raw ONNX outputs

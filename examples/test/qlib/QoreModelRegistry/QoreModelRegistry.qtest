@@ -79,6 +79,7 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("modelPackageInspection", \modelPackageInspectionTest());
         addTestCase("onnxPackageInspection", \onnxPackageInspectionTest());
         addTestCase("onnxExecutionPlanMetadata", \onnxExecutionPlanMetadataTest());
+        addTestCase("onnxRegistryDeploymentContract", \onnxRegistryDeploymentContractTest());
         addTestCase("onnxOptimizedArtifactRegistration", \onnxOptimizedArtifactRegistrationTest());
         addTestCase("onnxQuantizedArtifactDependencyError", \onnxQuantizedArtifactDependencyErrorTest());
         addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
@@ -1330,6 +1331,129 @@ class ModelRegistryTest inherits QUnit::Test {
                 "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
             });
         });
+    }
+
+    onnxRegistryDeploymentContractTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_contract_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+        writeBinaryFile(package_dir + DirSep + "model.onnx.data", <01020304>);
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-contract-linear",
+            "description": "ONNX deployment contract fixture",
+            "task": "regression",
+            "opset": 17,
+            "minimum_onnxruntime_version": "1.16.0",
+            "dynamic_axes": {"X": (0,)},
+            "benchmarks": {"baseline": {"average_ms": 0.0}},
+            "golden_vectors": ({"inputs": {"X": ((4.0,),)}, "outputs": {"Y": ((9.0,),)}},),
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-contract-linear", vid);
+        assertEq("regression", manifest.task,
+            "task should be stored at version level");
+        assertEq(17, manifest.opset, "declared opset should be stored");
+        assertEq("1.16.0", manifest.minimum_onnxruntime_version,
+            "minimum ONNX Runtime version should be stored");
+        assertEq("X", manifest.inputs[0].name,
+            "input tensor contract should be stored at version level");
+        assertEq("Y", manifest.outputs[0].name,
+            "output tensor contract should be stored at version level");
+        assertEq(0, manifest.dynamic_axes.X[0],
+            "declared dynamic axis metadata should be stored");
+        assertTrue(manifest.external_data.contains("model.onnx.data"),
+            "external-data companions should be exposed at version level");
+        assertTrue(manifest.validation.valid,
+            "registration-time ONNX validation should be visible in the manifest");
+        assertEq("CPUExecutionProvider", manifest.providers.active_provider,
+            "provider diagnostics should expose the active provider");
+        assertEq(0.0, manifest.benchmarks.baseline.average_ms,
+            "benchmark metadata should be preserved");
+        assertEq(1, manifest.golden_vectors.size(),
+            "golden vectors should be preserved");
+
+        hash<auto> inspection = registry.inspectOnnxVersion("onnx-contract-linear", vid);
+        assertEq("X", inspection.inputs[0].name,
+            "registry inspect action should expose input metadata");
+
+        hash<QoreOnnxTools::OnnxValidationResult> validation =
+            registry.validateOnnxVersion("onnx-contract-linear", vid);
+        assertTrue(validation.valid,
+            "registry validate action should validate the ONNX entry artifact");
+
+        hash<QoreOnnxTools::OnnxBenchmarkResult> benchmark =
+            registry.benchmarkOnnxVersion("onnx-contract-linear", vid, NOTHING,
+                <QoreOnnxTools::OnnxBenchmarkOptions>{
+                    "warmup_runs": 0,
+                    "runs": 1,
+                });
+        assertEq(1, benchmark.runs,
+            "registry benchmark action should run with caller options");
+
+        hash<QoreOnnxTools::OnnxCompareResult> comparison =
+            registry.compareOnnxVersions("onnx-contract-linear", vid, vid,
+                <QoreOnnxTools::OnnxCompareOptions>{
+                    "warmup_runs": 0,
+                    "runs": 1,
+                });
+        assertTrue(comparison.outputs_match,
+            "registry compare action should compare version artifacts");
+
+        QoreModelRegistry::ModelRegistryDataProvider dp(registry);
+        AbstractDataProvider versions_dp = dp.getChildProvider("onnx-contract-linear");
+        AbstractDataProviderRecordIterator it =
+            versions_dp.searchRecords({"version_id": vid});
+        assertTrue(it.next(), "deployment-contract version should be searchable");
+        hash<auto> record = it.getValue();
+        assertEq("CPUExecutionProvider", record.active_provider,
+            "DataProvider navigation should expose provider diagnostics");
+        assertTrue(record.validation_valid,
+            "DataProvider navigation should expose validation status");
+        assertEq("X", record.inputs[0].name,
+            "DataProvider API metadata should expose input contract fields");
+
+        string packaged_dir = dir + DirSep + "onnx_contract_packaged";
+        QoreOnnxTools::OnnxPackageTools::createPackage(package_dir, packaged_dir,
+            <QoreOnnxTools::OnnxPackageOptions>{
+                "task": "regression",
+                "opset": 18,
+                "minimum_onnxruntime_version": "1.17.0",
+                "preprocess": {"input_layout": "matrix"},
+                "postprocess": {"output_field": "score"},
+                "benchmarks": {"cpu": {"runs": 1}},
+                "golden_vectors": ({"inputs": {"X": ((5.0,),)}, "outputs": {"Y": ((11.0,),)}},),
+                "session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            });
+        string packaged_vid = registry.registerPackage(packaged_dir, {
+            "name": "onnx-contract-packaged",
+        });
+        hash<QoreModelRegistry::ModelVersionInfo> packaged_manifest =
+            registry.getVersionManifest("onnx-contract-packaged", packaged_vid);
+        assertEq("regression", packaged_manifest.task,
+            "qore-onnx package manifest task should be ingested");
+        assertEq(18, packaged_manifest.opset,
+            "qore-onnx package manifest opset should be ingested");
+        assertEq("1.17.0", packaged_manifest.minimum_onnxruntime_version,
+            "qore-onnx package manifest runtime requirement should be ingested");
+        assertEq("matrix", packaged_manifest.preprocess.input_layout,
+            "qore-onnx package manifest preprocessing contract should be ingested");
+        assertEq("score", packaged_manifest.postprocess.output_field,
+            "qore-onnx package manifest postprocessing contract should be ingested");
+        assertEq(1, packaged_manifest.benchmarks.cpu.runs,
+            "qore-onnx package manifest benchmark metadata should be ingested");
+        assertEq(1, packaged_manifest.golden_vectors.size(),
+            "qore-onnx package manifest golden vectors should be ingested");
     }
 
     onnxOptimizedArtifactRegistrationTest() {

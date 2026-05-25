@@ -220,19 +220,51 @@ class QoreOnnxToolsTest inherits QUnit::Test {
 
         hash<QoreOnnxTools::OnnxPackageResult> result =
             QoreOnnxTools::OnnxPackageTools::createPackage(src_dir, out_dir,
-                <QoreOnnxTools::OnnxPackageOptions>{"write_manifest": False});
+                <QoreOnnxTools::OnnxPackageOptions>{
+                    "task": "regression",
+                    "opset": 17,
+                    "minimum_onnxruntime_version": "1.16.0",
+                    "preprocess": {"input_layout": "row-major"},
+                    "postprocess": {"output_field": "Y"},
+                    "benchmarks": {"baseline": {"average_ms": 0.0}},
+                    "golden_vectors": ({"inputs": {"X": ((4.0,),)}, "outputs": {"Y": ((9.0,),)}},),
+                });
         assertEq("model.onnx", result.entry_artifact);
         assertEq("onnx", result.framework);
         assertEq("onnxruntime", result.runtime);
+        assertEq("regression", result.task);
+        assertEq(17, result.opset);
+        assertEq("1.16.0", result.minimum_onnxruntime_version);
+        assertEq("X", result.inputs[0].name);
+        assertEq("Y", result.outputs[0].name);
+        assertTrue(result.external_data.contains("model.onnx.data"));
+        assertEq("CPUExecutionProvider", result.providers.active_provider);
         assertEq("safe", result.safety);
         assertTrue(result.executable);
         assertTrue(is_file(out_dir + DirSep + "model.onnx"));
         assertTrue(is_file(out_dir + DirSep + "model.onnx.data"));
         assertTrue(is_file(out_dir + DirSep + "config.json"));
+        assertTrue(is_file(result.manifest_path));
         assertEq(1, (select result.artifacts, $1.role == "external_data").size());
         assertEq(1, (select result.artifacts, $1.role == "tokenizer").size());
         assertTrue(result.validation.valid);
         assertTrue(result.artifacts[0].sha256.val());
+%ifndef NoJson
+        hash<auto> manifest = parse_json(ReadOnlyFile::readTextFile(result.manifest_path));
+        assertEq("regression", manifest.task);
+        assertEq(17, manifest.opset);
+        assertEq("model.onnx", manifest.execution.entry_artifact);
+        assertEq("row-major", manifest.preprocess.input_layout);
+        assertEq("Y", manifest.outputs[0].name);
+        assertTrue(manifest.validation.valid);
+        assertEq(0.0, manifest.benchmarks.baseline.average_ms.toFloat());
+%endif
+
+        string default_out_dir = dir.path + DirSep + "default-pkg";
+        hash<QoreOnnxTools::OnnxPackageResult> default_result =
+            QoreOnnxTools::OnnxPackageTools::createPackage(src_dir, default_out_dir);
+        assertTrue(is_file(default_result.manifest_path),
+            "default package creation should write a manifest");
     }
 
     unsafePackageClassificationTest() {

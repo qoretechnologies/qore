@@ -84,6 +84,14 @@ class ModelRegistryDataProviderHelper {
     static hash<auto> makeVersionRecord(hash<ModelVersionInfo> version) {
         hash<auto> rec = cast<hash<auto>>(version);
         rec.artifact_count = version.artifacts ? version.artifacts.size() : 0;
+        if (version.providers) {
+            rec.active_provider = version.providers.active_provider;
+            rec.provider_diagnostics = version.providers.diagnostics;
+        }
+        if (version.validation) {
+            rec.validation_valid = version.validation.valid;
+            rec.validation_issues = version.validation.issues;
+        }
         if (version.execution) {
             rec.entry_artifact = version.execution.entry_artifact;
             rec.local_executable = version.execution.local_executable;
@@ -132,6 +140,16 @@ class ModelRegistryDataProviderHelper {
                 SoftStringOrNothingType),
             "runtime": new QoreDataField("runtime", "Preferred runtime",
                 SoftStringOrNothingType),
+            "task": new QoreDataField("task", "Model task identifier",
+                SoftStringOrNothingType),
+            "opset": new QoreDataField("opset", "ONNX opset version",
+                IntOrNothingType),
+            "producer": new QoreDataField("producer", "Model producer metadata",
+                SoftStringOrNothingType),
+            "minimum_onnxruntime_version": new QoreDataField(
+                "minimum_onnxruntime_version",
+                "Minimum ONNX Runtime version required by deployment policy",
+                SoftStringOrNothingType),
             "executable": new QoreDataField("executable", "Executable by Qore",
                 BoolType),
             "safety": new QoreDataField("safety", "Safety classification",
@@ -142,6 +160,10 @@ class ModelRegistryDataProviderHelper {
                 "Runtime entry artifact", SoftStringOrNothingType),
             "local_executable": new QoreDataField("local_executable",
                 "Executable in-process by Qore", BoolOrNothingType),
+            "active_provider": new QoreDataField("active_provider",
+                "Active ONNX Runtime provider", SoftStringOrNothingType),
+            "validation_valid": new QoreDataField("validation_valid",
+                "ONNX validation result", BoolOrNothingType),
             "tokenizer_json": new QoreDataField("tokenizer_json",
                 "Tokenizer artifact name", SoftStringOrNothingType),
             "tokenizer_config_json": new QoreDataField("tokenizer_config_json",
@@ -152,6 +174,36 @@ class ModelRegistryDataProviderHelper {
                 "Tokenizer has a chat template", BoolType),
             "config": new QoreDataField("config", "Version configuration",
                 AbstractDataProviderTypeMap."*hash"),
+            "inputs": new QoreDataField("inputs", "ONNX input tensor contract",
+                AbstractDataProviderTypeMap."list"),
+            "outputs": new QoreDataField("outputs", "ONNX output tensor contract",
+                AbstractDataProviderTypeMap."list"),
+            "dynamic_axes": new QoreDataField("dynamic_axes",
+                "Dynamic-axis metadata keyed by tensor name",
+                AbstractDataProviderTypeMap."*hash"),
+            "external_data": new QoreDataField("external_data",
+                "ONNX external-data artifact names",
+                AbstractDataProviderTypeMap."list"),
+            "preprocess": new QoreDataField("preprocess", "Preprocessing contract",
+                AbstractDataProviderTypeMap."*hash"),
+            "postprocess": new QoreDataField("postprocess", "Postprocessing contract",
+                AbstractDataProviderTypeMap."*hash"),
+            "providers": new QoreDataField("providers",
+                "ONNX provider deployment diagnostics", AbstractDataProviderTypeMap."*hash"),
+            "provider_diagnostics": new QoreDataField("provider_diagnostics",
+                "ONNX provider diagnostics list", AbstractDataProviderTypeMap."list"),
+            "validation": new QoreDataField("validation",
+                "ONNX validation diagnostics", AbstractDataProviderTypeMap."*hash"),
+            "validation_issues": new QoreDataField("validation_issues",
+                "ONNX validation issues", AbstractDataProviderTypeMap."list"),
+            "benchmarks": new QoreDataField("benchmarks", "Benchmark metadata",
+                AbstractDataProviderTypeMap."*hash"),
+            "golden_vectors": new QoreDataField("golden_vectors",
+                "Golden validation vectors", AbstractDataProviderTypeMap."list"),
+            "optimized_artifacts": new QoreDataField("optimized_artifacts",
+                "Optimized ONNX/ORT artifacts", AbstractDataProviderTypeMap."list"),
+            "quantized_artifacts": new QoreDataField("quantized_artifacts",
+                "Quantized ONNX artifacts", AbstractDataProviderTypeMap."list"),
             "artifacts": new QoreDataField("artifacts", "Artifact metadata list",
                 AbstractDataProviderTypeMap."list"),
             "execution": new QoreDataField("execution", "Execution metadata",
@@ -179,6 +231,30 @@ class ModelRegistryDataProviderHelper {
                 SoftStringOrNothingType),
             "framework": new QoreDataField("framework", "Framework name override",
                 SoftStringOrNothingType),
+            "task": new QoreDataField("task", "Model task identifier",
+                SoftStringOrNothingType),
+            "opset": new QoreDataField("opset", "ONNX opset version",
+                IntOrNothingType),
+            "producer": new QoreDataField("producer", "Producer metadata",
+                SoftStringOrNothingType),
+            "minimum_onnxruntime_version": new QoreDataField(
+                "minimum_onnxruntime_version",
+                "Minimum ONNX Runtime version required by deployment policy",
+                SoftStringOrNothingType),
+            "dynamic_axes": new QoreDataField("dynamic_axes",
+                "Dynamic-axis metadata keyed by tensor name",
+                AbstractDataProviderTypeMap."*hash"),
+            "preprocess": new QoreDataField("preprocess", "Preprocessing contract",
+                AbstractDataProviderTypeMap."*hash"),
+            "postprocess": new QoreDataField("postprocess", "Postprocessing contract",
+                AbstractDataProviderTypeMap."*hash"),
+            "validation": new QoreDataField("validation",
+                "ONNX validation diagnostics to record",
+                AbstractDataProviderTypeMap."*hash"),
+            "benchmarks": new QoreDataField("benchmarks", "Benchmark metadata",
+                AbstractDataProviderTypeMap."*hash"),
+            "golden_vectors": new QoreDataField("golden_vectors",
+                "Golden validation vectors", AbstractDataProviderTypeMap."list"),
             "config": new QoreDataField("config", "Version configuration",
                 AbstractDataProviderTypeMap."*hash"),
             "registration_options": new QoreDataField("registration_options",
@@ -211,7 +287,10 @@ class ModelRegistryDataProviderHelper {
             options.name = model_name;
         }
         foreach string key in (("version_id", "description", "metrics", "tags",
-                "training_data_hash", "algorithm", "framework", "config")) {
+                "training_data_hash", "algorithm", "framework", "task", "opset",
+                "producer", "minimum_onnxruntime_version", "dynamic_axes",
+                "preprocess", "postprocess", "validation", "benchmarks",
+                "golden_vectors", "config")) {
             if (exists rec{key}) {
                 options{key} = rec{key};
             }

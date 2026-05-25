@@ -209,6 +209,79 @@ QoreModelRegistry::ModelExecutableAdapter optimized =
     reg.loadOnnxArtifactAdapter("bge-small-en", vid, "model.cpu.ort", NOTHING);
     @endcode
 
+    @par ONNX Deployment Contract Example:
+    @code{.py}
+%requires QoreModelRegistry
+%requires QoreOnnxTools
+%requires ml
+
+QoreModelRegistry::ModelRegistry reg({"path": "/var/models"});
+
+# The package can be created with qore-onnx package or assembled by another
+# deployment process.  Registry registration stores the runtime contract next
+# to the model version so DataProvider navigation and API metadata can expose it.
+string vid = reg.registerPackage("/srv/model-packages/customer-score", {
+    "name": "customer-score",
+    "task": "regression",
+    "opset": 17,
+    "minimum_onnxruntime_version": "1.16.0",
+    "dynamic_axes": {"X": (0,)},
+    "preprocess": {
+        "input_layout": "row-major",
+        "feature_columns": ("age", "balance", "risk_score"),
+    },
+    "postprocess": {"output_field": "score"},
+    "benchmarks": {
+        "cpu": {
+            "average_ms": 0.19,
+            "runs": 1000,
+        },
+    },
+    "golden_vectors": ({
+        "inputs": {"X": ((41.0, 10000.0, 0.7),)},
+        "outputs": {"Y": ((0.82,),)},
+    },),
+    "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+});
+
+hash<QoreModelRegistry::ModelVersionInfo> manifest =
+    reg.getVersionManifest("customer-score", vid);
+printf("task=%s input=%s output=%s provider=%s\n",
+    manifest.task,
+    manifest.inputs[0].name,
+    manifest.outputs[0].name,
+    manifest.providers.active_provider);
+
+# Registry actions operate on the packaged entry artifact and automatically
+# materialize external-data companions before calling ONNX Runtime.
+hash<auto> inspection = reg.inspectOnnxVersion("customer-score", vid);
+hash<QoreOnnxTools::OnnxValidationResult> validation =
+    reg.validateOnnxVersion("customer-score", vid);
+hash<QoreOnnxTools::OnnxBenchmarkResult> benchmark =
+    reg.benchmarkOnnxVersion("customer-score", vid, NOTHING, {
+        "runs": 100,
+        "warmup_runs": 5,
+    });
+hash<QoreOnnxTools::OnnxCompareResult> comparison =
+    reg.compareOnnxVersions("customer-score", vid, vid, {
+        "benchmark": True,
+        "runs": 10,
+    });
+
+printf("valid=%y avg=%fms match=%y\n",
+    validation.valid, benchmark.average_ms, comparison.outputs_match);
+
+QoreModelRegistry::ModelRegistryDataProvider dp(reg);
+AbstractDataProvider versions = dp.getChildProvider("customer-score");
+AbstractDataProviderRecordIterator it =
+    versions.searchRecords({"version_id": vid});
+if (it.next()) {
+    hash<auto> rec = it.getValue();
+    printf("provider=%s valid=%y\n",
+        rec.active_provider, rec.validation_valid);
+}
+    @endcode
+
     @par DataProvider Package Registration Example:
     @code{.py}
 %requires QoreModelRegistry
@@ -265,6 +338,19 @@ reg.loadExecutable("torch-source", vid);
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
 
     @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
+    - Model manifests now expose the complete ONNX deployment contract at the
+      version level: \c task, \c opset, \c producer,
+      \c minimum_onnxruntime_version, \c inputs, \c outputs,
+      \c dynamic_axes, \c external_data, \c preprocess, \c postprocess,
+      \c providers, \c optimized_artifacts, \c quantized_artifacts,
+      \c validation, \c benchmarks, and \c golden_vectors
+    - Added registry action methods for packaged ONNX versions:
+      \c inspectOnnxVersion(), \c validateOnnxVersion(),
+      \c benchmarkOnnxVersion(), \c compareOnnxVersions(), and
+      \c compareOnnxVersionArtifacts()
+    - ModelRegistry DataProvider records now expose ONNX provider diagnostics,
+      validation status, tensor contracts, deployment metadata, benchmark
+      metadata, golden vectors, and optimized/quantized artifact lists
     - ONNX model packages now expose task-aware execution-plan metadata through
       \c task, \c execution.task, and \c execution.plan; supported task names
       include \c raw, \c classification, \c regression, \c embedding,

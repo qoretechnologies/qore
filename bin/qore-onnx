@@ -41,12 +41,15 @@ class QoreOnnxCli {
             "abs_tolerance": "abs-tolerance=s",
             "activation_type": "activation-type=s",
             "benchmark_inputs": "benchmark-inputs=s",
+            "benchmarks": "benchmarks=s",
             "calibration_data": "calibration-data=s",
             "calibration_method": "calibration-method=s",
             "candidate_session_config": "candidate-session-config=s",
             "dry_run": "dry-run",
+            "dynamic_axes": "dynamic-axes=s",
             "extra_options": "extra-options=s",
             "force": "f,force",
+            "golden_vectors": "golden-vectors=s",
             "help": "h,help",
             "input": "i,input=s",
             "json": "J,json",
@@ -56,6 +59,7 @@ class QoreOnnxCli {
             "manifest": "manifest!",
             "manifest_name": "manifest-name=s",
             "method": "m,method=s",
+            "minimum_onnxruntime_version": "minimum-onnxruntime-version=s",
             "no_include_companions": "no-include-companions",
             "no_include_external_data": "no-include-external-data",
             "no_manifest": "no-manifest",
@@ -63,15 +67,19 @@ class QoreOnnxCli {
             "nodes_to_exclude": "nodes-to-exclude=s",
             "nodes_to_quantize": "nodes-to-quantize=s",
             "op_types": "op-types=s",
+            "opset": "opset=i",
             "ort_format": "ort-format",
             "output": "o,output=s",
             "per_channel": "per-channel",
+            "postprocess": "postprocess=s",
+            "preprocess": "preprocess=s",
             "python": "python=s",
             "reduce_range": "reduce-range",
             "rel_tolerance": "rel-tolerance=s",
             "runs": "runs=i",
             "session_config": "session-config=s",
             "source_session_config": "source-session-config=s",
+            "task": "task=s",
             "top_limit": "top-limit=i",
             "validate": "validate!",
             "version": "V,version",
@@ -322,6 +330,27 @@ class QoreOnnxCli {
         if (opts.session_config.val()) {
             popts.session_config = buildSessionConfig(opts);
         }
+        if (opts.task.val()) popts.task = opts.task;
+        if (exists opts.opset) popts.opset = opts.opset;
+        if (opts.minimum_onnxruntime_version.val()) {
+            popts.minimum_onnxruntime_version = opts.minimum_onnxruntime_version;
+        }
+        if (opts.preprocess.val()) {
+            popts.preprocess = cast<hash<auto>>(readJsonFile(opts.preprocess));
+        }
+        if (opts.postprocess.val()) {
+            popts.postprocess = cast<hash<auto>>(readJsonFile(opts.postprocess));
+        }
+        if (opts.dynamic_axes.val()) {
+            popts.dynamic_axes = cast<hash<auto>>(readJsonFile(opts.dynamic_axes));
+        }
+        if (opts.benchmarks.val()) {
+            popts.benchmarks = cast<hash<auto>>(readJsonFile(opts.benchmarks));
+        }
+        if (opts.golden_vectors.val()) {
+            popts.golden_vectors =
+                cast<list<hash<auto>>>(readJsonFile(opts.golden_vectors));
+        }
         if (exists opts.force) popts.force = opts.force;
         if (exists opts.include_companions) popts.include_companions = opts.include_companions;
         if (exists opts.no_include_companions) popts.include_companions = False;
@@ -335,7 +364,7 @@ class QoreOnnxCli {
         return popts;
     }
 
-    private static hash<auto> readJsonFile(string path) {
+    private static auto readJsonFile(string path) {
 %ifdef NoJson
         throw "QORE-ONNX-ERROR", "the json module is required for JSON input options";
 %else
@@ -390,6 +419,14 @@ class QoreOnnxCli {
         printf("  --force                          Overwrite output file\n");
         printf("  --no-validate                    Skip loading the output model after optimization\n\n");
         printf("Package options:\n");
+        printf("  --task NAME                     Store an ONNX task in the package manifest\n");
+        printf("  --opset N                       Store an ONNX opset version in the package manifest\n");
+        printf("  --minimum-onnxruntime-version V Store deployment runtime requirement metadata\n");
+        printf("  --preprocess PATH               JSON preprocessing contract metadata\n");
+        printf("  --postprocess PATH              JSON postprocessing contract metadata\n");
+        printf("  --dynamic-axes PATH             JSON dynamic-axis metadata hash\n");
+        printf("  --benchmarks PATH               JSON benchmark metadata hash\n");
+        printf("  --golden-vectors PATH           JSON list of golden validation vectors\n");
         printf("  --manifest-name NAME             Manifest filename, default qore-onnx-package.json\n");
         printf("  --no-manifest                    Do not write a package manifest\n");
         printf("  --no-include-companions          Skip tokenizer/config companion files\n");

@@ -168,6 +168,58 @@ public hashdecl ModelVersionInfo {
     /** @since QoreModelRegistry 2.4
     */
     *string task;
+    #! ONNX opset version, when known
+    /** @since QoreModelRegistry 2.5
+    */
+    *int opset;
+    #! Producer framework/tool metadata, when known
+    /** @since QoreModelRegistry 2.5
+    */
+    *string producer;
+    #! Minimum ONNX Runtime version required by deployment policy, when declared
+    /** @since QoreModelRegistry 2.5
+    */
+    *string minimum_onnxruntime_version;
+    #! ONNX input tensor contract, when known
+    /** @since QoreModelRegistry 2.5
+    */
+    *list<hash<auto>> inputs;
+    #! ONNX output tensor contract, when known
+    /** @since QoreModelRegistry 2.5
+    */
+    *list<hash<auto>> outputs;
+    #! Dynamic-axis metadata keyed by tensor name, when known
+    /** @since QoreModelRegistry 2.5
+    */
+    *hash<auto> dynamic_axes;
+    #! ONNX external-data artifact names required by the entry artifact
+    /** @since QoreModelRegistry 2.5
+    */
+    *list<string> external_data;
+    #! Version-level preprocessing contract metadata
+    /** @since QoreModelRegistry 2.5
+    */
+    *hash<auto> preprocess;
+    #! Version-level postprocessing contract metadata
+    /** @since QoreModelRegistry 2.5
+    */
+    *hash<auto> postprocess;
+    #! ONNX Runtime provider deployment diagnostics and policy metadata
+    /** @since QoreModelRegistry 2.5
+    */
+    *hash<auto> providers;
+    #! ONNX validation diagnostics recorded at package registration time
+    /** @since QoreModelRegistry 2.5
+    */
+    *hash<auto> validation;
+    #! Benchmark metadata supplied by deployment tooling or registry callers
+    /** @since QoreModelRegistry 2.5
+    */
+    *hash<auto> benchmarks;
+    #! Golden input/output vectors supplied for deployment validation
+    /** @since QoreModelRegistry 2.5
+    */
+    *list<hash<auto>> golden_vectors;
     #! True if this version can be executed locally by Qore
     /** @since QoreModelRegistry 2.2
     */

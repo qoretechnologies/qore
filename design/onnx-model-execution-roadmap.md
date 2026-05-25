@@ -406,7 +406,7 @@ Acceptance checks:
 
 ## Phase 10: High-Level Registry Contract
 
-Status: pending.
+Status: completed.
 
 Extend QoreModelRegistry manifests with a complete ONNX deployment contract.
 
@@ -437,8 +437,19 @@ Acceptance checks:
 
 - Registry actions can inspect, validate, benchmark, optimize, quantize, and
   compare ONNX model versions.
+  Implemented with registry-level `inspectOnnxVersion()`,
+  `validateOnnxVersion()`, `benchmarkOnnxVersion()`, `compareOnnxVersions()`,
+  `compareOnnxVersionArtifacts()`, and the existing
+  `registerOptimizedOnnxArtifact()` / `registerQuantizedOnnxArtifact()`
+  methods. These methods materialize packaged ONNX external-data companions
+  before invoking QoreOnnxTools.
 - Manifest diagnostics are visible from DataProvider navigation and API
   metadata.
+  Implemented by extending `ModelVersionInfo`, package inspection, qore-onnx
+  package manifests, and `ModelRegistryDataProvider` record fields with
+  provider diagnostics, validation status, tensor contracts, dynamic axes,
+  external data, preprocessing/postprocessing metadata, benchmark metadata, and
+  golden vectors.
 
 ## Phase 11: Final Documentation and Full Verification
 
