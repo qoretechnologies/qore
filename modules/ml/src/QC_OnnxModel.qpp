@@ -472,6 +472,43 @@ hash<auto> OnnxModel::saveOptimized(string output_path,
     return model->saveOptimized(output_path->c_str(), options, ort_format, xsink);
 }
 
+//! Ends ONNX Runtime profiling for this model
+/** @return the generated ONNX Runtime profile file path, or @ref NOTHING if
+    profiling was not enabled or ONNX Runtime did not produce a profile file
+
+    Profiling is enabled when creating the model with
+    \c OnnxSessionConfig.enable_profiling or \c OnnxSessionConfig.profile_file_prefix.
+
+    @par Example:
+    @code{.py}
+OnnxModel model("/models/customer-score.onnx",
+    <OnnxSessionConfig>{"providers": (), "profile_file_prefix": "/tmp/customer-score"});
+hash<auto> out = model.run({"X": ((1.0,),)});
+*string profile_path = model.endProfiling();
+    @endcode
+
+    @throw ML-ONNX-PROFILING-ERROR if ONNX Runtime cannot end profiling
+*/
+*string OnnxModel::endProfiling() {
+    return model->endProfiling(xsink);
+}
+
+//! Returns Qore-side inference counters and latency statistics
+/** @return a hash with \c run_count, \c batch_items, \c total_ms, \c last_ms,
+    \c max_ms, \c avg_ms, \c profiling_enabled, \c profile_file_prefix, and
+    \c last_profile_file
+*/
+hash<auto> OnnxModel::getInferenceStats() [flags=RET_VALUE_ONLY] {
+    return model->getInferenceStats(xsink);
+}
+
+//! Resets Qore-side inference counters and latency statistics
+/** The ONNX Runtime profile state is not changed by this method.
+*/
+nothing OnnxModel::resetInferenceStats() {
+    model->resetInferenceStats();
+}
+
 //! Creates a reusable ONNX Runtime I/O binding for this model
 /** @return a new @ref OnnxIoBinding tied to this model session
 

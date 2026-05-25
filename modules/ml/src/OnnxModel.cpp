@@ -32,6 +32,7 @@
 #include <onnxruntime_session_options_config_keys.h>
 
 #include <algorithm>
+#include <chrono>
 #include <numeric>
 #include <cstring>
 #include <cerrno>
@@ -51,10 +52,15 @@ namespace {
 
 std::mutex auto_provider_mutex;
 std::unordered_set<std::string> unusable_auto_providers;
+using SteadyClock = std::chrono::steady_clock;
 
 bool isAutoProviderDisabled(const std::string& provider) {
     std::lock_guard<std::mutex> lock(auto_provider_mutex);
     return unusable_auto_providers.find(provider) != unusable_auto_providers.end();
+}
+
+double elapsedMilliseconds(const SteadyClock::time_point& start) {
+    return std::chrono::duration<double, std::milli>(SteadyClock::now() - start).count();
 }
 
 void disableAutoProvider(const std::string& provider) {
@@ -840,6 +846,36 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
     QoreValue log_sev_val = config->getKeyValue("log_severity");
     if (!log_sev_val.isNullOrNothing()) {
         opts.SetLogSeverityLevel((int)log_sev_val.getAsBigInt());
+    }
+
+    QoreValue profile_prefix_val = config->getKeyValue("profile_file_prefix");
+    QoreValue enable_profile_val = config->getKeyValue("enable_profiling");
+    bool enable_profile = (!enable_profile_val.isNullOrNothing() && enable_profile_val.getAsBool())
+        || !profile_prefix_val.isNullOrNothing();
+    if (enable_profile) {
+        std::string prefix = "qore-onnx-profile";
+        if (!profile_prefix_val.isNullOrNothing()) {
+            QoreStringValueHelper profile_prefix(profile_prefix_val);
+            if (!profile_prefix->strlen()) {
+                xsink->raiseException("ML-ONNX-ERROR",
+                    "invalid profile_file_prefix; expected a non-empty path prefix");
+                return;
+            }
+            prefix = profile_prefix->c_str();
+        }
+        try {
+            opts.EnableProfiling(prefix.c_str());
+            {
+                std::lock_guard<std::mutex> lock(stats_mutex);
+                profiling_enabled = true;
+                profiling_file_prefix = prefix;
+                last_profile_file.clear();
+            }
+        } catch (const Ort::Exception& e) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "failed to enable ONNX Runtime profiling: %s", e.what());
+            return;
+        }
     }
 
     QoreValue optimized_path_val = config->getKeyValue("optimized_model_filepath");
@@ -2987,6 +3023,91 @@ QoreHashNode* QoreOnnxModel::runBound(const QoreObject* binding_obj, const QoreO
     return binding->run(options_obj, return_tensors, xsink);
 }
 
+QoreStringNode* QoreOnnxModel::endProfiling(ExceptionSink* xsink) {
+    if (!session) {
+        xsink->raiseException("ML-ONNX-ERROR", "model is not loaded");
+        return nullptr;
+    }
+    try {
+        Ort::AllocatedStringPtr profile_file = session->EndProfilingAllocated(allocator);
+        if (!profile_file || !profile_file.get() || !*profile_file.get()) {
+            std::lock_guard<std::mutex> lock(stats_mutex);
+            profiling_enabled = false;
+            return nullptr;
+        }
+        std::string profile_path = profile_file.get();
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex);
+            last_profile_file = profile_path;
+            profiling_enabled = false;
+        }
+        return new QoreStringNode(profile_path);
+    } catch (const Ort::Exception& e) {
+        xsink->raiseException("ML-ONNX-PROFILING-ERROR",
+            "failed to end ONNX Runtime profiling: %s", e.what());
+        return nullptr;
+    }
+}
+
+void QoreOnnxModel::recordInference(double elapsed_ms, uint64_t batch_items) {
+    std::lock_guard<std::mutex> lock(stats_mutex);
+    ++inference_run_count;
+    inference_batch_items += batch_items;
+    total_inference_ms += elapsed_ms;
+    last_inference_ms = elapsed_ms;
+    if (elapsed_ms > max_inference_ms) {
+        max_inference_ms = elapsed_ms;
+    }
+}
+
+QoreHashNode* QoreOnnxModel::getInferenceStats(ExceptionSink* xsink) const {
+    uint64_t run_count;
+    uint64_t batch_items;
+    double total_ms;
+    double last_ms;
+    double max_ms;
+    bool profiling_active;
+    std::string profile_prefix;
+    std::string profile_file;
+    {
+        std::lock_guard<std::mutex> lock(stats_mutex);
+        run_count = inference_run_count;
+        batch_items = inference_batch_items;
+        total_ms = total_inference_ms;
+        last_ms = last_inference_ms;
+        max_ms = max_inference_ms;
+        profiling_active = profiling_enabled;
+        profile_prefix = profiling_file_prefix;
+        profile_file = last_profile_file;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("run_count", static_cast<int64_t>(run_count), xsink);
+    rv->setKeyValue("batch_items", static_cast<int64_t>(batch_items), xsink);
+    rv->setKeyValue("total_ms", total_ms, xsink);
+    rv->setKeyValue("last_ms", last_ms, xsink);
+    rv->setKeyValue("max_ms", max_ms, xsink);
+    rv->setKeyValue("avg_ms", run_count ? total_ms / run_count : 0.0, xsink);
+    rv->setKeyValue("profiling_enabled", profiling_active, xsink);
+    rv->setKeyValue("profile_file_prefix", profile_prefix.empty()
+        ? QoreValue() : QoreValue(new QoreStringNode(profile_prefix)), xsink);
+    rv->setKeyValue("last_profile_file", profile_file.empty()
+        ? QoreValue() : QoreValue(new QoreStringNode(profile_file)), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return rv.release();
+}
+
+void QoreOnnxModel::resetInferenceStats() {
+    std::lock_guard<std::mutex> lock(stats_mutex);
+    inference_run_count = 0;
+    inference_batch_items = 0;
+    total_inference_ms = 0.0;
+    last_inference_ms = 0.0;
+    max_inference_ms = 0.0;
+}
+
 QoreHashNode* QoreOnnxModel::saveOptimized(const char* output_path, const QoreHashNode* config,
         bool ort_format, ExceptionSink* xsink) const {
     if (!output_path || !*output_path) {
@@ -3086,6 +3207,9 @@ QoreHashNode* QoreOnnxModel::collectBoundOutputs(Ort::IoBinding& binding, bool r
             return nullptr;
         }
         rv->setKeyValue(names[i].c_str(), out_val, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
     return rv.release();
 }
@@ -3283,6 +3407,7 @@ QoreHashNode* QoreOnnxIoBinding::run(const QoreObject* options_obj, bool return_
         options_holder = qore_options;
     }
 
+    auto start = SteadyClock::now();
     try {
         if (qore_options) {
             model->session->Run(qore_options->options, *binding);
@@ -3295,7 +3420,11 @@ QoreHashNode* QoreOnnxIoBinding::run(const QoreObject* options_obj, bool return_
         return nullptr;
     }
 
-    return model->collectBoundOutputs(*binding, return_tensors, xsink);
+    QoreHashNode* rv = model->collectBoundOutputs(*binding, return_tensors, xsink);
+    if (!*xsink) {
+        model->recordInference(elapsedMilliseconds(start), 1);
+    }
+    return rv;
 }
 
 QoreListNode* QoreOnnxIoBinding::getBoundInputNames(ExceptionSink* xsink) const {
@@ -3313,6 +3442,7 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
         xsink->raiseException("ML-ONNX-ERROR", "model is not loaded");
         return nullptr;
     }
+    auto start = SteadyClock::now();
 
     // Build input tensor names and values
     std::vector<const char*> input_names;
@@ -3837,8 +3967,12 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
             return nullptr;
         }
         rv->setKeyValue(output_meta[i].name.c_str(), out_val, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
 
+    recordInference(elapsedMilliseconds(start), 1);
     return rv.release();
 }
 

@@ -482,6 +482,10 @@ hashdecl Qore::ML::OnnxSessionConfig {
     *int graph_optimization_level;
     //! diagnostic log verbosity: 0=verbose, 1=info, 2=warning, 3=error, 4=fatal; default 2 (warning)
     *int log_severity;
+    //! whether to enable ONNX Runtime profiling for this session
+    *bool enable_profiling;
+    //! profile file prefix passed to ONNX Runtime; setting this also enables profiling
+    *string profile_file_prefix;
     //! path where ONNX Runtime should save the optimized model while creating the session
     *string optimized_model_filepath;
     //! input model format for memory buffers or ambiguous paths: "ONNX" or "ORT"

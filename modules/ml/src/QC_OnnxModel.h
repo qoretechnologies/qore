@@ -152,6 +152,15 @@ public:
     DLLLOCAL QoreHashNode* runBound(const QoreObject* binding_obj, const QoreObject* options_obj,
         bool return_tensors, ExceptionSink* xsink);
 
+    //! Ends ONNX Runtime profiling and returns the generated profile path
+    DLLLOCAL QoreStringNode* endProfiling(ExceptionSink* xsink);
+
+    //! Returns Qore-side inference counters and latency stats
+    DLLLOCAL QoreHashNode* getInferenceStats(ExceptionSink* xsink) const;
+
+    //! Resets Qore-side inference counters and latency stats
+    DLLLOCAL void resetInferenceStats();
+
     //! Saves an optimized ONNX or ORT artifact from the original model source
     DLLLOCAL QoreHashNode* saveOptimized(const char* output_path, const QoreHashNode* config,
         bool ort_format, ExceptionSink* xsink) const;
@@ -200,6 +209,16 @@ private:
     bool allow_cpu_fallback = true;
     bool fail_on_provider_fallback = false;
     bool cpu_fallback_used = false;
+    bool profiling_enabled = false;
+    std::string profiling_file_prefix;
+    std::string last_profile_file;
+
+    mutable std::mutex stats_mutex;
+    uint64_t inference_run_count = 0;
+    uint64_t inference_batch_items = 0;
+    double total_inference_ms = 0.0;
+    double last_inference_ms = 0.0;
+    double max_inference_ms = 0.0;
 
     //! Initialize the Ort::Env and populate session options from the config hash
     /** Shared between the path-based and memory-based configured constructors.
@@ -288,6 +307,7 @@ private:
     //! Converts bound outputs to a Qore hash
     DLLLOCAL QoreHashNode* collectBoundOutputs(Ort::IoBinding& binding, bool return_tensors,
         ExceptionSink* xsink);
+    DLLLOCAL void recordInference(double elapsed_ms, uint64_t batch_items);
 
     //! Build a QoreHashNode with OnnxTensorInfo from a TensorMeta
     DLLLOCAL QoreHashNode* tensorMetaToHash(const TensorMeta& meta, ExceptionSink* xsink) const;

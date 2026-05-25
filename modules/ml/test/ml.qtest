@@ -153,6 +153,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
         addTestCase("OnnxModel ORT artifact", \onnxOrtArtifactTest());
+        addTestCase("OnnxModel profiling and stats", \onnxProfilingStatsTest());
         addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
@@ -3261,6 +3262,47 @@ public class MlTest inherits QUnit::Test {
             <ML::OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
         hash<auto> result = model.run({"X": ((5.0,),)});
         assertFloat(11.0, result.Y[0], 1e-5);
+    }
+
+    onnxProfilingStatsTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        FsUtil::TmpFile prefix("qore-ml-onnx-profile-", "");
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "profile_file_prefix": prefix.path,
+        });
+        hash<auto> before = model.getInferenceStats();
+        assertEq(0, before.run_count);
+        assertTrue(before.profiling_enabled);
+
+        hash<auto> result = model.run({"X": ((6.0,),)});
+        assertFloat(13.0, result.Y[0], 1e-5);
+
+        hash<auto> stats = model.getInferenceStats();
+        assertEq(1, stats.run_count);
+        assertEq(1, stats.batch_items);
+        assertTrue(stats.last_ms >= 0.0);
+        assertTrue(stats.total_ms >= stats.last_ms);
+        assertEq(prefix.path, stats.profile_file_prefix);
+
+        *string profile_path = model.endProfiling();
+        assertTrue(profile_path && profile_path.val());
+        assertTrue(is_file(profile_path));
+        unlink(profile_path);
+
+        hash<auto> after_profile = model.getInferenceStats();
+        assertFalse(after_profile.profiling_enabled);
+        assertEq(profile_path, after_profile.last_profile_file);
+
+        model.resetInferenceStats();
+        hash<auto> reset = model.getInferenceStats();
+        assertEq(0, reset.run_count);
+        assertEq(0, reset.batch_items);
+        assertEq(0.0, reset.total_ms);
     }
 
     onnxMultiInputTensorInferenceTest() {
