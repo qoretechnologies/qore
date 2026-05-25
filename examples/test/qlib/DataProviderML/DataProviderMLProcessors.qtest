@@ -394,17 +394,26 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # The highest logit is token ID 4 ("hello" in minimalTokenizerJson()).
         hash<auto> logits = QoreOnnxExport::OnnxGraphBuilder::makeTensorFloat(
             "constant_logits", (1, 1, 8), (0.0, 0.1, 0.2, 0.3, 9.0, 0.4, 0.5, 0.6));
-        list<hash<auto>> attrs = ({
+        hash<auto> unused_cache = QoreOnnxExport::OnnxGraphBuilder::makeTensorFloat(
+            "constant_present", (1, 1, 1, 2), (1.0, 2.0));
+        list<hash<auto>> logits_attrs = ({
             "name": "value",
             "type": QoreOnnxExport::ONNX_ATTR_TENSOR,
             "t": logits,
         },);
+        list<hash<auto>> cache_attrs = ({
+            "name": "value",
+            "type": QoreOnnxExport::ONNX_ATTR_TENSOR,
+            "t": unused_cache,
+        },);
         hash<auto> model_hash = QoreOnnxExport::OnnxGraphBuilder::buildModel(
             "tiny-causal-lm",
-            (QoreOnnxExport::OnnxGraphBuilder::makeNode("Constant", (), ("logits",), attrs),),
+            (QoreOnnxExport::OnnxGraphBuilder::makeNode("Constant", (), ("logits",), logits_attrs),
+                QoreOnnxExport::OnnxGraphBuilder::makeNode("Constant", (), ("present.0",), cache_attrs)),
             (DataProviderMLProcessorsTest::makeDynamicInt64SequenceInput("input_ids"),
                 DataProviderMLProcessorsTest::makeDynamicInt64SequenceInput("attention_mask")),
-            (DataProviderMLProcessorsTest::makeStaticFloatTensorOutput("logits", (1, 1, 8)),),
+            (DataProviderMLProcessorsTest::makeStaticFloatTensorOutput("logits", (1, 1, 8)),
+                DataProviderMLProcessorsTest::makeStaticFloatTensorOutput("present.0", (1, 1, 1, 2))),
             ());
         return QoreOnnxExport::OnnxGraphBuilder::serialize(model_hash);
     }
@@ -3079,7 +3088,11 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "initial causal-lm execution should report unsupported stateful KV-cache reuse");
         assertTrue(results[0].prediction.kv_cache.requested,
             "KV-cache execution plan metadata should be reported in the output");
+        assertEq(("logits",), results[0].prediction.kv_cache.selected_outputs,
+            "causal-lm should request only logits while KV-cache reuse is unsupported");
         assertEq((1, 1, 8), results[0].prediction.last_outputs.logits.shape);
+        assertFalse(results[0].prediction.last_outputs.hasKey("present.0"),
+            "unused cache outputs should not be materialized when only logits are needed");
     }
 
     registryModelOnnxDataFrameTensorPath() {

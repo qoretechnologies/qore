@@ -1978,7 +1978,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       registry ONNX packages, including registry tokenizer loading,
       \c input_ids and \c attention_mask tensor construction, greedy decoding,
       stop-token handling, generated token metadata, and truthful KV-cache
-      capability reporting
+      capability reporting; while stateful KV-cache reuse is not yet exposed,
+      causal-LM execution requests only the logits tensor when the output name
+      is known so unused present-key/value cache tensors are not materialized
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used

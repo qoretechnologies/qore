@@ -310,6 +310,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         #! ONNX input tensor names exposed by the loaded model
         hash<string, bool> onnx_input_names;
 
+        #! ONNX output tensor names exposed by the loaded model
+        hash<string, bool> onnx_output_names;
+
         #! Prompt field for causal language model generation
         *string prompt_field;
 
@@ -421,6 +424,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             provider_diagnostics = model.getProviderDiagnostics();
             execution_provider = provider_diagnostics.active_provider;
             onnx_input_names = QoreRegistryModelProcessor::buildOnnxInputNameMap(provider_diagnostics);
+            onnx_output_names = QoreRegistryModelProcessor::buildOnnxOutputNameMap(provider_diagnostics);
             if (exists input_map) {
                 hash<string, list<string>> imap = input_map;
                 foreach string tensor_name in (keys imap) {
@@ -1063,6 +1067,20 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         return rv;
     }
 
+    #! Builds a hash map of declared ONNX output tensor names from diagnostics
+    private static hash<string, bool> buildOnnxOutputNameMap(*hash<auto> diagnostics) {
+        hash<string, bool> rv = {};
+        if (!diagnostics || !exists diagnostics.outputs) {
+            return rv;
+        }
+        foreach hash<auto> output in (diagnostics.outputs) {
+            if (output.name.val()) {
+                rv{output.name} = True;
+            }
+        }
+        return rv;
+    }
+
     #! Configures task-aware causal language model generation from registry metadata
     private configureCausalLm(hash<auto> copts, QoreModelRegistry::ModelRegistry registry) {
         if (!model.isOnnx()) {
@@ -1105,6 +1123,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             ("token_type_ids_name", "token_type_ids"), ("input", "generation"), "token_type_ids");
         causal_lm_logits_output_name = getExecutionPlanStringDefault(
             ("logits_output_name", "logits_output", "output_name"), ("output", "generation"), "logits");
+        if (!output_names && onnx_output_names.hasKey(causal_lm_logits_output_name)) {
+            output_names = (causal_lm_logits_output_name,);
+        }
 
         if (exists copts.max_new_tokens) {
             causal_lm_max_new_tokens = int(copts.max_new_tokens);
@@ -1538,6 +1559,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             "supported": False,
             "reason": "stateful KV-cache reuse is not exposed by the current Qore ONNX execution path",
         };
+        if (output_names) {
+            rv.selected_outputs = output_names;
+        }
         *auto plan_cache = getExecutionPlanValue(("kv_cache", "past_key_values"), ("generation",));
         if (exists plan_cache) {
             rv.requested = True;
