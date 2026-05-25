@@ -396,6 +396,16 @@ public class MlTest inherits QUnit::Test {
         assertEq((2, 2), from_buffer.getShape());
         assertEq("buffer<float64>", from_buffer.getBuffer().fullType());
 
+        ML::Tensor int8_tensor(data: (-1, 0, 1), dtype: "int8");
+        assertEq("int8", int8_tensor.getDtype());
+        assertEq("buffer<int8>", int8_tensor.getBuffer().fullType());
+        assertEq((-1, 0, 1), int8_tensor.toList());
+
+        ML::Tensor bool_tensor(data: (True, False, True), dtype: "bool");
+        assertEq("bool", bool_tensor.getDtype());
+        assertEq("buffer<bool>", bool_tensor.getBuffer().fullType());
+        assertEq((True, False, True), bool_tensor.toList());
+
         assertThrows("ML-TENSOR-ERROR", sub() {
             ML::Tensor bad(data: new buffer<*float64>((1.0, NOTHING)));
         });
