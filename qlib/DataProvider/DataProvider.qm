@@ -50,7 +50,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.4.0";
+    version = "3.5.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1034,6 +1034,43 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_5 DataProvider v3.5
+    - added framework-level auto-injection of a generic "Make an API call" action for every
+      REST-capable @ref DataProvider::DataProviderActionCatalog "data provider app":
+      - apps that declare a connection \c scheme automatically receive an auto-registered
+        @ref DPAT_API "DPAT_API" action with action name
+        @ref DataProvider::AbstractDataProvider::GenericApiCallActionName "make-api-call",
+        accepting per-call \c method, \c path, \c query_args, \c body, and \c hdr inputs
+      - the action is backed by an auto-injected virtual child provider named
+        @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "\"__call__\"",
+        constructed lazily from the value returned by
+        @ref DataProvider::AbstractDataProvider::getRestClientForGenericCall()
+      - REST-based data providers are auto-discovered via reflection: the default impl of
+        @ref DataProvider::AbstractDataProvider::getRestClientForGenericCallImpl() walks the actual
+        class hierarchy of @c self looking for either:
+        - a member named
+          @ref DataProvider::AbstractDataProvider::GenericApiCallRestMemberName "\"rest\""
+          whose value is an object responding to @c restDoRequest() — the qore qlib convention; or
+        - a member named
+          @ref DataProvider::AbstractDataProvider::GenericApiCallConnectionMemberName "\"conn\""
+          whose value is an @c AbstractConnection; the framework calls @c conn.get(False) to
+          acquire the underlying client without establishing a network connection — the module-v8
+          @c TypeScriptActionInterface convention
+        This covers all REST-based providers in both ecosystems with no per-provider boilerplate.
+      - providers using a non-standard member name can still override
+        @ref DataProvider::AbstractDataProvider::getRestClientForGenericCallImpl() explicitly
+      - apps that should not expose this action (e.g. non-REST databases, FTP, WebSocket)
+        opt out via the new
+        @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call"
+        field
+      - the underlying generic call provider implementation is supplied by the
+        @c RestClientDataProvider module through the new
+        @ref DataProvider::AbstractDataProvider::setGenericApiCallChildBuilder()
+        and
+        @ref DataProvider::DataProviderActionCatalog::setGenericApiCallActionBuilder()
+        hooks, keeping the @c DataProvider module free of any direct dependency on a specific
+        REST transport
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and
