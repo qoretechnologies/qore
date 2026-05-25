@@ -154,6 +154,8 @@
 
 static thread_local std::string qore_aot_expr_serialization_error;
 
+extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
 static void qoreAOTClearExprSerializationError() {
     qore_aot_expr_serialization_error.clear();
 }
@@ -4119,6 +4121,109 @@ static bool isAOTSerializableMethodVariant(const QoreMethod* method, const Abstr
     const QoreClass* method_class = method->getClass();
     const QoreClass* owner_class = owner->getClass();
     return !(method_class && owner_class && method_class->getClass(owner_class->getID()));
+}
+
+//! Collect function names that have native AOT slot maps in this binary.
+static bool collectAOTSlotMapFunctionNames(const QoreAOTBinaryReader& reader,
+        std::unordered_set<std::string>& slot_map_names, bool& found_section, std::string& error) {
+    found_section = false;
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
+    if (!sec) {
+        return true;
+    }
+    found_section = true;
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        return true;
+    }
+    const uint8_t* end = ptr + sec->size;
+    if (ptr + sizeof(uint32_t) > end) {
+        return true;
+    }
+
+    uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
+    for (uint32_t i = 0; i < num_funcs && ptr + sizeof(uint32_t) <= end; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT slot map name collection")) {
+            error = "operation cancelled during AOT slot map name collection";
+            return false;
+        }
+        const uint8_t* entry_start = ptr;
+        uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
+        const uint8_t* entry_end = ptr + entry_size;
+        if (entry_end < ptr || entry_end > end) {
+            break;
+        }
+        if (const char* name = reader.readStringRef(ptr)) {
+            if (*name) {
+                slot_map_names.insert(name);
+            }
+        }
+        ptr = entry_end;
+        if (ptr <= entry_start) {
+            break;
+        }
+    }
+    return true;
+}
+
+static std::string getAOTMethodVariantKey(const QoreClass* qc, const char* method_name, bool is_static,
+        const AbstractQoreFunctionVariant* variant) {
+    std::string key;
+    if (const char* class_path = qc ? qc->getPath() : nullptr) {
+        if (class_path[0] == ':' && class_path[1] == ':') {
+            class_path += 2;
+        }
+        key = class_path;
+    }
+    key += "::";
+    if (is_static) {
+        key += "_static_";
+    }
+    key += method_name ? method_name : "";
+    return getVariantKey(key.c_str(), variant);
+}
+
+static MethodVariantBase* findInheritedConcreteMethodVariant(const BCList* scl, const QoreClass* origin_class,
+        const char* method_name, MethodVariantBase* variant, std::unordered_set<const QoreClass*>& visited) {
+    for (auto& i : *scl) {
+        const QoreClass* nqc = (*i).sclass;
+        if (!nqc || nqc == origin_class || !visited.insert(nqc).second) {
+            continue;
+        }
+
+        qore_class_private* npriv = qore_class_private::get(*const_cast<QoreClass*>(nqc));
+        QoreMethod* m = npriv->parseFindLocalMethod(method_name);
+        if (m) {
+            MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+            MethodVariantBase* ov = f->parseHasVariantWithSignature(variant, npriv->ahm.relaxed_match);
+            if (ov && !ov->isAbstract()) {
+                return ov;
+            }
+        }
+        if (npriv->scl) {
+            MethodVariantBase* ov = findInheritedConcreteMethodVariant(npriv->scl, origin_class, method_name,
+                variant, visited);
+            if (ov) {
+                return ov;
+            }
+        }
+    }
+    return nullptr;
+}
+
+static bool hasInheritedConcreteMethodVariant(QoreClass* qc, const char* method_name, MethodVariantBase* variant) {
+    if (!qc || !method_name || !*method_name || !variant) {
+        return false;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    if (!priv->scl) {
+        return false;
+    }
+    std::unordered_set<const QoreClass*> visited;
+    MethodVariantBase* inherited = findInheritedConcreteMethodVariant(priv->scl, qc, method_name, variant, visited);
+    return inherited && inherited != variant;
 }
 
 //! Recursively collect all user-defined items from the namespace tree
@@ -11579,6 +11684,11 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     };
     uint64_t local_alloc_us = 0, local_sig_us = 0, local_add_us = 0;
     uint64_t local_variants = 0;
+    bool has_slot_map_section = false;
+    std::unordered_set<std::string> slot_map_names;
+    if (!collectAOTSlotMapFunctionNames(reader, slot_map_names, has_slot_map_section, error)) {
+        return false;
+    }
 
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t class_idx = QoreAOTBinaryReader::readU32(ptr);
@@ -11772,6 +11882,18 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             if (skip_class) {
                 delete mvb;
                 continue;
+            }
+
+            if (has_slot_map_section && !is_static && !is_constructor && !is_destructor && !is_copy
+                    && !is_abstract) {
+                std::string variant_key = getAOTMethodVariantKey(qc, method_name, false, mvb);
+                if (slot_map_names.find(variant_key) == slot_map_names.end()
+                        && hasInheritedConcreteMethodVariant(qc, method_name, mvb)) {
+                    printd(2, "AOT deser: skipping stale inherited method shell '%s::%s' without native slot '%s'\n",
+                        qc->getName(), method_name ? method_name : "", variant_key.c_str());
+                    delete mvb;
+                    continue;
+                }
             }
 
             // Note: QCF_USES_EXTRA_ARGS flag is handled by the overridden hasVarargs()
