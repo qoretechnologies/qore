@@ -52,6 +52,8 @@ public hashdecl RerankerConfig {
     *binary model_data;
     #! ONNX mode: tokenizer config for input preparation
     *hash<auto> tokenizer_config;
+    #! ONNX mode: optional parsed tokenizer_config.json companion settings
+    *hash<auto> tokenizer_runtime_config;
     #! Maximum sequence length for query+passage pairs; default 512
     int max_length = 512;
     #! Activation function for ONNX logits: "sigmoid" (default, binary relevance),
@@ -151,6 +153,9 @@ public class CrossEncoderReranker {
                 ? new ML::OnnxModel(config.model_data)
                 : new ML::OnnxModel(config.model_path);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
+            if (config.tokenizer_runtime_config) {
+                onnx_tokenizer.loadConfig(config.tokenizer_runtime_config);
+            }
         }
     }
 

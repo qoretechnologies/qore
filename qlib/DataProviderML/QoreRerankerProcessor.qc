@@ -245,8 +245,11 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                     ?? "model";
                 rconfig.model_data = registry.loadNamedArtifact(copts.registry_model_name,
                     manifest.version_id, artifact_name);
-                rconfig.tokenizer_config = registry.loadTokenizerConfig(copts.registry_model_name,
-                    manifest.version_id, copts.registry_tokenizer_artifact_name);
+                hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                    copts.registry_model_name, manifest.version_id,
+                    copts.registry_tokenizer_artifact_name);
+                rconfig.tokenizer_config = tokenizer_package.tokenizer_json;
+                rconfig.tokenizer_runtime_config = tokenizer_package.tokenizer_config;
 %else
                 throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
 %endif

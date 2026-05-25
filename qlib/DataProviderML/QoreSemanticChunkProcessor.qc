@@ -222,6 +222,7 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
         }
 %ifndef NoJson
         hash<auto> tok_config;
+        *hash<auto> tok_runtime_config;
         *QoreModelRegistry::ModelRegistry registry;
         hash<QoreModelRegistry::ModelVersionInfo> manifest;
         if (copts.registry_model_name.val()) {
@@ -229,8 +230,11 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
                 AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts));
             manifest = registry.getVersionManifest(copts.registry_model_name,
                 copts.registry_model_version);
-            tok_config = registry.loadTokenizerConfig(copts.registry_model_name,
-                manifest.version_id, copts.registry_tokenizer_artifact_name);
+            hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                copts.registry_model_name, manifest.version_id,
+                copts.registry_tokenizer_artifact_name);
+            tok_config = tokenizer_package.tokenizer_json;
+            tok_runtime_config = tokenizer_package.tokenizer_config;
         } else {
             tok_config = parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
         }
@@ -267,6 +271,7 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
                 emb_config.model_data = registry.loadNamedArtifact(copts.registry_model_name,
                     manifest.version_id, artifact_name);
                 emb_config.tokenizer_config = tok_config;
+                emb_config.tokenizer_runtime_config = tok_runtime_config;
             } else if (!copts.embedding_model_path.val()) {
                 throw "CONSTRUCTOR-ERROR",
                     "embedding_model_path is required for ONNX embedding mode unless "
@@ -283,6 +288,7 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
             "chunk_overlap": copts.chunk_overlap ?? 50,
             "similarity_threshold": copts.similarity_threshold ?? 0.5,
             "segment_size": copts.segment_size ?? 3,
+            "tokenizer_runtime_config": tok_runtime_config,
         });
 
         configured = True;

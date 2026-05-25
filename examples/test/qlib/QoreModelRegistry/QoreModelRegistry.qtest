@@ -1213,6 +1213,11 @@ class ModelRegistryTest inherits QUnit::Test {
         hash<auto> tokenizer_config = registry.loadTokenizerConfig("hf-source", vid);
         assertEq("WordPiece", tokenizer_config.model.type,
             "tokenizer helper should load tokenizer.json from the manifest");
+        hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig("hf-source", vid);
+        assertEq("WordPiece", tokenizer_package.tokenizer_json.model.type,
+            "tokenizer package helper should include tokenizer.json");
+        assertEq(512, tokenizer_package.tokenizer_config.model_max_length,
+            "tokenizer package helper should include tokenizer_config.json");
 
         list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
             registry.listArtifacts("hf-source", vid);

@@ -199,14 +199,18 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
         if (!token_counter) {
 %ifndef NoJson
             hash<auto> tokenizer_config;
+            *hash<auto> tokenizer_runtime_config;
             if (tokenizer_model_name.val()) {
                 QoreModelRegistry::ModelRegistry registry(registry_options);
-                tokenizer_config = registry.loadTokenizerConfig(tokenizer_model_name,
-                    tokenizer_model_version, tokenizer_artifact_name);
+                hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                    tokenizer_model_name, tokenizer_model_version, tokenizer_artifact_name);
+                tokenizer_config = tokenizer_package.tokenizer_json;
+                tokenizer_runtime_config = tokenizer_package.tokenizer_config;
             } else {
                 tokenizer_config = parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
             }
-            token_counter = new QoreTokenizerUtils::TokenCounter(tokenizer_config);
+            token_counter = new QoreTokenizerUtils::TokenCounter(tokenizer_config,
+                tokenizer_runtime_config);
 %else
             throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
 %endif

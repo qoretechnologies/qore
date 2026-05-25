@@ -389,8 +389,11 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                         ?? "model";
                     config.model_data = registry.loadNamedArtifact(registry_model_name,
                         manifest.version_id, artifact_name);
-                    config.tokenizer_config = registry.loadTokenizerConfig(registry_model_name,
-                        manifest.version_id, registry_tokenizer_artifact_name);
+                    hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                        registry_model_name, manifest.version_id,
+                        registry_tokenizer_artifact_name);
+                    config.tokenizer_config = tokenizer_package.tokenizer_json;
+                    config.tokenizer_runtime_config = tokenizer_package.tokenizer_config;
                 } else {
                     config.tokenizer_config =
                         parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));

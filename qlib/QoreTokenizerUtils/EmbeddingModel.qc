@@ -43,6 +43,8 @@ public hashdecl EmbeddingConfig {
     *binary model_data;
     #! ONNX mode: tokenizer config for input preparation
     *hash<auto> tokenizer_config;
+    #! ONNX mode: optional parsed tokenizer_config.json companion settings
+    *hash<auto> tokenizer_runtime_config;
     #! Maximum input tokens (longer inputs are truncated); default 512
     int max_tokens = 512;
     #! HTTP endpoint format: "auto" (try OpenAI then bge-m3 fallback),
@@ -143,6 +145,9 @@ public class EmbeddingModel {
                 ? new ML::OnnxModel(config.model_data)
                 : new ML::OnnxModel(config.model_path);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
+            if (config.tokenizer_runtime_config) {
+                onnx_tokenizer.loadConfig(config.tokenizer_runtime_config);
+            }
         }
     }
 

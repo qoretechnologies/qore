@@ -527,6 +527,48 @@ public class ModelRegistry {
         return loadJsonArtifact(name, manifest.version_id, artifact_name);
     }
 
+    #! Loads tokenizer.json plus optional tokenizer companion configuration artifacts
+    /** The returned hash always contains \c tokenizer_json. When present in the
+        package manifest, it also contains \c tokenizer_config,
+        \c special_tokens_map, and \c generation_config parsed from the matching
+        HuggingFace JSON artifacts.
+
+        @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name optional tokenizer.json artifact name
+
+        @return parsed tokenizer package configuration
+
+        @throw ML-REGISTRY-ERROR if no tokenizer artifact is available or a
+            companion JSON artifact cannot be parsed
+
+        @since QoreModelRegistry 2.3
+    */
+    hash<auto> loadTokenizerPackageConfig(string name, *string version_id,
+            *string artifact_name) {
+        hash<ModelVersionInfo> manifest = getVersionManifest(name, version_id);
+        hash<auto> rv = {
+            "tokenizer_json": loadTokenizerConfig(name, manifest.version_id, artifact_name),
+        };
+
+        if (manifest.tokenizer) {
+            if (manifest.tokenizer.tokenizer_config_json.val()) {
+                rv{"tokenizer_config"} = loadJsonArtifact(name, manifest.version_id,
+                    manifest.tokenizer.tokenizer_config_json);
+            }
+            if (manifest.tokenizer.special_tokens_map_json.val()) {
+                rv{"special_tokens_map"} = loadJsonArtifact(name, manifest.version_id,
+                    manifest.tokenizer.special_tokens_map_json);
+            }
+            if (manifest.tokenizer.generation_config_json.val()) {
+                rv{"generation_config"} = loadJsonArtifact(name, manifest.version_id,
+                    manifest.tokenizer.generation_config_json);
+            }
+        }
+
+        return rv;
+    }
+
     #! Lists named artifacts for a model version
     /** @param name the model name
         @param version_id the version ID, or NOTHING/"latest"
