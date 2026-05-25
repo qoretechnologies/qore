@@ -4263,6 +4263,12 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     // Collect user global variables
     for (auto& vi : ns->var_list.vmap) {
         Var* var = vi.second;
+        if (var->isImported()) {
+            // Imported globals belong to dependency modules.  Serializing them
+            // here would make the downstream AOT module deserialize a private
+            // local slot instead of binding to the dependency's live storage.
+            continue;
+        }
         if (!var->isBuiltin()) {
             // Filter out globals from reexported dependencies
             const char* var_module = var->getModuleName();
@@ -10955,6 +10961,17 @@ bool QoreAOTBinaryDeserializer::deserializeGlobals(std::string& error) {
         }
         if (!name || !*name) {
             error = "invalid empty name for global variable";
+            return false;
+        }
+
+        Var* existing_var = ns_list[ns_idx]->var_list.runtimeFindVar(name);
+        if (existing_var) {
+            if (existing_var->isImported()) {
+                printd(5, "AOT deser: reusing imported global var '%s' instead of creating local copy\n",
+                    name);
+                continue;
+            }
+            error = "duplicate global variable '" + std::string(name) + "'";
             return false;
         }
 

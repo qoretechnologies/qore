@@ -22,6 +22,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
         addTestCase("AOT module init uses runtime qmod path", \moduleInitUsesRuntimeQmodPath());
         addTestCase("AOT module init can inspect module hash", \moduleInitCanInspectModuleHash());
         addTestCase("AOT module init can load another module", \moduleInitCanLoadAnotherModule());
+        addTestCase("AOT module binds dependency public our globals",
+            \moduleBindsDependencyPublicOurGlobal());
 
         set_return_value(main());
     }
@@ -209,5 +211,90 @@ printf(\"seen=%y\\n\", AOTModuleLoadsModuleInInit::seen());
         string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("seen=True\nEXIT=0\n", run_out,
             "nested module loads from AOT module init must not leak into the outer module context");
+    }
+
+    moduleBindsDependencyPublicOurGlobal() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string dep_qm_path = tmp_dir + "/AOTPublicOurDep.qm";
+        string dep_qmod_path = tmp_dir + "/AOTPublicOurDep.qmod";
+        string main_qm_path = tmp_dir + "/AOTPublicOurMain.qm";
+        string main_qmod_path = tmp_dir + "/AOTPublicOurMain.qmod";
+        string script_path = tmp_dir + "/run-public-our.qr";
+
+        File f();
+        f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTPublicOurDep {
+    version = \"1.0\";
+    desc = \"dependency public our global regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public class AOTPublicOurToken {
+    public string value() {
+        return \"live-slot\";
+    }
+}
+
+public our *AOTPublicOurToken AOTPublicOurShared;
+
+public sub initAOTPublicOurShared() {
+    AOTPublicOurShared = new AOTPublicOurToken();
+}
+");
+        f.close();
+
+        string compile_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, dep_qmod_path, dep_qm_path));
+        assertTrue(is_file(dep_qmod_path), "compiled public-our dependency module: " + compile_dep_out);
+
+        f.open2(main_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTPublicOurDep
+
+module AOTPublicOurMain {
+    version = \"1.0\";
+    desc = \"downstream public our global regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        initAOTPublicOurShared();
+    };
+}
+
+public class AOTPublicOurReader {
+    public string read() {
+        return AOTPublicOurShared.value();
+    }
+}
+
+public string sub readAOTPublicOurShared() {
+    AOTPublicOurReader reader();
+    return reader.read();
+}
+");
+        f.close();
+
+        string compile_main_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, tmp_dir, qore_bin, main_qmod_path, main_qm_path));
+        assertTrue(is_file(main_qmod_path), "compiled public-our downstream module: " + compile_main_out);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTPublicOurMain
+
+printf(\"top=%s\\n\", AOTPublicOurShared.value());
+printf(\"aot=%s\\n\", readAOTPublicOurShared());
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("top=live-slot\naot=live-slot\nEXIT=0\n", run_out,
+            "AOT-compiled downstream method must read the dependency module's live public our slot");
     }
 }
