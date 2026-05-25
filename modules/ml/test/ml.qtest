@@ -396,6 +396,14 @@ public class MlTest inherits QUnit::Test {
         assertEq((2, 2), from_buffer.getShape());
         assertEq("buffer<float64>", from_buffer.getBuffer().fullType());
 
+        ML::Tensor from_columns = ML::Tensor::fromColumns((
+            new buffer<float32>((1.0, 3.0)),
+            new buffer<float32>((2.0, 4.0)),
+        ), "float32");
+        assertEq("float32", from_columns.getDtype());
+        assertEq((2, 2), from_columns.getShape());
+        assertEq(((1.0, 2.0), (3.0, 4.0)), from_columns.toList());
+
         ML::Tensor int8_tensor(data: (-1, 0, 1), dtype: "int8");
         assertEq("int8", int8_tensor.getDtype());
         assertEq("buffer<int8>", int8_tensor.getBuffer().fullType());
@@ -411,6 +419,18 @@ public class MlTest inherits QUnit::Test {
         });
         assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
             ML::Tensor bad(data: (1.0, 2.0, 3.0), shape: (2, 2));
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = ML::Tensor::fromColumns((
+                new buffer<float32>((1.0, 2.0)),
+                new buffer<float32>((3.0,)),
+            ), "float32");
+        });
+        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
+            ML::Tensor bad = ML::Tensor::fromColumns((
+                new buffer<float32>((1.0, 2.0)),
+                new buffer<float64>((3.0, 4.0)),
+            ), "float32");
         });
     }
 

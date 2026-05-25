@@ -28,6 +28,7 @@
 #include "QC_Tensor.h"
 
 #include <limits>
+#include <vector>
 
 namespace {
 
@@ -74,6 +75,29 @@ int inferTensorTypeRec(QoreValue value, inferred_tensor_type_t& info, ExceptionS
                 value.getFullTypeName());
             return -1;
     }
+}
+
+template <typename T>
+int packDenseColumns(QoreBufferNode& output, const std::vector<const QoreBufferNode*>& columns,
+        size_t rows, ExceptionSink* xsink) {
+    T* dst = static_cast<T*>(output.getRawData());
+    std::vector<const T*> srcs;
+    srcs.reserve(columns.size());
+    for (const QoreBufferNode* col : columns) {
+        srcs.push_back(static_cast<const T*>(col->getRawData()));
+    }
+
+    size_t width = columns.size();
+    for (size_t i = 0; i < rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "packing tensor columns")) {
+            return -1;
+        }
+        size_t offset = i * width;
+        for (size_t j = 0; j < width; ++j) {
+            dst[offset + j] = srcs[j][i];
+        }
+    }
+    return 0;
 }
 
 }
@@ -313,6 +337,144 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
         return nullptr;
     }
     return new QoreTensor(buffer_holder.release(), std::move(shape));
+}
+
+QoreTensor* QoreTensor::fromColumns(const QoreListNode* columns_arg, const QoreStringNode* dtype,
+        ExceptionSink* xsink) {
+    if (!columns_arg || columns_arg->empty()) {
+        xsink->raiseException("ML-TENSOR-ERROR", "fromColumns() requires at least one dense buffer column");
+        return nullptr;
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    if (dtype) {
+        if (!qore_buffer_element_type_from_name(dtype->c_str(), element_type)) {
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "unsupported tensor dtype '%s'; expected int8, int16, int32, int64, float32, float64, or bool",
+                dtype->c_str());
+            return nullptr;
+        }
+    }
+
+    std::vector<const QoreBufferNode*> columns;
+    columns.reserve(columns_arg->size());
+    size_t rows = 0;
+    for (size_t i = 0; i < columns_arg->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "validating tensor columns")) {
+            return nullptr;
+        }
+
+        QoreValue value = columns_arg->retrieveEntry(i);
+        if (value.getType() != NT_BUFFER) {
+            xsink->raiseException("ML-TENSOR-ERROR",
+                "fromColumns() column %zu is type '%s'; expected a dense buffer", i, value.getFullTypeName());
+            return nullptr;
+        }
+
+        const QoreBufferNode* column = value.get<const QoreBufferNode>();
+        if (column->hasNullableElements()) {
+            xsink->raiseException("ML-TENSOR-ERROR",
+                "fromColumns() column %zu is '%s'; nullable buffer elements cannot be represented in model tensors",
+                i, value.getFullTypeName());
+            return nullptr;
+        }
+        if (column->ensureHostStorage(xsink)) {
+            return nullptr;
+        }
+
+        if (i == 0) {
+            if (element_type == QoreBufferElementType::Invalid) {
+                element_type = column->getElementType();
+            }
+            rows = column->size();
+        } else if (column->size() != rows) {
+            xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+                "fromColumns() column %zu has %zu rows; expected %zu", i, column->size(), rows);
+            return nullptr;
+        }
+
+        if (column->getElementType() != element_type) {
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "fromColumns() column %zu has type '%s'; expected '%s'", i,
+                qore_buffer_element_type_name(column->getElementType()),
+                qore_buffer_element_type_name(element_type));
+            return nullptr;
+        }
+        columns.push_back(column);
+    }
+
+    if (element_type == QoreBufferElementType::String || element_type == QoreBufferElementType::Decimal128
+            || element_type == QoreBufferElementType::Invalid) {
+        xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+            "fromColumns() does not support tensor dtype '%s'; use numeric or bool columns",
+            qore_buffer_element_type_name(element_type));
+        return nullptr;
+    }
+
+    size_t width = columns.size();
+    if (rows && width > std::numeric_limits<size_t>::max() / rows) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "fromColumns() tensor element count overflows size_t");
+        return nullptr;
+    }
+    constexpr size_t max_int64 = static_cast<size_t>(std::numeric_limits<int64_t>::max());
+    if (rows > max_int64 || width > max_int64) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "fromColumns() tensor dimensions exceed int64 limits");
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(element_type, false, rows * width), xsink);
+    switch (element_type) {
+        case QoreBufferElementType::Float32:
+            if (packDenseColumns<float>(**buffer, columns, rows, xsink)) {
+                return nullptr;
+            }
+            break;
+        case QoreBufferElementType::Float64:
+            if (packDenseColumns<double>(**buffer, columns, rows, xsink)) {
+                return nullptr;
+            }
+            break;
+        case QoreBufferElementType::Int8:
+            if (packDenseColumns<int8_t>(**buffer, columns, rows, xsink)) {
+                return nullptr;
+            }
+            break;
+        case QoreBufferElementType::Int16:
+            if (packDenseColumns<int16_t>(**buffer, columns, rows, xsink)) {
+                return nullptr;
+            }
+            break;
+        case QoreBufferElementType::Int32:
+            if (packDenseColumns<int32_t>(**buffer, columns, rows, xsink)) {
+                return nullptr;
+            }
+            break;
+        case QoreBufferElementType::Int64:
+            if (packDenseColumns<int64_t>(**buffer, columns, rows, xsink)) {
+                return nullptr;
+            }
+            break;
+        case QoreBufferElementType::Bool:
+            for (size_t i = 0; i < rows; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "packing bool tensor columns")) {
+                    return nullptr;
+                }
+                size_t offset = i * width;
+                for (size_t j = 0; j < width; ++j) {
+                    if ((*buffer)->setEntry(offset + j, columns[j]->getReferencedEntry(i, xsink), xsink)) {
+                        return nullptr;
+                    }
+                }
+            }
+            break;
+        default:
+            assert(false);
+    }
+
+    return new QoreTensor(buffer.release(), {
+        static_cast<int64_t>(rows),
+        static_cast<int64_t>(width),
+    });
 }
 
 QoreBufferNode* QoreTensor::refBuffer() const {

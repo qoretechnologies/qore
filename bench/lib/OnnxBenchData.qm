@@ -50,6 +50,11 @@ public namespace OnnxBench {
         return rows * 8;
     }
 
+    public int sub approxSklearnBytes(int rows) {
+        # Four float32 input columns, three float32 probability outputs, and one int64 label.
+        return rows * ((4 + 3) * 4 + 8);
+    }
+
     public bool sub canRunOnnx(string model_path) {
         hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
         return caps.has_onnx && is_file(model_path);
@@ -61,6 +66,14 @@ public namespace OnnxBench {
             return path;
         }
         return "modules/ml/test/data/test_linear.onnx";
+    }
+
+    public string sub sklearnModelPath() {
+        string path = get_script_dir() + "/../../modules/ml/test/data/test_sklearn_rf.onnx";
+        if (is_file(path)) {
+            return path;
+        }
+        return "modules/ml/test/data/test_sklearn_rf.onnx";
     }
 
     public list<list<float>> sub makeNestedInput(int rows) {
@@ -93,6 +106,40 @@ public namespace OnnxBench {
             input[i] = i.toFloat();
         }
         return new DataFrame::DataFrame({"x": input});
+    }
+
+    public DataFrame::DataFrame sub makeSklearnFrame(int rows) {
+        buffer<float32> sepal_length = buffer<float32>::sized(rows);
+        buffer<float32> sepal_width = buffer<float32>::sized(rows);
+        buffer<float32> petal_length = buffer<float32>::sized(rows);
+        buffer<float32> petal_width = buffer<float32>::sized(rows);
+
+        for (int i = 0; i < rows; ++i) {
+            int cls = i % 3;
+            if (cls == 0) {
+                sepal_length[i] = 5.1;
+                sepal_width[i] = 3.5;
+                petal_length[i] = 1.4;
+                petal_width[i] = 0.2;
+            } else if (cls == 1) {
+                sepal_length[i] = 7.0;
+                sepal_width[i] = 3.2;
+                petal_length[i] = 4.7;
+                petal_width[i] = 1.4;
+            } else {
+                sepal_length[i] = 6.3;
+                sepal_width[i] = 3.3;
+                petal_length[i] = 6.0;
+                petal_width[i] = 2.5;
+            }
+        }
+
+        return new DataFrame::DataFrame({
+            "sepal_length": sepal_length,
+            "sepal_width": sepal_width,
+            "petal_length": petal_length,
+            "petal_width": petal_width,
+        });
     }
 
     public list<hash<auto>> sub makeRecords(int rows) {
@@ -129,6 +176,28 @@ public namespace OnnxBench {
             float actual = values[rows - 1].toFloat();
             if (abs(expected - actual) > 0.01) {
                 throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifySklearnTensorOutput(string name, hash<auto> result, int rows) {
+        ML::Tensor labels = result.label;
+        if (labels.getShape() != (rows,)) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned label shape %y; expected (%d)",
+                name, labels.getShape(), rows);
+        }
+        ML::Tensor probabilities = result.probabilities;
+        if (probabilities.getShape() != (rows, 3)) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned probability shape %y; expected (%d, 3)",
+                name, probabilities.getShape(), rows);
+        }
+
+        if (rows >= 3) {
+            list<auto> label_values = labels.getBuffer().toList();
+            if (label_values[0].toInt() != 0 || label_values[1].toInt() != 1
+                    || label_values[2].toInt() != 2) {
+                throw "BENCHMARK-ERROR",
+                    sprintf("%s returned unexpected first labels: %y", name, label_values[0..2]);
             }
         }
     }

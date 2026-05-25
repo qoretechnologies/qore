@@ -392,6 +392,13 @@ if (caps.has_onnx) {
     hash<auto> tensor_result = model.runTensors({"input": dense});
     Qore::ML::Tensor output = tensor_result.output;
     printf("output dtype=%s shape=%y\n", output.getDtype(), output.getShape());
+
+    # Pack dense DataFrame columns directly into a row-major model tensor.
+    Qore::ML::Tensor features = Qore::ML::Tensor::fromColumns((
+        df.getColumnBuffer("income"),
+        df.getColumnBuffer("debt_ratio"),
+        df.getColumnBuffer("history_months"),
+    ), "float32");
 }
     @endcode
 
@@ -742,6 +749,9 @@ if (!caps.has_onnx) {
     - Added @ref Qore::ML::Tensor "Tensor" and
       @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()" for dense
       ONNX inference with \c buffer<T> storage and explicit shape metadata
+    - Added @ref Qore::ML::Tensor::fromColumns() "Tensor::fromColumns()" to
+      pack equal-length dense column buffers into a row-major tensor without
+      row hash or nested list materialization
     - ONNX tensor conversion now supports float, double, int8, int16, int32,
       int64, and bool inputs and outputs
     - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now

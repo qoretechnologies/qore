@@ -613,7 +613,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         if (count == window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
-            *ML::Tensor direct_input = inputTensorFromSingleDenseColumn(records, shape, count, fields, input_dtype);
+            *ML::Tensor direct_input = inputTensorFromDenseColumns(records, shape, count, fields, input_dtype);
             if (exists direct_input) {
                 hash<auto> outputs = model.runTensors({input_tensor: direct_input});
                 if (isTensorOutputMode()) {
@@ -656,6 +656,22 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
     #! Processes complete shaped windows for models with multiple mapped input tensors
     private hash<auto> processMappedShapeWindows(auto records, DataProvider::DataProviderShape shape, int count) {
+        if (count == window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
+            *hash<auto> direct_inputs = inputTensorsFromMappedDenseColumns(records, shape, count);
+            if (exists direct_inputs) {
+                hash<auto> outputs = model.runTensors(direct_inputs);
+                if (isTensorOutputMode()) {
+                    return outputs;
+                }
+
+                hash<auto> result;
+                foreach string okey in (keys outputs) {
+                    appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), count, True);
+                }
+                return result;
+            }
+        }
+
         hash<auto> mapped_matrices = matricesFromInputMap(records, shape);
         if (isTensorOutputMode()) {
             return processMappedTensorShapeWindows(mapped_matrices, count);
@@ -703,37 +719,72 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         return shape == DataProvider::DataProviderShape::RowRecords ? converted : converted[0];
     }
 
-    #! Creates a dense input tensor directly from a single matching column when possible
-    private *ML::Tensor inputTensorFromSingleDenseColumn(auto records, DataProvider::DataProviderShape shape,
+    #! Creates a dense input tensor directly from matching top-level dense columns when possible
+    private *ML::Tensor inputTensorFromDenseColumns(auto records, DataProvider::DataProviderShape shape,
             int count, list<string> tensor_fields, string dtype) {
-        if (tensor_fields.lsize() != 1 || tensor_fields[0].find(".") >= 0) {
+        *list<auto> columns = denseColumnsFromShape(records, shape, tensor_fields, dtype);
+        if (!exists columns) {
             return;
         }
 
-        *auto column;
-        switch (shape) {
-            case DataProvider::DataProviderShape::DataFrameBlock:
-                column = records.getColumnBuffer(tensor_fields[0]);
-                break;
-            case DataProvider::DataProviderShape::BufferColumns:
-                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
-                    column = records.getColumn(tensor_fields[0]);
-                } else if (records.hasKey(tensor_fields[0])) {
-                    column = records{tensor_fields[0]};
-                }
-                break;
-            case DataProvider::DataProviderShape::HashOfLists:
-                if (records.hasKey(tensor_fields[0])) {
-                    column = records{tensor_fields[0]};
-                }
-                break;
-        }
+        return ML::Tensor::fromColumns(columns, dtype);
+    }
 
-        if (!exists column || column.typeCode() != NT_BUFFER
-                || column.fullType() != sprintf("buffer<%s>", dtype)) {
+    #! Creates mapped dense input tensors directly from dense columns when possible
+    private *hash<auto> inputTensorsFromMappedDenseColumns(auto records,
+            DataProvider::DataProviderShape shape, int count) {
+        hash<auto> rv;
+        hash<string, list<string>> imap = input_map;
+        foreach string tensor_name in (keys imap) {
+            *ML::Tensor tensor = inputTensorFromDenseColumns(records, shape, count,
+                imap{tensor_name}, input_dtypes{tensor_name});
+            if (!exists tensor) {
+                return;
+            }
+            rv{tensor_name} = tensor;
+        }
+        return rv;
+    }
+
+    #! Returns matching dense top-level columns, or NOTHING when the fast path is not safe
+    private *list<auto> denseColumnsFromShape(auto records, DataProvider::DataProviderShape shape,
+            list<string> tensor_fields, string dtype) {
+        if (!tensor_fields) {
             return;
         }
-        return new ML::Tensor(column, (count, 1), dtype);
+
+        string required_type = sprintf("buffer<%s>", dtype);
+        list<auto> columns;
+        foreach string field in (tensor_fields) {
+            if (field.find(".") >= 0) {
+                return;
+            }
+
+            *auto column;
+            switch (shape) {
+                case DataProvider::DataProviderShape::DataFrameBlock:
+                    column = records.getColumnBuffer(field);
+                    break;
+                case DataProvider::DataProviderShape::BufferColumns:
+                    if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                        column = records.getColumn(field);
+                    } else if (records.hasKey(field)) {
+                        column = records{field};
+                    }
+                    break;
+                case DataProvider::DataProviderShape::HashOfLists:
+                    if (records.hasKey(field)) {
+                        column = records{field};
+                    }
+                    break;
+            }
+
+            if (!exists column || column.typeCode() != NT_BUFFER || column.fullType() != required_type) {
+                return;
+            }
+            push columns, column;
+        }
+        return columns;
     }
 
     #! Extracts numeric input fields as a model matrix from a shaped block

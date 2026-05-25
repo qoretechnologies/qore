@@ -2057,6 +2057,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
       - ML::Tensor and OnnxModel::runTensors() provide dense buffer-backed ONNX
         inference with explicit tensor shape metadata
+      - ML::Tensor::fromColumns() packs equal-length dense column buffers into
+        row-major tensors for multi-feature model inputs without row hash or
+        nested list materialization
       - ONNX inference supports float, double, int8, int16, int32, int64, and bool
         tensor input/output conversion
       - OnnxModel automatic provider selection falls back to CPU when an advertised
@@ -2562,6 +2565,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - onnx-model and registry-model processors support explicit \c input_map
         configuration for ONNX models with multiple named input tensors, and compact
         \c output_mode values for dense column or raw tensor outputs
+      - multi-column dense ONNX input frames use native tensor column packing to
+        avoid row hash and nested list materialization in DataProviderML
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module

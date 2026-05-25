@@ -1689,6 +1689,9 @@ module DataProviderML {
     dense column already stored with the model's expected dtype, the processor
     can build the input tensor directly from that column instead of
     materializing row hashes or row matrices.
+    Multi-column dense feature frames use @ref Qore::ML::Tensor::fromColumns()
+    "ML::Tensor::fromColumns()" to pack top-level numeric buffer columns into
+    model tensors in native code.
 
     ONNX models with multiple input tensors can use \c input_map instead of
     \c fields.  The map key is the ONNX input tensor name and the value is one
@@ -1866,6 +1869,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       \c "columns", \c "dataframe", and \c "tensor"; single-column dense input
       with the expected ONNX dtype uses a direct tensor path to avoid row matrix
       materialization
+    - multi-column dense ONNX inputs are packed with
+      @ref Qore::ML::Tensor::fromColumns() "ML::Tensor::fromColumns()" to avoid
+      row hash and nested list materialization
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used

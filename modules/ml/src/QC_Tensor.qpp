@@ -92,6 +92,30 @@ static Tensor Tensor::fromBuffer(auto data, list<int> shape) [flags=RET_VALUE_ON
     return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
 }
 
+//! Creates a row-major two-dimensional Tensor from dense column buffers
+/** @param columns list of equal-length non-nullable dense buffers
+    @param dtype optional tensor dtype; when omitted, the first column's buffer
+        type is used and all columns must have the same type
+
+    @return a Tensor with shape \c (rows, columns)
+
+    This method is optimized for DataFrame and DataProvider columnar pipelines
+    that need to feed multi-feature ONNX models. It packs column buffers into
+    the row-major layout expected by ONNX Runtime without first materializing
+    row hashes or nested Qore lists.
+
+    @throw ML-TENSOR-ERROR if a column is not a dense buffer or contains nulls
+    @throw ML-TENSOR-SHAPE-ERROR if columns have different lengths
+    @throw ML-TENSOR-DTYPE-ERROR if column dtypes are unsupported or inconsistent
+*/
+static Tensor Tensor::fromColumns(list<auto> columns, *string dtype) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromColumns(columns, dtype, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
 //! Returns the tensor dtype
 /** @return dtype name such as \c float32, \c float64, \c int64, or \c bool
 */
