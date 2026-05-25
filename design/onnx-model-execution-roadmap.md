@@ -369,7 +369,7 @@ Acceptance checks:
 
 ## Phase 9: Session Pools, Async Inference, and Dynamic Batching
 
-Status: in progress.
+Status: completed.
 
 Add pooled inference infrastructure for high-throughput service workloads.
 
@@ -453,7 +453,7 @@ Acceptance checks:
 
 ## Phase 11: Final Documentation and Full Verification
 
-Status: pending.
+Status: completed.
 
 Documentation:
 

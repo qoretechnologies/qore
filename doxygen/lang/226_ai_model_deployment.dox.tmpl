@@ -1,0 +1,318 @@
+/** @page ai_model_deployment AI Model Deployment and ONNX Inference
+
+    @tableofcontents
+
+    @section ai_model_deployment_overview Overview
+
+    %Qore supports production model execution with ONNX Runtime, typed tensor
+    values, model package metadata, registry-managed artifacts, and
+    DataProvider-aware pipeline processors. The focus is inference and
+    deployment: models are normally trained or exported by existing ML tooling,
+    then inspected, packaged, validated, benchmarked, registered, and executed
+    by %Qore.
+
+    The main pieces are:
+    - the @ref mlintro "ml" module, which exposes @ref Qore::ML::OnnxModel
+      "ML::OnnxModel", @ref Qore::ML::Tensor "ML::Tensor",
+      @ref Qore::ML::OnnxSessionPool "ML::OnnxSessionPool", provider
+      diagnostics, profiling, graph optimization, ORT format loading, and
+      typed tensor execution;
+    - @ref qoreonnxtoolsintro "QoreOnnxTools" and the \c qore-onnx command,
+      which inspect, validate, benchmark, compare, optimize, quantize, and
+      package ONNX artifacts;
+    - @ref qoremodelregistryintro "QoreModelRegistry", which stores native Qore
+      models and multi-file ONNX packages with checksums, tokenizer companions,
+      provider policy, execution plans, optimized/quantized artifacts, and
+      deployment-contract metadata;
+    - @ref dataprovidermlintro "DataProviderML", which runs registry-backed or
+      path-backed ONNX models inside DataProvider pipelines with row, columnar,
+      buffer-column, and DataFrame input shapes.
+
+    @section ai_model_direct Direct ONNX Execution
+
+    Use direct @ref Qore::ML::OnnxModel "ML::OnnxModel" APIs when the
+    application already owns the model path, session policy, and input tensor
+    preparation. Pass dense @ref Qore::ML::Tensor "ML::Tensor" values for
+    predictable type and shape behavior.
+
+    @code{.py}
+%requires ml
+
+hash<ML::OnnxSessionConfig> session = <ML::OnnxSessionConfig>{
+    # Empty providers means explicit CPU-only execution; no GPU auto-detection.
+    "providers": (),
+    "intra_op_num_threads": 4,
+    "enable_profiling": True,
+};
+
+ML::OnnxModel model("/models/customer-score.onnx", session);
+
+ML::Tensor features(data: new buffer<float32>((
+    41.0, 10000.0, 0.70,
+    55.0,  5000.0, 0.20,
+)), shape: (2, 3), dtype: "float32");
+
+hash<auto> outputs = model.runTensors({"X": features});
+printf("provider=%s runs=%d\n",
+    model.getEffectiveProviderReport().active_provider,
+    model.getInferenceStats().run_count);
+
+string profile_path = model.endProfiling();
+    @endcode
+
+    For high-throughput services, use a bounded session pool. A pool keeps a
+    fixed number of immutable ONNX sessions and applies backpressure instead of
+    creating sessions on demand.
+
+    @code{.py}
+%requires ml
+
+ML::OnnxSessionPool pool(
+    "/models/customer-score.onnx",
+    <ML::OnnxSessionConfig>{"providers": ()},
+    {
+        "max_sessions": 4,
+        "max_concurrent_runs": 8,
+        "queue_depth": 64,
+        "timeout_ms": 1000,
+        "dynamic_batch_size": 32,
+        "dynamic_batch_wait_ms": 2,
+    });
+
+Future f = pool.runAsync({"X": features});
+hash<auto> scored = f.get();
+printf("queued=%d completed=%d\n",
+    pool.getStats().queued_runs,
+    pool.getStats().completed_runs);
+    @endcode
+
+    @section ai_model_provider_policy Provider Policy and Fallback
+
+    ONNX Runtime providers are deployment policy, not an implementation detail.
+    %Qore exposes both the requested provider policy and the effective provider
+    report so production code can reject accidental CPU fallback or record it as
+    a deployment diagnostic.
+
+    - Omit \c providers to let %Qore try the best available accelerator provider
+      reported by ONNX Runtime, then fall back to CPU when policy allows it.
+    - Use \c providers: \c () for explicit CPU-only execution.
+    - Set \c required_providers when a model version is only valid with a
+      particular provider.
+    - Set \c allow_cpu_fallback: \c False or
+      \c fail_on_provider_fallback: \c True when silent fallback would be a
+      deployment error.
+
+    @code{.py}
+hash<ML::OnnxSessionConfig> gpu_only = <ML::OnnxSessionConfig>{
+    "providers": (<ML::OnnxProviderConfig>{
+        "name": "CUDA",
+        "options": {"device_id": "0"},
+    },),
+    "required_providers": ("CUDA",),
+    "allow_cpu_fallback": False,
+    "fail_on_provider_fallback": True,
+};
+
+ML::OnnxModel model("/models/reranker.onnx", gpu_only);
+hash<auto> report = model.getEffectiveProviderReport();
+printf("active=%s diagnostics=%y\n",
+    report.active_provider, report.diagnostics);
+    @endcode
+
+    Migration note: code that previously relied on implicit provider selection
+    should record \c getEffectiveProviderReport() and choose an explicit policy
+    before moving to production. Use \c providers: \c () for reproducible
+    CPU-only behavior in tests and CI.
+
+    @section ai_model_package_registry Packaging and Registry Metadata
+
+    ONNX deployments are often multi-file packages: a model file, external-data
+    files, tokenizer artifacts, config files, optimization outputs, benchmark
+    metadata, and validation vectors. The \c qore-onnx package command writes a
+    deterministic package manifest that the model registry can ingest.
+
+    @code{.sh}
+qore-onnx package --task regression --opset 17 \
+    --minimum-onnxruntime-version 1.16.0 \
+    --preprocess preprocess-contract.json \
+    --postprocess postprocess-contract.json \
+    --dynamic-axes dynamic-axes.json \
+    --benchmarks benchmarks.json \
+    --golden-vectors golden-vectors.json \
+    /models/customer-score.onnx /srv/model-packages/customer-score
+    @endcode
+
+    Register the package once, then load, inspect, validate, benchmark, compare,
+    and execute it by model/version identity instead of by loose filesystem
+    paths.
+
+    @code{.py}
+%requires QoreModelRegistry
+%requires QoreOnnxTools
+%requires ml
+
+QoreModelRegistry::ModelRegistry reg({"path": "/var/models"});
+
+string vid = reg.registerPackage("/srv/model-packages/customer-score", {
+    "name": "customer-score",
+    "description": "Customer scoring model exported to ONNX",
+    "tags": ("production",),
+    "task": "regression",
+    "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+});
+
+hash<QoreModelRegistry::ModelVersionInfo> manifest =
+    reg.getVersionManifest("customer-score", vid);
+printf("task=%s opset=%y provider=%s valid=%y\n",
+    manifest.task,
+    manifest.opset,
+    manifest.providers.active_provider,
+    manifest.validation.valid);
+
+hash<auto> inspection = reg.inspectOnnxVersion("customer-score", vid);
+hash<QoreOnnxTools::OnnxValidationResult> validation =
+    reg.validateOnnxVersion("customer-score", vid);
+hash<QoreOnnxTools::OnnxBenchmarkResult> benchmark =
+    reg.benchmarkOnnxVersion("customer-score", vid, NOTHING, {
+        "runs": 100,
+        "warmup_runs": 5,
+    });
+printf("inputs=%y valid=%y average=%fms\n",
+    inspection.inputs, validation.valid, benchmark.average_ms);
+    @endcode
+
+    The registry stores the complete ONNX deployment contract at version level:
+    \c task, \c opset, producer metadata,
+    \c minimum_onnxruntime_version, input/output tensor contracts,
+    \c dynamic_axes, \c external_data, tokenizer companions, preprocessing and
+    postprocessing metadata, execution plan and session policy, provider
+    diagnostics, optimized and quantized artifacts, validation diagnostics,
+    benchmark metadata, and golden vectors.
+
+    @section ai_model_dataprovider DataProviderML and DataFrames
+
+    Use @ref dataprovidermlintro "DataProviderML" when ONNX inference is one
+    step in a larger data pipeline. Processors accept row records, hash-of-lists
+    data, dense buffer columns, and @ref dataframeintro "DataFrame" blocks.
+    Shape-aware paths keep data columnar and avoid per-row hash materialization
+    when the processor and downstream steps support it.
+
+    @code{.py}
+%requires DataProviderML
+%requires dataframe
+
+DataProviderML::QoreRegistryModelProcessor proc({
+    "registry_path": "/var/models",
+    "model_name": "customer-score",
+    "tag": "production",
+    "fields": ("age", "balance", "risk_score"),
+    "window_size": 1024,
+    "output_mode": "columns",
+    "include_input_fields": False,
+});
+
+DataFrame::DataFrame batch({
+    "age": new buffer<float64>((41.0, 55.0)),
+    "balance": new buffer<float64>((10000.0, 5000.0)),
+    "risk_score": new buffer<float64>((0.70, 0.20)),
+});
+
+DataFrame::DataFrame scored = proc.processRecordsShape(
+    batch, DataProviderShape::DataFrameBlock);
+printf("rows=%d columns=%y\n", scored.rowCount(), scored.columnNames());
+    @endcode
+
+    For transformer-style models with multiple named inputs, use \c input_map
+    instead of relying on a single merged feature matrix.
+
+    @code{.py}
+DataProviderML::QoreRegistryModelProcessor classifier({
+    "registry_path": "/var/models",
+    "model_name": "text-classifier",
+    "tag": "production",
+    "input_map": {
+        "input_ids": "token_ids",
+        "attention_mask": "attention_mask",
+        "token_type_ids": "segment_ids",
+    },
+    "output_mode": "columns",
+});
+    @endcode
+
+    Registry-backed task plans provide stable outputs for common inference
+    tasks. \c regression, \c classification, and
+    \c sequence-classification plans emit task fields such as \c value,
+    \c label, and \c scores while preserving raw ONNX outputs. \c embedding and
+    \c reranker packages can be used by \c embed-text and \c rerank-text
+    processors without duplicating mode options. Initial \c causal-lm plans
+    support tokenizer loading, \c input_ids and \c attention_mask tensor
+    construction, greedy decoding, stop tokens, generated-token metadata, and
+    truthful reporting when stateful KV-cache reuse is not available.
+
+    @section ai_model_optimization Optimization, Quantization, and Comparison
+
+    Optimize, quantize, validate, compare, and benchmark model variants before
+    promotion. %Qore records the variant lineage and provider compatibility
+    metadata so callers do not accidentally load a hardware-specific ORT
+    artifact with the wrong provider policy.
+
+    @code{.py}
+hash<QoreModelRegistry::ModelArtifactInfo> opt =
+    reg.registerOptimizedOnnxArtifact("customer-score", vid, "cpu.ort", {
+        "ort_format": True,
+        "session_config": <ML::OnnxSessionConfig>{"providers": ()},
+    });
+
+hash<QoreModelRegistry::ModelArtifactInfo> int8 =
+    reg.registerQuantizedOnnxArtifact("customer-score", vid, "int8.onnx", {
+        "method": "dynamic",
+        "weight_type": "QInt8",
+        "compare": True,
+        "benchmark": True,
+        "runs": 100,
+    });
+
+hash<QoreOnnxTools::OnnxCompareResult> cmp =
+    reg.compareOnnxVersionArtifacts(
+        "customer-score", vid, opt.name, int8.name, {
+            "abs_tolerance": 0.01,
+            "rel_tolerance": 0.01,
+            "benchmark": True,
+        });
+printf("match=%y speedup=%y\n", cmp.outputs_match, cmp.speedup);
+    @endcode
+
+    @section ai_model_benchmarks Benchmarking
+
+    The source tree includes benchmark cases for raw ONNX tensor execution and
+    DataProviderML ONNX pipelines. A focused local run can be started with:
+
+    @code{.sh}
+QORE_BENCH_ONNX_ROWS=10000 \
+    bench/run.sh --filter='onnx|dataproviderml_onnx' \
+    --iterations=5 --warmup=1 --save=/tmp/qore-onnx-bench.json
+    @endcode
+
+    Benchmark representative deployment shapes: row events, DataFrame blocks,
+    buffer columns, single-input tensors, multi-input tensors, registry-loaded
+    packages, optimized artifacts, and quantized artifacts. Measure with the
+    same provider policy and thread settings that production will use.
+
+    @section ai_model_limits Current Limits
+
+    %Qore intentionally does not reimplement training frameworks or ONNX
+    exporters. Use the exporter that best fits the source model, then use
+    %Qore for packaging, deployment metadata, validation, benchmarking, and
+    runtime execution.
+
+    Current implementation boundaries:
+    - half-precision and unsigned ONNX tensor outputs can be exposed through
+      wider Qore buffer types when there is no exact Qore dense buffer element
+      type;
+    - provider-owned device buffers are not exposed as portable Qore values;
+    - DataProviderML \c causal-lm execution currently performs greedy decoding
+      and reports when stateful KV-cache reuse is requested but not available;
+    - external quantization and conversion workflows depend on the installed
+      Python ONNX Runtime tooling; \c qore-onnx check-python reports missing
+      dependencies and versions.
+*/

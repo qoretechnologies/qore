@@ -40,7 +40,7 @@
 %endtry
 
 module QoreModelRegistry {
-    version = "2.2.0";
+    version = "2.5.0";
     desc = "user module providing an ML model registry with pluggable storage backends for versioning, tagging, and deployment management";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -337,7 +337,7 @@ reg.loadExecutable("torch-source", vid);
 
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
 
-    @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
+    @subsection qoremodelregistry_2_5 QoreModelRegistry Module Version 2.5
     - Model manifests now expose the complete ONNX deployment contract at the
       version level: \c task, \c opset, \c producer,
       \c minimum_onnxruntime_version, \c inputs, \c outputs,
@@ -351,6 +351,8 @@ reg.loadExecutable("torch-source", vid);
     - ModelRegistry DataProvider records now expose ONNX provider diagnostics,
       validation status, tensor contracts, deployment metadata, benchmark
       metadata, golden vectors, and optimized/quantized artifact lists
+
+    @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
     - ONNX model packages now expose task-aware execution-plan metadata through
       \c task, \c execution.task, and \c execution.plan; supported task names
       include \c raw, \c classification, \c regression, \c embedding,
