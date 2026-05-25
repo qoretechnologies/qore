@@ -538,6 +538,24 @@ public class ConnectionSchemeCache {
         return keys cache;
     }
 
+    #! Returns all known scheme names without forcing deferred providers to load
+    /** @return a sorted list of all known scheme names, including registered, cached, and deferred schemes
+    */
+    static list<string> listAllSchemeNames() {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        hash<auto> schemes = (map {$1: True}, keys SchemeMap);
+        schemes += (map {$1: True}, keys cache);
+        schemes += (map {$1: True}, keys initmap);
+        return sort(keys schemes);
+    }
+
     #! Returns info for the given connection scheme or @ref nothing if not present
     /** @param scheme the scheme for the connection
 
