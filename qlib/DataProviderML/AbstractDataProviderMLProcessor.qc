@@ -123,6 +123,86 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         };
     }
 
+    #! Returns the task declared by a registry manifest execution plan
+    /** @param manifest model registry version manifest
+
+        @return the normalized task name, or @ref NOTHING when no task is declared
+
+        @since DataProviderML 1.4
+    */
+    static *string getRegistryExecutionTask(
+            hash<QoreModelRegistry::ModelVersionInfo> manifest) {
+        if (manifest.task.val()) {
+            return manifest.task;
+        }
+        if (!manifest.execution) {
+            return NOTHING;
+        }
+        if (manifest.execution.task.val()) {
+            return manifest.execution.task;
+        }
+        if (manifest.execution.plan) {
+            if (manifest.execution.plan.task.val()) {
+                return string(manifest.execution.plan.task);
+            }
+            if (manifest.execution.plan.type.val()) {
+                string type = string(manifest.execution.plan.type).lwr();
+                type =~ s/^onnx[\/:]//;
+                return type;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns the artifact name declared by a registry execution plan
+    /** @param manifest model registry version manifest
+
+        @return the plan artifact name, or @ref NOTHING when none is declared
+
+        @since DataProviderML 1.4
+    */
+    static *string getRegistryExecutionPlanArtifactName(
+            hash<QoreModelRegistry::ModelVersionInfo> manifest) {
+        if (manifest.execution && manifest.execution.plan) {
+            if (manifest.execution.plan.artifact_name.val()) {
+                return string(manifest.execution.plan.artifact_name);
+            }
+            if (manifest.execution.plan.model_artifact_name.val()) {
+                return string(manifest.execution.plan.model_artifact_name);
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Verifies a registry execution plan task for a task-aware processor
+    /** @param manifest model registry version manifest
+        @param expected_task task required by the processor
+        @param processor_name processor action name for error messages
+        @param required if @ref True, missing or raw task metadata is rejected
+
+        @throw CONSTRUCTOR-ERROR if the manifest task is incompatible
+
+        @since DataProviderML 1.4
+    */
+    static validateRegistryExecutionTask(hash<QoreModelRegistry::ModelVersionInfo> manifest,
+            string expected_task, string processor_name, bool required) {
+        *string task = getRegistryExecutionTask(manifest);
+        if (task.val() && task != "raw" && task != expected_task) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("%s requires a registry execution plan with task %y, but "
+                    "model %y version %y declares task %y",
+                    processor_name, expected_task, manifest.name, manifest.version_id, task);
+        }
+        if (required && (!task.val() || task == "raw")) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("%s inferred ONNX mode from registry_model_name, but model %y "
+                    "version %y does not declare an %s execution plan; register the "
+                    "package with task: %y or provide the processor mode explicitly",
+                    processor_name, manifest.name, manifest.version_id, expected_task,
+                    expected_task);
+        }
+    }
+
     #! Records the shape of accumulated input for shape-preserving flushes
     private updatePendingOutputShape(DataProvider::DataProviderShape shape) {
         if (!pending_output_shape_set) {

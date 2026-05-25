@@ -232,8 +232,12 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
         addTestCase("embed-text - DataFrameBlock ONNX shape", \embedTextDataFrameOnnxShape());
         addTestCase("embed-text - BufferColumns ONNX shape", \embedTextBufferColumnsOnnxShape());
+        addTestCase("embed-text - registry execution plan inference",
+            \embedTextRegistryPlanInference());
         addTestCase("rerank-text - DataFrameBlock ONNX shape", \rerankTextDataFrameOnnxShape());
         addTestCase("rerank-text - BufferColumns ONNX shape", \rerankTextBufferColumnsOnnxShape());
+        addTestCase("rerank-text - registry execution plan inference",
+            \rerankTextRegistryPlanInference());
 
         # Integration tests
         addTestCase("integration - factory registration", \integrationFactory());
@@ -255,6 +259,12 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     static writeTextFile(string path, string data) {
+        File f();
+        f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(data);
+    }
+
+    static writeBinaryFile(string path, binary data) {
         File f();
         f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
         f.write(data);
@@ -298,6 +308,24 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "{\"model_max_length\":128,\"chat_template\":\"{{ messages }}\"}");
         QoreModelRegistry::ModelRegistry registry({"path": dir});
         return registry.registerPackage(package_dir, {"name": model_name});
+    }
+
+    static string createTokenOnnxRegistryPackage(string dir, string model_name,
+            string model_path, string task) {
+        string package_dir = dir + DirSep + model_name + "_pkg";
+        mkdir_ex(package_dir, 0755, True);
+        DataProviderMLProcessorsTest::writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(model_path));
+        DataProviderMLProcessorsTest::writeTextFile(package_dir + DirSep + "tokenizer.json",
+            DataProviderMLProcessorsTest::minimalTokenizerJson());
+        DataProviderMLProcessorsTest::writeTextFile(package_dir + DirSep + "tokenizer_config.json",
+            "{\"model_max_length\":128}");
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        return registry.registerPackage(package_dir, {
+            "name": model_name,
+            "task": task,
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
     }
 
     # ===================== IsolationForest Tests =====================
@@ -3294,6 +3322,44 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "embedding vectors should be normalized");
     }
 
+    embedTextRegistryPlanInference() {
+        if (skipTokenEmbeddingOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "embed_registry_plan_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string vid = DataProviderMLProcessorsTest::createTokenOnnxRegistryPackage(
+            dir, "embed-plan-model", getTokenEmbeddingModelPath(), "embedding");
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("embed-plan-model", vid);
+        assertEq("embedding", manifest.execution.task);
+        assertEq("onnx/embedding", manifest.execution.plan.type);
+
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 32,
+            "registry_model_name": "embed-plan-model",
+            "registry_path": dir,
+            "max_tokens": 8,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "body": ("hello world", "enterprise ai"),
+        });
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        list<auto> embeddings = result.getColumn("embedding");
+        assertEq(2, embeddings.lsize());
+        assertEq(2, embeddings[0].lsize());
+    }
+
     rerankTextDataFrameOnnxShape() {
 %ifdef NoDataFrame
         testSkip("dataframe module not available");
@@ -3372,6 +3438,47 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         }
         assertEq(2, result.getColumn("id").toList().lsize());
         assertEq(2, result.getColumn("passage").lsize());
+    }
+
+    rerankTextRegistryPlanInference() {
+        if (skipTokenRerankerOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "rerank_registry_plan_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string vid = DataProviderMLProcessorsTest::createTokenOnnxRegistryPackage(
+            dir, "rerank-plan-model", getTokenRerankerModelPath(), "reranker");
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("rerank-plan-model", vid);
+        assertEq("reranker", manifest.execution.task);
+        assertEq("onnx/reranker", manifest.execution.plan.type);
+
+        DataProviderML::QoreRerankerProcessor proc({
+            "query_field": "query",
+            "passage_field": "passage",
+            "top_k": 2,
+            "registry_model_name": "rerank-plan-model",
+            "registry_path": dir,
+            "max_length": 24,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3)),
+            "query": ("machine learning", "machine learning", "machine learning"),
+            "passage": ("machine learning systems", "weather forecast", "enterprise ai search"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq((1, 2), result.getColumn("reranker_rank").toList());
     }
 
     # ===================== Integration Tests =====================

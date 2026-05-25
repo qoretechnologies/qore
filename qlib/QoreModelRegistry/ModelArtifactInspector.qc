@@ -114,6 +114,22 @@ public class ModelArtifactInspector {
         string runtime = inferRuntime(primary);
         string artifact_kind = inferArtifactKind(primary, artifacts);
         string safety = inferPackageSafety(artifacts);
+        *hash<auto> option_plan;
+        if (exists options.execution_plan) {
+            option_plan = cast<hash<auto>>(options.execution_plan);
+        }
+        *string plan_task = taskFromExecutionPlan(option_plan);
+        if (plan_task.val() && options.task.val()) {
+            string normalized_plan_task = normalizeExecutionTask(plan_task);
+            string normalized_option_task = normalizeExecutionTask(options.task);
+            if (normalized_plan_task != normalized_option_task) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("conflicting ONNX package task metadata: option 'task' is %y "
+                        "but execution_plan declares %y", normalized_option_task,
+                        normalized_plan_task);
+            }
+        }
+        string task = inferExecutionTask(plan_task ?? options.task, artifacts, runtime);
         *hash<auto> input_schema;
         *hash<auto> output_schema;
         if (primary.format == "onnx" && primary.metadata) {
@@ -127,6 +143,16 @@ public class ModelArtifactInspector {
         *hash<auto> execution_config = options.execution_config
             ?? options.session_config
             ?? (runtime == "onnxruntime" ? options.config : NOTHING);
+        hash<auto> execution_plan =
+            buildExecutionPlan(runtime, task, primary, input_schema, output_schema, option_plan);
+        *hash<auto> preprocess;
+        if (exists options.preprocess) {
+            preprocess = cast<hash<auto>>(options.preprocess);
+        }
+        *hash<auto> postprocess;
+        if (exists options.postprocess) {
+            postprocess = cast<hash<auto>>(options.postprocess);
+        }
 
         return cast<hash<ModelVersionInfo>>({
             "version_id": options.version_id,
@@ -142,14 +168,19 @@ public class ModelArtifactInspector {
             "framework": options.framework ?? framework,
             "artifact_kind": artifact_kind,
             "runtime": runtime,
+            "task": task,
             "executable": runtime == "qore-ml" || runtime == "onnxruntime",
             "safety": safety,
             "artifacts": artifacts,
             "tokenizer": tokenizer,
             "execution": <ModelExecutionInfo>{
                 "runtime": runtime,
+                "task": task,
                 "local_executable": runtime == "qore-ml" || runtime == "onnxruntime",
                 "entry_artifact": primary.name,
+                "plan": execution_plan,
+                "preprocess": preprocess,
+                "postprocess": postprocess,
                 "requires": runtime == "onnxruntime" ? ("ml",) : (),
                 "input_schema": input_schema,
                 "output_schema": output_schema,
@@ -508,6 +539,132 @@ public class ModelArtifactInspector {
             }
         }
         return "ModelPackage";
+    }
+
+    private static *string taskFromExecutionPlan(*hash<auto> plan) {
+        if (!plan) {
+            return NOTHING;
+        }
+        if (plan.task.val()) {
+            return string(plan.task);
+        }
+        if (plan.type.val()) {
+            string type = string(plan.type).lwr();
+            type =~ s/^onnx[\/:]//;
+            return type;
+        }
+        return NOTHING;
+    }
+
+    private static string inferExecutionTask(*auto requested_task,
+            list<hash<ModelArtifactInfo>> artifacts, string runtime) {
+        if (requested_task.val()) {
+            return normalizeExecutionTask(requested_task);
+        }
+        if (runtime != "onnxruntime") {
+            return "raw";
+        }
+
+        string hints = "";
+        foreach hash<ModelArtifactInfo> a in (artifacts) {
+            hints += " " + a.name.lwr() + " " + a.role.lwr();
+            if (!a.metadata) {
+                continue;
+            }
+            if (a.metadata.model_type.val()) {
+                hints += " " + string(a.metadata.model_type).lwr();
+            }
+            if (a.metadata.architectures) {
+                foreach auto arch in (a.metadata.architectures) {
+                    hints += " " + string(arch).lwr();
+                }
+            }
+        }
+
+        if (hints =~ /(rerank|ranker|cross[-_ ]?encoder)/) {
+            return "reranker";
+        }
+        if (hints =~ /(embedding|embedder|sentence[-_ ]?transformer|bge|e5|minilm|mpnet)/) {
+            return "embedding";
+        }
+        if (hints =~ /(tok(en)?[-_ ]?classification|for[-_ ]?token[-_ ]?classification)/) {
+            return "token-classification";
+        }
+        if (hints =~ /(sequence[-_ ]?classification|for[-_ ]?sequence[-_ ]?classification|classifier)/) {
+            return "sequence-classification";
+        }
+        if (hints =~ /(regression|regressor)/) {
+            return "regression";
+        }
+        if (hints =~ /(encoder[-_ ]?decoder|seq2seq|bart|t5)/) {
+            return "encoder-decoder";
+        }
+        if (hints =~ /(causal[-_ ]?lm|for[-_ ]?causal[-_ ]?lm|text[-_ ]?generation|gpt|llama|mistral|qwen)/) {
+            return "causal-lm";
+        }
+        return "raw";
+    }
+
+    private static string normalizeExecutionTask(auto task) {
+        string t = string(task).lwr();
+        t =~ s/^onnx[\/:]//;
+        t =~ s/_/-/g;
+        switch (t) {
+            case "raw":
+            case "classification":
+            case "regression":
+            case "embedding":
+            case "reranker":
+            case "token-classification":
+            case "sequence-classification":
+            case "encoder-decoder":
+            case "causal-lm":
+                return t;
+            case "text-classification":
+                return "sequence-classification";
+            case "feature-extraction":
+            case "sentence-embedding":
+            case "sentence-transformer":
+                return "embedding";
+            case "ranking":
+            case "cross-encoder":
+                return "reranker";
+            case "text-generation":
+            case "causal-language-modeling":
+                return "causal-lm";
+            case "seq2seq":
+                return "encoder-decoder";
+        }
+        throw "ML-REGISTRY-ERROR",
+            sprintf("unsupported ONNX execution task %y; valid tasks are: "
+                "raw, classification, regression, embedding, reranker, "
+                "token-classification, sequence-classification, encoder-decoder, "
+                "and causal-lm", task);
+    }
+
+    private static hash<auto> buildExecutionPlan(string runtime, string task,
+            hash<ModelArtifactInfo> primary, *hash<auto> input_schema,
+            *hash<auto> output_schema, *hash<auto> option_plan) {
+        hash<auto> plan;
+        if (option_plan) {
+            plan += option_plan;
+        }
+        if (!plan.type.val()) {
+            plan.type = runtime == "onnxruntime" ? "onnx/" + task : runtime + "/" + task;
+        }
+        if (!plan.task.val()) {
+            plan.task = task;
+        }
+        if (!plan.artifact_name.val()) {
+            plan.artifact_name = primary.name;
+        }
+        if (!exists plan.input_schema && input_schema) {
+            plan.input_schema = input_schema;
+        }
+        if (!exists plan.output_schema && output_schema) {
+            plan.output_schema = output_schema;
+        }
+        return plan;
     }
 }
 

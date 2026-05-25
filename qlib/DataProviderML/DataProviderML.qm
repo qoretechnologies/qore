@@ -1794,11 +1794,15 @@ printf("tokens=%d\n", out.body_token_count);
     @code{.py}
 DataProviderML::QoreEmbedTextProcessor proc({
     "text_field": "chunk_text",
-    "embedding_mode": "onnx",
     "registry_model_name": "bge-small-en",
     "registry_path": "/var/models",
     "window_size": 32,
 });
+
+# When the registry package declares task: "embedding" or an onnx/embedding
+# execution plan, embed-text infers local ONNX mode from the manifest.  The
+# explicit embedding_mode option can still be supplied when a legacy package
+# has only raw ONNX execution metadata.
 
 list<auto> rows = proc.processRecord({"chunk_text": "contract renewal terms"});
     @endcode
@@ -1900,6 +1904,10 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     - \c embed-text and \c rerank-text accept \c onnx_session_config and inherit
       QoreModelRegistry package execution config for ONNX Runtime provider,
       threading, and graph-optimization settings
+    - \c embed-text and \c rerank-text can infer local ONNX mode from
+      QoreModelRegistry task-aware execution plans, so packages registered with
+      \c task = "embedding" or \c task = "reranker" do not require duplicate
+      processor mode options in pipeline definitions
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used

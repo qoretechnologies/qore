@@ -89,7 +89,6 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                     "- `http` — Call an HTTP reranker endpoint\n"
                     "- `onnx` — Run a local ONNX cross-encoder model",
                 "type": AbstractDataProviderTypeMap."string",
-                "required": True,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "http",
@@ -205,6 +204,9 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
         #! Registry backend options
         hash<auto> registry_options;
 
+        #! True when ONNX mode was inferred from registry execution metadata
+        bool reranker_mode_inferred = False;
+
         #! Accumulated records
         list<auto> buffer = ();
 
@@ -230,9 +232,19 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
             throw "CONSTRUCTOR-ERROR", "passage_field option is required";
         }
 
-        string reranker_mode = copts.reranker_mode;
+        string reranker_mode;
+        *string requested_reranker_mode = copts.reranker_mode;
+        if (requested_reranker_mode.val()) {
+            reranker_mode = requested_reranker_mode;
+        }
+        if (!reranker_mode.val() && copts.registry_model_name.val()) {
+            reranker_mode = "onnx";
+            reranker_mode_inferred = True;
+        }
         if (!reranker_mode.val()) {
-            throw "CONSTRUCTOR-ERROR", "reranker_mode option is required";
+            throw "CONSTRUCTOR-ERROR",
+                "reranker_mode is required unless registry_model_name identifies a "
+                "registry package with an onnx/reranker execution plan";
         }
 
         hash<QoreTokenizerUtils::RerankerConfig> rconfig(<QoreTokenizerUtils::RerankerConfig>{
@@ -258,7 +270,11 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 hash<QoreModelRegistry::ModelVersionInfo> manifest =
                     registry.getVersionManifest(copts.registry_model_name,
                         copts.registry_model_version);
+                AbstractDataProviderMLProcessor::validateRegistryExecutionTask(
+                    manifest, "reranker", "rerank-text", reranker_mode_inferred);
                 string artifact_name = copts.registry_model_artifact_name
+                    ?? AbstractDataProviderMLProcessor::getRegistryExecutionPlanArtifactName(
+                        manifest)
                     ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
                     ?? "model";
                 if (manifest.execution && manifest.execution.config) {

@@ -78,6 +78,7 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("executableAdapterOnnxTensor", \executableAdapterOnnxTensorTest());
         addTestCase("modelPackageInspection", \modelPackageInspectionTest());
         addTestCase("onnxPackageInspection", \onnxPackageInspectionTest());
+        addTestCase("onnxExecutionPlanMetadata", \onnxExecutionPlanMetadataTest());
         addTestCase("onnxOptimizedArtifactRegistration", \onnxOptimizedArtifactRegistrationTest());
         addTestCase("onnxQuantizedArtifactDependencyError", \onnxQuantizedArtifactDependencyErrorTest());
         addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
@@ -1253,6 +1254,9 @@ class ModelRegistryTest inherits QUnit::Test {
             registry.getVersionManifest("onnx-linear", vid);
         assertEq("onnx", manifest.framework, "ONNX package framework should be inferred");
         assertEq("onnxruntime", manifest.runtime, "ONNX package runtime should be onnxruntime");
+        assertEq("raw", manifest.task, "plain ONNX packages should default to raw task");
+        assertEq("onnx/raw", manifest.execution.plan.type,
+            "plain ONNX packages should expose a raw execution plan");
         assertEq("executable", manifest.artifact_kind, "ONNX package should be executable");
         assertTrue(manifest.execution.input_schema.tensors.size() > 0,
             "ONNX input tensor metadata should be stored in execution input_schema");
@@ -1279,6 +1283,53 @@ class ModelRegistryTest inherits QUnit::Test {
         hash<auto> rows = adapter.runFeatureMatrix(((4.0,),), NOTHING);
         assertTrue(abs(9.0 - rows.Y[0].toFloat()) < 1e-5,
             sprintf("expected externally-materialized ONNX output 9.0, got %y", rows.Y[0]));
+    }
+
+    onnxExecutionPlanMetadataTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_plan_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-plan-linear",
+            "description": "ONNX execution-plan metadata fixture",
+            "task": "regression",
+            "execution_plan": {
+                "type": "onnx/regression",
+                "output": {"kind": "score"},
+            },
+            "preprocess": {"input_layout": "row-major"},
+            "postprocess": {"output_field": "score"},
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-plan-linear", vid);
+        assertEq("regression", manifest.task);
+        assertEq("regression", manifest.execution.task);
+        assertEq("onnx/regression", manifest.execution.plan.type);
+        assertEq("model.onnx", manifest.execution.plan.artifact_name);
+        assertEq("row-major", manifest.execution.preprocess.input_layout);
+        assertEq("score", manifest.execution.postprocess.output_field);
+        assertEq("X", manifest.execution.plan.input_schema.tensors[0].name);
+        assertEq("Y", manifest.execution.plan.output_schema.tensors[0].name);
+
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            registry.registerPackage(package_dir, {
+                "name": "onnx-plan-conflict",
+                "task": "embedding",
+                "execution_plan": {"type": "onnx/regression"},
+                "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+            });
+        });
     }
 
     onnxOptimizedArtifactRegistrationTest() {

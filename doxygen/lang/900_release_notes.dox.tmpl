@@ -3279,6 +3279,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - QoreModelRegistry exposes optimized and quantized ONNX deployment
         artifact lists and can load named optimized/quantized ONNX artifacts
         with provider compatibility checks
+      - QoreModelRegistry ONNX package manifests now expose task-aware
+        execution-plan metadata through \c task, \c execution.task, and
+        \c execution.plan; DataProviderML \c embed-text and \c rerank-text can
+        infer registry-backed ONNX mode from \c embedding and \c reranker plans
       - QoreOnnxTools and \c qore-onnx compare can compare two ONNX/ORT
         artifacts for output compatibility and optional latency differences
 

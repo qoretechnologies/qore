@@ -98,10 +98,18 @@ public hashdecl TokenizerArtifactInfo {
 public hashdecl ModelExecutionInfo {
     #! Runtime identifier: "qore-ml", "onnxruntime", "external-http", "metadata-only"
     string runtime = "metadata-only";
+    #! Task identifier, for example "raw", "embedding", "reranker", or "sequence-classification"
+    *string task;
     #! Whether Qore can execute this version in-process
     bool local_executable = False;
     #! Name of the primary artifact used by this runtime
     *string entry_artifact;
+    #! Structured execution plan metadata used by task-aware processors
+    *hash<auto> plan;
+    #! Optional preprocessing contract metadata
+    *hash<auto> preprocess;
+    #! Optional postprocessing contract metadata
+    *hash<auto> postprocess;
     #! Optional list of required Qore modules or external capabilities
     list<string> requires = ();
     #! Optional input schema/tensor metadata
@@ -156,6 +164,10 @@ public hashdecl ModelVersionInfo {
     /** @since QoreModelRegistry 2.2
     */
     *string runtime;
+    #! Model task identifier, for example "raw", "embedding", "reranker", or "sequence-classification"
+    /** @since QoreModelRegistry 2.4
+    */
+    *string task;
     #! True if this version can be executed locally by Qore
     /** @since QoreModelRegistry 2.2
     */

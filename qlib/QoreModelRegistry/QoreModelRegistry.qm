@@ -145,13 +145,24 @@ string vid = reg.registerPackage("/srv/models/bge-small-en", {
     "name": "bge-small-en",
     "description": "Embedding model package exported to ONNX",
     "tags": ("embedding", "production"),
+    "task": "embedding",
+    "execution_plan": {
+        "type": "onnx/embedding",
+        "pooling": "mean",
+        "normalize": True,
+    },
     "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
 });
 
 hash<QoreModelRegistry::ModelVersionInfo> manifest =
     reg.getVersionManifest("bge-small-en", vid);
-printf("runtime=%s tokenizer=%s\n",
-    manifest.runtime, manifest.tokenizer.tokenizer_json);
+printf("runtime=%s task=%s tokenizer=%s\n",
+    manifest.runtime, manifest.execution.task, manifest.tokenizer.tokenizer_json);
+
+# The manifest keeps task-aware execution metadata next to the package:
+#   manifest.task == "embedding"
+#   manifest.execution.plan.type == "onnx/embedding"
+#   manifest.execution.plan.artifact_name == "model.onnx"
 
 # Tokenizer utilities and DataProviderML processors can load tokenizer.json
 # and companion tokenizer_config.json settings directly from the registry
@@ -254,6 +265,11 @@ reg.loadExecutable("torch-source", vid);
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
 
     @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
+    - ONNX model packages now expose task-aware execution-plan metadata through
+      \c task, \c execution.task, and \c execution.plan; supported task names
+      include \c raw, \c classification, \c regression, \c embedding,
+      \c reranker, \c token-classification, \c sequence-classification,
+      \c encoder-decoder, and \c causal-lm
     - Added @ref QoreModelRegistry::ModelRegistry::registerOptimizedOnnxArtifact()
       to create optimized ONNX/ORT artifacts with @ref qoreonnxtoolsintro "QoreOnnxTools"
       and store lineage metadata on the source model version

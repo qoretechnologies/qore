@@ -85,7 +85,6 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                     "- `http` — call an OpenAI-compatible `/v1/embeddings` HTTP endpoint\n"
                     "- `onnx` — run a local ONNX embedding model (requires the ml module)",
                 "type": AbstractDataProviderTypeMap."string",
-                "required": True,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "http",
@@ -248,6 +247,9 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         #! Registry tokenizer artifact name
         *string registry_tokenizer_artifact_name;
 
+        #! True when ONNX mode was inferred from registry execution metadata
+        bool embedding_mode_inferred = False;
+
         #! Registry backend options
         hash<auto> registry_options;
 
@@ -277,7 +279,24 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size must be >= 1; got %d", window_size);
         }
-        embedding_mode = copts.embedding_mode;
+        registry_model_name = copts.registry_model_name;
+        registry_model_version = copts.registry_model_version;
+        registry_model_artifact_name = copts.registry_model_artifact_name;
+        registry_tokenizer_artifact_name = copts.registry_tokenizer_artifact_name;
+        registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
+        *string requested_embedding_mode = copts.embedding_mode;
+        if (requested_embedding_mode.val()) {
+            embedding_mode = requested_embedding_mode;
+        }
+        if (!embedding_mode.val() && registry_model_name.val()) {
+            embedding_mode = "onnx";
+            embedding_mode_inferred = True;
+        }
+        if (!embedding_mode.val()) {
+            throw "CONSTRUCTOR-ERROR",
+                "embedding_mode is required unless registry_model_name identifies a "
+                "registry package with an onnx/embedding execution plan";
+        }
         if (embedding_mode != "http" && embedding_mode != "onnx") {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("embedding_mode must be \"http\" or \"onnx\"; got %y", embedding_mode);
@@ -296,11 +315,6 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         }
         max_tokens = copts.max_tokens ?? 512;
         pooling_strategy = copts.pooling_strategy ?? "mean";
-        registry_model_name = copts.registry_model_name;
-        registry_model_version = copts.registry_model_version;
-        registry_model_artifact_name = copts.registry_model_artifact_name;
-        registry_tokenizer_artifact_name = copts.registry_tokenizer_artifact_name;
-        registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
         if (embedding_mode == "onnx" && !registry_model_name.val()) {
             if (!embedding_model_path.val()) {
                 throw "CONSTRUCTOR-ERROR",
@@ -553,7 +567,11 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                     QoreModelRegistry::ModelRegistry registry(registry_options);
                     hash<QoreModelRegistry::ModelVersionInfo> manifest =
                         registry.getVersionManifest(registry_model_name, registry_model_version);
+                    AbstractDataProviderMLProcessor::validateRegistryExecutionTask(
+                        manifest, "embedding", "embed-text", embedding_mode_inferred);
                     string artifact_name = registry_model_artifact_name
+                        ?? AbstractDataProviderMLProcessor::getRegistryExecutionPlanArtifactName(
+                            manifest)
                         ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
                         ?? "model";
                     if (manifest.execution && manifest.execution.config) {

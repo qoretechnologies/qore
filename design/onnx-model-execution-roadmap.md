@@ -334,7 +334,7 @@ Acceptance checks:
 
 ## Phase 8: Task-Specific ONNX Execution Plans
 
-Status: pending.
+Status: in progress.
 
 Add registry execution plan types so users do not have to hand-code common
 preprocess/run/postprocess logic.
@@ -354,6 +354,9 @@ Execution plans:
 Acceptance checks:
 
 - Existing `embed-text` and `rerank-text` processors use the plan metadata.
+  Implemented for registry-backed ONNX packages with `task = "embedding"` and
+  `task = "reranker"`; processors infer ONNX mode and validate incompatible
+  declared tasks.
 - Sequence classification and regression plans return clear typed outputs.
 - Initial causal-LM support handles tokenizer input, attention masks, greedy
   decoding, stop tokens, and basic KV cache metadata.
