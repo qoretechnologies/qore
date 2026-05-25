@@ -210,7 +210,8 @@
       @ref qore_2_3_0_new_user_modules "New User Modules"
     - QoreModelRegistry and DataProviderML now support versioned AI model packages
       with named artifacts, safe HuggingFace/PyTorch metadata inspection,
-      registry-hosted \c tokenizer.json files, ONNX execution metadata, and
+      registry-hosted \c tokenizer.json and \c tokenizer_config.json files,
+      ONNX execution metadata, tensor-backed ONNX inference, and
       DataProvider-native package/artifact creation workflows
     - cryptography: new @ref qorecryptointro "QoreCrypto" envelope-encryption module
     - existing modules updated extensively (DataProvider, RestClient, HttpServer,
@@ -2054,6 +2055,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - Holt-Winters triple exponential smoothing for time series forecasting
       - Seasonal Decomposition for decomposing time series into trend, seasonal, and residual components
       - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
+      - ML::Tensor and OnnxModel::runTensors() provide dense buffer-backed ONNX
+        inference with explicit tensor shape metadata
+      - ONNX inference supports float, double, int8, int16, int32, int64, and bool
+        tensor input/output conversion
       - OnnxModel automatic provider selection falls back to CPU when an advertised
         GPU provider cannot create a session, for example when CUDA libraries are
         not installed; explicit provider configurations still report provider errors
@@ -2550,9 +2555,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - processors accept \c DataFrameBlock, \c BufferColumns, and
         \c HashOfLists input shapes through the DataProvider pipeline shape API
       - tokenize, chunk-text, embed-text, rerank-text, semantic-chunk-text, and
-        registry-model processors can load tokenizer and ONNX artifacts directly
+        registry-model processors can load tokenizer, tokenizer_config, and ONNX artifacts directly
         from QoreModelRegistry packages
-        and preserve shaped bulk outputs where the result is rectangular
+      - onnx-model and registry-model processors use tensor execution for complete
+        shaped ONNX windows and preserve shaped bulk outputs where the result is rectangular
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module
@@ -3229,8 +3235,13 @@ foreach string module_name in (registry.getProcessModules()) {
         tokenizer metadata, execution metadata, and pluggable filesystem/database/REST backends
       - safe HuggingFace/PyTorch package inspection: JSON and SafeTensors metadata
         can be parsed, while PyTorch pickle artifacts are recorded but never executed
-      - \c loadExecutable(), \c loadJsonArtifact(), and \c loadTokenizerConfig()
-        simplify local ONNX execution and tokenizer reuse
+      - \c loadExecutable(), \c loadJsonArtifact(), \c loadTokenizerConfig(), and
+        \c loadTokenizerPackageConfig() simplify local ONNX execution and tokenizer reuse
+      - ModelExecutableAdapter provides row-major and tensor ONNX feature-matrix
+        execution plus provider diagnostics for registry-backed inference
+      - ONNX session configuration is stored in execution metadata, and packages
+        with adjacent external-data artifacts are materialized automatically for
+        session creation
 
     - @ref qoreocrutilsintro "QoreOcrUtils" module
       - new module providing an OCR abstraction layer with native and HTTP backends
@@ -3295,6 +3306,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
       - EmbeddingModel and CrossEncoderReranker accept in-memory ONNX model artifacts
         from registries in addition to filesystem paths
+      - TokenCounter, DocumentChunker, EmbeddingModel, and CrossEncoderReranker can
+        apply tokenizer_config.json companion settings from registry model packages
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
       - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries

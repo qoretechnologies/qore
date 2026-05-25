@@ -1721,7 +1721,10 @@ DataFrame::DataFrame clusters = kmeans.processRecordsShape(
     Text and ONNX processors can load model package artifacts directly from
     @ref qoremodelregistryintro "QoreModelRegistry". This avoids scattering
     \c tokenizer.json and ONNX files across pipeline hosts and keeps the model,
-    tokenizer, and metadata versioned together.
+    tokenizer, and metadata versioned together. When a package includes
+    \c tokenizer_config.json, those companion settings are loaded with
+    \c tokenizer.json so tokenizer utilities can use model-level limits and
+    chat templates.
 
     Processors that support registry-backed artifacts include:
     - @ref DataProviderML::QoreTokenizeProcessor "tokenize"
@@ -1758,6 +1761,29 @@ DataProviderML::QoreEmbedTextProcessor proc({
 list<auto> rows = proc.processRecord({"chunk_text": "contract renewal terms"});
     @endcode
 
+    @par Registry ONNX DataFrameBlock example:
+    @code{.py}
+%requires DataProviderML
+%requires dataframe
+
+DataProviderML::QoreRegistryModelProcessor proc({
+    "registry_path": "/var/models",
+    "model_name": "credit-score-onnx",
+    "version": "production",
+    "fields": ("income", "debt_ratio", "history_months"),
+    "window_size": 1024,
+});
+
+DataFrame::DataFrame batch({
+    "income": new buffer<float64>((75000.0, 54000.0)),
+    "debt_ratio": new buffer<float64>((0.28, 0.41)),
+    "history_months": new buffer<float64>((120.0, 36.0)),
+});
+
+auto scored = proc.processRecordsShape(batch, DataProviderShape::DataFrameBlock);
+list<auto> predictions = scored.getColumn("prediction");
+    @endcode
+
     @par BufferColumns example:
     @code{.py}
 %requires DataProviderML
@@ -1781,10 +1807,14 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
 
     @subsection dataproviderml_v1_4 DataProviderML v1.4
     - Tokenization, chunking, embedding, re-ranking, and semantic chunking processors
-      can load \c tokenizer.json and ONNX artifacts from QoreModelRegistry packages
+      can load \c tokenizer.json, companion \c tokenizer_config.json settings, and
+      ONNX artifacts from QoreModelRegistry packages
     - \c registry-model now uses QoreModelRegistry executable metadata so native Qore
       ML and ONNX registry packages are supported with descriptive errors for
       metadata-only PyTorch/HuggingFace packages
+    - \c onnx-model and registry-backed ONNX inference use tensor execution for
+      complete \c DataFrameBlock, \c BufferColumns, and \c HashOfLists windows,
+      preserving bulk pipeline shapes without per-row inference calls
     - Shared registry backend options support filesystem, database, and REST model
       registry backends for AI pipeline artifacts
 

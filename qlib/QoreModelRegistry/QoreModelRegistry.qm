@@ -134,6 +134,7 @@ list<string> tenants = admin.listTenants();  # ("acme-corp", "globex-inc")
     @par HuggingFace/ONNX Package Example:
     @code{.py}
 %requires QoreModelRegistry
+%requires ml
 
 QoreModelRegistry::ModelRegistry reg({"path": "/var/models"});
 
@@ -142,6 +143,7 @@ string vid = reg.registerPackage("/srv/models/bge-small-en", {
     "name": "bge-small-en",
     "description": "Embedding model package exported to ONNX",
     "tags": ("embedding", "production"),
+    "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
 });
 
 hash<QoreModelRegistry::ModelVersionInfo> manifest =
@@ -150,11 +152,22 @@ printf("runtime=%s tokenizer=%s\n",
     manifest.runtime, manifest.tokenizer.tokenizer_json);
 
 # Tokenizer utilities and DataProviderML processors can load tokenizer.json
-# directly from the registry without a separate filesystem path.
+# and companion tokenizer_config.json settings directly from the registry
+# without a separate filesystem path.
 hash<auto> tokenizer_config = reg.loadTokenizerConfig("bge-small-en", vid);
+hash<auto> tokenizer_package = reg.loadTokenizerPackageConfig("bge-small-en", vid);
+printf("max sequence length=%y\n", tokenizer_package.tokenizer_config.model_max_length);
 
-# ONNX packages are executable when ONNX Runtime is available.
-    object model = reg.loadExecutable("bge-small-en", vid);
+# ONNX packages are executable when ONNX Runtime is available. Packages with
+# adjacent external-data files are materialized automatically for session setup.
+object model = reg.loadExecutable("bge-small-en", vid);
+
+# The adapter provides row-oriented inference, tensor outputs, and provider diagnostics.
+QoreModelRegistry::ModelExecutableAdapter adapter =
+    reg.loadExecutableAdapter("bge-small-en", vid);
+hash<auto> outputs = adapter.runFeatureMatrix(((1.0, 2.0, 3.0),), NOTHING);
+hash<auto> tensor_outputs = adapter.runFeatureMatrixTensors(((1.0, 2.0, 3.0),), NOTHING);
+printf("provider=%s\n", adapter.getProviderDiagnostics().active_provider);
     @endcode
 
     @par DataProvider Package Registration Example:
@@ -211,6 +224,18 @@ reg.loadExecutable("torch-source", vid);
     @endcode
 
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
+
+    @subsection qoremodelregistry_2_3 QoreModelRegistry Module Version 2.3
+    - Added @ref QoreModelRegistry::ModelExecutableAdapter::runFeatureMatrixTensors()
+      for registry-backed ONNX inference that returns @ref Qore::ML::Tensor "ML::Tensor"
+      outputs
+    - Added provider diagnostics through
+      @ref QoreModelRegistry::ModelExecutableAdapter::getProviderDiagnostics()
+    - Added \c loadTokenizerPackageConfig() to load \c tokenizer.json together
+      with optional \c tokenizer_config.json, \c special_tokens_map.json, and
+      \c generation_config.json companion artifacts
+    - ONNX package execution preserves session configuration in execution metadata
+      and materializes adjacent external-data artifacts for ONNX Runtime session setup
 
     @subsection qoremodelregistry_2_2 QoreModelRegistry Module Version 2.2
     - Added safe model package registration with @ref QoreModelRegistry::ModelRegistry::registerPackage()

@@ -68,11 +68,12 @@ module QoreTokenizerUtils {
     - @ref QoreTokenizerUtils::SemanticDocumentChunker "SemanticDocumentChunker" — chunks
       documents at semantic boundaries detected by embedding similarity
 
-    All classes accept a HuggingFace `tokenizer.json` configuration and produce output
-    compatible with any ONNX embedding model or LLM API. ONNX embedding and
-    re-ranking models can be loaded from either filesystem paths or in-memory
-    binary artifacts, which allows QoreModelRegistry database and REST backends
-    to execute registered ONNX packages without first writing temporary model files.
+    All classes accept a HuggingFace `tokenizer.json` configuration and can also
+    apply companion `tokenizer_config.json` settings such as model maximum length
+    and chat templates when available. ONNX embedding and re-ranking models can be
+    loaded from either filesystem paths or in-memory binary artifacts, which allows
+    QoreModelRegistry database and REST backends to execute registered ONNX packages
+    without first writing temporary model files.
 
     @par Example: Chunk a document for RAG
     @code{.py}
@@ -95,6 +96,9 @@ foreach hash<auto> chunk in (chunks) {
     @subsection qoretokenizerutils_1_2 QoreTokenizerUtils Module Version 1.2
     - EmbeddingModel and CrossEncoderReranker can load ONNX models from in-memory
       \c model_data artifacts as well as filesystem \c model_path values
+    - TokenCounter, DocumentChunker, EmbeddingModel, and CrossEncoderReranker can
+      apply optional \c tokenizer_config.json companion settings through
+      \c tokenizer_runtime_config
     - Enables QoreModelRegistry-backed ONNX execution for DataProviderML processors
       without temporary files
 
