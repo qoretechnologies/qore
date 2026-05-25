@@ -429,7 +429,10 @@ hash<auto> OnnxModel::run(hash<auto> inputs, *list<string> output_names) {
         all model outputs are returned
 
     @return a hash where keys are output tensor names and values are @ref ML::Tensor
-    objects preserving dtype and shape metadata
+    objects preserving shape metadata. The tensor dtype is the Qore storage
+    dtype; ONNX \c float16 and \c bfloat16 values are materialized as
+    \c float32, and unsigned integer outputs are materialized as \c int64 until
+    native Qore buffer dtypes exist for those physical ONNX types.
 
     @par Example:
     @code{.py}

@@ -3216,6 +3216,31 @@ public class MlTest inherits QUnit::Test {
         assertEq((0, 9223372036854775807), out.u64_out);
         assertEq(("alpha", "beta"), out.s_out);
 
+        hash<auto> tensor_out = model.runTensors({
+            "f16_in": new ML::Tensor(data: ((1.5,), (-2.0,)), dtype: "float32"),
+            "bf16_in": new ML::Tensor(data: ((3.0,), (4.5,)), dtype: "float32"),
+            "u8_in": new ML::Tensor(data: ((0,), (255,)), dtype: "int64"),
+            "u16_in": new ML::Tensor(data: ((0,), (65535,)), dtype: "int64"),
+            "u32_in": new ML::Tensor(data: ((0,), (4000000000,)), dtype: "int64"),
+            "u64_in": new ML::Tensor(data: ((0,), (9223372036854775807,)), dtype: "int64"),
+            "s_in": new ML::Tensor(data: (("alpha",), ("beta",)), dtype: "string"),
+        });
+
+        assertEq("float32", tensor_out.f16_out.getDtype());
+        assertEq((2, 1), tensor_out.f16_out.getShape());
+        assertFloat(1.5, tensor_out.f16_out.toList()[0][0], 0.001);
+        assertFloat(-2.0, tensor_out.f16_out.toList()[1][0], 0.001);
+        assertEq("float32", tensor_out.bf16_out.getDtype());
+        assertFloat(3.0, tensor_out.bf16_out.toList()[0][0], 0.01);
+        assertFloat(4.5, tensor_out.bf16_out.toList()[1][0], 0.01);
+        assertEq("int64", tensor_out.u8_out.getDtype());
+        assertEq(((0,), (255,)), tensor_out.u8_out.toList());
+        assertEq(((0,), (65535,)), tensor_out.u16_out.toList());
+        assertEq(((0,), (4000000000,)), tensor_out.u32_out.toList());
+        assertEq(((0,), (9223372036854775807,)), tensor_out.u64_out.toList());
+        assertEq(("alpha",), tensor_out.s_out.toList()[0]);
+        assertEq(("beta",), tensor_out.s_out.toList()[1]);
+
         assertThrows("ML-ONNX-INFERENCE-ERROR", "uint8 tensor value", sub() {
             model.run({
                 "f16_in": ((1.0,),),

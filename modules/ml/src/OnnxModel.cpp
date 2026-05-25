@@ -231,6 +231,59 @@ int qoreValueToUInt64(QoreValue value, uint64_t max_value, const char* type_name
     return 0;
 }
 
+int bufferToFloat16Vector(const QoreBufferNode& buffer, std::vector<Ort::Float16_t>& out,
+        ExceptionSink* xsink) {
+    out.reserve(buffer.size());
+    for (size_t i = 0; i < buffer.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "converting tensor buffer to ONNX float16 input")) {
+            return -1;
+        }
+        QoreValue value = buffer.getReferencedEntry(i, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        out.push_back(Ort::Float16_t(static_cast<float>(value.getAsFloat())));
+    }
+    return 0;
+}
+
+int bufferToBFloat16Vector(const QoreBufferNode& buffer, std::vector<Ort::BFloat16_t>& out,
+        ExceptionSink* xsink) {
+    out.reserve(buffer.size());
+    for (size_t i = 0; i < buffer.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "converting tensor buffer to ONNX bfloat16 input")) {
+            return -1;
+        }
+        QoreValue value = buffer.getReferencedEntry(i, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        out.push_back(Ort::BFloat16_t(static_cast<float>(value.getAsFloat())));
+    }
+    return 0;
+}
+
+template <typename T>
+int bufferToUnsignedVector(const QoreBufferNode& buffer, std::vector<T>& out,
+        uint64_t max_value, const char* type_name, ExceptionSink* xsink) {
+    out.reserve(buffer.size());
+    for (size_t i = 0; i < buffer.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "converting tensor buffer to unsigned ONNX input")) {
+            return -1;
+        }
+        QoreValue value = buffer.getReferencedEntry(i, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        uint64_t parsed;
+        if (qoreValueToUInt64(value, max_value, type_name, parsed, xsink)) {
+            return -1;
+        }
+        out.push_back(static_cast<T>(parsed));
+    }
+    return 0;
+}
+
 template <typename T>
 QoreValue reshapeFloatingOutput(const T* data, const std::vector<int64_t>& shape,
         size_t& offset, const char* cancel_msg, ExceptionSink* xsink) {
@@ -3645,13 +3698,6 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                 return nullptr;
             }
             QoreBufferElementType expected = onnxTypeToBufferElementType(meta.element_type);
-            if (expected == QoreBufferElementType::Invalid || direct_buffer->getElementType() != expected) {
-                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
-                    "input tensor '%s': model expects ONNX type '%s', but input buffer has type '%s'",
-                    meta.name.c_str(), elementTypeToString(meta.element_type),
-                    qore_buffer_element_type_name(direct_buffer->getElementType()));
-                return nullptr;
-            }
             if (direct_buffer->ensureHostStorage(xsink)) {
                 return nullptr;
             }
@@ -3668,6 +3714,87 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
             }
 
             Ort::MemoryInfo mem_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+            if (expected == QoreBufferElementType::Invalid) {
+                switch (meta.element_type) {
+                    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16: {
+                        auto buf = std::make_unique<std::vector<Ort::Float16_t>>();
+                        if (bufferToFloat16Vector(*direct_buffer, *buf, xsink)) {
+                            return nullptr;
+                        }
+                        input_tensors.push_back(Ort::Value::CreateTensor<Ort::Float16_t>(mem_info,
+                            buf->data(), buf->size(), direct_shape.data(), direct_shape.size()));
+                        float16_buffers.push_back(std::move(buf));
+                        break;
+                    }
+                    case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16: {
+                        auto buf = std::make_unique<std::vector<Ort::BFloat16_t>>();
+                        if (bufferToBFloat16Vector(*direct_buffer, *buf, xsink)) {
+                            return nullptr;
+                        }
+                        input_tensors.push_back(Ort::Value::CreateTensor<Ort::BFloat16_t>(mem_info,
+                            buf->data(), buf->size(), direct_shape.data(), direct_shape.size()));
+                        bfloat16_buffers.push_back(std::move(buf));
+                        break;
+                    }
+                    case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
+                        auto buf = std::make_unique<std::vector<uint8_t>>();
+                        if (bufferToUnsignedVector(*direct_buffer, *buf, std::numeric_limits<uint8_t>::max(),
+                                "uint8", xsink)) {
+                            return nullptr;
+                        }
+                        input_tensors.push_back(Ort::Value::CreateTensor<uint8_t>(mem_info,
+                            buf->data(), buf->size(), direct_shape.data(), direct_shape.size()));
+                        uint8_buffers.push_back(std::move(buf));
+                        break;
+                    }
+                    case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16: {
+                        auto buf = std::make_unique<std::vector<uint16_t>>();
+                        if (bufferToUnsignedVector(*direct_buffer, *buf, std::numeric_limits<uint16_t>::max(),
+                                "uint16", xsink)) {
+                            return nullptr;
+                        }
+                        input_tensors.push_back(Ort::Value::CreateTensor<uint16_t>(mem_info,
+                            buf->data(), buf->size(), direct_shape.data(), direct_shape.size()));
+                        uint16_buffers.push_back(std::move(buf));
+                        break;
+                    }
+                    case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32: {
+                        auto buf = std::make_unique<std::vector<uint32_t>>();
+                        if (bufferToUnsignedVector(*direct_buffer, *buf, std::numeric_limits<uint32_t>::max(),
+                                "uint32", xsink)) {
+                            return nullptr;
+                        }
+                        input_tensors.push_back(Ort::Value::CreateTensor<uint32_t>(mem_info,
+                            buf->data(), buf->size(), direct_shape.data(), direct_shape.size()));
+                        uint32_buffers.push_back(std::move(buf));
+                        break;
+                    }
+                    case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64: {
+                        auto buf = std::make_unique<std::vector<uint64_t>>();
+                        if (bufferToUnsignedVector(*direct_buffer, *buf, std::numeric_limits<uint64_t>::max(),
+                                "uint64", xsink)) {
+                            return nullptr;
+                        }
+                        input_tensors.push_back(Ort::Value::CreateTensor<uint64_t>(mem_info,
+                            buf->data(), buf->size(), direct_shape.data(), direct_shape.size()));
+                        uint64_buffers.push_back(std::move(buf));
+                        break;
+                    }
+                    default:
+                        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                            "input tensor '%s': model expects unsupported ONNX type '%s'",
+                            meta.name.c_str(), elementTypeToString(meta.element_type));
+                        return nullptr;
+                }
+                continue;
+            }
+            if (direct_buffer->getElementType() != expected) {
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "input tensor '%s': model expects ONNX type '%s', but input buffer has type '%s'",
+                    meta.name.c_str(), elementTypeToString(meta.element_type),
+                    qore_buffer_element_type_name(direct_buffer->getElementType()));
+                return nullptr;
+            }
             switch (meta.element_type) {
                 case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
                     input_tensors.push_back(Ort::Value::CreateTensor<float>(mem_info,
