@@ -151,6 +151,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel dtype coverage", \onnxTypeCoverageTest());
         addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
+        addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
+        addTestCase("OnnxModel ORT artifact", \onnxOrtArtifactTest());
         addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
@@ -3218,6 +3220,47 @@ public class MlTest inherits QUnit::Test {
         ML::Tensor y = result.x_out;
         assertEq((2, 1), y.getShape());
         assertEq(((8.0,), (13.0,)), y.toList());
+    }
+
+    onnxOptimizedArtifactTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        FsUtil::TmpFile out("qore-ml-onnx-opt-", ".onnx");
+        unlink(out.path);
+
+        hash<auto> info = ML::onnx_optimize_model(
+            input_path: getTestModelPath(),
+            output_path: out.path,
+            options: <ML::OnnxSessionConfig>{"providers": ()});
+        assertEq("ONNX", info.output_format);
+        assertEq(out.path, info.output_path);
+        assertTrue(is_file(out.path));
+
+        ML::OnnxModel model(out.path, <ML::OnnxSessionConfig>{"providers": ()});
+        hash<auto> result = model.run({"X": ((4.0,),)});
+        assertFloat(9.0, result.Y[0], 1e-5);
+    }
+
+    onnxOrtArtifactTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        FsUtil::TmpFile out("qore-ml-onnx-opt-", ".ort");
+        unlink(out.path);
+
+        ML::OnnxModel source(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        hash<auto> info = source.saveOptimized(output_path: out.path);
+        assertEq("ORT", info.output_format);
+        assertEq(out.path, info.output_path);
+        assertTrue(is_file(out.path));
+
+        ML::OnnxModel model(out.path,
+            <ML::OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
+        hash<auto> result = model.run({"X": ((5.0,),)});
+        assertFloat(11.0, result.Y[0], 1e-5);
     }
 
     onnxMultiInputTensorInferenceTest() {

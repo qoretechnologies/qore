@@ -64,6 +64,10 @@ DLLLOCAL QoreListNode* qore_ml_get_onnx_providers(ExceptionSink* xsink);
 //! Returns known ONNX Runtime provider option metadata
 DLLLOCAL QoreHashNode* qore_ml_get_onnx_provider_options(ExceptionSink* xsink);
 
+//! Saves an optimized ONNX or ORT artifact by loading the input model with ONNX Runtime
+DLLLOCAL QoreHashNode* qore_ml_onnx_optimize_model(const char* input_path, const char* output_path,
+    const QoreHashNode* config, bool ort_format, ExceptionSink* xsink);
+
 //! Input/output tensor metadata
 struct TensorMeta {
     std::string name;
@@ -148,6 +152,10 @@ public:
     DLLLOCAL QoreHashNode* runBound(const QoreObject* binding_obj, const QoreObject* options_obj,
         bool return_tensors, ExceptionSink* xsink);
 
+    //! Saves an optimized ONNX or ORT artifact from the original model source
+    DLLLOCAL QoreHashNode* saveOptimized(const char* output_path, const QoreHashNode* config,
+        bool ort_format, ExceptionSink* xsink) const;
+
     //! Run batch inference
     /** @param batch list of input hashes
         @param xsink exception sink
@@ -181,6 +189,10 @@ private:
     std::vector<std::string> requested_providers;
     std::vector<std::string> required_providers;
     std::vector<OnnxProviderDiagnostic> provider_diagnostics;
+
+    std::string source_model_path;
+    std::vector<char> source_model_data;
+    std::string source_load_model_format;
 
     std::string active_provider;
     bool auto_provider_selected = false;

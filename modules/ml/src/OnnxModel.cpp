@@ -29,6 +29,8 @@
 
 #include "QC_OnnxModel.h"
 
+#include <onnxruntime_session_options_config_keys.h>
+
 #include <algorithm>
 #include <numeric>
 #include <cstring>
@@ -462,6 +464,82 @@ static std::unordered_map<std::string, std::string> hashToStringMap(const QoreHa
     return rv;
 }
 
+static bool hasOrtSuffix(const char* path) {
+    if (!path) {
+        return false;
+    }
+    std::string p(path);
+    return p.size() >= 4 && p.compare(p.size() - 4, 4, ".ort") == 0;
+}
+
+static std::string getConfigStringValue(const QoreHashNode* config, const char* key) {
+    if (!config) {
+        return {};
+    }
+    QoreValue val = config->getKeyValue(key);
+    if (val.isNullOrNothing()) {
+        return {};
+    }
+    QoreStringValueHelper str(val);
+    return str->c_str();
+}
+
+static bool configValueIsOrt(const QoreHashNode* config, const char* key) {
+    std::string value = getConfigStringValue(config, key);
+    return value == "ORT" || value == "ort";
+}
+
+static void addSessionConfigEntry(Ort::SessionOptions& opts, const char* key,
+        const std::string& value, ExceptionSink* xsink) {
+    try {
+        opts.AddConfigEntry(key, value.c_str());
+    } catch (const Ort::Exception& e) {
+        xsink->raiseException("ML-ONNX-ERROR",
+            "failed to set ONNX Runtime session config entry '%s': %s", key, e.what());
+    }
+}
+
+static QoreHashNode* buildOptimizationConfig(const QoreHashNode* config, const char* output_path,
+        bool ort_format, const char* source_load_model_format, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(config ? config->copy() : new QoreHashNode(hashdeclOnnxSessionConfig, xsink),
+        xsink);
+    rv->setKeyValue("optimized_model_filepath", new QoreStringNode(output_path), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (ort_format || hasOrtSuffix(output_path)) {
+        rv->setKeyValue("save_model_format", new QoreStringNode("ORT"), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    if (source_load_model_format && *source_load_model_format
+            && rv->getKeyValue("load_model_format").isNullOrNothing()) {
+        rv->setKeyValue("load_model_format", new QoreStringNode(source_load_model_format), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    return rv.release();
+}
+
+static QoreHashNode* makeOptimizationInfo(const char* input_path, const char* output_path,
+        bool ort_format, const QoreOnnxModel& optimizer, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("input_path", input_path && *input_path
+        ? QoreValue(new QoreStringNode(input_path)) : QoreValue(), xsink);
+    rv->setKeyValue("output_path", new QoreStringNode(output_path), xsink);
+    rv->setKeyValue("output_format", new QoreStringNode(ort_format ? "ORT" : "ONNX"), xsink);
+    rv->setKeyValue("provider_report", optimizer.getEffectiveProviderReport(xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return rv.release();
+}
+
 QoreOnnxRunOptions::QoreOnnxRunOptions(const QoreHashNode* opts, ExceptionSink* xsink) {
     if (!opts) {
         return;
@@ -582,6 +660,7 @@ QoreHashNode* QoreOnnxRunOptions::getInfo(ExceptionSink* xsink) const {
 
 QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
     : active_provider("CPUExecutionProvider") {
+    source_model_path = model_path;
     try {
         available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
@@ -601,6 +680,8 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
 
 QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
+    source_model_path = model_path;
+    source_load_model_format = getConfigStringValue(config, "load_model_format");
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
@@ -620,6 +701,8 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
 
 QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
+    const char* data = static_cast<const char*>(model_data);
+    source_model_data.assign(data, data + model_data_len);
     try {
         available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
@@ -641,6 +724,9 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
 QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     const QoreHashNode* config, ExceptionSink* xsink)
     : active_provider("CPUExecutionProvider") {
+    const char* data = static_cast<const char*>(model_data);
+    source_model_data.assign(data, data + model_data_len);
+    source_load_model_format = getConfigStringValue(config, "load_model_format");
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
@@ -754,6 +840,68 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
     QoreValue log_sev_val = config->getKeyValue("log_severity");
     if (!log_sev_val.isNullOrNothing()) {
         opts.SetLogSeverityLevel((int)log_sev_val.getAsBigInt());
+    }
+
+    QoreValue optimized_path_val = config->getKeyValue("optimized_model_filepath");
+    if (!optimized_path_val.isNullOrNothing()) {
+        QoreStringValueHelper optimized_path(optimized_path_val);
+        if (!optimized_path->strlen()) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "invalid optimized_model_filepath; expected a non-empty output path");
+            return;
+        }
+        opts.SetOptimizedModelFilePath(optimized_path->c_str());
+    }
+
+    std::unordered_map<std::string, std::string> session_config_entries;
+    QoreValue session_config_val = config->getKeyValue("config");
+    if (!session_config_val.isNullOrNothing()) {
+        if (session_config_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "invalid ONNX session config value; expected a hash of string-compatible values");
+            return;
+        }
+        session_config_entries = hashToStringMap(session_config_val.get<const QoreHashNode>(),
+            "ONNX session options", xsink);
+        if (*xsink) {
+            return;
+        }
+    }
+
+    QoreValue load_format_val = config->getKeyValue("load_model_format");
+    if (!load_format_val.isNullOrNothing()) {
+        QoreStringValueHelper load_format(load_format_val);
+        if (!strcmp(load_format->c_str(), "ORT") || !strcmp(load_format->c_str(), "ort")) {
+            session_config_entries[kOrtSessionOptionsConfigLoadModelFormat] = "ORT";
+        } else if (strcmp(load_format->c_str(), "ONNX") && strcmp(load_format->c_str(), "onnx")) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "invalid load_model_format '%s'; expected 'ONNX' or 'ORT'", load_format->c_str());
+            return;
+        }
+    }
+
+    QoreValue save_format_val = config->getKeyValue("save_model_format");
+    if (!save_format_val.isNullOrNothing()) {
+        QoreStringValueHelper save_format(save_format_val);
+        if (!strcmp(save_format->c_str(), "ORT") || !strcmp(save_format->c_str(), "ort")) {
+            session_config_entries[kOrtSessionOptionsConfigSaveModelFormat] = "ORT";
+        } else if (strcmp(save_format->c_str(), "ONNX") && strcmp(save_format->c_str(), "onnx")) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "invalid save_model_format '%s'; expected 'ONNX' or 'ORT'", save_format->c_str());
+            return;
+        }
+    }
+
+    size_t count = 0;
+    for (const auto& entry : session_config_entries) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "adding ONNX session config entries")) {
+            return;
+        }
+        ++count;
+        addSessionConfigEntry(opts, entry.first.c_str(), entry.second, xsink);
+        if (*xsink) {
+            return;
+        }
     }
 }
 
@@ -2837,6 +2985,73 @@ QoreHashNode* QoreOnnxModel::runBound(const QoreObject* binding_obj, const QoreO
     }
     ReferenceHolder<QoreOnnxIoBinding> binding_holder(binding, xsink);
     return binding->run(options_obj, return_tensors, xsink);
+}
+
+QoreHashNode* QoreOnnxModel::saveOptimized(const char* output_path, const QoreHashNode* config,
+        bool ort_format, ExceptionSink* xsink) const {
+    if (!output_path || !*output_path) {
+        xsink->raiseException("ML-ONNX-ERROR",
+            "optimized model output path must be a non-empty string");
+        return nullptr;
+    }
+
+    bool effective_ort_format = ort_format || hasOrtSuffix(output_path)
+        || configValueIsOrt(config, "save_model_format");
+    ReferenceHolder<QoreHashNode> opt_config(buildOptimizationConfig(config, output_path,
+        effective_ort_format, source_load_model_format.c_str(), xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (!source_model_path.empty()) {
+        QoreOnnxModel optimizer(source_model_path.c_str(), *opt_config, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return makeOptimizationInfo(source_model_path.c_str(), output_path, effective_ort_format,
+            optimizer, xsink);
+    }
+
+    if (!source_model_data.empty()) {
+        QoreOnnxModel optimizer(source_model_data.data(), source_model_data.size(), *opt_config, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return makeOptimizationInfo(nullptr, output_path, effective_ort_format, optimizer, xsink);
+    }
+
+    xsink->raiseException("ML-ONNX-ERROR",
+        "cannot save an optimized ONNX model because the original model source is not available");
+    return nullptr;
+}
+
+QoreHashNode* qore_ml_onnx_optimize_model(const char* input_path, const char* output_path,
+        const QoreHashNode* config, bool ort_format, ExceptionSink* xsink) {
+    if (!input_path || !*input_path) {
+        xsink->raiseException("ML-ONNX-ERROR",
+            "input model path must be a non-empty string");
+        return nullptr;
+    }
+    if (!output_path || !*output_path) {
+        xsink->raiseException("ML-ONNX-ERROR",
+            "optimized model output path must be a non-empty string");
+        return nullptr;
+    }
+
+    bool effective_ort_format = ort_format || hasOrtSuffix(output_path)
+        || configValueIsOrt(config, "save_model_format");
+    ReferenceHolder<QoreHashNode> opt_config(buildOptimizationConfig(config, output_path,
+        effective_ort_format, nullptr, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreOnnxModel optimizer(input_path, *opt_config, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    return makeOptimizationInfo(input_path, output_path, effective_ort_format, optimizer, xsink);
 }
 
 QoreHashNode* QoreOnnxModel::collectBoundOutputs(Ort::IoBinding& binding, bool return_tensors,

@@ -441,6 +441,37 @@ hash<auto> OnnxModel::runTensors(hash<auto> inputs) {
     return model->runTensors(inputs, xsink);
 }
 
+//! Saves an optimized ONNX or ORT artifact from this model's original source
+/** @param output_path target path for the optimized artifact
+    @param options optional session configuration to use while recreating the
+        session and writing the optimized model
+    @param ort_format when True, writes ONNX Runtime ORT format regardless of
+        output path suffix
+
+    If \c output_path ends in \c ".ort", ORT format is selected automatically.
+    This method works for models created from paths and for models created from
+    in-memory bytes.
+
+    @return a hash containing the output path, output format, and effective
+        provider report used while creating the optimized artifact
+
+    @par Example:
+    @code{.py}
+OnnxModel model("/models/customer-score.onnx", <OnnxSessionConfig>{"providers": ()});
+hash<auto> info = model.saveOptimized(output_path: "/models/customer-score.ort");
+OnnxModel optimized("/models/customer-score.ort",
+    <OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
+    @endcode
+
+    @throw ML-ONNX-ERROR if the optimized artifact cannot be written
+    @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+*/
+hash<auto> OnnxModel::saveOptimized(string output_path,
+        *hash<OnnxSessionConfig> options, bool ort_format = False)
+        [flags=NAMED_ARGS] {
+    return model->saveOptimized(output_path->c_str(), options, ort_format, xsink);
+}
+
 //! Creates a reusable ONNX Runtime I/O binding for this model
 /** @return a new @ref OnnxIoBinding tied to this model session
 

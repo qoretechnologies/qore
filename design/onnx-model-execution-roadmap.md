@@ -180,16 +180,20 @@ Acceptance checks:
 
 ## Phase 4: Offline Graph Optimization and ORT Format
 
-Status: pending.
+Status: raw ML APIs implemented; registry metadata integration remains pending.
 
 Add first-class support for optimized ONNX artifacts and ORT format artifacts.
 
 APIs:
 
-- `ML::onnx_optimize_model(input_path, output_path, config)`
-- `ML::OnnxModel::saveOptimized(path, config)`
-- `optimized_model_filepath` in `OnnxSessionConfig`
-- `.ort` artifact loading from file and bytes
+- `ML::onnx_optimize_model(input_path, output_path, config)`: implemented as
+  `ML::onnx_optimize_model(input_path:, output_path:, options:, ort_format:)`.
+- `ML::OnnxModel::saveOptimized(path, config)`: implemented as
+  `ML::OnnxModel::saveOptimized(output_path:, options:, ort_format:)`.
+- `optimized_model_filepath` in `OnnxSessionConfig`: implemented.
+- `.ort` artifact loading from file and bytes: implemented with
+  `load_model_format: "ORT"` and automatic `.ort` path detection by ONNX
+  Runtime.
 
 Registry metadata:
 
@@ -201,9 +205,10 @@ Registry metadata:
 
 Acceptance checks:
 
-- Optimized and original models are compared on golden vectors.
-- Hardware-specific optimized models are rejected on mismatched provider/device
-  unless explicitly overridden.
+- Optimized ONNX and ORT artifacts are loaded and compared against golden
+  vectors in `modules/ml/test/ml.qtest`.
+- Hardware-specific optimized model metadata and mismatched-provider rejection
+  remain registry-level work.
 
 ## Phase 5: Profiling and Observability
 

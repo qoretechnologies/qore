@@ -482,6 +482,14 @@ hashdecl Qore::ML::OnnxSessionConfig {
     *int graph_optimization_level;
     //! diagnostic log verbosity: 0=verbose, 1=info, 2=warning, 3=error, 4=fatal; default 2 (warning)
     *int log_severity;
+    //! path where ONNX Runtime should save the optimized model while creating the session
+    *string optimized_model_filepath;
+    //! input model format for memory buffers or ambiguous paths: "ONNX" or "ORT"
+    *string load_model_format;
+    //! optimized model output format when optimized_model_filepath is set: "ONNX" or "ORT"
+    *string save_model_format;
+    //! raw ONNX Runtime session config entries; values are converted to strings
+    *hash<auto> config;
 }
 
 //! ONNX model metadata
@@ -862,6 +870,45 @@ printf("CUDA options: %y\n", opts.CUDAExecutionProvider.known_options);
 hash<auto> ml_get_onnx_provider_options() [flags=CONSTANT; dom=DEFAULT] {
 #ifdef HAVE_ONNXRUNTIME
     return qore_ml_get_onnx_provider_options(xsink);
+#else
+    return xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX Runtime "
+        "support; check MLCapabilities.has_onnx before calling this function");
+#endif
+}
+
+//! Saves an optimized ONNX or ORT model artifact
+/** @param input_path source ONNX or ORT model path
+    @param output_path target path for the optimized artifact
+    @param options optional ONNX session configuration; providers, graph
+        optimization level, threading, and raw session \c config entries are
+        honored
+    @param ort_format when True, writes ONNX Runtime ORT format regardless of
+        output path suffix
+
+    If \c output_path ends in \c ".ort", ORT format is selected automatically.
+    Otherwise the default output format is optimized ONNX unless
+    \c options.save_model_format is \c "ORT".
+
+    @return a hash containing the input path, output path, output format, and
+        effective provider report used while creating the optimized artifact
+
+    @par Example:
+    @code{.py}
+hash<auto> info = onnx_optimize_model(
+    input_path: "/models/customer-score.onnx",
+    output_path: "/models/customer-score.ort",
+    options: <OnnxSessionConfig>{"providers": ()});
+OnnxModel model("/models/customer-score.ort",
+    <OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model cannot be optimized
+    @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+*/
+hash<auto> onnx_optimize_model(string input_path, string output_path, *hash<auto> options, bool ort_format = False) [dom=FILESYSTEM; flags=NAMED_ARGS] {
+#ifdef HAVE_ONNXRUNTIME
+    return qore_ml_onnx_optimize_model(input_path->c_str(), output_path->c_str(),
+        options, ort_format, xsink);
 #else
     return xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX Runtime "
         "support; check MLCapabilities.has_onnx before calling this function");
