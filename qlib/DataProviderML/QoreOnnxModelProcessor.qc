@@ -1162,6 +1162,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     private hash<auto> processDenseColumnShapeWindows(ML::Tensor input, auto records,
             DataProvider::DataProviderShape shape, int count) {
         hash<auto> result;
+        hash<auto> output_windows;
+        hash<auto> output_counts;
         addInputFieldColumns(\result, records, shape, ());
         for (int start = 0; start < count; start += window_size) {
             int end = start + window_size;
@@ -1171,11 +1173,9 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             int window_count = end - start;
             bool single_window = start == 0 && end == count;
             hash<auto> outputs = runDenseTensorWindow(input, start, window_count, single_window);
-            foreach string okey in (keys outputs) {
-                appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), window_count,
-                    single_window);
-            }
+            collectTensorOutputWindow(\output_windows, \output_counts, outputs, window_count);
         }
+        appendTensorOutputWindows(\result, output_windows, output_counts, count);
         return result;
     }
 
@@ -1217,6 +1217,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     private hash<auto> processMappedDenseColumnShapeWindows(hash<auto> dense_inputs, auto records,
             DataProvider::DataProviderShape shape, int count) {
         hash<auto> result;
+        hash<auto> output_windows;
+        hash<auto> output_counts;
         addInputFieldColumns(\result, records, shape, ());
         for (int start = 0; start < count; start += window_size) {
             int end = start + window_size;
@@ -1226,11 +1228,9 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             int window_count = end - start;
             bool single_window = start == 0 && end == count;
             hash<auto> outputs = runMappedDenseTensorWindow(dense_inputs, start, window_count, single_window);
-            foreach string okey in (keys outputs) {
-                appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), window_count,
-                    single_window);
-            }
+            collectTensorOutputWindow(\output_windows, \output_counts, outputs, window_count);
         }
+        appendTensorOutputWindows(\result, output_windows, output_counts, count);
         return result;
     }
 
@@ -1253,6 +1253,67 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             "window_size": window_size,
             "windows": windows,
         };
+    }
+
+    #! Collects tensor output from one inference window
+    private collectTensorOutputWindow(reference<hash<auto>> output_windows, reference<hash<auto>> output_counts,
+            hash<auto> outputs, int row_count) {
+        foreach string okey in (keys outputs) {
+            if (!output_windows.hasKey(okey)) {
+                output_windows{okey} = ();
+                output_counts{okey} = ();
+            }
+            push output_windows{okey}, cast<ML::Tensor>(outputs{okey});
+            push output_counts{okey}, row_count;
+        }
+    }
+
+    #! Appends collected tensor windows as dense columns when row-aligned concatenation is safe
+    private appendTensorOutputWindows(reference<hash<auto>> result, hash<auto> output_windows,
+            hash<auto> output_counts, int total_count) {
+        foreach string okey in (keys output_windows) {
+            list<ML::Tensor> tensors = cast<list<ML::Tensor>>(output_windows{okey});
+            list<int> counts = cast<list<int>>(output_counts{okey});
+            if (canConcatTensorOutputWindows(tensors, counts, total_count)) {
+                ML::Tensor tensor = tensors.lsize() == 1 ? tensors[0] : ML::Tensor::concatRows(tensors);
+                appendTensorOutputColumns(\result, okey, tensor, total_count, True);
+                continue;
+            }
+
+            for (int i = 0; i < tensors.lsize(); ++i) {
+                appendTensorOutputColumns(\result, okey, tensors[i], counts[i], tensors.lsize() == 1);
+            }
+        }
+    }
+
+    #! Returns True when tensor windows can be concatenated without changing output semantics
+    private bool canConcatTensorOutputWindows(list<ML::Tensor> tensors, list<int> counts, int total_count) {
+        if (!tensors || tensors.lsize() != counts.lsize()) {
+            return False;
+        }
+
+        list<int> first_shape = tensors[0].getShape();
+        if (!first_shape || first_shape[0] != counts[0]) {
+            return False;
+        }
+        string dtype = tensors[0].getDtype();
+        int count_sum = counts[0];
+
+        for (int i = 1; i < tensors.lsize(); ++i) {
+            list<int> shape = tensors[i].getShape();
+            if (!shape || shape[0] != counts[i] || shape.lsize() != first_shape.lsize()
+                    || tensors[i].getDtype() != dtype) {
+                return False;
+            }
+            for (int j = 1; j < shape.lsize(); ++j) {
+                if (shape[j] != first_shape[j]) {
+                    return False;
+                }
+            }
+            count_sum += counts[i];
+        }
+
+        return count_sum == total_count;
     }
 
     #! Appends list values to a compact output column

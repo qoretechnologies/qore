@@ -1705,6 +1705,9 @@ module DataProviderML {
     with the model's expected dtype, the processor can build the input tensor
     directly from those columns and slice tensor views for each \c window_size
     batch instead of materializing row hashes or row matrices.
+    Row-aligned tensor outputs from multiple windows are concatenated before
+    compact column conversion, so scalar and vector model outputs remain dense
+    buffer columns when the model returns dense tensor data.
     Multi-column dense feature frames use @ref Qore::ML::Tensor::fromColumns()
     "ML::Tensor::fromColumns()" to pack top-level numeric buffer columns into
     model tensors in native code.  Shaped ONNX inputs smaller than
@@ -1921,6 +1924,8 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       \c DataFrameBlock, \c BufferColumns, and \c HashOfLists windows,
       preserving bulk pipeline shapes without per-row inference calls; dense
       buffer inputs are sliced as tensor views across \c window_size batches
+      and row-aligned tensor outputs are concatenated before compact column
+      conversion so dense output buffers survive multi-window scoring
     - \c onnx-model and \c registry-model support compact \c output_mode values
       \c "columns", \c "dataframe", and \c "tensor"; dense input columns with
       the expected ONNX dtype use a direct tensor path to avoid row matrix

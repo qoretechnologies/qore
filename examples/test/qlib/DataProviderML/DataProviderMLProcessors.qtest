@@ -1939,6 +1939,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
         assertEq(7, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
         assertEq(("Y",), result.columnNames());
+        assertEq("buffer<float32>", result.getColumnBuffer("Y").fullType());
 
         list<auto> outputs = result.getColumn("Y");
         assertEq(7, outputs.lsize());
@@ -1985,22 +1986,22 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         DataProviderML::QoreOnnxModelProcessor proc({
             "model_path": getTestModelPath(),
             "input_map": {"X": "x"},
-            "window_size": 5,
+            "window_size": 4,
             "output_mode": "columns",
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)),
         });
         auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
-        assertEq(5, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq(7, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
         assertEq(("Y",), result.columnNames());
         assertEq("buffer<float32>", result.getColumnBuffer("Y").fullType());
 
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
-        assertFloat(11.0, outputs[4], 1e-5);
+        assertFloat(15.0, outputs[6], 1e-5);
 %endif
     }
 
@@ -3345,17 +3346,17 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)),
         });
         auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
-        assertEq(4, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq(7, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
         assertEq(("Y",), result.columnNames());
         assertEq("buffer<float32>", result.getColumnBuffer("Y").fullType());
 
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
-        assertFloat(9.0, outputs[3], 1e-5);
+        assertFloat(15.0, outputs[6], 1e-5);
 %endif
     }
 
@@ -3500,17 +3501,17 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         DataFrame::DataFrame df({
-            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0)),
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)),
         });
         auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
         assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
-        assertEq(4, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq(7, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
         assertEq(("Y",), result.columnNames());
         assertEq("buffer<float32>", result.getColumnBuffer("Y").fullType());
 
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
-        assertFloat(9.0, outputs[3], 1e-5);
+        assertFloat(15.0, outputs[6], 1e-5);
 %endif
     }
 
