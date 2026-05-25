@@ -2570,6 +2570,9 @@ foreach string module_name in (registry.getProcessModules()) {
         \c output_mode values for dense column or raw tensor outputs
       - multi-column dense ONNX input frames use native tensor column packing to
         avoid row hash and nested list materialization in DataProviderML
+      - shaped ONNX inputs smaller than the configured \c window_size, and final
+        remainder windows, are processed directly as tensor batches instead of
+        falling back through row buffering
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module

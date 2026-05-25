@@ -487,8 +487,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     }
 
     private list<auto> processMappedOnnxRecordWindow(list<hash<auto>> records) {
-        hash<auto> outputs = runMappedTensorWindow(matricesFromRecordInputMap(records), 0, True);
         int count = records.lsize();
+        hash<auto> outputs = runMappedTensorWindow(matricesFromRecordInputMap(records), 0, count, True);
 
         hash<auto> output_values;
         foreach string okey in (keys outputs) {
@@ -597,7 +597,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         }
 
         int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
-        if (!count || count % window_size) {
+        if (!count) {
             return;
         }
 
@@ -605,7 +605,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             return processMappedShapeWindows(records, shape, count);
         }
 
-        if (count == window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
+        if (count <= window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
             *ML::Tensor direct_input = inputTensorFromDenseColumns(records, shape, count, fields,
                 model.getOnnxInputTensorDtype(input_tensor));
             if (exists direct_input) {
@@ -631,19 +631,29 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             hash<auto> result;
             addInputFieldColumns(\result, records, shape, matrix);
             for (int start = 0; start < count; start += window_size) {
-                list<list<float>> window = count == window_size
+                int end = start + window_size;
+                if (end > count) {
+                    end = count;
+                }
+                bool single_window = start == 0 && end == count;
+                list<list<float>> window = single_window
                     ? matrix
-                    : matrix[start..(start + window_size - 1)];
-                appendTensorWindowColumnResult(\result, window, count == window_size);
+                    : matrix[start..(end - 1)];
+                appendTensorWindowColumnResult(\result, window, single_window);
             }
             return result;
         }
 
         hash<auto> result;
         for (int start = 0; start < count; start += window_size) {
-            list<list<float>> window = count == window_size
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            bool single_window = start == 0 && end == count;
+            list<list<float>> window = single_window
                 ? matrix
-                : matrix[start..(start + window_size - 1)];
+                : matrix[start..(end - 1)];
             appendTensorWindowEventResult(\result, window);
         }
         return result;
@@ -651,7 +661,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     #! Processes complete shaped windows for registry ONNX models with mapped inputs
     private hash<auto> processMappedShapeWindows(auto records, DataProvider::DataProviderShape shape, int count) {
-        if (count == window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
+        if (count <= window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
             *hash<auto> direct_inputs = inputTensorsFromMappedDenseColumns(records, shape, count);
             if (exists direct_inputs) {
                 hash<auto> outputs = model.runTensors(direct_inputs);
@@ -677,17 +687,27 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         if (isColumnOutputMode()) {
             addInputFieldColumns(\result, records, shape, record_matrix);
             for (int start = 0; start < count; start += window_size) {
-                hash<auto> outputs = runMappedTensorWindow(mapped_matrices, start, count == window_size);
+                int end = start + window_size;
+                if (end > count) {
+                    end = count;
+                }
+                int window_count = end - start;
+                bool single_window = start == 0 && end == count;
+                hash<auto> outputs = runMappedTensorWindow(mapped_matrices, start, window_count, single_window);
                 foreach string okey in (keys outputs) {
-                    appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), window_size,
-                        count == window_size);
+                    appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), window_count,
+                        single_window);
                 }
             }
             return result;
         }
 
         for (int start = 0; start < count; start += window_size) {
-            appendMappedTensorWindowEventResult(\result, mapped_matrices, record_matrix, start);
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            appendMappedTensorWindowEventResult(\result, mapped_matrices, record_matrix, start, end - start);
         }
         return result;
     }
@@ -919,9 +939,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     #! Appends one mapped tensor inference window to a hash-of-lists result
     private appendMappedTensorWindowEventResult(reference<hash<auto>> result, hash<auto> mapped_matrices,
-            list<list<float>> record_matrix, int start) {
-        hash<auto> outputs = runMappedTensorWindow(mapped_matrices, start, False);
-        int count = window_size;
+            list<list<float>> record_matrix, int start, int count) {
+        hash<auto> outputs = runMappedTensorWindow(mapped_matrices, start, count, False);
 
         hash<auto> output_values;
         foreach string okey in (keys outputs) {
@@ -1007,13 +1026,17 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     }
 
     private hash<auto> processTensorShapeWindows(list<list<float>> matrix, int count) {
-        if (count == window_size) {
+        if (count <= window_size) {
             return model.runFeatureMatrixTensors(matrix, input_tensor);
         }
 
         list<hash<auto>> windows;
         for (int start = 0; start < count; start += window_size) {
-            list<list<float>> window = matrix[start..(start + window_size - 1)];
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            list<list<float>> window = matrix[start..(end - 1)];
             push windows, model.runFeatureMatrixTensors(window, input_tensor);
         }
         return {
@@ -1024,13 +1047,17 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     }
 
     private hash<auto> processMappedTensorShapeWindows(hash<auto> mapped_matrices, int count) {
-        if (count == window_size) {
-            return runMappedTensorWindow(mapped_matrices, 0, True);
+        if (count <= window_size) {
+            return runMappedTensorWindow(mapped_matrices, 0, count, True);
         }
 
         list<hash<auto>> windows;
         for (int start = 0; start < count; start += window_size) {
-            push windows, runMappedTensorWindow(mapped_matrices, start, False);
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            push windows, runMappedTensorWindow(mapped_matrices, start, end - start, False);
         }
         return {
             "row_count": count,
@@ -1039,14 +1066,14 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         };
     }
 
-    private hash<auto> runMappedTensorWindow(hash<auto> mapped_matrices, int start, bool single_window) {
+    private hash<auto> runMappedTensorWindow(hash<auto> mapped_matrices, int start, int count, bool single_window) {
         hash<auto> inputs;
         hash<string, list<string>> imap = input_map;
         foreach string tensor_name in (keys imap) {
             list<list<float>> matrix = cast<list<list<float>>>(mapped_matrices{tensor_name});
-            list<list<float>> window = single_window
+            list<list<float>> window = single_window && count == matrix.lsize()
                 ? matrix
-                : matrix[start..(start + window_size - 1)];
+                : matrix[start..(start + count - 1)];
             string dtype = model.getOnnxInputTensorDtype(tensor_name);
             inputs{tensor_name} = new ML::Tensor(window, NOTHING, dtype);
         }
