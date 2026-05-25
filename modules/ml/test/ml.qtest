@@ -149,6 +149,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel inference", \onnxInferenceTest());
         addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
         addTestCase("OnnxModel dtype coverage", \onnxTypeCoverageTest());
+        addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
+        addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
@@ -3152,6 +3154,70 @@ public class MlTest inherits QUnit::Test {
                 "s_in": (("x",),),
             });
         });
+    }
+
+    onnxIoBindingTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        ML::OnnxIoBinding binding = model.createBinding();
+        ML::Tensor input(data: new buffer<float32>((1.0, 2.0, 3.0, 0.0, -1.0)), shape: (5, 1));
+
+        binding.bindInput(name: "X", value: input);
+        binding.bindOutput(name: "Y");
+        assertEq(("X",), binding.getBoundInputNames());
+        assertEq(("Y",), binding.getBoundOutputNames());
+
+        ML::OnnxRunOptions options({"run_tag": "qore-ml-binding-test"});
+        hash<auto> result = binding.run(options: options, tensors: True);
+        assertTrue(result.hasKey("Y"));
+
+        ML::Tensor y = result.Y;
+        assertEq("float32", y.getDtype());
+        assertEq((5, 1), y.getShape());
+        list<auto> y_vals = y.toList();
+        assertFloat(3.0, y_vals[0][0], 1e-5);
+        assertFloat(5.0, y_vals[1][0], 1e-5);
+        assertFloat(7.0, y_vals[2][0], 1e-5);
+        assertFloat(1.0, y_vals[3][0], 1e-5);
+        assertFloat(-1.0, y_vals[4][0], 1e-5);
+
+        hash<auto> info = options.getInfo();
+        assertEq("qore-ml-binding-test", info.run_tag);
+
+        binding.clearInputs();
+        binding.clearOutputs();
+        assertEq((), binding.getBoundInputNames());
+        assertEq((), binding.getBoundOutputNames());
+
+        binding.bindInputs({"X": ((10.0,),)});
+        binding.bindOutputs();
+        hash<auto> scalar_result = model.runBound(binding: binding);
+        assertFloat(21.0, scalar_result.Y[0], 1e-5);
+    }
+
+    onnxPreallocatedIoBindingTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        binary model_data = makeOnnxIdentityModel(({"name": "x", "type": QoreOnnxExport::ONNX_FLOAT},));
+        ML::OnnxModel model(model_data, <ML::OnnxSessionConfig>{"providers": ()});
+        ML::OnnxIoBinding binding = model.createBinding();
+        ML::Tensor input(data: new buffer<float32>((8.0, 13.0)), shape: (2, 1));
+        ML::Tensor output(data: new buffer<float32>((0.0, 0.0)), shape: (2, 1));
+
+        binding.bindInput(name: "x_in", value: input);
+        binding.bindOutputTensor(name: "x_out", output: output);
+        hash<auto> result = binding.run(tensors: True);
+
+        assertTrue(result.hasKey("x_out"));
+        assertEq(((8.0,), (13.0,)), output.toList());
+        ML::Tensor y = result.x_out;
+        assertEq((2, 1), y.getShape());
+        assertEq(((8.0,), (13.0,)), y.toList());
     }
 
     onnxMultiInputTensorInferenceTest() {

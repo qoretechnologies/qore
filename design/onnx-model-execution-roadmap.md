@@ -141,33 +141,42 @@ Implementation notes:
 
 ## Phase 3: OrtValue, I/O Binding, and Zero-Copy Execution
 
-Status: pending.
+Status: core APIs implemented; dataframe/Arrow/device binding integration remains
+in later phases.
 
 Expose ONNX Runtime binding primitives so Qore can avoid unnecessary host/device
 copies and repeated tensor reconstruction.
 
 APIs:
 
-- `ML::OnnxValue` or `ML::OrtValue`
-- `ML::OnnxIoBinding`
-- `ML::OnnxRunOptions`
-- `ML::OnnxModel::createBinding()`
-- `ML::OnnxModel::runBound()`
+- `ML::OnnxIoBinding`: implemented for reusable model-specific bindings.
+- `ML::OnnxRunOptions`: implemented for run tags, per-run logging,
+  termination, and ONNX Runtime config entries.
+- `ML::OnnxModel::createBinding()`: implemented.
+- `ML::OnnxModel::runBound()`: implemented.
+- `ML::OnnxValue` or `ML::OrtValue`: deferred until there is a separate need
+  to pass provider-owned values outside an `OnnxIoBinding`.
 
 Supported bindings:
 
-- `ML::Tensor`
-- `buffer<T>`
-- dataframe dense columns
-- Arrow buffers when layout is compatible
-- provider-owned device buffers
+- `ML::Tensor`: implemented for inputs and fixed-shape numeric preallocated
+  outputs.
+- `buffer<T>`: implemented for inputs when the ONNX element type maps directly
+  to the Qore dense buffer type.
+- dataframe dense columns: deferred to the DataProviderML/dataframe integration
+  phase.
+- Arrow buffers when layout is compatible: deferred to Arrow-backed tensor and
+  dataframe interchange work.
+- provider-owned device buffers: deferred until device buffer ownership and
+  provider memory metadata are exposed in Qore.
 
 Acceptance checks:
 
-- Benchmarks compare nested lists, tensors, DataFrame dense columns, and I/O
-  binding.
-- Output allocation can be controlled by Qore or by ONNX Runtime.
-- DataProviderML uses binding reuse for stable shapes.
+- Tests cover reusable input binding, ONNX Runtime-managed output allocation,
+  run options, and Qore-preallocated numeric output tensors.
+- Benchmarks must still compare nested lists, tensors, DataFrame dense columns,
+  and I/O binding.
+- DataProviderML must still use binding reuse for stable shapes.
 
 ## Phase 4: Offline Graph Optimization and ORT Format
 

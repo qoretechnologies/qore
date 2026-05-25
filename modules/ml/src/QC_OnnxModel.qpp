@@ -36,6 +36,197 @@ extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
 extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 
+//! Per-run ONNX Runtime options
+/** Configures options for one ONNX Runtime inference call. Use this class when
+    a deployment needs run tags, per-run logging, termination control, or
+    provider-specific run configuration entries.
+
+    @par Example:
+    @code{.py}
+OnnxRunOptions opts({"run_tag": "customer-scoring-batch"});
+hash<auto> out = model.runBound(binding, opts);
+    @endcode
+*/
+qclass OnnxRunOptions [arg=QoreOnnxRunOptions* options; ns=Qore::ML; flags=final];
+
+//! Creates ONNX Runtime run options
+/** @param options optional options hash
+
+    Recognized keys are:
+    - \c run_tag: string tag visible to ONNX Runtime logging and profiling
+    - \c log_severity_level: integer ONNX Runtime severity threshold
+    - \c log_verbosity_level: integer ONNX Runtime verbosity level
+    - \c terminate: bool; when True, the options start in the terminated state
+    - \c config: hash of string config entries passed to ONNX Runtime
+
+    @throw ML-ONNX-RUN-OPTIONS-ERROR if the options hash is invalid
+*/
+OnnxRunOptions::constructor(*hash<auto> options) [flags=NAMED_ARGS] {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxRunOptions> holder(new QoreOnnxRunOptions(options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXRUNOPTIONS, holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before creating OnnxRunOptions");
+#endif
+}
+
+//! Creates a copy of the OnnxRunOptions
+/** @throw COPY-ERROR OnnxRunOptions objects cannot be copied
+*/
+OnnxRunOptions::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxRunOptions objects cannot be copied");
+}
+
+//! Requests termination for runs using these options
+/** The same object can be reused after calling unsetTerminate().
+*/
+nothing OnnxRunOptions::setTerminate() {
+    options->setTerminate(xsink);
+}
+
+//! Clears a previous termination request
+/** After this call, the same OnnxRunOptions object can be used for normal
+    inference again.
+*/
+nothing OnnxRunOptions::unsetTerminate() {
+    options->unsetTerminate(xsink);
+}
+
+//! Returns structured run option metadata
+/** @return a hash containing the configured run tag, logging levels,
+    termination state, and config entries
+*/
+hash<auto> OnnxRunOptions::getInfo() [flags=RET_VALUE_ONLY] {
+    return options->getInfo(xsink);
+}
+
+//! Reusable ONNX Runtime I/O binding
+/** Holds ONNX Runtime input and output bindings for a specific @ref OnnxModel.
+    Bindings let production code reuse stable input tensors and output
+    allocation decisions across many runs instead of rebuilding every
+    Ort::Value for each call.
+
+    Create instances with @ref OnnxModel::createBinding().
+
+    @par Example:
+    @code{.py}
+OnnxIoBinding binding = model.createBinding();
+binding.bindInputs({"X": input_tensor});
+binding.bindOutputs();
+hash<auto> out = binding.run(tensors: True);
+    @endcode
+*/
+qclass OnnxIoBinding [arg=QoreOnnxIoBinding* binding; ns=Qore::ML; flags=final];
+
+//! Creates an OnnxIoBinding
+/** @throw ML-ONNX-BINDING-ERROR OnnxIoBinding objects must be created with
+    OnnxModel::createBinding()
+*/
+OnnxIoBinding::constructor() {
+    xsink->raiseException("ML-ONNX-BINDING-ERROR",
+        "OnnxIoBinding objects must be created with OnnxModel::createBinding()");
+}
+
+//! Creates a copy of the OnnxIoBinding
+/** @throw COPY-ERROR OnnxIoBinding objects cannot be copied
+*/
+OnnxIoBinding::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxIoBinding objects cannot be copied");
+}
+
+//! Binds one input tensor
+/** @param name model input tensor name
+    @param value tensor data; accepts the same values as OnnxModel::run(),
+        including nested lists, dense \c buffer<T>, and @ref ML::Tensor values
+
+    @throw ML-ONNX-BINDING-ERROR if the input name is unknown or the value is invalid
+*/
+nothing OnnxIoBinding::bindInput(string name, auto value) [flags=NAMED_ARGS] {
+    binding->bindInput(name->c_str(), value, xsink);
+}
+
+//! Binds all inputs from a hash keyed by model input tensor name
+/** @param inputs hash whose keys are model input names and whose values are
+    accepted input tensor data
+
+    @throw ML-ONNX-BINDING-ERROR if any required input is missing or invalid
+*/
+nothing OnnxIoBinding::bindInputs(hash<auto> inputs) [flags=NAMED_ARGS] {
+    binding->bindInputs(inputs, xsink);
+}
+
+//! Binds one output to ONNX Runtime-managed CPU memory
+/** @param name model output tensor name
+*/
+nothing OnnxIoBinding::bindOutput(string name) [flags=NAMED_ARGS] {
+    binding->bindOutput(name->c_str(), xsink);
+}
+
+//! Binds all model outputs to ONNX Runtime-managed CPU memory
+/** This is the usual output binding mode when callers want ONNX Runtime to
+    allocate output tensors according to the actual runtime shapes.
+*/
+nothing OnnxIoBinding::bindOutputs() {
+    binding->bindOutputs(xsink);
+}
+
+//! Binds one output to a preallocated numeric Tensor
+/** @param name model output tensor name
+    @param output preallocated @ref ML::Tensor receiving ONNX Runtime output
+
+    Preallocated output binding is supported for fixed-width numeric output
+    tensors whose buffer layout matches ONNX Runtime. Bool and string outputs
+    should use bindOutput() so ONNX Runtime can allocate the output.
+*/
+nothing OnnxIoBinding::bindOutputTensor(string name, Tensor output) [flags=NAMED_ARGS] {
+    binding->bindOutputTensor(name->c_str(), output, xsink);
+}
+
+//! Clears all bound inputs
+/** Existing bound input values are released. Bind new inputs before the next
+    run() call.
+*/
+nothing OnnxIoBinding::clearInputs() {
+    binding->clearInputs();
+}
+
+//! Clears all bound outputs
+/** Existing output allocation choices are released. Bind outputs before the next
+    run() call.
+*/
+nothing OnnxIoBinding::clearOutputs() {
+    binding->clearOutputs();
+}
+
+//! Runs inference with the current bindings
+/** @param options optional per-run options
+    @param tensors when True, return outputs as @ref ML::Tensor objects
+
+    @return a hash keyed by output tensor name
+*/
+hash<auto> OnnxIoBinding::run(*OnnxRunOptions options, bool tensors = False)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return binding->run(options, tensors, xsink);
+}
+
+//! Returns currently bound input names
+/** @return names in the order inputs were bound
+*/
+list<string> OnnxIoBinding::getBoundInputNames() [flags=RET_VALUE_ONLY] {
+    return binding->getBoundInputNames(xsink);
+}
+
+//! Returns currently bound output names
+/** @return names in the order outputs were bound
+*/
+list<string> OnnxIoBinding::getBoundOutputNames() [flags=RET_VALUE_ONLY] {
+    return binding->getBoundOutputNames(xsink);
+}
+
 //! The OnnxModel class loads and runs pre-trained ONNX models for inference
 /** Loads an ONNX model file and provides methods for running inference with
     Qore data types. Input data is automatically converted to the appropriate
@@ -248,6 +439,35 @@ buffer<float32> raw = y.getBuffer();
 */
 hash<auto> OnnxModel::runTensors(hash<auto> inputs) {
     return model->runTensors(inputs, xsink);
+}
+
+//! Creates a reusable ONNX Runtime I/O binding for this model
+/** @return a new @ref OnnxIoBinding tied to this model session
+
+    @par Example:
+    @code{.py}
+OnnxIoBinding binding = model.createBinding();
+binding.bindInputs({"X": input_tensor});
+binding.bindOutputs();
+hash<auto> outputs = model.runBound(binding, tensors: True);
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model is not loaded
+*/
+OnnxIoBinding OnnxModel::createBinding() [flags=RET_VALUE_ONLY] {
+    return model->createBinding(getProgram(), xsink);
+}
+
+//! Runs a reusable ONNX Runtime I/O binding
+/** @param binding binding created by createBinding()
+    @param options optional per-run options
+    @param tensors when True, return outputs as @ref ML::Tensor objects
+
+    @return a hash keyed by output tensor name
+*/
+hash<auto> OnnxModel::runBound(OnnxIoBinding binding, *OnnxRunOptions options,
+        bool tensors = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return model->runBound(binding, options, tensors, xsink);
 }
 
 //! Runs batch inference on the model

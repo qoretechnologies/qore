@@ -89,6 +89,10 @@ public:
         return buffer;
     }
 
+    DLLLOCAL QoreBufferNode* getMutableBuffer() const {
+        return buffer;
+    }
+
     DLLLOCAL size_t getElementCount() const {
         return buffer->size();
     }

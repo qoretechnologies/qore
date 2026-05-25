@@ -35,6 +35,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <mutex>
 
 #ifdef HAVE_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
@@ -42,10 +43,18 @@
 #endif
 
 DLLEXPORT extern qore_classid_t CID_ONNXMODEL;
+DLLEXPORT extern qore_classid_t CID_ONNXRUNOPTIONS;
+DLLEXPORT extern qore_classid_t CID_ONNXIOBINDING;
 DLLLOCAL extern QoreClass* QC_ONNXMODEL;
+DLLLOCAL extern QoreClass* QC_ONNXRUNOPTIONS;
+DLLLOCAL extern QoreClass* QC_ONNXIOBINDING;
 
 DLLLOCAL void preinitOnnxModelClass();
+DLLLOCAL void preinitOnnxRunOptionsClass();
+DLLLOCAL void preinitOnnxIoBindingClass();
 DLLLOCAL QoreClass* initOnnxModelClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initOnnxRunOptionsClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initOnnxIoBindingClass(QoreNamespace& ns);
 
 #ifdef HAVE_ONNXRUNTIME
 
@@ -76,6 +85,10 @@ struct OnnxProviderDiagnostic {
     bool active = false;
     bool cpu_fallback = false;
 };
+
+struct OnnxBoundOrtValue;
+class QoreOnnxIoBinding;
+class QoreOnnxRunOptions;
 
 //! ONNX Model wrapper class
 class QoreOnnxModel : public AbstractPrivateData {
@@ -128,6 +141,13 @@ public:
     //! Run inference and return outputs as ML::Tensor objects
     DLLLOCAL QoreHashNode* runTensors(const QoreHashNode* inputs, ExceptionSink* xsink);
 
+    //! Creates a reusable ONNX Runtime I/O binding for this model
+    DLLLOCAL QoreObject* createBinding(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! Runs a reusable ONNX Runtime I/O binding
+    DLLLOCAL QoreHashNode* runBound(const QoreObject* binding_obj, const QoreObject* options_obj,
+        bool return_tensors, ExceptionSink* xsink);
+
     //! Run batch inference
     /** @param batch list of input hashes
         @param xsink exception sink
@@ -148,6 +168,8 @@ public:
     DLLLOCAL bool isLoaded() const { return session != nullptr; }
 
 private:
+    friend class QoreOnnxIoBinding;
+
     std::unique_ptr<Ort::Env> env;
     std::unique_ptr<Ort::Session> session;
     Ort::AllocatorWithDefaultOptions allocator;
@@ -236,6 +258,24 @@ private:
 
     //! Shared inference implementation
     DLLLOCAL QoreHashNode* runImpl(const QoreHashNode* inputs, bool return_tensors, ExceptionSink* xsink);
+
+    //! Finds an input tensor by name
+    DLLLOCAL const TensorMeta* findInputMeta(const char* name) const;
+
+    //! Finds an output tensor by name
+    DLLLOCAL const TensorMeta* findOutputMeta(const char* name) const;
+
+    //! Creates an Ort::Value and backing lifetime holders for an input value
+    DLLLOCAL std::unique_ptr<OnnxBoundOrtValue> prepareInputValue(const TensorMeta& meta,
+        QoreValue value, ExceptionSink* xsink);
+
+    //! Creates an Ort::Value and backing lifetime holders for a preallocated output tensor
+    DLLLOCAL std::unique_ptr<OnnxBoundOrtValue> prepareOutputTensorValue(const TensorMeta& meta,
+        const QoreObject* tensor_obj, ExceptionSink* xsink);
+
+    //! Converts bound outputs to a Qore hash
+    DLLLOCAL QoreHashNode* collectBoundOutputs(Ort::IoBinding& binding, bool return_tensors,
+        ExceptionSink* xsink);
 
     //! Build a QoreHashNode with OnnxTensorInfo from a TensorMeta
     DLLLOCAL QoreHashNode* tensorMetaToHash(const TensorMeta& meta, ExceptionSink* xsink) const;
@@ -357,6 +397,65 @@ private:
         ExceptionSink* xsink);
 };
 
+//! ONNX Runtime per-run options wrapper
+class QoreOnnxRunOptions : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreOnnxRunOptions(const QoreHashNode* options, ExceptionSink* xsink);
+
+    DLLLOCAL void setTerminate(ExceptionSink* xsink);
+    DLLLOCAL void unsetTerminate(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink) const;
+
+private:
+    friend class QoreOnnxModel;
+    friend class QoreOnnxIoBinding;
+
+    Ort::RunOptions options;
+    std::string run_tag;
+    int log_severity_level = -1;
+    int log_verbosity_level = -1;
+    bool terminated = false;
+    std::unordered_map<std::string, std::string> config_entries;
+};
+
+//! ONNX Runtime reusable I/O binding wrapper
+class QoreOnnxIoBinding : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreOnnxIoBinding(QoreOnnxModel* model, ExceptionSink* xsink);
+    DLLLOCAL virtual ~QoreOnnxIoBinding();
+
+    DLLLOCAL void bindInput(const char* name, QoreValue value, ExceptionSink* xsink);
+    DLLLOCAL void bindInputs(const QoreHashNode* inputs, ExceptionSink* xsink);
+    DLLLOCAL void bindOutput(const char* name, ExceptionSink* xsink);
+    DLLLOCAL void bindOutputs(ExceptionSink* xsink);
+    DLLLOCAL void bindOutputTensor(const char* name, const QoreObject* tensor_obj,
+        ExceptionSink* xsink);
+    DLLLOCAL void clearInputs();
+    DLLLOCAL void clearOutputs();
+    DLLLOCAL QoreHashNode* run(const QoreObject* options_obj, bool return_tensors,
+        ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* getBoundInputNames(ExceptionSink* xsink) const;
+    DLLLOCAL QoreListNode* getBoundOutputNames(ExceptionSink* xsink) const;
+
+private:
+    mutable std::mutex mutex;
+    QoreOnnxModel* model = nullptr;
+    std::unique_ptr<Ort::IoBinding> binding;
+    std::vector<std::unique_ptr<OnnxBoundOrtValue>> bound_inputs;
+    std::vector<std::unique_ptr<OnnxBoundOrtValue>> bound_outputs;
+    std::vector<std::string> bound_input_names;
+    std::vector<std::string> bound_output_names;
+
+    DLLLOCAL void bindInputUnlocked(const char* name, QoreValue value, ExceptionSink* xsink);
+    DLLLOCAL void bindOutputUnlocked(const char* name, ExceptionSink* xsink);
+    DLLLOCAL void bindOutputTensorUnlocked(const char* name, const QoreObject* tensor_obj,
+        ExceptionSink* xsink);
+    DLLLOCAL void clearInputsUnlocked();
+    DLLLOCAL void clearOutputsUnlocked();
+    DLLLOCAL QoreOnnxRunOptions* getRunOptions(const QoreObject* options_obj,
+        ExceptionSink* xsink) const;
+};
+
 #else // !HAVE_ONNXRUNTIME
 
 //! Stub class — always defined so the OnnxModel Qore class compiles without ONNX Runtime.
@@ -365,6 +464,8 @@ class QoreOnnxModel : public AbstractPrivateData {
 public:
     DLLLOCAL QoreHashNode* run(const QoreHashNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreObject* createBinding(QoreProgram*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* runBound(const QoreObject*, const QoreObject*, bool, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) const { return nullptr; }
@@ -381,6 +482,33 @@ public:
     DLLLOCAL QoreHashNode* getEffectiveProviderReport(ExceptionSink*) const { return nullptr; }
 };
 
+class QoreOnnxRunOptions : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreOnnxRunOptions(const QoreHashNode*, ExceptionSink*) {}
+    DLLLOCAL void setTerminate(ExceptionSink*) {}
+    DLLLOCAL void unsetTerminate(ExceptionSink*) {}
+    DLLLOCAL QoreHashNode* getInfo(ExceptionSink*) const { return nullptr; }
+};
+
+class QoreOnnxIoBinding : public AbstractPrivateData {
+public:
+    DLLLOCAL void bindInput(const char*, QoreValue, ExceptionSink*) {}
+    DLLLOCAL void bindInputs(const QoreHashNode*, ExceptionSink*) {}
+    DLLLOCAL void bindOutput(const char*, ExceptionSink*) {}
+    DLLLOCAL void bindOutputs(ExceptionSink*) {}
+    DLLLOCAL void bindOutputTensor(const char*, const QoreObject*, ExceptionSink*) {}
+    DLLLOCAL void clearInputs() {}
+    DLLLOCAL void clearOutputs() {}
+    DLLLOCAL QoreHashNode* run(const QoreObject*, bool, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreListNode* getBoundInputNames(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreListNode* getBoundOutputNames(ExceptionSink*) const { return nullptr; }
+};
+
 #endif // HAVE_ONNXRUNTIME
+
+DLLLOCAL QoreObject* qore_ml_onnx_run_options_to_object(QoreOnnxRunOptions* options,
+    QoreProgram* pgm, ExceptionSink* xsink);
+DLLLOCAL QoreObject* qore_ml_onnx_io_binding_to_object(QoreOnnxIoBinding* binding,
+    QoreProgram* pgm, ExceptionSink* xsink);
 
 #endif // _QORE_MODULE_ML_QC_ONNXMODEL_H
