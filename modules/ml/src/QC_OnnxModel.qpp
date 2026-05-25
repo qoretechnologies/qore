@@ -691,3 +691,147 @@ printf("Active provider: %s\n", report.active_provider);
 hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
     return model->getEffectiveProviderReport(xsink);
 }
+
+//! Bounded pool of immutable ONNX Runtime sessions
+/** OnnxSessionPool keeps multiple @ref OnnxModel sessions ready for concurrent
+    inference. It is intended for service workloads where requests arrive from
+    several threads and each request should acquire an immutable session with
+    bounded queueing instead of sharing one session object directly.
+
+    Pool options:
+    - \c max_sessions: number of ONNX sessions to create; default \c 1
+    - \c max_concurrent_runs: upper bound for simultaneously acquired sessions;
+      default equals \c max_sessions
+    - \c queue_depth: maximum callers allowed to wait for a session; default \c 64
+    - \c timeout_ms: maximum time to wait for a session; \c 0 means wait without
+      a fixed deadline while still checking cancellation
+    - \c dynamic_batch_size: maximum chunk size used by runBatch(); \c 0 keeps
+      the caller's batch intact
+    - \c dynamic_batch_wait_ms: reserved metadata for async/coalesced batching
+      policies built on this pool
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionPool pool("/models/customer-score.onnx",
+    <ML::OnnxSessionConfig>{"providers": ()},
+    {"max_sessions": 4, "queue_depth": 64, "timeout_ms": 250});
+
+hash<auto> out = pool.run({"X": ((42.0,),)});
+hash<auto> stats = pool.getPoolStats();
+    @endcode
+*/
+qclass OnnxSessionPool [arg=QoreOnnxSessionPool* pool; ns=Qore::ML; flags=final; dom=FILESYSTEM];
+
+//! Creates an ONNX session pool from a model file
+/** @param model_path path to the ONNX or ORT artifact
+    @param session_config optional @ref OnnxSessionConfig hash applied to every
+        session
+    @param pool_options optional pool sizing and queueing options
+
+    @throw ML-ONNX-POOL-ERROR if pool options are invalid
+    @throw ML-ONNX-ERROR if any session cannot be created
+*/
+OnnxSessionPool::constructor(string model_path, *hash<OnnxSessionConfig> session_config,
+        *hash<auto> pool_options) [flags=NAMED_ARGS] {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxSessionPool> holder(
+        new QoreOnnxSessionPool(model_path->c_str(), session_config, pool_options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXSESSIONPOOL, holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before creating OnnxSessionPool");
+#endif
+}
+
+//! Creates an ONNX session pool from in-memory model bytes
+/** @param model_data ONNX or ORT artifact bytes
+    @param session_config optional @ref OnnxSessionConfig hash applied to every
+        session
+    @param pool_options optional pool sizing and queueing options
+*/
+OnnxSessionPool::constructor(binary model_data, *hash<OnnxSessionConfig> session_config,
+        *hash<auto> pool_options) [flags=NAMED_ARGS] {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxSessionPool> holder(new QoreOnnxSessionPool(
+        model_data->getPtr(), model_data->size(), session_config, pool_options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXSESSIONPOOL, holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before creating OnnxSessionPool");
+#endif
+}
+
+//! Creates a copy of the OnnxSessionPool
+/** @throw COPY-ERROR OnnxSessionPool objects cannot be copied
+*/
+OnnxSessionPool::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxSessionPool objects cannot be copied");
+}
+
+//! Runs inference with named input tensors through an acquired session
+/** @param inputs hash where keys are input tensor names
+    @return output hash in the same format as @ref OnnxModel::run()
+*/
+hash<auto> OnnxSessionPool::run(hash<auto> inputs) {
+    return pool->run(inputs, xsink);
+}
+
+//! Runs inference and returns outputs as @ref Tensor objects
+/** @param inputs hash where values are @ref Tensor objects or tensor-compatible
+        data
+    @return output hash where each value is a @ref Tensor
+*/
+hash<auto> OnnxSessionPool::runTensors(hash<auto> inputs) {
+    return pool->runTensors(inputs, xsink);
+}
+
+//! Runs a batch through the pool while preserving result order
+/** If \c dynamic_batch_size is configured, the input list is processed in
+    stable chunks no larger than that size. The returned list order always
+    matches the input order.
+*/
+list<hash<auto>> OnnxSessionPool::runBatch(list<auto> batch) {
+    return pool->runBatch(batch, xsink);
+}
+
+//! Returns current pool counters and configuration
+/** @return hash with configured limits, active/waiting counts, run counters,
+    timeout/rejection counters, and dynamic batching settings
+*/
+hash<auto> OnnxSessionPool::getPoolStats() [flags=RET_VALUE_ONLY] {
+    return pool->getPoolStats(xsink);
+}
+
+//! Resets pool run counters without changing configured limits
+/** Does not change configured limits or currently active/waiting callers.
+*/
+nothing OnnxSessionPool::resetPoolStats() {
+    pool->resetPoolStats();
+}
+
+//! Returns model metadata from an acquired session
+/** @return model metadata in the same format as @ref OnnxModel::getModelInfo()
+*/
+hash<OnnxModelInfo> OnnxSessionPool::getModelInfo() {
+    return pool->getModelInfo(xsink);
+}
+
+//! Returns input tensor metadata from an acquired session
+/** @return list of input tensor metadata
+*/
+list<hash<OnnxTensorInfo>> OnnxSessionPool::getInputInfo() {
+    return pool->getInputInfo(xsink);
+}
+
+//! Returns output tensor metadata from an acquired session
+/** @return list of output tensor metadata
+*/
+list<hash<OnnxTensorInfo>> OnnxSessionPool::getOutputInfo() {
+    return pool->getOutputInfo(xsink);
+}

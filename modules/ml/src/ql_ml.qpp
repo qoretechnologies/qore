@@ -819,6 +819,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("TextFeatures"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
+    algos->push(new QoreStringNode("OnnxSessionPool"), xsink);
 #endif
     rv->setKeyValue("native_algorithms", algos.release(), xsink);
 

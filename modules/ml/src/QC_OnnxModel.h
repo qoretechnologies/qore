@@ -36,6 +36,8 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
+#include <chrono>
 
 #ifdef HAVE_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
@@ -45,16 +47,20 @@
 DLLEXPORT extern qore_classid_t CID_ONNXMODEL;
 DLLEXPORT extern qore_classid_t CID_ONNXRUNOPTIONS;
 DLLEXPORT extern qore_classid_t CID_ONNXIOBINDING;
+DLLEXPORT extern qore_classid_t CID_ONNXSESSIONPOOL;
 DLLLOCAL extern QoreClass* QC_ONNXMODEL;
 DLLLOCAL extern QoreClass* QC_ONNXRUNOPTIONS;
 DLLLOCAL extern QoreClass* QC_ONNXIOBINDING;
+DLLLOCAL extern QoreClass* QC_ONNXSESSIONPOOL;
 
 DLLLOCAL void preinitOnnxModelClass();
 DLLLOCAL void preinitOnnxRunOptionsClass();
 DLLLOCAL void preinitOnnxIoBindingClass();
+DLLLOCAL void preinitOnnxSessionPoolClass();
 DLLLOCAL QoreClass* initOnnxModelClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initOnnxRunOptionsClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initOnnxIoBindingClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initOnnxSessionPoolClass(QoreNamespace& ns);
 
 #ifdef HAVE_ONNXRUNTIME
 
@@ -488,6 +494,67 @@ private:
         ExceptionSink* xsink) const;
 };
 
+//! Bounded pool of immutable ONNX Runtime sessions
+class QoreOnnxSessionPool : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreOnnxSessionPool(const char* model_path, const QoreHashNode* session_config,
+        const QoreHashNode* pool_options, ExceptionSink* xsink);
+    DLLLOCAL QoreOnnxSessionPool(const void* model_data, size_t model_data_len,
+        const QoreHashNode* session_config, const QoreHashNode* pool_options,
+        ExceptionSink* xsink);
+
+    DLLLOCAL QoreHashNode* run(const QoreHashNode* inputs, ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode* inputs, ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* runBatch(const QoreListNode* batch, ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* getPoolStats(ExceptionSink* xsink) const;
+    DLLLOCAL void resetPoolStats();
+    DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* getInputInfo(ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink* xsink);
+
+private:
+    struct Lease {
+        DLLLOCAL Lease(QoreOnnxSessionPool& pool, size_t index) : pool(pool), index(index) {}
+        DLLLOCAL ~Lease();
+
+        QoreOnnxSessionPool& pool;
+        size_t index;
+    };
+
+    std::vector<std::unique_ptr<QoreOnnxModel>> sessions;
+    std::vector<bool> in_use;
+
+    mutable std::mutex mutex;
+    std::condition_variable cv;
+
+    int64_t max_sessions = 1;
+    int64_t max_concurrent_runs = 1;
+    int64_t queue_depth = 64;
+    int64_t timeout_ms = 0;
+    int64_t dynamic_batch_size = 0;
+    int64_t dynamic_batch_wait_ms = 0;
+
+    uint64_t total_runs = 0;
+    uint64_t total_batches = 0;
+    uint64_t total_batch_items = 0;
+    uint64_t total_waits = 0;
+    uint64_t total_timeouts = 0;
+    uint64_t total_rejections = 0;
+    uint64_t active_runs = 0;
+    uint64_t max_active_runs_observed = 0;
+    uint64_t waiting_callers = 0;
+    uint64_t max_waiting_callers_observed = 0;
+
+    DLLLOCAL void parsePoolOptions(const QoreHashNode* pool_options, ExceptionSink* xsink);
+    DLLLOCAL std::unique_ptr<Lease> acquire(ExceptionSink* xsink);
+    DLLLOCAL void release(size_t index);
+    DLLLOCAL int64_t getPositiveOption(const QoreHashNode* options, const char* name,
+        int64_t current, bool allow_zero, ExceptionSink* xsink);
+    DLLLOCAL void validateReady(ExceptionSink* xsink) const;
+    DLLLOCAL size_t findAvailableUnlocked() const;
+    DLLLOCAL void recordRun(size_t batch_items);
+};
+
 #else // !HAVE_ONNXRUNTIME
 
 //! Stub class — always defined so the OnnxModel Qore class compiles without ONNX Runtime.
@@ -534,6 +601,18 @@ public:
     DLLLOCAL QoreHashNode* run(const QoreObject*, bool, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* getBoundInputNames(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getBoundOutputNames(ExceptionSink*) const { return nullptr; }
+};
+
+class QoreOnnxSessionPool : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreHashNode* run(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* getPoolStats(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL void resetPoolStats() {}
+    DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink*) { return nullptr; }
 };
 
 #endif // HAVE_ONNXRUNTIME

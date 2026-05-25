@@ -156,6 +156,9 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel profiling and stats", \onnxProfilingStatsTest());
         addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
+        addTestCase("OnnxSessionPool inference and stats", \onnxSessionPoolTest());
+        addTestCase("OnnxSessionPool dynamic batch ordering", \onnxSessionPoolDynamicBatchTest());
+        addTestCase("OnnxSessionPool backpressure", \onnxSessionPoolBackpressureTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -382,7 +385,8 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(33, caps.native_algorithms.size());
+            assertTrue(caps.native_algorithms.contains("OnnxSessionPool"));
+            assertEq(34, caps.native_algorithms.size());
         } else {
             assertEq(32, caps.native_algorithms.size());
         }
@@ -3350,6 +3354,119 @@ public class MlTest inherits QUnit::Test {
         assertFloat(3.0, results[0].Y[0], 1e-5);
         assertFloat(11.0, results[1].Y[0], 1e-5);
         assertFloat(21.0, results[2].Y[0], 1e-5);
+    }
+
+    onnxSessionPoolTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 2, "max_concurrent_runs": 2, "queue_depth": 4, "timeout_ms": 1000});
+
+        hash<auto> result = pool.run({"X": ((4.0,),)});
+        assertTrue(result.hasKey("Y"));
+        assertFloat(9.0, result.Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(2, stats.max_sessions);
+        assertEq(2, stats.actual_sessions);
+        assertEq(2, stats.max_concurrent_runs);
+        assertEq(1, stats.total_runs);
+        assertEq(1, stats.total_batch_items);
+        assertEq(0, stats.total_rejections);
+        assertEq(0, stats.total_timeouts);
+
+        list<hash<ML::OnnxTensorInfo>> inputs = pool.getInputInfo();
+        assertEq("X", inputs[0].name);
+        list<hash<ML::OnnxTensorInfo>> outputs = pool.getOutputInfo();
+        assertEq("Y", outputs[0].name);
+
+        pool.resetPoolStats();
+        stats = pool.getPoolStats();
+        assertEq(0, stats.total_runs);
+        assertEq(0, stats.total_batch_items);
+    }
+
+    onnxSessionPoolDynamicBatchTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 2, "dynamic_batch_size": 2, "queue_depth": 4, "timeout_ms": 1000});
+
+        list<hash<auto>> batch = (
+            {"X": ((1.0,),)},
+            {"X": ((5.0,),)},
+            {"X": ((10.0,),)},
+            {"X": ((-1.0,),)},
+            {"X": ((0.0,),)},
+        );
+        list<hash<auto>> results = pool.runBatch(batch);
+        assertEq(5, results.size());
+        assertFloat(3.0, results[0].Y[0], 1e-5);
+        assertFloat(11.0, results[1].Y[0], 1e-5);
+        assertFloat(21.0, results[2].Y[0], 1e-5);
+        assertFloat(-1.0, results[3].Y[0], 1e-5);
+        assertFloat(1.0, results[4].Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(2, stats.dynamic_batch_size);
+        assertEq(1, stats.total_batches);
+        assertEq(1, stats.total_runs);
+        assertEq(5, stats.total_batch_items);
+    }
+
+    onnxSessionPoolBackpressureTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 0, "timeout_ms": 1});
+
+        list<list<float>> long_input;
+        for (int i = 0; i < 100000; ++i) {
+            push long_input, (2.0,);
+        }
+
+        Counter ready(1);
+        Counter cnt(1);
+        *hash<ExceptionInfo> bg_error;
+        background sub() {
+            on_exit cnt.dec();
+            try {
+                ready.dec();
+                hash<auto> result = pool.run({"X": long_input});
+                assertFloat(5.0, result.Y[0], 1e-5);
+            } catch (hash<ExceptionInfo> ex) {
+                bg_error = ex;
+            }
+        }();
+
+        ready.waitForZero();
+        bool active_seen = False;
+        for (int i = 0; i < 1000; ++i) {
+            if (pool.getPoolStats().active_runs > 0) {
+                active_seen = True;
+                break;
+            }
+            usleep(1ms);
+        }
+        assertTrue(active_seen, "background inference should occupy the only pool session");
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", sub() {
+            pool.run({"X": ((3.0,),)});
+        });
+        cnt.waitForZero();
+        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
+
+        hash<auto> stats = pool.getPoolStats();
+        assertTrue(stats.total_rejections >= 1,
+            "pool should count rejected callers when queue_depth is zero");
     }
 
     onnxSingleValueTest() {

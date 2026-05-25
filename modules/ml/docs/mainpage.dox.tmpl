@@ -377,6 +377,11 @@ hash<auto> events = proc.processRecordsShape(
       deployed in a %Qore pipeline for real-time scoring. Supports float, double, int8, int16,
       int32, int64, and bool tensor types. ONNX Runtime sessions are thread-safe for concurrent
       inference.
+    - @ref Qore::ML::OnnxSessionPool "OnnxSessionPool" — Keeps a bounded set of immutable
+      ONNX sessions ready for concurrent service requests. Use it when production traffic needs
+      explicit limits for session count, concurrent runs, queue depth, and acquisition timeout.
+      The pool also supports ordered \c runBatch() chunking with \c dynamic_batch_size so large
+      request lists can be split into stable mini-batches without changing result order.
     - @ref Qore::ML::Tensor "Tensor" — Dense tensor wrapper around \c buffer<T> plus explicit
       shape metadata. Use it with @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()"
       to avoid converting large numeric inputs and outputs through nested lists.
@@ -392,6 +397,16 @@ if (caps.has_onnx) {
     hash<auto> tensor_result = model.runTensors({"input": dense});
     Qore::ML::Tensor output = tensor_result.output;
     printf("output dtype=%s shape=%y\n", output.getDtype(), output.getShape());
+
+    Qore::ML::OnnxSessionPool pool("/path/to/model.onnx",
+        <Qore::ML::OnnxSessionConfig>{"providers": ()}, {
+            "max_sessions": 4,
+            "queue_depth": 64,
+            "timeout_ms": 250,
+            "dynamic_batch_size": 128,
+        });
+    hash<auto> pooled_result = pool.run({"input": data});
+    hash<auto> pool_stats = pool.getPoolStats();
 
     # Pack dense DataFrame columns directly into a row-major model tensor.
     Qore::ML::Tensor features = Qore::ML::Tensor::fromColumns((

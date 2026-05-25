@@ -279,6 +279,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitOnnxRunOptionsClass();
     preinitOnnxIoBindingClass();
     preinitOnnxModelClass();
+    preinitOnnxSessionPoolClass();
     preinitStandardScalerClass();
     preinitMinMaxScalerClass();
     preinitImputerClass();
@@ -375,6 +376,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initOnnxRunOptionsClass(MLNS));
     MLNS.addSystemClass(initOnnxIoBindingClass(MLNS));
     MLNS.addSystemClass(initOnnxModelClass(MLNS));
+    MLNS.addSystemClass(initOnnxSessionPoolClass(MLNS));
     MLNS.addSystemClass(initStandardScalerClass(MLNS));
     MLNS.addSystemClass(initMinMaxScalerClass(MLNS));
     MLNS.addSystemClass(initImputerClass(MLNS));

@@ -2055,6 +2055,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - Holt-Winters triple exponential smoothing for time series forecasting
       - Seasonal Decomposition for decomposing time series into trend, seasonal, and residual components
       - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
+      - ML::OnnxSessionPool provides bounded immutable ONNX session pools for
+        concurrent service workloads, including max session/concurrency limits,
+        queue depth, acquisition timeout, cancellation checks, pool statistics,
+        and ordered batch chunking with dynamic_batch_size
       - ML::Tensor and OnnxModel::runTensors() provide dense buffer-backed ONNX
         inference with explicit tensor shape metadata
       - ML::Tensor::fromColumns() packs equal-length dense column buffers into

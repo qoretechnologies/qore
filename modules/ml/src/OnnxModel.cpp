@@ -3999,4 +3999,364 @@ QoreListNode* QoreOnnxModel::runBatch(const QoreListNode* batch, ExceptionSink* 
     return rv.release();
 }
 
+QoreOnnxSessionPool::Lease::~Lease() {
+    pool.release(index);
+}
+
+QoreOnnxSessionPool::QoreOnnxSessionPool(const char* model_path,
+        const QoreHashNode* session_config, const QoreHashNode* pool_options,
+        ExceptionSink* xsink) {
+    parsePoolOptions(pool_options, xsink);
+    if (*xsink) {
+        return;
+    }
+
+    size_t session_count = static_cast<size_t>(max_sessions);
+    sessions.reserve(session_count);
+    in_use.resize(session_count, false);
+    for (size_t i = 0; i < session_count; ++i) {
+        if (i && (i % 100) == 0 && qore_check_cancel(xsink, "OnnxSessionPool constructor")) {
+            return;
+        }
+        std::unique_ptr<QoreOnnxModel> session(
+            session_config
+                ? new QoreOnnxModel(model_path, session_config, xsink)
+                : new QoreOnnxModel(model_path, xsink));
+        if (*xsink) {
+            return;
+        }
+        sessions.push_back(std::move(session));
+    }
+}
+
+QoreOnnxSessionPool::QoreOnnxSessionPool(const void* model_data, size_t model_data_len,
+        const QoreHashNode* session_config, const QoreHashNode* pool_options,
+        ExceptionSink* xsink) {
+    parsePoolOptions(pool_options, xsink);
+    if (*xsink) {
+        return;
+    }
+
+    size_t session_count = static_cast<size_t>(max_sessions);
+    sessions.reserve(session_count);
+    in_use.resize(session_count, false);
+    for (size_t i = 0; i < session_count; ++i) {
+        if (i && (i % 100) == 0 && qore_check_cancel(xsink, "OnnxSessionPool constructor")) {
+            return;
+        }
+        std::unique_ptr<QoreOnnxModel> session(
+            session_config
+                ? new QoreOnnxModel(model_data, model_data_len, session_config, xsink)
+                : new QoreOnnxModel(model_data, model_data_len, xsink));
+        if (*xsink) {
+            return;
+        }
+        sessions.push_back(std::move(session));
+    }
+}
+
+void QoreOnnxSessionPool::parsePoolOptions(const QoreHashNode* pool_options,
+        ExceptionSink* xsink) {
+    max_sessions = getPositiveOption(pool_options, "max_sessions", max_sessions, false, xsink);
+    if (*xsink) {
+        return;
+    }
+    max_concurrent_runs = getPositiveOption(pool_options, "max_concurrent_runs",
+        max_sessions, false, xsink);
+    if (*xsink) {
+        return;
+    }
+    queue_depth = getPositiveOption(pool_options, "queue_depth", queue_depth, true, xsink);
+    if (*xsink) {
+        return;
+    }
+    timeout_ms = getPositiveOption(pool_options, "timeout_ms", timeout_ms, true, xsink);
+    if (*xsink) {
+        return;
+    }
+    dynamic_batch_size = getPositiveOption(pool_options, "dynamic_batch_size",
+        dynamic_batch_size, true, xsink);
+    if (*xsink) {
+        return;
+    }
+    dynamic_batch_wait_ms = getPositiveOption(pool_options, "dynamic_batch_wait_ms",
+        dynamic_batch_wait_ms, true, xsink);
+    if (*xsink) {
+        return;
+    }
+
+    if (max_concurrent_runs > max_sessions) {
+        max_concurrent_runs = max_sessions;
+    }
+}
+
+int64_t QoreOnnxSessionPool::getPositiveOption(const QoreHashNode* options,
+        const char* name, int64_t current, bool allow_zero, ExceptionSink* xsink) {
+    if (!options) {
+        return current;
+    }
+
+    QoreValue value = options->getKeyValue(name);
+    if (value.isNullOrNothing()) {
+        return current;
+    }
+
+    int64_t parsed = value.getAsBigInt();
+    if (parsed < 0 || (!allow_zero && parsed == 0)) {
+        xsink->raiseException("ML-ONNX-POOL-ERROR",
+            "invalid %s value %lld; expected %s integer", name, (long long)parsed,
+            allow_zero ? "a non-negative" : "a positive");
+        return current;
+    }
+    return parsed;
+}
+
+void QoreOnnxSessionPool::validateReady(ExceptionSink* xsink) const {
+    if (sessions.empty()) {
+        xsink->raiseException("ML-ONNX-POOL-ERROR", "OnnxSessionPool has no loaded sessions");
+    }
+}
+
+size_t QoreOnnxSessionPool::findAvailableUnlocked() const {
+    for (size_t i = 0; i < in_use.size(); ++i) {
+        if (!in_use[i]) {
+            return i;
+        }
+    }
+    return in_use.size();
+}
+
+std::unique_ptr<QoreOnnxSessionPool::Lease> QoreOnnxSessionPool::acquire(ExceptionSink* xsink) {
+    validateReady(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::unique_lock<std::mutex> lock(mutex);
+    size_t index = active_runs < static_cast<uint64_t>(max_concurrent_runs)
+        ? findAvailableUnlocked()
+        : in_use.size();
+    if (index < in_use.size()) {
+        in_use[index] = true;
+        ++active_runs;
+        if (active_runs > max_active_runs_observed) {
+            max_active_runs_observed = active_runs;
+        }
+        return std::make_unique<Lease>(*this, index);
+    }
+
+    if (queue_depth == 0 || waiting_callers >= static_cast<uint64_t>(queue_depth)) {
+        ++total_rejections;
+        xsink->raiseException("ML-ONNX-POOL-BACKPRESSURE",
+            "OnnxSessionPool queue is full; active_runs=%llu waiting_callers=%llu queue_depth=%lld",
+            (unsigned long long)active_runs, (unsigned long long)waiting_callers,
+            (long long)queue_depth);
+        return nullptr;
+    }
+
+    ++waiting_callers;
+    ++total_waits;
+    if (waiting_callers > max_waiting_callers_observed) {
+        max_waiting_callers_observed = waiting_callers;
+    }
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        if (qore_check_cancel(xsink, "OnnxSessionPool acquire")) {
+            --waiting_callers;
+            return nullptr;
+        }
+
+        if (timeout_ms > 0) {
+            auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) {
+                --waiting_callers;
+                ++total_timeouts;
+                xsink->raiseException("ML-ONNX-POOL-TIMEOUT",
+                    "timed out after %lld ms waiting for an ONNX session", (long long)timeout_ms);
+                return nullptr;
+            }
+            cv.wait_until(lock, std::min(deadline, now + std::chrono::milliseconds(100)));
+        } else {
+            cv.wait_for(lock, std::chrono::milliseconds(100));
+        }
+
+        index = findAvailableUnlocked();
+        if (active_runs < static_cast<uint64_t>(max_concurrent_runs)
+                && index < in_use.size()) {
+            --waiting_callers;
+            in_use[index] = true;
+            ++active_runs;
+            if (active_runs > max_active_runs_observed) {
+                max_active_runs_observed = active_runs;
+            }
+            return std::make_unique<Lease>(*this, index);
+        }
+    }
+}
+
+void QoreOnnxSessionPool::release(size_t index) {
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (index < in_use.size() && in_use[index]) {
+            in_use[index] = false;
+        }
+        if (active_runs > 0) {
+            --active_runs;
+        }
+    }
+    cv.notify_one();
+}
+
+void QoreOnnxSessionPool::recordRun(size_t batch_items) {
+    std::lock_guard<std::mutex> lock(mutex);
+    ++total_runs;
+    total_batch_items += batch_items;
+}
+
+QoreHashNode* QoreOnnxSessionPool::run(const QoreHashNode* inputs, ExceptionSink* xsink) {
+    std::unique_ptr<Lease> lease = acquire(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreHashNode* rv = sessions[lease->index]->run(inputs, xsink);
+    if (!*xsink) {
+        recordRun(1);
+    }
+    return rv;
+}
+
+QoreHashNode* QoreOnnxSessionPool::runTensors(const QoreHashNode* inputs, ExceptionSink* xsink) {
+    std::unique_ptr<Lease> lease = acquire(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreHashNode* rv = sessions[lease->index]->runTensors(inputs, xsink);
+    if (!*xsink) {
+        recordRun(1);
+    }
+    return rv;
+}
+
+QoreListNode* QoreOnnxSessionPool::runBatch(const QoreListNode* batch, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    size_t total = batch->size();
+    if (!total) {
+        return rv.release();
+    }
+
+    size_t chunk_size = dynamic_batch_size > 0
+        ? static_cast<size_t>(dynamic_batch_size)
+        : total;
+    if (!chunk_size || chunk_size > total) {
+        chunk_size = total;
+    }
+
+    for (size_t start = 0; start < total; start += chunk_size) {
+        if (start && (start % 100) == 0 && qore_check_cancel(xsink, "OnnxSessionPool runBatch")) {
+            return nullptr;
+        }
+        size_t end = std::min(start + chunk_size, total);
+        ReferenceHolder<QoreListNode> chunk(new QoreListNode(autoTypeInfo), xsink);
+        for (size_t i = start; i < end; ++i) {
+            if ((i - start) && ((i - start) % 100) == 0
+                    && qore_check_cancel(xsink, "OnnxSessionPool runBatch chunk")) {
+                return nullptr;
+            }
+            chunk->push(batch->getReferencedEntry(i), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+
+        std::unique_ptr<Lease> lease = acquire(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreListNode> chunk_result(
+            sessions[lease->index]->runBatch(*chunk, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        for (size_t i = 0; i < chunk_result->size(); ++i) {
+            if (i && (i % 100) == 0 && qore_check_cancel(xsink, "OnnxSessionPool runBatch results")) {
+                return nullptr;
+            }
+            rv->push(chunk_result->getReferencedEntry(i), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        ++total_batches;
+    }
+    recordRun(total);
+    return rv.release();
+}
+
+QoreHashNode* QoreOnnxSessionPool::getPoolStats(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    std::lock_guard<std::mutex> lock(mutex);
+    rv->setKeyValue("max_sessions", max_sessions, xsink);
+    rv->setKeyValue("actual_sessions", static_cast<int64_t>(sessions.size()), xsink);
+    rv->setKeyValue("max_concurrent_runs", max_concurrent_runs, xsink);
+    rv->setKeyValue("queue_depth", queue_depth, xsink);
+    rv->setKeyValue("timeout_ms", timeout_ms, xsink);
+    rv->setKeyValue("dynamic_batch_size", dynamic_batch_size, xsink);
+    rv->setKeyValue("dynamic_batch_wait_ms", dynamic_batch_wait_ms, xsink);
+    rv->setKeyValue("active_runs", static_cast<int64_t>(active_runs), xsink);
+    rv->setKeyValue("waiting_callers", static_cast<int64_t>(waiting_callers), xsink);
+    rv->setKeyValue("total_runs", static_cast<int64_t>(total_runs), xsink);
+    rv->setKeyValue("total_batches", static_cast<int64_t>(total_batches), xsink);
+    rv->setKeyValue("total_batch_items", static_cast<int64_t>(total_batch_items), xsink);
+    rv->setKeyValue("total_waits", static_cast<int64_t>(total_waits), xsink);
+    rv->setKeyValue("total_timeouts", static_cast<int64_t>(total_timeouts), xsink);
+    rv->setKeyValue("total_rejections", static_cast<int64_t>(total_rejections), xsink);
+    rv->setKeyValue("max_active_runs_observed", static_cast<int64_t>(max_active_runs_observed), xsink);
+    rv->setKeyValue("max_waiting_callers_observed", static_cast<int64_t>(max_waiting_callers_observed), xsink);
+    return rv.release();
+}
+
+void QoreOnnxSessionPool::resetPoolStats() {
+    std::lock_guard<std::mutex> lock(mutex);
+    total_runs = 0;
+    total_batches = 0;
+    total_batch_items = 0;
+    total_waits = 0;
+    total_timeouts = 0;
+    total_rejections = 0;
+    max_active_runs_observed = active_runs;
+    max_waiting_callers_observed = waiting_callers;
+}
+
+QoreHashNode* QoreOnnxSessionPool::getModelInfo(ExceptionSink* xsink) {
+    std::unique_ptr<Lease> lease = acquire(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return sessions[lease->index]->getModelInfo(xsink);
+}
+
+QoreListNode* QoreOnnxSessionPool::getInputInfo(ExceptionSink* xsink) {
+    std::unique_ptr<Lease> lease = acquire(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return sessions[lease->index]->getInputInfo(xsink);
+}
+
+QoreListNode* QoreOnnxSessionPool::getOutputInfo(ExceptionSink* xsink) {
+    std::unique_ptr<Lease> lease = acquire(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return sessions[lease->index]->getOutputInfo(xsink);
+}
+
 #endif // HAVE_ONNXRUNTIME

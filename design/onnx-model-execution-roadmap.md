@@ -369,7 +369,7 @@ Acceptance checks:
 
 ## Phase 9: Session Pools, Async Inference, and Dynamic Batching
 
-Status: pending.
+Status: in progress.
 
 Add pooled inference infrastructure for high-throughput service workloads.
 
@@ -386,9 +386,24 @@ APIs:
 Acceptance checks:
 
 - Concurrent inference is deterministic for immutable sessions.
+  Implemented for `ML::OnnxSessionPool` with a bounded set of immutable
+  `OnnxModel` sessions, configurable `max_sessions`, `max_concurrent_runs`,
+  `queue_depth`, `timeout_ms`, cancellation checks while waiting, and pool
+  statistics.
 - Backpressure and timeout behavior is tested.
+  Initial backpressure coverage is implemented for a saturated pool with
+  `queue_depth = 0`.
 - Dynamic batching preserves result ordering.
+  Implemented for caller-supplied batches by splitting `runBatch()` input into
+  stable `dynamic_batch_size` chunks and appending results in input order.
 - Representative pool tests pass under valgrind.
+
+Remaining Phase 9 work:
+
+- true async request APIs
+- cross-caller dynamic batching with `dynamic_batch_wait_ms`
+- timeout-path qtest coverage with a waiting caller
+- representative pool valgrind run
 
 ## Phase 10: High-Level Registry Contract
 
