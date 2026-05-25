@@ -375,6 +375,137 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
         return events;
     }
+
+    #! Processes records in bulk hash-of-lists format
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processCompleteShapeWindows(records, DataProvider::DataProviderShape::HashOfLists);
+        if (exists result) {
+            return cast<hash<auto>>(result);
+        }
+        *auto fallback = processShapeRowsFallback(records, DataProvider::DataProviderShape::HashOfLists);
+        if (!exists fallback) {
+            return;
+        }
+        return cast<hash<auto>>(fallback);
+    }
+
+    #! Processes records in an explicitly negotiated pipeline shape
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        *auto result = processCompleteShapeWindows(records, shape);
+        if (exists result) {
+            return AbstractDataProviderMLProcessor::convertBulkOutputShape(result, shape);
+        }
+        return processShapeRowsFallback(records, shape);
+    }
+
+    #! Uses the row-oriented implementation as a semantics-preserving fallback
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Processes complete shaped ONNX windows with one tensor inference call per window
+    private *hash<auto> processCompleteShapeWindows(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "registry-model processor not configured; provide constructor options";
+        }
+        if (!model.isOnnx() || buffer) {
+            return;
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count || count % window_size) {
+            return;
+        }
+
+        list<list<float>> matrix = matrixFromShape(records, shape);
+        hash<auto> result;
+        for (int start = 0; start < count; start += window_size) {
+            list<list<float>> window = count == window_size
+                ? matrix
+                : matrix[start..(start + window_size - 1)];
+            appendTensorWindowEventResult(\result, window);
+        }
+        return result;
+    }
+
+    #! Extracts numeric input fields as a model matrix from a shaped block
+    private list<list<float>> matrixFromShape(auto records, DataProvider::DataProviderShape shape) {
+        if (shape == DataProvider::DataProviderShape::DataFrameBlock) {
+            return cast<list<list<float>>>(records.toMatrix(fields));
+        }
+
+        if (shape == DataProvider::DataProviderShape::BufferColumns) {
+            auto df = DataProvider::AbstractDataProcessor::convertShape(
+                records, shape, DataProvider::DataProviderShape::DataFrameBlock)[0];
+            return cast<list<list<float>>>(df.toMatrix(fields));
+        }
+
+        list<list<float>> matrix;
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        for (int i = 0; i < count; ++i) {
+            list<float> row;
+            foreach string f in (fields) {
+                push row, records{f}[i].toFloat();
+            }
+            push matrix, row;
+        }
+        return matrix;
+    }
+
+    #! Appends one registry ONNX tensor inference window to a hash-of-lists result
+    private appendTensorWindowEventResult(reference<hash<auto>> result, list<list<float>> matrix) {
+        hash<auto> outputs = model.runFeatureMatrix(matrix, input_tensor);
+        int count = matrix.lsize();
+
+        for (int i = 0; i < count; ++i) {
+            hash<auto> record_values;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                record_values{fields[j]} = matrix[i][j];
+            }
+
+            hash<auto> model_output;
+            foreach string okey in (keys outputs) {
+                auto oval = outputs{okey};
+                if (oval.typeCode() == NT_LIST && oval.lsize() == count) {
+                    model_output{okey} = oval[i];
+                } else {
+                    model_output{okey} = oval;
+                }
+            }
+
+            push result{"event_type"}, "registry-model";
+            push result{"model_name"}, model_name;
+            push result{"version_id"}, loaded_version;
+            push result{"record_values"}, record_values;
+            push result{"execution_provider"}, execution_provider;
+            push result{"provider_diagnostics"}, provider_diagnostics;
+            push result{"prediction"}, model_output;
+        }
+    }
 }
 
 } # namespace DataProviderML

@@ -185,6 +185,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # RegistryModel tests
         addTestCase("registry-model - field parsing", \registryModelFieldParsing());
         addTestCase("registry-model - ONNX package inference", \registryModelOnnxPackageInference());
+        addTestCase("registry-model - DataFrameBlock tensor path",
+            \registryModelOnnxDataFrameTensorPath());
         addTestCase("tokenize - registry tokenizer", \tokenizeRegistryTokenizer());
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
 
@@ -2209,6 +2211,61 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             sprintf("expected first ONNX prediction ~3.0, got %y", results[0].prediction.Y));
         assertTrue(abs(7.0 - results[2].prediction.Y.toFloat()) < 0.01,
             sprintf("expected third ONNX prediction ~7.0, got %y", results[2].prediction.Y));
+    }
+
+    registryModelOnnxDataFrameTensorPath() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_df_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string package_dir = dir + DirSep + "linear_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(getTestModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "linear-onnx-df",
+            "description": "test ONNX package for shaped registry inference",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "linear-onnx-df",
+            "version": vid,
+            "fields": "x",
+            "window_size": 4,
+        });
+
+        DataFrame::DataFrame df({
+            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0)),
+        });
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(result,
+            DataProviderShape::DataFrameBlock));
+
+        list<auto> predictions = result.getColumn("prediction");
+        assertEq(4, predictions.lsize());
+        assertTrue(abs(3.0 - predictions[0].Y.toFloat()) < 0.01,
+            sprintf("expected first registry DataFrame prediction ~3.0, got %y",
+                predictions[0].Y));
+        assertTrue(abs(9.0 - predictions[3].Y.toFloat()) < 0.01,
+            sprintf("expected fourth registry DataFrame prediction ~9.0, got %y",
+                predictions[3].Y));
+%endif
     }
 
     tokenizeRegistryTokenizer() {
