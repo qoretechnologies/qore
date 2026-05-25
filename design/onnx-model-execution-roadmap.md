@@ -43,7 +43,7 @@ Deliverables:
 Acceptance checks:
 
 - This roadmap exists and is kept current.
-- Each later phase has tests, docs, benchmarks where performance is affected,
+- Each subsequent phase has tests, docs, benchmarks where performance is affected,
   and valgrind coverage for representative native paths.
 
 ## Phase 1: Provider Management and Runtime Diagnostics
@@ -99,7 +99,7 @@ Implementation notes:
 
 ## Phase 2: Tensor and Type Coverage
 
-Status: pending.
+Status: completed.
 
 Extend tensor conversion coverage so Qore can run more exported models without
 ad hoc conversion code.
@@ -125,6 +125,19 @@ Acceptance checks:
 - Shape mismatch errors include input name, expected shape/type, and supplied
   shape/type.
 - DataFrame dense columns and `buffer<T>` map to tensors without row hashes.
+
+Implementation notes:
+
+- `ML::OnnxModel::run()` now supports `float16`, `bfloat16`, unsigned integer,
+  and string tensor inputs and outputs in addition to the previously-supported
+  float, double, signed integer, and bool tensor families.
+- `ML::OnnxModel::runTensors()` returns half/bfloat16 tensors as `float32`
+  buffers and unsigned integer tensors as `int64` buffers because the Qore
+  dense buffer type system does not currently expose unsigned or half-float
+  element types.
+- `ML::Tensor` now supports `buffer<string>` and string list data for string
+  tensor workflows.
+- Tensor metadata includes `symbolic_shape` alongside numeric shape metadata.
 
 ## Phase 3: OrtValue, I/O Binding, and Zero-Copy Execution
 

@@ -48,12 +48,12 @@ hash<auto> outputs = model.runTensors({"X": input});
 qclass Tensor [arg=QoreTensor* tensor; ns=Qore::ML; flags=final];
 
 //! Creates a Tensor from a list, nested list, scalar, or dense buffer
-/** @param data source data; accepts numeric/bool values, nested lists, or a
+/** @param data source data; accepts numeric/bool/string values, nested lists, or a
     non-nullable \c buffer<T>
     @param shape optional tensor shape; inferred from nested lists and defaults
     to a one-dimensional shape for buffers
     @param dtype optional buffer element type; expected values are \c int8,
-    \c int16, \c int32, \c int64, \c float32, \c float64, or \c bool
+    \c int16, \c int32, \c int64, \c float32, \c float64, \c bool, or \c string
 
     When \c data is a buffer and \c dtype is supplied, the dtype must match the
     buffer element type. Use the buffer constructor first when a dtype conversion

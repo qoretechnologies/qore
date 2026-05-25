@@ -386,6 +386,8 @@ hashdecl Qore::ML::OnnxTensorInfo {
     string type;
     //! tensor shape dimensions (-1 for dynamic dimensions)
     list<int> shape;
+    //! symbolic tensor shape dimensions; empty strings correspond to fixed numeric dimensions
+    list<string> symbolic_shape;
 }
 
 //! ONNX execution provider configuration

@@ -32,6 +32,8 @@
 #include <algorithm>
 #include <numeric>
 #include <cstring>
+#include <cerrno>
+#include <cstdlib>
 #include <limits>
 #include <mutex>
 #include <unordered_set>
@@ -74,6 +76,8 @@ QoreBufferElementType onnxTypeToBufferElementType(ONNXTensorElementDataType type
             return QoreBufferElementType::Int64;
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
             return QoreBufferElementType::Bool;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
+            return QoreBufferElementType::String;
         default:
             return QoreBufferElementType::Invalid;
     }
@@ -94,6 +98,152 @@ int64_t tensorShapeElementCount(const std::vector<int64_t>& shape, ExceptionSink
 
 bool isTensorObject(QoreValue value) {
     return value.getType() == NT_OBJECT && value.get<const QoreObject>()->getClass()->getID() == CID_TENSOR;
+}
+
+int inferValueShapeRec(QoreValue value, std::vector<int64_t>& shape, ExceptionSink* xsink) {
+    shape.clear();
+    if (value.getType() != NT_LIST) {
+        return 0;
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    shape.push_back(static_cast<int64_t>(list->size()));
+    if (list->empty()) {
+        return 0;
+    }
+
+    std::vector<int64_t> first_shape;
+    if (inferValueShapeRec(list->retrieveEntry(0), first_shape, xsink)) {
+        return -1;
+    }
+    for (size_t i = 1; i < list->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "inferring ONNX tensor input shape")) {
+            return -1;
+        }
+        std::vector<int64_t> current_shape;
+        if (inferValueShapeRec(list->retrieveEntry(i), current_shape, xsink)) {
+            return -1;
+        }
+        if (current_shape != first_shape) {
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "cannot infer ONNX tensor shape from a ragged nested list; element %zu has a different shape", i);
+            return -1;
+        }
+    }
+    shape.insert(shape.end(), first_shape.begin(), first_shape.end());
+    return 0;
+}
+
+QoreValue uint64ToQore(uint64_t value) {
+    if (value <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        return static_cast<int64_t>(value);
+    }
+    return new QoreNumberNode(std::to_string(value).c_str());
+}
+
+int qoreValueToUInt64(QoreValue value, uint64_t max_value, const char* type_name,
+        uint64_t& out, ExceptionSink* xsink) {
+    if (value.getType() == NT_STRING) {
+        QoreStringValueHelper str(value);
+        const char* s = str->c_str();
+        if (!*s) {
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "%s tensor value is empty; expected an unsigned integer in the range 0..%llu",
+                type_name, static_cast<unsigned long long>(max_value));
+            return -1;
+        }
+        for (const char* p = s; *p; ++p) {
+            if (*p < '0' || *p > '9') {
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "%s tensor value '%s' is not an unsigned decimal integer in the range 0..%llu",
+                    type_name, s, static_cast<unsigned long long>(max_value));
+                return -1;
+            }
+        }
+        char* end = nullptr;
+        errno = 0;
+        unsigned long long parsed = std::strtoull(s, &end, 10);
+        if (errno || !end || *end || parsed > max_value) {
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "%s tensor value '%s' is outside the supported range 0..%llu",
+                type_name, s, static_cast<unsigned long long>(max_value));
+            return -1;
+        }
+        out = static_cast<uint64_t>(parsed);
+        return 0;
+    }
+
+    int64_t v = value.getAsBigInt();
+    if (v < 0 || static_cast<uint64_t>(v) > max_value) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+            "%s tensor value " QLLD " is outside the supported range 0..%llu",
+            type_name, v, static_cast<unsigned long long>(max_value));
+        return -1;
+    }
+    out = static_cast<uint64_t>(v);
+    return 0;
+}
+
+template <typename T>
+QoreValue reshapeFloatingOutput(const T* data, const std::vector<int64_t>& shape,
+        size_t& offset, const char* cancel_msg, ExceptionSink* xsink) {
+    if (shape.empty() || (shape.size() == 1 && shape[0] == 1)) {
+        return static_cast<double>(data[offset++].ToFloat());
+    }
+    if (shape.size() == 1) {
+        ReferenceHolder<QoreListNode> list(new QoreListNode(floatTypeInfo), nullptr);
+        for (int64_t i = 0; i < shape[0]; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, cancel_msg)) {
+                return QoreValue();
+            }
+            list->push(static_cast<double>(data[offset++].ToFloat()), nullptr);
+        }
+        return list.release();
+    }
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), nullptr);
+    std::vector<int64_t> inner_shape(shape.begin() + 1, shape.end());
+    for (int64_t i = 0; i < shape[0]; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, cancel_msg)) {
+            return QoreValue();
+        }
+        QoreValue value = reshapeFloatingOutput(data, inner_shape, offset, cancel_msg, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        list->push(value, nullptr);
+    }
+    return list.release();
+}
+
+template <typename T>
+QoreValue reshapeUnsignedOutput(const T* data, const std::vector<int64_t>& shape,
+        size_t& offset, const char* cancel_msg, ExceptionSink* xsink) {
+    if (shape.empty() || (shape.size() == 1 && shape[0] == 1)) {
+        return uint64ToQore(static_cast<uint64_t>(data[offset++]));
+    }
+    if (shape.size() == 1) {
+        ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), nullptr);
+        for (int64_t i = 0; i < shape[0]; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, cancel_msg)) {
+                return QoreValue();
+            }
+            list->push(uint64ToQore(static_cast<uint64_t>(data[offset++])), nullptr);
+        }
+        return list.release();
+    }
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), nullptr);
+    std::vector<int64_t> inner_shape(shape.begin() + 1, shape.end());
+    for (int64_t i = 0; i < shape[0]; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, cancel_msg)) {
+            return QoreValue();
+        }
+        QoreValue value = reshapeUnsignedOutput(data, inner_shape, offset, cancel_msg, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        list->push(value, nullptr);
+    }
+    return list.release();
 }
 
 std::vector<std::string> getAvailableOnnxProviders() {
@@ -877,6 +1027,12 @@ void QoreOnnxModel::loadMetadata(ExceptionSink* xsink) {
         auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
         input_meta[i].element_type = tensor_info.GetElementType();
         input_meta[i].shape = tensor_info.GetShape();
+        input_meta[i].symbolic_shape.clear();
+        std::vector<const char*> symbolic_dims = tensor_info.GetSymbolicDimensions();
+        input_meta[i].symbolic_shape.reserve(symbolic_dims.size());
+        for (const char* dim : symbolic_dims) {
+            input_meta[i].symbolic_shape.push_back(dim ? dim : "");
+        }
     }
 
     // Load output metadata
@@ -890,6 +1046,12 @@ void QoreOnnxModel::loadMetadata(ExceptionSink* xsink) {
         auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
         output_meta[i].element_type = tensor_info.GetElementType();
         output_meta[i].shape = tensor_info.GetShape();
+        output_meta[i].symbolic_shape.clear();
+        std::vector<const char*> symbolic_dims = tensor_info.GetSymbolicDimensions();
+        output_meta[i].symbolic_shape.reserve(symbolic_dims.size());
+        for (const char* dim : symbolic_dims) {
+            output_meta[i].symbolic_shape.push_back(dim ? dim : "");
+        }
     }
 }
 
@@ -908,6 +1070,7 @@ const char* QoreOnnxModel::elementTypeToString(ONNXTensorElementDataType type) {
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: return "bool";
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING: return "string";
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16: return "float16";
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16: return "bfloat16";
         default: return "unknown";
     }
 }
@@ -923,6 +1086,12 @@ QoreHashNode* QoreOnnxModel::tensorMetaToHash(const TensorMeta& meta,
         shape_list->push(dim, xsink);
     }
     rv->setKeyValue("shape", shape_list.release(), xsink);
+
+    ReferenceHolder<QoreListNode> symbolic_shape(new QoreListNode(stringTypeInfo), xsink);
+    for (const auto& dim : meta.symbolic_shape) {
+        symbolic_shape->push(new QoreStringNode(dim), xsink);
+    }
+    rv->setKeyValue("symbolic_shape", symbolic_shape.release(), xsink);
     return rv.release();
 }
 
@@ -1068,6 +1237,42 @@ void QoreOnnxModel::flattenToDoubles(const QoreValue& val, std::vector<double>& 
     }
 }
 
+void QoreOnnxModel::flattenToFloat16(const QoreValue& val, std::vector<Ort::Float16_t>& out,
+        ExceptionSink* xsink) {
+    if (val.getType() == NT_LIST) {
+        const QoreListNode* list = val.get<const QoreListNode>();
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "flattening ONNX float16 tensor input")) {
+                return;
+            }
+            flattenToFloat16(list->retrieveEntry(i), out, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        out.push_back(Ort::Float16_t(static_cast<float>(val.getAsFloat())));
+    }
+}
+
+void QoreOnnxModel::flattenToBFloat16(const QoreValue& val, std::vector<Ort::BFloat16_t>& out,
+        ExceptionSink* xsink) {
+    if (val.getType() == NT_LIST) {
+        const QoreListNode* list = val.get<const QoreListNode>();
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "flattening ONNX bfloat16 tensor input")) {
+                return;
+            }
+            flattenToBFloat16(list->retrieveEntry(i), out, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        out.push_back(Ort::BFloat16_t(static_cast<float>(val.getAsFloat())));
+    }
+}
+
 void QoreOnnxModel::flattenToInt32(const QoreValue& val, std::vector<int32_t>& out,
         ExceptionSink* xsink) {
     if (val.getType() == NT_LIST) {
@@ -1131,6 +1336,72 @@ void QoreOnnxModel::flattenToInt8(const QoreValue& val, std::vector<int8_t>& out
     }
 }
 
+void QoreOnnxModel::flattenToUInt32(const QoreValue& val, std::vector<uint32_t>& out,
+        ExceptionSink* xsink) {
+    if (val.getType() == NT_LIST) {
+        const QoreListNode* list = val.get<const QoreListNode>();
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "flattening ONNX uint32 tensor input")) {
+                return;
+            }
+            flattenToUInt32(list->retrieveEntry(i), out, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        uint64_t v;
+        if (qoreValueToUInt64(val, std::numeric_limits<uint32_t>::max(), "uint32", v, xsink)) {
+            return;
+        }
+        out.push_back(static_cast<uint32_t>(v));
+    }
+}
+
+void QoreOnnxModel::flattenToUInt16(const QoreValue& val, std::vector<uint16_t>& out,
+        ExceptionSink* xsink) {
+    if (val.getType() == NT_LIST) {
+        const QoreListNode* list = val.get<const QoreListNode>();
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "flattening ONNX uint16 tensor input")) {
+                return;
+            }
+            flattenToUInt16(list->retrieveEntry(i), out, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        uint64_t v;
+        if (qoreValueToUInt64(val, std::numeric_limits<uint16_t>::max(), "uint16", v, xsink)) {
+            return;
+        }
+        out.push_back(static_cast<uint16_t>(v));
+    }
+}
+
+void QoreOnnxModel::flattenToUInt8(const QoreValue& val, std::vector<uint8_t>& out,
+        ExceptionSink* xsink) {
+    if (val.getType() == NT_LIST) {
+        const QoreListNode* list = val.get<const QoreListNode>();
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "flattening ONNX uint8 tensor input")) {
+                return;
+            }
+            flattenToUInt8(list->retrieveEntry(i), out, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        uint64_t v;
+        if (qoreValueToUInt64(val, std::numeric_limits<uint8_t>::max(), "uint8", v, xsink)) {
+            return;
+        }
+        out.push_back(static_cast<uint8_t>(v));
+    }
+}
+
 void QoreOnnxModel::flattenToInt64(const QoreValue& val, std::vector<int64_t>& out,
         ExceptionSink* xsink) {
     if (val.getType() == NT_LIST) {
@@ -1143,6 +1414,28 @@ void QoreOnnxModel::flattenToInt64(const QoreValue& val, std::vector<int64_t>& o
         }
     } else {
         out.push_back(val.getAsBigInt());
+    }
+}
+
+void QoreOnnxModel::flattenToUInt64(const QoreValue& val, std::vector<uint64_t>& out,
+        ExceptionSink* xsink) {
+    if (val.getType() == NT_LIST) {
+        const QoreListNode* list = val.get<const QoreListNode>();
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "flattening ONNX uint64 tensor input")) {
+                return;
+            }
+            flattenToUInt64(list->retrieveEntry(i), out, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        uint64_t v;
+        if (qoreValueToUInt64(val, std::numeric_limits<uint64_t>::max(), "uint64", v, xsink)) {
+            return;
+        }
+        out.push_back(v);
     }
 }
 
@@ -1164,28 +1457,78 @@ void QoreOnnxModel::flattenToBools(const QoreValue& val, std::vector<uint8_t>& o
     }
 }
 
+void QoreOnnxModel::flattenToStrings(const QoreValue& val, std::vector<std::string>& out,
+        ExceptionSink* xsink) {
+    if (val.getType() == NT_LIST) {
+        const QoreListNode* list = val.get<const QoreListNode>();
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "flattening ONNX string tensor input")) {
+                return;
+            }
+            flattenToStrings(list->retrieveEntry(i), out, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    } else if (val.getType() == NT_STRING) {
+        QoreStringValueHelper str(val);
+        out.push_back(str->c_str());
+    } else {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+            "string tensor value has type '%s'; expected string", val.getFullTypeName());
+    }
+}
+
 std::vector<int64_t> QoreOnnxModel::inferShape(const QoreValue& val, const TensorMeta& meta,
         ExceptionSink* xsink) {
     std::vector<int64_t> shape = meta.shape;
+    std::vector<int64_t> supplied_shape;
+    if (inferValueShapeRec(val, supplied_shape, xsink)) {
+        return {};
+    }
 
-    // Resolve dynamic dimensions (-1) by inspecting the data
-    if (val.getType() == NT_LIST) {
-        const QoreListNode* list = val.get<const QoreListNode>();
-        // First dimension is the list size
-        if (!shape.empty() && shape[0] == -1) {
-            shape[0] = (int64_t)list->size();
-        }
-        // For 2D+ tensors, check first element for second dimension
-        if (shape.size() >= 2 && shape[1] == -1 && list->size() > 0) {
-            QoreValue first = list->retrieveEntry(0);
-            if (first.getType() == NT_LIST) {
-                shape[1] = (int64_t)first.get<const QoreListNode>()->size();
+    if (shape.empty()) {
+        return supplied_shape;
+    }
+
+    if (supplied_shape.empty()) {
+        bool scalar_ok = true;
+        for (int64_t& dim : shape) {
+            if (dim == -1) {
+                dim = 1;
+            } else if (dim != 1) {
+                scalar_ok = false;
             }
         }
-    } else {
-        // Scalar input: shape should be empty or {1}
-        if (shape.empty()) {
-            shape.push_back(1);
+        if (scalar_ok) {
+            return shape;
+        }
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+            "input tensor '%s': model expects rank %zu with shape metadata, but call supplies a scalar",
+            meta.name.c_str(), shape.size());
+        return {};
+    }
+
+    if (shape.size() != supplied_shape.size()) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+            "input tensor '%s': model expects rank %zu, but call supplies rank %zu",
+            meta.name.c_str(), shape.size(), supplied_shape.size());
+        return {};
+    }
+
+    for (size_t i = 0; i < shape.size(); ++i) {
+        if (shape[i] == -1) {
+            shape[i] = supplied_shape[i];
+        } else if (shape[i] > 0 && shape[i] != supplied_shape[i]) {
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "input tensor '%s': model expects dimension %zu to be " QLLD ", but call supplies " QLLD,
+                meta.name.c_str(), i, shape[i], supplied_shape[i]);
+            return {};
+        } else if (shape[i] < -1) {
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "input tensor '%s': unsupported negative dimension " QLLD " at index %zu",
+                meta.name.c_str(), shape[i], i);
+            return {};
         }
     }
 
@@ -1231,6 +1574,16 @@ QoreValue QoreOnnxModel::reshapeOutput(const double* data, const std::vector<int
         list->push(reshapeOutput(data, inner_shape, offset), nullptr);
     }
     return list.release();
+}
+
+QoreValue QoreOnnxModel::reshapeOutputFloat16(const Ort::Float16_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink) {
+    return reshapeFloatingOutput(data, shape, offset, "reshaping ONNX float16 tensor output", xsink);
+}
+
+QoreValue QoreOnnxModel::reshapeOutputBFloat16(const Ort::BFloat16_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink) {
+    return reshapeFloatingOutput(data, shape, offset, "reshaping ONNX bfloat16 tensor output", xsink);
 }
 
 QoreValue QoreOnnxModel::reshapeOutputInt32(const int32_t* data,
@@ -1313,6 +1666,21 @@ QoreValue QoreOnnxModel::reshapeOutputInt8(const int8_t* data,
     return list.release();
 }
 
+QoreValue QoreOnnxModel::reshapeOutputUInt32(const uint32_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink) {
+    return reshapeUnsignedOutput(data, shape, offset, "reshaping ONNX uint32 tensor output", xsink);
+}
+
+QoreValue QoreOnnxModel::reshapeOutputUInt16(const uint16_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink) {
+    return reshapeUnsignedOutput(data, shape, offset, "reshaping ONNX uint16 tensor output", xsink);
+}
+
+QoreValue QoreOnnxModel::reshapeOutputUInt8(const uint8_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink) {
+    return reshapeUnsignedOutput(data, shape, offset, "reshaping ONNX uint8 tensor output", xsink);
+}
+
 QoreValue QoreOnnxModel::reshapeOutputInt64(const int64_t* data,
         const std::vector<int64_t>& shape, size_t& offset) {
     if (shape.empty() || (shape.size() == 1 && shape[0] == 1)) {
@@ -1331,6 +1699,11 @@ QoreValue QoreOnnxModel::reshapeOutputInt64(const int64_t* data,
         list->push(reshapeOutputInt64(data, inner_shape, offset), nullptr);
     }
     return list.release();
+}
+
+QoreValue QoreOnnxModel::reshapeOutputUInt64(const uint64_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink) {
+    return reshapeUnsignedOutput(data, shape, offset, "reshaping ONNX uint64 tensor output", xsink);
 }
 
 QoreValue QoreOnnxModel::reshapeOutputBool(const bool* data,
@@ -1363,6 +1736,36 @@ QoreValue QoreOnnxModel::reshapeOutputBool(const bool* data,
     return list.release();
 }
 
+QoreValue QoreOnnxModel::reshapeOutputString(Ort::Value& tensor,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink) {
+    if (shape.empty() || (shape.size() == 1 && shape[0] == 1)) {
+        return new QoreStringNode(tensor.GetStringTensorElement(offset++));
+    }
+    if (shape.size() == 1) {
+        ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
+        for (int64_t i = 0; i < shape[0]; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "reshaping ONNX string tensor output")) {
+                return QoreValue();
+            }
+            list->push(new QoreStringNode(tensor.GetStringTensorElement(offset++)), xsink);
+        }
+        return list.release();
+    }
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+    std::vector<int64_t> inner_shape(shape.begin() + 1, shape.end());
+    for (int64_t i = 0; i < shape[0]; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "reshaping ONNX string tensor output")) {
+            return QoreValue();
+        }
+        QoreValue value = reshapeOutputString(tensor, inner_shape, offset, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        list->push(value, xsink);
+    }
+    return list.release();
+}
+
 QoreValue QoreOnnxModel::convertOutputTensor(Ort::Value& tensor, ExceptionSink* xsink) {
     if (!tensor.IsTensor()) {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR", "output is not a tensor");
@@ -1383,26 +1786,52 @@ QoreValue QoreOnnxModel::convertOutputTensor(Ort::Value& tensor, ExceptionSink* 
             const double* data = tensor.GetTensorData<double>();
             return reshapeOutput(data, shape, offset);
         }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16: {
+            const Ort::Float16_t* data = tensor.GetTensorData<Ort::Float16_t>();
+            return reshapeOutputFloat16(data, shape, offset, xsink);
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16: {
+            const Ort::BFloat16_t* data = tensor.GetTensorData<Ort::BFloat16_t>();
+            return reshapeOutputBFloat16(data, shape, offset, xsink);
+        }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
             const int64_t* data = tensor.GetTensorData<int64_t>();
             return reshapeOutputInt64(data, shape, offset);
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64: {
+            const uint64_t* data = tensor.GetTensorData<uint64_t>();
+            return reshapeOutputUInt64(data, shape, offset, xsink);
         }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
             const int32_t* data = tensor.GetTensorData<int32_t>();
             return reshapeOutputInt32(data, shape, offset);
         }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32: {
+            const uint32_t* data = tensor.GetTensorData<uint32_t>();
+            return reshapeOutputUInt32(data, shape, offset, xsink);
+        }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16: {
             const int16_t* data = tensor.GetTensorData<int16_t>();
             return reshapeOutputInt16(data, shape, offset, xsink);
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16: {
+            const uint16_t* data = tensor.GetTensorData<uint16_t>();
+            return reshapeOutputUInt16(data, shape, offset, xsink);
         }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8: {
             const int8_t* data = tensor.GetTensorData<int8_t>();
             return reshapeOutputInt8(data, shape, offset, xsink);
         }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
+            const uint8_t* data = tensor.GetTensorData<uint8_t>();
+            return reshapeOutputUInt8(data, shape, offset, xsink);
+        }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
             const bool* data = tensor.GetTensorData<bool>();
             return reshapeOutputBool(data, shape, offset, xsink);
         }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
+            return reshapeOutputString(tensor, shape, offset, xsink);
         default:
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "unsupported output tensor type '%s'", elementTypeToString(type));
@@ -1421,14 +1850,45 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value& tensor, Excepti
     std::vector<int64_t> shape = tensor_info.GetShape();
     QoreBufferElementType buffer_type = onnxTypeToBufferElementType(type);
     if (buffer_type == QoreBufferElementType::Invalid) {
-        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
-            "unsupported output tensor type '%s'", elementTypeToString(type));
-        return QoreValue();
+        switch (type) {
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+                buffer_type = QoreBufferElementType::Float32;
+                break;
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+                buffer_type = QoreBufferElementType::Int64;
+                break;
+            default:
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "unsupported output tensor type '%s'", elementTypeToString(type));
+                return QoreValue();
+        }
     }
 
     int64_t total_elements = tensorShapeElementCount(shape, xsink);
     if (*xsink) {
         return QoreValue();
+    }
+
+    if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
+        ReferenceHolder<QoreListNode> flat(new QoreListNode(stringTypeInfo), xsink);
+        for (int64_t i = 0; i < total_elements; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "converting ONNX string tensor output")) {
+                return QoreValue();
+            }
+            flat->push(new QoreStringNode(tensor.GetStringTensorElement(static_cast<size_t>(i))), xsink);
+        }
+        ReferenceHolder<QoreBufferNode> string_buffer(
+            new QoreBufferNode(QoreBufferElementType::String, false, *flat, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreTensor> qore_tensor(
+            new QoreTensor(string_buffer.release(), std::move(shape)), xsink);
+        return qore_ml_tensor_to_object(qore_tensor.release(), getProgram(), xsink);
     }
 
     ReferenceHolder<QoreBufferNode> buffer(
@@ -1444,9 +1904,42 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value& tensor, Excepti
             std::memcpy((*buffer)->getRawData(), data, sizeof(double) * static_cast<size_t>(total_elements));
             break;
         }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16: {
+            const Ort::Float16_t* data = tensor.GetTensorData<Ort::Float16_t>();
+            float* dst = static_cast<float*>((*buffer)->getRawData());
+            for (int64_t i = 0; i < total_elements; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting ONNX float16 tensor output")) {
+                    return QoreValue();
+                }
+                dst[i] = data[i].ToFloat();
+            }
+            break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16: {
+            const Ort::BFloat16_t* data = tensor.GetTensorData<Ort::BFloat16_t>();
+            float* dst = static_cast<float*>((*buffer)->getRawData());
+            for (int64_t i = 0; i < total_elements; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting ONNX bfloat16 tensor output")) {
+                    return QoreValue();
+                }
+                dst[i] = data[i].ToFloat();
+            }
+            break;
+        }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
             const int32_t* data = tensor.GetTensorData<int32_t>();
             std::memcpy((*buffer)->getRawData(), data, sizeof(int32_t) * static_cast<size_t>(total_elements));
+            break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32: {
+            const uint32_t* data = tensor.GetTensorData<uint32_t>();
+            int64_t* dst = static_cast<int64_t*>((*buffer)->getRawData());
+            for (int64_t i = 0; i < total_elements; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting ONNX uint32 tensor output")) {
+                    return QoreValue();
+                }
+                dst[i] = static_cast<int64_t>(data[i]);
+            }
             break;
         }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16: {
@@ -1454,14 +1947,53 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value& tensor, Excepti
             std::memcpy((*buffer)->getRawData(), data, sizeof(int16_t) * static_cast<size_t>(total_elements));
             break;
         }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16: {
+            const uint16_t* data = tensor.GetTensorData<uint16_t>();
+            int64_t* dst = static_cast<int64_t*>((*buffer)->getRawData());
+            for (int64_t i = 0; i < total_elements; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting ONNX uint16 tensor output")) {
+                    return QoreValue();
+                }
+                dst[i] = static_cast<int64_t>(data[i]);
+            }
+            break;
+        }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8: {
             const int8_t* data = tensor.GetTensorData<int8_t>();
             std::memcpy((*buffer)->getRawData(), data, sizeof(int8_t) * static_cast<size_t>(total_elements));
             break;
         }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
+            const uint8_t* data = tensor.GetTensorData<uint8_t>();
+            int64_t* dst = static_cast<int64_t*>((*buffer)->getRawData());
+            for (int64_t i = 0; i < total_elements; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting ONNX uint8 tensor output")) {
+                    return QoreValue();
+                }
+                dst[i] = static_cast<int64_t>(data[i]);
+            }
+            break;
+        }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
             const int64_t* data = tensor.GetTensorData<int64_t>();
             std::memcpy((*buffer)->getRawData(), data, sizeof(int64_t) * static_cast<size_t>(total_elements));
+            break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64: {
+            const uint64_t* data = tensor.GetTensorData<uint64_t>();
+            int64_t* dst = static_cast<int64_t*>((*buffer)->getRawData());
+            for (int64_t i = 0; i < total_elements; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting ONNX uint64 tensor output")) {
+                    return QoreValue();
+                }
+                if (data[i] > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "uint64 output tensor value %llu exceeds Qore ML::Tensor int64 range",
+                        static_cast<unsigned long long>(data[i]));
+                    return QoreValue();
+                }
+                dst[i] = static_cast<int64_t>(data[i]);
+            }
             break;
         }
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
@@ -1507,10 +2039,16 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
     // We need to keep the data buffers alive until after Run()
     std::vector<std::unique_ptr<std::vector<float>>> float_buffers;
     std::vector<std::unique_ptr<std::vector<double>>> double_buffers;
+    std::vector<std::unique_ptr<std::vector<Ort::Float16_t>>> float16_buffers;
+    std::vector<std::unique_ptr<std::vector<Ort::BFloat16_t>>> bfloat16_buffers;
     std::vector<std::unique_ptr<std::vector<int8_t>>> int8_buffers;
     std::vector<std::unique_ptr<std::vector<int16_t>>> int16_buffers;
     std::vector<std::unique_ptr<std::vector<int32_t>>> int32_buffers;
     std::vector<std::unique_ptr<std::vector<int64_t>>> int64_buffers;
+    std::vector<std::unique_ptr<std::vector<uint8_t>>> uint8_buffers;
+    std::vector<std::unique_ptr<std::vector<uint16_t>>> uint16_buffers;
+    std::vector<std::unique_ptr<std::vector<uint32_t>>> uint32_buffers;
+    std::vector<std::unique_ptr<std::vector<uint64_t>>> uint64_buffers;
     std::vector<std::unique_ptr<std::vector<uint8_t>>> bool_buffers;
 
     for (const auto& meta : input_meta) {
@@ -1555,7 +2093,9 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
             direct_buffer = val.get<const QoreBufferNode>();
             direct_shape = meta.shape;
             if (direct_shape.empty()) {
-                direct_shape.push_back(static_cast<int64_t>(direct_buffer->size()));
+                if (direct_buffer->size() != 1) {
+                    direct_shape.push_back(static_cast<int64_t>(direct_buffer->size()));
+                }
             } else {
                 int dynamic_idx = -1;
                 int64_t known = 1;
@@ -1634,6 +2174,37 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                         const_cast<double*>(static_cast<const double*>(direct_buffer->getRawData())),
                         direct_buffer->size(), direct_shape.data(), direct_shape.size()));
                     break;
+                case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING: {
+                    std::vector<std::string> strings;
+                    strings.reserve(direct_buffer->size());
+                    std::vector<const char*> raw;
+                    raw.reserve(direct_buffer->size());
+                    for (size_t i = 0; i < direct_buffer->size(); ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink, "converting string tensor input")) {
+                            return nullptr;
+                        }
+                        QoreValue entry = direct_buffer->getReferencedEntry(i, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        if (entry.getType() != NT_STRING) {
+                            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                                "input tensor '%s': string buffer element %zu has type '%s'; expected string",
+                                meta.name.c_str(), i, entry.getFullTypeName());
+                            return nullptr;
+                        }
+                        QoreStringValueHelper str(entry);
+                        strings.push_back(str->c_str());
+                    }
+                    for (const auto& str : strings) {
+                        raw.push_back(str.c_str());
+                    }
+                    Ort::Value string_tensor = Ort::Value::CreateTensor(allocator, direct_shape.data(),
+                        direct_shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+                    string_tensor.FillStringTensor(raw.data(), raw.size());
+                    input_tensors.push_back(std::move(string_tensor));
+                    break;
+                }
                 case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
                     input_tensors.push_back(Ort::Value::CreateTensor<int8_t>(mem_info,
                         const_cast<int8_t*>(static_cast<const int8_t*>(direct_buffer->getRawData())),
@@ -1683,9 +2254,9 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
             return nullptr;
         }
 
-        int64_t total_elements = 1;
-        for (int64_t dim : shape) {
-            total_elements *= dim;
+        int64_t total_elements = tensorShapeElementCount(shape, xsink);
+        if (*xsink) {
+            return nullptr;
         }
 
         Ort::MemoryInfo mem_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator,
@@ -1728,6 +2299,42 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                 double_buffers.push_back(std::move(buf));
                 break;
             }
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16: {
+                auto buf = std::make_unique<std::vector<Ort::Float16_t>>();
+                flattenToFloat16(val, *buf, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if ((int64_t)buf->size() != total_elements) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': expected %lld elements, got %zu",
+                        meta.name.c_str(), (long long)total_elements, buf->size());
+                    return nullptr;
+                }
+                input_tensors.push_back(
+                    Ort::Value::CreateTensor<Ort::Float16_t>(mem_info, buf->data(), buf->size(),
+                        shape.data(), shape.size()));
+                float16_buffers.push_back(std::move(buf));
+                break;
+            }
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16: {
+                auto buf = std::make_unique<std::vector<Ort::BFloat16_t>>();
+                flattenToBFloat16(val, *buf, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if ((int64_t)buf->size() != total_elements) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': expected %lld elements, got %zu",
+                        meta.name.c_str(), (long long)total_elements, buf->size());
+                    return nullptr;
+                }
+                input_tensors.push_back(
+                    Ort::Value::CreateTensor<Ort::BFloat16_t>(mem_info, buf->data(), buf->size(),
+                        shape.data(), shape.size()));
+                bfloat16_buffers.push_back(std::move(buf));
+                break;
+            }
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8: {
                 auto buf = std::make_unique<std::vector<int8_t>>();
                 flattenToInt8(val, *buf, xsink);
@@ -1744,6 +2351,24 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                     Ort::Value::CreateTensor<int8_t>(mem_info, buf->data(), buf->size(),
                         shape.data(), shape.size()));
                 int8_buffers.push_back(std::move(buf));
+                break;
+            }
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
+                auto buf = std::make_unique<std::vector<uint8_t>>();
+                flattenToUInt8(val, *buf, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if ((int64_t)buf->size() != total_elements) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': expected %lld elements, got %zu",
+                        meta.name.c_str(), (long long)total_elements, buf->size());
+                    return nullptr;
+                }
+                input_tensors.push_back(
+                    Ort::Value::CreateTensor<uint8_t>(mem_info, buf->data(), buf->size(),
+                        shape.data(), shape.size()));
+                uint8_buffers.push_back(std::move(buf));
                 break;
             }
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16: {
@@ -1764,6 +2389,24 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                 int16_buffers.push_back(std::move(buf));
                 break;
             }
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16: {
+                auto buf = std::make_unique<std::vector<uint16_t>>();
+                flattenToUInt16(val, *buf, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if ((int64_t)buf->size() != total_elements) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': expected %lld elements, got %zu",
+                        meta.name.c_str(), (long long)total_elements, buf->size());
+                    return nullptr;
+                }
+                input_tensors.push_back(
+                    Ort::Value::CreateTensor<uint16_t>(mem_info, buf->data(), buf->size(),
+                        shape.data(), shape.size()));
+                uint16_buffers.push_back(std::move(buf));
+                break;
+            }
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
                 auto buf = std::make_unique<std::vector<int32_t>>();
                 flattenToInt32(val, *buf, xsink);
@@ -1780,6 +2423,24 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                     Ort::Value::CreateTensor<int32_t>(mem_info, buf->data(), buf->size(),
                         shape.data(), shape.size()));
                 int32_buffers.push_back(std::move(buf));
+                break;
+            }
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32: {
+                auto buf = std::make_unique<std::vector<uint32_t>>();
+                flattenToUInt32(val, *buf, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if ((int64_t)buf->size() != total_elements) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': expected %lld elements, got %zu",
+                        meta.name.c_str(), (long long)total_elements, buf->size());
+                    return nullptr;
+                }
+                input_tensors.push_back(
+                    Ort::Value::CreateTensor<uint32_t>(mem_info, buf->data(), buf->size(),
+                        shape.data(), shape.size()));
+                uint32_buffers.push_back(std::move(buf));
                 break;
             }
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
@@ -1800,6 +2461,24 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                 int64_buffers.push_back(std::move(buf));
                 break;
             }
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64: {
+                auto buf = std::make_unique<std::vector<uint64_t>>();
+                flattenToUInt64(val, *buf, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if ((int64_t)buf->size() != total_elements) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': expected %lld elements, got %zu",
+                        meta.name.c_str(), (long long)total_elements, buf->size());
+                    return nullptr;
+                }
+                input_tensors.push_back(
+                    Ort::Value::CreateTensor<uint64_t>(mem_info, buf->data(), buf->size(),
+                        shape.data(), shape.size()));
+                uint64_buffers.push_back(std::move(buf));
+                break;
+            }
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
                 auto buf = std::make_unique<std::vector<uint8_t>>();
                 flattenToBools(val, *buf, xsink);
@@ -1816,6 +2495,29 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                     Ort::Value::CreateTensor<bool>(mem_info, reinterpret_cast<bool*>(buf->data()), buf->size(),
                         shape.data(), shape.size()));
                 bool_buffers.push_back(std::move(buf));
+                break;
+            }
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING: {
+                std::vector<std::string> strings;
+                flattenToStrings(val, strings, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if ((int64_t)strings.size() != total_elements) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': expected %lld elements, got %zu",
+                        meta.name.c_str(), (long long)total_elements, strings.size());
+                    return nullptr;
+                }
+                std::vector<const char*> raw;
+                raw.reserve(strings.size());
+                for (const auto& str : strings) {
+                    raw.push_back(str.c_str());
+                }
+                Ort::Value string_tensor = Ort::Value::CreateTensor(allocator, shape.data(),
+                    shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+                string_tensor.FillStringTensor(raw.data(), raw.size());
+                input_tensors.push_back(std::move(string_tensor));
                 break;
             }
             default:

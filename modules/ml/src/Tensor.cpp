@@ -37,6 +37,7 @@ struct inferred_tensor_type_t {
     bool has_int = false;
     bool has_float = false;
     bool has_bool = false;
+    bool has_string = false;
 };
 
 int inferTensorTypeRec(QoreValue value, inferred_tensor_type_t& info, ExceptionSink* xsink) {
@@ -70,9 +71,12 @@ int inferTensorTypeRec(QoreValue value, inferred_tensor_type_t& info, ExceptionS
         case NT_BOOLEAN:
             info.has_bool = true;
             return 0;
+        case NT_STRING:
+            info.has_string = true;
+            return 0;
         default:
             xsink->raiseException("ML-TENSOR-ERROR",
-                "cannot infer tensor dtype from value of type '%s'; pass a numeric, bool, list, or buffer value",
+                "cannot infer tensor dtype from value of type '%s'; pass a numeric, bool, string, list, or buffer value",
                 value.getFullTypeName());
             return -1;
     }
@@ -302,13 +306,31 @@ QoreBufferElementType QoreTensor::inferElementType(QoreValue value, ExceptionSin
         return QoreBufferElementType::Invalid;
     }
     if (info.has_float) {
+        if (info.has_string) {
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "cannot infer tensor dtype from mixed string and numeric values; pass a homogeneous tensor");
+            return QoreBufferElementType::Invalid;
+        }
         return QoreBufferElementType::Float64;
     }
     if (info.has_int) {
+        if (info.has_string) {
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "cannot infer tensor dtype from mixed string and numeric values; pass a homogeneous tensor");
+            return QoreBufferElementType::Invalid;
+        }
         return QoreBufferElementType::Int64;
     }
     if (info.has_bool) {
+        if (info.has_string) {
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "cannot infer tensor dtype from mixed string and bool values; pass a homogeneous tensor");
+            return QoreBufferElementType::Invalid;
+        }
         return QoreBufferElementType::Bool;
+    }
+    if (info.has_string) {
+        return QoreBufferElementType::String;
     }
     xsink->raiseException("ML-TENSOR-ERROR",
         "cannot infer tensor dtype from an empty list; pass dtype explicitly");
@@ -326,13 +348,13 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
     if (dtype) {
         if (!qore_buffer_element_type_from_name(dtype->c_str(), element_type)) {
             xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
-                "unsupported tensor dtype '%s'; expected int8, int16, int32, int64, float32, float64, or bool",
+                "unsupported tensor dtype '%s'; expected int8, int16, int32, int64, float32, float64, bool, or string",
                 dtype->c_str());
             return nullptr;
         }
-        if (element_type == QoreBufferElementType::String || element_type == QoreBufferElementType::Decimal128) {
+        if (element_type == QoreBufferElementType::Decimal128) {
             xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
-                "tensor dtype '%s' is not supported for ML tensors yet; use numeric or bool tensor data",
+                "tensor dtype '%s' is not supported for ML tensors yet; use numeric, bool, or string tensor data",
                 dtype->c_str());
             return nullptr;
         }
@@ -342,10 +364,9 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
     if (data.getType() == NT_BUFFER) {
         const QoreBufferNode* source = data.get<const QoreBufferNode>();
         QoreBufferElementType source_type = source->getElementType();
-        if (source_type == QoreBufferElementType::String || source_type == QoreBufferElementType::Decimal128
-                || source_type == QoreBufferElementType::Invalid) {
+        if (source_type == QoreBufferElementType::Decimal128 || source_type == QoreBufferElementType::Invalid) {
             xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
-                "tensor dtype '%s' is not supported for ML tensors yet; use numeric or bool tensor data",
+                "tensor dtype '%s' is not supported for ML tensors yet; use numeric, bool, or string tensor data",
                 qore_buffer_element_type_name(source_type));
             return nullptr;
         }

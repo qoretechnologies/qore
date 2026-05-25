@@ -27,11 +27,14 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/protobuf"
 %prepend-module-path "${SCRIPT_DIR}/../../../build/modules/ml"
 
 %requires QUnit
 %requires FsUtil
 %requires ml
+%requires QoreOnnxExport
 
 %exec-class MlTest
 
@@ -39,6 +42,7 @@ public class MlTest inherits QUnit::Test {
     constructor() : Test("MlTest", "1.0") {
         addTestCase("ml_get_capabilities", \capabilitiesTest());
         addTestCase("Tensor basics", \tensorBasicTest());
+        addTestCase("Tensor string dtype", \tensorStringTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -144,6 +148,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel load and metadata", \onnxLoadTest());
         addTestCase("OnnxModel inference", \onnxInferenceTest());
         addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
+        addTestCase("OnnxModel dtype coverage", \onnxTypeCoverageTest());
         addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
@@ -434,9 +439,6 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-TENSOR-ERROR", sub() {
             ML::Tensor bad(data: new buffer<*float64>((1.0, NOTHING)));
         });
-        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
-            ML::Tensor bad(data: new buffer<string>(("x",)));
-        });
         assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
             ML::Tensor bad(data: (1.0, 2.0, 3.0), shape: (2, 2));
         });
@@ -461,6 +463,18 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
             ML::Tensor bad = ML::Tensor::concatRows((from_columns, from_buffer));
         });
+    }
+
+    tensorStringTest() {
+        ML::Tensor t(data: (("alpha", "beta"), ("gamma", "delta")), dtype: "string");
+        assertEq("string", t.getDtype());
+        assertEq((2, 2), t.getShape());
+        assertEq("buffer<string>", t.getBuffer().fullType());
+        assertEq((("alpha", "beta"), ("gamma", "delta")), t.toList());
+
+        ML::Tensor inferred(data: ("red", "green", "blue"));
+        assertEq("string", inferred.getDtype());
+        assertEq(("red", "green", "blue"), inferred.toList());
     }
 
     iforestConstructorTest() {
@@ -2984,6 +2998,28 @@ public class MlTest inherits QUnit::Test {
         return False;
     }
 
+    private binary makeOnnxIdentityModel(list<hash<auto>> specs) {
+        list<hash<auto>> nodes = ();
+        list<hash<auto>> inputs = ();
+        list<hash<auto>> outputs = ();
+
+        foreach hash<auto> spec in (specs) {
+            string input_name = spec.name + "_in";
+            string output_name = spec.name + "_out";
+            nodes += QoreOnnxExport::OnnxGraphBuilder::makeNode(
+                "Identity", (input_name,), (output_name,));
+            inputs += QoreOnnxExport::OnnxGraphBuilder::makeInput(input_name, 1, spec.type);
+            outputs += QoreOnnxExport::OnnxGraphBuilder::makeOutput(output_name, 1, spec.type);
+        }
+
+        hash<auto> model_hash = QoreOnnxExport::OnnxGraphBuilder::buildModel(
+            "qore_type_identity", nodes, inputs, outputs, (),
+            ({"domain": "", "version": 13},), "qore-ml-test");
+        model_hash.ir_version = 8;
+        model_hash.doc_string = "Qore ONNX dtype coverage identity model";
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(model_hash);
+    }
+
     onnxLoadTest() {
         if (skipOnnx()) {
             return;
@@ -3003,6 +3039,7 @@ public class MlTest inherits QUnit::Test {
         assertEq("float", inputs[0].type);
         assertEq(2, inputs[0].shape.size());
         assertEq(1, inputs[0].shape[1]);
+        assertEq(2, inputs[0].symbolic_shape.size());
 
         # Check outputs
         list<hash<ML::OnnxTensorInfo>> outputs = model.getOutputInfo();
@@ -3054,6 +3091,67 @@ public class MlTest inherits QUnit::Test {
         assertFloat(7.0, y_vals[2][0], 1e-5);
         assertFloat(1.0, y_vals[3][0], 1e-5);
         assertFloat(-1.0, y_vals[4][0], 1e-5);
+    }
+
+    onnxTypeCoverageTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        binary model_data = makeOnnxIdentityModel((
+            {"name": "f16", "type": QoreOnnxExport::ONNX_FLOAT16},
+            {"name": "bf16", "type": QoreOnnxExport::ONNX_BFLOAT16},
+            {"name": "u8", "type": QoreOnnxExport::ONNX_UINT8},
+            {"name": "u16", "type": QoreOnnxExport::ONNX_UINT16},
+            {"name": "u32", "type": QoreOnnxExport::ONNX_UINT32},
+            {"name": "u64", "type": QoreOnnxExport::ONNX_UINT64},
+            {"name": "s", "type": QoreOnnxExport::ONNX_STRING},
+        ));
+
+        ML::OnnxModel model(model_data, <ML::OnnxSessionConfig>{"providers": ()});
+        hash<auto> out = model.run({
+            "f16_in": ((1.5,), (-2.0,)),
+            "bf16_in": ((3.0,), (4.5,)),
+            "u8_in": ((0,), (255,)),
+            "u16_in": ((0,), (65535,)),
+            "u32_in": ((0,), (4000000000,)),
+            "u64_in": ((0,), (9223372036854775807,)),
+            "s_in": (("alpha",), ("beta",)),
+        });
+
+        assertFloat(1.5, out.f16_out[0], 0.001);
+        assertFloat(-2.0, out.f16_out[1], 0.001);
+        assertFloat(3.0, out.bf16_out[0], 0.01);
+        assertFloat(4.5, out.bf16_out[1], 0.01);
+        assertEq((0, 255), out.u8_out);
+        assertEq((0, 65535), out.u16_out);
+        assertEq((0, 4000000000), out.u32_out);
+        assertEq((0, 9223372036854775807), out.u64_out);
+        assertEq(("alpha", "beta"), out.s_out);
+
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "uint8 tensor value", sub() {
+            model.run({
+                "f16_in": ((1.0,),),
+                "bf16_in": ((1.0,),),
+                "u8_in": ((256,),),
+                "u16_in": ((1,),),
+                "u32_in": ((1,),),
+                "u64_in": ((1,),),
+                "s_in": (("x",),),
+            });
+        });
+
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "uint64 tensor value", sub() {
+            model.run({
+                "f16_in": ((1.0,),),
+                "bf16_in": ((1.0,),),
+                "u8_in": ((1,),),
+                "u16_in": ((1,),),
+                "u32_in": ((1,),),
+                "u64_in": (("-1",),),
+                "s_in": (("x",),),
+            });
+        });
     }
 
     onnxMultiInputTensorInferenceTest() {

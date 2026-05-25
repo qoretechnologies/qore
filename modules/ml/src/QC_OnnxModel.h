@@ -60,6 +60,7 @@ struct TensorMeta {
     std::string name;
     ONNXTensorElementDataType element_type;
     std::vector<int64_t> shape;
+    std::vector<std::string> symbolic_shape;
 };
 
 //! Execution provider diagnostic information
@@ -247,6 +248,14 @@ private:
     DLLLOCAL void flattenToDoubles(const QoreValue& val, std::vector<double>& out,
         ExceptionSink* xsink);
 
+    //! Flatten a nested Qore list into a flat vector of float16 values
+    DLLLOCAL void flattenToFloat16(const QoreValue& val, std::vector<Ort::Float16_t>& out,
+        ExceptionSink* xsink);
+
+    //! Flatten a nested Qore list into a flat vector of bfloat16 values
+    DLLLOCAL void flattenToBFloat16(const QoreValue& val, std::vector<Ort::BFloat16_t>& out,
+        ExceptionSink* xsink);
+
     //! Flatten a nested Qore list into a flat vector of int32_t
     DLLLOCAL void flattenToInt32(const QoreValue& val, std::vector<int32_t>& out,
         ExceptionSink* xsink);
@@ -259,12 +268,32 @@ private:
     DLLLOCAL void flattenToInt8(const QoreValue& val, std::vector<int8_t>& out,
         ExceptionSink* xsink);
 
+    //! Flatten a nested Qore list into a flat vector of uint32_t
+    DLLLOCAL void flattenToUInt32(const QoreValue& val, std::vector<uint32_t>& out,
+        ExceptionSink* xsink);
+
+    //! Flatten a nested Qore list into a flat vector of uint16_t
+    DLLLOCAL void flattenToUInt16(const QoreValue& val, std::vector<uint16_t>& out,
+        ExceptionSink* xsink);
+
+    //! Flatten a nested Qore list into a flat vector of uint8_t
+    DLLLOCAL void flattenToUInt8(const QoreValue& val, std::vector<uint8_t>& out,
+        ExceptionSink* xsink);
+
     //! Flatten a nested Qore list into a flat vector of int64_t
     DLLLOCAL void flattenToInt64(const QoreValue& val, std::vector<int64_t>& out,
         ExceptionSink* xsink);
 
+    //! Flatten a nested Qore list into a flat vector of uint64_t
+    DLLLOCAL void flattenToUInt64(const QoreValue& val, std::vector<uint64_t>& out,
+        ExceptionSink* xsink);
+
     //! Flatten a nested Qore list into a flat vector of bool bytes
     DLLLOCAL void flattenToBools(const QoreValue& val, std::vector<uint8_t>& out,
+        ExceptionSink* xsink);
+
+    //! Flatten a nested Qore list into a flat vector of strings
+    DLLLOCAL void flattenToStrings(const QoreValue& val, std::vector<std::string>& out,
         ExceptionSink* xsink);
 
     //! Reshape a flat float vector into a nested Qore list based on shape
@@ -274,6 +303,14 @@ private:
     //! Reshape a flat double vector into a nested Qore list
     DLLLOCAL QoreValue reshapeOutput(const double* data, const std::vector<int64_t>& shape,
         size_t& offset);
+
+    //! Reshape flat float16 data (converted to float)
+    DLLLOCAL QoreValue reshapeOutputFloat16(const Ort::Float16_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink);
+
+    //! Reshape flat bfloat16 data (converted to float)
+    DLLLOCAL QoreValue reshapeOutputBFloat16(const Ort::BFloat16_t* data,
+        const std::vector<int64_t>& shape, size_t& offset, ExceptionSink* xsink);
 
     //! Reshape flat int32 data (converted to int64 for Qore)
     DLLLOCAL QoreValue reshapeOutputInt32(const int32_t* data, const std::vector<int64_t>& shape,
@@ -287,12 +324,32 @@ private:
     DLLLOCAL QoreValue reshapeOutputInt8(const int8_t* data, const std::vector<int64_t>& shape,
         size_t& offset, ExceptionSink* xsink);
 
+    //! Reshape flat uint32 data (converted to int64 for Qore)
+    DLLLOCAL QoreValue reshapeOutputUInt32(const uint32_t* data, const std::vector<int64_t>& shape,
+        size_t& offset, ExceptionSink* xsink);
+
+    //! Reshape flat uint16 data (converted to int64 for Qore)
+    DLLLOCAL QoreValue reshapeOutputUInt16(const uint16_t* data, const std::vector<int64_t>& shape,
+        size_t& offset, ExceptionSink* xsink);
+
+    //! Reshape flat uint8 data (converted to int64 for Qore)
+    DLLLOCAL QoreValue reshapeOutputUInt8(const uint8_t* data, const std::vector<int64_t>& shape,
+        size_t& offset, ExceptionSink* xsink);
+
     //! Reshape flat int64 data
     DLLLOCAL QoreValue reshapeOutputInt64(const int64_t* data, const std::vector<int64_t>& shape,
         size_t& offset);
 
+    //! Reshape flat uint64 data
+    DLLLOCAL QoreValue reshapeOutputUInt64(const uint64_t* data, const std::vector<int64_t>& shape,
+        size_t& offset, ExceptionSink* xsink);
+
     //! Reshape flat bool data
     DLLLOCAL QoreValue reshapeOutputBool(const bool* data, const std::vector<int64_t>& shape,
+        size_t& offset, ExceptionSink* xsink);
+
+    //! Reshape flat string data
+    DLLLOCAL QoreValue reshapeOutputString(Ort::Value& tensor, const std::vector<int64_t>& shape,
         size_t& offset, ExceptionSink* xsink);
 
     //! Infer shape from Qore data (for dynamic shapes)
