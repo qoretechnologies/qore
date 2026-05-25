@@ -176,8 +176,9 @@ Acceptance checks:
 - Tests cover reusable input binding, ONNX Runtime-managed output allocation,
   run options, Qore-preallocated numeric output tensors, DataProviderML
   compact-column binding diagnostics, and registry adapter binding diagnostics.
-- Benchmarks must still compare nested lists, tensors, DataFrame dense columns,
-  and I/O binding.
+- Benchmarks compare nested lists, tensors, DataFrame dense columns, compact
+  DataProviderML column output, and reusable I/O binding through the
+  `bench_onnx_run_*` and `bench_dataproviderml_onnx_dataframe*` cases.
 - DataProviderML and QoreModelRegistry tensor execution paths reuse
   `ML::OnnxIoBinding` for stable shaped windows and expose binding diagnostics.
 
