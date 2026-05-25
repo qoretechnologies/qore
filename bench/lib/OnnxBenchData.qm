@@ -155,6 +155,23 @@ public namespace OnnxBench {
         }
     }
 
+    public nothing sub verifyProcessorFlatFrame(string name, DataFrame::DataFrame frame, int rows, string column) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        list<auto> values = frame.getColumn(column);
+        if (values.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d values; expected %d", name, values.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
     public nothing sub collectResult(reference<list<auto>> results, auto r) {
         if (exists r) {
             if (r.typeCode() == NT_LIST) {

@@ -1,0 +1,50 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlOnnxDataFrameTensor
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlOnnxDataFrameTensor {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("dataproviderml_onnx_dataframe_tensor: skipped (ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_onnx_dataframe_tensor");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        DataFrame::DataFrame frame;
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": model_path,
+            "fields": "x",
+            "window_size": rows,
+            "output_mode": "tensor",
+        });
+
+        r.setup = sub () {
+            frame = OnnxBench::makeFrame(rows);
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = proc.processRecordsShape(frame, DataProviderShape::DataFrameBlock);
+            ML::Tensor output = result.Y;
+            OnnxBench::verifyTensorOutput("dataproviderml_onnx_dataframe_tensor", output, rows);
+        };
+
+        exit(r.run());
+    }
+}

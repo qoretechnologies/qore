@@ -111,6 +111,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("onnx-model - basic inference", \onnxModelBasicInference());
         addTestCase("onnx-model - flush partial", \onnxModelFlushPartial());
         addTestCase("onnx-model - DataFrameBlock tensor path", \onnxModelDataFrameTensorPath());
+        addTestCase("onnx-model - DataFrameBlock compact columns", \onnxModelDataFrameColumnOutput());
+        addTestCase("onnx-model - DataFrameBlock tensor output", \onnxModelDataFrameTensorOutput());
         addTestCase("onnx-model - capabilities", \onnxModelCapabilities());
         addTestCase("onnx-model - constructor validation", \onnxModelConstructorValidation());
 
@@ -187,6 +189,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("registry-model - ONNX package inference", \registryModelOnnxPackageInference());
         addTestCase("registry-model - DataFrameBlock tensor path",
             \registryModelOnnxDataFrameTensorPath());
+        addTestCase("registry-model - DataFrameBlock compact columns",
+            \registryModelOnnxDataFrameColumnOutput());
+        addTestCase("registry-model - DataFrameBlock tensor output",
+            \registryModelOnnxDataFrameTensorOutput());
         addTestCase("tokenize - registry tokenizer", \tokenizeRegistryTokenizer());
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
 
@@ -1413,6 +1419,63 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
 %endif
     }
 
+    onnxModelDataFrameColumnOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 5,
+            "output_mode": "columns",
+        });
+
+        DataFrame::DataFrame df({
+            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0, 5.0)),
+        });
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(5, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq(("Y",), result.columnNames());
+        assertEq("buffer<float32>", result.getColumnBuffer("Y").fullType());
+
+        list<auto> outputs = result.getColumn("Y");
+        assertFloat(3.0, outputs[0], 1e-5);
+        assertFloat(11.0, outputs[4], 1e-5);
+%endif
+    }
+
+    onnxModelDataFrameTensorOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 5,
+            "output_mode": "tensor",
+        });
+
+        DataFrame::DataFrame df({
+            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0, 5.0)),
+        });
+        hash<auto> result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertTrue(result.Y instanceof ML::Tensor, "tensor output should expose ML::Tensor values");
+        ML::Tensor output = result.Y;
+        assertEq((5, 1), output.getShape());
+        assertEq("buffer<float32>", output.getBuffer().fullType());
+        list<auto> outputs = output.toList();
+        assertFloat(3.0, outputs[0][0], 1e-5);
+        assertFloat(11.0, outputs[4][0], 1e-5);
+%endif
+    }
+
     onnxModelCapabilities() {
         if (skipOnnx()) {
             return;
@@ -2265,6 +2328,109 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(abs(9.0 - predictions[3].Y.toFloat()) < 0.01,
             sprintf("expected fourth registry DataFrame prediction ~9.0, got %y",
                 predictions[3].Y));
+%endif
+    }
+
+    registryModelOnnxDataFrameColumnOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_columns_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string package_dir = dir + DirSep + "linear_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(getTestModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "linear-onnx-columns",
+            "description": "test ONNX package for compact registry inference",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "linear-onnx-columns",
+            "version": vid,
+            "fields": "x",
+            "window_size": 4,
+            "output_mode": "columns",
+        });
+
+        DataFrame::DataFrame df({
+            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0)),
+        });
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq(("Y",), result.columnNames());
+        assertEq("buffer<float32>", result.getColumnBuffer("Y").fullType());
+
+        list<auto> outputs = result.getColumn("Y");
+        assertFloat(3.0, outputs[0], 1e-5);
+        assertFloat(9.0, outputs[3], 1e-5);
+%endif
+    }
+
+    registryModelOnnxDataFrameTensorOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_tensor_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string package_dir = dir + DirSep + "linear_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(getTestModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "linear-onnx-tensor",
+            "description": "test ONNX package for tensor registry inference",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "linear-onnx-tensor",
+            "version": vid,
+            "fields": "x",
+            "window_size": 4,
+            "output_mode": "tensor",
+        });
+
+        DataFrame::DataFrame df({
+            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0)),
+        });
+        hash<auto> result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertTrue(result.Y instanceof ML::Tensor, "registry tensor output should expose ML::Tensor values");
+        ML::Tensor output = result.Y;
+        assertEq((4, 1), output.getShape());
+        assertEq("buffer<float32>", output.getBuffer().fullType());
+        list<auto> outputs = output.toList();
+        assertFloat(3.0, outputs[0][0], 1e-5);
+        assertFloat(9.0, outputs[3][0], 1e-5);
 %endif
     }
 

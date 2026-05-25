@@ -1,0 +1,73 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlRegistryOnnxDataFrameTensor
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires DataProviderML
+%requires QoreModelRegistry
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlRegistryOnnxDataFrameTensor {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("dataproviderml_registry_onnx_dataframe_tensor: skipped "
+                "(ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_registry_onnx_dataframe_tensor");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        string dir = tmp_location() + DirSep + "qore_onnx_bench_" + get_random_bytes(4).toHex();
+        on_exit {
+            OnnxBench::cleanupDir(dir);
+        }
+        mkdir_ex(dir, 0755, True);
+
+        string package_dir = dir + DirSep + "linear_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(model_path));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "linear-onnx-bench-tensor",
+            "description": "benchmark ONNX package for tensor registry inference",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        DataFrame::DataFrame frame;
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "linear-onnx-bench-tensor",
+            "version": vid,
+            "fields": "x",
+            "window_size": rows,
+            "output_mode": "tensor",
+        });
+
+        r.setup = sub () {
+            frame = OnnxBench::makeFrame(rows);
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = proc.processRecordsShape(frame, DataProviderShape::DataFrameBlock);
+            ML::Tensor output = result.Y;
+            OnnxBench::verifyTensorOutput("dataproviderml_registry_onnx_dataframe_tensor", output, rows);
+        };
+
+        exit(r.run());
+    }
+}

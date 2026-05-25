@@ -101,6 +101,36 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                     "input is used automatically, which is correct for most models",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "output_mode": <DataProviderOptionInfo>{
+                "display_name": "Output Mode",
+                "short_desc": "How to return ONNX inference results",
+                "desc": "Controls the output representation. `events` preserves the existing "
+                    "one-event-per-record structure with nested `record_values` and "
+                    "`model_output` hashes. `columns` / `dataframe` returns flat output "
+                    "columns without per-row event hash materialization. `tensor` returns "
+                    "the raw `ML::Tensor` outputs for callers that can consume tensor "
+                    "results directly. Default: `events`",
+                "type": AbstractDataProviderTypeMap."string",
+                "default_value": "events",
+                "example_value": "columns",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "events", "display_name": "Event Records"},
+                    <AllowedValueInfo>{"value": "columns", "display_name": "Column Output"},
+                    <AllowedValueInfo>{"value": "dataframe", "display_name": "DataFrame Columns"},
+                    <AllowedValueInfo>{"value": "tensor", "display_name": "Tensor Output"},
+                ),
+            },
+            "include_input_fields": <DataProviderOptionInfo>{
+                "display_name": "Include Input Fields",
+                "short_desc": "Whether compact output includes original feature columns",
+                "desc": "When `output_mode` is `columns` or `dataframe`, include the original "
+                    "input feature columns alongside ONNX output columns. Disable this when "
+                    "downstream steps only need model outputs to reduce output size and "
+                    "improve throughput. Default: `False`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+                "example_value": False,
+            },
             "execution_providers": <DataProviderOptionInfo>{
                 "display_name": "Execution Providers",
                 "short_desc": "Comma-separated execution providers (e.g. CUDA,TensorRT)",
@@ -185,6 +215,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         #! ONNX model instance
         ML::OnnxModel model;
 
+        #! Output representation mode
+        string output_mode = "events";
+
+        #! Whether compact column output includes original feature columns
+        bool include_input_fields = False;
+
         #! Accumulated records
         list<hash<auto>> buffer;
 
@@ -211,6 +247,10 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         model_path = copts.model_path;
         if (exists copts.input_tensor) {
             input_tensor = copts.input_tensor;
+        }
+        output_mode = copts.output_mode ?? "events";
+        if (exists copts.include_input_fields) {
+            include_input_fields = copts.include_input_fields;
         }
 
         # Build session config from options
@@ -382,6 +422,10 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
         *auto result = processCompleteShapeWindows(records, DataProvider::DataProviderShape::HashOfLists);
         if (exists result) {
+            if (isColumnOutputMode()) {
+                return cast<hash<auto>>(convertColumnOutputShape(cast<hash<auto>>(result),
+                    DataProvider::DataProviderShape::HashOfLists));
+            }
             return cast<hash<auto>>(result);
         }
         *auto fallback = processShapeRowsFallback(records, DataProvider::DataProviderShape::HashOfLists);
@@ -400,6 +444,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
         *auto result = processCompleteShapeWindows(records, shape);
         if (exists result) {
+            if (isTensorOutputMode()) {
+                return result;
+            }
+            if (isColumnOutputMode()) {
+                return convertColumnOutputShape(cast<hash<auto>>(result), shape);
+            }
             return AbstractDataProviderMLProcessor::convertBulkOutputShape(result, shape);
         }
         return processShapeRowsFallback(records, shape);
@@ -428,7 +478,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     }
 
     #! Processes complete shaped windows with a single tensor inference call per window
-    private *hash<auto> processCompleteShapeWindows(auto records, DataProvider::DataProviderShape shape) {
+    private *auto processCompleteShapeWindows(auto records, DataProvider::DataProviderShape shape) {
         if (!configured) {
             throw "PROCESSOR-ERROR",
                 "QoreOnnxModelProcessor: not configured; provide constructor options";
@@ -443,7 +493,22 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         list<list<float>> matrix = matrixFromShape(records, shape);
+        if (isTensorOutputMode()) {
+            return processTensorShapeWindows(matrix, count);
+        }
+
         hash<auto> result;
+        if (isColumnOutputMode()) {
+            addInputFieldColumns(\result, records, shape, matrix);
+            for (int start = 0; start < count; start += window_size) {
+                list<list<float>> window = count == window_size
+                    ? matrix
+                    : matrix[start..(start + window_size - 1)];
+                appendTensorWindowColumnResult(\result, window, count == window_size);
+            }
+            return result;
+        }
+
         for (int start = 0; start < count; start += window_size) {
             list<list<float>> window = count == window_size
                 ? matrix
@@ -451,6 +516,28 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             appendTensorWindowEventResult(\result, window);
         }
         return result;
+    }
+
+    #! True when compact column output is configured
+    private bool isColumnOutputMode() {
+        return output_mode == "columns" || output_mode == "dataframe";
+    }
+
+    #! True when raw tensor output is configured
+    private bool isTensorOutputMode() {
+        return output_mode == "tensor";
+    }
+
+    #! Converts compact output columns to the negotiated DataProvider shape
+    private auto convertColumnOutputShape(hash<auto> columns, DataProvider::DataProviderShape shape) {
+        if (shape == DataProvider::DataProviderShape::BufferColumns) {
+            return columns;
+        }
+        list<auto> converted = DataProvider::AbstractDataProcessor::convertShape(
+            columns,
+            cast<enum<DataProvider::DataProviderShape>>(DataProvider::DataProviderShape::BufferColumns),
+            cast<enum<DataProvider::DataProviderShape>>(shape));
+        return shape == DataProvider::DataProviderShape::RowRecords ? converted : converted[0];
     }
 
     #! Extracts numeric input fields as a model matrix from a shaped block
@@ -461,7 +548,9 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
         if (shape == DataProvider::DataProviderShape::BufferColumns) {
             auto df = DataProvider::AbstractDataProcessor::convertShape(
-                records, shape, DataProvider::DataProviderShape::DataFrameBlock)[0];
+                records,
+                cast<enum<DataProvider::DataProviderShape>>(shape),
+                cast<enum<DataProvider::DataProviderShape>>(DataProvider::DataProviderShape::DataFrameBlock))[0];
             return cast<list<list<float>>>(df.toMatrix(fields));
         }
 
@@ -477,9 +566,51 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         return matrix;
     }
 
+    #! Adds original feature columns to compact output when requested
+    private addInputFieldColumns(reference<hash<auto>> result, auto records,
+            DataProvider::DataProviderShape shape, list<list<float>> matrix) {
+        if (!include_input_fields) {
+            return;
+        }
+
+        foreach string f in (fields) {
+            if (f.find(".") >= 0) {
+                continue;
+            }
+            switch (shape) {
+                case DataProvider::DataProviderShape::DataFrameBlock:
+                    result{f} = records.getColumnBuffer(f);
+                    break;
+                case DataProvider::DataProviderShape::BufferColumns:
+                    if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                        result{f} = records.getColumn(f);
+                    } else if (records.hasKey(f)) {
+                        result{f} = records{f};
+                    }
+                    break;
+                case DataProvider::DataProviderShape::HashOfLists:
+                    if (records.hasKey(f)) {
+                        result{f} = records{f};
+                    }
+                    break;
+            }
+        }
+
+        for (int j = 0; j < fields.lsize(); ++j) {
+            if (result.hasKey(fields[j])) {
+                continue;
+            }
+            list<float> values;
+            for (int i = 0; i < matrix.lsize(); ++i) {
+                push values, matrix[i][j];
+            }
+            result{fields[j]} = values;
+        }
+    }
+
     #! Appends one tensor inference window to a hash-of-lists event result
     private appendTensorWindowEventResult(reference<hash<auto>> result, list<list<float>> matrix) {
-        ML::Tensor input(data: matrix, dtype: input_dtype);
+        ML::Tensor input(matrix, NOTHING, input_dtype);
         hash<auto> outputs = model.runTensors({input_tensor: input});
         int count = matrix.lsize();
 
@@ -508,6 +639,80 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             push result{"record_values"}, record_values;
             push result{"model_output"}, model_output;
         }
+    }
+
+    #! Appends compact column output for one tensor inference window
+    private appendTensorWindowColumnResult(reference<hash<auto>> result, list<list<float>> matrix,
+            bool single_window) {
+        ML::Tensor input(matrix, NOTHING, input_dtype);
+        hash<auto> outputs = model.runTensors({input_tensor: input});
+        int count = matrix.lsize();
+        foreach string okey in (keys outputs) {
+            appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), count, single_window);
+        }
+    }
+
+    #! Appends one tensor output to compact column output
+    private appendTensorOutputColumns(reference<hash<auto>> result, string name, ML::Tensor tensor,
+            int row_count, bool single_window) {
+        list<int> shape = tensor.getShape();
+        if ((shape.lsize() == 1 && shape[0] == row_count)
+                || (shape.lsize() == 2 && shape[0] == row_count && shape[1] == 1)) {
+            if (single_window && !result.hasKey(name)) {
+                result{name} = tensor.getBuffer();
+            } else {
+                appendColumnValues(\result, name, tensor.getBuffer().toList());
+            }
+            return;
+        }
+
+        auto nested = tensor.toList();
+        if (shape.lsize() == 2 && shape[0] == row_count) {
+            for (int j = 0; j < shape[1]; ++j) {
+                list<auto> values;
+                for (int i = 0; i < row_count; ++i) {
+                    push values, nested[i][j];
+                }
+                appendColumnValues(\result, sprintf("%s_%d", name, j), values);
+            }
+            return;
+        }
+
+        if (nested.typeCode() == NT_LIST && nested.lsize() == row_count) {
+            appendColumnValues(\result, name, nested);
+            return;
+        }
+
+        appendColumnValues(\result, name,
+            DataProvider::AbstractDataProcessor::repeatValue(nested, row_count));
+    }
+
+    #! Appends list values to a compact output column
+    private appendColumnValues(reference<hash<auto>> result, string name, list<auto> values) {
+        if (!result.hasKey(name)) {
+            result{name} = ();
+        }
+        result{name} += values;
+    }
+
+    #! Runs shaped inference and returns raw tensor outputs
+    private hash<auto> processTensorShapeWindows(list<list<float>> matrix, int count) {
+        if (count == window_size) {
+            ML::Tensor input(matrix, NOTHING, input_dtype);
+            return model.runTensors({input_tensor: input});
+        }
+
+        list<hash<auto>> windows;
+        for (int start = 0; start < count; start += window_size) {
+            list<list<float>> window = matrix[start..(start + window_size - 1)];
+            ML::Tensor input(window, NOTHING, input_dtype);
+            push windows, model.runTensors({input_tensor: input});
+        }
+        return {
+            "row_count": count,
+            "window_size": window_size,
+            "windows": windows,
+        };
     }
 
     #! Converts a tensor output to row-addressable values where possible
