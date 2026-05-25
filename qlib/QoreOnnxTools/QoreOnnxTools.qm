@@ -1,0 +1,99 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreOnnxTools.qm module providing ONNX deployment tooling helpers
+
+/*  QoreOnnxTools.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires ml
+%requires FsUtil
+%requires Util
+
+module QoreOnnxTools {
+    version = "1.0.0";
+    desc = "user module providing ONNX deployment tooling helpers";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreOnnxTools Module
+
+    @tableofcontents
+
+    @section qoreonnxtoolsintro QoreOnnxTools Module Introduction
+
+    The %QoreOnnxTools module provides production-oriented orchestration helpers
+    for ONNX model deployment workflows. The module does not reimplement the
+    Python ONNX Runtime tooling; instead it validates Qore inputs, builds
+    repeatable tool invocations, records metadata, and reports missing Python
+    dependencies with actionable installation guidance.
+
+    @par Dynamic Quantization Example
+    @code{.q}
+hash<QoreOnnxTools::OnnxQuantizationResult> info =
+    QoreOnnxTools::OnnxQuantizer::quantize(
+        "/models/customer-score.onnx",
+        "/models/customer-score-int8.onnx",
+        <QoreOnnxTools::OnnxQuantizationOptions>{
+            "method": "dynamic",
+            "weight_type": "QInt8",
+        });
+printf("quantized=%s runtime=%s\n",
+    info.output_path, info.dependency.onnxruntime_version);
+    @endcode
+
+    @par Static Calibration Example
+    @code{.q}
+QoreOnnxTools::OnnxQuantizer::quantize(
+    "/models/reranker.onnx",
+    "/models/reranker-static-int8.onnx",
+    <QoreOnnxTools::OnnxQuantizationOptions>{
+        "method": "static",
+        "calibration_data_json_path": "/models/calibration-records.json",
+        "activation_type": "QUInt8",
+        "weight_type": "QInt8",
+    });
+    @endcode
+
+    Static calibration JSON must contain a list of records. Each record maps
+    ONNX input names to nested numeric arrays. The generated Python helper
+    converts each record to NumPy arrays and passes them to ONNX Runtime's
+    \c CalibrationDataReader.
+
+    @par CLI Examples
+    @code{.sh}
+qore-onnx check-python --python /opt/onnx/bin/python3
+qore-onnx quantize --method dynamic --weight-type QInt8 \
+    /models/customer-score.onnx /models/customer-score-int8.onnx
+qore-onnx quantize --method static --calibration-data calibration.json \
+    /models/reranker.onnx /models/reranker-static-int8.onnx
+    @endcode
+
+    @section qoreonnxtoolsrelnotes QoreOnnxTools Module Release Notes
+
+    @subsection qoreonnxtools_1_0 QoreOnnxTools Module Version 1.0
+    - Initial release with ONNX Runtime Python quantization orchestration
+    - Added dependency diagnostics and dry-run planning for quantization
+*/

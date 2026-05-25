@@ -3280,6 +3280,13 @@ foreach string module_name in (registry.getProcessModules()) {
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
 
+    - @ref qoreonnxtoolsintro "QoreOnnxTools" module
+      - new module providing ONNX deployment tooling helpers for quantization workflows
+      - OnnxQuantizer checks Python ONNX Runtime quantization dependencies and reports actionable installation guidance
+      - supports dynamic quantization and static quantization orchestration with JSON calibration records
+      - dry-run planning records the command, source model metadata, and selected options without invoking external tooling
+      - the new \c qore-onnx command exposes dependency checks and quantization planning/execution from the shell
+
     - @ref qoreragtypesintro "QoreRagTypes" module
       - new module providing the provider-neutral hashdecls and abstract embedder /
         reranker / vector-store classes shared by QoreRagUtils and individual RAG

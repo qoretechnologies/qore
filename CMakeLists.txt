@@ -410,6 +410,7 @@ set(QORE_BIN_FILES
     bin/qore-i18n
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
+    bin/qore-onnx
     bin/qdiff
     bin/qfmt
     bin/qpatch
@@ -2893,6 +2894,7 @@ qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreModelRegi
 qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
+qore_user_module("qlib/QoreOnnxTools" "modules/ml/ml;FsUtil;Util")
 qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
 qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer;modules/ml/ml")
 qore_user_module("qlib/QoreCrypto" "")

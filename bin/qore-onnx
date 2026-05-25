@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  qore-onnx Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QoreOnnxTools
+%requires Util
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class QoreOnnxCli
+
+class QoreOnnxCli {
+    private {
+        const Version = "1.0.0";
+        const Opts = {
+            "activation_type": "activation-type=s",
+            "calibration_data": "calibration-data=s",
+            "calibration_method": "calibration-method=s",
+            "dry_run": "dry-run",
+            "extra_options": "extra-options=s",
+            "force": "f,force",
+            "help": "h,help",
+            "input": "i,input=s",
+            "json": "J,json",
+            "method": "m,method=s",
+            "nodes_to_exclude": "nodes-to-exclude=s",
+            "nodes_to_quantize": "nodes-to-quantize=s",
+            "op_types": "op-types=s",
+            "output": "o,output=s",
+            "per_channel": "per-channel",
+            "python": "python=s",
+            "reduce_range": "reduce-range",
+            "validate": "validate!",
+            "version": "V,version",
+            "weight_type": "weight-type=s",
+        };
+    }
+
+    constructor() {
+        GetOpt getopt(Opts);
+        hash<auto> opts = getopt.parse3(\ARGV);
+
+        if (opts.version) {
+            printf("qore-onnx %s\n", Version);
+            exit(0);
+        }
+        if (opts.help || !ARGV) {
+            usage(opts.help ? 0 : 2);
+        }
+
+        string command = shift ARGV;
+        try {
+            switch (command) {
+                case "quantize":
+                    quantize(opts);
+                    break;
+                case "check-python":
+                    checkPython(opts);
+                    break;
+                default:
+                    stderr.printf("qore-onnx: unsupported command %y\n", command);
+                    usage(2);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qore-onnx: %s: %s\n", ex.err, ex.desc);
+            exit(1);
+        }
+    }
+
+    private static nothing quantize(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string output_path = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!input_path.val() || !output_path.val()) {
+            stderr.printf("qore-onnx: quantize requires input and output paths\n");
+            usage(2);
+        }
+
+        hash<QoreOnnxTools::OnnxQuantizationOptions> qopts = buildQuantOptions(opts);
+        hash<QoreOnnxTools::OnnxQuantizationResult> result =
+            QoreOnnxTools::OnnxQuantizer::quantize(input_path, output_path, qopts);
+        writeResult(result, opts);
+    }
+
+    private static nothing checkPython(hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxQuantizationOptions> qopts = buildQuantOptions(opts);
+        hash<QoreOnnxTools::OnnxPythonDependencyInfo> result =
+            QoreOnnxTools::OnnxQuantizer::checkPythonDependencies(qopts);
+        writeResult(result, opts);
+        exit(result.available ? 0 : 1);
+    }
+
+    private static hash<QoreOnnxTools::OnnxQuantizationOptions> buildQuantOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxQuantizationOptions> qopts =
+            <QoreOnnxTools::OnnxQuantizationOptions>{};
+        if (opts.python.val()) qopts.python = opts.python;
+        if (opts.method.val()) qopts.method = opts.method;
+        if (opts.weight_type.val()) qopts.weight_type = opts.weight_type;
+        if (opts.activation_type.val()) qopts.activation_type = opts.activation_type;
+        if (opts.calibration_method.val()) qopts.calibration_method = opts.calibration_method;
+        if (opts.op_types.val()) qopts.op_types = opts.op_types;
+        if (opts.nodes_to_quantize.val()) qopts.nodes_to_quantize = opts.nodes_to_quantize;
+        if (opts.nodes_to_exclude.val()) qopts.nodes_to_exclude = opts.nodes_to_exclude;
+        if (opts.calibration_data.val()) qopts.calibration_data_json_path = opts.calibration_data;
+        if (opts.extra_options.val()) qopts.extra_options_json_path = opts.extra_options;
+        if (exists opts.per_channel) qopts.per_channel = opts.per_channel;
+        if (exists opts.reduce_range) qopts.reduce_range = opts.reduce_range;
+        if (exists opts.dry_run) qopts.dry_run = opts.dry_run;
+        if (exists opts.force) qopts.force = opts.force;
+        if (exists opts.validate) qopts.validate = opts.validate;
+        return qopts;
+    }
+
+    private static nothing writeResult(auto result, hash<auto> opts) {
+        if (opts.json) {
+%ifdef NoJson
+            throw "QORE-ONNX-ERROR", "the json module is required for --json output";
+%else
+            printf("%s\n", make_json(result));
+%endif
+            return;
+        }
+        printf("%y\n", result);
+    }
+
+    private static nothing usage(int rc) {
+        printf("Usage:\n");
+        printf("  qore-onnx check-python [--python PATH] [--json]\n");
+        printf("  qore-onnx quantize [OPTIONS] INPUT.onnx OUTPUT.onnx\n\n");
+        printf("Quantize options:\n");
+        printf("  --method dynamic|static          Quantization method, default dynamic\n");
+        printf("  --python PATH                    Python executable, default QORE_ONNX_PYTHON or python3\n");
+        printf("  --weight-type QInt8|QUInt8       Quantized weight type, default QInt8\n");
+        printf("  --activation-type QInt8|QUInt8   Static activation type, default QUInt8\n");
+        printf("  --calibration-data PATH          Static calibration JSON records\n");
+        printf("  --extra-options PATH             ONNX Runtime extra_options JSON object\n");
+        printf("  --op-types CSV                   Restrict quantization to ONNX op types\n");
+        printf("  --nodes-to-quantize CSV          Restrict quantization to ONNX node names\n");
+        printf("  --nodes-to-exclude CSV           Exclude ONNX node names from quantization\n");
+        printf("  --per-channel                    Enable per-channel quantization\n");
+        printf("  --reduce-range                   Enable reduced-range quantization\n");
+        printf("  --dry-run                        Print the execution plan only\n");
+        printf("  --force                          Overwrite output file\n");
+        printf("  --no-validate                    Skip loading the output model after quantization\n");
+        printf("  --json                           Emit JSON output\n");
+        exit(rc);
+    }
+}

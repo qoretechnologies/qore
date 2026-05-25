@@ -247,29 +247,48 @@ Acceptance checks:
 
 ## Phase 6: Quantization and Calibration
 
-Status: pending.
+Status: initial Qore orchestration implemented.
 
 Use existing ONNX Runtime and Optimum tooling when available; Qore owns
 orchestration, validation, registry metadata, and deployment comparison.
 
 Workflows:
 
-- dynamic quantization
-- static calibration from DataProvider/DataFrame input
+- dynamic quantization through `QoreOnnxTools::OnnxQuantizer`
+- static quantization with JSON calibration input through
+  `QoreOnnxTools::OnnxQuantizer`
 - hardware presets such as `avx2`, `avx512`, `avx512_vnni`, `arm64`, and
-  `tensorrt`
-- original vs quantized accuracy comparison
-- original vs quantized latency comparison
+  `tensorrt`: option metadata is accepted and passed through for tooling that
+  supports the requested target
+- original vs quantized accuracy comparison: pending
+- original vs quantized latency comparison: pending
+
+APIs:
+
+- `QoreOnnxTools::OnnxQuantizer::checkPythonDependencies()`: implemented for
+  actionable Python/ONNX Runtime quantization dependency diagnostics.
+- `QoreOnnxTools::OnnxQuantizer::plan()`: implemented as a dry-run command and
+  artifact plan generator.
+- `QoreOnnxTools::OnnxQuantizer::quantize()`: implemented for dynamic and
+  static quantization orchestration with source/output model inspection.
+- `OnnxQuantizationOptions`: implemented for method, weight/activation types,
+  calibration input, op/node filters, extra ONNX Runtime quantization options,
+  overwrite policy, and validation.
+- `OnnxQuantizationResult`: implemented for command, dependency, source model,
+  output model, and metadata reporting.
 
 Acceptance checks:
 
 - Missing external quantization dependencies produce actionable errors.
-- Quantized artifacts record lineage, calibration fingerprint, and validation
-  results.
+- Dry-run mode produces the exact generated command without requiring external
+  quantization dependencies.
+- Quantized artifacts report source/output metadata and dependency information.
+- Registry lineage, calibration fingerprint storage, and validation result
+  registration remain pending.
 
 ## Phase 7: Import and Conversion Tooling
 
-Status: pending.
+Status: initial CLI implemented.
 
 Add Qore CLI and registry workflows for model ingestion.  External Python tools
 may be invoked when installed, but Qore must record the exact command,
@@ -277,12 +296,14 @@ dependency versions, inputs, and outputs.
 
 Tools:
 
-- `qore-onnx inspect`
-- `qore-onnx validate`
-- `qore-onnx package`
-- `qore-onnx benchmark`
-- `qore-onnx optimize`
-- `qore-onnx quantize`
+- `qore-onnx check-python`: implemented for dependency diagnostics.
+- `qore-onnx quantize`: implemented for dynamic/static quantization
+  orchestration and dry-run planning.
+- `qore-onnx inspect`: pending.
+- `qore-onnx validate`: pending.
+- `qore-onnx package`: pending.
+- `qore-onnx benchmark`: pending.
+- `qore-onnx optimize`: pending.
 
 Acceptance checks:
 

@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreOnnxTools.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
+%requires QUnit
+%requires FsUtil
+%requires QoreOnnxTools
+%requires ml
+
+%exec-class QoreOnnxToolsTest
+
+class QoreOnnxToolsTest inherits QUnit::Test {
+    constructor() : Test("QoreOnnxToolsTest", "1.0") {
+        addTestCase("Python dependency diagnostics", \pythonDependencyDiagnosticsTest());
+        addTestCase("Dynamic quantization dry run", \dynamicQuantizationDryRunTest());
+        addTestCase("Static quantization requires calibration", \staticRequiresCalibrationTest());
+        addTestCase("Missing quantization dependency message", \missingDependencyMessageTest());
+        set_return_value(main());
+    }
+
+    private static string getTestModelPath() {
+        return get_script_dir() + "/../../../../modules/ml/test/data/test_linear.onnx";
+    }
+
+    pythonDependencyDiagnosticsTest() {
+        hash<QoreOnnxTools::OnnxPythonDependencyInfo> dep =
+            QoreOnnxTools::OnnxQuantizer::checkPythonDependencies(
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "definitely-not-python-qore",
+                });
+        assertFalse(dep.available);
+        assertEq("definitely-not-python-qore", dep.python);
+        assertTrue(dep.rc != 0);
+        assertTrue(dep.install_hint.val());
+    }
+
+    dynamicQuantizationDryRunTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        string output_path = dir.path + DirSep + "quantized.onnx";
+
+        hash<QoreOnnxTools::OnnxQuantizationResult> plan =
+            QoreOnnxTools::OnnxQuantizer::plan(getTestModelPath(), output_path,
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "/opt/qore-python/bin/python3",
+                    "method": "dynamic",
+                    "weight_type": "QInt8",
+                    "op_types": "MatMul,Gemm",
+                    "per_channel": True,
+                });
+
+        assertFalse(plan.executed);
+        assertEq(getTestModelPath(), plan.input_path);
+        assertEq(output_path, plan.output_path);
+        assertEq("dynamic", plan.method);
+        assertTrue(plan.command.contains("--per-channel"));
+        assertTrue(plan.command.contains("--op-types"));
+        assertTrue(plan.command.contains("MatMul,Gemm"));
+        assertTrue(exists plan.source_model);
+    }
+
+    staticRequiresCalibrationTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        assertThrows("QORE-ONNX-TOOLS-ERROR", sub() {
+            QoreOnnxTools::OnnxQuantizer::plan(getTestModelPath(),
+                dir.path + DirSep + "static.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{"method": "static"});
+        });
+    }
+
+    missingDependencyMessageTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        assertThrows("QORE-ONNX-TOOLS-ERROR", sub() {
+            QoreOnnxTools::OnnxQuantizer::quantize(getTestModelPath(),
+                dir.path + DirSep + "quantized.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "definitely-not-python-qore",
+                    "method": "dynamic",
+                });
+        });
+    }
+}
