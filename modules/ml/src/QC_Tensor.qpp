@@ -1,0 +1,135 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Tensor.qpp
+
+    Qore ml module - Tensor class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+
+#include "QC_Tensor.h"
+
+//! Dense tensor value for ML model inference
+/** A Tensor stores model input or output data as a dense \c buffer<T> plus
+    explicit shape metadata. It is the bridge between Qore's columnar dense
+    buffers and model runtimes such as ONNX Runtime.
+
+    Tensor values do not allow nullable buffer elements because model tensors do
+    not carry per-element \c NOTHING values. Impute or filter missing values
+    before creating a Tensor.
+
+    @par Example:
+    @code{.py}
+ML::Tensor input(data: ((1.0, 2.0), (3.0, 4.0)), dtype: "float32");
+assertEq((2, 2), input.getShape());
+hash<auto> outputs = model.runTensors({"X": input});
+    @endcode
+*/
+qclass Tensor [arg=QoreTensor* tensor; ns=Qore::ML; flags=final];
+
+//! Creates a Tensor from a list, nested list, scalar, or dense buffer
+/** @param data source data; accepts numeric/bool values, nested lists, or a
+    non-nullable \c buffer<T>
+    @param shape optional tensor shape; inferred from nested lists and defaults
+    to a one-dimensional shape for buffers
+    @param dtype optional buffer element type; expected values are \c int8,
+    \c int16, \c int32, \c int64, \c float32, \c float64, or \c bool
+
+    When \c data is a buffer and \c dtype is supplied, the dtype must match the
+    buffer element type. Use the buffer constructor first when a dtype conversion
+    is required.
+
+    @throw ML-TENSOR-ERROR if the source contains null values or unsupported data
+    @throw ML-TENSOR-SHAPE-ERROR if the shape is invalid or does not match the
+    source element count
+    @throw ML-TENSOR-DTYPE-ERROR if dtype is invalid or incompatible
+*/
+Tensor::constructor(auto data, *list<int> shape, *string dtype) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, dtype, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_TENSOR, holder.release());
+}
+
+//! Creates a copy of the Tensor
+/** @throw COPY-ERROR Tensor objects cannot be copied implicitly
+*/
+Tensor::copy() {
+    xsink->raiseException("COPY-ERROR", "Tensor objects cannot be copied implicitly");
+}
+
+//! Creates a Tensor from a dense buffer
+/** @param data non-nullable dense buffer
+    @param shape tensor shape
+    @return a Tensor wrapping a copy of the buffer data with the given shape
+*/
+static Tensor Tensor::fromBuffer(auto data, list<int> shape) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Returns the tensor dtype
+/** @return dtype name such as \c float32, \c float64, \c int64, or \c bool
+*/
+string Tensor::getDtype() [flags=CONSTANT] {
+    return new QoreStringNode(qore_buffer_element_type_name(tensor->getElementType()));
+}
+
+//! Returns the tensor shape
+/** @return list of dimension sizes
+*/
+list<int> Tensor::getShape() [flags=CONSTANT] {
+    return tensor->getShapeList(xsink);
+}
+
+//! Returns the number of tensor dimensions
+/** @return tensor rank
+*/
+int Tensor::rank() [flags=CONSTANT] {
+    return tensor->getRank();
+}
+
+//! Returns the number of elements in the tensor
+/** @return element count
+*/
+int Tensor::size() [flags=CONSTANT] {
+    return static_cast<int64_t>(tensor->getElementCount());
+}
+
+//! Returns the dense backing buffer
+/** @return a \c buffer<T> containing the flat tensor data
+*/
+auto Tensor::getBuffer() [flags=RET_VALUE_ONLY] {
+    return tensor->refBuffer();
+}
+
+//! Converts the tensor to nested Qore lists using its shape
+/** @return nested list representation of the tensor data
+*/
+auto Tensor::toList() [flags=RET_VALUE_ONLY] {
+    return tensor->toList(xsink);
+}

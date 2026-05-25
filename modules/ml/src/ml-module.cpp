@@ -50,6 +50,7 @@
 #include "QC_LOF.h"
 #include "QC_KNN.h"
 #include "QC_GMM.h"
+#include "QC_Tensor.h"
 #include "QC_OnnxModel.h"
 #include "QC_StandardScaler.h"
 #include "QC_MinMaxScaler.h"
@@ -272,6 +273,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitLOFClass();
     preinitKNNClass();
     preinitGMMClass();
+    preinitTensorClass();
     preinitOnnxModelClass();
     preinitStandardScalerClass();
     preinitMinMaxScalerClass();
@@ -364,6 +366,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initLOFClass(MLNS));
     MLNS.addSystemClass(initKNNClass(MLNS));
     MLNS.addSystemClass(initGMMClass(MLNS));
+    MLNS.addSystemClass(initTensorClass(MLNS));
     MLNS.addSystemClass(initOnnxModelClass(MLNS));
     MLNS.addSystemClass(initStandardScalerClass(MLNS));
     MLNS.addSystemClass(initMinMaxScalerClass(MLNS));

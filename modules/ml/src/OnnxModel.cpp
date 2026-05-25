@@ -56,6 +56,38 @@ void disableAutoProvider(const std::string& provider) {
     unusable_auto_providers.insert(provider);
 }
 
+QoreBufferElementType onnxTypeToBufferElementType(ONNXTensorElementDataType type) {
+    switch (type) {
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+            return QoreBufferElementType::Float32;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+            return QoreBufferElementType::Float64;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+            return QoreBufferElementType::Int32;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            return QoreBufferElementType::Int64;
+        default:
+            return QoreBufferElementType::Invalid;
+    }
+}
+
+int64_t tensorShapeElementCount(const std::vector<int64_t>& shape, ExceptionSink* xsink) {
+    int64_t total = 1;
+    for (int64_t dim : shape) {
+        if (dim < 0) {
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "cannot use unresolved dynamic tensor shape dimension " QLLD " for inference", dim);
+            return -1;
+        }
+        total *= dim;
+    }
+    return total;
+}
+
+bool isTensorObject(QoreValue value) {
+    return value.getType() == NT_OBJECT && value.get<const QoreObject>()->getClass()->getID() == CID_TENSOR;
+}
+
 }
 
 QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
@@ -787,7 +819,68 @@ QoreValue QoreOnnxModel::convertOutputTensor(Ort::Value& tensor, ExceptionSink* 
     }
 }
 
+QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value& tensor, ExceptionSink* xsink) {
+    if (!tensor.IsTensor()) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR", "output is not a tensor");
+        return QoreValue();
+    }
+
+    auto tensor_info = tensor.GetTensorTypeAndShapeInfo();
+    ONNXTensorElementDataType type = tensor_info.GetElementType();
+    std::vector<int64_t> shape = tensor_info.GetShape();
+    QoreBufferElementType buffer_type = onnxTypeToBufferElementType(type);
+    if (buffer_type == QoreBufferElementType::Invalid) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+            "unsupported output tensor type '%s'", elementTypeToString(type));
+        return QoreValue();
+    }
+
+    int64_t total_elements = tensorShapeElementCount(shape, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreBufferNode> buffer(
+        new QoreBufferNode(buffer_type, false, static_cast<size_t>(total_elements)), xsink);
+    switch (type) {
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
+            const float* data = tensor.GetTensorData<float>();
+            std::memcpy((*buffer)->getRawData(), data, sizeof(float) * static_cast<size_t>(total_elements));
+            break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE: {
+            const double* data = tensor.GetTensorData<double>();
+            std::memcpy((*buffer)->getRawData(), data, sizeof(double) * static_cast<size_t>(total_elements));
+            break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
+            const int32_t* data = tensor.GetTensorData<int32_t>();
+            std::memcpy((*buffer)->getRawData(), data, sizeof(int32_t) * static_cast<size_t>(total_elements));
+            break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
+            const int64_t* data = tensor.GetTensorData<int64_t>();
+            std::memcpy((*buffer)->getRawData(), data, sizeof(int64_t) * static_cast<size_t>(total_elements));
+            break;
+        }
+        default:
+            assert(false);
+    }
+
+    ReferenceHolder<QoreTensor> qore_tensor(
+        new QoreTensor(buffer.release(), std::move(shape)), xsink);
+    return qore_ml_tensor_to_object(qore_tensor.release(), getProgram(), xsink);
+}
+
 QoreHashNode* QoreOnnxModel::run(const QoreHashNode* inputs, ExceptionSink* xsink) {
+    return runImpl(inputs, false, xsink);
+}
+
+QoreHashNode* QoreOnnxModel::runTensors(const QoreHashNode* inputs, ExceptionSink* xsink) {
+    return runImpl(inputs, true, xsink);
+}
+
+QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_tensors, ExceptionSink* xsink) {
     if (!session) {
         xsink->raiseException("ML-ONNX-ERROR", "model is not loaded");
         return nullptr;
@@ -812,6 +905,132 @@ QoreHashNode* QoreOnnxModel::run(const QoreHashNode* inputs, ExceptionSink* xsin
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "missing required input tensor '%s'", meta.name.c_str());
             return nullptr;
+        }
+
+        const QoreBufferNode* direct_buffer = nullptr;
+        std::vector<int64_t> direct_shape;
+        ReferenceHolder<QoreTensor> tensor_holder(xsink);
+
+        if (isTensorObject(val)) {
+            QoreObject* obj = val.get<QoreObject>();
+            tensor_holder = static_cast<QoreTensor*>(obj->getReferencedPrivateData(CID_TENSOR, xsink));
+            if (*xsink) {
+                return nullptr;
+            }
+            direct_buffer = (*tensor_holder)->getBuffer();
+            direct_shape = (*tensor_holder)->getShape();
+
+            if (meta.shape.size() != direct_shape.size()) {
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "input tensor '%s': model expects rank %zu, ML::Tensor has rank %zu",
+                    meta.name.c_str(), meta.shape.size(), direct_shape.size());
+                return nullptr;
+            }
+            for (size_t i = 0; i < meta.shape.size(); ++i) {
+                if (meta.shape[i] > 0 && meta.shape[i] != direct_shape[i]) {
+                    xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                        "input tensor '%s': model expects dimension %zu to be " QLLD ", ML::Tensor has " QLLD,
+                        meta.name.c_str(), i, meta.shape[i], direct_shape[i]);
+                    return nullptr;
+                }
+            }
+        } else if (val.getType() == NT_BUFFER) {
+            direct_buffer = val.get<const QoreBufferNode>();
+            direct_shape = meta.shape;
+            if (direct_shape.empty()) {
+                direct_shape.push_back(static_cast<int64_t>(direct_buffer->size()));
+            } else {
+                int dynamic_idx = -1;
+                int64_t known = 1;
+                for (size_t i = 0; i < direct_shape.size(); ++i) {
+                    if (direct_shape[i] == -1) {
+                        if (dynamic_idx >= 0) {
+                            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                                "input tensor '%s': cannot infer multiple dynamic dimensions from a flat buffer; "
+                                "wrap the buffer in ML::Tensor with an explicit shape",
+                                meta.name.c_str());
+                            return nullptr;
+                        }
+                        dynamic_idx = static_cast<int>(i);
+                    } else if (direct_shape[i] < -1) {
+                        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                            "input tensor '%s': unsupported negative dimension " QLLD,
+                            meta.name.c_str(), direct_shape[i]);
+                        return nullptr;
+                    } else {
+                        known *= direct_shape[i];
+                    }
+                }
+                if (dynamic_idx >= 0) {
+                    if (!known || direct_buffer->size() % known) {
+                        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                            "input tensor '%s': cannot infer dynamic dimension from %zu buffer elements and known "
+                            "shape product " QLLD,
+                            meta.name.c_str(), direct_buffer->size(), known);
+                        return nullptr;
+                    }
+                    direct_shape[dynamic_idx] = static_cast<int64_t>(direct_buffer->size() / known);
+                }
+            }
+        }
+
+        if (direct_buffer) {
+            if (direct_buffer->hasNullableElements()) {
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "input tensor '%s': nullable buffer elements cannot be passed to ONNX Runtime; impute or filter "
+                    "missing values first",
+                    meta.name.c_str());
+                return nullptr;
+            }
+            QoreBufferElementType expected = onnxTypeToBufferElementType(meta.element_type);
+            if (expected == QoreBufferElementType::Invalid || direct_buffer->getElementType() != expected) {
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "input tensor '%s': model expects ONNX type '%s', but input buffer has type '%s'",
+                    meta.name.c_str(), elementTypeToString(meta.element_type),
+                    qore_buffer_element_type_name(direct_buffer->getElementType()));
+                return nullptr;
+            }
+            if (direct_buffer->ensureHostStorage(xsink)) {
+                return nullptr;
+            }
+
+            int64_t total_elements = tensorShapeElementCount(direct_shape, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (total_elements != static_cast<int64_t>(direct_buffer->size())) {
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "input tensor '%s': shape expects " QLLD " elements, got %zu",
+                    meta.name.c_str(), total_elements, direct_buffer->size());
+                return nullptr;
+            }
+
+            Ort::MemoryInfo mem_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+            switch (meta.element_type) {
+                case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+                    input_tensors.push_back(Ort::Value::CreateTensor<float>(mem_info,
+                        const_cast<float*>(static_cast<const float*>(direct_buffer->getRawData())),
+                        direct_buffer->size(), direct_shape.data(), direct_shape.size()));
+                    break;
+                case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+                    input_tensors.push_back(Ort::Value::CreateTensor<double>(mem_info,
+                        const_cast<double*>(static_cast<const double*>(direct_buffer->getRawData())),
+                        direct_buffer->size(), direct_shape.data(), direct_shape.size()));
+                    break;
+                case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+                    input_tensors.push_back(Ort::Value::CreateTensor<int32_t>(mem_info,
+                        const_cast<int32_t*>(static_cast<const int32_t*>(direct_buffer->getRawData())),
+                        direct_buffer->size(), direct_shape.data(), direct_shape.size()));
+                    break;
+                case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+                    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(mem_info,
+                        const_cast<int64_t*>(static_cast<const int64_t*>(direct_buffer->getRawData())),
+                        direct_buffer->size(), direct_shape.data(), direct_shape.size()));
+                    break;
+                default:
+                    assert(false);
+            }
+            continue;
         }
 
         // Infer shape
@@ -929,7 +1148,9 @@ QoreHashNode* QoreOnnxModel::run(const QoreHashNode* inputs, ExceptionSink* xsin
     // Convert outputs to Qore hash (values can be any type: scalars, lists, etc.)
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     for (size_t i = 0; i < output_tensors.size(); ++i) {
-        QoreValue out_val = convertOutputTensor(output_tensors[i], xsink);
+        QoreValue out_val = return_tensors
+            ? convertOutputTensorToTensor(output_tensors[i], xsink)
+            : convertOutputTensor(output_tensors[i], xsink);
         if (*xsink) {
             return nullptr;
         }

@@ -225,6 +225,29 @@ hash<auto> OnnxModel::run(hash<auto> inputs) {
     return model->run(inputs, xsink);
 }
 
+//! Runs inference and returns output tensors as ML::Tensor objects
+/** @param inputs a hash where keys are input tensor names and values are tensor
+    data; scalars, lists, nested lists, \c buffer<T>, and @ref ML::Tensor values
+    are supported
+
+    @return a hash where keys are output tensor names and values are @ref ML::Tensor
+    objects preserving dtype and shape metadata
+
+    @par Example:
+    @code{.py}
+ML::Tensor input(data: ((1.0, 2.0),), dtype: "float32");
+hash<auto> outputs = model.runTensors({"X": input});
+ML::Tensor y = outputs.Y;
+buffer<float32> raw = y.getBuffer();
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model is not loaded
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or tensor data is invalid
+*/
+hash<auto> OnnxModel::runTensors(hash<auto> inputs) {
+    return model->runTensors(inputs, xsink);
+}
+
 //! Runs batch inference on the model
 /** @param batch a list of input hashes; each hash has the same format as run()
 

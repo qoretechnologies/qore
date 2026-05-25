@@ -30,6 +30,8 @@
 
 #include <qore/Qore.h>
 
+#include "QC_Tensor.h"
+
 #include <vector>
 #include <string>
 #include <memory>
@@ -86,6 +88,9 @@ public:
         @return hash of output tensors (keys = output names, values = data)
     */
     DLLLOCAL QoreHashNode* run(const QoreHashNode* inputs, ExceptionSink* xsink);
+
+    //! Run inference and return outputs as ML::Tensor objects
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode* inputs, ExceptionSink* xsink);
 
     //! Run batch inference
     /** @param batch list of input hashes
@@ -157,6 +162,12 @@ private:
     //! Convert an Ort::Value output tensor to Qore data
     DLLLOCAL QoreValue convertOutputTensor(Ort::Value& tensor, ExceptionSink* xsink);
 
+    //! Convert an Ort::Value output tensor to an ML::Tensor object
+    DLLLOCAL QoreValue convertOutputTensorToTensor(Ort::Value& tensor, ExceptionSink* xsink);
+
+    //! Shared inference implementation
+    DLLLOCAL QoreHashNode* runImpl(const QoreHashNode* inputs, bool return_tensors, ExceptionSink* xsink);
+
     //! Build a QoreHashNode with OnnxTensorInfo from a TensorMeta
     DLLLOCAL QoreHashNode* tensorMetaToHash(const TensorMeta& meta, ExceptionSink* xsink) const;
 
@@ -204,6 +215,7 @@ private:
 class QoreOnnxModel : public AbstractPrivateData {
 public:
     DLLLOCAL QoreHashNode* run(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) const { return nullptr; }

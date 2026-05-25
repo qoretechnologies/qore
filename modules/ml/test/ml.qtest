@@ -38,6 +38,7 @@
 public class MlTest inherits QUnit::Test {
     constructor() : Test("MlTest", "1.0") {
         addTestCase("ml_get_capabilities", \capabilitiesTest());
+        addTestCase("Tensor basics", \tensorBasicTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -142,6 +143,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("GMM online EM update", \gmmUpdateTest());
         addTestCase("OnnxModel load and metadata", \onnxLoadTest());
         addTestCase("OnnxModel inference", \onnxInferenceTest());
+        addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
@@ -373,6 +375,33 @@ public class MlTest inherits QUnit::Test {
         } else {
             assertEq(32, caps.native_algorithms.size());
         }
+    }
+
+    tensorBasicTest() {
+        ML::Tensor t(data: ((1.0, 2.0), (3.0, 4.0)), dtype: "float32");
+        assertEq("float32", t.getDtype());
+        assertEq((2, 2), t.getShape());
+        assertEq(2, t.rank());
+        assertEq(4, t.size());
+        assertEq("buffer<float32>", t.getBuffer().fullType());
+
+        list<auto> nested = t.toList();
+        assertEq(2, nested.size());
+        assertEq(2, nested[0].size());
+        assertFloat(1.0, nested[0][0], 1e-5);
+        assertFloat(4.0, nested[1][1], 1e-5);
+
+        ML::Tensor from_buffer = ML::Tensor::fromBuffer(new buffer<float64>((1.0, 2.0, 3.0, 4.0)), (2, 2));
+        assertEq("float64", from_buffer.getDtype());
+        assertEq((2, 2), from_buffer.getShape());
+        assertEq("buffer<float64>", from_buffer.getBuffer().fullType());
+
+        assertThrows("ML-TENSOR-ERROR", sub() {
+            ML::Tensor bad(data: new buffer<*float64>((1.0, NOTHING)));
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad(data: (1.0, 2.0, 3.0), shape: (2, 2));
+        });
     }
 
     iforestConstructorTest() {
@@ -2918,6 +2947,30 @@ public class MlTest inherits QUnit::Test {
         assertFloat(7.0, y_vals[2], 1e-5);
         assertFloat(1.0, y_vals[3], 1e-5);
         assertFloat(-1.0, y_vals[4], 1e-5);
+    }
+
+    onnxTensorInferenceTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        ML::Tensor input(data: new buffer<float32>((1.0, 2.0, 3.0, 0.0, -1.0)), shape: (5, 1));
+        hash<auto> result = model.runTensors({"X": input});
+        assertTrue(result.hasKey("Y"));
+
+        ML::Tensor y = result.Y;
+        assertEq("float32", y.getDtype());
+        assertEq((5, 1), y.getShape());
+        assertEq("buffer<float32>", y.getBuffer().fullType());
+
+        list<auto> y_vals = y.toList();
+        assertEq(5, y_vals.size());
+        assertFloat(3.0, y_vals[0][0], 1e-5);
+        assertFloat(5.0, y_vals[1][0], 1e-5);
+        assertFloat(7.0, y_vals[2][0], 1e-5);
+        assertFloat(1.0, y_vals[3][0], 1e-5);
+        assertFloat(-1.0, y_vals[4][0], 1e-5);
     }
 
     onnxBatchTest() {
