@@ -225,7 +225,8 @@ public class ModelExecutableAdapter {
         @return output hash where each value is an @ref Qore::ML::Tensor
 
         @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX model, the
-            model has no input tensors, or the input tensor type is unsupported
+            model has no input tensors, or the input tensor cannot be
+            represented by a numeric feature matrix
 
         @since QoreModelRegistry 2.3
     */
@@ -238,7 +239,12 @@ public class ModelExecutableAdapter {
 
         string tensor_name = resolveOnnxInputTensor(input_tensor);
         string dtype = resolveOnnxInputTensorDtype(tensor_name);
-        ML::Tensor input(data: matrix, dtype: dtype);
+        if (dtype == "string") {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("input tensor %y has string dtype; use runTensors() with an ML::Tensor string input "
+                    "instead of runFeatureMatrixTensors()", tensor_name);
+        }
+        ML::Tensor input(convertFeatureMatrixForTensorDtype(matrix, dtype, tensor_name), NOTHING, dtype);
         return model.runTensors({tensor_name: input}, output_names);
     }
 
@@ -281,7 +287,11 @@ public class ModelExecutableAdapter {
     /** @param input_tensor optional ONNX input tensor name; when omitted, the
             first model input is used
 
-        @return dtype name such as \c float32, \c float64, \c int64, or \c bool
+        @return ML::Tensor storage dtype name such as \c float32, \c float64,
+            \c int64, \c bool, or \c string. ONNX \c float16 and \c bfloat16
+            inputs use \c float32 storage, and unsigned integer inputs use
+            \c int64 storage because Qore does not currently expose native
+            unsigned or half-precision buffer dtypes.
 
         @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX model, the
             model has no input tensors, or the input tensor type is unsupported
@@ -385,7 +395,7 @@ public class ModelExecutableAdapter {
         return inputs[0].name;
     }
 
-    #! Resolves the ML::Tensor dtype needed for the ONNX input tensor
+    #! Resolves the ML::Tensor storage dtype needed for the ONNX input tensor
     private string resolveOnnxInputTensorDtype(string tensor_name) {
         foreach hash<ML::OnnxTensorInfo> input in (model.getInputInfo()) {
             if (input.name == tensor_name) {
@@ -397,7 +407,7 @@ public class ModelExecutableAdapter {
             sprintf("ONNX model does not have an input tensor named '%s'", tensor_name);
     }
 
-    #! Maps ONNX Runtime tensor type names to ML::Tensor dtype names
+    #! Maps ONNX Runtime tensor type names to compatible ML::Tensor storage dtype names
     private static string onnxTypeToTensorDtype(string onnx_type) {
         if (onnx_type == "float") {
             return "float32";
@@ -405,15 +415,66 @@ public class ModelExecutableAdapter {
         if (onnx_type == "double") {
             return "float64";
         }
+        if (onnx_type == "float16" || onnx_type == "bfloat16") {
+            return "float32";
+        }
         if (onnx_type == "int64" || onnx_type == "int32"
                 || onnx_type == "int16" || onnx_type == "int8"
                 || onnx_type == "bool") {
             return onnx_type;
         }
+        if (onnx_type == "uint64" || onnx_type == "uint32"
+                || onnx_type == "uint16" || onnx_type == "uint8") {
+            return "int64";
+        }
+        if (onnx_type == "string") {
+            return "string";
+        }
 
         throw "ML-REGISTRY-ERROR",
-            sprintf("ONNX input tensor type '%s' cannot be represented as an ML::Tensor dtype",
+            sprintf("ONNX input tensor type '%s' cannot be represented as an ML::Tensor storage dtype",
                 onnx_type);
+    }
+
+    #! Converts a floating-point feature matrix to the ML::Tensor storage dtype expected by ONNX
+    private static auto convertFeatureMatrixForTensorDtype(list<list<float>> matrix, string dtype,
+            string tensor_name) {
+        if (dtype == "float32" || dtype == "float64") {
+            return matrix;
+        }
+
+        if (dtype == "bool") {
+            list<list<bool>> out;
+            foreach list<float> row in (matrix) {
+                list<bool> out_row;
+                foreach float value in (row) {
+                    if (value != 0.0 && value != 1.0) {
+                        throw "ML-REGISTRY-ERROR",
+                            sprintf("input tensor %y expects boolean matrix values encoded as 0.0 or 1.0; got %y",
+                                tensor_name, value);
+                    }
+                    push out_row, value == 1.0;
+                }
+                push out, out_row;
+            }
+            return out;
+        }
+
+        list<list<int>> out;
+        foreach list<float> row in (matrix) {
+            list<int> out_row;
+            foreach float value in (row) {
+                int int_value = value.toInt();
+                if (int_value.toFloat() != value) {
+                    throw "ML-REGISTRY-ERROR",
+                        sprintf("input tensor %y expects integer matrix values for dtype %y; got %y",
+                            tensor_name, dtype, value);
+                }
+                push out_row, int_value;
+            }
+            push out, out_row;
+        }
+        return out;
     }
 
     #! Converts tensor outputs to row-addressable values while preserving compact scalar rows

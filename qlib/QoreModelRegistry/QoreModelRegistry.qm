@@ -187,6 +187,11 @@ hash<auto> mapped_outputs = adapter.runTensors({
     "input_ids": ML::Tensor(data: ((101, 7592, 102),), dtype: "int64"),
     "attention_mask": ML::Tensor(data: ((1, 1, 1),), dtype: "int64"),
 }, ("embeddings",));
+# Adapter dtype helpers return the ML::Tensor storage dtype to use with Qore.
+# For example, ONNX float16/bfloat16 inputs use float32 storage, and unsigned
+# ONNX integer inputs use int64 storage until Qore exposes native unsigned and
+# half-precision buffer dtypes.
+string input_dtype = adapter.getOnnxInputTensorDtype("input_ids");
 printf("provider=%s\n", adapter.getProviderDiagnostics().active_provider);
 
 # Create and register a provider-specific optimized deployment artifact.
@@ -355,6 +360,9 @@ reg.loadExecutable("torch-source", vid);
     - ModelExecutableAdapter ONNX execution methods accept selected output names
       so registry-backed multi-output ONNX packages can avoid materializing
       unused labels, probabilities, logits, or embeddings
+    - ModelExecutableAdapter now reports compatible Qore tensor storage dtypes
+      for ONNX \c float16, \c bfloat16, unsigned integer, and string inputs and
+      accepts those storage dtypes in \c runFeatureTensor() / \c runTensors()
 
     @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
     - ONNX model packages now expose task-aware execution-plan metadata through
