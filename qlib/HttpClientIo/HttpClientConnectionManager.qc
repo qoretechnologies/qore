@@ -887,6 +887,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 continue;
             }
 
+            # Expose the effective (post-redirect) URL that produced this
+            # response.  `url` is the final scheme://host[:port] and `path` is
+            # the final path after any redirects, so callers can resolve
+            # relative references against the final location like a browser.
+            resp.effective_url = url + (path =~ /^\// ? path : "/" + path);
             return resp;
         }
     }
