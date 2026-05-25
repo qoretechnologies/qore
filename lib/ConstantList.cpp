@@ -669,9 +669,18 @@ void ConstantList::assimilate(ConstantList& n) {
 // duplicate checking is done here
 void ConstantList::assimilate(ConstantList& n, const char* type, const char* name,
         std::vector<std::string>* pending_names) {
+    qore_ns_private* ns = ptr.getNs();
+    const bool imported_ns = ns && ns->imported;
+
     // assimilate target list
     for (cnemap_t::iterator i = n.cnemap.begin(), e = n.cnemap.end(); i != e; ++i) {
-        if (inList(i->first)) {
+        ConstantEntry* existing = findEntry(i->first);
+        if (existing) {
+            if (imported_ns && existing->isPublic() && i->second->isPublic()) {
+                // A child Program can parse a user module that redeclares public API constants inherited from the
+                // parent Program. Keep the inherited value and drop the redundant parsed declaration.
+                continue;
+            }
             parse_error(*i->second->loc, "constant \"%s\" has already been defined in %s \"%s\"", i->first, type,
                 name);
             continue;

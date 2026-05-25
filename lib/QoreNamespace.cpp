@@ -3920,6 +3920,20 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
     // assimilate pending functions
     func_list.assimilate(pns->func_list, this, &pending_func_names);
 
+    // Drop enum value namespaces for imported duplicate public enums before
+    // namespace assimilation.  EnumList::assimilate() discards the redundant
+    // enum declaration, and the generated EnumName::Member constants must be
+    // discarded with it.
+    if (imported) {
+        EnumListIterator eli(pns->enumList);
+        while (eli.next()) {
+            QoreEnumDecl* existing = enumList.find(eli.getName());
+            if (existing && qore_enum_decl_private::get(*existing)->isPublic() && eli.isPublic()) {
+                pns->nsl.parseRemove(eli.getName(), nullptr);
+            }
+        }
+    }
+
     // assimilate enums
     enumList.assimilate(pns->enumList, *this, &pending_enum_names);
 

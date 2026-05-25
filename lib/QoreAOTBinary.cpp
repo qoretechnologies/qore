@@ -12221,7 +12221,38 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         if (!priv->scl || priv->ahm.empty()) {
             continue;
         }
+        std::unordered_set<std::string> existing_methods;
+        existing_methods.reserve(priv->hm.size());
+        size_t method_count = 0;
+        for (auto& mi : priv->hm) {
+            if (++method_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
+                error = "operation cancelled during AOT abstract method inheritance restore";
+                return false;
+            }
+            existing_methods.insert(mi.first);
+        }
+
         priv->ahm.parseInit(*priv, priv->scl);
+
+        // Abstract resolution can synthesize a local method on this class
+        // after commitClassesPrepare() has already run parseAddAncestors().
+        // Give those synthesized methods the same inherited overload list
+        // source parsing would attach during initializeHierarchy().
+        method_count = 0;
+        for (auto& mi : priv->hm) {
+            if (++method_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
+                error = "operation cancelled during AOT abstract method inheritance restore";
+                return false;
+            }
+            if (existing_methods.find(mi.first) == existing_methods.end()
+                    && strcmp(mi.second->getName(), "constructor")
+                    && strcmp(mi.second->getName(), "destructor")
+                    && strcmp(mi.second->getName(), "copy")) {
+                priv->parseAddAncestors(mi.second);
+            }
+        }
         addAOTInheritedInternalMemberContexts(priv);
         // parseResolveAbstract() is a no-op once this flag is true; set it
         // so any later source-parse pass in the same Program doesn't
