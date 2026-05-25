@@ -21,6 +21,8 @@
     - \c Precompiled — SentencePiece Darts DoubleArray trie normalization (used by T5)
     - \c Sequence — chains multiple normalizers
     - \c Replace / \c Prepend / \c Lowercase / \c StripAccents / \c Strip
+      (\c Replace supports both HuggingFace \c {"String": "..."} and
+      \c {"Regex": "..."} patterns)
 
     @subsection tokenizer_pretokenizers Supported Pre-tokenizers
     - \c BertPreTokenizer — split on whitespace and punctuation
@@ -280,6 +282,7 @@ string clean = tok.decode(enc.input_ids, True);
       and \c encodeBatchPairsForModel() return row-major \c buffer<int64>
       values for direct ONNX tensor creation without per-token list/hash
       materialization
+    - \c Replace normalizers support HuggingFace \c {"Regex": "..."} patterns
 
     @subsection tokenizer_1_0 tokenizer Module Version 1.0
     - BPE, WordPiece, and Unigram tokenization models

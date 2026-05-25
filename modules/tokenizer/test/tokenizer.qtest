@@ -42,6 +42,7 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("batchEncodingTest", \batchEncodingTest());
         addTestCase("modelInputTensorBatchTest", \modelInputTensorBatchTest());
         addTestCase("unicodeDigitTest", \unicodeDigitTest());
+        addTestCase("replaceRegexNormalizerTest", \replaceRegexNormalizerTest());
         addTestCase("decoderCleanupTest", \decoderCleanupTest());
         addTestCase("wordIdsTest", \wordIdsTest());
         addTestCase("addTokensTest", \addTokensTest());
@@ -187,6 +188,35 @@ class TokenizerTest inherits QUnit::Test {
         hash<auto> enc3 = tok.encode("café résumé naïve");
         assertTrue(enc3.input_ids.size() > 2,
             "accented input should tokenize without crash");
+    }
+
+    replaceRegexNormalizerTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        hash<auto> config = {
+            "normalizer": {
+                "type": "Replace",
+                "pattern": {"Regex": "[0-9]+"},
+                "content": " NUM ",
+            },
+            "pre_tokenizer": {"type": "WhitespaceSplit"},
+            "model": {
+                "type": "WordPiece",
+                "vocab": {
+                    "[UNK]": 0,
+                    "abc": 1,
+                    "NUM": 2,
+                    "def": 3,
+                },
+                "unk_token": "[UNK]",
+            },
+        };
+        Tokenizer::HFTokenizer tok(config);
+
+        hash<auto> enc = tok.encode("abc123def456");
+        assertEq((1, 2, 3, 2), enc.input_ids,
+            "Replace normalizer should support HuggingFace Regex patterns");
     }
 
     vocabLookupTest() {

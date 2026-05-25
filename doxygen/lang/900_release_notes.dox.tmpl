@@ -2173,6 +2173,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - pre-tokenized input (\c encodePreTokenized) for domain-specific tokenization
       - dynamic vocabulary extension (\c addTokens) with \c std::shared_mutex thread safety
       - full Unicode \\p{N} digit support and Unicode punctuation decoder cleanup
+      - \c Replace normalizers support HuggingFace \c {"Regex": "..."} patterns
       - O(n log n) BPE merge algorithm using priority queue + doubly linked list
       - Precompiled normalizer supporting SentencePiece Darts DoubleArray trie format
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
