@@ -49,11 +49,31 @@ DLLLOCAL QoreClass* initOnnxModelClass(QoreNamespace& ns);
 
 #ifdef HAVE_ONNXRUNTIME
 
+//! Returns available ONNX Runtime providers as a Qore list
+DLLLOCAL QoreListNode* qore_ml_get_onnx_providers(ExceptionSink* xsink);
+
+//! Returns known ONNX Runtime provider option metadata
+DLLLOCAL QoreHashNode* qore_ml_get_onnx_provider_options(ExceptionSink* xsink);
+
 //! Input/output tensor metadata
 struct TensorMeta {
     std::string name;
     ONNXTensorElementDataType element_type;
     std::vector<int64_t> shape;
+};
+
+//! Execution provider diagnostic information
+struct OnnxProviderDiagnostic {
+    std::string name;
+    std::unordered_map<std::string, std::string> options;
+    std::string error;
+    bool requested = false;
+    bool required = false;
+    bool available = false;
+    bool appended = false;
+    bool auto_selected = false;
+    bool active = false;
+    bool cpu_fallback = false;
 };
 
 //! ONNX Model wrapper class
@@ -81,6 +101,21 @@ public:
 
     //! Returns the active execution provider name
     DLLLOCAL const std::string& getActiveProvider() const { return active_provider; }
+
+    //! Returns the providers available in the linked ONNX Runtime build
+    DLLLOCAL QoreListNode* getProviders(ExceptionSink* xsink) const;
+
+    //! Returns known execution-provider option metadata
+    DLLLOCAL QoreHashNode* getProviderOptions(ExceptionSink* xsink) const;
+
+    //! Returns explicitly requested providers in normalized form
+    DLLLOCAL QoreListNode* getRequestedProviders(ExceptionSink* xsink) const;
+
+    //! Returns structured provider diagnostics
+    DLLLOCAL QoreListNode* getProviderDiagnostics(ExceptionSink* xsink) const;
+
+    //! Returns the effective provider report for this session
+    DLLLOCAL QoreHashNode* getEffectiveProviderReport(ExceptionSink* xsink) const;
 
     //! Run inference with named input tensors
     /** @param inputs hash where keys are tensor names, values are data (scalars, lists, or nested lists)
@@ -119,8 +154,17 @@ private:
     std::vector<TensorMeta> input_meta;
     std::vector<TensorMeta> output_meta;
 
+    std::vector<std::string> available_providers;
+    std::vector<std::string> requested_providers;
+    std::vector<std::string> required_providers;
+    std::vector<OnnxProviderDiagnostic> provider_diagnostics;
+
     std::string active_provider;
     bool auto_provider_selected = false;
+    bool explicit_provider_config = false;
+    bool allow_cpu_fallback = true;
+    bool fail_on_provider_fallback = false;
+    bool cpu_fallback_used = false;
 
     //! Initialize the Ort::Env and populate session options from the config hash
     /** Shared between the path-based and memory-based configured constructors.
@@ -137,6 +181,9 @@ private:
     DLLLOCAL void configureBaseSessionOptions(Ort::SessionOptions& opts,
         const QoreHashNode* config, ExceptionSink* xsink);
 
+    //! Configure provider behavior from a config hash
+    DLLLOCAL void configureProviderPolicy(const QoreHashNode* config, ExceptionSink* xsink);
+
     //! Create a path-based session, falling back to CPU if an auto-selected provider fails
     DLLLOCAL void createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
         const QoreHashNode* config, ExceptionSink* xsink);
@@ -147,6 +194,27 @@ private:
 
     //! Auto-detect and append the best available GPU execution provider
     DLLLOCAL void autoDetectProvider(Ort::SessionOptions& opts);
+
+    //! Returns true if a provider is in the ONNX Runtime available provider list
+    DLLLOCAL bool isProviderAvailable(const std::string& name) const;
+
+    //! Normalize a user provider alias to an ONNX Runtime provider name
+    DLLLOCAL static std::string normalizeProviderName(const std::string& name);
+
+    //! Returns a readable provider list for diagnostics
+    DLLLOCAL std::string availableProvidersString() const;
+
+    //! Records or updates provider diagnostics
+    DLLLOCAL OnnxProviderDiagnostic& providerDiagnostic(const std::string& name);
+
+    //! Marks the provider as appended and active
+    DLLLOCAL void markProviderAppended(const std::string& name, bool auto_selected);
+
+    //! Records a provider error
+    DLLLOCAL void markProviderError(const std::string& name, const std::string& error);
+
+    //! Validates required provider policy after provider configuration
+    DLLLOCAL void validateRequiredProviders(ExceptionSink* xsink) const;
 
     //! Append an execution provider to session options
     DLLLOCAL void appendProvider(Ort::SessionOptions& opts, const std::string& name,
@@ -249,6 +317,11 @@ public:
         static std::string empty;
         return empty;
     }
+    DLLLOCAL QoreListNode* getProviders(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreHashNode* getProviderOptions(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreListNode* getRequestedProviders(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreListNode* getProviderDiagnostics(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreHashNode* getEffectiveProviderReport(ExceptionSink*) const { return nullptr; }
 };
 
 #endif // HAVE_ONNXRUNTIME

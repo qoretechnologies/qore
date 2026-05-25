@@ -61,6 +61,7 @@
 #include "QC_SparseMatrix.h"
 #include "QC_AbstractMLModel.h"
 #include "QC_MLPipeline.h"
+#include "QC_OnnxModel.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -92,6 +93,7 @@ extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
 extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 extern const TypedHashDecl* hashdeclStandardScalerInfo;
 extern const TypedHashDecl* hashdeclMinMaxScalerInfo;
 extern const TypedHashDecl* hashdeclImputerInfo;
@@ -409,6 +411,36 @@ hashdecl Qore::ML::OnnxProviderConfig {
     *hash<string, string> options;
 }
 
+//! ONNX execution provider diagnostic information
+/** Describes how a provider was requested and configured for an
+    @ref OnnxModel session.  Diagnostics are meant for deployment validation:
+    they show which providers were available in the current ONNX Runtime build,
+    which ones were requested or required by the caller, and whether CPU
+    fallback was used.
+*/
+hashdecl Qore::ML::OnnxProviderDiagnostic {
+    //! normalized ONNX Runtime provider name
+    string name;
+    //! provider-specific options supplied in @ref OnnxProviderConfig
+    *hash<string, string> options;
+    //! whether the provider was explicitly requested
+    bool requested;
+    //! whether the provider was listed in @ref OnnxSessionConfig.required_providers
+    bool required;
+    //! whether the provider is available in the linked ONNX Runtime build
+    bool available;
+    //! whether the provider was appended to the session options
+    bool appended;
+    //! whether the provider was selected by Qore's automatic provider selection
+    bool auto_selected;
+    //! whether the provider is the effective top-level provider recorded for the session
+    bool active;
+    //! whether this provider was used because an automatic non-CPU provider failed
+    bool cpu_fallback;
+    //! provider append, initialization, or fallback error text, if any
+    *string error;
+}
+
 //! ONNX session configuration
 /** Controls ONNX Runtime session options including execution providers, threading,
     and graph optimization.
@@ -434,6 +466,12 @@ hashdecl Qore::ML::OnnxSessionConfig {
         \c "OpenVINO" (Intel), \c "DirectML" (Windows GPU), \c "CoreML" (macOS/iOS)
     */
     *list<hash<OnnxProviderConfig>> providers;
+    //! provider names that must be configured successfully; unavailable required providers raise ML-ONNX-PROVIDER-ERROR
+    *list<string> required_providers;
+    //! whether Qore may fall back to CPU when an auto-selected non-CPU provider fails; default True
+    *bool allow_cpu_fallback;
+    //! whether an auto-selected provider failure should raise instead of using CPU fallback; default False
+    *bool fail_on_provider_fallback;
     //! number of threads for parallelism within a single operation (e.g. one large matrix multiply); default 1; must be >= 1
     *int intra_op_threads;
     //! number of threads for running independent operations in parallel (e.g. two unrelated layers); 0 = let the runtime decide; must be >= 0
@@ -460,6 +498,14 @@ hashdecl Qore::ML::OnnxModelInfo {
     list<hash<OnnxTensorInfo>> outputs;
     //! active execution provider name (e.g. "CPUExecutionProvider")
     *string active_provider;
+    //! available providers reported by ONNX Runtime on this host
+    list<string> available_providers;
+    //! normalized provider names explicitly requested by session configuration
+    list<string> requested_providers;
+    //! provider configuration and fallback diagnostics
+    list<hash<OnnxProviderDiagnostic>> provider_diagnostics;
+    //! whether CPU fallback was used after an automatic non-CPU provider failed
+    bool cpu_fallback_used;
 }
 
 //! StandardScaler model information
@@ -768,16 +814,12 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     rv->setKeyValue("eigen_version", eigen_ver, xsink);
 
     // ONNX providers
-    ReferenceHolder<QoreListNode> providers(new QoreListNode(stringTypeInfo), xsink);
 #ifdef HAVE_ONNXRUNTIME
-    {
-        std::vector<std::string> available = Ort::GetAvailableProviders();
-        for (const auto& p : available) {
-            providers->push(new QoreStringNode(p), xsink);
-        }
-    }
-#endif
+    rv->setKeyValue("onnx_providers", qore_ml_get_onnx_providers(xsink), xsink);
+#else
+    ReferenceHolder<QoreListNode> providers(new QoreListNode(stringTypeInfo), xsink);
     rv->setKeyValue("onnx_providers", providers.release(), xsink);
+#endif
 
     return rv.release();
 }
@@ -795,12 +837,29 @@ printf("Available providers: %y\n", providers);
 */
 list<string> ml_get_onnx_providers() [flags=CONSTANT; dom=DEFAULT] {
 #ifdef HAVE_ONNXRUNTIME
-    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
-    std::vector<std::string> available = Ort::GetAvailableProviders();
-    for (const auto& p : available) {
-        rv->push(new QoreStringNode(p), xsink);
-    }
-    return rv.release();
+    return qore_ml_get_onnx_providers(xsink);
+#else
+    return xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX Runtime "
+        "support; check MLCapabilities.has_onnx before calling this function");
+#endif
+}
+
+//! Returns known ONNX Runtime execution provider options
+/** @return a hash keyed by canonical provider name; each value includes provider
+    aliases, availability, and the provider options Qore knows how to pass
+    through to ONNX Runtime
+
+    @par Example:
+    @code{.py}
+hash<auto> opts = ml_get_onnx_provider_options();
+printf("CUDA available: %y\n", opts.CUDAExecutionProvider.available);
+printf("CUDA options: %y\n", opts.CUDAExecutionProvider.known_options);
+    @endcode
+
+*/
+hash<auto> ml_get_onnx_provider_options() [flags=CONSTANT; dom=DEFAULT] {
+#ifdef HAVE_ONNXRUNTIME
+    return qore_ml_get_onnx_provider_options(xsink);
 #else
     return xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX Runtime "
         "support; check MLCapabilities.has_onnx before calling this function");

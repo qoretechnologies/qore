@@ -29,7 +29,7 @@ ONNX Runtime workflows.
 
 ## Phase 0: Design and Baseline
 
-Status: started.
+Status: completed.
 
 Deliverables:
 
@@ -48,7 +48,7 @@ Acceptance checks:
 
 ## Phase 1: Provider Management and Runtime Diagnostics
 
-Status: pending.
+Status: completed.
 
 Add explicit provider discovery, provider option reporting, requested-provider
 validation, and fallback diagnostics.
@@ -85,6 +85,17 @@ Acceptance checks:
 - CPU-only config remains easy: `providers: ()` or omitted CPU provider.
 - Provider diagnostics are available from both raw `ML::OnnxModel` and
   registry-loaded model processors.
+
+Implementation notes:
+
+- Raw `ML::OnnxModel` now exposes available providers, requested providers,
+  provider option metadata, provider diagnostics, and an effective provider
+  report.
+- Invalid explicit providers and unavailable required providers raise
+  `ML-ONNX-PROVIDER-ERROR` with the requested provider and available-provider
+  list.
+- Registry and `DataProviderML` integration uses the raw model API until the
+  high-level registry contract is expanded in Phase 10.
 
 ## Phase 2: Tensor and Type Coverage
 

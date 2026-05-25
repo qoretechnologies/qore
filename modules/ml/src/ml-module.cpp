@@ -182,6 +182,7 @@ DLLLOCAL TypedHashDecl* init_hashdecl_KNNClassificationResult(QoreNamespace& ns)
 DLLLOCAL TypedHashDecl* init_hashdecl_KNNRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxTensorInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxProviderConfig(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_OnnxProviderDiagnostic(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxSessionConfig(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxModelInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_StandardScalerInfo(QoreNamespace& ns);
@@ -225,6 +226,7 @@ const TypedHashDecl* hashdeclKNNClassificationResult;
 const TypedHashDecl* hashdeclKNNRegressionResult;
 const TypedHashDecl* hashdeclOnnxTensorInfo;
 const TypedHashDecl* hashdeclOnnxProviderConfig;
+const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 const TypedHashDecl* hashdeclOnnxSessionConfig;
 const TypedHashDecl* hashdeclOnnxModelInfo;
 const TypedHashDecl* hashdeclStandardScalerInfo;
@@ -320,6 +322,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclKNNRegressionResult = init_hashdecl_KNNRegressionResult(MLNS);
     hashdeclOnnxTensorInfo = init_hashdecl_OnnxTensorInfo(MLNS);
     hashdeclOnnxProviderConfig = init_hashdecl_OnnxProviderConfig(MLNS);
+    hashdeclOnnxProviderDiagnostic = init_hashdecl_OnnxProviderDiagnostic(MLNS);
     hashdeclOnnxSessionConfig = init_hashdecl_OnnxSessionConfig(MLNS);
     hashdeclOnnxModelInfo = init_hashdecl_OnnxModelInfo(MLNS);
     hashdeclStandardScalerInfo = init_hashdecl_StandardScalerInfo(MLNS);

@@ -41,6 +41,7 @@ extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
 extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 
 namespace {
 
@@ -95,11 +96,105 @@ bool isTensorObject(QoreValue value) {
     return value.getType() == NT_OBJECT && value.get<const QoreObject>()->getClass()->getID() == CID_TENSOR;
 }
 
+std::vector<std::string> getAvailableOnnxProviders() {
+    std::vector<std::string> providers = Ort::GetAvailableProviders();
+    if (std::find(providers.begin(), providers.end(), "CPUExecutionProvider") == providers.end()) {
+        providers.push_back("CPUExecutionProvider");
+    }
+    return providers;
+}
+
+QoreListNode* stringVectorToList(const std::vector<std::string>& values, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (const auto& value : values) {
+        rv->push(new QoreStringNode(value), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* providerAliases(const std::vector<std::string>& aliases, ExceptionSink* xsink) {
+    return stringVectorToList(aliases, xsink);
+}
+
+void setStringOption(QoreHashNode* h, const char* key, const char* value, ExceptionSink* xsink) {
+    h->setKeyValue(key, new QoreStringNode(value), xsink);
+}
+
+QoreHashNode* makeProviderOptionInfo(const char* canonical, const std::vector<std::string>& aliases,
+        const std::vector<std::pair<const char*, const char*>>& options,
+        const std::vector<std::string>& available, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    setStringOption(*rv, "name", canonical, xsink);
+    rv->setKeyValue("available",
+        std::find(available.begin(), available.end(), canonical) != available.end(), xsink);
+    rv->setKeyValue("aliases", providerAliases(aliases, xsink), xsink);
+
+    ReferenceHolder<QoreHashNode> opts(new QoreHashNode(autoTypeInfo), xsink);
+    for (const auto& opt : options) {
+        setStringOption(*opts, opt.first, opt.second, xsink);
+    }
+    rv->setKeyValue("known_options", opts.release(), xsink);
+    return rv.release();
+}
+
+QoreHashNode* getOnnxProviderOptionsMetadata(ExceptionSink* xsink) {
+    std::vector<std::string> available = getAvailableOnnxProviders();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+
+    rv->setKeyValue("CPUExecutionProvider", makeProviderOptionInfo("CPUExecutionProvider",
+        {"CPU", "CPUExecutionProvider"}, {}, available, xsink), xsink);
+    rv->setKeyValue("CUDAExecutionProvider", makeProviderOptionInfo("CUDAExecutionProvider",
+        {"CUDA", "CUDAExecutionProvider"}, {
+            {"device_id", "CUDA device ordinal to use"},
+            {"gpu_mem_limit", "maximum GPU memory in bytes"},
+            {"arena_extend_strategy", "CUDA arena extension strategy"},
+            {"cudnn_conv_algo_search", "cuDNN convolution algorithm search mode"},
+            {"do_copy_in_default_stream", "whether copies run on the default stream"},
+            {"enable_cuda_graph", "enable CUDA graph capture when supported"},
+        }, available, xsink), xsink);
+    rv->setKeyValue("TensorrtExecutionProvider", makeProviderOptionInfo("TensorrtExecutionProvider",
+        {"TensorRT", "TensorRTExecutionProvider", "TensorrtExecutionProvider"}, {
+            {"device_id", "CUDA device ordinal to use"},
+            {"trt_max_workspace_size", "TensorRT workspace size in bytes"},
+            {"trt_fp16_enable", "enable FP16 TensorRT kernels"},
+            {"trt_int8_enable", "enable INT8 TensorRT kernels"},
+            {"trt_engine_cache_enable", "enable TensorRT engine cache"},
+            {"trt_engine_cache_path", "TensorRT engine cache directory"},
+        }, available, xsink), xsink);
+    rv->setKeyValue("CoreMLExecutionProvider", makeProviderOptionInfo("CoreMLExecutionProvider",
+        {"CoreML", "CoreMLExecutionProvider"}, {}, available, xsink), xsink);
+    rv->setKeyValue("OpenVINOExecutionProvider", makeProviderOptionInfo("OpenVINOExecutionProvider",
+        {"OpenVINO", "OpenVINOExecutionProvider"}, {
+            {"device_type", "OpenVINO target device such as CPU, GPU, or AUTO"},
+            {"precision", "OpenVINO precision policy"},
+        }, available, xsink), xsink);
+    rv->setKeyValue("DmlExecutionProvider", makeProviderOptionInfo("DmlExecutionProvider",
+        {"DML", "DirectML", "DmlExecutionProvider"}, {
+            {"device_id", "DirectML device ordinal to use"},
+        }, available, xsink), xsink);
+    rv->setKeyValue("ROCMExecutionProvider", makeProviderOptionInfo("ROCMExecutionProvider",
+        {"ROCM", "ROCm", "ROCMExecutionProvider"}, {
+            {"device_id", "ROCm device ordinal to use"},
+            {"gpu_mem_limit", "maximum GPU memory in bytes"},
+        }, available, xsink), xsink);
+
+    return rv.release();
+}
+
+}
+
+QoreListNode* qore_ml_get_onnx_providers(ExceptionSink* xsink) {
+    return stringVectorToList(getAvailableOnnxProviders(), xsink);
+}
+
+QoreHashNode* qore_ml_get_onnx_provider_options(ExceptionSink* xsink) {
+    return getOnnxProviderOptionsMetadata(xsink);
 }
 
 QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
     : active_provider("CPUExecutionProvider") {
     try {
+        available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
@@ -118,6 +213,7 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
 QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     try {
+        available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
         if (!initEnvAndOptions(session_options, config, xsink)) {
             return;
@@ -136,6 +232,7 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
 QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     try {
+        available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
@@ -156,6 +253,7 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     const QoreHashNode* config, ExceptionSink* xsink)
     : active_provider("CPUExecutionProvider") {
     try {
+        available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
         if (!initEnvAndOptions(session_options, config, xsink)) {
             return;
@@ -188,6 +286,11 @@ bool QoreOnnxModel::initEnvAndOptions(Ort::SessionOptions& session_options,
     }
 
     env = std::make_unique<Ort::Env>(log_level, "qore-ml");
+
+    configureProviderPolicy(config, xsink);
+    if (*xsink) {
+        return false;
+    }
 
     configureSession(session_options, config, xsink);
     if (*xsink) {
@@ -265,17 +368,183 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
     }
 }
 
+std::string QoreOnnxModel::normalizeProviderName(const std::string& name) {
+    if (name == "CPU" || name == "CPUExecutionProvider") {
+        return "CPUExecutionProvider";
+    }
+    if (name == "CUDA" || name == "CUDAExecutionProvider") {
+        return "CUDAExecutionProvider";
+    }
+    if (name == "TensorRT" || name == "TensorRTExecutionProvider"
+            || name == "TensorrtExecutionProvider") {
+        return "TensorrtExecutionProvider";
+    }
+    if (name == "CoreML" || name == "CoreMLExecutionProvider") {
+        return "CoreMLExecutionProvider";
+    }
+    if (name == "OpenVINO" || name == "OpenVINOExecutionProvider") {
+        return "OpenVINOExecutionProvider";
+    }
+    if (name == "DML" || name == "DirectML" || name == "DmlExecutionProvider") {
+        return "DmlExecutionProvider";
+    }
+    if (name == "ROCM" || name == "ROCm" || name == "ROCMExecutionProvider") {
+        return "ROCMExecutionProvider";
+    }
+    return name;
+}
+
+bool QoreOnnxModel::isProviderAvailable(const std::string& name) const {
+    std::string normalized = normalizeProviderName(name);
+    return normalized == "CPUExecutionProvider"
+        || std::find(available_providers.begin(), available_providers.end(), normalized)
+            != available_providers.end();
+}
+
+std::string QoreOnnxModel::availableProvidersString() const {
+    std::string rv;
+    for (size_t i = 0; i < available_providers.size(); ++i) {
+        if (i) {
+            rv += ", ";
+        }
+        rv += available_providers[i];
+    }
+    return rv;
+}
+
+OnnxProviderDiagnostic& QoreOnnxModel::providerDiagnostic(const std::string& name) {
+    std::string normalized = normalizeProviderName(name);
+    for (auto& diag : provider_diagnostics) {
+        if (diag.name == normalized) {
+            return diag;
+        }
+    }
+    provider_diagnostics.push_back(OnnxProviderDiagnostic());
+    OnnxProviderDiagnostic& diag = provider_diagnostics.back();
+    diag.name = normalized;
+    diag.available = isProviderAvailable(normalized);
+    return diag;
+}
+
+void QoreOnnxModel::markProviderAppended(const std::string& name, bool auto_selected) {
+    std::string normalized = normalizeProviderName(name);
+    OnnxProviderDiagnostic& diag = providerDiagnostic(normalized);
+    diag.appended = true;
+    diag.auto_selected = auto_selected;
+    diag.error.clear();
+    for (auto& d : provider_diagnostics) {
+        d.active = d.name == active_provider;
+    }
+}
+
+void QoreOnnxModel::markProviderError(const std::string& name, const std::string& error) {
+    OnnxProviderDiagnostic& diag = providerDiagnostic(name);
+    diag.error = error;
+}
+
+void QoreOnnxModel::configureProviderPolicy(const QoreHashNode* config, ExceptionSink* xsink) {
+    allow_cpu_fallback = true;
+    fail_on_provider_fallback = false;
+    required_providers.clear();
+
+    if (!config) {
+        return;
+    }
+
+    QoreValue allow_fallback_val = config->getKeyValue("allow_cpu_fallback");
+    if (!allow_fallback_val.isNullOrNothing()) {
+        allow_cpu_fallback = allow_fallback_val.getAsBool();
+    }
+
+    QoreValue fail_fallback_val = config->getKeyValue("fail_on_provider_fallback");
+    if (!fail_fallback_val.isNullOrNothing()) {
+        fail_on_provider_fallback = fail_fallback_val.getAsBool();
+    }
+
+    QoreValue required_val = config->getKeyValue("required_providers");
+    if (!required_val.isNullOrNothing()) {
+        if (required_val.getType() != NT_LIST) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                "invalid required_providers value; expected a list of provider names");
+            return;
+        }
+
+        const QoreListNode* required = required_val.get<const QoreListNode>();
+        for (size_t i = 0; i < required->size(); ++i) {
+            QoreStringValueHelper name(required->retrieveEntry(i));
+            std::string normalized = normalizeProviderName(name->c_str());
+            required_providers.push_back(normalized);
+            OnnxProviderDiagnostic& diag = providerDiagnostic(normalized);
+            diag.required = true;
+            if (!diag.available) {
+                xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                    "required ONNX Runtime execution provider '%s' is not available; "
+                    "available providers: %s", normalized.c_str(), availableProvidersString().c_str());
+                return;
+            }
+        }
+    }
+}
+
+void QoreOnnxModel::validateRequiredProviders(ExceptionSink* xsink) const {
+    std::string requested;
+    for (size_t i = 0; i < requested_providers.size(); ++i) {
+        if (i) {
+            requested += ", ";
+        }
+        requested += requested_providers[i];
+    }
+    if (requested.empty()) {
+        requested = "<none>";
+    }
+
+    for (const auto& required : required_providers) {
+        bool appended = false;
+        for (const auto& diag : provider_diagnostics) {
+            if (diag.name == required && diag.appended) {
+                appended = true;
+                break;
+            }
+        }
+        if (!appended) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                "required ONNX Runtime execution provider '%s' was available but was not "
+                "configured for this session; requested providers: %s; available providers: %s",
+                required.c_str(), requested.c_str(), availableProvidersString().c_str());
+            return;
+        }
+    }
+}
+
 void QoreOnnxModel::createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
     const QoreHashNode* config, ExceptionSink* xsink) {
     try {
         session = std::make_unique<Ort::Session>(*env, model_path, opts);
     } catch (const Ort::Exception& e) {
+        if (explicit_provider_config && active_provider != "CPUExecutionProvider") {
+            markProviderError(active_provider, e.what());
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                "failed to load ONNX model '%s' with requested execution provider '%s': %s; "
+                "available providers reported by ONNX Runtime: %s. Use providers: () for "
+                "explicit CPU-only execution, or set a provider that is fully installed on "
+                "this host.", model_path, active_provider.c_str(), e.what(),
+                availableProvidersString().c_str());
+            return;
+        }
         if (!auto_provider_selected || active_provider == "CPUExecutionProvider") {
             throw;
         }
 
         std::string provider = active_provider;
         disableAutoProvider(provider);
+        markProviderError(provider, e.what());
+        if (!allow_cpu_fallback || fail_on_provider_fallback) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                "failed to load ONNX model '%s' with auto-selected provider '%s': %s; "
+                "CPU fallback is disabled by session configuration", model_path, provider.c_str(),
+                e.what());
+            return;
+        }
         Ort::SessionOptions cpu_opts;
         configureBaseSessionOptions(cpu_opts, config, xsink);
         if (*xsink) {
@@ -283,6 +552,10 @@ void QoreOnnxModel::createSessionFromPath(const char* model_path, Ort::SessionOp
         }
         active_provider = "CPUExecutionProvider";
         auto_provider_selected = false;
+        cpu_fallback_used = true;
+        markProviderAppended("CPUExecutionProvider", false);
+        OnnxProviderDiagnostic& cpu_diag = providerDiagnostic("CPUExecutionProvider");
+        cpu_diag.cpu_fallback = true;
 
         try {
             session = std::make_unique<Ort::Session>(*env, model_path, cpu_opts);
@@ -300,12 +573,30 @@ void QoreOnnxModel::createSessionFromMemory(const void* model_data, size_t model
     try {
         session = std::make_unique<Ort::Session>(*env, model_data, model_data_len, opts);
     } catch (const Ort::Exception& e) {
+        if (explicit_provider_config && active_provider != "CPUExecutionProvider") {
+            markProviderError(active_provider, e.what());
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                "failed to load ONNX model from memory (%zu bytes) with requested execution "
+                "provider '%s': %s; available providers reported by ONNX Runtime: %s. Use "
+                "providers: () for explicit CPU-only execution, or set a provider that is "
+                "fully installed on this host.", model_data_len, active_provider.c_str(),
+                e.what(), availableProvidersString().c_str());
+            return;
+        }
         if (!auto_provider_selected || active_provider == "CPUExecutionProvider") {
             throw;
         }
 
         std::string provider = active_provider;
         disableAutoProvider(provider);
+        markProviderError(provider, e.what());
+        if (!allow_cpu_fallback || fail_on_provider_fallback) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                "failed to load ONNX model from memory (%zu bytes) with auto-selected provider "
+                "'%s': %s; CPU fallback is disabled by session configuration", model_data_len,
+                provider.c_str(), e.what());
+            return;
+        }
         Ort::SessionOptions cpu_opts;
         configureBaseSessionOptions(cpu_opts, config, xsink);
         if (*xsink) {
@@ -313,6 +604,10 @@ void QoreOnnxModel::createSessionFromMemory(const void* model_data, size_t model
         }
         active_provider = "CPUExecutionProvider";
         auto_provider_selected = false;
+        cpu_fallback_used = true;
+        markProviderAppended("CPUExecutionProvider", false);
+        OnnxProviderDiagnostic& cpu_diag = providerDiagnostic("CPUExecutionProvider");
+        cpu_diag.cpu_fallback = true;
 
         try {
             session = std::make_unique<Ort::Session>(*env, model_data, model_data_len,
@@ -335,20 +630,40 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
 
     // providers (list of OnnxProviderConfig)
     QoreValue providers_val = config->getKeyValue("providers");
-    if (!providers_val.isNullOrNothing() && providers_val.getType() == NT_LIST) {
+    if (!providers_val.isNullOrNothing() && providers_val.getType() != NT_LIST) {
+        xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+            "invalid providers value; expected a list of OnnxProviderConfig hashes");
+        return;
+    }
+
+    if (!providers_val.isNullOrNothing()) {
+        explicit_provider_config = true;
         const QoreListNode* providers = providers_val.get<const QoreListNode>();
+        if (!providers->size()) {
+            markProviderAppended("CPUExecutionProvider", false);
+            validateRequiredProviders(xsink);
+            return;
+        }
+
         for (size_t i = 0; i < providers->size(); ++i) {
             QoreValue pval = providers->retrieveEntry(i);
             if (pval.getType() != NT_HASH) {
-                continue;
+                xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                    "invalid providers entry at index %zu; expected an OnnxProviderConfig hash", i);
+                return;
             }
             const QoreHashNode* pconfig = pval.get<const QoreHashNode>();
             QoreValue name_val = pconfig->getKeyValue("name");
             if (name_val.isNullOrNothing()) {
-                continue;
+                xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                    "invalid providers entry at index %zu; missing provider name", i);
+                return;
             }
             QoreStringValueHelper name_str(name_val);
-            std::string provider_name(name_str->c_str());
+            std::string provider_name = normalizeProviderName(name_str->c_str());
+            requested_providers.push_back(provider_name);
+            OnnxProviderDiagnostic& diag = providerDiagnostic(provider_name);
+            diag.requested = true;
 
             // Parse options hash
             std::unordered_map<std::string, std::string> provider_opts;
@@ -361,21 +676,39 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
                     provider_opts[hi.getKey()] = key_str->c_str();
                 }
             }
+            diag.options = provider_opts;
+
+            if (!isProviderAvailable(provider_name)) {
+                xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
+                    "requested ONNX Runtime execution provider '%s' is not available; "
+                    "available providers: %s; call ML::ml_get_onnx_providers() to inspect "
+                    "this runtime, or use providers: () for explicit CPU-only execution",
+                    provider_name.c_str(), availableProvidersString().c_str());
+                return;
+            }
 
             appendProvider(opts, provider_name, provider_opts, xsink);
             if (*xsink) {
+                if (diag.error.empty()) {
+                    diag.error = "provider append failed";
+                }
                 return;
             }
+            markProviderAppended(provider_name, false);
         }
+        validateRequiredProviders(xsink);
     } else {
         // No explicit providers configured — auto-detect best available GPU provider
         autoDetectProvider(opts);
+        validateRequiredProviders(xsink);
     }
 }
 
 void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
     auto_provider_selected = false;
-    std::vector<std::string> available = Ort::GetAvailableProviders();
+    if (available_providers.empty()) {
+        available_providers = getAvailableOnnxProviders();
+    }
 
     // Priority order: CUDA (Linux), CoreML (macOS), then CPU fallback
     static const std::vector<std::string> preferred = {
@@ -384,8 +717,10 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
     };
 
     for (const auto& pref : preferred) {
-        if (std::find(available.begin(), available.end(), pref) != available.end()) {
+        OnnxProviderDiagnostic& diag = providerDiagnostic(pref);
+        if (std::find(available_providers.begin(), available_providers.end(), pref) != available_providers.end()) {
             if (isAutoProviderDisabled(pref)) {
+                diag.error = "provider was disabled after a previous session creation failure";
                 continue;
             }
 
@@ -395,14 +730,17 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
                 appendProvider(opts, pref, empty_opts, &xsink);
                 if (!xsink) {
                     auto_provider_selected = active_provider != "CPUExecutionProvider";
+                    markProviderAppended(pref, auto_provider_selected);
                     return;
                 }
                 // Provider failed to initialize — try the next one
+                diag.error = "provider append failed";
                 xsink.clear();
                 disableAutoProvider(pref);
                 active_provider = "CPUExecutionProvider";
                 auto_provider_selected = false;
             } catch (...) {
+                diag.error = "provider append raised an unknown C++ exception";
                 disableAutoProvider(pref);
                 active_provider = "CPUExecutionProvider";
                 auto_provider_selected = false;
@@ -410,17 +748,19 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
         }
     }
     // Fall through to CPU (always available, no action needed)
+    markProviderAppended("CPUExecutionProvider", false);
 }
 
 void QoreOnnxModel::appendProvider(Ort::SessionOptions& opts, const std::string& name,
     const std::unordered_map<std::string, std::string>& provider_opts,
     ExceptionSink* xsink) {
-    // Normalize name: strip "ExecutionProvider" suffix if present for matching
-    std::string normalized = name;
+    std::string normalized = normalizeProviderName(name);
 
     // CPU is always a fallback; no action needed
-    if (normalized == "CPU" || normalized == "CPUExecutionProvider") {
-        active_provider = "CPUExecutionProvider";
+    if (normalized == "CPUExecutionProvider") {
+        if (active_provider.empty()) {
+            active_provider = "CPUExecutionProvider";
+        }
         return;
     }
 
@@ -448,6 +788,7 @@ void QoreOnnxModel::appendProvider(Ort::SessionOptions& opts, const std::string&
                 if (status) {
                     std::string msg = Ort::GetApi().GetErrorMessage(status);
                     Ort::GetApi().ReleaseStatus(status);
+                    markProviderError(normalized, msg);
                     xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
                         "failed to configure CUDA provider: %s", msg.c_str());
                     return;
@@ -459,11 +800,14 @@ void QoreOnnxModel::appendProvider(Ort::SessionOptions& opts, const std::string&
             if (status) {
                 std::string msg = Ort::GetApi().GetErrorMessage(status);
                 Ort::GetApi().ReleaseStatus(status);
+                markProviderError(normalized, msg);
                 xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
                     "failed to append CUDA provider: %s", msg.c_str());
                 return;
             }
-            active_provider = "CUDAExecutionProvider";
+            if (active_provider.empty() || active_provider == "CPUExecutionProvider") {
+                active_provider = "CUDAExecutionProvider";
+            }
         } else if (normalized == "TensorRT" || normalized == "TensorrtExecutionProvider"
                 || normalized == "TensorRTExecutionProvider") {
             // Use V2 API for TensorRT
@@ -487,6 +831,7 @@ void QoreOnnxModel::appendProvider(Ort::SessionOptions& opts, const std::string&
                 if (status) {
                     std::string msg = Ort::GetApi().GetErrorMessage(status);
                     Ort::GetApi().ReleaseStatus(status);
+                    markProviderError(normalized, msg);
                     xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
                         "failed to configure TensorRT provider: %s", msg.c_str());
                     return;
@@ -498,17 +843,23 @@ void QoreOnnxModel::appendProvider(Ort::SessionOptions& opts, const std::string&
             if (status) {
                 std::string msg = Ort::GetApi().GetErrorMessage(status);
                 Ort::GetApi().ReleaseStatus(status);
+                markProviderError(normalized, msg);
                 xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
                     "failed to append TensorRT provider: %s", msg.c_str());
                 return;
             }
-            active_provider = "TensorrtExecutionProvider";
+            if (active_provider.empty() || active_provider == "CPUExecutionProvider") {
+                active_provider = "TensorrtExecutionProvider";
+            }
         } else {
             // Generic API for all other providers
             opts.AppendExecutionProvider(normalized, provider_opts);
-            active_provider = normalized;
+            if (active_provider.empty() || active_provider == "CPUExecutionProvider") {
+                active_provider = normalized;
+            }
         }
     } catch (const Ort::Exception& e) {
+        markProviderError(normalized, e.what());
         xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
             "failed to append execution provider '%s': %s", name.c_str(), e.what());
     }
@@ -593,6 +944,67 @@ QoreListNode* QoreOnnxModel::getOutputInfo(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+QoreListNode* QoreOnnxModel::getProviders(ExceptionSink* xsink) const {
+    return stringVectorToList(available_providers, xsink);
+}
+
+QoreHashNode* QoreOnnxModel::getProviderOptions(ExceptionSink* xsink) const {
+    return getOnnxProviderOptionsMetadata(xsink);
+}
+
+QoreListNode* QoreOnnxModel::getRequestedProviders(ExceptionSink* xsink) const {
+    return stringVectorToList(requested_providers, xsink);
+}
+
+static QoreHashNode* providerDiagnosticToHash(const OnnxProviderDiagnostic& diag, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclOnnxProviderDiagnostic, xsink), xsink);
+    rv->setKeyValue("name", new QoreStringNode(diag.name), xsink);
+    rv->setKeyValue("requested", diag.requested, xsink);
+    rv->setKeyValue("required", diag.required, xsink);
+    rv->setKeyValue("available", diag.available, xsink);
+    rv->setKeyValue("appended", diag.appended, xsink);
+    rv->setKeyValue("auto_selected", diag.auto_selected, xsink);
+    rv->setKeyValue("active", diag.active, xsink);
+    rv->setKeyValue("cpu_fallback", diag.cpu_fallback, xsink);
+
+    if (!diag.error.empty()) {
+        rv->setKeyValue("error", new QoreStringNode(diag.error), xsink);
+    }
+
+    if (!diag.options.empty()) {
+        ReferenceHolder<QoreHashNode> options(new QoreHashNode(stringTypeInfo), xsink);
+        for (const auto& opt : diag.options) {
+            options->setKeyValue(opt.first.c_str(), new QoreStringNode(opt.second), xsink);
+        }
+        rv->setKeyValue("options", options.release(), xsink);
+    }
+
+    return rv.release();
+}
+
+QoreListNode* QoreOnnxModel::getProviderDiagnostics(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclOnnxProviderDiagnostic->getTypeInfo()),
+        xsink);
+    for (const auto& diag : provider_diagnostics) {
+        rv->push(providerDiagnosticToHash(diag, xsink), xsink);
+    }
+    return rv.release();
+}
+
+QoreHashNode* QoreOnnxModel::getEffectiveProviderReport(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("active_provider", new QoreStringNode(active_provider), xsink);
+    rv->setKeyValue("available_providers", getProviders(xsink), xsink);
+    rv->setKeyValue("requested_providers", getRequestedProviders(xsink), xsink);
+    rv->setKeyValue("provider_diagnostics", getProviderDiagnostics(xsink), xsink);
+    rv->setKeyValue("explicit_provider_config", explicit_provider_config, xsink);
+    rv->setKeyValue("allow_cpu_fallback", allow_cpu_fallback, xsink);
+    rv->setKeyValue("fail_on_provider_fallback", fail_on_provider_fallback, xsink);
+    rv->setKeyValue("cpu_fallback_used", cpu_fallback_used, xsink);
+    rv->setKeyValue("auto_provider_selected", auto_provider_selected, xsink);
+    return rv.release();
+}
+
 QoreHashNode* QoreOnnxModel::getModelInfo(ExceptionSink* xsink) const {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclOnnxModelInfo, xsink), xsink);
 
@@ -618,6 +1030,10 @@ QoreHashNode* QoreOnnxModel::getModelInfo(ExceptionSink* xsink) const {
     if (!active_provider.empty()) {
         rv->setKeyValue("active_provider", new QoreStringNode(active_provider), xsink);
     }
+    rv->setKeyValue("available_providers", getProviders(xsink), xsink);
+    rv->setKeyValue("requested_providers", getRequestedProviders(xsink), xsink);
+    rv->setKeyValue("provider_diagnostics", getProviderDiagnostics(xsink), xsink);
+    rv->setKeyValue("cpu_fallback_used", cpu_fallback_used, xsink);
 
     return rv.release();
 }

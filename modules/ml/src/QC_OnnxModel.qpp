@@ -34,6 +34,7 @@ extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
 extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 
 //! The OnnxModel class loads and runs pre-trained ONNX models for inference
 /** Loads an ONNX model file and provides methods for running inference with
@@ -43,8 +44,9 @@ extern const TypedHashDecl* hashdeclOnnxSessionConfig;
     @par Thread Safety
     ONNX Runtime sessions are thread-safe for inference after creation, so
     concurrent run() calls from multiple threads on the same OnnxModel instance
-    are safe. Metadata methods (getModelInfo(), getInputInfo(), getOutputInfo(),
-    getProviderInfo()) are also safe for concurrent use.
+    are safe. Metadata and diagnostic methods (getModelInfo(), getInputInfo(),
+    getOutputInfo(), getProviderInfo(), getEffectiveProviderReport()) are also
+    safe for concurrent use.
 
     @par Example:
     @code{.py}
@@ -333,6 +335,71 @@ printf("Configured provider: %s\n", provider);
     @endcode
 
 */
-string OnnxModel::getProviderInfo() [flags=CONSTANT] {
+string OnnxModel::getProviderInfo() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(model->getActiveProvider());
+}
+
+//! Returns providers available in the linked ONNX Runtime build
+/** @return a list of canonical ONNX Runtime execution provider names
+
+    @par Example:
+    @code{.py}
+list<string> providers = model.getProviders();
+printf("Available providers: %y\n", providers);
+    @endcode
+*/
+list<string> OnnxModel::getProviders() [flags=RET_VALUE_ONLY] {
+    return model->getProviders(xsink);
+}
+
+//! Returns known provider option metadata
+/** @return a hash keyed by canonical provider name with aliases, availability,
+    and known option descriptions
+
+    @par Example:
+    @code{.py}
+hash<auto> options = model.getProviderOptions();
+printf("CUDA options: %y\n", options.CUDAExecutionProvider.known_options);
+    @endcode
+*/
+hash<auto> OnnxModel::getProviderOptions() [flags=RET_VALUE_ONLY] {
+    return model->getProviderOptions(xsink);
+}
+
+//! Returns normalized provider names requested by the session config
+/** @return the normalized explicit provider list; empty when providers were not
+    supplied or when providers: () requested CPU-only execution
+*/
+list<string> OnnxModel::getRequestedProviders() [flags=RET_VALUE_ONLY] {
+    return model->getRequestedProviders(xsink);
+}
+
+//! Returns structured provider diagnostics for this session
+/** @return a list of @ref OnnxProviderDiagnostic hashes
+
+    @par Example:
+    @code{.py}
+for (hash<OnnxProviderDiagnostic> diag in model.getProviderDiagnostics()) {
+    printf("%s: available=%y appended=%y error=%y\n",
+        diag.name, diag.available, diag.appended, diag.error);
+}
+    @endcode
+*/
+list<hash<OnnxProviderDiagnostic>> OnnxModel::getProviderDiagnostics() [flags=RET_VALUE_ONLY] {
+    return model->getProviderDiagnostics(xsink);
+}
+
+//! Returns the effective provider report for this session
+/** @return a hash containing the active provider, available providers,
+    requested providers, provider diagnostics, and fallback policy
+
+    @par Example:
+    @code{.py}
+hash<auto> report = model.getEffectiveProviderReport();
+assertEq(False, report.cpu_fallback_used);
+printf("Active provider: %s\n", report.active_provider);
+    @endcode
+*/
+hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
+    return model->getEffectiveProviderReport(xsink);
 }

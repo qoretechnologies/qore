@@ -3386,9 +3386,27 @@ public class MlTest inherits QUnit::Test {
         assertTrue(providers.contains(info.active_provider),
             sprintf("active_provider %y should be in available providers %y",
                 info.active_provider, providers));
+        assertTrue(info.available_providers.contains("CPUExecutionProvider"));
+        assertTrue(info.provider_diagnostics.size() > 0);
+        assertFalse(info.cpu_fallback_used);
 
         # getProviderInfo() should match
         assertEq(info.active_provider, model.getProviderInfo());
+
+        assertEq(providers, model.getProviders());
+        hash<auto> options = ML::ml_get_onnx_provider_options();
+        assertTrue(options.hasKey("CPUExecutionProvider"));
+        assertTrue(options.CPUExecutionProvider.available);
+
+        hash<auto> method_options = model.getProviderOptions();
+        assertTrue(method_options.hasKey("CPUExecutionProvider"));
+        assertEq(options.CPUExecutionProvider.available,
+            method_options.CPUExecutionProvider.available);
+
+        hash<auto> report = model.getEffectiveProviderReport();
+        assertEq(model.getProviderInfo(), report.active_provider);
+        assertTrue(report.available_providers.contains("CPUExecutionProvider"));
+        assertTrue(report.provider_diagnostics.size() > 0);
     }
 
     onnxInvalidProviderTest() {
@@ -3405,6 +3423,13 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-ONNX-PROVIDER-ERROR", sub() {
             ML::OnnxModel model(getTestModelPath(), config);
         });
+
+        assertThrows("ML-ONNX-PROVIDER-ERROR", "available providers", sub() {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "required_providers": ("NonExistentProvider123",),
+            });
+        });
+
     }
 
     onnxInvalidConfigTest() {
@@ -3477,6 +3502,10 @@ public class MlTest inherits QUnit::Test {
         ML::OnnxModel model(getTestModelPath(), config);
         assertTrue(model.isLoaded());
         assertEq("CPUExecutionProvider", model.getProviderInfo());
+        assertEq((), model.getRequestedProviders());
+        hash<auto> report = model.getEffectiveProviderReport();
+        assertTrue(report.explicit_provider_config);
+        assertFalse(report.cpu_fallback_used);
 
         # Inference should work
         hash<auto> result = model.run({"X": ((4.0,),)});
@@ -3491,6 +3520,11 @@ public class MlTest inherits QUnit::Test {
         ML::OnnxModel model2(getTestModelPath(), config2);
         assertTrue(model2.isLoaded());
         assertEq("CPUExecutionProvider", model2.getProviderInfo());
+        assertEq(("CPUExecutionProvider",), model2.getRequestedProviders());
+        list<hash<ML::OnnxProviderDiagnostic>> diags = model2.getProviderDiagnostics();
+        assertEq("CPUExecutionProvider", diags[0].name);
+        assertTrue(diags[0].requested);
+        assertTrue(diags[0].appended);
     }
 
     onnxCudaTest() {
