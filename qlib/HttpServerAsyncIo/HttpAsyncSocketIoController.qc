@@ -1747,9 +1747,15 @@ public class HttpAsyncSocketIoController {
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
+                    # Bind the queue to the QUIC session so libqore delivers a
+                    # close signal on peer stream reset / session close, releasing
+                    # the dedicated handler thread even though disconnect() does
+                    # not close a multiplexed connection (issue #5339).
+                    h3op.registerPersistentSessionQueue(session_id, q);
                 },
                 "deregister_persistent_queue": sub (string key) {
                     self.deregisterPersistentQueue(key);
+                    h3op.deregisterPersistentSessionQueue(session_id);
                 },
                 # NOTE: resume_body_streaming is NOTHING for HTTP/3 because
                 # the h3op is already resumed during dispatch (getOutput()
@@ -3526,9 +3532,15 @@ public class HttpAsyncSocketIoController {
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
+                    # Bind the queue to the H2 connection so libqore delivers a
+                    # close signal on peer stream reset, releasing the dedicated
+                    # handler thread even though disconnect() does not close a
+                    # multiplexed connection (issue #5339).
+                    h2op.registerPersistentSessionQueue(q);
                 },
                 "deregister_persistent_queue": sub (string key) {
                     self.deregisterPersistentQueue(key);
+                    h2op.deregisterPersistentSessionQueue();
                 },
                 "resume_body_streaming": body_streaming ? sub () {
                     resumeMultiplexedReading(h2op, uh,

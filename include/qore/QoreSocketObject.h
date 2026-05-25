@@ -639,6 +639,13 @@ public:
     //! Internal async-poll helper for HTTP/2 remote stream closed checks.
     DLLLOCAL bool isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) const;
 
+    //! Drains stream IDs reset by the peer since the last call (I/O thread only)
+    /** Used by the HTTP/2 server poll operation to surface peer RST_STREAMs for
+        persistent-session teardown.  Returns an empty vector if there is no
+        HTTP/2 session.
+    */
+    DLLLOCAL std::vector<int32_t> takeHttp2PeerResetReportsForAsyncPoll();
+
     //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
     /** @param stream_id the HTTP/2 stream ID
         @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)

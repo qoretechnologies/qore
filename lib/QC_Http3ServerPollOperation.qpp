@@ -223,7 +223,10 @@ QoreHashNode* Http3ServerPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     // AFTER processing gives the most up-to-date view
     struct OnExit {
         Http3ServerPollOperationPriv* self;
-        ~OnExit() { self->checkStreamQueues(); }
+        ~OnExit() {
+            self->checkStreamQueues();
+            self->deliverSessionLifecycleEvents();
+        }
     } on_exit{this};
 
     while (true) {
@@ -672,6 +675,62 @@ void Http3ServerPollOperationPriv::checkStreamQueues() {
     }
     ASYNC_IO_TRACE("Http3ServerPollOperationPriv::checkStreamQueues registered=%zu ready=%zu\n",
         stream_queues.size(), data_ready_streams.size());
+}
+
+void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
+    // op_lock held (called from continuePoll() OnExit on the I/O thread).
+    // read_op (a SocketQuicServerPollOperation) accumulates peer-reset and
+    // session-close events while processing QUIC packets; deliver a close to any
+    // persistent-session Queue bound to an affected session so a dedicated
+    // handler thread parked on the Queue is released (its teardown then runs on
+    // the binding thread).  The push is the same I/O-thread Queue-push path used
+    // for stream data; the Queue stays alive via the QoreObject ref held in the
+    // persistent_session_queue_objs member.
+    if (!read_op || persistent_session_queues_.empty()) {
+        // Still drain read_op so events do not accumulate unbounded when no
+        // persistent session is bound to this connection.
+        if (read_op) {
+            std::vector<std::pair<int64_t, int64_t>> resets;
+            std::vector<int64_t> closed;
+            read_op->takeSessionLifecycleEvents(resets, closed);
+        }
+        return;
+    }
+    std::vector<std::pair<int64_t, int64_t>> resets;
+    std::vector<int64_t> closed;
+    read_op->takeSessionLifecycleEvents(resets, closed);
+
+    // A peer stream reset abandons the persistent exchange on its session; a
+    // session close ends it outright.  Either releases the session's persistent
+    // handler.  De-duplicate by session so we push at most one close per session.
+    std::unordered_set<int64_t> sessions_to_close;
+    for (auto& p : resets) {
+        sessions_to_close.insert(p.first);
+    }
+    for (int64_t sid : closed) {
+        sessions_to_close.insert(sid);
+    }
+    for (int64_t sid : sessions_to_close) {
+        auto it = persistent_session_queues_.find(sid);
+        if (it == persistent_session_queues_.end()) {
+            continue;
+        }
+        Queue* q = it->second;
+        // Remove before pushing so a duplicate event in the same batch (or a
+        // later poll) does not double-deliver; the dedicated loop's deregister
+        // will be a no-op for this session.
+        persistent_session_queues_.erase(it);
+        ExceptionSink xs;
+        ReferenceHolder<QoreHashNode> close_entry(new QoreHashNode(autoTypeInfo), &xs);
+        close_entry->setKeyValue("type", new QoreStringNode("close"), &xs);
+        if (xs) {
+            xs.clear();
+            continue;
+        }
+        ASYNC_IO_TRACE("Http3ServerPollOperationPriv::deliverSessionLifecycleEvents "
+            "pushing persistent close session=%lld\n", (long long)sid);
+        q->pushAndTakeRef(close_entry.release());
+    }
 }
 
 /** @endcond */
@@ -1129,6 +1188,78 @@ list<string> Http3ServerPollOperation::getAndClearDataReadyStreams() [flags=RET_
         rv->push(new QoreStringNode(skey), xsink);
     }
     return rv.release();
+}
+
+//! Binds a Queue to a QUIC session for persistent-session close delivery
+/** Called by the async-I/O controller when a multiplexed persistent handler
+    session is dedicated.  When the peer resets a stream on this session or the
+    session closes, continuePoll() pushes a \c {"type":"close"} hash to the Queue
+    (the same I/O-thread Queue-push path as stream data), releasing the dedicated
+    handler thread parked on it so its teardown runs on the binding thread.
+
+    @param session_id the QUIC session ID
+    @param queue the persistent-session Queue
+
+    @since %Qore 2.3
+*/
+nothing Http3ServerPollOperation::registerPersistentSessionQueue(int session_id, Queue[Queue] queue) {
+    // Hold the QoreObject ref in a member hash so the raw Queue* stays valid
+    // across the I/O-thread close push (mirrors stream_queue_objs).
+    QoreValue queue_arg = args->retrieveEntry(1);
+    {
+        AutoLocker ml(priv->stream_member_lock);
+        ValueHolder existing(self->getReferencedMemberNoMethod("persistent_session_queue_objs", xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> queue_objs(
+            existing->getType() == NT_HASH
+                ? existing->get<QoreHashNode>()->copy()
+                : new QoreHashNode(objectTypeInfo),
+            xsink);
+        if (queue_arg.getType() == NT_OBJECT) {
+            queue_objs->setKeyValue(std::to_string((int64_t)session_id).c_str(),
+                const_cast<QoreObject*>(queue_arg.get<const QoreObject>())->refSelf(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        self->setMemberValue("persistent_session_queue_objs", QC_HTTP3SERVERPOLLOPERATION,
+            queue_objs.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    priv->registerPersistentSessionQueue((int64_t)session_id, *queue);
+}
+
+//! Unbinds the persistent-session close Queue for a QUIC session
+/** Called by the async-I/O controller when the persistent session ends (clean
+    commit, explicit end, or after a delivered close).  Removes the C++ map entry
+    first (so the I/O thread will not push) and then drops the QoreObject ref.
+
+    @param session_id the QUIC session ID
+
+    @since %Qore 2.3
+*/
+nothing Http3ServerPollOperation::deregisterPersistentSessionQueue(int session_id) {
+    // Erase the C++ map entry first (under op_lock) so a concurrent I/O-thread
+    // delivery sees nothing, then drop the QoreObject ref.
+    priv->deregisterPersistentSessionQueue((int64_t)session_id);
+    {
+        AutoLocker ml(priv->stream_member_lock);
+        ValueHolder existing(self->getReferencedMemberNoMethod("persistent_session_queue_objs", xsink), xsink);
+        if (*xsink || existing->getType() != NT_HASH) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> queue_objs(existing->get<QoreHashNode>()->copy(), xsink);
+        queue_objs->removeKey(std::to_string((int64_t)session_id).c_str(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        self->setMemberValue("persistent_session_queue_objs", QC_HTTP3SERVERPOLLOPERATION,
+            queue_objs.release(), xsink);
+    }
 }
 
 //! Notifies all registered stream listeners that the connection is closed

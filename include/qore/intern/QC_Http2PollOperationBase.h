@@ -228,6 +228,23 @@ public:
     DLLLOCAL void registerStreamFrameState(int32_t stream_id, Queue* queue,
         QoreObject* queue_obj);
 
+    //! Binds a Queue to receive the persistent-session close signal for this connection
+    /** HTTP/2 has one persistent session per TCP connection.  When the peer
+        resets a stream on a still-open connection (e.g. a timed-out request),
+        continuePoll() pushes a \c {"type":"close"} hash to this Queue so a
+        persistent dedicated handler thread parked on it is released and runs its
+        teardown on the binding thread — rather than leaking until full
+        connection close.  Mirrors the HTTP/3 persistent-session rail.
+
+        @param queue the persistent-session Queue (ref transferred)
+        @param queue_obj the QoreObject wrapping queue (ref transferred)
+    */
+    DLLLOCAL void registerPersistentSessionQueue(Queue* queue, QoreObject* queue_obj,
+        ExceptionSink* xsink);
+
+    //! Unbinds the persistent-session close Queue (drops the held refs)
+    DLLLOCAL void deregisterPersistentSessionQueue(ExceptionSink* xsink);
+
     //! Returns and clears the list of stream IDs that had data drained
     /** Called by the controller after continuePoll() returns. For each
         stream ID, the controller dispatches onStreamData() to the worker pool.
@@ -304,6 +321,18 @@ private:
 
     //! Stream IDs that had data drained — I/O-thread-only
     std::vector<int32_t> data_ready_streams;
+
+    //! Persistent-session close-delivery Queue for this connection, or nullptr.
+    /** One persistent session per H2 connection.  continuePoll() pushes
+        {"type":"close"} here on a peer stream reset.  Protected by op_lock; the
+        QoreObject ref (persistent_session_queue_obj) keeps the Queue alive
+        across the I/O-thread push.
+    */
+    Queue* persistent_session_queue = nullptr;
+    QoreObject* persistent_session_queue_obj = nullptr;
+
+    //! Deliver a persistent-session close if the peer reset a stream this cycle
+    DLLLOCAL void deliverPersistentSessionClose(ExceptionSink* xsink);
 
     //! Maximum consecutive empty reads before closing the connection
     static constexpr int MAX_EMPTY_READS = 100;

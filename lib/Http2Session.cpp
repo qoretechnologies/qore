@@ -2022,6 +2022,10 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
             // the stream is erased from `streams` below (mirrors
             // QuicSession::peer_reset_streams_).
             h2->peer_reset_streams[stream_id] = error_code;
+            // One-shot report so the H2 server poll operation can tear down a
+            // persistent dedicated handler thread bound to this connection when
+            // the client abandons a stream.  Runs under m (held during mem_recv).
+            h2->pending_peer_reset_reports.push_back(stream_id);
         }
         // Mark as complete even if there was an error (including RST_STREAM without headers)
         stream->body_complete = true;
