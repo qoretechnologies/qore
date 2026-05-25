@@ -1294,7 +1294,7 @@ module DataProviderML {
                 QoreEmbedTextProcessor::ConstructorOptions{
                     "embedding_url", "embedding_model", "embedding_api_key", "window_size",
                     "embedding_model_path", "tokenizer_config_path", "max_tokens",
-                    "pooling_strategy", "registry_model_name", "registry_model_version",
+                    "pooling_strategy", "output_mode", "registry_model_name", "registry_model_version",
                     "registry_model_artifact_name", "registry_tokenizer_artifact_name",
                     "registry_backend_type", "registry_path", "registry_datasource",
                     "registry_table_prefix", "registry_rest_client",
@@ -1679,7 +1679,9 @@ module DataProviderML {
     directly from shaped inputs without first materializing per-row hashes.
     \c text-normalize appends a normalized text column, \c tokenize appends a
     token-count column, \c schema-validation appends validation columns or
-    filters invalid rows, \c embed-text appends an \c embedding column, and
+    filters invalid rows, \c embed-text appends an \c embedding column by
+    default or flat dense \c embedding_0, \c embedding_1, ... columns with
+    \c output_mode = "columns", and
     \c rerank-text emits the configured top-k rows with \c reranker_score and
     \c reranker_rank columns while preserving the negotiated shape.
 
@@ -1923,9 +1925,13 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       reading top-level columns directly; \c text-normalize appends a
       normalized text column, \c tokenize appends a token-count column,
       \c schema-validation appends \c _is_valid and \c _validation_errors or
-      filters invalid rows, \c embed-text appends an \c embedding column, and
+      filters invalid rows, \c embed-text appends an \c embedding column or
+      flat dense embedding dimension columns, and
       \c rerank-text emits top-k rows with \c reranker_score and
       \c reranker_rank columns without per-row hash materialization
+    - \c embed-text supports \c output_mode = "columns" to split ONNX embedding
+      tensors into dense \c embedding_N buffer columns for DataFrame and
+      BufferColumns pipelines
     - \c embed-text and \c rerank-text accept \c onnx_session_config and inherit
       QoreModelRegistry package execution config for ONNX Runtime provider,
       threading, and graph-optimization settings

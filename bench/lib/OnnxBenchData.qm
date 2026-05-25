@@ -522,6 +522,29 @@ public namespace OnnxBench {
         verifyEmbeddingList(name, columnToList(columns.getColumn("embedding")), rows);
     }
 
+    public nothing sub verifyEmbedFlatFrame(string name, DataFrame::DataFrame frame, int rows) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        verifyEmbedFlatColumns(name, frame, rows);
+    }
+
+    public nothing sub verifyEmbedFlatColumns(string name, auto columns, int rows) {
+        list<auto> c0 = columnToList(columns.getColumn("embedding_0"));
+        list<auto> c1 = columnToList(columns.getColumn("embedding_1"));
+        if (c0.size() != rows || c1.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned embedding columns with %d/%d rows; expected %d",
+                name, c0.size(), c1.size(), rows);
+        }
+        if (rows) {
+            float norm = sqrt(c0[rows - 1].toFloat() * c0[rows - 1].toFloat()
+                + c1[rows - 1].toFloat() * c1[rows - 1].toFloat());
+            if (abs(norm - 1.0) > 1e-5) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned final flat embedding norm %f", name, norm);
+            }
+        }
+    }
+
     public nothing sub verifyRerankRows(string name, list<auto> rows_out, int rows) {
         if (rows_out.size() != rows) {
             throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, rows_out.size(), rows);

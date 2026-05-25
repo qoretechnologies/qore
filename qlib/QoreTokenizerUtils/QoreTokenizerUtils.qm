@@ -78,6 +78,11 @@ module QoreTokenizerUtils {
     execution providers, disable GPU auto-detection for CPU-only deployments, and
     tune runtime threading.
 
+    ONNX embedding callers that need columnar or tensor-native pipelines can use
+    @ref QoreTokenizerUtils::EmbeddingModel::embedBatchTensor() "EmbeddingModel::embedBatchTensor()"
+    to receive a dense \c ML::Tensor directly and split it into flat
+    \c buffer<float32> columns without first materializing nested row lists.
+
     @par Example: Chunk a document for RAG
     @code{.py}
 %requires QoreTokenizerUtils
@@ -105,6 +110,9 @@ foreach hash<auto> chunk in (chunks) {
     - Local ONNX embedding and reranking paths use dense \c ML::Tensor inputs
       for \c input_ids, \c attention_mask, and \c token_type_ids, and only send
       tokenizer tensors declared by the model
+    - EmbeddingModel exposes @ref QoreTokenizerUtils::EmbeddingModel::embedBatchTensor()
+      "embedBatchTensor()" for tensor-native embedding consumers and dense
+      DataProviderML column output
     - EmbeddingModel and CrossEncoderReranker accept \c session_config for
       ONNX Runtime provider, threading, and graph-optimization settings
     - Enables QoreModelRegistry-backed ONNX execution for DataProviderML processors

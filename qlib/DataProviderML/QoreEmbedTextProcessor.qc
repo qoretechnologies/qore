@@ -169,6 +169,30 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                     <AllowedValueInfo>{"value": "max", "display_name": "Max"},
                 ),
             },
+            "output_mode": <DataProviderOptionInfo>{
+                "display_name": "Output Mode",
+                "short_desc": "How embeddings are added to shaped output",
+                "desc": "Controls how embedding vectors are represented in shaped bulk output:\n\n"
+                    "- `vector` — keep the existing `embedding` field containing one vector per row\n"
+                    "- `columns` — split dimensions into flat dense `embedding_0`, `embedding_1`, "
+                    "... columns for analytical pipelines and DataFrame processing\n\n"
+                    "`columns` mode avoids nested vector-list materialization for local ONNX embeddings "
+                    "when the input shape is `DataFrameBlock` or `BufferColumns`.",
+                "type": AbstractDataProviderTypeMap."string",
+                "default_value": "vector",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "vector",
+                        "display_name": "Vector Field",
+                        "desc": "Store each embedding as a vector in the `embedding` field",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "columns",
+                        "display_name": "Dense Columns",
+                        "desc": "Split embedding dimensions into flat dense columns",
+                    },
+                ),
+            },
             "registry_model_name": <DataProviderOptionInfo>{
                 "display_name": "Registry Model Name",
                 "short_desc": "Registry package containing ONNX and tokenizer artifacts",
@@ -234,6 +258,9 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
 
         #! ONNX pooling strategy
         string pooling_strategy = "mean";
+
+        #! Embedding output mode ("vector" or "columns")
+        string output_mode = "vector";
 
         #! Registry model/package name for ONNX mode
         *string registry_model_name;
@@ -315,6 +342,11 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         }
         max_tokens = copts.max_tokens ?? 512;
         pooling_strategy = copts.pooling_strategy ?? "mean";
+        output_mode = copts.output_mode ?? "vector";
+        if (output_mode != "vector" && output_mode != "columns") {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("output_mode must be \"vector\" or \"columns\"; got %y", output_mode);
+        }
         if (embedding_mode == "onnx" && !registry_model_name.val()) {
             if (!embedding_model_path.val()) {
                 throw "CONSTRUCTOR-ERROR",
@@ -386,6 +418,14 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         # batch embed
+        if (output_mode == "columns") {
+            *ML::Tensor embedding_tensor = emb_model.embedBatchTensor(texts);
+            if (!embedding_tensor) {
+                return ();
+            }
+            return addEmbeddingColumnsToRows(records, cast<ML::Tensor>(embedding_tensor));
+        }
+
         list<list<float>> embeddings = emb_model.embedBatch(texts);
 
         # emit one enriched record per input record
@@ -432,6 +472,14 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         ensureEmbeddingModel();
+        if (output_mode == "columns") {
+            *ML::Tensor embedding_tensor = embedTextsInWindowsTensor(texts);
+            if (!embedding_tensor) {
+                return;
+            }
+            return addEmbeddingColumns(records, shape, count, cast<ML::Tensor>(embedding_tensor));
+        }
+
         list<list<float>> embeddings = embedTextsInWindows(texts);
         if (embeddings.lsize() != count) {
             throw "PROCESSOR-ERROR",
@@ -457,6 +505,29 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
             embeddings += emb_model.embedBatch(window);
         }
         return embeddings;
+    }
+
+    #! Embeds a text column in configured batch windows and keeps dense tensor output
+    private *ML::Tensor embedTextsInWindowsTensor(list<string> texts) {
+        int count = texts.lsize();
+        list<ML::Tensor> tensors;
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            list<string> window = start == 0 && end == count
+                ? texts
+                : texts[start..(end - 1)];
+            *ML::Tensor tensor = emb_model.embedBatchTensor(window);
+            if (tensor) {
+                push tensors, cast<ML::Tensor>(tensor);
+            }
+        }
+        if (!tensors) {
+            return;
+        }
+        return tensors.lsize() == 1 ? tensors[0] : ML::Tensor::concatRows(tensors);
     }
 
     #! Uses the row-oriented implementation when a column fast path is not safe
@@ -544,6 +615,69 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 hash<auto> columns = records + {};
                 columns.embedding = embeddings;
                 return columns;
+            }
+        }
+        return records;
+    }
+
+    #! Appends embedding dimensions as scalar fields to row records
+    private list<auto> addEmbeddingColumnsToRows(list<hash<auto>> records, ML::Tensor embeddings) {
+        list<int> shape = embeddings.getShape();
+        if (shape.lsize() != 2 || shape[0] != records.lsize()) {
+            throw "PROCESSOR-ERROR",
+                sprintf("embedding tensor shape %y does not match %d input rows", shape, records.lsize());
+        }
+
+        list<auto> buffers = embeddings.toColumnBuffers();
+        list<list<auto>> values;
+        foreach auto buffer in (buffers) {
+            push values, buffer.toList();
+        }
+
+        list<auto> results = ();
+        for (int i = 0; i < records.lsize(); ++i) {
+            hash<auto> result = {} + records[i];
+            for (int j = 0; j < shape[1]; ++j) {
+                result{sprintf("embedding_%d", j)} = values[j][i];
+            }
+            push results, result;
+        }
+        return results;
+    }
+
+    #! Appends embedding dimensions as dense columns while preserving the negotiated shape
+    private auto addEmbeddingColumns(auto records, DataProvider::DataProviderShape shape, int count,
+            ML::Tensor embeddings) {
+        list<int> tensor_shape = embeddings.getShape();
+        if (tensor_shape.lsize() != 2 || tensor_shape[0] != count) {
+            throw "PROCESSOR-ERROR",
+                sprintf("embedding tensor shape %y does not match %d input rows", tensor_shape, count);
+        }
+
+        list<auto> columns = embeddings.toColumnBuffers();
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock: {
+                hash<auto> data = records.toColumnHash();
+                for (int j = 0; j < tensor_shape[1]; ++j) {
+                    data{sprintf("embedding_%d", j)} = columns[j];
+                }
+                return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(data);
+            }
+            case DataProvider::DataProviderShape::BufferColumns: {
+                hash<auto> data = DataProvider::AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                for (int j = 0; j < tensor_shape[1]; ++j) {
+                    data{sprintf("embedding_%d", j)} = columns[j];
+                }
+                return ColumnarResult::fromColumnHash(data);
+            }
+            case DataProvider::DataProviderShape::HashOfLists: {
+                hash<auto> data = records + {};
+                for (int j = 0; j < tensor_shape[1]; ++j) {
+                    data{sprintf("embedding_%d", j)} = columns[j].toList();
+                }
+                return data;
             }
         }
         return records;

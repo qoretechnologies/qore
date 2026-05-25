@@ -525,6 +525,15 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         assertEq(2, result[0].size(), "test embedding model returns two dimensions");
         assertEq(2, emb.getDimension(), "embedding dimension should be cached");
 
+        *ML::Tensor tensor_result = emb.embedBatchTensor(("hello world", "machine learning"));
+        assertTrue(tensor_result instanceof ML::Tensor, "ONNX embedding tensor API should return ML::Tensor");
+        ML::Tensor tensor = cast<ML::Tensor>(tensor_result);
+        assertEq((2, 2), tensor.getShape(), "embedding tensor should be rows x dimensions");
+        list<auto> tensor_columns = tensor.toColumnBuffers();
+        assertEq(2, tensor_columns.lsize(), "embedding tensor should split into two dense columns");
+        assertEq("buffer<float32>", tensor_columns[0].fullType(),
+            "embedding tensor columns should stay float32 buffers");
+
         foreach list<float> vec in (result) {
             float norm = sqrt(vec[0] * vec[0] + vec[1] * vec[1]);
             assertTrue(abs(norm - 1.0) < 1e-5,
@@ -544,6 +553,7 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         # empty batch should return empty list without making HTTP call
         list<list<float>> result = emb.embedBatch(());
         assertEq(0, result.size(), "empty batch should return empty list");
+        assertNothing(emb.embedBatchTensor(()), "empty tensor batch should return NOTHING");
     }
 
     # =============== CrossEncoderReranker Tests ===============

@@ -243,6 +243,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
         addTestCase("embed-text - DataFrameBlock ONNX shape", \embedTextDataFrameOnnxShape());
         addTestCase("embed-text - BufferColumns ONNX shape", \embedTextBufferColumnsOnnxShape());
+        addTestCase("embed-text - DataFrameBlock dense columns",
+            \embedTextDataFrameOnnxColumnOutput());
+        addTestCase("embed-text - BufferColumns dense columns",
+            \embedTextBufferColumnsOnnxColumnOutput());
         addTestCase("embed-text - registry execution plan inference",
             \embedTextRegistryPlanInference());
         addTestCase("rerank-text - DataFrameBlock ONNX shape", \rerankTextDataFrameOnnxShape());
@@ -3682,6 +3686,83 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(abs(sqrt(embeddings[1][0] * embeddings[1][0]
                 + embeddings[1][1] * embeddings[1][1]) - 1.0) < 1e-5,
             "embedding vectors should be normalized");
+    }
+
+    embedTextDataFrameOnnxColumnOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        if (skipTokenEmbeddingOnnx()) {
+            return;
+        }
+
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 32,
+            "embedding_mode": "onnx",
+            "embedding_model_path": getTokenEmbeddingModelPath(),
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_tokens": 8,
+            "output_mode": "columns",
+        });
+
+        DataFrame::DataFrame df({
+            "id": (1, 2),
+            "body": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result),
+            "embed-text dense columns should preserve DataFrameBlock output");
+        assertTrue(result.columnNames().contains("embedding_0"));
+        assertTrue(result.columnNames().contains("embedding_1"));
+        assertFalse(result.columnNames().contains("embedding"),
+            "dense column output should not also materialize nested vector column");
+        assertEq("buffer<float32>", result.getColumnBuffer("embedding_0").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("embedding_1").fullType());
+
+        list<float> c0 = result.getColumnBuffer("embedding_0").toList();
+        list<float> c1 = result.getColumnBuffer("embedding_1").toList();
+        assertEq(2, c0.lsize());
+        assertTrue(abs(sqrt(c0[0] * c0[0] + c1[0] * c1[0]) - 1.0) < 1e-5,
+            "flat embedding columns should be normalized");
+    }
+
+    embedTextBufferColumnsOnnxColumnOutput() {
+        if (skipTokenEmbeddingOnnx()) {
+            return;
+        }
+
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 32,
+            "embedding_mode": "onnx",
+            "embedding_model_path": getTokenEmbeddingModelPath(),
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_tokens": 8,
+            "output_mode": "columns",
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "body": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "embed-text dense columns should preserve BufferColumns output");
+        assertEq((1, 2), result.getColumn("id").toList());
+        assertEq("buffer<float32>", result.getColumn("embedding_0").fullType());
+        assertEq("buffer<float32>", result.getColumn("embedding_1").fullType());
+
+        list<float> c0 = result.getColumn("embedding_0").toList();
+        list<float> c1 = result.getColumn("embedding_1").toList();
+        assertEq(2, c0.lsize());
+        assertTrue(abs(sqrt(c0[1] * c0[1] + c1[1] * c1[1]) - 1.0) < 1e-5,
+            "flat embedding columns should be normalized");
     }
 
     embedTextRegistryPlanInference() {

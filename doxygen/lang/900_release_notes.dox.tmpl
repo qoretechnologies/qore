@@ -2076,6 +2076,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - ML::Tensor::toColumnBuffers() splits rank-1 and rank-2 tensor outputs
         into dense column buffers so DataFrame and DataProviderML column output
         modes can avoid nested row-list materialization for vector outputs
+      - QoreTokenizerUtils::EmbeddingModel::embedBatchTensor() and
+        DataProviderML \c embed-text \c output_mode = "columns" keep local ONNX
+        embedding output in dense tensor/buffer form for DataFrame and
+        BufferColumns pipelines
       - ONNX inference supports float, double, int8, int16, int32, int64, and bool
         tensor input/output conversion
       - OnnxModel automatic provider selection falls back to CPU when an advertised

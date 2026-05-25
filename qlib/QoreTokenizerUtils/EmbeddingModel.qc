@@ -191,6 +191,43 @@ public class EmbeddingModel {
         throw "EMBEDDING-ERROR", sprintf("unsupported mode %y", mode);
     }
 
+    #! Embeds a batch of texts and returns one dense tensor
+    /** This method is the lowest-copy local ONNX embedding API. In ONNX mode,
+        tokenization, pooling, and normalization stay in dense tensor form and
+        the returned tensor has shape \c (texts.size(), dimension). In HTTP mode,
+        the endpoint response is converted to a \c float32 tensor.
+
+        @param texts list of texts to embed
+        @return an @ref Qore::ML::Tensor with one embedding row per text, or
+            \c NOTHING for an empty input batch
+
+        @throw EMBEDDING-ERROR if the embedding request fails
+
+        @par Example:
+        @code{.q}
+        QoreTokenizerUtils::EmbeddingModel emb(config);
+        *ML::Tensor embeddings = emb.embedBatchTensor(("invoice text", "support ticket"));
+        if (embeddings) {
+            list<auto> dimension_columns = embeddings.toColumnBuffers();
+        }
+        @endcode
+
+        @since QoreTokenizerUtils 1.2
+    */
+    *ML::Tensor embedBatchTensor(list<string> texts) {
+        if (!texts) {
+            return;
+        }
+
+        if (mode == "http") {
+            return new ML::Tensor(embedBatchHttp(texts), NOTHING, "float32");
+        }
+        if (mode == "onnx") {
+            return embedBatchOnnxTensor(texts);
+        }
+        throw "EMBEDDING-ERROR", sprintf("unsupported mode %y", mode);
+    }
+
     #! Returns the embedding vector dimension
     /** Returns the cached dimension after the first successful embedding call.
         @return the embedding dimension, or -1 if no embedding has been computed yet
@@ -224,8 +261,26 @@ public class EmbeddingModel {
         @return list of float vectors, one per input text
     */
     private list<list<float>> embedBatchOnnx(list<string> texts) {
+        *ML::Tensor tensor = embedBatchOnnxTensor(texts);
+        return tensor ? tensor.toList() : ();
+    }
+
+    #! Embeds texts via local ONNX model and keeps the result as a dense tensor
+    /** Tokenizes texts, pads to uniform length, runs ONNX inference in
+        sub-batches, mean-pools the last hidden state (weighted by attention
+        mask), and L2-normalizes the output vectors.
+
+        @param texts list of texts to embed
+        @return a dense tensor with one embedding row per input text, or
+            \c NOTHING for an empty input batch
+    */
+    private *ML::Tensor embedBatchOnnxTensor(list<string> texts) {
+        if (!texts) {
+            return;
+        }
+
         int batch_size = 32;
-        list<list<float>> all_embeddings = ();
+        list<ML::Tensor> tensor_batches = ();
         int total = texts.size();
         int offset = 0;
 
@@ -254,14 +309,12 @@ public class EmbeddingModel {
                 dimension = normalized_shape[1];
             }
 
-            foreach list<float> embedding in (normalized.toList()) {
-                push all_embeddings, embedding;
-            }
+            push tensor_batches, normalized;
 
             offset = end;
         }
 
-        return all_embeddings;
+        return tensor_batches.size() == 1 ? tensor_batches[0] : ML::Tensor::concatRows(tensor_batches);
     }
 
     #! Builds ONNX Runtime tensor inputs from dense tokenizer buffers
