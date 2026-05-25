@@ -4098,6 +4098,29 @@ static inline bool shouldSkipByCompileFile(const char* item_file, const char* co
     return strcmp(item_file, compile_file) != 0;
 }
 
+//! Returns true for user variants that should be emitted for this method.
+/**
+    Abstract-method resolution can install a concrete parent variant into a
+    child class's local method map when a sibling base satisfies the abstract
+    contract.  That variant remains owned by the parent QoreMethod; serializing
+    it as a child method creates a source-stripped AOT variant with signature
+    metadata but no executable body.  The child relationship is derived from
+    the base hierarchy, so AOT must let deserialization rebuild it instead.
+*/
+static bool isAOTSerializableMethodVariant(const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    if (!method || !variant || !variant->isUser()) {
+        return false;
+    }
+    const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(variant);
+    const QoreMethod* owner = mvb->method();
+    if (owner == method) {
+        return true;
+    }
+    const QoreClass* method_class = method->getClass();
+    const QoreClass* owner_class = owner->getClass();
+    return !(method_class && owner_class && method_class->getClass(owner_class->getID()));
+}
+
 //! Recursively collect all user-defined items from the namespace tree
 /** @param state the state object to collect items into
     @param ns the namespace to collect from
@@ -5709,7 +5732,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
-                if (v->isUser()) {
+                if (isAOTSerializableMethodVariant(method, v)) {
                     ++num_variants;
                 }
             }
@@ -5722,7 +5745,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
-                if (v->isUser()) {
+                if (isAOTSerializableMethodVariant(method, v)) {
                     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
                     // write access + flags before the signature
                     writer.writeU8(static_cast<uint8_t>(mvb->getAccess()));

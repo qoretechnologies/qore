@@ -370,6 +370,10 @@ static std::string getLibqoreDir() {
 // `ir_func->name` before LLVM function lookup.
 static std::string aotSymbolPrefix(const char* compile_module);
 
+// Forward decl - implementation follows aotSymbolPrefix below.
+static bool isAOTCompilableMethodVariant(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant);
+
 //! Generate a unique variant key that includes parameter types to distinguish overloads
 /** Format: "name(type1,type2,...)" - uses type paths for parameter types
     @param name the base function/method name
@@ -2820,6 +2824,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             QoreFunctionIterator vit(*mfb);
             while (vit.next()) {
                 const AbstractQoreFunctionVariant* variant = vit.getVariant();
+                if (!isAOTCompilableMethodVariant(meth, variant)) {
+                    continue;
+                }
                 UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
                 if (!uvb || !uvb->hasBody()) {
                     continue;
@@ -5301,6 +5308,29 @@ static std::string aotSymbolPrefix(const char* compile_module) {
     // toolchain's symbol table.  The `_qaot_` marker is distinct
     // enough to survive nm/objdump searches for diagnostics.
     return std::string("_qaot_") + sanitizeCIdentifier(compile_module) + "_";
+}
+
+//! Returns true for user variants that should be compiled for this method.
+/**
+    A child class can contain a local method shell whose variant is actually a
+    concrete parent variant installed while resolving an abstract sibling base.
+    Compiling that inherited variant under the child method key either creates a
+    duplicate body or, when the parent was loaded from source-stripped AOT, a
+    metadata-only method with no body. Let class deserialization rebuild the
+    inherited relationship from the base hierarchy instead.
+*/
+static bool isAOTCompilableMethodVariant(const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    if (!method || !variant || !variant->isUser()) {
+        return false;
+    }
+    const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(variant);
+    const QoreMethod* owner = mvb->method();
+    if (owner == method) {
+        return true;
+    }
+    const QoreClass* method_class = method->getClass();
+    const QoreClass* owner_class = owner->getClass();
+    return !(method_class && owner_class && method_class->getClass(owner_class->getID()));
 }
 
 //! Phase 4 slice 5: extract a filename basename without extension.
