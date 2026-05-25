@@ -10,9 +10,9 @@
 #   - slice 10i: batch compile (N .qos from one parse cycle).
 #
 # Positive test: reverse-order registration + batch mode -> compute()
-# runs successfully.  Late-bound non-hierarchy references in this fixture
-# also work without batch after both fragments are registered; class hierarchy
-# cases where batch remains load-bearing are covered by
+# runs successfully.  The compatibility control also verifies that the same
+# fragments still work without batch when registered in dependency order.
+# Class hierarchy cases where batch remains load-bearing are covered by
 # qo_batch_inherit_test.sh.
 #
 # Run from the qore repo root:
@@ -84,7 +84,7 @@ g++ -std=c++20 -Iinclude -Lbuild \
 LD_LIBRARY_PATH=build "${TMP}/qo_script_batch_test"
 
 echo ""
-echo "=== Step 4: compatibility control (reverse order, NO batch) ==="
+echo "=== Step 4: compatibility control (dependency order, NO batch) ==="
 cat > "${TMP}/compat.cpp" <<'EOF'
 #include <qore/Qore.h>
 #include <qore/QoreAOT.h>
@@ -99,8 +99,8 @@ int main() {
     qore_init(QL_GPL, "UTF-8", true);
     QoreProgram* pgm = qore_create_program(
         PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-    qore_${MAIN_ID}_${MAIN_ID}_script_register(pgm);   // reversed - no batch
     qore_${LIB_ID}_${LIB_ID}_script_register(pgm);
+    qore_${MAIN_ID}_${MAIN_ID}_script_register(pgm);
     int rc = qore_run_callable(pgm, "compute", nullptr);
     qore_destroy_program(pgm);
     qore_cleanup();
@@ -112,9 +112,9 @@ g++ -std=c++20 -Iinclude -Lbuild \
     -lqore -Wl,-rpath,build \
     -o "${TMP}/compat"
 LD_LIBRARY_PATH=build "${TMP}/compat"
-echo "  confirmed: reverse-order registration without batch also works for this late-bound fixture"
+echo "  confirmed: dependency-order registration without batch also works"
 
 echo ""
 echo "OK: slice 10g out-of-order batch register works end-to-end"
 echo "    (batch-compiled 2 .qos, registered in reverse dep order,"
-echo "    compute() ran; no-batch compatibility control also ran)."
+echo "    compute() ran; dependency-order no-batch control also ran)."

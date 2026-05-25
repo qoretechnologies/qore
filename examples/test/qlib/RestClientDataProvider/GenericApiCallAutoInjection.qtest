@@ -173,7 +173,7 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
                 DataProviderActionCatalog::getActionHash(app_name);
             *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
             assertTrue(exists a, "make-api-call should be auto-registered");
-            assertEq(DPAT_API, a.action_code);
+            assertEq(cast<int>(DPAT_API), cast<int>(a.action_code));
             assertEq("/" + AbstractDataProvider::GenericApiCallChildName, a.path);
             assertEq("Make an API call", a.display_name);
 

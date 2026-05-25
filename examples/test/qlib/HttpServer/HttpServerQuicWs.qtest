@@ -78,7 +78,7 @@ class EchoWsConnection inherits WebSocketConnection {
 
 #! Sends an initial message from registered(), before the first client frame arrives
 class RegisteredSendWsConnection inherits EchoWsConnection {
-    constructor(WebSocketHandler handler) : EchoWsConnection(handler) {
+    constructor(WebSocketHandler handler, Queue closed_signal) : EchoWsConnection(handler, closed_signal) {
     }
 
     registered() {
@@ -126,7 +126,7 @@ class EchoWsHandler inherits WebSocketHandler {
 
 class RegisteredSendWsHandler inherits EchoWsHandler {
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
-        return new RegisteredSendWsConnection(self);
+        return new RegisteredSendWsConnection(self, closed_signal);
     }
 }
 
