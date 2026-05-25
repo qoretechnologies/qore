@@ -360,12 +360,7 @@ public class ModelRegistry {
             return ML::ml_deserialize(backend.loadNamedArtifact(name, version_id, entry_artifact));
         }
         if (runtime == "onnxruntime" || meta.format == "onnx") {
-            binary artifact = backend.loadNamedArtifact(name, version_id, entry_artifact);
-            if (meta.execution && meta.execution.config) {
-                return new ML::OnnxModel(artifact,
-                    cast<hash<ML::OnnxSessionConfig>>(meta.execution.config));
-            }
-            return new ML::OnnxModel(artifact);
+            return loadOnnxExecutable(name, version_id, meta, entry_artifact);
         }
 
         throw "ML-REGISTRY-ERROR",
@@ -771,6 +766,93 @@ public class ModelRegistry {
             return "torch-export";
         }
         return "binary";
+    }
+
+    #! Loads an ONNX executable, materializing external data files when needed
+    private object loadOnnxExecutable(string name, string version_id,
+            hash<ModelVersionInfo> meta, string entry_artifact) {
+        validatePackageArtifactName(entry_artifact);
+        *hash<ML::OnnxSessionConfig> config = meta.execution && meta.execution.config
+            ? cast<hash<ML::OnnxSessionConfig>>(meta.execution.config)
+            : NOTHING;
+        list<string> external_files = getOnnxExternalDataArtifactNames(meta, entry_artifact);
+
+        if (!external_files) {
+            binary artifact = backend.loadNamedArtifact(name, version_id, entry_artifact);
+            if (config) {
+                return new ML::OnnxModel(artifact, config);
+            }
+            return new ML::OnnxModel(artifact);
+        }
+
+        string tmp_dir = tmp_location() + DirSep + "qore_onnx_registry_"
+            + get_random_bytes(8).toHex();
+        mkdir_ex(tmp_dir, 0700, True);
+        on_exit { cleanupTempDir(tmp_dir); }
+
+        string model_path = tmp_dir + DirSep + entry_artifact;
+        writeBinaryFile(model_path, backend.loadNamedArtifact(name, version_id, entry_artifact));
+        foreach string external_file in (external_files) {
+            writeBinaryFile(tmp_dir + DirSep + external_file,
+                backend.loadNamedArtifact(name, version_id, external_file));
+        }
+
+        if (config) {
+            return new ML::OnnxModel(model_path, config);
+        }
+        return new ML::OnnxModel(model_path);
+    }
+
+    #! Returns external-data artifact names referenced by ONNX package metadata
+    private static list<string> getOnnxExternalDataArtifactNames(
+            hash<ModelVersionInfo> meta, string entry_artifact) {
+        list<string> rv();
+        foreach hash<ModelArtifactInfo> artifact in (meta.artifacts) {
+            if (artifact.role == "external_data" && !rv.contains(artifact.name)) {
+                validatePackageArtifactName(artifact.name);
+                push rv, artifact.name;
+            }
+            if (artifact.name == entry_artifact && artifact.metadata
+                    && artifact.metadata.external_data_files) {
+                foreach string external_name in (artifact.metadata.external_data_files) {
+                    if (!rv.contains(external_name)) {
+                        validatePackageArtifactName(external_name);
+                        push rv, external_name;
+                    }
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Validates an artifact name before materializing it in a temporary package directory
+    private static nothing validatePackageArtifactName(string artifact_name) {
+        if (!artifact_name.val() || artifact_name == "." || artifact_name == ".."
+                || artifact_name =~ /[\\\/]/) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("invalid package artifact name '%s'", artifact_name);
+        }
+    }
+
+    #! Writes a binary file
+    private static nothing writeBinaryFile(string path, binary data) {
+        File f();
+        f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(data);
+    }
+
+    #! Removes a temporary directory created for ONNX external-data loading
+    private static nothing cleanupTempDir(string path) {
+        if (!is_dir(path)) {
+            return;
+        }
+        Dir d();
+        if (d.chdir(path)) {
+            foreach string file in (d.listFiles()) {
+                unlink(path + DirSep + file);
+            }
+        }
+        rmdir(path);
     }
 }
 

@@ -124,6 +124,9 @@ public class ModelArtifactInspector {
                 output_schema = {"tensors": primary.metadata.outputs};
             }
         }
+        *hash<auto> execution_config = options.execution_config
+            ?? options.session_config
+            ?? (runtime == "onnxruntime" ? options.config : NOTHING);
 
         return cast<hash<ModelVersionInfo>>({
             "version_id": options.version_id,
@@ -150,6 +153,7 @@ public class ModelArtifactInspector {
                 "requires": runtime == "onnxruntime" ? ("ml",) : (),
                 "input_schema": input_schema,
                 "output_schema": output_schema,
+                "config": execution_config,
             },
             "config": options.config,
         });

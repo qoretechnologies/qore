@@ -1127,6 +1127,7 @@ class ModelRegistryTest inherits QUnit::Test {
         string vid = registry.registerPackage(package_dir, {
             "name": "adapter-onnx",
             "description": "adapter ONNX tensor execution fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
         });
 
         QoreModelRegistry::ModelExecutableAdapter adapter =
@@ -1237,6 +1238,7 @@ class ModelRegistryTest inherits QUnit::Test {
         string vid = registry.registerPackage(package_dir, {
             "name": "onnx-linear",
             "description": "ONNX metadata inspection fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
         });
 
         hash<QoreModelRegistry::ModelVersionInfo> manifest =
@@ -1250,6 +1252,8 @@ class ModelRegistryTest inherits QUnit::Test {
             "test ONNX model input tensor should be captured");
         assertEq("Y", manifest.execution.output_schema.tensors[0].name,
             "test ONNX model output tensor should be captured");
+        assertEq(0, manifest.execution.config.providers.size(),
+            "ONNX session configuration should be stored in execution metadata");
 
         list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
             registry.listArtifacts("onnx-linear", vid);
@@ -1261,6 +1265,12 @@ class ModelRegistryTest inherits QUnit::Test {
             "ONNX Runtime should read model metadata during inspection");
         assertTrue(model_artifact.metadata.has_external_data,
             "common adjacent ONNX external data files should be recorded");
+
+        QoreModelRegistry::ModelExecutableAdapter adapter =
+            registry.loadExecutableAdapter("onnx-linear", vid);
+        hash<auto> rows = adapter.runFeatureMatrix(((4.0,),), NOTHING);
+        assertTrue(abs(9.0 - rows.Y[0].toFloat()) < 1e-5,
+            sprintf("expected externally-materialized ONNX output 9.0, got %y", rows.Y[0]));
     }
 
     filesystemBackendThreadSafetyTest() {
