@@ -31,11 +31,24 @@
 # enable all warnings
 
 %requires(reexport) DataProvider
+%requires(reexport) RestClient
 %requires(reexport) RestClientIo
 %requires FileLocationHandler
 
+# optional serializers used by the framework-injected GenericApiCallProvider's body_type handling;
+# the auto/json/etc. branches gracefully degrade if a serializer is unavailable
+%try-module json >= 1.5
+%define NoJson
+%endtry
+%try-module yaml >= 0.5
+%define NoYaml
+%endtry
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
 module RestClientDataProvider {
-    version = "2.3.0";
+    version = "2.4.0";
     desc = "user module providing a data provider API for REST servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -43,6 +56,138 @@ module RestClientDataProvider {
     init = sub () {
         # register the data provider factory
         DataProvider::registerFactory(new RestClientDataProviderFactory());
+
+        # register the framework-injected generic API call child builder; the DataProvider framework calls
+        # this to construct the auto-injected "__call__" child of every REST-capable data provider.
+        # The builder accepts any AbstractRestClient subclass — the common parent of both the synchronous
+        # RestClient and the async RestClientIo — so this works uniformly for qore-side and module-v8
+        # TypeScript providers regardless of which transport they use.
+        AbstractDataProvider::setGenericApiCallChildBuilder(
+            *AbstractDataProvider sub (object rest_client) {
+                if (rest_client instanceof RestClient::AbstractRestClient) {
+                    return new GenericApiCallProvider(cast<RestClient::AbstractRestClient>(rest_client));
+                }
+                return NOTHING;
+            },
+        );
+
+        # register the framework-injected "make-api-call" action builder; the DataProvider framework calls
+        # this for every REST-capable app (apps with a scheme that have not opted out via
+        # disable_generic_api_call) to construct the auto-registered DPAT_API action
+        DataProviderActionCatalog::setGenericApiCallActionBuilder(
+            hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app) {
+                return <DataProviderActionInfo>{
+                    "app": app.name,
+                    "path": "/" + AbstractDataProvider::GenericApiCallChildName,
+                    "action": AbstractDataProvider::GenericApiCallActionName,
+                    # group is required by the Qorus action picker — actions without a `groups`
+                    # value are silently dropped from the per-app picker UI even though they
+                    # appear in the public catalog API
+                    "groups": ("General",),
+                    "display_name": "Make an API call",
+                    "short_desc": sprintf("Make a custom API call to %s", app.display_name),
+                    "desc": sprintf("Make a custom HTTP / REST API call to **%s** using the "
+                        "configured connection's authentication.\n\n"
+                        "Specify the HTTP method, the URI path (relative to the connection's API base "
+                        "URL), optional query parameters, headers, and request body. The response is "
+                        "returned as a hash containing the status code, response headers, and response "
+                        "body.\n\n"
+                        "Use this action for endpoints that are not yet exposed as first-class actions "
+                        "on this app.", app.display_name),
+                    "action_code": DPAT_API,
+                    # the body field's effective type depends on body_type; getRequestTypeWithOptionsImpl
+                    # / getRequestTypeWithDataImpl on GenericApiCallProvider re-types it at form-render
+                    # time
+                    "data_dependent_options": True,
+                    # only expose the per-call fields — connection-level options (auth, timeouts, proxy,
+                    # oauth2, etc.) are inherited from the existing connection and would be confusing
+                    # clutter on the action form.
+                    #
+                    # Option ordering: we add options in the visual order we want them rendered, and
+                    # we tag related options with an option-level `groups` value so UIs that group
+                    # by section keep paired fields together (body_type + body, path + path_vars,
+                    # expected_status + error_passthru). The data-provider development guide notes
+                    # that the form-rendering UI may bucket-sort by required-ness; grouping
+                    # reinforces semantic adjacency independent of that sort.
+                    # Option ordering rationale:
+                    # The Qorus UI bucket-sorts options into required-then-preselected-then-rest
+                    # (the `sort` integer is computed server-side, not settable from here). To keep
+                    # `body_type` and `body` visually adjacent, both are marked preselected-but-not-
+                    # required and registered consecutively; `body_type` has a `default_value` of
+                    # `"auto"` so users still get a sensible pre-filled value.
+                    "options":
+                        # 1. Request basics — method is the only strictly required field
+                        DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"method",}, {
+                                "preselected": True,
+                                "required": True,
+                                "groups": ("Request",),
+                            },
+                        )
+                        + DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"path",}, {
+                                "preselected": True,
+                                "required": True,
+                                "groups": ("Request",),
+                            },
+                        )
+                        # 2. Body block — body_type immediately followed by body so they end up
+                        # adjacent in the bucket-sorted UI form. body_type is preselected (default
+                        # "auto") so the UI pre-fills it; it carries the dependency-controller
+                        # markers (has_dependents / structural_determinate / on_change=refetch)
+                        # so the UI re-fetches the body editor when body_type changes.
+                        + DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"body_type",}, {
+                                "preselected": True,
+                                # explicitly NOT required at the action-option level: the field's
+                                # non-nullable `StringType` would otherwise be inferred as required,
+                                # which would put body_type in the required-bucket and separate it
+                                # from `body` (preselected-but-not-required) in the UI's bucket sort
+                                "required": False,
+                                "has_dependents": True,
+                                "structural_determinate": True,
+                                "on_change": ("refetch",),
+                                "groups": ("Body",),
+                            },
+                        )
+                        + DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"body",}, {
+                                "preselected": True,
+                                "depends_on": ("body_type",),
+                                "groups": ("Body",),
+                            },
+                        )
+                        # 3. Additional request controls
+                        + DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"path_vars",}, {
+                                "preselected": True,
+                                "groups": ("Request",),
+                            },
+                        )
+                        + DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"query_args",}, {
+                                "preselected": True,
+                                "groups": ("Request",),
+                            },
+                        )
+                        + DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"hdr",}, {
+                                "preselected": True,
+                                "groups": ("Request",),
+                            },
+                        )
+                        # 4. Response-handling controls (not preselected to keep the default form compact)
+                        + DataProviderActionCatalog::getActionOptionFromFields(
+                            GenericApiCallRequestDataType::Fields{"expected_status", "error_passthru",
+                                "include_debug"},
+                            {"groups": ("Response",)},
+                        ),
+                    # output_type MUST match what GenericApiCallProvider actually returns —
+                    # the lean status/headers/body[+debug] shape, not the legacy response type
+                    "output_type": GenericApiCallResponseDataType,
+                };
+            },
+        );
 
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
@@ -55,6 +200,12 @@ module RestClientDataProvider {
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "generic-rest-logo.svg",
             "groups": (DataProvider::AppGroup::ApiIntegration,),
+            # GenericRest is the one semantic exception to the framework's positive REST detection:
+            # this app already exposes a canonical /call action below, and the auto-injected
+            # make-api-call would duplicate it. Non-REST apps (Db, FTP, MongoDB, etc.) do NOT need
+            # this flag — they are automatically excluded by the predicate that walks the connection
+            # scheme's `cls` hierarchy for RestClient::RestConnection.
+            "disable_generic_api_call": True,
         });
 
         # register all supported actions
@@ -145,6 +296,33 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
 
     @section restclientdataprovider_relnotes Release Notes
+
+    @subsection restclientdataprovider_v2_4 RestClientDataProvider v2.4
+    - implements the framework-level generic API call auto-injection introduced in
+      @ref dataprovider_v3_5 "DataProvider v3.5":
+      - registers the
+        @ref DataProvider::AbstractDataProvider::setGenericApiCallChildBuilder() "child builder"
+        and the
+        @ref DataProvider::DataProviderActionCatalog::setGenericApiCallActionBuilder() "action builder"
+        in the module's init block, so every REST-capable app that has not opted out via
+        @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call"
+        automatically gets a uniform `make-api-call` DPAT_API action
+      - added @ref RestClientDataProvider::GenericApiCallProvider "GenericApiCallProvider", the
+        framework-injected provider class that backs the auto-injected
+        @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "\"__call__\"" child;
+        it accepts any @c AbstractRestClient subclass, so it works uniformly with both the
+        synchronous @c RestClient and the async @c RestClientIo transports
+      - rich per-call configuration:
+        - `body_type` selector (json / form / multipart / xml / yaml / text / binary / auto) drives
+          both body serialization and the `Content-Type` header; the
+          @ref RestClientDataProvider::GenericApiCallRequestDataType "request type" uses dynamic
+          option resolution so the body editor in the UI reshapes for the chosen body_type (JSON
+          editor for json, file picker for multipart, etc.)
+        - `path_vars` substitutes `{name}` placeholders in the URI path
+        - `expected_status` whitelists response codes (mismatches raise `REST-STATUS-ERROR`)
+        - `error_passthru` returns non-2xx responses as data instead of raising
+        - `multipart` body type accepts a @ref DataProvider::FileDataType "FileDataType" structure
+          and the framework builds the multipart envelope
 
     @subsection restclientdataprovider_v2_3 RestClientDataProvider v2.3
     - migrated from @ref RestClient::RestClient "RestClient" (synchronous HTTP/1.x) to

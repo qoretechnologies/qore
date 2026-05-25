@@ -26,6 +26,8 @@ public class GroqRestClientTest inherits QUnit::Test {
             \restOptionsTest());
         addTestCase("Groq mode is distinct from Grok mode",
             \distinctModesTest());
+        addTestCase("sync GroqRestClient connection path includes /openai",
+            \syncConnectionPathTest());
         set_return_value(main());
     }
 
@@ -93,10 +95,34 @@ public class GroqRestClientTest inherits QUnit::Test {
         # apikey is remapped to token for Bearer header
         assertEq("my-key", opts.token);
         assertEq(NOTHING, opts.apikey);
-        # URL + api defaults applied
-        assertEq("https://api.groq.com/openai", opts.url);
+        # URL + api defaults applied — /openai now lives on default_path,
+        # not on the URL, so HTTPClient applies it for relative paths
+        # like the ping `models` -> /openai/v1/models.
+        assertEq("https://api.groq.com", opts.url);
         assertEq("v1", opts.api);
-        assertEq("/v1", opts.default_path);
+        assertEq("/openai/v1", opts.default_path);
+
+        # overriding the api version threads through to default_path
+        hash<auto> opts2 = GroqRestClient::GroqRestClientBase::getOptions({
+            "apikey": "k",
+            "api": "v2",
+        });
+        assertEq("/openai/v2", opts2.default_path);
+    }
+
+    private syncConnectionPathTest() {
+        # The bug we're guarding against: sync GroqRestClient used to call
+        # setConnectionPath("v1") in its constructor, which overwrote the
+        # /openai prefix and made pings hit /v1/models -> 404.  After the
+        # fix the /openai prefix lives on default_path and HTTPClient
+        # promotes it onto connection.path, so the resolved request path
+        # for `models` is /openai/v1/models.
+        GroqRestClient::GroqRestClient rc({"apikey": "k"}, True);
+        # connection path must include both /openai and the api version
+        assertEq("/openai/v1", rc.getConnectionPath());
+        # async client must produce the same connection path
+        GroqRestClient::GroqRestClientIo io({"apikey": "k"});
+        assertEq("/openai/v1", io.getConnectionPath());
     }
 
     private distinctModesTest() {

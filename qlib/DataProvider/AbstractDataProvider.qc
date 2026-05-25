@@ -1948,6 +1948,48 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             },
             "requires_result": RequiresResultOption,
         };
+
+        #! Reserved child-provider name for the framework-injected generic "Make an API call" action
+        /** When a data provider exposes a non-NOTHING value via @ref getRestClientForGenericCall(), the framework
+            automatically injects a virtual child provider with this name. The child provider accepts arbitrary
+            method/path/headers/query/body input and dispatches the request through the provider's authenticated
+            REST client. The action catalog auto-registers a corresponding `make-api-call` DPAT_API action for every
+            REST-capable app, pointing at this child.
+
+            Do not use this name for any user-defined child provider; the framework reserves it.
+
+            @since DataProvider 3.5
+        */
+        const GenericApiCallChildName = "__call__";
+
+        #! Action name used by the auto-injected generic "Make an API call" action
+        /** @since DataProvider 3.5
+        */
+        const GenericApiCallActionName = "make-api-call";
+
+        #! Convention-based member name used by reflective REST-client discovery
+        /** The default @ref getRestClientForGenericCallImpl() walks the actual class hierarchy of
+            @c self for a member with this name, returning its value if the value is an object that
+            responds to @c restDoRequest(). Every REST-based data provider in the qore qlib follows
+            this convention (e.g. <tt>private { RestClientIo rest; }</tt>), so framework auto-injection
+            works for them with no per-provider override required.
+
+            @since DataProvider 3.5
+        */
+        const GenericApiCallRestMemberName = "rest";
+
+        #! Convention-based connection member name used by reflective REST-client discovery
+        /** Some frameworks (notably the @c TypeScriptActionInterface module in module-v8) hold an
+            @c AbstractConnection in a member named @c "conn" rather than storing the REST client
+            directly. The default @ref getRestClientForGenericCallImpl() falls back to this convention
+            when no direct @ref GenericApiCallRestMemberName "rest" member is found: it reads the
+            @c conn member, calls @c get(False) on it to acquire the underlying client without
+            establishing a network connection, and returns the client if it responds to
+            @c restDoRequest().
+
+            @since DataProvider 3.5
+        */
+        const GenericApiCallConnectionMemberName = "conn";
     }
 
     private {
@@ -1982,6 +2024,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         #! flag if template callbacks are locked
         static bool template_callbacks_locked = False;
+
+        #! Static builder callback that constructs the framework-injected generic API call child provider
+        /** Signature: <tt>*AbstractDataProvider sub (object rest_client)</tt>; the argument is the value
+            returned by @ref getRestClientForGenericCall() (typically a @c RestClientIo instance). The
+            builder may return @ref NOTHING to indicate that the given client type is unsupported, in
+            which case the framework skips auto-injection for that provider. The builder is normally
+            registered once by the @c RestClientDataProvider module's init block.
+
+            @since DataProvider 3.5
+        */
+        static *code<*AbstractDataProvider(object)> cb_build_generic_api_call_child;
     }
 
     private:internal {
@@ -4074,9 +4127,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
+
+        @note If this provider exposes a non-NOTHING value via @ref getRestClientForGenericCall(), the
+        framework-injected @ref GenericApiCallChildName "__call__" child is appended to the list automatically
+        (unless the provider's own @ref getChildProviderNamesImpl() already includes it).
     */
     *list<string> getChildProviderNames() {
-        return getChildProviderNamesImpl();
+        *list<string> rv = getChildProviderNamesImpl();
+        if (hasGenericApiCallChild() && (!rv || !inlist(GenericApiCallChildName, rv))) {
+            list<string> appended = rv ?? ();
+            appended += GenericApiCallChildName;
+            rv = appended;
+        }
+        return rv;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -4086,10 +4149,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-CHILD-PROVIDER unknown child provider
 
+        @note If \a name is @ref GenericApiCallChildName "__call__" and this provider exposes a non-NOTHING
+        value via @ref getRestClientForGenericCall() and a generic API call child builder has been registered
+        (via @ref setGenericApiCallChildBuilder()), the framework constructs the child automatically rather
+        than calling @ref getChildProviderImpl(). The provider's own @ref getChildProviderImpl() takes
+        precedence if it returns a non-NOTHING value for the reserved name.
+
         @see getChildProviderEx()
     */
     *AbstractDataProvider getChildProvider(string name) {
         *AbstractDataProvider child = getChildProviderImpl(name);
+        if (!child && name == GenericApiCallChildName) {
+            child = buildGenericApiCallChild();
+        }
         if (child && logger && !child.logger) {
             child.setLogger(logger);
         }
@@ -4103,10 +4175,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-CHILD-PROVIDER unknown child provider
 
+        @note If \a name is @ref GenericApiCallChildName "__call__" and the provider's own
+        @ref getChildProviderImpl() returns @ref NOTHING for it, the framework attempts to build the
+        auto-injected generic API call child via @ref buildGenericApiCallChild() before raising the
+        \c INVALID-CHILD-PROVIDER exception. This mirrors the behavior of @ref getChildProvider().
+
         @see getChildProvider()
     */
     AbstractDataProvider getChildProviderEx(string name) {
         *AbstractDataProvider provider = getChildProviderImpl(name);
+        if (!provider && name == GenericApiCallChildName) {
+            provider = buildGenericApiCallChild();
+        }
         if (!provider) {
             throw "INVALID-CHILD-PROVIDER", sprintf("provider %y is unknown; known children of %y: %y", name,
                 getName(), getChildProviderNames());
@@ -4115,6 +4195,92 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             provider.setLogger(logger);
         }
         return provider;
+    }
+
+    #! Returns the REST client object that backs the framework-injected generic API call action
+    /** REST-based data providers should expose their underlying authenticated REST client (typically a
+        @c RestClientIo instance) by overriding @ref getRestClientForGenericCallImpl() to return it. The
+        framework uses the returned object to auto-inject a virtual @ref GenericApiCallChildName "__call__"
+        child provider and a corresponding `make-api-call` DPAT_API action for every REST-capable app.
+
+        Non-REST data providers should leave the default implementation in place, which returns @ref NOTHING.
+
+        The returned value is typed as @c *object rather than a specific class so the @c DataProvider module
+        does not need to depend on @c RestClientIo. At runtime the framework passes the object verbatim to
+        the generic API call child builder registered via @ref setGenericApiCallChildBuilder().
+
+        @return the REST client object that backs the generic API call action, or @ref NOTHING if this
+        provider is not REST-based
+
+        @since DataProvider 3.5
+    */
+    *object getRestClientForGenericCall() {
+        return getRestClientForGenericCallImpl();
+    }
+
+    #! Returns @ref True if this provider exposes a framework-injected generic API call child
+    /** @return @ref True if @ref getRestClientForGenericCall() returns a non-NOTHING value and a generic API
+        call child builder has been registered via @ref setGenericApiCallChildBuilder(); @ref False otherwise
+
+        @since DataProvider 3.5
+    */
+    bool hasGenericApiCallChild() {
+        return cb_build_generic_api_call_child && exists getRestClientForGenericCall();
+    }
+
+    #! Sets the static builder used to construct the framework-injected generic API call child provider
+    /** This setter is normally called once at module initialization time by the @c RestClientDataProvider
+        module. Subsequent calls with the same builder return @ref True; calls with a different builder when
+        a builder is already registered return @ref False without changing the registered builder.
+
+        @param builder a closure with signature
+        <tt>AbstractDataProvider sub (object rest_client)</tt> that constructs a generic API call child
+        provider from the value returned by @ref getRestClientForGenericCall()
+
+        @return @ref True if the builder was successfully set (first call) or if the same builder is being
+        re-registered; @ref False if a different builder is already registered
+
+        @since DataProvider 3.5
+    */
+    static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) {
+        if (cb_build_generic_api_call_child) {
+            return cb_build_generic_api_call_child == builder;
+        }
+        cb_build_generic_api_call_child = builder;
+        return True;
+    }
+
+    #! Clears the registered generic API call child builder
+    /** This method is primarily for testing purposes.
+
+        @since DataProvider 3.5
+    */
+    static clearGenericApiCallChildBuilder() {
+        delete cb_build_generic_api_call_child;
+    }
+
+    #! Returns @ref True if a generic API call child builder is currently registered
+    /** @since DataProvider 3.5
+    */
+    static bool hasGenericApiCallChildBuilder() {
+        return exists cb_build_generic_api_call_child;
+    }
+
+    #! Builds the framework-injected generic API call child provider for this provider, if any
+    /** @return the generic API call child provider, or @ref NOTHING if this provider is not REST-capable or
+        no builder has been registered
+
+        @since DataProvider 3.5
+    */
+    private *AbstractDataProvider buildGenericApiCallChild() {
+        if (!cb_build_generic_api_call_child) {
+            return;
+        }
+        *object rest = getRestClientForGenericCall();
+        if (!rest) {
+            return;
+        }
+        return call_function_args(cb_build_generic_api_call_child, (rest,));
     }
 
     #! Returns the given child provider from a \c "/" separated path string
@@ -6378,6 +6544,81 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {
         # intentionally empty
+    }
+
+    #! Returns the REST client object backing this provider, for the framework-injected generic API call action
+    /** The default implementation auto-discovers the underlying REST client via reflection. Two
+        conventions are recognized:
+
+        1. **Direct REST client member** (the qore qlib convention): walks the class hierarchy of
+           @c self for a member named @ref GenericApiCallRestMemberName "\"rest\"" whose value is an
+           object responding to @c restDoRequest() (the abstract REST API on
+           @ref RestClient::AbstractRestClient "AbstractRestClient"). Returns that value directly.
+
+        2. **Connection member** (the module-v8 convention): if no direct @c rest member is found,
+           walks for a member named @ref GenericApiCallConnectionMemberName "\"conn\"" that exposes
+           @c get(bool); the framework calls @c get(False) to obtain the underlying client without
+           establishing a network connection, then returns it if it responds to @c restDoRequest().
+
+        Together these conventions cover every REST-based data provider in qore qlib and in
+        module-v8's TypeScript app framework with no per-provider overrides. The duck-typed
+        @c restDoRequest() check keeps the @c DataProvider module free of any direct dependency on
+        a specific REST transport.
+
+        Providers can override this method to:
+        - return @ref NOTHING explicitly to opt out of the framework-injected generic API call action
+        - return a differently-named member when neither convention is followed
+        - return a wrapped or transformed client
+
+        @return the underlying REST client object, or @ref NOTHING if no compatible REST client can be
+        discovered on this provider
+
+        @note Reflection failures are swallowed and treated as "no rest client" — providers that genuinely
+        lack a REST client (DB, file, queue, etc.) get @ref NOTHING with no error.
+
+        @since DataProvider 3.5
+    */
+    private *object getRestClientForGenericCallImpl() {
+        Reflection::Class cls;
+        try {
+            cls = Reflection::Class::getClass(self);
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+
+        # 1. Try the direct REST client member (qore qlib convention)
+        try {
+            *Reflection::AbstractClassMember m = cls.getMember(GenericApiCallRestMemberName);
+            if (m) {
+                auto val = m.getValue(self);
+                if (val.typeCode() == NT_OBJECT
+                    && cast<object>(val).hasCallableMethod("restDoRequest")) {
+                    return val;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore; fall through to the connection-member fallback
+        }
+
+        # 2. Fallback: try the connection-member convention (module-v8 TypeScript apps store an
+        # AbstractConnection in "conn" rather than the REST client directly). Resolve the
+        # underlying client via conn.get(False) so we don't establish a network connection just
+        # to inspect the type.
+        try {
+            *Reflection::AbstractClassMember m = cls.getMember(GenericApiCallConnectionMemberName);
+            if (m) {
+                auto val = m.getValue(self);
+                if (val.typeCode() == NT_OBJECT && cast<object>(val).hasCallableMethod("get")) {
+                    object client = cast<object>(val).get(False);
+                    if (exists client && client.hasCallableMethod("restDoRequest")) {
+                        return client;
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # silent fall-through; reflection or connection issues just mean "no rest client discovered"
+        }
+        return NOTHING;
     }
 
     #! Returns connection info if the data provider supports connections, otherwise returns @ref NOTHING
