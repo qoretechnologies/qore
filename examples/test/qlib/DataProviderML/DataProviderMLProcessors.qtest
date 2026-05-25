@@ -2198,6 +2198,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq("registry-model", results[0].event_type);
         assertEq("linear-onnx", results[0].model_name);
         assertEq(vid, results[0].version_id);
+        assertTrue(results[0].execution_provider.val(),
+            "registry ONNX events should include the active execution provider");
+        assertEq("onnxruntime", results[0].provider_diagnostics.runtime,
+            "registry ONNX events should include provider diagnostics");
         assertTrue(results[0].prediction.hasKey("Y"), "ONNX output should be returned as prediction hash");
         assertTrue(abs(3.0 - results[0].prediction.Y.toFloat()) < 0.01,
             sprintf("expected first ONNX prediction ~3.0, got %y", results[0].prediction.Y));

@@ -187,6 +187,12 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         #! Optional ONNX input tensor name
         *string input_tensor;
 
+        #! Active ONNX execution provider, when available
+        *string execution_provider;
+
+        #! Runtime/provider diagnostics for the loaded model
+        *hash<auto> provider_diagnostics;
+
         #! Window size
         int window_size = 100;
 
@@ -237,6 +243,10 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         } else {
             model = registry.loadExecutableAdapter(model_name, copts.version);
             loaded_version = model.getVersionId();
+        }
+        if (model.isOnnx()) {
+            provider_diagnostics = model.getProviderDiagnostics();
+            execution_provider = provider_diagnostics.active_provider;
         }
 
         configured = True;
@@ -357,6 +367,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "model_name": model_name,
                 "version_id": loaded_version,
                 "record_values": record_values,
+                "execution_provider": execution_provider,
+                "provider_diagnostics": provider_diagnostics,
                 "prediction": model_output,
             };
         }

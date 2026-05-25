@@ -1996,6 +1996,10 @@ public namespace DataProviderML {
         string version_id;
         #! The input field values passed to the model
         hash<auto> record_values;
+        #! The ONNX Runtime execution provider used for registry-backed ONNX models
+        *string execution_provider;
+        #! Runtime/provider diagnostics for registry-backed models
+        *hash<auto> provider_diagnostics;
         #! The model's prediction result
         auto prediction;
     }

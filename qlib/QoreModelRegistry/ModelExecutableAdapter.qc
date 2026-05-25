@@ -172,10 +172,74 @@ public class ModelExecutableAdapter {
     */
     hash<auto> runFeatureMatrix(list<list<float>> matrix, *string input_tensor) {
         if (isOnnx()) {
-            string tensor_name = resolveOnnxInputTensor(input_tensor);
-            return model.run({tensor_name: matrix});
+            return tensorOutputsToRows(runFeatureMatrixTensors(matrix, input_tensor),
+                matrix.lsize());
         }
         return {"prediction": model.predictMatrix(matrix)};
+    }
+
+    #! Runs a feature matrix through an ONNX model and returns ML::Tensor outputs
+    /** This method avoids converting dense ONNX Runtime outputs back to nested
+        Qore lists. It is intended for DataProviderML and other bulk inference
+        callers that can consume tensor-shaped results directly or split them
+        into per-record outputs with stable row counts.
+
+        @param matrix row-major feature matrix
+        @param input_tensor optional ONNX input tensor name; when omitted, the
+            first model input is used
+
+        @return output hash where each value is an @ref Qore::ML::Tensor
+
+        @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX model, the
+            model has no input tensors, or the input tensor type is unsupported
+
+        @since QoreModelRegistry 2.3
+    */
+    hash<auto> runFeatureMatrixTensors(list<list<float>> matrix, *string input_tensor) {
+        if (!isOnnx()) {
+            throw "ML-REGISTRY-ERROR",
+                "runFeatureMatrixTensors() requires an ONNX Runtime model";
+        }
+
+        string tensor_name = resolveOnnxInputTensor(input_tensor);
+        string dtype = resolveOnnxInputTensorDtype(tensor_name);
+        ML::Tensor input(data: matrix, dtype: dtype);
+        return model.runTensors({tensor_name: input});
+    }
+
+    #! Returns execution-provider and tensor metadata diagnostics
+    /** The returned hash is intentionally untyped so new runtime-specific
+        diagnostics can be added without changing the adapter API.
+
+        @return diagnostic information including runtime, version, ONNX
+            provider information, and input/output tensor metadata when
+            available
+
+        @since QoreModelRegistry 2.3
+    */
+    hash<auto> getProviderDiagnostics() {
+        hash<auto> rv = {
+            "runtime": runtime,
+            "is_onnx": isOnnx(),
+            "version_id": getVersionId(),
+        };
+
+        if (manifest) {
+            rv{"manifest_runtime"} = manifest.runtime;
+            rv{"artifact_kind"} = manifest.artifact_kind;
+            rv{"framework"} = manifest.framework;
+            rv{"execution"} = manifest.execution;
+        }
+
+        if (isOnnx()) {
+            hash<auto> info = getModelInfo();
+            rv{"active_provider"} = info.active_provider;
+            rv{"available_providers"} = ML::ml_get_onnx_providers();
+            rv{"inputs"} = info.inputs;
+            rv{"outputs"} = info.outputs;
+        }
+
+        return rv;
     }
 
     #! Infers a runtime identifier from the object class
@@ -196,6 +260,62 @@ public class ModelExecutableAdapter {
             throw "ML-REGISTRY-ERROR", "ONNX model has no input tensors";
         }
         return inputs[0].name;
+    }
+
+    #! Resolves the ML::Tensor dtype needed for the ONNX input tensor
+    private string resolveOnnxInputTensorDtype(string tensor_name) {
+        foreach hash<ML::OnnxTensorInfo> input in (model.getInputInfo()) {
+            if (input.name == tensor_name) {
+                return onnxTypeToTensorDtype(input.type);
+            }
+        }
+
+        throw "ML-REGISTRY-ERROR",
+            sprintf("ONNX model does not have an input tensor named '%s'", tensor_name);
+    }
+
+    #! Maps ONNX Runtime tensor type names to ML::Tensor dtype names
+    private static string onnxTypeToTensorDtype(string onnx_type) {
+        if (onnx_type == "float") {
+            return "float32";
+        }
+        if (onnx_type == "double") {
+            return "float64";
+        }
+        if (onnx_type == "int64" || onnx_type == "int32"
+                || onnx_type == "int16" || onnx_type == "int8"
+                || onnx_type == "bool") {
+            return onnx_type;
+        }
+
+        throw "ML-REGISTRY-ERROR",
+            sprintf("ONNX input tensor type '%s' cannot be represented as an ML::Tensor dtype",
+                onnx_type);
+    }
+
+    #! Converts tensor outputs to row-addressable values while preserving compact scalar rows
+    private static hash<auto> tensorOutputsToRows(hash<auto> outputs, int row_count) {
+        hash<auto> rv;
+        foreach string okey in (keys outputs) {
+            rv{okey} = tensorOutputToRows(cast<ML::Tensor>(outputs{okey}), row_count);
+        }
+        return rv;
+    }
+
+    #! Converts a tensor output to the row shape returned by OnnxModel::run() where possible
+    private static auto tensorOutputToRows(ML::Tensor tensor, int row_count) {
+        list<int> shape = tensor.getShape();
+        if (shape.lsize() == 1 && shape[0] == row_count) {
+            return tensor.getBuffer().toList();
+        }
+        if (shape.lsize() == 2 && shape[0] == row_count && shape[1] == 1) {
+            return tensor.getBuffer().toList();
+        }
+        auto nested = tensor.toList();
+        if (nested.typeCode() == NT_LIST && nested.lsize() == row_count) {
+            return nested;
+        }
+        return nested;
     }
 }
 

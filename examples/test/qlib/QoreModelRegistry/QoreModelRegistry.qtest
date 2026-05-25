@@ -25,6 +25,7 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
 %requires Util
 %requires QUnit
 %requires Mime
@@ -73,6 +74,7 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("filesystemBackendDirect", \filesystemBackendDirectTest());
         addTestCase("namedArtifacts", \namedArtifactsTest());
         addTestCase("executableAdapterNative", \executableAdapterNativeTest());
+        addTestCase("executableAdapterOnnxTensor", \executableAdapterOnnxTensorTest());
         addTestCase("modelPackageInspection", \modelPackageInspectionTest());
         addTestCase("onnxPackageInspection", \onnxPackageInspectionTest());
         addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
@@ -1107,6 +1109,63 @@ class ModelRegistryTest inherits QUnit::Test {
         hash<auto> batch = adapter.runFeatureMatrix(((1.0, 1.0), (5.0, 5.0)), NOTHING);
         assertTrue(batch.hasKey("prediction"), "native matrix adapter result should have prediction key");
         assertEq(2, batch.prediction.size(), "native matrix adapter should return two predictions");
+    }
+
+    executableAdapterOnnxTensorTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_adapter";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "adapter-onnx",
+            "description": "adapter ONNX tensor execution fixture",
+        });
+
+        QoreModelRegistry::ModelExecutableAdapter adapter =
+            registry.loadExecutableAdapter("adapter-onnx", vid);
+        assertEq("onnxruntime", adapter.getRuntime(), "ONNX adapter runtime should be onnxruntime");
+        assertTrue(adapter.isOnnx(), "adapter should identify ONNX models");
+
+        hash<auto> tensors = adapter.runFeatureMatrixTensors(((1.0,), (2.0,), (3.0,)), NOTHING);
+        assertTrue(tensors.hasKey("Y"), "tensor result should contain ONNX output");
+        ML::Tensor y = tensors.Y;
+        assertEq("float32", y.getDtype(), "ONNX tensor dtype should be preserved");
+        assertEq((3, 1), y.getShape(), "ONNX tensor output shape should be preserved");
+
+        list<auto> values = y.toList();
+        assertTrue(abs(3.0 - values[0][0].toFloat()) < 1e-5,
+            sprintf("expected tensor output 3.0, got %y", values[0][0]));
+        assertTrue(abs(5.0 - values[1][0].toFloat()) < 1e-5,
+            sprintf("expected tensor output 5.0, got %y", values[1][0]));
+        assertTrue(abs(7.0 - values[2][0].toFloat()) < 1e-5,
+            sprintf("expected tensor output 7.0, got %y", values[2][0]));
+
+        hash<auto> rows = adapter.runFeatureMatrix(((1.0,), (2.0,), (3.0,)), NOTHING);
+        assertTrue(rows.hasKey("Y"), "row result should contain ONNX output");
+        assertTrue(abs(3.0 - rows.Y[0].toFloat()) < 1e-5,
+            sprintf("expected row output 3.0, got %y", rows.Y[0]));
+        assertTrue(abs(5.0 - rows.Y[1].toFloat()) < 1e-5,
+            sprintf("expected row output 5.0, got %y", rows.Y[1]));
+        assertTrue(abs(7.0 - rows.Y[2].toFloat()) < 1e-5,
+            sprintf("expected row output 7.0, got %y", rows.Y[2]));
+
+        hash<auto> diagnostics = adapter.getProviderDiagnostics();
+        assertEq("onnxruntime", diagnostics.runtime,
+            "provider diagnostics should include runtime");
+        assertTrue(diagnostics.hasKey("active_provider"),
+            "provider diagnostics should include active provider");
+        assertTrue(diagnostics.available_providers.size() > 0,
+            "provider diagnostics should include ONNX Runtime providers");
+        assertEq("X", diagnostics.inputs[0].name,
+            "provider diagnostics should include input tensor metadata");
     }
 
     modelPackageInspectionTest() {
