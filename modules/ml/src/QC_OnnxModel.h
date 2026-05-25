@@ -588,10 +588,13 @@ private:
     };
 
     struct AsyncRequest {
-        DLLLOCAL AsyncRequest(const QoreHashNode* inputs, QorePromise* promise);
+        DLLLOCAL AsyncRequest(const QoreHashNode* inputs, const QoreListNode* output_names,
+            QorePromise* promise);
         DLLLOCAL ~AsyncRequest();
 
         QoreValue payload;
+        QoreValue output_names;
+        std::string output_signature;
         QorePromise* promise;
     };
 
@@ -627,8 +630,8 @@ private:
     DLLLOCAL void recordRun(size_t batch_items);
     DLLLOCAL QoreObject* submitSingleAsync(QoreValue payload, QoreValue output_names, AsyncOp op,
         const QoreTypeInfo* future_type, QoreProgram* pgm, ExceptionSink* xsink);
-    DLLLOCAL QoreObject* submitDynamicRunAsync(const QoreHashNode* inputs, QoreProgram* pgm,
-        ExceptionSink* xsink);
+    DLLLOCAL QoreObject* submitDynamicRunAsync(const QoreHashNode* inputs,
+        const QoreListNode* output_names, QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL void processDynamicRunQueue(ExceptionSink* xsink);
     DLLLOCAL void resolveAsyncRequest(AsyncRequest& request, QoreValue value, ExceptionSink* xsink);
     DLLLOCAL void rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch, ExceptionSink& err);

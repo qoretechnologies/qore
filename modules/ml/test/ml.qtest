@@ -3671,6 +3671,26 @@ public class MlTest inherits QUnit::Test {
         assertEq(2, stats.async_batch_items);
         assertEq(1, stats.total_batches);
         assertEq(2, stats.total_batch_items);
+
+        pool.resetPoolStats();
+        Future<hash<auto>> s1 = pool.runAsync({"X": ((2.0,),)}, ("Y",));
+        Future<hash<auto>> s2 = pool.runAsync({"X": ((4.0,),)}, ("Y",));
+
+        hash<auto> sr1 = s1.get(5s);
+        hash<auto> sr2 = s2.get(5s);
+        assertEq(("Y",), sort(keys sr1));
+        assertEq(("Y",), sort(keys sr2));
+        assertFloat(5.0, sr1.Y[0], 1e-5);
+        assertFloat(9.0, sr2.Y[0], 1e-5);
+
+        stats = pool.getPoolStats();
+        assertEq(2, stats.async_submitted);
+        assertEq(2, stats.async_completed);
+        assertEq(0, stats.async_errors);
+        assertEq(1, stats.async_batches);
+        assertEq(2, stats.async_batch_items);
+        assertEq(1, stats.total_batches);
+        assertEq(2, stats.total_batch_items);
     }
 
     onnxSingleValueTest() {

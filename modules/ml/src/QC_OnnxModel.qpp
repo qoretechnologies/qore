@@ -802,11 +802,11 @@ hash<auto> OnnxSessionPool::run(hash<auto> inputs, *list<string> output_names) {
         in the same format as @ref run()
 
     If \c dynamic_batch_size and \c dynamic_batch_wait_ms are both configured,
-    concurrent runAsync() callers without \c output_names are coalesced up to
-    the configured batch size or wait deadline. Each Future still resolves to
-    the result for its own request, and result order is preserved inside each
-    coalesced batch. Calls with \c output_names are run individually so
-    requests with different selected output sets are not mixed.
+    concurrent runAsync() callers are coalesced up to the configured batch size
+    or wait deadline. Each Future still resolves to the result for its own
+    request, and result order is preserved inside each coalesced batch. Calls
+    with \c output_names are batched only with requests using the same selected
+    output list, so requests with different output sets are never mixed.
 
     @par Example:
     @code{.py}
