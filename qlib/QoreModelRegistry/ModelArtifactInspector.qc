@@ -66,6 +66,9 @@ public class ModelArtifactInspector {
             info.metadata = inspectSafeTensorsFile(path);
         }
 %endif
+        if (format == "onnx") {
+            info.metadata = inspectOnnxFile(path);
+        }
         return info;
     }
 
@@ -97,6 +100,7 @@ public class ModelArtifactInspector {
                 push artifacts, info;
             }
         }
+        addCommonOnnxExternalDataArtifacts(path, \artifacts);
 
         if (!artifacts) {
             throw "ML-REGISTRY-ERROR",
@@ -110,6 +114,16 @@ public class ModelArtifactInspector {
         string runtime = inferRuntime(primary);
         string artifact_kind = inferArtifactKind(primary, artifacts);
         string safety = inferPackageSafety(artifacts);
+        *hash<auto> input_schema;
+        *hash<auto> output_schema;
+        if (primary.format == "onnx" && primary.metadata) {
+            if (exists primary.metadata.inputs) {
+                input_schema = {"tensors": primary.metadata.inputs};
+            }
+            if (exists primary.metadata.outputs) {
+                output_schema = {"tensors": primary.metadata.outputs};
+            }
+        }
 
         return cast<hash<ModelVersionInfo>>({
             "version_id": options.version_id,
@@ -134,6 +148,8 @@ public class ModelArtifactInspector {
                 "local_executable": runtime == "qore-ml" || runtime == "onnxruntime",
                 "entry_artifact": primary.name,
                 "requires": runtime == "onnxruntime" ? ("ml",) : (),
+                "input_schema": input_schema,
+                "output_schema": output_schema,
             },
             "config": options.config,
         });
@@ -148,6 +164,8 @@ public class ModelArtifactInspector {
             || lname == "generation_config.json"
             || lname == "special_tokens_map.json"
             || lname =~ /[.]onnx$/
+            || lname =~ /[.]onnx[.]data$/
+            || lname =~ /[.]data$/
             || lname =~ /[.]qml$/
             || lname =~ /[.]safetensors$/
             || lname =~ /[.](pt|pth|bin)$/
@@ -169,6 +187,9 @@ public class ModelArtifactInspector {
         }
         if (lname =~ /[.]onnx$/) {
             return "onnx";
+        }
+        if (lname =~ /[.]onnx[.]data$/ || lname =~ /[.]data$/) {
+            return "onnx-external-data";
         }
         if (lname =~ /[.]json$/) {
             return "json";
@@ -205,12 +226,99 @@ public class ModelArtifactInspector {
         if (format == "safetensors" || format == "pytorch-pickle") {
             return "weights";
         }
+        if (format == "onnx-external-data") {
+            return "external_data";
+        }
         return "model";
     }
 
     private static bool isSafeToParse(string format) {
         return format == "qml" || format == "onnx" || format == "json"
             || format == "safetensors" || format == "torch-export";
+    }
+
+    private static hash<auto> inspectOnnxFile(string path) {
+        hash<auto> result = {
+            "format": "onnx",
+            "runtime_available": ML::ml_get_capabilities().has_onnx,
+            "metadata_read": False,
+        };
+
+        list<string> external_data_files = findCommonOnnxExternalDataFiles(path);
+        if (external_data_files) {
+            result.has_external_data = True;
+            result.external_data_files = external_data_files;
+        } else {
+            result.has_external_data = False;
+        }
+
+        if (!result.runtime_available) {
+            result.note = "ONNX Runtime is not available; tensor metadata was not inspected";
+            return result;
+        }
+
+        try {
+            hash<ML::OnnxSessionConfig> config = <ML::OnnxSessionConfig>{
+                "providers": (),
+            };
+            ML::OnnxModel model(path, config);
+            hash<ML::OnnxModelInfo> info = model.getModelInfo();
+            result.metadata_read = True;
+            result.producer_name = info.producer_name;
+            result.description = info.description;
+            result.version = info.version;
+            result.inputs = info.inputs;
+            result.outputs = info.outputs;
+            result.active_provider = info.active_provider;
+        } catch (hash<ExceptionInfo> ex) {
+            result.error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        return result;
+    }
+
+    private static list<string> findCommonOnnxExternalDataFiles(string onnx_path) {
+        string model_name = basename(onnx_path);
+        string stem_data_name = model_name;
+        stem_data_name =~ s/[.]onnx$/.data/;
+        list<string> candidates = (
+            model_name + ".data",
+            stem_data_name,
+        );
+
+        list<string> parts = onnx_path.split(DirSep);
+        pop parts;
+        string dir = parts ? join(DirSep, parts) : ".";
+
+        list<string> rv();
+        foreach string c in (candidates) {
+            if (c.val() && is_file(dir + DirSep + c) && !rv.contains(c)) {
+                push rv, c;
+            }
+        }
+        return rv;
+    }
+
+    private static nothing addCommonOnnxExternalDataArtifacts(string package_path,
+            reference<list<hash<ModelArtifactInfo>>> artifacts) {
+        list<string> known = map $1.name, artifacts;
+        foreach hash<ModelArtifactInfo> artifact in (artifacts) {
+            if (artifact.format != "onnx" || !artifact.metadata
+                    || !artifact.metadata.external_data_files) {
+                continue;
+            }
+            foreach string external_name in (artifact.metadata.external_data_files) {
+                if (known.contains(external_name)) {
+                    continue;
+                }
+                string external_path = package_path + DirSep + external_name;
+                if (!is_file(external_path)) {
+                    continue;
+                }
+                hash<ModelArtifactInfo> external = inspectFile(external_path, external_name);
+                push artifacts, external;
+                push known, external_name;
+            }
+        }
     }
 
 %ifndef NoJson

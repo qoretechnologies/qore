@@ -74,6 +74,7 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("namedArtifacts", \namedArtifactsTest());
         addTestCase("executableAdapterNative", \executableAdapterNativeTest());
         addTestCase("modelPackageInspection", \modelPackageInspectionTest());
+        addTestCase("onnxPackageInspection", \onnxPackageInspectionTest());
         addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
         addTestCase("restBackendCacheInvalidation", \restBackendCacheInvalidationTest());
         addTestCase("databaseBackendIntegration", \databaseBackendIntegrationTest());
@@ -116,6 +117,28 @@ class ModelRegistryTest inherits QUnit::Test {
         ML::LinearRegression lr({"fit_intercept": True});
         lr.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)), (2.0, 4.0, 6.0, 8.0, 10.0));
         return lr;
+    }
+
+    private string getTestOnnxModelPath() {
+        string dir = get_script_dir();
+        string path = dir + "/../../../../modules/ml/test/data/test_linear.onnx";
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/test_linear.onnx";
+        }
+        return path;
+    }
+
+    private bool skipOnnx() {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        if (!caps.has_onnx) {
+            testSkip("ONNX Runtime not available");
+            return True;
+        }
+        if (!is_file(getTestOnnxModelPath())) {
+            testSkip("test ONNX model not found");
+            return True;
+        }
+        return False;
     }
 
     private nothing writeTextFile(string path, string data) {
@@ -1136,6 +1159,49 @@ class ModelRegistryTest inherits QUnit::Test {
         assertTrue(artifacts.size() >= 4,
             "all package artifacts should be registered");
         assertThrows("ML-REGISTRY-ERROR", \registry.loadExecutable(), ("hf-source", vid));
+    }
+
+    onnxPackageInspectionTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+        writeBinaryFile(package_dir + DirSep + "model.onnx.data", <01020304>);
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-linear",
+            "description": "ONNX metadata inspection fixture",
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-linear", vid);
+        assertEq("onnx", manifest.framework, "ONNX package framework should be inferred");
+        assertEq("onnxruntime", manifest.runtime, "ONNX package runtime should be onnxruntime");
+        assertEq("executable", manifest.artifact_kind, "ONNX package should be executable");
+        assertTrue(manifest.execution.input_schema.tensors.size() > 0,
+            "ONNX input tensor metadata should be stored in execution input_schema");
+        assertEq("X", manifest.execution.input_schema.tensors[0].name,
+            "test ONNX model input tensor should be captured");
+        assertEq("Y", manifest.execution.output_schema.tensors[0].name,
+            "test ONNX model output tensor should be captured");
+
+        list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
+            registry.listArtifacts("onnx-linear", vid);
+        assertTrue((select artifacts, $1.role == "external_data").size() > 0,
+            "common ONNX external data artifact should be preserved");
+        hash<QoreModelRegistry::ModelArtifactInfo> model_artifact =
+            (select artifacts, $1.name == "model.onnx")[0];
+        assertTrue(model_artifact.metadata.metadata_read,
+            "ONNX Runtime should read model metadata during inspection");
+        assertTrue(model_artifact.metadata.has_external_data,
+            "common adjacent ONNX external data files should be recorded");
     }
 
     filesystemBackendThreadSafetyTest() {
