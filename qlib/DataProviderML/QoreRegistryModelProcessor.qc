@@ -329,6 +329,10 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         bool causal_lm_add_special_tokens = True;
         bool causal_lm_skip_special_tokens = True;
         list<int> causal_lm_stop_token_ids;
+        bool causal_lm_kv_cache_requested = False;
+        bool causal_lm_kv_cache_enabled = False;
+        hash<string, string> causal_lm_kv_input_output_map;
+        list<string> causal_lm_kv_output_names;
         hash<auto> causal_lm_kv_cache_metadata;
 
         #! Output representation mode
@@ -1154,7 +1158,162 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             causal_tokenizer.loadConfig(tokenizer_package.tokenizer_config);
         }
         causal_lm_stop_token_ids = resolveCausalStopTokenIds(copts);
+        configureCausalKvCache();
         causal_lm_kv_cache_metadata = buildCausalKvCacheMetadata();
+    }
+
+    #! Configures causal-LM KV-cache reuse from execution-plan metadata and ONNX tensor names
+    private configureCausalKvCache() {
+        causal_lm_kv_cache_requested = isCausalKvCacheRequested();
+        if (!causal_lm_kv_cache_requested) {
+            return;
+        }
+
+        causal_lm_kv_input_output_map = resolveCausalKvInputOutputMap();
+        causal_lm_kv_output_names = uniqueStringValues(causal_lm_kv_input_output_map);
+        causal_lm_kv_cache_enabled = causal_lm_kv_input_output_map.size() > 0;
+        if (!causal_lm_kv_cache_enabled) {
+            return;
+        }
+
+        if (exists output_names) {
+            foreach string output_name in (causal_lm_kv_output_names) {
+                ensureCausalLmOutputName(output_name);
+            }
+        } else if (onnx_output_names.hasKey(causal_lm_logits_output_name)) {
+            output_names = (causal_lm_logits_output_name,);
+            foreach string output_name in (causal_lm_kv_output_names) {
+                ensureCausalLmOutputName(output_name);
+            }
+        }
+    }
+
+    #! Returns True when the execution plan requests causal-LM KV-cache reuse
+    private bool isCausalKvCacheRequested() {
+        *auto plan_cache = getExecutionPlanValue(("kv_cache", "past_key_values"), ("generation",));
+        if (!exists plan_cache) {
+            return False;
+        }
+        if (plan_cache.typeCode() == NT_HASH) {
+            hash<auto> cache = plan_cache;
+            return !exists cache.enabled || cache.enabled.toBool();
+        }
+        return plan_cache.toBool();
+    }
+
+    #! Resolves a mapping from past-input tensor names to present-output tensor names
+    private hash<string, string> resolveCausalKvInputOutputMap() {
+        *auto plan_cache = getExecutionPlanValue(("kv_cache", "past_key_values"), ("generation",));
+        if (exists plan_cache && plan_cache.typeCode() == NT_HASH) {
+            hash<auto> cache = plan_cache;
+            *auto explicit_map = exists cache.input_output_map ? cache.input_output_map
+                : (exists cache.map ? cache.map : NOTHING);
+            if (exists explicit_map) {
+                if (explicit_map.typeCode() != NT_HASH) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "causal-lm kv_cache.input_output_map must be a hash of past input names "
+                        "to present output names";
+                }
+                return normalizeCausalKvInputOutputMap(explicit_map);
+            }
+        }
+
+        hash<string, string> rv;
+        foreach string input_name in (sort(keys onnx_input_names)) {
+            if (!isLikelyCausalPastInput(input_name)) {
+                continue;
+            }
+            *string output_name = inferCausalPresentOutputName(input_name);
+            if (output_name.val()) {
+                rv{input_name} = output_name;
+            }
+        }
+        return rv;
+    }
+
+    #! Validates an explicitly configured KV-cache input/output map
+    private hash<string, string> normalizeCausalKvInputOutputMap(hash<auto> raw_map) {
+        hash<string, string> rv;
+        foreach auto i in (raw_map.pairIterator()) {
+            string input_name = string(i.key);
+            string output_name = string(i.value);
+            if (!onnx_input_names.hasKey(input_name)) {
+                throw "CONSTRUCTOR-ERROR",
+                    sprintf("causal-lm kv_cache input %y is not an ONNX input; available inputs: %y",
+                        input_name, sort(keys onnx_input_names));
+            }
+            if (!onnx_output_names.hasKey(output_name)) {
+                throw "CONSTRUCTOR-ERROR",
+                    sprintf("causal-lm kv_cache output %y is not an ONNX output; available outputs: %y",
+                        output_name, sort(keys onnx_output_names));
+            }
+            rv{input_name} = output_name;
+        }
+        return rv;
+    }
+
+    #! Returns unique hash values while preserving deterministic order
+    private static list<string> uniqueStringValues(hash<string, string> values) {
+        list<string> rv = ();
+        foreach string key in (sort(keys values)) {
+            string value = values{key};
+            if (!rv.contains(value)) {
+                push rv, value;
+            }
+        }
+        return rv;
+    }
+
+    #! Adds an output name to the internal ONNX output selection
+    private ensureCausalLmOutputName(string output_name) {
+        if (!onnx_output_names.hasKey(output_name)) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("registry-model task 'causal-lm' requires ONNX output %y for KV-cache reuse; "
+                    "available outputs: %y", output_name, sort(keys onnx_output_names));
+        }
+        if (!exists output_names) {
+            output_names = (output_name,);
+            return;
+        }
+        list<string> names = output_names;
+        if (!names.contains(output_name)) {
+            push names, output_name;
+            output_names = names;
+        }
+    }
+
+    #! Returns True for common ONNX causal-LM past-key/value input names
+    private static bool isLikelyCausalPastInput(string name) {
+        return name.find("past") >= 0 || name.find("cache") >= 0;
+    }
+
+    #! Infers the present-output tensor name corresponding to a past-input tensor
+    private *string inferCausalPresentOutputName(string input_name) {
+        list<string> candidates;
+        if (startsWith(input_name, "past_key_values.")) {
+            push candidates, "present." + input_name[16..];
+        }
+        if (startsWith(input_name, "past.")) {
+            push candidates, "present." + input_name[5..];
+        }
+        if (startsWith(input_name, "past_")) {
+            push candidates, "present_" + input_name[5..];
+        }
+        if (startsWith(input_name, "past")) {
+            push candidates, "present" + input_name[4..];
+        }
+
+        foreach string candidate in (candidates) {
+            if (onnx_output_names.hasKey(candidate)) {
+                return candidate;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns True when \a value starts with \a prefix
+    private static bool startsWith(string value, string prefix) {
+        return value.size() >= prefix.size() && value[0..(prefix.size() - 1)] == prefix;
     }
 
     private addInputFieldColumns(reference<hash<auto>> result, auto records,
@@ -1508,14 +1667,18 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         list<int> generated_ids;
         string finish_reason = "length";
         hash<auto> last_outputs;
+        *hash<auto> kv_cache_values;
 
         for (int step = 0; step < causal_lm_max_new_tokens; ++step) {
             hash<auto> outputs = runModelTensors(buildCausalLmInputs(token_ids,
-                attention_mask, token_type_ids));
+                attention_mask, token_type_ids, kv_cache_values));
             last_outputs = summarizeCausalLmOutputs(outputs);
             string logits_name = resolveCausalLmLogitsOutputName(outputs);
             int next_token = QoreRegistryModelProcessor::selectGreedyToken(
                 outputs{logits_name}, token_ids.size());
+            if (causal_lm_kv_cache_enabled) {
+                kv_cache_values = extractCausalKvCacheOutputs(outputs);
+            }
 
             push token_ids, next_token;
             push generated_ids, next_token;
@@ -1550,25 +1713,216 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     #! Builds ONNX tensor inputs for one causal-LM decode step
     private hash<auto> buildCausalLmInputs(list<int> token_ids, list<int> attention_mask,
-            list<int> token_type_ids) {
+            list<int> token_type_ids, *hash<auto> kv_cache_values) {
         hash<auto> inputs;
         if (!onnx_input_names.hasKey(causal_lm_input_ids_name)) {
             throw "PROCESSOR-ERROR",
                 sprintf("registry-model task 'causal-lm' requires ONNX input tensor %y; available inputs: %y",
                     causal_lm_input_ids_name, sort(keys onnx_input_names));
         }
+        bool reuse_cache = causal_lm_kv_cache_enabled && exists kv_cache_values;
+        list<int> input_ids = reuse_cache ? (token_ids[token_ids.size() - 1],) : token_ids;
         inputs{causal_lm_input_ids_name} = QoreRegistryModelProcessor::makeInt64Tensor(
-            (token_ids,), token_ids.size(), causal_lm_input_ids_name);
+            (input_ids,), input_ids.size(), causal_lm_input_ids_name);
 
         if (onnx_input_names.hasKey(causal_lm_attention_mask_name)) {
             inputs{causal_lm_attention_mask_name} = QoreRegistryModelProcessor::makeInt64Tensor(
                 (attention_mask,), attention_mask.size(), causal_lm_attention_mask_name);
         }
         if (onnx_input_names.hasKey(causal_lm_token_type_ids_name)) {
+            list<int> step_token_type_ids = reuse_cache && token_type_ids
+                ? (token_type_ids[token_type_ids.size() - 1],)
+                : token_type_ids;
             inputs{causal_lm_token_type_ids_name} = QoreRegistryModelProcessor::makeInt64Tensor(
-                (token_type_ids,), token_type_ids.size(), causal_lm_token_type_ids_name);
+                (step_token_type_ids,), step_token_type_ids.size(), causal_lm_token_type_ids_name);
+        }
+        if (causal_lm_kv_cache_enabled) {
+            foreach auto i in (causal_lm_kv_input_output_map.pairIterator()) {
+                if (exists kv_cache_values) {
+                    if (!kv_cache_values.hasKey(i.value)) {
+                        throw "PROCESSOR-ERROR",
+                            sprintf("registry-model task 'causal-lm' expected KV-cache output %y "
+                                "from the previous decode step; available outputs: %y",
+                                i.value, sort(keys kv_cache_values));
+                    }
+                    inputs{i.key} = kv_cache_values{i.value};
+                } else {
+                    inputs{i.key} = makeInitialCausalKvTensor(i.key);
+                }
+            }
         }
         return inputs;
+    }
+
+    #! Extracts present-key/value tensors from one causal-LM ONNX output hash
+    private hash<auto> extractCausalKvCacheOutputs(hash<auto> outputs) {
+        hash<auto> rv;
+        foreach string output_name in (causal_lm_kv_output_names) {
+            if (!outputs.hasKey(output_name)) {
+                throw "PROCESSOR-ERROR",
+                    sprintf("registry-model task 'causal-lm' expected KV-cache output %y; "
+                        "available outputs: %y", output_name, sort(keys outputs));
+            }
+            rv{output_name} = outputs{output_name};
+        }
+        return rv;
+    }
+
+    #! Creates an empty initial cache tensor for the first causal-LM decode step
+    private auto makeInitialCausalKvTensor(string input_name) {
+        hash<auto> info = requireOnnxInputInfo(input_name);
+        list<int> shape = resolveInitialCausalKvShape(input_name, info);
+        string dtype = onnxTypeToTensorDtype(info.type);
+        return QoreRegistryModelProcessor::makeZeroTensor(dtype, shape, input_name);
+    }
+
+    #! Returns the ONNX input metadata hash for \a input_name
+    private hash<auto> requireOnnxInputInfo(string input_name) {
+        if (!provider_diagnostics || !exists provider_diagnostics.inputs) {
+            throw "PROCESSOR-ERROR",
+                "registry-model task 'causal-lm' cannot initialize KV-cache tensors because "
+                "ONNX input metadata is not available";
+        }
+        foreach hash<auto> input in (provider_diagnostics.inputs) {
+            if (input.name == input_name) {
+                return input;
+            }
+        }
+        throw "PROCESSOR-ERROR",
+            sprintf("registry-model task 'causal-lm' cannot initialize KV-cache input %y; "
+                "available inputs: %y", input_name, sort(keys onnx_input_names));
+    }
+
+    #! Resolves the initial zero-length cache shape for a past-key/value input
+    private list<int> resolveInitialCausalKvShape(string input_name, hash<auto> info) {
+        *list<int> configured = getConfiguredInitialCausalKvShape(input_name);
+        if (exists configured) {
+            return configured;
+        }
+
+        list<int> shape = info.shape;
+        list<string> symbolic = exists info.symbolic_shape ? info.symbolic_shape : ();
+        list<int> rv;
+        bool has_zero_cache_dim = False;
+        for (int i = 0; i < shape.size(); ++i) {
+            int dim = shape[i];
+            string symbol = i < symbolic.size() ? symbolic[i] : "";
+            if (dim >= 0) {
+                push rv, dim;
+                if (dim == 0) {
+                    has_zero_cache_dim = True;
+                }
+                continue;
+            }
+            if (isLikelyPastSequenceSymbol(symbol)) {
+                push rv, 0;
+                has_zero_cache_dim = True;
+            } else if (isLikelyBatchSymbol(symbol) || i == 0) {
+                push rv, 1;
+            } else {
+                throw "PROCESSOR-ERROR",
+                    sprintf("registry-model task 'causal-lm' cannot infer an initial shape for "
+                        "KV-cache input %y from shape %y and symbolic shape %y; set "
+                        "execution.plan.kv_cache.initial_shapes.%s explicitly",
+                        input_name, shape, symbolic, input_name);
+            }
+        }
+        if (!has_zero_cache_dim) {
+            throw "PROCESSOR-ERROR",
+                sprintf("registry-model task 'causal-lm' cannot identify the zero-length cache "
+                    "axis for KV-cache input %y from shape %y and symbolic shape %y; set "
+                    "execution.plan.kv_cache.initial_shapes.%s explicitly",
+                    input_name, shape, symbolic, input_name);
+        }
+        return rv;
+    }
+
+    #! Reads an explicit initial KV-cache shape from the execution plan
+    private *list<int> getConfiguredInitialCausalKvShape(string input_name) {
+        *auto plan_cache = getExecutionPlanValue(("kv_cache", "past_key_values"), ("generation",));
+        if (!exists plan_cache || plan_cache.typeCode() != NT_HASH) {
+            return NOTHING;
+        }
+        hash<auto> cache = plan_cache;
+        *auto shape_map = exists cache.initial_shapes ? cache.initial_shapes
+            : (exists cache.shapes ? cache.shapes : NOTHING);
+        if (!exists shape_map) {
+            return NOTHING;
+        }
+        if (shape_map.typeCode() != NT_HASH) {
+            throw "CONSTRUCTOR-ERROR",
+                "causal-lm kv_cache.initial_shapes must be a hash of input tensor names to shape lists";
+        }
+        hash<auto> shapes = shape_map;
+        if (!shapes.hasKey(input_name)) {
+            return NOTHING;
+        }
+        return QoreRegistryModelProcessor::requireIntList(shapes{input_name},
+            sprintf("kv_cache.initial_shapes.%s", input_name));
+    }
+
+    #! Maps ONNX tensor type names to ML::Tensor storage dtypes
+    private static string onnxTypeToTensorDtype(string type) {
+        switch (type) {
+            case "float": return "float32";
+            case "double": return "float64";
+            case "float16": return "float32";
+            case "bfloat16": return "float32";
+            case "int8": return "int8";
+            case "int16": return "int16";
+            case "int32": return "int32";
+            case "int64": return "int64";
+            case "uint8": return "int64";
+            case "uint16": return "int64";
+            case "uint32": return "int64";
+            case "uint64": return "int64";
+            case "bool": return "bool";
+        }
+        throw "PROCESSOR-ERROR",
+            sprintf("registry-model task 'causal-lm' cannot create an initial KV-cache "
+                "tensor for ONNX type %y", type);
+    }
+
+    #! Creates a zero-filled dense tensor with the requested dtype and shape
+    private static auto makeZeroTensor(string dtype, list<int> shape, string input_name) {
+        int count = QoreRegistryModelProcessor::shapeElementCount(shape, input_name);
+        switch (dtype) {
+            case "float32": return ML::Tensor::fromBuffer(buffer<float32>::sized(count), shape);
+            case "float64": return ML::Tensor::fromBuffer(buffer<float64>::sized(count), shape);
+            case "int64": return ML::Tensor::fromBuffer(buffer<int64>::sized(count), shape);
+            case "int32": return ML::Tensor::fromBuffer(buffer<int32>::sized(count), shape);
+            case "int16": return ML::Tensor::fromBuffer(buffer<int16>::sized(count), shape);
+            case "int8": return ML::Tensor::fromBuffer(buffer<int8>::sized(count), shape);
+            case "bool": return ML::Tensor::fromBuffer(buffer<bool>::sized(count), shape);
+        }
+        throw "PROCESSOR-ERROR",
+            sprintf("registry-model task 'causal-lm' cannot create an initial KV-cache "
+                "tensor with dtype %y for input %y", dtype, input_name);
+    }
+
+    #! Computes shape element count for initial cache tensors
+    private static int shapeElementCount(list<int> shape, string input_name) {
+        int count = 1;
+        foreach int dim in (shape) {
+            if (dim < 0) {
+                throw "PROCESSOR-ERROR",
+                    sprintf("registry-model task 'causal-lm' initial KV-cache shape for %y "
+                        "contains negative dimension %d", input_name, dim);
+            }
+            count *= dim;
+        }
+        return count;
+    }
+
+    #! Returns True for symbolic dimensions that identify the past sequence axis
+    private static bool isLikelyPastSequenceSymbol(string symbol) {
+        return symbol.find("past") >= 0 || symbol.find("cache") >= 0
+            || symbol.find("sequence") >= 0 || symbol.find("seq") >= 0;
+    }
+
+    #! Returns True for symbolic dimensions that identify a batch axis
+    private static bool isLikelyBatchSymbol(string symbol) {
+        return symbol.find("batch") >= 0;
     }
 
     #! Resolves the configured logits output name against the current ONNX outputs
@@ -1735,17 +2089,22 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     #! Builds truthful KV-cache metadata for initial causal-LM execution
     private hash<auto> buildCausalKvCacheMetadata() {
-        hash<auto> rv = {
-            "enabled": False,
-            "supported": False,
-            "reason": "stateful KV-cache reuse is not exposed by the current Qore ONNX execution path",
-        };
+        hash<auto> rv;
+        rv.requested = causal_lm_kv_cache_requested;
+        rv.enabled = causal_lm_kv_cache_enabled;
+        rv.supported = causal_lm_kv_cache_enabled;
         if (output_names) {
             rv.selected_outputs = output_names;
         }
+        if (causal_lm_kv_cache_enabled) {
+            rv.input_output_map = causal_lm_kv_input_output_map;
+            rv.present_outputs = causal_lm_kv_output_names;
+            rv.initial_cache = "empty";
+        } else if (causal_lm_kv_cache_requested) {
+            rv.reason = "no matching ONNX past-input/present-output tensor pairs were found";
+        }
         *auto plan_cache = getExecutionPlanValue(("kv_cache", "past_key_values"), ("generation",));
         if (exists plan_cache) {
-            rv.requested = True;
             rv.plan = plan_cache;
         }
         return rv;

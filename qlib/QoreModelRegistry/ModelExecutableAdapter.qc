@@ -197,6 +197,7 @@ public class ModelExecutableAdapter {
 
         ML::OnnxIoBinding binding = getTensorBindingUnlocked(output_names);
         binding.bindInputs(inputs: inputs);
+        bindTensorOutputsUnlocked(binding, output_names);
         ++tensor_binding_run_count;
         return binding.run(tensors: True);
     }
@@ -420,13 +421,13 @@ public class ModelExecutableAdapter {
         if (!exists tensor_binding || tensor_binding_output_signature != signature) {
             tensor_binding = model.createBinding();
             tensor_binding_output_signature = signature;
-            bindTensorOutputsUnlocked(cast<ML::OnnxIoBinding>(tensor_binding), output_names);
         }
         return cast<ML::OnnxIoBinding>(tensor_binding);
     }
 
     #! Binds selected outputs or all outputs to ONNX Runtime-managed memory
     private bindTensorOutputsUnlocked(ML::OnnxIoBinding binding, *list<string> output_names) {
+        binding.clearOutputs();
         if (!exists output_names) {
             binding.bindOutputs();
             return;

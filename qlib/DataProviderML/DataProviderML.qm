@@ -2005,10 +2005,8 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     - \c registry-model supports initial \c causal-lm execution plans for
       registry ONNX packages, including registry tokenizer loading,
       \c input_ids and \c attention_mask tensor construction, greedy decoding,
-      stop-token handling, generated token metadata, and truthful KV-cache
-      capability reporting; while stateful KV-cache reuse is not yet exposed,
-      causal-LM execution requests only the logits tensor when the output name
-      is known so unused present-key/value cache tensors are not materialized
+      stop-token handling, generated token metadata, and KV-cache reuse for
+      matching ONNX \c past* input and \c present* output tensor pairs
     - \c registry-model \c causal-lm packages support compact
       \c output_mode = "columns" and \c output_mode = "dataframe" generation
       output, returning prompt-aligned columns such as \c generated_text,

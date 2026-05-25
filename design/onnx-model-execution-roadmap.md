@@ -366,12 +366,13 @@ Acceptance checks:
 - Sequence classification and regression plans return clear typed outputs.
   Implemented for `registry-model` event output with stable `value`, `label`,
   `scores`, and `raw_outputs` fields.
-- Initial causal-LM support handles tokenizer input, attention masks, greedy
-  decoding, stop tokens, and basic KV cache metadata. Implemented for
-  `registry-model` event output with tokenizer artifacts loaded from
-  QoreModelRegistry packages and truthful metadata when stateful KV-cache reuse
-  is requested by the plan but not exposed by the current Qore ONNX execution
-  path.
+- Causal-LM support handles tokenizer input, attention masks, greedy decoding,
+  stop tokens, compact output modes, and registry-package tokenizer artifacts.
+  When an execution plan requests KV-cache reuse and ONNX input/output metadata
+  exposes matching `past*` / `present*` tensor pairs, `registry-model` creates
+  empty initial cache tensors, requests present tensors, and feeds them back as
+  past tensors on later decode steps. Plans with unsupported cache naming still
+  report truthful diagnostics instead of silently pretending reuse is active.
 
 ## Phase 9: Session Pools, Async Inference, and Dynamic Batching
 

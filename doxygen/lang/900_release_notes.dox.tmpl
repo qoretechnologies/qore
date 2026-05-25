@@ -3334,8 +3334,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - DataProviderML \c registry-model supports initial \c causal-lm ONNX
         execution plans with registry tokenizer loading, \c input_ids and
         \c attention_mask tensor construction, greedy decoding, stop-token
-        handling, generated token metadata, and explicit KV-cache capability
-        reporting; compact \c columns and \c dataframe output modes return
+        handling, generated token metadata, and KV-cache reuse for matching
+        ONNX \c past* input and \c present* output tensor pairs; compact
+        \c columns and \c dataframe output modes return
         prompt-aligned generated text and token metadata without per-row event
         hash materialization
       - QoreOnnxTools and \c qore-onnx compare can compare two ONNX/ORT

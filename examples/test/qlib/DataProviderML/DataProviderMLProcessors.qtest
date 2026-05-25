@@ -374,6 +374,25 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         };
     }
 
+    static hash<auto> makeDynamicFloatCacheInput(string name) {
+        return {
+            "name": name,
+            "type": {
+                "tensor_type": {
+                    "elem_type": QoreOnnxExport::ONNX_FLOAT,
+                    "shape": {
+                        "dim": (
+                            {"dim_value": 1},
+                            {"dim_value": 1},
+                            {"dim_param": "past_sequence_length"},
+                            {"dim_value": 2},
+                        ),
+                    },
+                },
+            },
+        };
+    }
+
     static hash<auto> makeStaticFloatTensorOutput(string name, list<softint> dims) {
         list<hash<auto>> shape_dims;
         foreach int dim in (dims) {
@@ -413,7 +432,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             (QoreOnnxExport::OnnxGraphBuilder::makeNode("Constant", (), ("logits",), logits_attrs),
                 QoreOnnxExport::OnnxGraphBuilder::makeNode("Constant", (), ("present.0",), cache_attrs)),
             (DataProviderMLProcessorsTest::makeDynamicInt64SequenceInput("input_ids"),
-                DataProviderMLProcessorsTest::makeDynamicInt64SequenceInput("attention_mask")),
+                DataProviderMLProcessorsTest::makeDynamicInt64SequenceInput("attention_mask"),
+                DataProviderMLProcessorsTest::makeDynamicFloatCacheInput("past_key_values.0")),
             (DataProviderMLProcessorsTest::makeStaticFloatTensorOutput("logits", (1, 1, 8)),
                 DataProviderMLProcessorsTest::makeStaticFloatTensorOutput("present.0", (1, 1, 1, 2))),
             ());
@@ -3094,15 +3114,19 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq("length", results[0].prediction.finish_reason);
         assertTrue(results[0].prediction.text.find("hello") >= 0,
             "generated text should decode token ID 4 through the registry tokenizer");
-        assertFalse(results[0].prediction.kv_cache.supported,
-            "initial causal-lm execution should report unsupported stateful KV-cache reuse");
+        assertTrue(results[0].prediction.kv_cache.supported,
+            "causal-lm execution should support present-to-past KV-cache reuse when tensor names match");
+        assertTrue(results[0].prediction.kv_cache.enabled,
+            "causal-lm execution should enable KV-cache reuse when requested and supported");
         assertTrue(results[0].prediction.kv_cache.requested,
             "KV-cache execution plan metadata should be reported in the output");
-        assertEq(("logits",), results[0].prediction.kv_cache.selected_outputs,
-            "causal-lm should request only logits while KV-cache reuse is unsupported");
+        assertEq(("logits", "present.0"), results[0].prediction.kv_cache.selected_outputs,
+            "causal-lm should request logits and present tensors when KV-cache reuse is enabled");
+        assertEq("present.0", results[0].prediction.kv_cache.input_output_map{"past_key_values.0"},
+            "KV-cache metadata should expose the past-input to present-output mapping");
         assertEq((1, 1, 8), results[0].prediction.last_outputs.logits.shape);
-        assertFalse(results[0].prediction.last_outputs.hasKey("present.0"),
-            "unused cache outputs should not be materialized when only logits are needed");
+        assertEq((1, 1, 1, 2), results[0].prediction.last_outputs{"present.0"}.shape,
+            "present cache outputs should be materialized for reuse on the next decode step");
     }
 
     registryModelOnnxCausalLmColumnOutput() {

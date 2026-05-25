@@ -575,21 +575,22 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
         ML::OnnxIoBinding binding = getIoBindingUnlocked();
         binding.bindInputs(inputs: inputs);
+        bindIoOutputsUnlocked(binding);
         ++io_binding_run_count;
         return binding.run(tensors: True);
     }
 
-    #! Returns the reusable tensor-path I/O binding, creating and binding outputs once
+    #! Returns the reusable tensor-path I/O binding
     private ML::OnnxIoBinding getIoBindingUnlocked() {
         if (!exists io_binding) {
             io_binding = model.createBinding();
-            bindIoOutputsUnlocked(cast<ML::OnnxIoBinding>(io_binding));
         }
         return cast<ML::OnnxIoBinding>(io_binding);
     }
 
     #! Binds selected outputs or all outputs to ONNX Runtime-managed memory
     private bindIoOutputsUnlocked(ML::OnnxIoBinding binding) {
+        binding.clearOutputs();
         if (!exists output_names) {
             binding.bindOutputs();
             return;

@@ -310,8 +310,10 @@ QORE_BENCH_ONNX_ROWS=10000 \
       wider Qore buffer types when there is no exact Qore dense buffer element
       type;
     - provider-owned device buffers are not exposed as portable Qore values;
-    - DataProviderML \c causal-lm execution currently performs greedy decoding
-      and reports when stateful KV-cache reuse is requested but not available;
+    - DataProviderML \c causal-lm execution performs greedy decoding and can
+      reuse ONNX present-key/value tensors as past-key/value inputs when the
+      model exposes matching cache tensor metadata; unsupported cache layouts
+      are reported in diagnostics;
     - external quantization and conversion workflows depend on the installed
       Python ONNX Runtime tooling; \c qore-onnx check-python reports missing
       dependencies and versions.
