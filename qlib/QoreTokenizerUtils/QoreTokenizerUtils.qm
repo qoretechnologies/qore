@@ -82,6 +82,10 @@ module QoreTokenizerUtils {
     @ref QoreTokenizerUtils::EmbeddingModel::embedBatchTensor() "EmbeddingModel::embedBatchTensor()"
     to receive a dense \c ML::Tensor directly and split it into flat
     \c buffer<float32> columns without first materializing nested row lists.
+    Multi-output ONNX embedding and reranker models can set \c output_names
+    to ask ONNX Runtime to materialize only the tensor used downstream, for
+    example \c ("last_hidden_state",) for embedding pooling or \c ("logits",)
+    for cross-encoder scoring.
 
     @par Example: Chunk a document for RAG
     @code{.py}
@@ -115,6 +119,9 @@ foreach hash<auto> chunk in (chunks) {
       DataProviderML column output
     - EmbeddingModel and CrossEncoderReranker accept \c session_config for
       ONNX Runtime provider, threading, and graph-optimization settings
+    - EmbeddingModel and CrossEncoderReranker accept \c output_names for
+      local ONNX execution so multi-output models do not materialize unused
+      tensors
     - Enables QoreModelRegistry-backed ONNX execution for DataProviderML processors
       without temporary files
 

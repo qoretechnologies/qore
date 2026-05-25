@@ -182,6 +182,16 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 "required": False,
                 "default_value": 512,
             },
+            "output_names": <DataProviderOptionInfo>{
+                "display_name": "Output Tensor Names",
+                "short_desc": "Only materialize selected ONNX outputs",
+                "desc": "Optional output tensor names to request from ONNX Runtime before "
+                    "score extraction. Use this for multi-output reranker models when "
+                    "only the logits tensor is needed, for example `(\"logits\",)`. "
+                    "Omit this option to request all model outputs.",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                "example_value": ("logits",),
+            },
         } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
@@ -200,6 +210,9 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
 
         #! Optional ONNX Runtime session configuration
         *hash<ML::OnnxSessionConfig> onnx_session_config;
+
+        #! Optional ONNX output tensor names
+        *list<string> output_names;
 
         #! Registry backend options
         hash<auto> registry_options;
@@ -251,6 +264,20 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
             "mode": reranker_mode,
             "max_length": copts.max_length ?? 512,
         });
+        if (exists copts.output_names) {
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            if (!output_names) {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names must contain at least one ONNX output tensor name; "
+                    "omit output_names to request all model outputs";
+            }
+            if (reranker_mode != "onnx") {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names is only supported when reranker_mode is \"onnx\"; "
+                    "omit output_names for HTTP reranker endpoints";
+            }
+            rconfig.output_names = output_names;
+        }
         if (exists copts.onnx_session_config) {
             onnx_session_config = cast<hash<ML::OnnxSessionConfig>>(copts.onnx_session_config);
         }

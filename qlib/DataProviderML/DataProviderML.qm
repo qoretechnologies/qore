@@ -1282,7 +1282,9 @@ module DataProviderML {
                 "database like Qdrant or pgvector, then find relevant passages by comparing "
                 "vectors.\n\n"
                 "Supports any OpenAI-compatible embedding endpoint (SGLang, vLLM, OpenAI, "
-                "Azure OpenAI) or a local ONNX model.",
+                "Azure OpenAI) or a local ONNX model. For multi-output ONNX embedding "
+                "models, `output_names` can request only the hidden-state tensor needed "
+                "for pooling.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreEmbedTextProcessor",
@@ -1297,8 +1299,9 @@ module DataProviderML {
                 QoreEmbedTextProcessor::ConstructorOptions{
                     "embedding_url", "embedding_model", "embedding_api_key", "window_size",
                     "embedding_model_path", "tokenizer_config_path", "max_tokens",
-                    "pooling_strategy", "output_mode", "registry_model_name", "registry_model_version",
-                    "registry_model_artifact_name", "registry_tokenizer_artifact_name",
+                    "pooling_strategy", "output_names", "output_mode", "registry_model_name",
+                    "registry_model_version", "registry_model_artifact_name",
+                    "registry_tokenizer_artifact_name",
                     "registry_backend_type", "registry_path", "registry_datasource",
                     "registry_table_prefix", "registry_rest_client",
                     "registry_rest_base_path", "registry_tenant_id",
@@ -1358,7 +1361,9 @@ module DataProviderML {
                 "Accumulates all candidate records, scores them, and emits the top-k most "
                 "relevant records enriched with:\n"
                 "- `reranker_score` — relevance score (0.0 to 1.0)\n"
-                "- `reranker_rank` — rank position (1 = most relevant)",
+                "- `reranker_rank` — rank position (1 = most relevant)\n\n"
+                "For multi-output ONNX reranker models, `output_names` can request only "
+                "the logits tensor used for scoring.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRerankerProcessor",
@@ -1374,7 +1379,7 @@ module DataProviderML {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRerankerProcessor::ConstructorOptions{
                     "top_k", "reranker_url", "reranker_api_key",
-                    "reranker_model_path", "tokenizer_config_path", "max_length",
+                    "reranker_model_path", "tokenizer_config_path", "max_length", "output_names",
                     "registry_model_name", "registry_model_version",
                     "registry_model_artifact_name", "registry_tokenizer_artifact_name",
                     "registry_backend_type", "registry_path", "registry_datasource",
@@ -1807,6 +1812,7 @@ DataProviderML::QoreEmbedTextProcessor proc({
     "registry_model_name": "bge-small-en",
     "registry_path": "/var/models",
     "window_size": 32,
+    "output_names": ("last_hidden_state",),
 });
 
 # When the registry package declares task: "embedding" or an onnx/embedding
@@ -1956,6 +1962,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     - \c embed-text and \c rerank-text accept \c onnx_session_config and inherit
       QoreModelRegistry package execution config for ONNX Runtime provider,
       threading, and graph-optimization settings
+    - \c embed-text and \c rerank-text accept \c output_names for local and
+      registry-backed ONNX execution so multi-output embedding and reranker
+      models do not materialize unused tensors
     - \c embed-text and \c rerank-text can infer local ONNX mode from
       QoreModelRegistry task-aware execution plans, so packages registered with
       \c task = "embedding" or \c task = "reranker" do not require duplicate

@@ -251,10 +251,14 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             \embedTextDataFrameOnnxColumnOutput());
         addTestCase("embed-text - BufferColumns dense columns",
             \embedTextBufferColumnsOnnxColumnOutput());
+        addTestCase("embed-text - selected ONNX output",
+            \embedTextSelectedOnnxOutput());
         addTestCase("embed-text - registry execution plan inference",
             \embedTextRegistryPlanInference());
         addTestCase("rerank-text - DataFrameBlock ONNX shape", \rerankTextDataFrameOnnxShape());
         addTestCase("rerank-text - BufferColumns ONNX shape", \rerankTextBufferColumnsOnnxShape());
+        addTestCase("rerank-text - selected ONNX output",
+            \rerankTextSelectedOnnxOutput());
         addTestCase("rerank-text - registry execution plan inference",
             \rerankTextRegistryPlanInference());
 
@@ -3870,6 +3874,39 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "flat embedding columns should be normalized");
     }
 
+    embedTextSelectedOnnxOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        if (skipTokenEmbeddingOnnx()) {
+            return;
+        }
+
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 1,
+            "embedding_mode": "onnx",
+            "embedding_model_path": getTokenEmbeddingModelPath(),
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_tokens": 8,
+            "output_names": ("last_hidden_state",),
+            "output_mode": "columns",
+        });
+
+        DataFrame::DataFrame df({
+            "body": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result),
+            "embed-text selected output should preserve DataFrameBlock output");
+        assertEq("buffer<float32>", result.getColumnBuffer("embedding_0").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("embedding_1").fullType());
+        assertEq(2, result.getColumnBuffer("embedding_0").size());
+    }
+
     embedTextRegistryPlanInference() {
         if (skipTokenEmbeddingOnnx()) {
             return;
@@ -3986,6 +4023,42 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         }
         assertEq(2, result.getColumn("id").toList().lsize());
         assertEq(2, result.getColumn("passage").lsize());
+    }
+
+    rerankTextSelectedOnnxOutput() {
+        if (skipTokenRerankerOnnx()) {
+            return;
+        }
+
+        DataProviderML::QoreRerankerProcessor proc({
+            "query_field": "query",
+            "passage_field": "passage",
+            "top_k": 2,
+            "reranker_mode": "onnx",
+            "reranker_model_path": getTokenRerankerModelPath(),
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_length": 24,
+            "output_names": ("logits",),
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3)),
+            "query": ("machine learning", "machine learning", "machine learning"),
+            "passage": ("machine learning systems", "weather forecast", "enterprise ai search"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "rerank-text selected output should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        assertEq((1, 2), result.getColumn("reranker_rank").toList());
+        list<auto> scores = result.getColumn("reranker_score").toList();
+        assertEq(2, scores.lsize());
+        foreach float score in (scores) {
+            assertTrue(score > 0.0 && score <= 1.0,
+                sprintf("reranker selected output score should be in (0, 1]; got %f", score));
+        }
     }
 
     rerankTextRegistryPlanInference() {

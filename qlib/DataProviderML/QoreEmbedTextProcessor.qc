@@ -169,6 +169,16 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                     <AllowedValueInfo>{"value": "max", "display_name": "Max"},
                 ),
             },
+            "output_names": <DataProviderOptionInfo>{
+                "display_name": "Output Tensor Names",
+                "short_desc": "Only materialize selected ONNX outputs",
+                "desc": "Optional output tensor names to request from ONNX Runtime before "
+                    "embedding pooling. Use this for multi-output embedding models when "
+                    "only the hidden-state tensor is needed, for example "
+                    "`(\"last_hidden_state\",)`. Omit this option to request all model outputs.",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                "example_value": ("last_hidden_state",),
+            },
             "output_mode": <DataProviderOptionInfo>{
                 "display_name": "Output Mode",
                 "short_desc": "How embeddings are added to shaped output",
@@ -259,6 +269,9 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         #! ONNX pooling strategy
         string pooling_strategy = "mean";
 
+        #! Optional ONNX output tensor names
+        *list<string> output_names;
+
         #! Embedding output mode ("vector" or "columns")
         string output_mode = "vector";
 
@@ -342,6 +355,19 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         }
         max_tokens = copts.max_tokens ?? 512;
         pooling_strategy = copts.pooling_strategy ?? "mean";
+        if (exists copts.output_names) {
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            if (!output_names) {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names must contain at least one ONNX output tensor name; "
+                    "omit output_names to request all model outputs";
+            }
+            if (embedding_mode != "onnx") {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names is only supported when embedding_mode is \"onnx\"; "
+                    "omit output_names for HTTP embedding endpoints";
+            }
+        }
         output_mode = copts.output_mode ?? "vector";
         if (output_mode != "vector" && output_mode != "columns") {
             throw "CONSTRUCTOR-ERROR",
@@ -695,6 +721,9 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 "max_tokens": max_tokens,
                 "pooling_strategy": pooling_strategy,
             });
+            if (output_names) {
+                config.output_names = output_names;
+            }
             if (embedding_mode == "onnx") {
 %ifndef NoJson
                 if (registry_model_name.val()) {

@@ -47,6 +47,8 @@ public hashdecl EmbeddingConfig {
     *hash<auto> tokenizer_runtime_config;
     #! ONNX mode: optional session configuration for providers, threading, and graph optimization
     *hash<ML::OnnxSessionConfig> session_config;
+    #! ONNX mode: optional output tensor names to request from ONNX Runtime
+    *list<string> output_names;
     #! Maximum input tokens (longer inputs are truncated); default 512
     int max_tokens = 512;
     #! HTTP endpoint format: "auto" (try OpenAI then bge-m3 fallback),
@@ -105,6 +107,8 @@ public class EmbeddingModel {
         *Tokenizer::HFTokenizer onnx_tokenizer;
         #! Input tensors accepted by the ONNX model
         hash<string, bool> onnx_input_names = {};
+        #! Optional output tensor names requested from the ONNX model
+        *list<string> output_names;
     }
 
     #! Creates an EmbeddingModel with the given configuration
@@ -145,6 +149,14 @@ public class EmbeddingModel {
             }
             max_tokens = config.max_tokens;
             pooling_strategy = config.pooling_strategy;
+            if (exists config.output_names) {
+                output_names = config.output_names;
+                if (!output_names) {
+                    throw "EMBEDDING-CONFIG-ERROR",
+                        "output_names must contain at least one ONNX output tensor name; "
+                        "omit output_names to request all model outputs";
+                }
+            }
             onnx_model = exists config.session_config
                 ? (exists config.model_data
                     ? new ML::OnnxModel(config.model_data, config.session_config)
@@ -298,7 +310,7 @@ public class EmbeddingModel {
             ML::Tensor attention_mask = ML::Tensor::fromBuffer(token_batch.attention_mask, token_batch.shape);
             hash<auto> inputs = makeOnnxTokenTensorInputs(token_batch);
 
-            hash<auto> result = onnx_model.runTensors(inputs);
+            hash<auto> result = onnx_model.runTensors(inputs, output_names);
 
             # Get the last hidden state (typically the first output)
             ML::Tensor hidden_states = result.last_hidden_state ?? result{result.firstKey()};

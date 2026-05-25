@@ -56,6 +56,8 @@ public hashdecl RerankerConfig {
     *hash<auto> tokenizer_runtime_config;
     #! ONNX mode: optional session configuration for providers, threading, and graph optimization
     *hash<ML::OnnxSessionConfig> session_config;
+    #! ONNX mode: optional output tensor names to request from ONNX Runtime
+    *list<string> output_names;
     #! Maximum sequence length for query+passage pairs; default 512
     int max_length = 512;
     #! Activation function for ONNX logits: "sigmoid" (default, binary relevance),
@@ -119,6 +121,8 @@ public class CrossEncoderReranker {
         *Tokenizer::HFTokenizer onnx_tokenizer;
         #! Input tensors accepted by the ONNX model
         hash<string, bool> onnx_input_names = {};
+        #! Optional output tensor names requested from the ONNX model
+        *list<string> output_names;
     }
 
     #! Creates a CrossEncoderReranker with the given configuration
@@ -153,6 +157,14 @@ public class CrossEncoderReranker {
             }
             max_length = config.max_length;
             activation = config.activation;
+            if (exists config.output_names) {
+                output_names = config.output_names;
+                if (!output_names) {
+                    throw "RERANKER-CONFIG-ERROR",
+                        "output_names must contain at least one ONNX output tensor name; "
+                        "omit output_names to request all model outputs";
+                }
+            }
             onnx_model = exists config.session_config
                 ? (exists config.model_data
                     ? new ML::OnnxModel(config.model_data, config.session_config)
@@ -281,7 +293,7 @@ public class CrossEncoderReranker {
 
             hash<auto> inputs = makeOnnxTokenTensorInputs(token_batch);
 
-            hash<auto> result = onnx_model.runTensors(inputs);
+            hash<auto> result = onnx_model.runTensors(inputs, output_names);
 
             # Extract logits and apply the configured activation function.
             # Cross-encoder models typically output logits in a "logits" key
