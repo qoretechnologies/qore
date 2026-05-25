@@ -3286,6 +3286,11 @@ foreach string module_name in (registry.getProcessModules()) {
       - DataProviderML \c registry-model event output applies \c regression,
         \c classification, and \c sequence-classification execution plans to
         produce stable task fields while preserving raw ONNX outputs
+      - DataProviderML \c registry-model supports initial \c causal-lm ONNX
+        execution plans with registry tokenizer loading, \c input_ids and
+        \c attention_mask tensor construction, greedy decoding, stop-token
+        handling, generated token metadata, and explicit KV-cache capability
+        reporting
       - QoreOnnxTools and \c qore-onnx compare can compare two ONNX/ORT
         artifacts for output compatibility and optional latency differences
 

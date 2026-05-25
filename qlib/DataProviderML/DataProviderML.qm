@@ -34,6 +34,7 @@
 
 %requires QoreModelRegistry
 %requires QoreOnnxTools
+%requires tokenizer
 %requires QoreTokenizerUtils
 %requires QoreStructuredExtraction
 %requires QoreGuardrails
@@ -428,6 +429,7 @@ module DataProviderML {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
                     "version", "tag", "tenant_id", "input_tensor", "output_mode", "include_input_fields",
+                    "prompt_field", "max_new_tokens", "stop_token_ids", "registry_tokenizer_artifact_name",
                 }, {
                     "loc": "constructor",
                 }
@@ -1851,6 +1853,29 @@ auto logits = proc.processRecordsShape(token_batches,
     DataProviderShape::DataFrameBlock);
     @endcode
 
+    @par Registry causal-LM example:
+    @code{.py}
+DataProviderML::QoreRegistryModelProcessor generator({
+    "registry_path": "/var/models",
+    "model_name": "customer-reply-lm",
+    "tag": "production",
+    "prompt_field": "prompt",
+    "max_new_tokens": 64,
+    "stop_token_ids": (2,),
+    "window_size": 1,
+});
+
+# The package manifest declares task: "causal-lm" and an onnx/causal-lm
+# execution plan. The processor loads tokenizer.json from the same registry
+# package, builds input_ids and attention_mask tensors, runs greedy decoding,
+# and returns a typed text-generation prediction with token counts and
+# KV-cache capability metadata.
+list<auto> events = generator.processRecord({
+    "prompt": "Draft a short account renewal summary for Acme:",
+});
+printf("reply=%s\n", events[0].prediction.text);
+    @endcode
+
     @par BufferColumns example:
     @code{.py}
 %requires DataProviderML
@@ -1912,6 +1937,11 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       \c classification, and \c sequence-classification execution plans to
       produce stable task fields such as \c value, \c label, and \c scores
       while preserving raw ONNX outputs for diagnostics
+    - \c registry-model supports initial \c causal-lm execution plans for
+      registry ONNX packages, including registry tokenizer loading,
+      \c input_ids and \c attention_mask tensor construction, greedy decoding,
+      stop-token handling, generated token metadata, and truthful KV-cache
+      capability reporting
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used

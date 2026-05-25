@@ -35,6 +35,7 @@
 %requires FsUtil
 %requires ml
 %requires QoreModelRegistry
+%requires QoreOnnxExport
 %requires DataProviderML
 
 %try-module dataframe
@@ -214,6 +215,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             \registryModelOnnxRegressionPlanOutput());
         addTestCase("registry-model - ONNX sequence classification task output",
             \registryModelOnnxSequenceClassificationPlanOutput());
+        addTestCase("registry-model - ONNX causal LM task output",
+            \registryModelOnnxCausalLmPlanOutput());
         addTestCase("registry-model - DataFrameBlock tensor path",
             \registryModelOnnxDataFrameTensorPath());
         addTestCase("registry-model - DataFrameBlock multi-column tensor path",
@@ -328,6 +331,90 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         return registry.registerPackage(package_dir, {
             "name": model_name,
             "task": task,
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+    }
+
+    static hash<auto> makeDynamicInt64SequenceInput(string name) {
+        return {
+            "name": name,
+            "type": {
+                "tensor_type": {
+                    "elem_type": QoreOnnxExport::ONNX_INT64,
+                    "shape": {
+                        "dim": (
+                            {"dim_value": 1},
+                            {"dim_param": "S"},
+                        ),
+                    },
+                },
+            },
+        };
+    }
+
+    static hash<auto> makeStaticFloatTensorOutput(string name, list<softint> dims) {
+        list<hash<auto>> shape_dims;
+        foreach int dim in (dims) {
+            push shape_dims, {"dim_value": dim};
+        }
+        return {
+            "name": name,
+            "type": {
+                "tensor_type": {
+                    "elem_type": QoreOnnxExport::ONNX_FLOAT,
+                    "shape": {
+                        "dim": shape_dims,
+                    },
+                },
+            },
+        };
+    }
+
+    static binary makeTinyCausalLmOnnx() {
+        # The highest logit is token ID 4 ("hello" in minimalTokenizerJson()).
+        hash<auto> logits = QoreOnnxExport::OnnxGraphBuilder::makeTensorFloat(
+            "constant_logits", (1, 1, 8), (0.0, 0.1, 0.2, 0.3, 9.0, 0.4, 0.5, 0.6));
+        list<hash<auto>> attrs = ({
+            "name": "value",
+            "type": QoreOnnxExport::ONNX_ATTR_TENSOR,
+            "t": logits,
+        },);
+        hash<auto> model_hash = QoreOnnxExport::OnnxGraphBuilder::buildModel(
+            "tiny-causal-lm",
+            (QoreOnnxExport::OnnxGraphBuilder::makeNode("Constant", (), ("logits",), attrs),),
+            (DataProviderMLProcessorsTest::makeDynamicInt64SequenceInput("input_ids"),
+                DataProviderMLProcessorsTest::makeDynamicInt64SequenceInput("attention_mask")),
+            (DataProviderMLProcessorsTest::makeStaticFloatTensorOutput("logits", (1, 1, 8)),),
+            ());
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(model_hash);
+    }
+
+    static string createCausalLmRegistryPackage(string dir, string model_name) {
+        string package_dir = dir + DirSep + model_name + "_pkg";
+        mkdir_ex(package_dir, 0755, True);
+        DataProviderMLProcessorsTest::writeBinaryFile(package_dir + DirSep + "model.onnx",
+            DataProviderMLProcessorsTest::makeTinyCausalLmOnnx());
+        DataProviderMLProcessorsTest::writeTextFile(package_dir + DirSep + "tokenizer.json",
+            DataProviderMLProcessorsTest::minimalTokenizerJson());
+        DataProviderMLProcessorsTest::writeTextFile(package_dir + DirSep + "tokenizer_config.json",
+            "{\"model_max_length\":128}");
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        return registry.registerPackage(package_dir, {
+            "name": model_name,
+            "task": "causal-lm",
+            "execution_plan": {
+                "type": "onnx/causal-lm",
+                "prompt_field": "prompt",
+                "input_ids_name": "input_ids",
+                "attention_mask_name": "attention_mask",
+                "logits_output_name": "logits",
+                "max_new_tokens": 2,
+                "stop_token_ids": (3,),
+                "kv_cache": {
+                    "enabled": True,
+                    "past_key_prefix": "past_key_values",
+                },
+            },
             "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
         });
     }
@@ -2840,6 +2927,54 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(results[0].prediction.raw_outputs.hasKey("label"));
         assertTrue(results[0].prediction.raw_outputs.hasKey("probabilities"));
 %endif
+    }
+
+    registryModelOnnxCausalLmPlanOutput() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_causal_lm_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string vid = DataProviderMLProcessorsTest::createCausalLmRegistryPackage(
+            dir, "tiny-causal-lm");
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("tiny-causal-lm", vid);
+        assertEq("causal-lm", manifest.execution.task);
+        assertEq("onnx/causal-lm", manifest.execution.plan.type);
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "tiny-causal-lm",
+            "version": vid,
+            "window_size": 1,
+        });
+
+        list<auto> results;
+        DataProviderMLProcessorsTest::collectResult(\results,
+            proc.processRecord({"prompt": "hello world"}));
+
+        assertEq(1, results.size(), "causal-lm task should emit one event per prompt");
+        assertEq("causal-lm", results[0].prediction.task);
+        assertEq("text-generation", results[0].prediction.kind);
+        assertEq("hello world", results[0].prediction.prompt);
+        assertEq((4, 4), results[0].prediction.generated_token_ids);
+        assertEq(2, results[0].prediction.generated_token_count);
+        assertEq("length", results[0].prediction.finish_reason);
+        assertTrue(results[0].prediction.text.find("hello") >= 0,
+            "generated text should decode token ID 4 through the registry tokenizer");
+        assertFalse(results[0].prediction.kv_cache.supported,
+            "initial causal-lm execution should report unsupported stateful KV-cache reuse");
+        assertTrue(results[0].prediction.kv_cache.requested,
+            "KV-cache execution plan metadata should be reported in the output");
+        assertEq((1, 1, 8), results[0].prediction.last_outputs.logits.shape);
     }
 
     registryModelOnnxDataFrameTensorPath() {

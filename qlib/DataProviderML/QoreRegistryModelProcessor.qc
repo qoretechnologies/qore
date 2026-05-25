@@ -174,6 +174,44 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                     "is ignored.",
                 "example_value": {"X": ("x", "y")},
             },
+            "prompt_field": <DataProviderOptionInfo>{
+                "display_name": "Prompt Field",
+                "short_desc": "Record field containing text-generation prompts",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Input record field used as the prompt for registry ONNX packages "
+                    "declaring a `causal-lm` task. When omitted, the processor uses "
+                    "`prompt_field` from the package execution plan or the first "
+                    "`fields` entry.",
+                "input_field_names": True,
+                "example_value": "prompt",
+            },
+            "max_new_tokens": <DataProviderOptionInfo>{
+                "display_name": "Maximum New Tokens",
+                "short_desc": "Maximum generated tokens per prompt",
+                "type": AbstractDataProviderTypeMap."*int",
+                "desc": "Maximum number of tokens to generate for registry ONNX "
+                    "`causal-lm` execution. When omitted, the value is read from "
+                    "the registry execution plan or defaults to `32`.",
+                "example_value": 32,
+            },
+            "stop_token_ids": <DataProviderOptionInfo>{
+                "display_name": "Stop Token IDs",
+                "short_desc": "Token IDs that stop causal-LM generation",
+                "type": AbstractDataProviderTypeMap."*list",
+                "desc": "Optional list of token IDs that stop registry ONNX `causal-lm` "
+                    "generation. When omitted, the execution plan value is used, "
+                    "then the tokenizer EOS token when one is configured.",
+                "example_value": (3,),
+            },
+            "registry_tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Artifact Name",
+                "short_desc": "Tokenizer artifact name in the registry package",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Optional `tokenizer.json` artifact name to load from the model "
+                    "registry for `causal-lm` execution. Omit this when the package "
+                    "manifest already identifies the tokenizer artifact.",
+                "example_value": "tokenizer.json",
+            },
             "output_mode": <DataProviderOptionInfo>{
                 "display_name": "Output Mode",
                 "short_desc": "How to return registry model results",
@@ -255,6 +293,27 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         #! Registry execution plan metadata, when declared
         *hash<auto> execution_plan;
 
+        #! ONNX input tensor names exposed by the loaded model
+        hash<string, bool> onnx_input_names;
+
+        #! Prompt field for causal language model generation
+        *string prompt_field;
+
+        #! Tokenizer loaded from the registry for causal language models
+        *Tokenizer::HFTokenizer causal_tokenizer;
+
+        #! Causal language model tensor names and generation options
+        string causal_lm_input_ids_name = "input_ids";
+        string causal_lm_attention_mask_name = "attention_mask";
+        string causal_lm_token_type_ids_name = "token_type_ids";
+        string causal_lm_logits_output_name = "logits";
+        int causal_lm_max_new_tokens = 32;
+        int causal_lm_max_input_tokens = 0;
+        bool causal_lm_add_special_tokens = True;
+        bool causal_lm_skip_special_tokens = True;
+        list<int> causal_lm_stop_token_ids;
+        hash<auto> causal_lm_kv_cache_metadata;
+
         #! Output representation mode
         string output_mode = "events";
 
@@ -292,11 +351,6 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         if (exists copts.input_map) {
             input_map = QoreRegistryModelProcessor::parseInputMap(copts.input_map);
             fields = QoreRegistryModelProcessor::mergeInputMapFields(fields, input_map);
-        }
-        if (!fields) {
-            throw "CONSTRUCTOR-ERROR",
-                "no valid input field names provided; set 'fields' for a single input tensor "
-                "or 'input_map' for one or more ONNX input tensors";
         }
         input_tensor = copts.input_tensor;
         output_mode = copts.output_mode ?? "events";
@@ -344,6 +398,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         if (model.isOnnx()) {
             provider_diagnostics = model.getProviderDiagnostics();
             execution_provider = provider_diagnostics.active_provider;
+            onnx_input_names = QoreRegistryModelProcessor::buildOnnxInputNameMap(provider_diagnostics);
             if (exists input_map) {
                 hash<string, list<string>> imap = input_map;
                 foreach string tensor_name in (keys imap) {
@@ -353,6 +408,14 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         } else if (exists input_map) {
             throw "CONSTRUCTOR-ERROR",
                 "input_map is only supported for ONNX Runtime models; native registry models use 'fields'";
+        }
+
+        if (execution_task == "causal-lm") {
+            configureCausalLm(copts, registry);
+        } else if (!fields) {
+            throw "CONSTRUCTOR-ERROR",
+                "no valid input field names provided; set 'fields' for a single input tensor "
+                "or 'input_map' for one or more ONNX input tensors";
         }
 
         configured = True;
@@ -480,6 +543,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     private list<auto> processWindow(list<hash<auto>> records) {
         if (model.isOnnx()) {
+            if (execution_task == "causal-lm") {
+                return processCausalLmWindow(records);
+            }
             return processOnnxWindow(records);
         }
 
@@ -669,6 +735,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "registry-model processor not configured; provide constructor options";
         }
         if (!model.isOnnx() || buffer) {
+            return;
+        }
+        if (execution_task == "causal-lm") {
             return;
         }
 
@@ -941,6 +1010,91 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         return matrix;
     }
 
+    #! Builds a hash map of declared ONNX input tensor names from diagnostics
+    private static hash<string, bool> buildOnnxInputNameMap(*hash<auto> diagnostics) {
+        hash<string, bool> rv = {};
+        if (!diagnostics || !exists diagnostics.inputs) {
+            return rv;
+        }
+        foreach hash<auto> input in (diagnostics.inputs) {
+            if (input.name.val()) {
+                rv{input.name} = True;
+            }
+        }
+        return rv;
+    }
+
+    #! Configures task-aware causal language model generation from registry metadata
+    private configureCausalLm(hash<auto> copts, QoreModelRegistry::ModelRegistry registry) {
+        if (!model.isOnnx()) {
+            throw "CONSTRUCTOR-ERROR",
+                "registry-model task 'causal-lm' requires an ONNX Runtime model artifact";
+        }
+        if (exists input_map) {
+            throw "CONSTRUCTOR-ERROR",
+                "registry-model task 'causal-lm' builds tokenizer tensors from 'prompt_field'; "
+                "do not set 'input_map'";
+        }
+        if (output_mode != "events") {
+            throw "CONSTRUCTOR-ERROR",
+                "registry-model task 'causal-lm' currently supports output_mode 'events' only";
+        }
+
+        if (exists copts.prompt_field && copts.prompt_field.val()) {
+            prompt_field = string(copts.prompt_field);
+        }
+        if (!prompt_field.val()) {
+            prompt_field = getExecutionPlanString(("prompt_field", "text_field", "input_field"),
+                ("input", "generation", "tokenizer"));
+        }
+        if (!prompt_field.val() && fields) {
+            prompt_field = fields[0];
+        }
+        if (!prompt_field.val()) {
+            throw "CONSTRUCTOR-ERROR",
+                "registry-model task 'causal-lm' requires 'prompt_field' or an execution plan prompt_field";
+        }
+        if (!fields.contains(prompt_field)) {
+            push fields, prompt_field;
+        }
+
+        causal_lm_input_ids_name = getExecutionPlanStringDefault(
+            ("input_ids_name", "input_ids"), ("input", "generation"), "input_ids");
+        causal_lm_attention_mask_name = getExecutionPlanStringDefault(
+            ("attention_mask_name", "attention_mask"), ("input", "generation"), "attention_mask");
+        causal_lm_token_type_ids_name = getExecutionPlanStringDefault(
+            ("token_type_ids_name", "token_type_ids"), ("input", "generation"), "token_type_ids");
+        causal_lm_logits_output_name = getExecutionPlanStringDefault(
+            ("logits_output_name", "logits_output", "output_name"), ("output", "generation"), "logits");
+
+        if (exists copts.max_new_tokens) {
+            causal_lm_max_new_tokens = int(copts.max_new_tokens);
+        } else {
+            causal_lm_max_new_tokens = getExecutionPlanInt(
+                ("max_new_tokens", "max_tokens"), ("generation",), 32);
+        }
+        if (causal_lm_max_new_tokens <= 0) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("max_new_tokens must be positive for registry-model task 'causal-lm'; got %d",
+                    causal_lm_max_new_tokens);
+        }
+        causal_lm_max_input_tokens = getExecutionPlanInt(
+            ("max_input_tokens", "max_length"), ("tokenizer", "generation"), 0);
+        causal_lm_add_special_tokens = getExecutionPlanBool(
+            ("add_special_tokens",), ("tokenizer", "generation"), True);
+        causal_lm_skip_special_tokens = getExecutionPlanBool(
+            ("skip_special_tokens",), ("tokenizer", "generation"), True);
+
+        hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+            model_name, loaded_version, copts.registry_tokenizer_artifact_name);
+        causal_tokenizer = new Tokenizer::HFTokenizer(tokenizer_package.tokenizer_json);
+        if (exists tokenizer_package.tokenizer_config) {
+            causal_tokenizer.loadConfig(tokenizer_package.tokenizer_config);
+        }
+        causal_lm_stop_token_ids = resolveCausalStopTokenIds(copts);
+        causal_lm_kv_cache_metadata = buildCausalKvCacheMetadata();
+    }
+
     private addInputFieldColumns(reference<hash<auto>> result, auto records,
             DataProvider::DataProviderShape shape, list<list<float>> matrix) {
         if (!include_input_fields) {
@@ -1054,6 +1208,345 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             }
             push result{"prediction"}, applyTaskOutputPlan(model_output);
         }
+    }
+
+    #! Processes one event window through a registry-backed ONNX causal language model
+    private list<auto> processCausalLmWindow(list<hash<auto>> records) {
+        list<auto> events;
+        foreach hash<auto> rec in (records) {
+            string prompt = string(DataProvider::AbstractDataProvider::getFieldValue(rec, prompt_field));
+            hash<auto> prediction = generateCausalLmText(prompt);
+
+            hash<auto> record_values = {
+                prompt_field: prompt,
+            };
+
+            hash<RegistryModelEventInfo> event = <RegistryModelEventInfo>{
+                "event_type": "registry-model",
+                "model_name": model_name,
+                "version_id": loaded_version,
+                "record_values": record_values,
+                "execution_provider": execution_provider,
+                "provider_diagnostics": provider_diagnostics,
+                "prediction": prediction,
+            };
+            if (include_diagnostics) {
+                event.inference_stats = model.getInferenceStats();
+            }
+            push events, event;
+        }
+        return events;
+    }
+
+    #! Generates text using greedy decoding for an ONNX causal language model
+    private hash<auto> generateCausalLmText(string prompt) {
+        hash<auto> encode_options = {
+            "add_special_tokens": causal_lm_add_special_tokens,
+        };
+        if (causal_lm_max_input_tokens > 0) {
+            encode_options.max_length = causal_lm_max_input_tokens;
+            encode_options.truncation = "longest_first";
+        }
+
+        hash<auto> enc = causal_tokenizer.encodeAdvanced(prompt, encode_options);
+        list<int> token_ids = QoreRegistryModelProcessor::requireIntList(enc.input_ids,
+            "tokenizer input_ids");
+        if (!token_ids) {
+            throw "PROCESSOR-ERROR",
+                "registry-model task 'causal-lm' tokenizer produced no input_ids";
+        }
+
+        list<int> attention_mask = exists enc.attention_mask
+            ? QoreRegistryModelProcessor::requireIntList(enc.attention_mask, "tokenizer attention_mask")
+            : (map 1, range(token_ids.size()));
+        list<int> token_type_ids = exists enc.token_type_ids
+            ? QoreRegistryModelProcessor::requireIntList(enc.token_type_ids, "tokenizer token_type_ids")
+            : (map 0, range(token_ids.size()));
+
+        int input_token_count = token_ids.size();
+        list<int> generated_ids;
+        string finish_reason = "length";
+        hash<auto> last_outputs;
+
+        for (int step = 0; step < causal_lm_max_new_tokens; ++step) {
+            hash<auto> outputs = model.runTensors(buildCausalLmInputs(token_ids,
+                attention_mask, token_type_ids));
+            last_outputs = summarizeCausalLmOutputs(outputs);
+            string logits_name = resolveCausalLmLogitsOutputName(outputs);
+            int next_token = QoreRegistryModelProcessor::selectGreedyToken(
+                outputs{logits_name}, token_ids.size());
+
+            push token_ids, next_token;
+            push generated_ids, next_token;
+            push attention_mask, 1;
+            int last_type_id = token_type_ids ? token_type_ids[token_type_ids.size() - 1] : 0;
+            push token_type_ids, last_type_id;
+
+            if (causal_lm_stop_token_ids.contains(next_token)) {
+                finish_reason = "stop";
+                break;
+            }
+        }
+
+        string generated_text = generated_ids
+            ? causal_tokenizer.decode(generated_ids, causal_lm_skip_special_tokens)
+            : "";
+
+        return {
+            "task": "causal-lm",
+            "kind": "text-generation",
+            "prompt": prompt,
+            "text": generated_text,
+            "generated_token_ids": generated_ids,
+            "input_token_count": input_token_count,
+            "generated_token_count": generated_ids.size(),
+            "finish_reason": finish_reason,
+            "stop_token_ids": causal_lm_stop_token_ids,
+            "kv_cache": causal_lm_kv_cache_metadata,
+            "last_outputs": last_outputs,
+        };
+    }
+
+    #! Builds ONNX tensor inputs for one causal-LM decode step
+    private hash<auto> buildCausalLmInputs(list<int> token_ids, list<int> attention_mask,
+            list<int> token_type_ids) {
+        hash<auto> inputs;
+        if (!onnx_input_names.hasKey(causal_lm_input_ids_name)) {
+            throw "PROCESSOR-ERROR",
+                sprintf("registry-model task 'causal-lm' requires ONNX input tensor %y; available inputs: %y",
+                    causal_lm_input_ids_name, sort(keys onnx_input_names));
+        }
+        inputs{causal_lm_input_ids_name} = QoreRegistryModelProcessor::makeInt64Tensor(
+            (token_ids,), token_ids.size(), causal_lm_input_ids_name);
+
+        if (onnx_input_names.hasKey(causal_lm_attention_mask_name)) {
+            inputs{causal_lm_attention_mask_name} = QoreRegistryModelProcessor::makeInt64Tensor(
+                (attention_mask,), attention_mask.size(), causal_lm_attention_mask_name);
+        }
+        if (onnx_input_names.hasKey(causal_lm_token_type_ids_name)) {
+            inputs{causal_lm_token_type_ids_name} = QoreRegistryModelProcessor::makeInt64Tensor(
+                (token_type_ids,), token_type_ids.size(), causal_lm_token_type_ids_name);
+        }
+        return inputs;
+    }
+
+    #! Resolves the configured logits output name against the current ONNX outputs
+    private string resolveCausalLmLogitsOutputName(hash<auto> outputs) {
+        if (outputs.hasKey(causal_lm_logits_output_name)) {
+            return causal_lm_logits_output_name;
+        }
+        if (outputs.hasKey("logits")) {
+            return "logits";
+        }
+        list<string> output_names = sort(keys outputs);
+        if (!output_names) {
+            throw "PROCESSOR-ERROR",
+                "registry-model task 'causal-lm' produced no ONNX outputs";
+        }
+        return output_names[0];
+    }
+
+    #! Produces compact metadata for the last causal-LM output tensors
+    private static hash<auto> summarizeCausalLmOutputs(hash<auto> outputs) {
+        hash<auto> rv;
+        foreach string name in (keys outputs) {
+            auto value = outputs{name};
+            if (value instanceof ML::Tensor) {
+                ML::Tensor tensor = cast<ML::Tensor>(value);
+                rv{name} = {
+                    "dtype": tensor.getDtype(),
+                    "shape": tensor.getShape(),
+                };
+            } else {
+                rv{name} = value;
+            }
+        }
+        return rv;
+    }
+
+    #! Selects the highest-scoring token ID from common causal-LM logits shapes
+    private static int selectGreedyToken(auto logits, int input_token_count) {
+        if (logits instanceof ML::Tensor) {
+            logits = cast<ML::Tensor>(logits).toList();
+        }
+        auto row = QoreRegistryModelProcessor::selectLogitRow(logits, input_token_count);
+        if (row.typeCode() != NT_LIST || !row) {
+            throw "PROCESSOR-ERROR",
+                sprintf("registry-model task 'causal-lm' expected a non-empty logits vector; got %y",
+                    row);
+        }
+
+        int best_token = 0;
+        float best_score = row[0].toFloat();
+        for (int i = 1; i < row.lsize(); ++i) {
+            float score = row[i].toFloat();
+            if (score > best_score) {
+                best_score = score;
+                best_token = i;
+            }
+        }
+        return best_token;
+    }
+
+    #! Selects the final available sequence row from [B,S,V], [S,V], [B,V], or [V] logits
+    private static auto selectLogitRow(auto logits, int input_token_count) {
+        if (logits.typeCode() != NT_LIST || !logits) {
+            return logits;
+        }
+        auto first = logits[0];
+        if (first.typeCode() != NT_LIST) {
+            return logits;
+        }
+        if (!first) {
+            return first;
+        }
+        if (first[0].typeCode() == NT_LIST) {
+            list<auto> sequence_rows = first;
+            int idx = input_token_count - 1;
+            if (idx < 0) {
+                idx = 0;
+            }
+            if (idx >= sequence_rows.lsize()) {
+                idx = sequence_rows.lsize() - 1;
+            }
+            return sequence_rows[idx];
+        }
+
+        if (logits.lsize() == 1) {
+            return first;
+        }
+        int idx = input_token_count - 1;
+        if (idx < 0) {
+            idx = 0;
+        }
+        if (idx >= logits.lsize()) {
+            idx = logits.lsize() - 1;
+        }
+        return logits[idx];
+    }
+
+    #! Resolves optional causal-LM stop token IDs from options, plan, or tokenizer EOS metadata
+    private list<int> resolveCausalStopTokenIds(hash<auto> copts) {
+        if (exists copts.stop_token_ids) {
+            return QoreRegistryModelProcessor::requireIntList(copts.stop_token_ids,
+                "stop_token_ids");
+        }
+        *auto plan_ids = getExecutionPlanValue(
+            ("stop_token_ids", "eos_token_ids", "stop_ids"), ("generation",));
+        if (exists plan_ids) {
+            return QoreRegistryModelProcessor::requireIntList(plan_ids,
+                "execution plan stop_token_ids");
+        }
+
+        int eos = causal_tokenizer.getEosTokenId();
+        if (eos >= 0) {
+            return (eos,);
+        }
+        return ();
+    }
+
+    #! Builds truthful KV-cache metadata for initial causal-LM execution
+    private hash<auto> buildCausalKvCacheMetadata() {
+        hash<auto> rv = {
+            "enabled": False,
+            "supported": False,
+            "reason": "stateful KV-cache reuse is not exposed by the current Qore ONNX execution path",
+        };
+        *auto plan_cache = getExecutionPlanValue(("kv_cache", "past_key_values"), ("generation",));
+        if (exists plan_cache) {
+            rv.requested = True;
+            rv.plan = plan_cache;
+        }
+        return rv;
+    }
+
+    #! Reads a value from the execution plan root or named subsections
+    private *auto getExecutionPlanValue(list<string> plan_keys, list<string> sections) {
+        if (!execution_plan) {
+            return;
+        }
+        foreach string key in (plan_keys) {
+            if (execution_plan.hasKey(key)) {
+                return execution_plan{key};
+            }
+        }
+        foreach string section in (sections) {
+            if (!execution_plan.hasKey(section) || execution_plan{section}.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> subplan = execution_plan{section};
+            foreach string key in (plan_keys) {
+                if (subplan.hasKey(key)) {
+                    return subplan{key};
+                }
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Reads an optional string from the execution plan
+    private *string getExecutionPlanString(list<string> plan_keys, list<string> sections) {
+        *auto value = getExecutionPlanValue(plan_keys, sections);
+        if (exists value && value.val()) {
+            return string(value);
+        }
+        return NOTHING;
+    }
+
+    #! Reads a string from the execution plan with a default value
+    private string getExecutionPlanStringDefault(list<string> plan_keys, list<string> sections,
+            string default_value) {
+        *string value = getExecutionPlanString(plan_keys, sections);
+        return value.val() ? value : default_value;
+    }
+
+    #! Reads an integer from the execution plan with a default value
+    private int getExecutionPlanInt(list<string> plan_keys, list<string> sections, int default_value) {
+        *auto value = getExecutionPlanValue(plan_keys, sections);
+        if (exists value && value.val()) {
+            return int(value);
+        }
+        return default_value;
+    }
+
+    #! Reads a boolean from the execution plan with a default value
+    private bool getExecutionPlanBool(list<string> plan_keys, list<string> sections, bool default_value) {
+        *auto value = getExecutionPlanValue(plan_keys, sections);
+        if (exists value) {
+            return value ? True : False;
+        }
+        return default_value;
+    }
+
+    #! Converts a list-like value to list<int> with clear validation errors
+    private static list<int> requireIntList(auto value, string desc) {
+        if (value.typeCode() != NT_LIST) {
+            throw "PROCESSOR-ERROR",
+                sprintf("%s must be a list of token IDs; got %y", desc, value);
+        }
+        list<int> rv;
+        foreach auto v in (value) {
+            push rv, int(v);
+        }
+        return rv;
+    }
+
+    #! Converts integer rows to a dense int64 tensor
+    private static auto makeInt64Tensor(list<list<int>> rows, int width, string input_name) {
+        int row_count = rows.size();
+        buffer<int64> data = buffer<int64>::sized(row_count * width);
+        int offset = 0;
+        for (int i = 0; i < row_count; ++i) {
+            if (rows[i].size() != width) {
+                throw "PROCESSOR-ERROR",
+                    sprintf("token tensor '%s' row %d has length %d; expected %d",
+                        input_name, i, rows[i].size(), width);
+            }
+            for (int j = 0; j < width; ++j) {
+                data[offset++] = rows[i][j];
+            }
+        }
+        return ML::Tensor::fromBuffer(data, (row_count, width));
     }
 
     #! Applies task-aware output metadata for event-mode ONNX registry models

@@ -361,7 +361,11 @@ Acceptance checks:
   Implemented for `registry-model` event output with stable `value`, `label`,
   `scores`, and `raw_outputs` fields.
 - Initial causal-LM support handles tokenizer input, attention masks, greedy
-  decoding, stop tokens, and basic KV cache metadata.
+  decoding, stop tokens, and basic KV cache metadata. Implemented for
+  `registry-model` event output with tokenizer artifacts loaded from
+  QoreModelRegistry packages and truthful metadata when stateful KV-cache reuse
+  is requested by the plan but not exposed by the current Qore ONNX execution
+  path.
 
 ## Phase 9: Session Pools, Async Inference, and Dynamic Batching
 
