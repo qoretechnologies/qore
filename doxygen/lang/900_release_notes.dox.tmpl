@@ -2573,6 +2573,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - shaped ONNX inputs smaller than the configured \c window_size, and final
         remainder windows, are processed directly as tensor batches instead of
         falling back through row buffering
+      - embed-text preserves \c DataFrameBlock, \c BufferColumns, and
+        \c HashOfLists inputs by reading top-level text columns directly and
+        appending an \c embedding column without per-row hash materialization
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module

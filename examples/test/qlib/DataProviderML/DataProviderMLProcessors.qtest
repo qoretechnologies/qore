@@ -25,6 +25,7 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/tokenizer"
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/dataframe"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
@@ -217,6 +218,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             \registryModelOnnxInputMapRowOutput());
         addTestCase("tokenize - registry tokenizer", \tokenizeRegistryTokenizer());
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
+        addTestCase("embed-text - DataFrameBlock ONNX shape", \embedTextDataFrameOnnxShape());
+        addTestCase("embed-text - BufferColumns ONNX shape", \embedTextBufferColumnsOnnxShape());
 
         # Integration tests
         addTestCase("integration - factory registration", \integrationFactory());
@@ -1377,6 +1380,41 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         string path = getMultiInputModelPath();
         if (!is_file(path)) {
             testSkip("multi-input ONNX test model not found at: " + path);
+            return True;
+        }
+        return False;
+    }
+
+    private string getTokenEmbeddingModelPath() {
+        string dir = get_script_dir();
+        string path = dir + "/../../../../modules/ml/test/data/test_token_embedding.onnx";
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/test_token_embedding.onnx";
+        }
+        return path;
+    }
+
+    private string getTokenizerConfigPath() {
+        string dir = get_script_dir();
+        string path = dir + "/../../../../modules/tokenizer/test/test_data/bert-base-uncased-tokenizer.json";
+        if (!is_file(path)) {
+            path = "modules/tokenizer/test/test_data/bert-base-uncased-tokenizer.json";
+        }
+        return path;
+    }
+
+    private bool skipTokenEmbeddingOnnx() {
+        if (skipOnnx()) {
+            return True;
+        }
+        string model_path = getTokenEmbeddingModelPath();
+        if (!is_file(model_path)) {
+            testSkip("token embedding ONNX test model not found at: " + model_path);
+            return True;
+        }
+        string tokenizer_path = getTokenizerConfigPath();
+        if (!is_file(tokenizer_path)) {
+            testSkip("tokenizer test data not found at: " + tokenizer_path);
             return True;
         }
         return False;
@@ -3002,6 +3040,76 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "chunk-text should use tokenizer artifact loaded from registry");
         assertTrue(exists result[0].chunk_token_count,
             "chunk output should include token count");
+    }
+
+    embedTextDataFrameOnnxShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        if (skipTokenEmbeddingOnnx()) {
+            return;
+        }
+
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 32,
+            "embedding_mode": "onnx",
+            "embedding_model_path": getTokenEmbeddingModelPath(),
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "max_tokens": 8,
+        });
+
+        DataFrame::DataFrame df({
+            "id": (1, 2),
+            "body": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result),
+            "embed-text should preserve DataFrameBlock output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq((1, 2), result.getColumn("id"));
+
+        list<auto> embeddings = result.getColumn("embedding");
+        assertEq(2, embeddings.lsize());
+        assertEq(2, embeddings[0].lsize());
+        assertTrue(abs(sqrt(embeddings[0][0] * embeddings[0][0]
+                + embeddings[0][1] * embeddings[0][1]) - 1.0) < 1e-5,
+            "embedding vectors should be normalized");
+    }
+
+    embedTextBufferColumnsOnnxShape() {
+        if (skipTokenEmbeddingOnnx()) {
+            return;
+        }
+
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 32,
+            "embedding_mode": "onnx",
+            "embedding_model_path": getTokenEmbeddingModelPath(),
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "max_tokens": 8,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "body": ("hello world", "enterprise ai"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "embed-text should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        assertEq((1, 2), result.getColumn("id").toList());
+
+        list<auto> embeddings = result.getColumn("embedding");
+        assertEq(2, embeddings.lsize());
+        assertEq(2, embeddings[0].lsize());
+        assertTrue(abs(sqrt(embeddings[1][0] * embeddings[1][0]
+                + embeddings[1][1] * embeddings[1][1]) - 1.0) < 1e-5,
+            "embedding vectors should be normalized");
     }
 
     # ===================== Integration Tests =====================

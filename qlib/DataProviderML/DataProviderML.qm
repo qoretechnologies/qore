@@ -1671,6 +1671,9 @@ module DataProviderML {
     \c BufferColumns shape when possible.  This keeps downstream shape-aware
     processors in columnar bulk mode while preserving the existing row-oriented
     processor behavior for single records and compatibility hash-of-lists input.
+    The \c embed-text processor reads top-level text columns directly from
+    shaped inputs and appends an \c embedding column without first materializing
+    per-row hashes.
 
     StandardScaler, MinMaxScaler, KMeans, and PCA also support
     \c output_mode = "dataframe".  This mode returns flat DataFrame columns
@@ -1879,6 +1882,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     - shaped ONNX inputs smaller than \c window_size, or with a final remainder
       window, are processed directly as tensor batches instead of falling back
       through row buffering
+    - \c embed-text preserves \c DataFrameBlock, \c BufferColumns, and
+      \c HashOfLists input shapes by reading top-level text columns directly
+      and appending an \c embedding column without per-row hash materialization
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used

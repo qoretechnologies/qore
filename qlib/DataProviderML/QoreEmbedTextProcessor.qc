@@ -366,6 +366,157 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         return results;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash<auto>>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreEmbedTextProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (buffer || text_field.find(".") >= 0) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *list<string> texts = textColumnFromShape(records, shape, count);
+        if (!exists texts) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        ensureEmbeddingModel();
+        list<list<float>> embeddings = embedTextsInWindows(texts);
+        if (embeddings.lsize() != count) {
+            throw "PROCESSOR-ERROR",
+                sprintf("embedding model returned %d vectors for %d input rows",
+                    embeddings.lsize(), count);
+        }
+
+        return addEmbeddingColumn(records, shape, embeddings);
+    }
+
+    #! Embeds a text column in configured batch windows
+    private list<list<float>> embedTextsInWindows(list<string> texts) {
+        int count = texts.lsize();
+        list<list<float>> embeddings;
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            list<string> window = start == 0 && end == count
+                ? texts
+                : texts[start..(end - 1)];
+            embeddings += emb_model.embedBatch(window);
+        }
+        return embeddings;
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Reads the configured text field directly from a shaped column block
+    private *list<string> textColumnFromShape(auto records, DataProvider::DataProviderShape shape, int count) {
+        *auto column;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                if (records.columnNames().contains(text_field)) {
+                    column = records.getColumn(text_field);
+                }
+                break;
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    if (records.columnNames().contains(text_field)) {
+                        column = records.getColumn(text_field);
+                    }
+                } else if (records.hasKey(text_field)) {
+                    column = records{text_field};
+                }
+                break;
+            case DataProvider::DataProviderShape::HashOfLists:
+                if (records.hasKey(text_field)) {
+                    column = records{text_field};
+                }
+                break;
+        }
+        if (!exists column) {
+            return;
+        }
+        return QoreEmbedTextProcessor::columnToStrings(column, count, text_field);
+    }
+
+    #! Converts a shaped text column to string values using row-mode value semantics
+    private static list<string> columnToStrings(auto column, int count, string field) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        if (values.lsize() != count) {
+            throw "PROCESSOR-SHAPE-ERROR",
+                sprintf("text field %y has %d values but the shaped block has %d rows",
+                    field, values.lsize(), count);
+        }
+
+        list<string> texts;
+        foreach auto value in (values) {
+            push texts, value.toString();
+        }
+        return texts;
+    }
+
+    #! Appends the embedding vectors to a shaped block while preserving the input shape
+    private auto addEmbeddingColumn(auto records, DataProvider::DataProviderShape shape,
+            list<list<float>> embeddings) {
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                return records.withColumn("embedding", embeddings);
+            case DataProvider::DataProviderShape::BufferColumns: {
+                hash<auto> columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                columns.embedding = embeddings;
+                return ColumnarResult::fromColumnHash(columns);
+            }
+            case DataProvider::DataProviderShape::HashOfLists: {
+                hash<auto> columns = records + {};
+                columns.embedding = embeddings;
+                return columns;
+            }
+        }
+        return records;
+    }
+
     #! Ensures the EmbeddingModel is initialized (lazy creation to avoid connecting in constructor)
     private ensureEmbeddingModel() {
         if (!emb_model) {
