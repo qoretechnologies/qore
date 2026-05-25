@@ -134,6 +134,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testIgnoredSelfReturningMethodResultReleasesLocals());
         addTestCase("AOT background self call releases self",
             \testBackgroundSelfCallReleasesSelf());
+        addTestCase("AOT background self call dispatches to derived private method",
+            \testBackgroundSelfCallDispatchesDerivedPrivateMethod());
         addTestCase("AOT background self call releases self argument",
             \testBackgroundSelfCallReleasesSelfArgument());
         addTestCase("AOT background argv releases object member argument",
@@ -3337,6 +3339,35 @@ printf(\"destroyed=%d\\n\", destroyed);
             "background self-call cleanup regression fully precompiled: " + result.compile_out);
         assertEq("destroyed=1\n", result.run_out,
             "AOT background self calls must release the spawned thread's self reference after thread exit");
+    }
+
+    testBackgroundSelfCallDispatchesDerivedPrivateMethod() {
+        string code = "%modern
+
+class A {
+    private f() {
+        printf(\"A\\n\");
+    }
+
+    public g() {
+        background f();
+    }
+}
+
+class B inherits A {
+    private f() {
+        printf(\"B\\n\");
+    }
+}
+
+B b();
+b.g();
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background private self-call dispatch regression fully precompiled: " + result.compile_out);
+        assertEq("B\n", result.run_out,
+            "AOT background self calls must preserve virtual dispatch to derived private methods");
     }
 
     testBackgroundSelfCallReleasesSelfArgument() {

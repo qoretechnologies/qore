@@ -12385,7 +12385,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     // Create a temporary SelfFunctionCallNode with resolved method identity
     // strdup gives NamedScope ownership of the name string (del=true)
     SelfFunctionCallNode temp_sfcn(&loc_builtin, strdup(method_name),
-        nullptr, method, self->getClass(), cls);
+        nullptr, method, method->getClass(), cls);
 
     // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership
     // do_op_background copies the expression; the original must be freed after.
