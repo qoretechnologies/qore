@@ -707,8 +707,9 @@ hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
       a fixed deadline while still checking cancellation
     - \c dynamic_batch_size: maximum chunk size used by runBatch(); \c 0 keeps
       the caller's batch intact
-    - \c dynamic_batch_wait_ms: reserved metadata for async/coalesced batching
-      policies built on this pool
+    - \c dynamic_batch_wait_ms: maximum time runAsync() waits for other callers
+      so requests can be coalesced into one ordered batch; \c 0 disables
+      cross-caller coalescing
 
     @par Example:
     @code{.py}
@@ -782,6 +783,34 @@ hash<auto> OnnxSessionPool::run(hash<auto> inputs) {
     return pool->run(inputs, xsink);
 }
 
+//! Submits inference with named input tensors and returns a Future
+/** @param inputs hash where keys are input tensor names
+
+    @return a \c Future resolving to the output hash
+        in the same format as @ref run()
+
+    If \c dynamic_batch_size and \c dynamic_batch_wait_ms are both configured,
+    concurrent runAsync() callers are coalesced up to the configured batch size
+    or wait deadline. Each Future still resolves to the result for its own
+    request, and result order is preserved inside each coalesced batch.
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionPool pool("/models/customer-score.onnx",
+    <ML::OnnxSessionConfig>{"providers": ()},
+    {"max_sessions": 2, "dynamic_batch_size": 8, "dynamic_batch_wait_ms": 2});
+
+    Future<hash<auto>> f = pool.runAsync({"X": ((42.0,),)});
+hash<auto> out = f.get(5s);
+    @endcode
+
+    @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
+    @throw ML-ONNX-POOL-BACKPRESSURE if the async coalescing queue is full
+*/
+Future<hash<auto>> OnnxSessionPool::runAsync(hash<auto> inputs) {
+    return pool->runAsync(inputs, getProgram(), xsink);
+}
+
 //! Runs inference and returns outputs as @ref Tensor objects
 /** @param inputs hash where values are @ref Tensor objects or tensor-compatible
         data
@@ -791,6 +820,19 @@ hash<auto> OnnxSessionPool::runTensors(hash<auto> inputs) {
     return pool->runTensors(inputs, xsink);
 }
 
+//! Submits tensor-preserving inference and returns a Future
+/** @param inputs hash where values are @ref Tensor objects or tensor-compatible
+        data
+
+    @return a \c Future resolving to an output hash
+        where each value is a @ref Tensor
+
+    @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
+*/
+Future<hash<auto>> OnnxSessionPool::runTensorsAsync(hash<auto> inputs) {
+    return pool->runTensorsAsync(inputs, getProgram(), xsink);
+}
+
 //! Runs a batch through the pool while preserving result order
 /** If \c dynamic_batch_size is configured, the input list is processed in
     stable chunks no larger than that size. The returned list order always
@@ -798,6 +840,18 @@ hash<auto> OnnxSessionPool::runTensors(hash<auto> inputs) {
 */
 list<hash<auto>> OnnxSessionPool::runBatch(list<auto> batch) {
     return pool->runBatch(batch, xsink);
+}
+
+//! Submits batch inference and returns a Future
+/** @param batch list of input hashes in the same format accepted by runBatch()
+
+    @return a \c Future resolving to a list of output
+        hashes in input order
+
+    @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
+*/
+Future<list<hash<auto>>> OnnxSessionPool::runBatchAsync(list<auto> batch) {
+    return pool->runBatchAsync(batch, getProgram(), xsink);
 }
 
 //! Returns current pool counters and configuration

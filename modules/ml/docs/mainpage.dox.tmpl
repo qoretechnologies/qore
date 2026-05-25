@@ -381,7 +381,11 @@ hash<auto> events = proc.processRecordsShape(
       ONNX sessions ready for concurrent service requests. Use it when production traffic needs
       explicit limits for session count, concurrent runs, queue depth, and acquisition timeout.
       The pool also supports ordered \c runBatch() chunking with \c dynamic_batch_size so large
-      request lists can be split into stable mini-batches without changing result order.
+      request lists can be split into stable mini-batches without changing result order. The
+      Future-returning \c runAsync(), \c runTensorsAsync(), and \c runBatchAsync() methods let
+      service handlers submit work without blocking; when \c dynamic_batch_size and
+      \c dynamic_batch_wait_ms are configured, concurrent \c runAsync() callers are coalesced
+      into ordered batches and each Future resolves to its own result.
     - @ref Qore::ML::Tensor "Tensor" — Dense tensor wrapper around \c buffer<T> plus explicit
       shape metadata. Use it with @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()"
       to avoid converting large numeric inputs and outputs through nested lists.
@@ -404,8 +408,11 @@ if (caps.has_onnx) {
             "queue_depth": 64,
             "timeout_ms": 250,
             "dynamic_batch_size": 128,
+            "dynamic_batch_wait_ms": 2,
         });
     hash<auto> pooled_result = pool.run({"input": data});
+    Future<hash<auto>> pooled_future = pool.runAsync({"input": data});
+    hash<auto> async_result = pooled_future.get(5s);
     hash<auto> pool_stats = pool.getPoolStats();
 
     # Pack dense DataFrame columns directly into a row-major model tensor.

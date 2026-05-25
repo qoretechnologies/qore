@@ -334,7 +334,7 @@ Acceptance checks:
 
 ## Phase 8: Task-Specific ONNX Execution Plans
 
-Status: in progress.
+Status: completed.
 
 Add registry execution plan types so users do not have to hand-code common
 preprocess/run/postprocess logic.
@@ -391,19 +391,18 @@ Acceptance checks:
   `queue_depth`, `timeout_ms`, cancellation checks while waiting, and pool
   statistics.
 - Backpressure and timeout behavior is tested.
-  Initial backpressure coverage is implemented for a saturated pool with
-  `queue_depth = 0`.
+  Implemented for saturated pools with `queue_depth = 0` backpressure and a
+  waiting caller hitting `timeout_ms`.
 - Dynamic batching preserves result ordering.
   Implemented for caller-supplied batches by splitting `runBatch()` input into
   stable `dynamic_batch_size` chunks and appending results in input order.
+  Implemented for cross-caller `runAsync()` coalescing when both
+  `dynamic_batch_size` and `dynamic_batch_wait_ms` are configured; each Future
+  resolves to its own ordered result.
 - Representative pool tests pass under valgrind.
-
-Remaining Phase 9 work:
-
-- true async request APIs
-- cross-caller dynamic batching with `dynamic_batch_wait_ms`
-- timeout-path qtest coverage with a waiting caller
-- representative pool valgrind run
+  Verified with a representative async/coalesced `OnnxSessionPool` run under
+  valgrind; no errors and no definite, indirect, or possible leaks were
+  reported.
 
 ## Phase 10: High-Level Registry Contract
 

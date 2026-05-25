@@ -159,6 +159,9 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxSessionPool inference and stats", \onnxSessionPoolTest());
         addTestCase("OnnxSessionPool dynamic batch ordering", \onnxSessionPoolDynamicBatchTest());
         addTestCase("OnnxSessionPool backpressure", \onnxSessionPoolBackpressureTest());
+        addTestCase("OnnxSessionPool timeout", \onnxSessionPoolTimeoutTest());
+        addTestCase("OnnxSessionPool async inference", \onnxSessionPoolAsyncTest());
+        addTestCase("OnnxSessionPool async dynamic batching", \onnxSessionPoolAsyncDynamicBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -3429,9 +3432,9 @@ public class MlTest inherits QUnit::Test {
             <ML::OnnxSessionConfig>{"providers": ()},
             {"max_sessions": 1, "queue_depth": 0, "timeout_ms": 1});
 
-        list<list<float>> long_input;
-        for (int i = 0; i < 100000; ++i) {
-            push long_input, (2.0,);
+        list<hash<auto>> long_batch;
+        for (int i = 0; i < 5000; ++i) {
+            push long_batch, {"X": ((2.0,),)};
         }
 
         Counter ready(1);
@@ -3441,8 +3444,9 @@ public class MlTest inherits QUnit::Test {
             on_exit cnt.dec();
             try {
                 ready.dec();
-                hash<auto> result = pool.run({"X": long_input});
-                assertFloat(5.0, result.Y[0], 1e-5);
+                list<hash<auto>> results = pool.runBatch(long_batch);
+                assertEq(long_batch.size(), results.size());
+                assertFloat(5.0, results[0].Y[0], 1e-5);
             } catch (hash<ExceptionInfo> ex) {
                 bg_error = ex;
             }
@@ -3467,6 +3471,111 @@ public class MlTest inherits QUnit::Test {
         hash<auto> stats = pool.getPoolStats();
         assertTrue(stats.total_rejections >= 1,
             "pool should count rejected callers when queue_depth is zero");
+    }
+
+    onnxSessionPoolTimeoutTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 10});
+
+        list<hash<auto>> long_batch;
+        for (int i = 0; i < 5000; ++i) {
+            push long_batch, {"X": ((2.0,),)};
+        }
+
+        Counter ready(1);
+        Counter cnt(1);
+        *hash<ExceptionInfo> bg_error;
+        background sub() {
+            on_exit cnt.dec();
+            try {
+                ready.dec();
+                list<hash<auto>> results = pool.runBatch(long_batch);
+                assertEq(long_batch.size(), results.size());
+                assertFloat(5.0, results[0].Y[0], 1e-5);
+            } catch (hash<ExceptionInfo> ex) {
+                bg_error = ex;
+            }
+        }();
+
+        ready.waitForZero();
+        bool active_seen = False;
+        for (int i = 0; i < 1000; ++i) {
+            if (pool.getPoolStats().active_runs > 0) {
+                active_seen = True;
+                break;
+            }
+            usleep(1ms);
+        }
+        assertTrue(active_seen, "background inference should occupy the only pool session");
+        assertThrows("ML-ONNX-POOL-TIMEOUT", sub() {
+            pool.run({"X": ((3.0,),)});
+        });
+        cnt.waitForZero();
+        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
+
+        hash<auto> stats = pool.getPoolStats();
+        assertTrue(stats.total_timeouts >= 1,
+            "pool should count timed-out callers when waiting exceeds timeout_ms");
+    }
+
+    onnxSessionPoolAsyncTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 2, "queue_depth": 4, "timeout_ms": 1000});
+
+        Future<hash<auto>> f = pool.runAsync({"X": ((6.0,),)});
+        hash<auto> result = f.get(5s);
+        assertFloat(13.0, result.Y[0], 1e-5);
+
+        Future<list<hash<auto>>> bf = pool.runBatchAsync((
+            {"X": ((1.0,),)},
+            {"X": ((2.0,),)},
+        ));
+        list<hash<auto>> batch_result = bf.get(5s);
+        assertFloat(3.0, batch_result[0].Y[0], 1e-5);
+        assertFloat(5.0, batch_result[1].Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(2, stats.async_submitted);
+        assertEq(2, stats.async_completed);
+        assertEq(0, stats.async_errors);
+    }
+
+    onnxSessionPoolAsyncDynamicBatchTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 4, "timeout_ms": 1000,
+                "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 100});
+
+        Future<hash<auto>> f1 = pool.runAsync({"X": ((1.0,),)});
+        Future<hash<auto>> f2 = pool.runAsync({"X": ((5.0,),)});
+
+        hash<auto> r1 = f1.get(5s);
+        hash<auto> r2 = f2.get(5s);
+        assertFloat(3.0, r1.Y[0], 1e-5);
+        assertFloat(11.0, r2.Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(2, stats.async_submitted);
+        assertEq(2, stats.async_completed);
+        assertEq(0, stats.async_errors);
+        assertEq(1, stats.async_batches);
+        assertEq(2, stats.async_batch_items);
+        assertEq(1, stats.total_batches);
+        assertEq(2, stats.total_batch_items);
     }
 
     onnxSingleValueTest() {

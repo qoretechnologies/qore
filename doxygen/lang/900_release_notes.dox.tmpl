@@ -2058,7 +2058,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - ML::OnnxSessionPool provides bounded immutable ONNX session pools for
         concurrent service workloads, including max session/concurrency limits,
         queue depth, acquisition timeout, cancellation checks, pool statistics,
-        and ordered batch chunking with dynamic_batch_size
+        Future-returning async inference APIs, cross-caller dynamic batching with
+        dynamic_batch_wait_ms, and ordered batch chunking with dynamic_batch_size
       - ML::Tensor and OnnxModel::runTensors() provide dense buffer-backed ONNX
         inference with explicit tensor shape metadata
       - ML::Tensor::fromColumns() packs equal-length dense column buffers into

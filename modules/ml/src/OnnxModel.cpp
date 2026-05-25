@@ -29,6 +29,9 @@
 
 #include "QC_OnnxModel.h"
 
+#include "qore/intern/QC_FutureImpl.h"
+#include <qore/qore_thread.h>
+
 #include <onnxruntime_session_options_config_keys.h>
 
 #include <algorithm>
@@ -442,6 +445,19 @@ QoreObject* qore_ml_onnx_io_binding_to_object(QoreOnnxIoBinding* binding,
     QoreObject* obj = new QoreObject(QC_ONNXIOBINDING, pgm);
     obj->setPrivate(CID_ONNXIOBINDING, holder.release());
     return obj;
+}
+
+QoreObject* makeOnnxFutureObject(QorePromise* promise, const QoreTypeInfo* future_type,
+        QoreProgram* pgm, ExceptionSink* xsink) {
+    ReferenceHolder<QoreFuture> future_holder(promise->getFuture(xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    type_vec_t type_args;
+    type_args.push_back(future_type ? future_type : autoTypeInfo);
+    QoreObject* rv = new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release());
+    rv->setInstantiatedTypeInfo(QC_FUTUREIMPL->getTypeInfo(type_args));
+    return rv;
 }
 
 static std::unordered_map<std::string, std::string> hashToStringMap(const QoreHashNode* hash,
@@ -3999,8 +4015,50 @@ QoreListNode* QoreOnnxModel::runBatch(const QoreListNode* batch, ExceptionSink* 
     return rv.release();
 }
 
+QoreOnnxSessionPool::AsyncRequest::AsyncRequest(const QoreHashNode* inputs, QorePromise* promise)
+        : payload(inputs->hashRefSelf()), promise(promise) {
+    promise->ref();
+}
+
+QoreOnnxSessionPool::AsyncRequest::~AsyncRequest() {
+    ExceptionSink xsink;
+    payload.discard(&xsink);
+    promise->deref(&xsink);
+}
+
+QoreOnnxSessionPool::SingleAsyncParams::SingleAsyncParams(QoreOnnxSessionPool* pool,
+        QoreValue payload, QorePromise* promise, AsyncOp op)
+        : pool(pool), payload(payload), promise(promise), op(op) {
+    pool->ref();
+    promise->ref();
+}
+
+QoreOnnxSessionPool::SingleAsyncParams::~SingleAsyncParams() {
+    ExceptionSink xsink;
+    payload.discard(&xsink);
+    promise->deref(&xsink);
+    pool->deref(&xsink);
+}
+
 QoreOnnxSessionPool::Lease::~Lease() {
     pool.release(index);
+}
+
+QoreOnnxSessionPool::~QoreOnnxSessionPool() {
+    std::deque<std::unique_ptr<AsyncRequest>> requests;
+    {
+        std::lock_guard<std::mutex> lock(async_mutex);
+        requests.swap(async_requests);
+    }
+
+    for (auto& request : requests) {
+        ExceptionSink psink;
+        request->promise->setError("ML-ONNX-POOL-ERROR",
+            "OnnxSessionPool was destroyed before the async request could run", QoreValue(), &psink);
+        if (psink) {
+            psink.clear();
+        }
+    }
 }
 
 QoreOnnxSessionPool::QoreOnnxSessionPool(const char* model_path,
@@ -4300,6 +4358,286 @@ QoreListNode* QoreOnnxSessionPool::runBatch(const QoreListNode* batch, Exception
     return rv.release();
 }
 
+void QoreOnnxSessionPool::resolveAsyncRequest(AsyncRequest& request, QoreValue value,
+        ExceptionSink* xsink) {
+    (void)xsink;
+    ExceptionSink psink;
+    request.promise->set(value, &psink);
+    if (psink) {
+        psink.clear();
+        ++async_errors;
+        return;
+    }
+    ++async_completed;
+}
+
+void QoreOnnxSessionPool::rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch,
+        ExceptionSink& err) {
+    std::string code = "ML-ONNX-ASYNC-ERROR";
+    std::string desc = "async ONNX inference failed";
+    QoreValue arg;
+
+    QoreHashNode* ex = err.getExceptionInfo();
+    if (ex) {
+        QoreValue errv = ex->getKeyValue("err");
+        if (errv.getType() == NT_STRING) {
+            QoreStringValueHelper errstr(errv);
+            code = errstr->c_str();
+        }
+        QoreValue descv = ex->getKeyValue("desc");
+        if (descv.getType() == NT_STRING) {
+            QoreStringValueHelper descstr(descv);
+            desc = descstr->c_str();
+        }
+        arg = ex->getKeyValue("arg").refSelf();
+        ex->deref(nullptr);
+    }
+
+    for (auto& request : batch) {
+        ExceptionSink psink;
+        request->promise->setError(code.c_str(), desc.c_str(), arg.refSelf(), &psink);
+        if (psink) {
+            psink.clear();
+        }
+        ++async_errors;
+    }
+
+    ExceptionSink xsink;
+    arg.discard(&xsink);
+    err.clear();
+}
+
+void QoreOnnxSessionPool::singleAsyncThread(ExceptionSink* xsink, void* arg) {
+    (void)xsink;
+    std::unique_ptr<SingleAsyncParams> params(static_cast<SingleAsyncParams*>(arg));
+
+    ExceptionSink run_xsink;
+    QoreValue rv;
+    switch (params->op) {
+        case AsyncOp::Run:
+            rv = params->pool->run(params->payload.get<const QoreHashNode>(), &run_xsink);
+            break;
+        case AsyncOp::RunTensors:
+            rv = params->pool->runTensors(params->payload.get<const QoreHashNode>(), &run_xsink);
+            break;
+        case AsyncOp::RunBatch:
+            rv = params->pool->runBatch(params->payload.get<const QoreListNode>(), &run_xsink);
+            break;
+    }
+
+    if (run_xsink) {
+        params->pool->async_errors++;
+        params->promise->setException(run_xsink);
+        return;
+    }
+
+    ExceptionSink psink;
+    params->promise->set(rv, &psink);
+    if (psink) {
+        psink.clear();
+        params->pool->async_errors++;
+        return;
+    }
+    params->pool->async_completed++;
+}
+
+void QoreOnnxSessionPool::dynamicRunAsyncThread(ExceptionSink* xsink, void* arg) {
+    QoreOnnxSessionPool* pool = static_cast<QoreOnnxSessionPool*>(arg);
+    pool->processDynamicRunQueue(xsink);
+    pool->deref(xsink);
+}
+
+void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
+    while (true) {
+        std::vector<std::unique_ptr<AsyncRequest>> batch;
+        {
+            std::unique_lock<std::mutex> lock(async_mutex);
+            if (async_requests.empty()) {
+                return;
+            }
+
+            size_t target_size = dynamic_batch_size > 0
+                ? static_cast<size_t>(dynamic_batch_size)
+                : async_requests.size();
+            if (target_size < 1) {
+                target_size = 1;
+            }
+
+            if (dynamic_batch_wait_ms > 0 && async_requests.size() < target_size) {
+                auto deadline = std::chrono::steady_clock::now()
+                    + std::chrono::milliseconds(dynamic_batch_wait_ms);
+                while (async_requests.size() < target_size) {
+                    if (async_cv.wait_until(lock, deadline) == std::cv_status::timeout) {
+                        break;
+                    }
+                }
+            }
+
+            size_t count = std::min(target_size, async_requests.size());
+            batch.reserve(count);
+            for (size_t i = 0; i < count; ++i) {
+                batch.push_back(std::move(async_requests.front()));
+                async_requests.pop_front();
+            }
+        }
+
+        if (batch.empty()) {
+            continue;
+        }
+
+        if (qore_check_cancel(xsink, "OnnxSessionPool dynamic async batching")) {
+            ExceptionSink err;
+            err.assimilate(*xsink);
+            rejectAsyncBatch(batch, err);
+            return;
+        }
+
+        ReferenceHolder<QoreListNode> inputs(new QoreListNode(autoHashTypeInfo), xsink);
+        for (size_t i = 0; i < batch.size(); ++i) {
+            if (i && (i % 100) == 0
+                    && qore_check_cancel(xsink, "OnnxSessionPool dynamic async batch input assembly")) {
+                ExceptionSink err;
+                err.assimilate(*xsink);
+                rejectAsyncBatch(batch, err);
+                return;
+            }
+            inputs->push(batch[i]->payload.refSelf(), xsink);
+            if (*xsink) {
+                ExceptionSink err;
+                err.assimilate(*xsink);
+                rejectAsyncBatch(batch, err);
+                return;
+            }
+        }
+
+        ReferenceHolder<QoreListNode> results(runBatch(*inputs, xsink), xsink);
+        if (*xsink) {
+            ExceptionSink err;
+            err.assimilate(*xsink);
+            rejectAsyncBatch(batch, err);
+            continue;
+        }
+
+        if (results->size() != batch.size()) {
+            ExceptionSink err;
+            err.raiseException("ML-ONNX-ASYNC-ERROR",
+                "dynamic ONNX batch returned %zu results for %zu requests",
+                results->size(), batch.size());
+            rejectAsyncBatch(batch, err);
+            continue;
+        }
+
+        ++async_batches;
+        async_batch_items += batch.size();
+
+        for (size_t i = 0; i < batch.size(); ++i) {
+            if (i && (i % 100) == 0
+                    && qore_check_cancel(xsink, "OnnxSessionPool dynamic async batch result delivery")) {
+                ExceptionSink err;
+                err.assimilate(*xsink);
+                std::vector<std::unique_ptr<AsyncRequest>> remaining;
+                remaining.reserve(batch.size() - i);
+                for (size_t j = i; j < batch.size(); ++j) {
+                    remaining.push_back(std::move(batch[j]));
+                }
+                rejectAsyncBatch(remaining, err);
+                return;
+            }
+            QoreValue value = results->getReferencedEntry(i);
+            resolveAsyncRequest(*batch[i], value, xsink);
+        }
+    }
+}
+
+QoreObject* QoreOnnxSessionPool::submitSingleAsync(QoreValue payload, AsyncOp op,
+        const QoreTypeInfo* future_type, QoreProgram* pgm, ExceptionSink* xsink) {
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
+    QorePromise* promise = *promise_holder;
+    ReferenceHolder<QoreObject> future_obj(makeOnnxFutureObject(promise, future_type, pgm, xsink),
+        xsink);
+    if (*xsink) {
+        payload.discard(xsink);
+        return nullptr;
+    }
+
+    SingleAsyncParams* params = new SingleAsyncParams(this, payload, promise, op);
+    int tid = q_start_thread(xsink, singleAsyncThread, params);
+    if (tid == -1) {
+        delete params;
+        return nullptr;
+    }
+
+    ++async_submitted;
+    return future_obj.release();
+}
+
+QoreObject* QoreOnnxSessionPool::submitDynamicRunAsync(const QoreHashNode* inputs,
+        QoreProgram* pgm, ExceptionSink* xsink) {
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
+    QorePromise* promise = *promise_holder;
+    ReferenceHolder<QoreObject> future_obj(makeOnnxFutureObject(promise, autoHashTypeInfo, pgm, xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::unique_ptr<AsyncRequest> request(new AsyncRequest(inputs, promise));
+    bool start_leader = false;
+    {
+        std::lock_guard<std::mutex> lock(async_mutex);
+        start_leader = async_requests.empty();
+        if (!start_leader && (queue_depth == 0
+                || async_requests.size() >= static_cast<size_t>(queue_depth))) {
+            {
+                std::lock_guard<std::mutex> stats_lock(mutex);
+                ++total_rejections;
+            }
+            xsink->raiseException("ML-ONNX-POOL-BACKPRESSURE",
+                "OnnxSessionPool async queue is full; queued_requests=%zu queue_depth=%lld",
+                async_requests.size(), (long long)queue_depth);
+            return nullptr;
+        }
+        async_requests.push_back(std::move(request));
+        ++async_submitted;
+
+        if (start_leader) {
+            ref();
+            int tid = q_start_thread(xsink, dynamicRunAsyncThread, this);
+            if (tid == -1) {
+                async_requests.pop_back();
+                --async_submitted;
+                deref(xsink);
+                return nullptr;
+            }
+        } else {
+            async_cv.notify_one();
+        }
+    }
+
+    return future_obj.release();
+}
+
+QoreObject* QoreOnnxSessionPool::runAsync(const QoreHashNode* inputs, QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    if (dynamic_batch_size > 1 && dynamic_batch_wait_ms > 0) {
+        return submitDynamicRunAsync(inputs, pgm, xsink);
+    }
+    return submitSingleAsync(QoreValue(inputs->hashRefSelf()), AsyncOp::Run, autoHashTypeInfo, pgm,
+        xsink);
+}
+
+QoreObject* QoreOnnxSessionPool::runTensorsAsync(const QoreHashNode* inputs, QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    return submitSingleAsync(QoreValue(inputs->hashRefSelf()), AsyncOp::RunTensors, autoHashTypeInfo,
+        pgm, xsink);
+}
+
+QoreObject* QoreOnnxSessionPool::runBatchAsync(const QoreListNode* batch, QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    return submitSingleAsync(QoreValue(batch->listRefSelf()), AsyncOp::RunBatch,
+        qore_get_complex_list_type(autoHashTypeInfo), pgm, xsink);
+}
+
 QoreHashNode* QoreOnnxSessionPool::getPoolStats(ExceptionSink* xsink) const {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     std::lock_guard<std::mutex> lock(mutex);
@@ -4320,6 +4658,11 @@ QoreHashNode* QoreOnnxSessionPool::getPoolStats(ExceptionSink* xsink) const {
     rv->setKeyValue("total_rejections", static_cast<int64_t>(total_rejections), xsink);
     rv->setKeyValue("max_active_runs_observed", static_cast<int64_t>(max_active_runs_observed), xsink);
     rv->setKeyValue("max_waiting_callers_observed", static_cast<int64_t>(max_waiting_callers_observed), xsink);
+    rv->setKeyValue("async_submitted", static_cast<int64_t>(async_submitted.load()), xsink);
+    rv->setKeyValue("async_completed", static_cast<int64_t>(async_completed.load()), xsink);
+    rv->setKeyValue("async_errors", static_cast<int64_t>(async_errors.load()), xsink);
+    rv->setKeyValue("async_batches", static_cast<int64_t>(async_batches.load()), xsink);
+    rv->setKeyValue("async_batch_items", static_cast<int64_t>(async_batch_items.load()), xsink);
     return rv.release();
 }
 
@@ -4333,6 +4676,11 @@ void QoreOnnxSessionPool::resetPoolStats() {
     total_rejections = 0;
     max_active_runs_observed = active_runs;
     max_waiting_callers_observed = waiting_callers;
+    async_submitted = 0;
+    async_completed = 0;
+    async_errors = 0;
+    async_batches = 0;
+    async_batch_items = 0;
 }
 
 QoreHashNode* QoreOnnxSessionPool::getModelInfo(ExceptionSink* xsink) {
