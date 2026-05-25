@@ -205,6 +205,36 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                     <AllowedValueInfo>{"value": 4, "display_name": "Fatal"},
                 ),
             },
+            "enable_profiling": <DataProviderOptionInfo>{
+                "display_name": "Enable Profiling",
+                "short_desc": "Collect ONNX Runtime profile events",
+                "desc": "Enable ONNX Runtime profiling for this processor. Use "
+                    "`getDiagnostics(True)` after processing to finish profiling and "
+                    "return the generated profile path plus an operator/provider summary. "
+                    "Default: `False`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+                "example_value": True,
+            },
+            "profile_file_prefix": <DataProviderOptionInfo>{
+                "display_name": "Profile File Prefix",
+                "short_desc": "Prefix for ONNX Runtime profile JSON files",
+                "desc": "Filesystem prefix used by ONNX Runtime when profiling is enabled. "
+                    "When omitted, ONNX Runtime chooses its default prefix.",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "/var/tmp/customer-score-profile",
+            },
+            "include_diagnostics": <DataProviderOptionInfo>{
+                "display_name": "Include Diagnostics",
+                "short_desc": "Attach runtime diagnostics to output events",
+                "desc": "When output mode is `events`, include provider diagnostics and "
+                    "current inference counters on each emitted event. Leave disabled for "
+                    "high-throughput pipelines that only need diagnostics through "
+                    "`getDiagnostics()`.",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+                "example_value": False,
+            },
         };
     }
 
@@ -238,6 +268,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
         #! Whether compact column output includes original feature columns
         bool include_input_fields = False;
+
+        #! Whether event output includes runtime diagnostics
+        bool include_diagnostics = False;
+
+        #! Runtime/provider diagnostics captured after model construction
+        hash<auto> provider_diagnostics;
 
         #! Accumulated records
         list<hash<auto>> buffer;
@@ -279,9 +315,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         if (exists copts.include_input_fields) {
             include_input_fields = copts.include_input_fields;
         }
+        if (exists copts.include_diagnostics) {
+            include_diagnostics = copts.include_diagnostics;
+        }
 
         # Build session config from options
-        hash<ML::OnnxSessionConfig> session_config;
+        hash<ML::OnnxSessionConfig> session_config = <ML::OnnxSessionConfig>{};
         if (exists copts.execution_providers) {
             list<hash<ML::OnnxProviderConfig>> provider_list;
             foreach string pname in (copts.execution_providers.split(",")) {
@@ -313,16 +352,26 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         if (exists copts.log_severity) {
             session_config.log_severity = copts.log_severity;
         }
+        if (exists copts.enable_profiling) {
+            session_config.enable_profiling = copts.enable_profiling;
+        }
+        if (exists copts.profile_file_prefix) {
+            session_config.profile_file_prefix = copts.profile_file_prefix;
+        }
 
         # Load the model
         if (session_config.providers || exists session_config.intra_op_threads
                 || exists session_config.inter_op_threads
                 || exists session_config.graph_optimization_level
-                || exists session_config.log_severity) {
+                || exists session_config.log_severity
+                || exists session_config.enable_profiling
+                || exists session_config.profile_file_prefix) {
             model = new ML::OnnxModel(model_path, session_config);
         } else {
             model = new ML::OnnxModel(model_path);
         }
+        provider_diagnostics = model.getEffectiveProviderReport();
+        provider_diagnostics.runtime = "onnxruntime";
 
         # Determine the input tensor name
         if (!exists input_tensor) {
@@ -358,6 +407,43 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
         buffer = ();
         configured = True;
+    }
+
+    #! Returns current ONNX Runtime diagnostics for this processor
+    /** @param finish_profile if True, ends ONNX Runtime profiling and includes
+        a structured profile summary when profiling was enabled
+
+        @return provider diagnostics, input/output metadata, inference counters,
+        and optional profile summary
+
+        @since DataProviderML 1.4
+    */
+    hash<auto> getDiagnostics(bool finish_profile = False) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreOnnxModelProcessor: not configured; provide constructor options";
+        }
+        hash<auto> rv = {
+            "runtime": "onnxruntime",
+            "model_path": model_path,
+            "provider_diagnostics": provider_diagnostics,
+            "inputs": model.getInputInfo(),
+            "outputs": model.getOutputInfo(),
+            "inference_stats": model.getInferenceStats(),
+        };
+        if (finish_profile) {
+            *string profile_path = model.endProfiling();
+            if (profile_path.val()) {
+                rv.profile_path = profile_path;
+                try {
+                    rv.profile_summary = QoreOnnxTools::OnnxProfileTools::summarizeProfile(profile_path);
+                } catch (hash<ExceptionInfo> ex) {
+                    rv.profile_summary_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                rv.inference_stats = model.getInferenceStats();
+            }
+        }
+        return rv;
     }
 
     #! Converts ONNX metadata type names to ML::Tensor dtype names
@@ -491,6 +577,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 "record_values": record_values,
                 "model_output": model_output,
             };
+            addDiagnosticsToLastEvent(\events);
         }
         return events;
     }
@@ -529,6 +616,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 "record_values": record_values,
                 "model_output": model_output,
             };
+            addDiagnosticsToLastEvent(\events);
         }
         return events;
     }
@@ -945,6 +1033,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             push result{"execution_provider"}, model.getProviderInfo();
             push result{"record_values"}, record_values;
             push result{"model_output"}, model_output;
+            appendDiagnosticsColumns(\result);
         }
     }
 
@@ -978,7 +1067,27 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             push result{"execution_provider"}, model.getProviderInfo();
             push result{"record_values"}, record_values;
             push result{"model_output"}, model_output;
+            appendDiagnosticsColumns(\result);
         }
+    }
+
+    #! Adds diagnostics to the last event when requested
+    private addDiagnosticsToLastEvent(reference<list<auto>> events) {
+        if (!include_diagnostics || !events) {
+            return;
+        }
+        int index = events.lsize() - 1;
+        events[index].provider_diagnostics = provider_diagnostics;
+        events[index].inference_stats = model.getInferenceStats();
+    }
+
+    #! Appends diagnostics columns to event-mode hash-of-lists output when requested
+    private appendDiagnosticsColumns(reference<hash<auto>> result) {
+        if (!include_diagnostics) {
+            return;
+        }
+        push result{"provider_diagnostics"}, provider_diagnostics;
+        push result{"inference_stats"}, model.getInferenceStats();
     }
 
     #! Appends compact column output for one tensor inference window

@@ -33,6 +33,7 @@
 %endtry
 
 %requires QoreModelRegistry
+%requires QoreOnnxTools
 %requires QoreTokenizerUtils
 %requires QoreStructuredExtraction
 %requires QoreGuardrails
@@ -1904,6 +1905,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       requires \c fields when \c input_map is used
     - Shared registry backend options support filesystem, database, and REST model
       registry backends for AI pipeline artifacts
+    - \c onnx-model and \c registry-model expose ONNX Runtime provider,
+      inference-stat, and profile-summary diagnostics through \c getDiagnostics();
+      emitted events can include compact diagnostics when requested
 
     @subsection dataproviderml_v1_3 DataProviderML v1.3
     - DataProviderML processors now accept \c DataFrameBlock,
@@ -2099,6 +2103,10 @@ public namespace DataProviderML {
         #! values are the corresponding results (e.g., predicted classes, probabilities,
         #! or regression values)
         hash<auto> model_output;
+        #! Runtime/provider diagnostics when requested
+        *hash<auto> provider_diagnostics;
+        #! ONNX inference counters and latency statistics when requested
+        *hash<auto> inference_stats;
     }
 
     #! Registry model inference event hashdecl
@@ -2117,6 +2125,8 @@ public namespace DataProviderML {
         *string execution_provider;
         #! Runtime/provider diagnostics for registry-backed models
         *hash<auto> provider_diagnostics;
+        #! ONNX inference counters and latency statistics when requested
+        *hash<auto> inference_stats;
         #! The model's prediction result
         auto prediction;
     }

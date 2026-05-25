@@ -32,6 +32,7 @@
 %requires QUnit
 %requires Mime
 %requires DataProvider
+%requires FsUtil
 %requires ml
 %requires QoreModelRegistry
 %requires DataProviderML
@@ -110,6 +111,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
 
         # ONNX model tests
         addTestCase("onnx-model - basic inference", \onnxModelBasicInference());
+        addTestCase("onnx-model - diagnostics", \onnxModelDiagnostics());
         addTestCase("onnx-model - flush partial", \onnxModelFlushPartial());
         addTestCase("onnx-model - DataFrameBlock tensor path", \onnxModelDataFrameTensorPath());
         addTestCase("onnx-model - DataFrameBlock multi-column tensor path",
@@ -1518,6 +1520,49 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         }
     }
 
+    onnxModelDiagnostics() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpFile prefix("dpml-onnx-profile-", "");
+        *string profile_path;
+        on_exit {
+            if (profile_path.val() && is_file(profile_path)) {
+                unlink(profile_path);
+            }
+        }
+
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 3,
+            "profile_file_prefix": prefix.path,
+            "include_diagnostics": True,
+        });
+
+        list<auto> results;
+        foreach hash<auto> rec in (({"x": 1.0}, {"x": 2.0}, {"x": 3.0})) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(3, results.size(), "ONNX diagnostics test should emit one event per record");
+        assertEq("onnxruntime", results[0].provider_diagnostics.runtime);
+        assertTrue(results[0].inference_stats.run_count >= 1,
+            "diagnostic events should include current inference counters");
+
+        hash<auto> diag = proc.getDiagnostics(True);
+        profile_path = diag.profile_path;
+        assertEq("onnxruntime", diag.runtime);
+        assertEq(getTestModelPath(), diag.model_path);
+        assertTrue(diag.inference_stats.run_count >= 1);
+        assertTrue(profile_path.val(), "profiling should return a profile file path");
+        assertTrue(is_file(profile_path), "profile file should exist");
+        assertTrue(diag.profile_summary.operator_names.contains("Gemm"),
+            "profile summary should include the test model operator");
+        assertTrue(diag.profile_summary.provider_names.contains("CPUExecutionProvider"),
+            "profile summary should include the active CPU execution provider");
+    }
+
     onnxModelFlushPartial() {
         if (skipOnnx()) {
             return;
@@ -2594,10 +2639,22 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
         f.write(ReadOnlyFile::readBinaryFile(getTestModelPath()));
 
+        FsUtil::TmpFile prefix("dpml-registry-onnx-profile-", "");
+        *string profile_path;
+        on_exit {
+            if (profile_path.val() && is_file(profile_path)) {
+                unlink(profile_path);
+            }
+        }
+
         QoreModelRegistry::ModelRegistry registry({"path": dir});
         string vid = registry.registerPackage(package_dir, {
             "name": "linear-onnx",
             "description": "test ONNX package",
+            "execution_config": <ML::OnnxSessionConfig>{
+                "providers": (),
+                "profile_file_prefix": prefix.path,
+            },
         });
 
         DataProviderML::QoreRegistryModelProcessor proc({
@@ -2606,6 +2663,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "version": vid,
             "fields": "x",
             "window_size": 3,
+            "include_diagnostics": True,
         });
 
         list<auto> results;
@@ -2621,11 +2679,24 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "registry ONNX events should include the active execution provider");
         assertEq("onnxruntime", results[0].provider_diagnostics.runtime,
             "registry ONNX events should include provider diagnostics");
+        assertTrue(results[0].inference_stats.run_count >= 1,
+            "registry ONNX diagnostic events should include inference counters");
         assertTrue(results[0].prediction.hasKey("Y"), "ONNX output should be returned as prediction hash");
         assertTrue(abs(3.0 - results[0].prediction.Y.toFloat()) < 0.01,
             sprintf("expected first ONNX prediction ~3.0, got %y", results[0].prediction.Y));
         assertTrue(abs(7.0 - results[2].prediction.Y.toFloat()) < 0.01,
             sprintf("expected third ONNX prediction ~7.0, got %y", results[2].prediction.Y));
+
+        hash<auto> diag = proc.getDiagnostics(True);
+        profile_path = diag.profile_path;
+        assertEq("onnxruntime", diag.runtime);
+        assertEq("linear-onnx", diag.model_name);
+        assertEq(vid, diag.version_id);
+        assertTrue(diag.inference_stats.run_count >= 1);
+        assertTrue(profile_path.val(), "registry ONNX profiling should return a profile path");
+        assertTrue(is_file(profile_path), "registry ONNX profile file should exist");
+        assertTrue(diag.profile_summary.operator_names.contains("Gemm"),
+            "registry ONNX profile summary should include the test model operator");
     }
 
     registryModelOnnxDataFrameTensorPath() {

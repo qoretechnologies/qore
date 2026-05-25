@@ -311,6 +311,40 @@ public class ModelExecutableAdapter {
         return rv;
     }
 
+    #! Returns ONNX Runtime inference counters for ONNX models
+    /** @return inference statistics for ONNX models, or an empty hash for
+        native Qore ML models
+
+        @since QoreModelRegistry 2.4
+    */
+    hash<auto> getInferenceStats() {
+        if (!isOnnx()) {
+            return {};
+        }
+        return model.getInferenceStats();
+    }
+
+    #! Resets ONNX Runtime inference counters for ONNX models
+    /** @since QoreModelRegistry 2.4
+    */
+    nothing resetInferenceStats() {
+        if (isOnnx()) {
+            model.resetInferenceStats();
+        }
+    }
+
+    #! Ends ONNX Runtime profiling and returns the generated profile path
+    /** @return generated profile file path or NOTHING when profiling is not active
+
+        @since QoreModelRegistry 2.4
+    */
+    *string endProfiling() {
+        if (!isOnnx()) {
+            return;
+        }
+        return model.endProfiling();
+    }
+
     #! Infers a runtime identifier from the object class
     private static string inferRuntime(object model) {
         if (model instanceof ML::OnnxModel) {

@@ -210,6 +210,17 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "desc": "Number of records to accumulate before processing. "
                     "Default: 100.",
             },
+            "include_diagnostics": <DataProviderOptionInfo>{
+                "display_name": "Include Diagnostics",
+                "short_desc": "Attach runtime diagnostics to output events",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "desc": "When output mode is `events`, include current ONNX inference "
+                    "counters on each emitted ONNX event. Provider diagnostics are always "
+                    "available on registry-backed ONNX events; use `getDiagnostics()` for "
+                    "a single compact diagnostics record.",
+                "default_value": False,
+                "example_value": False,
+            },
         };
     }
 
@@ -243,6 +254,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
         #! Whether compact column output includes original feature columns
         bool include_input_fields = False;
+
+        #! Whether event output includes current inference counters
+        bool include_diagnostics = False;
 
         #! Window size
         int window_size = 100;
@@ -282,6 +296,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         output_mode = copts.output_mode ?? "events";
         if (exists copts.include_input_fields) {
             include_input_fields = copts.include_input_fields;
+        }
+        if (exists copts.include_diagnostics) {
+            include_diagnostics = copts.include_diagnostics;
         }
         if (copts.window_size) {
             window_size = copts.window_size;
@@ -326,6 +343,44 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         }
 
         configured = True;
+    }
+
+    #! Returns current diagnostics for the loaded registry model
+    /** @param finish_profile if True, ends ONNX Runtime profiling and includes
+        a structured profile summary when the registry execution configuration
+        enabled profiling
+
+        @return provider diagnostics, manifest metadata, inference counters, and
+        optional profile summary
+
+        @since DataProviderML 1.4
+    */
+    hash<auto> getDiagnostics(bool finish_profile = False) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "registry-model processor not configured; provide constructor options";
+        }
+        hash<auto> rv = {
+            "runtime": model.getRuntime(),
+            "model_name": model_name,
+            "version_id": loaded_version,
+            "provider_diagnostics": provider_diagnostics,
+            "manifest": model.getManifest(),
+            "inference_stats": model.getInferenceStats(),
+        };
+        if (finish_profile) {
+            *string profile_path = model.endProfiling();
+            if (profile_path.val()) {
+                rv.profile_path = profile_path;
+                try {
+                    rv.profile_summary = QoreOnnxTools::OnnxProfileTools::summarizeProfile(profile_path);
+                } catch (hash<ExceptionInfo> ex) {
+                    rv.profile_summary_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                rv.inference_stats = model.getInferenceStats();
+            }
+        }
+        return rv;
     }
 
     #! Parses the input tensor to field-list mapping
@@ -472,7 +527,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 }
             }
 
-            push events, <RegistryModelEventInfo>{
+            hash<RegistryModelEventInfo> event = <RegistryModelEventInfo>{
                 "event_type": "registry-model",
                 "model_name": model_name,
                 "version_id": loaded_version,
@@ -481,6 +536,10 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "provider_diagnostics": provider_diagnostics,
                 "prediction": model_output,
             };
+            if (include_diagnostics) {
+                event.inference_stats = model.getInferenceStats();
+            }
+            push events, event;
         }
 
         return events;
@@ -512,7 +571,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 }
             }
 
-            push events, <RegistryModelEventInfo>{
+            hash<RegistryModelEventInfo> event = <RegistryModelEventInfo>{
                 "event_type": "registry-model",
                 "model_name": model_name,
                 "version_id": loaded_version,
@@ -521,6 +580,10 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "provider_diagnostics": provider_diagnostics,
                 "prediction": model_output,
             };
+            if (include_diagnostics) {
+                event.inference_stats = model.getInferenceStats();
+            }
+            push events, event;
         }
 
         return events;
@@ -933,6 +996,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             push result{"record_values"}, record_values;
             push result{"execution_provider"}, execution_provider;
             push result{"provider_diagnostics"}, provider_diagnostics;
+            if (include_diagnostics) {
+                push result{"inference_stats"}, model.getInferenceStats();
+            }
             push result{"prediction"}, model_output;
         }
     }
@@ -970,6 +1036,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             push result{"record_values"}, record_values;
             push result{"execution_provider"}, execution_provider;
             push result{"provider_diagnostics"}, provider_diagnostics;
+            if (include_diagnostics) {
+                push result{"inference_stats"}, model.getInferenceStats();
+            }
             push result{"prediction"}, model_output;
         }
     }

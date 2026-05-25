@@ -2890,7 +2890,7 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "Logger;MapperUtil;Mime;ProviderIndexUtil;Util;reflection" "../../doxygen/DataProvider-Full.svg;Qore-Q-square.svg")
-qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreModelRegistry;QoreTokenizerUtils;QoreStructuredExtraction;QoreGuardrails;QoreOcrUtils;QoreVisionExtraction")
+qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreModelRegistry;QoreOnnxTools;QoreTokenizerUtils;QoreStructuredExtraction;QoreGuardrails;QoreOcrUtils;QoreVisionExtraction")
 qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;FsUtil;modules/ml/ml;Mime;QoreOnnxTools;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
