@@ -1671,12 +1671,14 @@ module DataProviderML {
     \c BufferColumns shape when possible.  This keeps downstream shape-aware
     processors in columnar bulk mode while preserving the existing row-oriented
     processor behavior for single records and compatibility hash-of-lists input.
-    The \c tokenize, \c embed-text, and \c rerank-text processors read
-    top-level text columns directly from shaped inputs without first
-    materializing per-row hashes.  \c tokenize appends a token-count column,
-    \c embed-text appends an \c embedding column, and \c rerank-text emits the
-    configured top-k rows with \c reranker_score and \c reranker_rank columns
-    while preserving the negotiated shape.
+    The \c text-normalize, \c tokenize, \c schema-validation,
+    \c embed-text, and \c rerank-text processors read top-level columns
+    directly from shaped inputs without first materializing per-row hashes.
+    \c text-normalize appends a normalized text column, \c tokenize appends a
+    token-count column, \c schema-validation appends validation columns or
+    filters invalid rows, \c embed-text appends an \c embedding column, and
+    \c rerank-text emits the configured top-k rows with \c reranker_score and
+    \c reranker_rank columns while preserving the negotiated shape.
 
     StandardScaler, MinMaxScaler, KMeans, and PCA also support
     \c output_mode = "dataframe".  This mode returns flat DataFrame columns
@@ -1885,10 +1887,13 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     - shaped ONNX inputs smaller than \c window_size, or with a final remainder
       window, are processed directly as tensor batches instead of falling back
       through row buffering
-    - \c tokenize, \c embed-text, and \c rerank-text preserve
+    - \c text-normalize, \c tokenize, \c schema-validation,
+      \c embed-text, and \c rerank-text preserve
       \c DataFrameBlock, \c BufferColumns, and \c HashOfLists input shapes by
-      reading top-level text columns directly; \c tokenize appends a
-      token-count column, \c embed-text appends an \c embedding column, and
+      reading top-level columns directly; \c text-normalize appends a
+      normalized text column, \c tokenize appends a token-count column,
+      \c schema-validation appends \c _is_valid and \c _validation_errors or
+      filters invalid rows, \c embed-text appends an \c embedding column, and
       \c rerank-text emits top-k rows with \c reranker_score and
       \c reranker_rank columns without per-row hash materialization
     - \c embed-text and \c rerank-text accept \c onnx_session_config and inherit

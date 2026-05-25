@@ -184,6 +184,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("data-profile - capabilities", \dataProfileCapabilities());
         addTestCase("data-profile - constructor validation", \dataProfileConstructorValidation());
 
+        # TextNormalize tests
+        addTestCase("text-normalize - DataFrameBlock shape", \textNormalizeDataFrameShape());
+        addTestCase("text-normalize - BufferColumns shape", \textNormalizeBufferColumnsShape());
+
         # SchemaValidation tests
         addTestCase("schema-validation - type check", \schemaValidTypeCheck());
         addTestCase("schema-validation - required fields", \schemaValidRequiredFields());
@@ -193,6 +197,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("schema-validation - enrich mode", \schemaValidEnrichMode());
         addTestCase("schema-validation - drop mode", \schemaValidDropMode());
         addTestCase("schema-validation - throw mode", \schemaValidThrowMode());
+        addTestCase("schema-validation - DataFrameBlock enrich shape",
+            \schemaValidDataFrameEnrichShape());
+        addTestCase("schema-validation - BufferColumns drop shape",
+            \schemaValidBufferColumnsDropShape());
         addTestCase("schema-validation - not configured", \schemaValidNotConfigured());
         addTestCase("schema-validation - capabilities", \schemaValidCapabilities());
         addTestCase("schema-validation - constructor validation", \schemaValidConstructorValidation());
@@ -3653,6 +3661,48 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
     }
 
+    # ===================== TextNormalize Tests =====================
+
+    textNormalizeDataFrameShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataProviderML::QoreTextNormalizeProcessor proc({
+            "text_field": "body",
+            "operations": ("strip_html", "collapse_whitespace", "lowercase"),
+        });
+
+        DataFrame::DataFrame df({
+            "id": (1, 2),
+            "body": ("<b>Hello</b>   WORLD", "Enterprise   AI"),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result),
+            "text-normalize should preserve DataFrameBlock output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq(("hello world", "enterprise ai"), result.getColumn("body_normalized"));
+    }
+
+    textNormalizeBufferColumnsShape() {
+        DataProviderML::QoreTextNormalizeProcessor proc({
+            "text_field": "body",
+            "operations": ("strip_html", "collapse_whitespace", "lowercase"),
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "body": ("<b>Hello</b>   WORLD", "Enterprise   AI"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "text-normalize should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        assertEq(("hello world", "enterprise ai"), result.getColumn("body_normalized").toList());
+    }
+
     # ===================== SchemaValidation Tests =====================
 
     schemaValidTypeCheck() {
@@ -3828,6 +3878,60 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertThrows("VALIDATION-ERROR", sub() {
             proc.processRecord({});
         });
+    }
+
+    schemaValidDataFrameEnrichShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "age": {"type": "int", "min": 18},
+                "status": {"allowed_values": ("active", "pending")},
+            },
+            "on_violation": "enrich",
+        });
+
+        DataFrame::DataFrame df({
+            "id": (1, 2),
+            "age": (20, 15),
+            "status": ("active", "blocked"),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result),
+            "schema-validation enrich should preserve DataFrameBlock output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertEq((True, False), result.getColumn("_is_valid"));
+
+        list<auto> errors = result.getColumn("_validation_errors");
+        assertEq(0, errors[0].lsize());
+        assertTrue(errors[1].lsize() >= 2,
+            "invalid row should include range and allowed-value violations");
+    }
+
+    schemaValidBufferColumnsDropShape() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "age": {"type": "int", "min": 18},
+                "status": {"allowed_values": ("active", "pending")},
+            },
+            "on_violation": "drop",
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3)),
+            "age": new buffer<int64>((20, 15, 30)),
+            "status": ("active", "blocked", "pending"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "schema-validation drop should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        assertEq((1, 3), result.getColumn("id").toList());
+        assertEq(("active", "pending"), result.getColumn("status").toList());
     }
 
     schemaValidNotConfigured() {
