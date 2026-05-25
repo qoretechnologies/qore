@@ -403,25 +403,30 @@ OnnxModel::copy() {
 /** @param inputs a hash where keys are input tensor names and values are the tensor data;
     scalars, lists, and nested lists are supported and automatically converted to the
     appropriate tensor types
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
 
     @return a hash where keys are output tensor names and values are the output data
 
     @par Example:
     @code{.py}
 hash<auto> outputs = model.run({"X": ((1.0, 2.0),)});
+hash<auto> probabilities = model.run({"X": batch}, ("probabilities",));
     @endcode
 
     @throw ML-ONNX-ERROR if the model is not loaded
-    @throw ML-ONNX-INFERENCE-ERROR if inference fails or input data is invalid
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or input/output data is invalid
 */
-hash<auto> OnnxModel::run(hash<auto> inputs) {
-    return model->run(inputs, xsink);
+hash<auto> OnnxModel::run(hash<auto> inputs, *list<string> output_names) {
+    return model->run(inputs, output_names, xsink);
 }
 
 //! Runs inference and returns output tensors as ML::Tensor objects
 /** @param inputs a hash where keys are input tensor names and values are tensor
     data; scalars, lists, nested lists, \c buffer<T>, and @ref ML::Tensor values
     are supported
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
 
     @return a hash where keys are output tensor names and values are @ref ML::Tensor
     objects preserving dtype and shape metadata
@@ -432,13 +437,14 @@ ML::Tensor input(data: ((1.0, 2.0),), dtype: "float32");
 hash<auto> outputs = model.runTensors({"X": input});
 ML::Tensor y = outputs.Y;
 buffer<float32> raw = y.getBuffer();
+hash<auto> only_scores = model.runTensors({"X": input}, ("probabilities",));
     @endcode
 
     @throw ML-ONNX-ERROR if the model is not loaded
-    @throw ML-ONNX-INFERENCE-ERROR if inference fails or tensor data is invalid
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or input/output data is invalid
 */
-hash<auto> OnnxModel::runTensors(hash<auto> inputs) {
-    return model->runTensors(inputs, xsink);
+hash<auto> OnnxModel::runTensors(hash<auto> inputs, *list<string> output_names) {
+    return model->runTensors(inputs, output_names, xsink);
 }
 
 //! Saves an optimized ONNX or ORT artifact from this model's original source
@@ -540,6 +546,8 @@ hash<auto> OnnxModel::runBound(OnnxIoBinding binding, *OnnxRunOptions options,
 
 //! Runs batch inference on the model
 /** @param batch a list of input hashes; each hash has the same format as run()
+    @param output_names optional output tensor names to materialize for each
+        batch element; when omitted, all model outputs are returned
 
     @return a list of output hashes
 
@@ -552,10 +560,10 @@ list<hash<auto>> results = model.runBatch((
     @endcode
 
     @throw ML-ONNX-ERROR if the model is not loaded
-    @throw ML-ONNX-INFERENCE-ERROR if inference fails
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or output names are invalid
 */
-list<hash<auto>> OnnxModel::runBatch(list<auto> batch) {
-    return model->runBatch(batch, xsink);
+list<hash<auto>> OnnxModel::runBatch(list<auto> batch, *list<string> output_names) {
+    return model->runBatch(batch, output_names, xsink);
 }
 
 //! Returns model metadata
@@ -777,22 +785,28 @@ OnnxSessionPool::copy() {
 
 //! Runs inference with named input tensors through an acquired session
 /** @param inputs hash where keys are input tensor names
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
     @return output hash in the same format as @ref OnnxModel::run()
 */
-hash<auto> OnnxSessionPool::run(hash<auto> inputs) {
-    return pool->run(inputs, xsink);
+hash<auto> OnnxSessionPool::run(hash<auto> inputs, *list<string> output_names) {
+    return pool->run(inputs, output_names, xsink);
 }
 
 //! Submits inference with named input tensors and returns a Future
 /** @param inputs hash where keys are input tensor names
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
 
     @return a \c Future resolving to the output hash
         in the same format as @ref run()
 
     If \c dynamic_batch_size and \c dynamic_batch_wait_ms are both configured,
-    concurrent runAsync() callers are coalesced up to the configured batch size
-    or wait deadline. Each Future still resolves to the result for its own
-    request, and result order is preserved inside each coalesced batch.
+    concurrent runAsync() callers without \c output_names are coalesced up to
+    the configured batch size or wait deadline. Each Future still resolves to
+    the result for its own request, and result order is preserved inside each
+    coalesced batch. Calls with \c output_names are run individually so
+    requests with different selected output sets are not mixed.
 
     @par Example:
     @code{.py}
@@ -800,58 +814,67 @@ ML::OnnxSessionPool pool("/models/customer-score.onnx",
     <ML::OnnxSessionConfig>{"providers": ()},
     {"max_sessions": 2, "dynamic_batch_size": 8, "dynamic_batch_wait_ms": 2});
 
-    Future<hash<auto>> f = pool.runAsync({"X": ((42.0,),)});
+    Future<hash<auto>> f = pool.runAsync({"X": ((42.0,),)}, ("score",));
 hash<auto> out = f.get(5s);
     @endcode
 
     @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
     @throw ML-ONNX-POOL-BACKPRESSURE if the async coalescing queue is full
 */
-Future<hash<auto>> OnnxSessionPool::runAsync(hash<auto> inputs) {
-    return pool->runAsync(inputs, getProgram(), xsink);
+Future<hash<auto>> OnnxSessionPool::runAsync(hash<auto> inputs, *list<string> output_names) {
+    return pool->runAsync(inputs, output_names, getProgram(), xsink);
 }
 
 //! Runs inference and returns outputs as @ref Tensor objects
 /** @param inputs hash where values are @ref Tensor objects or tensor-compatible
         data
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
     @return output hash where each value is a @ref Tensor
 */
-hash<auto> OnnxSessionPool::runTensors(hash<auto> inputs) {
-    return pool->runTensors(inputs, xsink);
+hash<auto> OnnxSessionPool::runTensors(hash<auto> inputs, *list<string> output_names) {
+    return pool->runTensors(inputs, output_names, xsink);
 }
 
 //! Submits tensor-preserving inference and returns a Future
 /** @param inputs hash where values are @ref Tensor objects or tensor-compatible
         data
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
 
     @return a \c Future resolving to an output hash
         where each value is a @ref Tensor
 
     @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
 */
-Future<hash<auto>> OnnxSessionPool::runTensorsAsync(hash<auto> inputs) {
-    return pool->runTensorsAsync(inputs, getProgram(), xsink);
+Future<hash<auto>> OnnxSessionPool::runTensorsAsync(hash<auto> inputs, *list<string> output_names) {
+    return pool->runTensorsAsync(inputs, output_names, getProgram(), xsink);
 }
 
 //! Runs a batch through the pool while preserving result order
 /** If \c dynamic_batch_size is configured, the input list is processed in
     stable chunks no larger than that size. The returned list order always
     matches the input order.
+    @param batch list of input hashes in the same format accepted by runBatch()
+    @param output_names optional output tensor names to materialize for each
+        batch element; when omitted, all model outputs are returned.
 */
-list<hash<auto>> OnnxSessionPool::runBatch(list<auto> batch) {
-    return pool->runBatch(batch, xsink);
+list<hash<auto>> OnnxSessionPool::runBatch(list<auto> batch, *list<string> output_names) {
+    return pool->runBatch(batch, output_names, xsink);
 }
 
 //! Submits batch inference and returns a Future
 /** @param batch list of input hashes in the same format accepted by runBatch()
+    @param output_names optional output tensor names to materialize for each
+        batch element; when omitted, all model outputs are returned
 
     @return a \c Future resolving to a list of output
         hashes in input order
 
     @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
 */
-Future<list<hash<auto>>> OnnxSessionPool::runBatchAsync(list<auto> batch) {
-    return pool->runBatchAsync(batch, getProgram(), xsink);
+Future<list<hash<auto>>> OnnxSessionPool::runBatchAsync(list<auto> batch, *list<string> output_names) {
+    return pool->runBatchAsync(batch, output_names, getProgram(), xsink);
 }
 
 //! Returns current pool counters and configuration

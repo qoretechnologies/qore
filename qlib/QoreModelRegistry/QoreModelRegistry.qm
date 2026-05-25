@@ -179,13 +179,14 @@ object model = reg.loadExecutable("bge-small-en", vid);
 QoreModelRegistry::ModelExecutableAdapter adapter =
     reg.loadExecutableAdapter("bge-small-en", vid);
 hash<auto> outputs = adapter.runFeatureMatrix(((1.0, 2.0, 3.0),), NOTHING);
-hash<auto> tensor_outputs = adapter.runFeatureMatrixTensors(((1.0, 2.0, 3.0),), NOTHING);
+hash<auto> tensor_outputs = adapter.runFeatureMatrixTensors(
+    ((1.0, 2.0, 3.0),), NOTHING, ("embeddings",));
 ML::Tensor dense_input(new buffer<float32>((1.0, 2.0, 3.0)), (1, 3), "float32");
-hash<auto> dense_outputs = adapter.runFeatureTensor(dense_input, NOTHING);
+hash<auto> dense_outputs = adapter.runFeatureTensor(dense_input, NOTHING, ("embeddings",));
 hash<auto> mapped_outputs = adapter.runTensors({
     "input_ids": ML::Tensor(data: ((101, 7592, 102),), dtype: "int64"),
     "attention_mask": ML::Tensor(data: ((1, 1, 1),), dtype: "int64"),
-});
+}, ("embeddings",));
 printf("provider=%s\n", adapter.getProviderDiagnostics().active_provider);
 
 # Create and register a provider-specific optimized deployment artifact.
@@ -351,6 +352,9 @@ reg.loadExecutable("torch-source", vid);
     - ModelRegistry DataProvider records now expose ONNX provider diagnostics,
       validation status, tensor contracts, deployment metadata, benchmark
       metadata, golden vectors, and optimized/quantized artifact lists
+    - ModelExecutableAdapter ONNX execution methods accept selected output names
+      so registry-backed multi-output ONNX packages can avoid materializing
+      unused labels, probabilities, logits, or embeddings
 
     @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
     - ONNX model packages now expose task-aware execution-plan metadata through

@@ -113,6 +113,16 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 "type": AbstractDataProviderTypeMap."*hash",
                 "example_value": {"X": ("x", "y")},
             },
+            "output_names": <DataProviderOptionInfo>{
+                "display_name": "Output Tensor Names",
+                "short_desc": "Only materialize selected ONNX outputs",
+                "desc": "Optional output tensor names to request from ONNX Runtime. "
+                    "Use this for multi-output models when downstream steps only need "
+                    "specific outputs, for example `(\"probabilities\",)` or "
+                    "`\"label,probabilities\"`. Omit this option to return all model outputs.",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                "example_value": ("probabilities",),
+            },
             "output_mode": <DataProviderOptionInfo>{
                 "display_name": "Output Mode",
                 "short_desc": "How to return ONNX inference results",
@@ -251,6 +261,9 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         #! Optional mapping of ONNX input tensor names to field lists
         *hash<string, list<string>> input_map;
 
+        #! Optional ONNX output tensor names to request
+        *list<string> output_names;
+
         #! Dtype per ONNX input tensor
         hash<string, string> input_dtypes;
 
@@ -310,6 +323,14 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         model_path = copts.model_path;
         if (exists copts.input_tensor) {
             input_tensor = copts.input_tensor;
+        }
+        if (exists copts.output_names) {
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            if (!output_names) {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names must contain at least one ONNX output tensor name; "
+                    "omit output_names to request all model outputs";
+            }
         }
         output_mode = copts.output_mode ?? "events";
         if (exists copts.include_input_fields) {
@@ -532,6 +553,16 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         return results;
     }
 
+    #! Runs ONNX inference with the configured output selection
+    private hash<auto> runModel(hash<auto> inputs) {
+        return model.run(inputs, output_names);
+    }
+
+    #! Runs tensor-preserving ONNX inference with the configured output selection
+    private hash<auto> runModelTensors(hash<auto> inputs) {
+        return model.runTensors(inputs, output_names);
+    }
+
     #! Processes a window of records through the ONNX model
     private list<auto> processWindow(list<hash<auto>> records) {
         if (exists input_map) {
@@ -549,7 +580,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         # Run inference
-        hash<auto> outputs = model.run({input_tensor: matrix});
+        hash<auto> outputs = runModel({input_tensor: matrix});
 
         # Emit one event per record
         list<auto> events;
@@ -703,7 +734,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         if (count <= window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
             *ML::Tensor direct_input = inputTensorFromDenseColumns(records, shape, count, fields, input_dtype);
             if (exists direct_input) {
-                hash<auto> outputs = model.runTensors({input_tensor: direct_input});
+                hash<auto> outputs = runModelTensors({input_tensor: direct_input});
                 if (isTensorOutputMode()) {
                     return outputs;
                 }
@@ -757,7 +788,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         if (count <= window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
             *hash<auto> direct_inputs = inputTensorsFromMappedDenseColumns(records, shape, count);
             if (exists direct_inputs) {
-                hash<auto> outputs = model.runTensors(direct_inputs);
+                hash<auto> outputs = runModelTensors(direct_inputs);
                 if (isTensorOutputMode()) {
                     return outputs;
                 }
@@ -1006,7 +1037,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     #! Appends one tensor inference window to a hash-of-lists event result
     private appendTensorWindowEventResult(reference<hash<auto>> result, list<list<float>> matrix) {
         ML::Tensor input(matrix, NOTHING, input_dtype);
-        hash<auto> outputs = model.runTensors({input_tensor: input});
+        hash<auto> outputs = runModelTensors({input_tensor: input});
         int count = matrix.lsize();
 
         hash<auto> output_values;
@@ -1094,7 +1125,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     private appendTensorWindowColumnResult(reference<hash<auto>> result, list<list<float>> matrix,
             bool single_window) {
         ML::Tensor input(matrix, NOTHING, input_dtype);
-        hash<auto> outputs = model.runTensors({input_tensor: input});
+        hash<auto> outputs = runModelTensors({input_tensor: input});
         int count = matrix.lsize();
         foreach string okey in (keys outputs) {
             appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), count, single_window);
@@ -1149,7 +1180,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     private hash<auto> processTensorShapeWindows(list<list<float>> matrix, int count) {
         if (count <= window_size) {
             ML::Tensor input(matrix, NOTHING, input_dtype);
-            return model.runTensors({input_tensor: input});
+            return runModelTensors({input_tensor: input});
         }
 
         list<hash<auto>> windows;
@@ -1160,7 +1191,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             }
             list<list<float>> window = matrix[start..(end - 1)];
             ML::Tensor input(window, NOTHING, input_dtype);
-            push windows, model.runTensors({input_tensor: input});
+            push windows, runModelTensors({input_tensor: input});
         }
         return {
             "row_count": count,
@@ -1201,7 +1232,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 : matrix[start..(start + count - 1)];
             inputs{tensor_name} = new ML::Tensor(window, NOTHING, input_dtypes{tensor_name});
         }
-        return model.runTensors(inputs);
+        return runModelTensors(inputs);
     }
 
     #! Converts a tensor output to row-addressable values where possible

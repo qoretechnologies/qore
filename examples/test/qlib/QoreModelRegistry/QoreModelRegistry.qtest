@@ -1163,6 +1163,11 @@ class ModelRegistryTest inherits QUnit::Test {
         assertTrue(abs(7.0 - rows.Y[2].toFloat()) < 1e-5,
             sprintf("expected row output 7.0, got %y", rows.Y[2]));
 
+        hash<auto> selected = adapter.runFeatureMatrixTensors(((1.0,), (2.0,), (3.0,)), NOTHING, ("Y",));
+        assertEq(1, selected.size(), "selected adapter tensor output should only include requested tensors");
+        assertTrue(selected.Y instanceof ML::Tensor,
+            "selected adapter tensor output should preserve ML::Tensor values");
+
         hash<auto> diagnostics = adapter.getProviderDiagnostics();
         assertEq("onnxruntime", diagnostics.runtime,
             "provider diagnostics should include runtime");

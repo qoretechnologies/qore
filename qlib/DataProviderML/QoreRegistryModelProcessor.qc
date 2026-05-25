@@ -174,6 +174,17 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                     "is ignored.",
                 "example_value": {"X": ("x", "y")},
             },
+            "output_names": <DataProviderOptionInfo>{
+                "display_name": "Output Tensor Names",
+                "short_desc": "Only materialize selected ONNX outputs",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                "desc": "Optional ONNX output tensor names to request from registry-backed "
+                    "ONNX Runtime models. Use this for multi-output packages when a "
+                    "pipeline only needs specific tensors, for example "
+                    "`(\"probabilities\",)` or `\"label,probabilities\"`. Omit this "
+                    "option to return all model outputs.",
+                "example_value": ("probabilities",),
+            },
             "prompt_field": <DataProviderOptionInfo>{
                 "display_name": "Prompt Field",
                 "short_desc": "Record field containing text-generation prompts",
@@ -281,6 +292,9 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         #! Optional mapping of ONNX input tensor names to field lists
         *hash<string, list<string>> input_map;
 
+        #! Optional ONNX output tensor names to request
+        *list<string> output_names;
+
         #! Active ONNX execution provider, when available
         *string execution_provider;
 
@@ -353,6 +367,14 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             fields = QoreRegistryModelProcessor::mergeInputMapFields(fields, input_map);
         }
         input_tensor = copts.input_tensor;
+        if (exists copts.output_names) {
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            if (!output_names) {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names must contain at least one ONNX output tensor name; "
+                    "omit output_names to request all model outputs";
+            }
+        }
         output_mode = copts.output_mode ?? "events";
         if (exists copts.include_input_fields) {
             include_input_fields = copts.include_input_fields;
@@ -405,9 +427,16 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                     model.getOnnxInputTensorDtype(tensor_name);
                 }
             }
-        } else if (exists input_map) {
-            throw "CONSTRUCTOR-ERROR",
-                "input_map is only supported for ONNX Runtime models; native registry models use 'fields'";
+        } else {
+            if (exists input_map) {
+                throw "CONSTRUCTOR-ERROR",
+                    "input_map is only supported for ONNX Runtime models; native registry models use 'fields'";
+            }
+            if (exists output_names) {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names is only supported for ONNX Runtime registry models; "
+                    "native registry models do not expose ONNX output tensor selection";
+            }
         }
 
         if (execution_task == "causal-lm") {
@@ -541,6 +570,26 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         return;
     }
 
+    #! Runs a registry-backed ONNX feature matrix with the configured output selection
+    private hash<auto> runModelFeatureMatrix(list<list<float>> matrix) {
+        return model.runFeatureMatrix(matrix, input_tensor, output_names);
+    }
+
+    #! Runs a registry-backed ONNX feature matrix and preserves dense tensor outputs
+    private hash<auto> runModelFeatureMatrixTensors(list<list<float>> matrix) {
+        return model.runFeatureMatrixTensors(matrix, input_tensor, output_names);
+    }
+
+    #! Runs a registry-backed ONNX input tensor with the configured output selection
+    private hash<auto> runModelFeatureTensor(ML::Tensor input) {
+        return model.runFeatureTensor(input, input_tensor, output_names);
+    }
+
+    #! Runs mapped registry-backed ONNX tensors with the configured output selection
+    private hash<auto> runModelTensors(hash<auto> inputs) {
+        return model.runTensors(inputs, output_names);
+    }
+
     private list<auto> processWindow(list<hash<auto>> records) {
         if (model.isOnnx()) {
             if (execution_task == "causal-lm") {
@@ -587,7 +636,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             push matrix, row;
         }
 
-        hash<auto> outputs = model.runFeatureMatrix(matrix, input_tensor);
+        hash<auto> outputs = runModelFeatureMatrix(matrix);
 
         list<auto> events;
         for (int i = 0; i < records.lsize(); ++i) {
@@ -754,7 +803,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             *ML::Tensor direct_input = inputTensorFromDenseColumns(records, shape, count, fields,
                 model.getOnnxInputTensorDtype(input_tensor));
             if (exists direct_input) {
-                hash<auto> outputs = model.runFeatureTensor(direct_input, input_tensor);
+                hash<auto> outputs = runModelFeatureTensor(direct_input);
                 if (isTensorOutputMode()) {
                     return outputs;
                 }
@@ -809,7 +858,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         if (count <= window_size && (isTensorOutputMode() || (isColumnOutputMode() && !include_input_fields))) {
             *hash<auto> direct_inputs = inputTensorsFromMappedDenseColumns(records, shape, count);
             if (exists direct_inputs) {
-                hash<auto> outputs = model.runTensors(direct_inputs);
+                hash<auto> outputs = runModelTensors(direct_inputs);
                 if (isTensorOutputMode()) {
                     return outputs;
                 }
@@ -1138,7 +1187,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     #! Appends one registry ONNX tensor inference window to a hash-of-lists result
     private appendTensorWindowEventResult(reference<hash<auto>> result, list<list<float>> matrix) {
-        hash<auto> outputs = model.runFeatureMatrix(matrix, input_tensor);
+        hash<auto> outputs = runModelFeatureMatrix(matrix);
         int count = matrix.lsize();
 
         for (int i = 0; i < count; ++i) {
@@ -1269,7 +1318,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         hash<auto> last_outputs;
 
         for (int step = 0; step < causal_lm_max_new_tokens; ++step) {
-            hash<auto> outputs = model.runTensors(buildCausalLmInputs(token_ids,
+            hash<auto> outputs = runModelTensors(buildCausalLmInputs(token_ids,
                 attention_mask, token_type_ids));
             last_outputs = summarizeCausalLmOutputs(outputs);
             string logits_name = resolveCausalLmLogitsOutputName(outputs);
@@ -1645,20 +1694,45 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     }
 
     private string resolveTaskOutputName(hash<auto> model_output, list<string> plan_keys) {
-        *string rv = resolveOptionalTaskOutputName(model_output, plan_keys, ());
-        if (rv.val()) {
-            return rv;
+        *string planned = getPlannedTaskOutputName(plan_keys);
+        if (planned.val()) {
+            if (model_output.hasKey(planned)) {
+                return planned;
+            }
+            throw "PROCESSOR-ERROR",
+                sprintf("registry-model task %y requires ONNX output %y, but the "
+                    "current inference result contains only %y%s",
+                    execution_task, planned, sort(keys model_output),
+                    exists output_names
+                        ? sprintf("; include %y in output_names or use raw columns/tensor output mode",
+                            planned)
+                        : "");
         }
-        list<string> output_names = sort(keys model_output);
-        if (!output_names) {
+
+        list<string> returned_outputs = sort(keys model_output);
+        if (!returned_outputs) {
             throw "PROCESSOR-ERROR",
                 sprintf("registry-model task %y produced no ONNX outputs", execution_task);
         }
-        return output_names[0];
+        return returned_outputs[0];
     }
 
     private *string resolveOptionalTaskOutputName(hash<auto> model_output,
             list<string> plan_keys, list<string> preferred_names) {
+        *string planned = getPlannedTaskOutputName(plan_keys);
+        if (planned.val() && model_output.hasKey(planned)) {
+            return planned;
+        }
+
+        foreach string preferred in (preferred_names) {
+            if (model_output.hasKey(preferred)) {
+                return preferred;
+            }
+        }
+        return NOTHING;
+    }
+
+    private *string getPlannedTaskOutputName(list<string> plan_keys) {
         if (execution_plan) {
             foreach string key in (plan_keys) {
                 if (execution_plan.hasKey(key) && execution_plan{key}.val()) {
@@ -1676,12 +1750,6 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 }
             }
         }
-
-        foreach string preferred in (preferred_names) {
-            if (model_output.hasKey(preferred)) {
-                return preferred;
-            }
-        }
         return NOTHING;
     }
 
@@ -1695,7 +1763,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     #! Appends compact column output for one registry ONNX tensor inference window
     private appendTensorWindowColumnResult(reference<hash<auto>> result, list<list<float>> matrix,
             bool single_window) {
-        hash<auto> outputs = model.runFeatureMatrixTensors(matrix, input_tensor);
+        hash<auto> outputs = runModelFeatureMatrixTensors(matrix);
         int count = matrix.lsize();
         foreach string okey in (keys outputs) {
             appendTensorOutputColumns(\result, okey, cast<ML::Tensor>(outputs{okey}), count, single_window);
@@ -1746,7 +1814,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     private hash<auto> processTensorShapeWindows(list<list<float>> matrix, int count) {
         if (count <= window_size) {
-            return model.runFeatureMatrixTensors(matrix, input_tensor);
+            return runModelFeatureMatrixTensors(matrix);
         }
 
         list<hash<auto>> windows;
@@ -1756,7 +1824,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 end = count;
             }
             list<list<float>> window = matrix[start..(end - 1)];
-            push windows, model.runFeatureMatrixTensors(window, input_tensor);
+            push windows, runModelFeatureMatrixTensors(window);
         }
         return {
             "row_count": count,
@@ -1796,7 +1864,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             string dtype = model.getOnnxInputTensorDtype(tensor_name);
             inputs{tensor_name} = new ML::Tensor(window, NOTHING, dtype);
         }
-        return model.runTensors(inputs);
+        return runModelTensors(inputs);
     }
 
     #! Converts a tensor output to row-addressable values where possible

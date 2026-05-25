@@ -151,8 +151,16 @@ public:
     */
     DLLLOCAL QoreHashNode* run(const QoreHashNode* inputs, ExceptionSink* xsink);
 
+    //! Run inference with named input tensors and selected outputs
+    DLLLOCAL QoreHashNode* run(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink);
+
     //! Run inference and return outputs as ML::Tensor objects
     DLLLOCAL QoreHashNode* runTensors(const QoreHashNode* inputs, ExceptionSink* xsink);
+
+    //! Run inference and return selected outputs as ML::Tensor objects
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink);
 
     //! Creates a reusable ONNX Runtime I/O binding for this model
     DLLLOCAL QoreObject* createBinding(QoreProgram* pgm, ExceptionSink* xsink);
@@ -180,6 +188,10 @@ public:
         @return list of output hashes
     */
     DLLLOCAL QoreListNode* runBatch(const QoreListNode* batch, ExceptionSink* xsink);
+
+    //! Run batch inference with selected outputs
+    DLLLOCAL QoreListNode* runBatch(const QoreListNode* batch, const QoreListNode* output_names,
+        ExceptionSink* xsink);
 
     //! Get model info
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink* xsink) const;
@@ -297,7 +309,12 @@ private:
     DLLLOCAL QoreValue convertOutputTensorToTensor(Ort::Value& tensor, ExceptionSink* xsink);
 
     //! Shared inference implementation
-    DLLLOCAL QoreHashNode* runImpl(const QoreHashNode* inputs, bool return_tensors, ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* runImpl(const QoreHashNode* inputs, bool return_tensors,
+        const QoreListNode* output_names, ExceptionSink* xsink);
+
+    //! Resolves output metadata requested by the caller
+    DLLLOCAL std::vector<const TensorMeta*> selectOutputMeta(const QoreListNode* output_names,
+        ExceptionSink* xsink) const;
 
     //! Finds an input tensor by name
     DLLLOCAL const TensorMeta* findInputMeta(const char* name) const;
@@ -508,11 +525,23 @@ public:
     DLLLOCAL virtual ~QoreOnnxSessionPool();
 
     DLLLOCAL QoreHashNode* run(const QoreHashNode* inputs, ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* run(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* runTensors(const QoreHashNode* inputs, ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink);
     DLLLOCAL QoreListNode* runBatch(const QoreListNode* batch, ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* runBatch(const QoreListNode* batch, const QoreListNode* output_names,
+        ExceptionSink* xsink);
     DLLLOCAL QoreObject* runAsync(const QoreHashNode* inputs, QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL QoreObject* runAsync(const QoreHashNode* inputs, const QoreListNode* output_names,
+        QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL QoreObject* runTensorsAsync(const QoreHashNode* inputs, QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL QoreObject* runTensorsAsync(const QoreHashNode* inputs, const QoreListNode* output_names,
+        QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL QoreObject* runBatchAsync(const QoreListNode* batch, QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL QoreObject* runBatchAsync(const QoreListNode* batch, const QoreListNode* output_names,
+        QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* getPoolStats(ExceptionSink* xsink) const;
     DLLLOCAL void resetPoolStats();
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink* xsink);
@@ -568,11 +597,12 @@ private:
 
     struct SingleAsyncParams {
         DLLLOCAL SingleAsyncParams(QoreOnnxSessionPool* pool, QoreValue payload,
-            QorePromise* promise, AsyncOp op);
+            QoreValue output_names, QorePromise* promise, AsyncOp op);
         DLLLOCAL ~SingleAsyncParams();
 
         QoreOnnxSessionPool* pool;
         QoreValue payload;
+        QoreValue output_names;
         QorePromise* promise;
         AsyncOp op;
     };
@@ -595,8 +625,8 @@ private:
     DLLLOCAL void validateReady(ExceptionSink* xsink) const;
     DLLLOCAL size_t findAvailableUnlocked() const;
     DLLLOCAL void recordRun(size_t batch_items);
-    DLLLOCAL QoreObject* submitSingleAsync(QoreValue payload, AsyncOp op, const QoreTypeInfo* future_type,
-        QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL QoreObject* submitSingleAsync(QoreValue payload, QoreValue output_names, AsyncOp op,
+        const QoreTypeInfo* future_type, QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL QoreObject* submitDynamicRunAsync(const QoreHashNode* inputs, QoreProgram* pgm,
         ExceptionSink* xsink);
     DLLLOCAL void processDynamicRunQueue(ExceptionSink* xsink);
@@ -614,10 +644,13 @@ private:
 class QoreOnnxModel : public AbstractPrivateData {
 public:
     DLLLOCAL QoreHashNode* run(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* run(const QoreHashNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreObject* createBinding(QoreProgram*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* runBound(const QoreObject*, const QoreObject*, bool, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreListNode* runBatch(const QoreListNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink*) const { return nullptr; }
@@ -658,11 +691,23 @@ public:
 class QoreOnnxSessionPool : public AbstractPrivateData {
 public:
     DLLLOCAL QoreHashNode* run(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* run(const QoreHashNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreListNode* runBatch(const QoreListNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreObject* runAsync(const QoreHashNode*, QoreProgram*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreObject* runAsync(const QoreHashNode*, const QoreListNode*, QoreProgram*, ExceptionSink*) {
+        return nullptr;
+    }
     DLLLOCAL QoreObject* runTensorsAsync(const QoreHashNode*, QoreProgram*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreObject* runTensorsAsync(const QoreHashNode*, const QoreListNode*, QoreProgram*, ExceptionSink*) {
+        return nullptr;
+    }
     DLLLOCAL QoreObject* runBatchAsync(const QoreListNode*, QoreProgram*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreObject* runBatchAsync(const QoreListNode*, const QoreListNode*, QoreProgram*, ExceptionSink*) {
+        return nullptr;
+    }
     DLLLOCAL QoreHashNode* getPoolStats(ExceptionSink*) const { return nullptr; }
     DLLLOCAL void resetPoolStats() {}
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) { return nullptr; }

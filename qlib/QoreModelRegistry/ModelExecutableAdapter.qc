@@ -148,18 +148,26 @@ public class ModelExecutableAdapter {
         wrapped under \c prediction for a hash-shaped result.
 
         @param inputs tensor-name hash or native model input hash
+        @param output_names optional ONNX output tensor names to materialize;
+            omit to return all ONNX outputs
 
         @return output hash
     */
-    hash<auto> run(hash<auto> inputs) {
+    hash<auto> run(hash<auto> inputs, *list<string> output_names) {
         if (isOnnx()) {
-            return model.run(inputs);
+            return model.run(inputs, output_names);
+        }
+        if (exists output_names) {
+            throw "ML-REGISTRY-ERROR",
+                "output_names can only be used with ONNX Runtime registry models";
         }
         return {"prediction": model.predict(inputs)};
     }
 
     #! Runs ONNX inference with explicit tensor inputs and returns ML::Tensor outputs
     /** @param inputs tensor-name hash where each value is an @ref Qore::ML::Tensor
+        @param output_names optional output tensor names to materialize; when
+            omitted, all model outputs are returned
 
         @return output hash where each value is an @ref Qore::ML::Tensor
 
@@ -167,12 +175,12 @@ public class ModelExecutableAdapter {
 
         @since QoreModelRegistry 2.3
     */
-    hash<auto> runTensors(hash<auto> inputs) {
+    hash<auto> runTensors(hash<auto> inputs, *list<string> output_names) {
         if (!isOnnx()) {
             throw "ML-REGISTRY-ERROR",
                 "runTensors() requires an ONNX Runtime model";
         }
-        return model.runTensors(inputs);
+        return model.runTensors(inputs, output_names);
     }
 
     #! Runs a feature matrix through the wrapped model
@@ -182,15 +190,22 @@ public class ModelExecutableAdapter {
         @param matrix row-major feature matrix
         @param input_tensor optional ONNX input tensor name; when omitted, the
             first model input is used
+        @param output_names optional ONNX output tensor names to materialize;
+            omit to return all ONNX outputs
 
         @return output hash
 
         @throw ML-REGISTRY-ERROR if an ONNX model has no input tensors
     */
-    hash<auto> runFeatureMatrix(list<list<float>> matrix, *string input_tensor) {
+    hash<auto> runFeatureMatrix(list<list<float>> matrix, *string input_tensor,
+            *list<string> output_names) {
         if (isOnnx()) {
-            return tensorOutputsToRows(runFeatureMatrixTensors(matrix, input_tensor),
+            return tensorOutputsToRows(runFeatureMatrixTensors(matrix, input_tensor, output_names),
                 matrix.lsize());
+        }
+        if (exists output_names) {
+            throw "ML-REGISTRY-ERROR",
+                "output_names can only be used with ONNX Runtime registry models";
         }
         return {"prediction": model.predictMatrix(matrix)};
     }
@@ -204,6 +219,8 @@ public class ModelExecutableAdapter {
         @param matrix row-major feature matrix
         @param input_tensor optional ONNX input tensor name; when omitted, the
             first model input is used
+        @param output_names optional ONNX output tensor names to materialize;
+            omit to return all ONNX outputs
 
         @return output hash where each value is an @ref Qore::ML::Tensor
 
@@ -212,7 +229,8 @@ public class ModelExecutableAdapter {
 
         @since QoreModelRegistry 2.3
     */
-    hash<auto> runFeatureMatrixTensors(list<list<float>> matrix, *string input_tensor) {
+    hash<auto> runFeatureMatrixTensors(list<list<float>> matrix, *string input_tensor,
+            *list<string> output_names) {
         if (!isOnnx()) {
             throw "ML-REGISTRY-ERROR",
                 "runFeatureMatrixTensors() requires an ONNX Runtime model";
@@ -221,7 +239,7 @@ public class ModelExecutableAdapter {
         string tensor_name = resolveOnnxInputTensor(input_tensor);
         string dtype = resolveOnnxInputTensorDtype(tensor_name);
         ML::Tensor input(data: matrix, dtype: dtype);
-        return model.runTensors({tensor_name: input});
+        return model.runTensors({tensor_name: input}, output_names);
     }
 
     #! Runs a dense feature tensor through an ONNX model and returns ML::Tensor outputs
@@ -232,6 +250,8 @@ public class ModelExecutableAdapter {
         @param input dense input tensor
         @param input_tensor optional ONNX input tensor name; when omitted, the
             first model input is used
+        @param output_names optional ONNX output tensor names to materialize;
+            omit to return all ONNX outputs
 
         @return output hash where each value is an @ref Qore::ML::Tensor
 
@@ -241,7 +261,7 @@ public class ModelExecutableAdapter {
 
         @since QoreModelRegistry 2.3
     */
-    hash<auto> runFeatureTensor(ML::Tensor input, *string input_tensor) {
+    hash<auto> runFeatureTensor(ML::Tensor input, *string input_tensor, *list<string> output_names) {
         if (!isOnnx()) {
             throw "ML-REGISTRY-ERROR",
                 "runFeatureTensor() requires an ONNX Runtime model";
@@ -254,7 +274,7 @@ public class ModelExecutableAdapter {
                 sprintf("input tensor %y expects dtype %y, but the supplied tensor has dtype %y",
                     tensor_name, dtype, input.getDtype());
         }
-        return model.runTensors({tensor_name: input});
+        return model.runTensors({tensor_name: input}, output_names);
     }
 
     #! Returns the ML::Tensor dtype expected by an ONNX input tensor

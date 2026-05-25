@@ -1992,6 +1992,56 @@ const TensorMeta* QoreOnnxModel::findOutputMeta(const char* name) const {
     return nullptr;
 }
 
+std::vector<const TensorMeta*> QoreOnnxModel::selectOutputMeta(const QoreListNode* output_names,
+        ExceptionSink* xsink) const {
+    std::vector<const TensorMeta*> selected;
+    if (!output_names) {
+        selected.reserve(output_meta.size());
+        for (const auto& meta : output_meta) {
+            selected.push_back(&meta);
+        }
+        return selected;
+    }
+
+    if (!output_names->size()) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+            "output_names must contain at least one ONNX output name; omit output_names to request all outputs");
+        return {};
+    }
+
+    std::unordered_set<std::string> seen;
+    selected.reserve(output_names->size());
+    for (size_t i = 0; i < output_names->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking ONNX output names")) {
+            return {};
+        }
+        QoreStringValueHelper name(output_names->retrieveEntry(i));
+        const TensorMeta* meta = findOutputMeta(name->c_str());
+        if (!meta) {
+            std::string available;
+            for (size_t j = 0; j < output_meta.size(); ++j) {
+                if (j) {
+                    available += ", ";
+                }
+                available += output_meta[j].name;
+            }
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "unknown ONNX output name '%s' at output_names[%zu]; available outputs: %s",
+                name->c_str(), i, available.c_str());
+            return {};
+        }
+        if (!seen.insert(meta->name).second) {
+            xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                "duplicate ONNX output name '%s' at output_names[%zu]; output names must be unique because "
+                "results are returned in a hash keyed by output name",
+                meta->name.c_str(), i);
+            return {};
+        }
+        selected.push_back(meta);
+    }
+    return selected;
+}
+
 static int resolveFlatBufferShape(const TensorMeta& meta, size_t element_count,
         std::vector<int64_t>& shape, ExceptionSink* xsink) {
     shape = meta.shape;
@@ -3004,11 +3054,21 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value& tensor, Excepti
 }
 
 QoreHashNode* QoreOnnxModel::run(const QoreHashNode* inputs, ExceptionSink* xsink) {
-    return runImpl(inputs, false, xsink);
+    return run(inputs, nullptr, xsink);
+}
+
+QoreHashNode* QoreOnnxModel::run(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink) {
+    return runImpl(inputs, false, output_names, xsink);
 }
 
 QoreHashNode* QoreOnnxModel::runTensors(const QoreHashNode* inputs, ExceptionSink* xsink) {
-    return runImpl(inputs, true, xsink);
+    return runTensors(inputs, nullptr, xsink);
+}
+
+QoreHashNode* QoreOnnxModel::runTensors(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink) {
+    return runImpl(inputs, true, output_names, xsink);
 }
 
 QoreObject* QoreOnnxModel::createBinding(QoreProgram* pgm, ExceptionSink* xsink) {
@@ -3453,7 +3513,8 @@ QoreListNode* QoreOnnxIoBinding::getBoundOutputNames(ExceptionSink* xsink) const
     return stringVectorToList(bound_output_names, xsink);
 }
 
-QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_tensors, ExceptionSink* xsink) {
+QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_tensors,
+        const QoreListNode* requested_output_names, ExceptionSink* xsink) {
     if (!session) {
         xsink->raiseException("ML-ONNX-ERROR", "model is not loaded");
         return nullptr;
@@ -3957,9 +4018,14 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
     }
 
     // Build output names
+    std::vector<const TensorMeta*> selected_outputs = selectOutputMeta(requested_output_names, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     std::vector<const char*> output_names;
-    for (const auto& meta : output_meta) {
-        output_names.push_back(meta.name.c_str());
+    output_names.reserve(selected_outputs.size());
+    for (const TensorMeta* meta : selected_outputs) {
+        output_names.push_back(meta->name.c_str());
     }
 
     // Run inference
@@ -3982,7 +4048,7 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
         if (*xsink) {
             return nullptr;
         }
-        rv->setKeyValue(output_meta[i].name.c_str(), out_val, xsink);
+        rv->setKeyValue(selected_outputs[i]->name.c_str(), out_val, xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -3993,6 +4059,11 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
 }
 
 QoreListNode* QoreOnnxModel::runBatch(const QoreListNode* batch, ExceptionSink* xsink) {
+    return runBatch(batch, nullptr, xsink);
+}
+
+QoreListNode* QoreOnnxModel::runBatch(const QoreListNode* batch, const QoreListNode* output_names,
+        ExceptionSink* xsink) {
     if (!session) {
         xsink->raiseException("ML-ONNX-ERROR", "model is not loaded");
         return nullptr;
@@ -4006,7 +4077,7 @@ QoreListNode* QoreOnnxModel::runBatch(const QoreListNode* batch, ExceptionSink* 
                 "batch element %zu is not a hash", i);
             return nullptr;
         }
-        QoreHashNode* result = run(entry.get<const QoreHashNode>(), xsink);
+        QoreHashNode* result = run(entry.get<const QoreHashNode>(), output_names, xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -4027,8 +4098,8 @@ QoreOnnxSessionPool::AsyncRequest::~AsyncRequest() {
 }
 
 QoreOnnxSessionPool::SingleAsyncParams::SingleAsyncParams(QoreOnnxSessionPool* pool,
-        QoreValue payload, QorePromise* promise, AsyncOp op)
-        : pool(pool), payload(payload), promise(promise), op(op) {
+        QoreValue payload, QoreValue output_names, QorePromise* promise, AsyncOp op)
+        : pool(pool), payload(payload), output_names(output_names), promise(promise), op(op) {
     pool->ref();
     promise->ref();
 }
@@ -4036,6 +4107,7 @@ QoreOnnxSessionPool::SingleAsyncParams::SingleAsyncParams(QoreOnnxSessionPool* p
 QoreOnnxSessionPool::SingleAsyncParams::~SingleAsyncParams() {
     ExceptionSink xsink;
     payload.discard(&xsink);
+    output_names.discard(&xsink);
     promise->deref(&xsink);
     pool->deref(&xsink);
 }
@@ -4273,12 +4345,17 @@ void QoreOnnxSessionPool::recordRun(size_t batch_items) {
 }
 
 QoreHashNode* QoreOnnxSessionPool::run(const QoreHashNode* inputs, ExceptionSink* xsink) {
+    return run(inputs, nullptr, xsink);
+}
+
+QoreHashNode* QoreOnnxSessionPool::run(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink) {
     std::unique_ptr<Lease> lease = acquire(xsink);
     if (*xsink) {
         return nullptr;
     }
 
-    QoreHashNode* rv = sessions[lease->index]->run(inputs, xsink);
+    QoreHashNode* rv = sessions[lease->index]->run(inputs, output_names, xsink);
     if (!*xsink) {
         recordRun(1);
     }
@@ -4286,12 +4363,17 @@ QoreHashNode* QoreOnnxSessionPool::run(const QoreHashNode* inputs, ExceptionSink
 }
 
 QoreHashNode* QoreOnnxSessionPool::runTensors(const QoreHashNode* inputs, ExceptionSink* xsink) {
+    return runTensors(inputs, nullptr, xsink);
+}
+
+QoreHashNode* QoreOnnxSessionPool::runTensors(const QoreHashNode* inputs, const QoreListNode* output_names,
+        ExceptionSink* xsink) {
     std::unique_ptr<Lease> lease = acquire(xsink);
     if (*xsink) {
         return nullptr;
     }
 
-    QoreHashNode* rv = sessions[lease->index]->runTensors(inputs, xsink);
+    QoreHashNode* rv = sessions[lease->index]->runTensors(inputs, output_names, xsink);
     if (!*xsink) {
         recordRun(1);
     }
@@ -4299,6 +4381,11 @@ QoreHashNode* QoreOnnxSessionPool::runTensors(const QoreHashNode* inputs, Except
 }
 
 QoreListNode* QoreOnnxSessionPool::runBatch(const QoreListNode* batch, ExceptionSink* xsink) {
+    return runBatch(batch, nullptr, xsink);
+}
+
+QoreListNode* QoreOnnxSessionPool::runBatch(const QoreListNode* batch, const QoreListNode* output_names,
+        ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
     size_t total = batch->size();
     if (!total) {
@@ -4334,7 +4421,7 @@ QoreListNode* QoreOnnxSessionPool::runBatch(const QoreListNode* batch, Exception
             return nullptr;
         }
         ReferenceHolder<QoreListNode> chunk_result(
-            sessions[lease->index]->runBatch(*chunk, xsink), xsink);
+            sessions[lease->index]->runBatch(*chunk, output_names, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -4413,15 +4500,16 @@ void QoreOnnxSessionPool::singleAsyncThread(ExceptionSink* xsink, void* arg) {
 
     ExceptionSink run_xsink;
     QoreValue rv;
+    const QoreListNode* output_names = params->output_names.get<const QoreListNode>();
     switch (params->op) {
         case AsyncOp::Run:
-            rv = params->pool->run(params->payload.get<const QoreHashNode>(), &run_xsink);
+            rv = params->pool->run(params->payload.get<const QoreHashNode>(), output_names, &run_xsink);
             break;
         case AsyncOp::RunTensors:
-            rv = params->pool->runTensors(params->payload.get<const QoreHashNode>(), &run_xsink);
+            rv = params->pool->runTensors(params->payload.get<const QoreHashNode>(), output_names, &run_xsink);
             break;
         case AsyncOp::RunBatch:
-            rv = params->pool->runBatch(params->payload.get<const QoreListNode>(), &run_xsink);
+            rv = params->pool->runBatch(params->payload.get<const QoreListNode>(), output_names, &run_xsink);
             break;
     }
 
@@ -4549,7 +4637,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
     }
 }
 
-QoreObject* QoreOnnxSessionPool::submitSingleAsync(QoreValue payload, AsyncOp op,
+QoreObject* QoreOnnxSessionPool::submitSingleAsync(QoreValue payload, QoreValue output_names, AsyncOp op,
         const QoreTypeInfo* future_type, QoreProgram* pgm, ExceptionSink* xsink) {
     ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
     QorePromise* promise = *promise_holder;
@@ -4557,10 +4645,11 @@ QoreObject* QoreOnnxSessionPool::submitSingleAsync(QoreValue payload, AsyncOp op
         xsink);
     if (*xsink) {
         payload.discard(xsink);
+        output_names.discard(xsink);
         return nullptr;
     }
 
-    SingleAsyncParams* params = new SingleAsyncParams(this, payload, promise, op);
+    SingleAsyncParams* params = new SingleAsyncParams(this, payload, output_names, promise, op);
     int tid = q_start_thread(xsink, singleAsyncThread, params);
     if (tid == -1) {
         delete params;
@@ -4619,22 +4708,40 @@ QoreObject* QoreOnnxSessionPool::submitDynamicRunAsync(const QoreHashNode* input
 
 QoreObject* QoreOnnxSessionPool::runAsync(const QoreHashNode* inputs, QoreProgram* pgm,
         ExceptionSink* xsink) {
-    if (dynamic_batch_size > 1 && dynamic_batch_wait_ms > 0) {
+    return runAsync(inputs, nullptr, pgm, xsink);
+}
+
+QoreObject* QoreOnnxSessionPool::runAsync(const QoreHashNode* inputs, const QoreListNode* output_names,
+        QoreProgram* pgm, ExceptionSink* xsink) {
+    if (!output_names && dynamic_batch_size > 1 && dynamic_batch_wait_ms > 0) {
         return submitDynamicRunAsync(inputs, pgm, xsink);
     }
-    return submitSingleAsync(QoreValue(inputs->hashRefSelf()), AsyncOp::Run, autoHashTypeInfo, pgm,
-        xsink);
+    return submitSingleAsync(QoreValue(inputs->hashRefSelf()),
+        output_names ? QoreValue(output_names->listRefSelf()) : QoreValue(), AsyncOp::Run,
+        autoHashTypeInfo, pgm, xsink);
 }
 
 QoreObject* QoreOnnxSessionPool::runTensorsAsync(const QoreHashNode* inputs, QoreProgram* pgm,
         ExceptionSink* xsink) {
-    return submitSingleAsync(QoreValue(inputs->hashRefSelf()), AsyncOp::RunTensors, autoHashTypeInfo,
-        pgm, xsink);
+    return runTensorsAsync(inputs, nullptr, pgm, xsink);
+}
+
+QoreObject* QoreOnnxSessionPool::runTensorsAsync(const QoreHashNode* inputs,
+        const QoreListNode* output_names, QoreProgram* pgm, ExceptionSink* xsink) {
+    return submitSingleAsync(QoreValue(inputs->hashRefSelf()),
+        output_names ? QoreValue(output_names->listRefSelf()) : QoreValue(), AsyncOp::RunTensors,
+        autoHashTypeInfo, pgm, xsink);
 }
 
 QoreObject* QoreOnnxSessionPool::runBatchAsync(const QoreListNode* batch, QoreProgram* pgm,
         ExceptionSink* xsink) {
-    return submitSingleAsync(QoreValue(batch->listRefSelf()), AsyncOp::RunBatch,
+    return runBatchAsync(batch, nullptr, pgm, xsink);
+}
+
+QoreObject* QoreOnnxSessionPool::runBatchAsync(const QoreListNode* batch,
+        const QoreListNode* output_names, QoreProgram* pgm, ExceptionSink* xsink) {
+    return submitSingleAsync(QoreValue(batch->listRefSelf()),
+        output_names ? QoreValue(output_names->listRefSelf()) : QoreValue(), AsyncOp::RunBatch,
         qore_get_complex_list_type(autoHashTypeInfo), pgm, xsink);
 }
 

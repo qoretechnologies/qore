@@ -365,7 +365,8 @@ module DataProviderML {
                     "can be exported to ONNX format and deployed here for real-time scoring "
                     "of loan applications. Records accumulate in a batch; when full, all are "
                     "passed through the model. Output fields depend on the specific model "
-                    "(e.g., class probabilities, regression values, embeddings).",
+                    "(e.g., class probabilities, regression values, embeddings); use "
+                    "`output_names` to materialize only selected ONNX outputs.",
                 "action_code": DPAT_PIPELINE_PROCESSOR,
                 "processor_capabilities": DPC_AGGREGATE,
                 "cls": "DataProviderML::QoreOnnxModelProcessor",
@@ -388,7 +389,7 @@ module DataProviderML {
                         "input_tensor", "execution_providers",
                         "cuda_device_id", "intra_op_threads",
                         "inter_op_threads", "graph_optimization_level",
-                        "log_severity", "output_mode", "include_input_fields",
+                        "log_severity", "output_names", "output_mode", "include_input_fields",
                     }, {
                         "loc": "constructor",
                     }
@@ -408,7 +409,8 @@ module DataProviderML {
                 "in the registry (KMeans, LinearRegression, IsolationForest, etc.). "
                 "The model is loaded once and reused for all subsequent batches. "
                 "Specify `tag` to load a specific tagged version (e.g., 'production') "
-                "or `version` for a specific version ID.",
+                "or `version` for a specific version ID. For registry-backed ONNX models, "
+                "use `output_names` to materialize only selected output tensors.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRegistryModelProcessor",
@@ -428,8 +430,9 @@ module DataProviderML {
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
-                    "version", "tag", "tenant_id", "input_tensor", "output_mode", "include_input_fields",
-                    "prompt_field", "max_new_tokens", "stop_token_ids", "registry_tokenizer_artifact_name",
+                    "version", "tag", "tenant_id", "input_tensor", "output_names", "output_mode",
+                    "include_input_fields", "prompt_field", "max_new_tokens", "stop_token_ids",
+                    "registry_tokenizer_artifact_name",
                 }, {
                     "loc": "constructor",
                 }
@@ -1823,6 +1826,7 @@ DataProviderML::QoreRegistryModelProcessor proc({
     "fields": ("income", "debt_ratio", "history_months"),
     "window_size": 1024,
     "output_mode": "columns",
+    "output_names": ("probabilities",),
 });
 
 DataFrame::DataFrame batch({
@@ -1832,7 +1836,7 @@ DataFrame::DataFrame batch({
 });
 
 auto scored = proc.processRecordsShape(batch, DataProviderShape::DataFrameBlock);
-list<auto> probabilities = scored.getColumn("probabilities");
+list<auto> probabilities = scored.getColumn("probabilities_1");
     @endcode
 
     @par Multi-input ONNX example:
@@ -1848,12 +1852,19 @@ DataProviderML::QoreRegistryModelProcessor proc({
     },
     "window_size": 256,
     "output_mode": "columns",
+    "output_names": ("logits",),
     "include_input_fields": False,
 });
 
 auto logits = proc.processRecordsShape(token_batches,
     DataProviderShape::DataFrameBlock);
     @endcode
+
+    In event mode, task-aware registry plans such as \c regression and
+    \c sequence-classification require their planned value or label output to
+    be included in \c output_names. Use \c output_mode = "columns" or
+    \c output_mode = "tensor" when a pipeline needs raw selected tensors
+    without task-specific event shaping.
 
     @par Registry causal-LM example:
     @code{.py}
@@ -1913,6 +1924,10 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       \c "columns", \c "dataframe", and \c "tensor"; single-column dense input
       with the expected ONNX dtype uses a direct tensor path to avoid row matrix
       materialization
+    - \c onnx-model and registry-backed ONNX \c registry-model processors accept
+      \c output_names to request selected ONNX outputs only; this avoids
+      materializing unused labels, scores, logits, or embeddings in multi-output
+      models
     - multi-column dense ONNX inputs are packed with
       @ref Qore::ML::Tensor::fromColumns() "ML::Tensor::fromColumns()" to avoid
       row hash and nested list materialization
