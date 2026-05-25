@@ -68,6 +68,17 @@ printf("inputs=%y valid=%y avg=%fms\n",
     inspection.inputs, validation.valid, benchmark.average_ms);
     @endcode
 
+    @par Profile Summary Example
+    @code{.q}
+hash<QoreOnnxTools::OnnxProfileSummary> profile =
+    QoreOnnxTools::OnnxProfileTools::summarizeProfile(
+        "/var/tmp/onnxruntime_profile.json");
+foreach hash<QoreOnnxTools::OnnxProfileAggregateInfo> op in (profile.operators) {
+    printf("op=%s provider=%s total=%fms count=%d\n",
+        op.name, op.provider, op.total_ms, op.count);
+}
+    @endcode
+
     @par Dynamic Quantization Example
     @code{.q}
 hash<QoreOnnxTools::OnnxQuantizationResult> info =
@@ -106,6 +117,7 @@ qore-onnx check-python --python /opt/onnx/bin/python3
 qore-onnx inspect --json /models/customer-score.onnx
 qore-onnx validate /models/customer-score.onnx
 qore-onnx benchmark --runs 100 /models/customer-score.onnx
+qore-onnx profile --top-limit 20 /var/tmp/onnxruntime_profile.json
 qore-onnx optimize /models/customer-score.onnx /models/customer-score-opt.onnx
 qore-onnx package /models/customer-score.onnx /srv/model-packages/customer-score
 qore-onnx quantize --method dynamic --weight-type QInt8 \
@@ -120,6 +132,8 @@ qore-onnx quantize --method static --calibration-data calibration.json \
     - Initial release with ONNX Runtime Python quantization orchestration
     - Added dependency diagnostics and dry-run planning for quantization
     - Added ONNX model inspection, validation, optimization, and benchmark helpers
+    - Added ONNX Runtime profile summarization by operator, provider, node, and
+      session event
     - Added deterministic ONNX package assembly with companion artifact
       classification and manifest generation
 */

@@ -31,6 +31,10 @@
 %requires QoreOnnxTools
 %requires ml
 
+%try-module json
+%define NoJson
+%endtry
+
 %exec-class QoreOnnxToolsTest
 
 class QoreOnnxToolsTest inherits QUnit::Test {
@@ -42,6 +46,7 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         addTestCase("ONNX model inspection and validation", \modelInspectionValidationTest());
         addTestCase("ONNX benchmark with generated inputs", \modelBenchmarkTest());
         addTestCase("ONNX optimization helper", \modelOptimizationTest());
+        addTestCase("ONNX profile summarization", \onnxProfileSummaryTest());
         addTestCase("ONNX package creation", \onnxPackageCreationTest());
         addTestCase("Unsafe source package classification", \unsafePackageClassificationTest());
         set_return_value(main());
@@ -149,6 +154,35 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertFalse(result.ort_format);
         assertTrue(result.validation.valid);
         assertEq("ONNX", result.optimization.output_format);
+    }
+
+    onnxProfileSummaryTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        FsUtil::TmpFile prefix("qore-onnx-tools-profile-", "");
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "profile_file_prefix": prefix.path,
+        });
+        model.run({"X": ((6.0,),)});
+        string profile_path = model.endProfiling();
+        on_exit { unlink(profile_path); }
+
+        hash<QoreOnnxTools::OnnxProfileSummary> summary =
+            QoreOnnxTools::OnnxProfileTools::summarizeProfile(profile_path);
+        assertEq(profile_path, summary.profile_path);
+        assertTrue(summary.event_count > 0);
+        assertTrue(summary.node_event_count > 0);
+        assertTrue(summary.session_event_count > 0);
+        assertTrue(summary.total_node_us > 0);
+        assertTrue(summary.total_node_ms > 0.0);
+        assertTrue(summary.operator_names.contains("Gemm"));
+        assertTrue(summary.provider_names.contains("CPUExecutionProvider"));
+        assertEq("Gemm", summary.operators[0].name);
+        assertEq("CPUExecutionProvider", summary.providers[0].name);
+        assertTrue(summary.nodes[0].total_us > 0);
+        assertTrue(summary.sessions[0].total_us > 0);
     }
 
     onnxPackageCreationTest() {

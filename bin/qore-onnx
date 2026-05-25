@@ -68,6 +68,7 @@ class QoreOnnxCli {
             "reduce_range": "reduce-range",
             "runs": "runs=i",
             "session_config": "session-config=s",
+            "top_limit": "top-limit=i",
             "validate": "validate!",
             "version": "V,version",
             "warmup_runs": "warmup-runs=i",
@@ -104,6 +105,9 @@ class QoreOnnxCli {
                     break;
                 case "benchmark":
                     benchmark(opts);
+                    break;
+                case "profile":
+                    profile(opts);
                     break;
                 case "optimize":
                     optimize(opts);
@@ -164,6 +168,13 @@ class QoreOnnxCli {
         requireInput("benchmark", input_path);
         writeResult(QoreOnnxTools::OnnxModelTools::benchmark(input_path,
             buildBenchmarkOptions(opts)), opts);
+    }
+
+    private static nothing profile(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("profile", input_path);
+        writeResult(QoreOnnxTools::OnnxProfileTools::summarizeProfile(input_path,
+            exists opts.top_limit ? opts.top_limit : 20), opts);
     }
 
     private static nothing optimize(hash<auto> opts) {
@@ -301,6 +312,7 @@ class QoreOnnxCli {
         printf("  qore-onnx inspect [--session-config PATH] [--json] INPUT.onnx\n");
         printf("  qore-onnx validate [--session-config PATH] [--json] INPUT.onnx\n");
         printf("  qore-onnx benchmark [OPTIONS] INPUT.onnx\n");
+        printf("  qore-onnx profile [--top-limit N] [--json] PROFILE.json\n");
         printf("  qore-onnx optimize [OPTIONS] INPUT.onnx OUTPUT.onnx\n");
         printf("  qore-onnx package [OPTIONS] INPUT.onnx|PACKAGE_DIR OUTPUT_DIR\n");
         printf("  qore-onnx quantize [OPTIONS] INPUT.onnx OUTPUT.onnx\n\n");
@@ -312,6 +324,8 @@ class QoreOnnxCli {
         printf("  --warmup-runs N                  Warmup inference runs, default 1\n");
         printf("  --benchmark-inputs PATH          JSON input hash; generated when omitted\n");
         printf("  --keep-output                    Include the final output in benchmark results\n\n");
+        printf("Profile options:\n");
+        printf("  --top-limit N                    Maximum node/session rows, default 20\n\n");
         printf("Optimize options:\n");
         printf("  --ort-format                     Save optimized artifact in ORT format\n");
         printf("  --force                          Overwrite output file\n");

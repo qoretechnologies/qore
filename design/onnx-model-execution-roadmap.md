@@ -212,8 +212,9 @@ Acceptance checks:
 
 ## Phase 5: Profiling and Observability
 
-Status: raw profiling controls and Qore-side counters implemented; structured
-operator profile summarization remains pending.
+Status: raw profiling controls, Qore-side counters, and structured profile
+summarization implemented; DataProviderML diagnostics integration remains
+pending.
 
 Expose ONNX Runtime profiling and Qore-level inference metrics.
 
@@ -226,8 +227,9 @@ APIs:
 - `ML::OnnxModel::getInferenceStats()`: implemented for run counts, batch item
   counts, total/last/max/average latency, and profile file state.
 - `ML::OnnxModel::resetInferenceStats()`: implemented.
-- structured profile summary parser: pending; the raw ONNX Runtime JSON profile
-  file is currently returned.
+- `QoreOnnxTools::OnnxProfileTools::summarizeProfile()`: implemented for ONNX Runtime
+  Chrome-trace JSON profiles with operator, provider, node, and session
+  aggregates.
 
 Metrics:
 
@@ -242,8 +244,8 @@ Acceptance checks:
 
 - ONNX Runtime profile files are generated and exposed to Qore callers.
 - Qore-side inference counters and latency stats are available as Qore data.
-- Structured operator-level profile parsing and DataProviderML diagnostics
-  integration remain pending.
+- Structured operator-level profile parsing is available through
+  QoreOnnxTools; DataProviderML diagnostics integration remains pending.
 
 ## Phase 6: Quantization and Calibration
 
