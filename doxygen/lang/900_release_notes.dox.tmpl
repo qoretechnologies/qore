@@ -2068,6 +2068,11 @@ foreach string module_name in (registry.getProcessModules()) {
       - ML::Tensor::reshape(), ML::Tensor::sliceRows(), and
         ML::Tensor::concatRows() support zero-copy tensor reshaping, row slicing,
         and native mini-batch assembly for model execution
+      - ML::Tensor::sigmoid(), ML::Tensor::softmax(), ML::Tensor::argmax(),
+        ML::Tensor::topK(), ML::Tensor::poolTokenEmbeddings(), and
+        ML::Tensor::l2NormalizeRows() provide dense ONNX postprocessing for
+        classifier logits, top-k selection, and transformer embedding pooling
+        without nested list materialization
       - ONNX inference supports float, double, int8, int16, int32, int64, and bool
         tensor input/output conversion
       - OnnxModel automatic provider selection falls back to CPU when an advertised

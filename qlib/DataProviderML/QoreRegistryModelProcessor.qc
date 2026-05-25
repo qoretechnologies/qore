@@ -1367,9 +1367,68 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     #! Selects the highest-scoring token ID from common causal-LM logits shapes
     private static int selectGreedyToken(auto logits, int input_token_count) {
         if (logits instanceof ML::Tensor) {
-            logits = cast<ML::Tensor>(logits).toList();
+            return QoreRegistryModelProcessor::selectGreedyTokenFromTensor(
+                cast<ML::Tensor>(logits), input_token_count);
         }
         auto row = QoreRegistryModelProcessor::selectLogitRow(logits, input_token_count);
+        return QoreRegistryModelProcessor::selectBestTokenFromLogitRow(row);
+    }
+
+    #! Selects the highest-scoring token ID from tensor logits without materializing the full vocab scores
+    private static int selectGreedyTokenFromTensor(ML::Tensor logits, int input_token_count) {
+        list<int> shape = logits.getShape();
+        if (!shape || shape[shape.lsize() - 1] <= 0) {
+            throw "PROCESSOR-ERROR",
+                sprintf("registry-model task 'causal-lm' expected logits with a non-empty vocab axis; got shape %y",
+                    shape);
+        }
+
+        auto indices = logits.argmax(axis: -1).toList();
+        switch (shape.lsize()) {
+            case 1:
+                return indices.toInt();
+            case 2: {
+                if (indices.typeCode() != NT_LIST || !indices) {
+                    throw "PROCESSOR-ERROR",
+                        sprintf("registry-model task 'causal-lm' expected argmax token IDs for logits shape %y; got %y",
+                            shape, indices);
+                }
+                int idx = shape[0] == 1
+                    ? 0
+                    : QoreRegistryModelProcessor::clampSequenceIndex(input_token_count, indices.lsize());
+                return indices[idx].toInt();
+            }
+            case 3: {
+                if (indices.typeCode() != NT_LIST || !indices || indices[0].typeCode() != NT_LIST || !indices[0]) {
+                    throw "PROCESSOR-ERROR",
+                        sprintf("registry-model task 'causal-lm' expected batch token IDs for logits shape %y; got %y",
+                            shape, indices);
+                }
+                auto sequence_indices = indices[0];
+                int idx = QoreRegistryModelProcessor::clampSequenceIndex(input_token_count,
+                    sequence_indices.lsize());
+                return sequence_indices[idx].toInt();
+            }
+        }
+
+        auto row = QoreRegistryModelProcessor::selectLogitRow(logits.toList(), input_token_count);
+        return QoreRegistryModelProcessor::selectBestTokenFromLogitRow(row);
+    }
+
+    #! Selects the final sequence index for causal-LM outputs
+    private static int clampSequenceIndex(int input_token_count, int row_count) {
+        int idx = input_token_count - 1;
+        if (idx < 0) {
+            idx = 0;
+        }
+        if (idx >= row_count) {
+            idx = row_count - 1;
+        }
+        return idx;
+    }
+
+    #! Selects the maximum-scoring token ID from one logits row
+    private static int selectBestTokenFromLogitRow(auto row) {
         if (row.typeCode() != NT_LIST || !row) {
             throw "PROCESSOR-ERROR",
                 sprintf("registry-model task 'causal-lm' expected a non-empty logits vector; got %y",
@@ -1402,26 +1461,14 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         }
         if (first[0].typeCode() == NT_LIST) {
             list<auto> sequence_rows = first;
-            int idx = input_token_count - 1;
-            if (idx < 0) {
-                idx = 0;
-            }
-            if (idx >= sequence_rows.lsize()) {
-                idx = sequence_rows.lsize() - 1;
-            }
+            int idx = QoreRegistryModelProcessor::clampSequenceIndex(input_token_count, sequence_rows.lsize());
             return sequence_rows[idx];
         }
 
         if (logits.lsize() == 1) {
             return first;
         }
-        int idx = input_token_count - 1;
-        if (idx < 0) {
-            idx = 0;
-        }
-        if (idx >= logits.lsize()) {
-            idx = logits.lsize() - 1;
-        }
+        int idx = QoreRegistryModelProcessor::clampSequenceIndex(input_token_count, logits.lsize());
         return logits[idx];
     }
 

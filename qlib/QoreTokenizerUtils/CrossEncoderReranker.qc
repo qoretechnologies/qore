@@ -283,43 +283,70 @@ public class CrossEncoderReranker {
 
             hash<auto> result = onnx_model.runTensors(inputs);
 
-            # Extract logits and apply sigmoid
+            # Extract logits and apply the configured activation function.
             # Cross-encoder models typically output logits in a "logits" key
-            # or a single unnamed output; handle both
+            # or a single unnamed output; handle both.
             auto logits = result.logits ?? result{result.firstKey()};
-            logits = logits.toList();
-
-            if (logits.typeCode() == NT_LIST) {
-                foreach auto logit_row in (logits) {
-                    float raw;
-                    if (logit_row.typeCode() == NT_LIST) {
-                        # Shape [batch, 1] or [batch, num_labels]
-                        raw = logit_row[0].toFloat();
-                    } else {
-                        raw = logit_row.toFloat();
-                    }
-                    # Apply configured activation function
-                    switch (activation) {
-                        case "sigmoid":
-                            push all_scores, 1.0 / (1.0 + exp(-raw));
-                            break;
-                        case "none":
-                            push all_scores, raw;
-                            break;
-                        case "softmax":
-                            # For single-output models, softmax degenerates to sigmoid
-                            push all_scores, 1.0 / (1.0 + exp(-raw));
-                            break;
-                        default:
-                            push all_scores, 1.0 / (1.0 + exp(-raw));
-                    }
-                }
+            foreach float score in (scoresFromLogits(logits)) {
+                push all_scores, score;
             }
 
             offset = end;
         }
 
         return all_scores;
+    }
+
+    #! Converts ONNX logits to relevance scores while avoiding nested list materialization where possible
+    private list<float> scoresFromLogits(auto logits) {
+        if (logits instanceof ML::Tensor) {
+            ML::Tensor tensor = cast<ML::Tensor>(logits);
+            list<int> shape = tensor.getShape();
+            bool simple = shape.lsize() == 1 || (shape.lsize() == 2 && shape[1] == 1);
+            if (simple) {
+                list<float> rv = ();
+                auto values = tensor.getBuffer().toList();
+                foreach auto value in (values) {
+                    push rv, applyActivation(value.toFloat());
+                }
+                return rv;
+            }
+            return scoresFromListLogits(tensor.toList());
+        }
+        return scoresFromListLogits(logits);
+    }
+
+    #! Converts row/list logits to relevance scores using the established fallback semantics
+    private list<float> scoresFromListLogits(auto logits) {
+        list<float> rv = ();
+        if (logits.typeCode() == NT_LIST) {
+            foreach auto logit_row in (logits) {
+                float raw;
+                if (logit_row.typeCode() == NT_LIST) {
+                    # Shape [batch, 1] or [batch, num_labels]
+                    raw = logit_row[0].toFloat();
+                } else {
+                    raw = logit_row.toFloat();
+                }
+                push rv, applyActivation(raw);
+            }
+        }
+        return rv;
+    }
+
+    #! Applies the configured scalar activation function
+    private float applyActivation(float raw) {
+        switch (activation) {
+            case "sigmoid":
+                return 1.0 / (1.0 + exp(-raw));
+            case "none":
+                return raw;
+            case "softmax":
+                # For single-output models, softmax degenerates to sigmoid.
+                return 1.0 / (1.0 + exp(-raw));
+            default:
+                return 1.0 / (1.0 + exp(-raw));
+        }
     }
 
     #! Builds ONNX Runtime tensor inputs from dense tokenizer buffers

@@ -119,6 +119,44 @@ public namespace OnnxBench {
         return rows * 160;
     }
 
+    public int sub tensorPostprocessRows() {
+        *string env_rows = ENV.QORE_BENCH_TENSOR_POSTPROCESS_ROWS;
+        return env_rows ? env_rows.toInt() : 256;
+    }
+
+    public int sub tensorPostprocessTokens() {
+        *string env_tokens = ENV.QORE_BENCH_TENSOR_POSTPROCESS_TOKENS;
+        return env_tokens ? env_tokens.toInt() : 64;
+    }
+
+    public int sub tensorPostprocessDim() {
+        *string env_dim = ENV.QORE_BENCH_TENSOR_POSTPROCESS_DIM;
+        return env_dim ? env_dim.toInt() : 64;
+    }
+
+    public int sub approxTensorPostprocessBytes(int rows, int tokens, int dim) {
+        return rows * tokens * ((dim * 4) + 8) + rows * dim * 4;
+    }
+
+    public buffer<float32> sub makeTokenHiddenStateBuffer(int rows, int tokens, int dim) {
+        int total = rows * tokens * dim;
+        buffer<float32> values = buffer<float32>::sized(total);
+        for (int i = 0; i < total; ++i) {
+            values[i] = ((i % 97).toFloat() - 48.0) / 32.0;
+        }
+        return values;
+    }
+
+    public buffer<int64> sub makeTokenMaskBuffer(int rows, int tokens) {
+        int total = rows * tokens;
+        buffer<int64> values = buffer<int64>::sized(total);
+        for (int i = 0; i < total; ++i) {
+            int token = i % tokens;
+            values[i] = (token && token < tokens - 3) ? 1 : 0;
+        }
+        return values;
+    }
+
     public list<list<float>> sub makeNestedInput(int rows) {
         list<list<float>> input;
         for (int i = 0; i < rows; ++i) {

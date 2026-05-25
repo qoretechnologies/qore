@@ -240,42 +240,22 @@ public class EmbeddingModel {
                 "padding": "batch_longest",
             });
 
+            ML::Tensor attention_mask = ML::Tensor::fromBuffer(token_batch.attention_mask, token_batch.shape);
             hash<auto> inputs = makeOnnxTokenTensorInputs(token_batch);
 
             hash<auto> result = onnx_model.runTensors(inputs);
 
             # Get the last hidden state (typically the first output)
-            auto hidden_states = result.last_hidden_state ?? result{result.firstKey()};
-            hidden_states = hidden_states.toList();
+            ML::Tensor hidden_states = result.last_hidden_state ?? result{result.firstKey()};
+            ML::Tensor normalized = hidden_states.poolTokenEmbeddings(
+                attention_mask: attention_mask, strategy: pooling_strategy).l2NormalizeRows();
+            list<int> normalized_shape = normalized.getShape();
+            if (!dimension && normalized_shape.size() > 1) {
+                dimension = normalized_shape[1];
+            }
 
-            list<list<int>> batch_attention_mask = EmbeddingModel::makeMaskRows(token_batch);
-
-            # Pool and L2-normalize using C++ vector math from ml module
-            for (int i = 0; i < token_batch.rows; ++i) {
-                list<list<float>> token_embeddings = cast<list<list<float>>>(hidden_states[i]);
-                list<float> pooled;
-                switch (pooling_strategy) {
-                    case "cls":
-                        # CLS token pooling — use the first token's embedding
-                        pooled = token_embeddings[0];
-                        break;
-                    case "max":
-                        # Max pooling — element-wise max across masked tokens
-                        pooled = ML::ml_max_pool(
-                            token_embeddings, batch_attention_mask[i]);
-                        break;
-                    default:
-                        # Mean pooling (default)
-                        pooled = ML::ml_mean_pool(
-                            token_embeddings, batch_attention_mask[i]);
-                }
-                list<float> normalized = ML::ml_l2_normalize(pooled);
-
-                if (!dimension) {
-                    dimension = normalized.size();
-                }
-
-                push all_embeddings, normalized;
+            foreach list<float> embedding in (normalized.toList()) {
+                push all_embeddings, embedding;
             }
 
             offset = end;
@@ -312,22 +292,6 @@ public class EmbeddingModel {
             rv{input.name} = True;
         }
         return rv;
-    }
-
-    #! Converts the dense attention mask buffer to per-row lists for pooling
-    private static list<list<int>> makeMaskRows(hash<Tokenizer::TokenizerModelInputBatch> token_batch) {
-        list<int> flat_mask = token_batch.attention_mask.toList();
-        list<list<int>> rows = ();
-        int offset = 0;
-        for (int i = 0; i < token_batch.rows; ++i) {
-            if (token_batch.columns) {
-                push rows, flat_mask[offset .. offset + token_batch.columns - 1];
-                offset += token_batch.columns;
-            } else {
-                push rows, ();
-            }
-        }
-        return rows;
     }
 
     #! Embeds texts via HTTP endpoint

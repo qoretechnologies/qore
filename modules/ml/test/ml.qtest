@@ -43,6 +43,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("ml_get_capabilities", \capabilitiesTest());
         addTestCase("Tensor basics", \tensorBasicTest());
         addTestCase("Tensor string dtype", \tensorStringTest());
+        addTestCase("Tensor native postprocessing", \tensorPostprocessingTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -487,6 +488,69 @@ public class MlTest inherits QUnit::Test {
         ML::Tensor inferred(data: ("red", "green", "blue"));
         assertEq("string", inferred.getDtype());
         assertEq(("red", "green", "blue"), inferred.toList());
+    }
+
+    tensorPostprocessingTest() {
+        ML::Tensor logits(data: new buffer<float32>((0.0, 2.0, -2.0, 1.0)), shape: (2, 2));
+
+        ML::Tensor sigmoid = logits.sigmoid();
+        assertEq((2, 2), sigmoid.getShape());
+        list<auto> sigmoid_values = sigmoid.toList();
+        assertFloat(0.5, sigmoid_values[0][0], 1e-5);
+        assertFloat(1.0 / (1.0 + exp(-2.0)), sigmoid_values[0][1], 1e-5);
+
+        ML::Tensor softmax = logits.softmax();
+        list<auto> probs = softmax.toList();
+        assertFloat(1.0, probs[0][0] + probs[0][1], 1e-5);
+        assertTrue(probs[0][1] > probs[0][0], "softmax should preserve row ordering");
+
+        ML::Tensor argmax = logits.argmax();
+        assertEq((2,), argmax.getShape());
+        assertEq((1, 1), argmax.toList());
+
+        hash<auto> top = logits.topK(k: 1);
+        assertTrue(top.values instanceof ML::Tensor, "topK values should be a Tensor");
+        assertTrue(top.indices instanceof ML::Tensor, "topK indices should be a Tensor");
+        assertEq((2, 1), top.values.getShape());
+        assertEq(((2.0,), (1.0,)), top.values.toList());
+        assertEq(((1,), (1,)), top.indices.toList());
+
+        ML::Tensor hidden(data: new buffer<float32>((
+            1.0, 2.0, 3.0,
+            3.0, 4.0, 5.0,
+            100.0, 100.0, 100.0,
+            2.0, 0.0, 0.0,
+            4.0, 0.0, 0.0,
+            0.0, 0.0, 0.0
+        )), shape: (2, 3, 3));
+        ML::Tensor mask(data: new buffer<int64>((1, 1, 0, 1, 1, 0)), shape: (2, 3));
+        ML::Tensor pooled = hidden.poolTokenEmbeddings(attention_mask: mask, strategy: "mean");
+        assertEq((2, 3), pooled.getShape());
+        assertEq(((2.0, 3.0, 4.0), (3.0, 0.0, 0.0)), pooled.toList());
+
+        ML::Tensor max_pooled = hidden.poolTokenEmbeddings(attention_mask: mask, strategy: "max");
+        assertEq(((3.0, 4.0, 5.0), (4.0, 0.0, 0.0)), max_pooled.toList());
+
+        ML::Tensor cls_pooled = hidden.poolTokenEmbeddings(mask, "cls");
+        assertEq(((1.0, 2.0, 3.0), (2.0, 0.0, 0.0)), cls_pooled.toList());
+
+        ML::Tensor normalized = pooled.l2NormalizeRows();
+        list<auto> normalized_values = normalized.toList();
+        float n00 = normalized_values[0][0];
+        float n01 = normalized_values[0][1];
+        float n02 = normalized_values[0][2];
+        float n10 = normalized_values[1][0];
+        float n11 = normalized_values[1][1];
+        float n12 = normalized_values[1][2];
+        assertFloat(1.0, sqrt(n00 * n00 + n01 * n01 + n02 * n02), 1e-5);
+        assertFloat(1.0, sqrt(n10 * n10 + n11 * n11 + n12 * n12), 1e-5);
+
+        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
+            ML::Tensor bad(data: (1, 2, 3), dtype: "int64").sigmoid();
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            logits.topK(k: 3);
+        });
     }
 
     iforestConstructorTest() {

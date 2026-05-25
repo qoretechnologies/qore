@@ -427,6 +427,25 @@ if (caps.has_onnx) {
     Qore::ML::Tensor first_batch = features.sliceRows(offset: 0, count: 128);
     Qore::ML::Tensor next_batch = features.sliceRows(offset: 128, count: 128);
     Qore::ML::Tensor combined = Qore::ML::Tensor::concatRows((first_batch, next_batch));
+
+    # Postprocess ONNX transformer outputs while they are still dense tensors.
+    # "last_hidden_state" has shape (batch, tokens, embedding_dim); "attention_mask"
+    # has shape (batch, tokens). The result has shape (batch, embedding_dim).
+    Qore::ML::Tensor input_ids(data: new buffer<int64>((101, 2023, 2003, 102)), shape: (1, 4));
+    Qore::ML::Tensor attention_mask(data: new buffer<int64>((1, 1, 1, 1)), shape: (1, 4));
+    hash<auto> token_outputs = model.runTensors({
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+    });
+    Qore::ML::Tensor sentence_embeddings = token_outputs.last_hidden_state
+        .poolTokenEmbeddings(attention_mask: attention_mask, strategy: "mean")
+        .l2NormalizeRows();
+
+    # Classifier and reranker logits can also be postprocessed natively.
+    Qore::ML::Tensor logits(data: new buffer<float32>((0.2, 2.4, -0.7, 1.1, 0.4, 3.2)), shape: (2, 3));
+    Qore::ML::Tensor probabilities = logits.sigmoid();
+    Qore::ML::Tensor labels = logits.argmax(axis: -1);
+    hash<auto> top3 = logits.topK(k: 2, axis: -1);
 }
     @endcode
 
@@ -784,6 +803,13 @@ if (!caps.has_onnx) {
       @ref Qore::ML::Tensor::sliceRows() "Tensor::sliceRows()", and
       @ref Qore::ML::Tensor::concatRows() "Tensor::concatRows()" for
       zero-copy tensor reshaping, row slicing, and native batch assembly
+    - Added @ref Qore::ML::Tensor::sigmoid() "Tensor::sigmoid()",
+      @ref Qore::ML::Tensor::softmax() "Tensor::softmax()",
+      @ref Qore::ML::Tensor::argmax() "Tensor::argmax()",
+      @ref Qore::ML::Tensor::topK() "Tensor::topK()",
+      @ref Qore::ML::Tensor::poolTokenEmbeddings() "Tensor::poolTokenEmbeddings()",
+      and @ref Qore::ML::Tensor::l2NormalizeRows() "Tensor::l2NormalizeRows()"
+      for dense ONNX postprocessing without nested list materialization
     - ONNX tensor conversion now supports float, double, int8, int16, int32,
       int64, and bool inputs and outputs
     - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now
