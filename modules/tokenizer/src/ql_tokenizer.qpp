@@ -45,3 +45,33 @@ hashdecl Qore::Tokenizer::TokenizerEncoding {
     */
     *list<hash<TokenizerEncoding>> overflowing;
 }
+
+//! Dense tokenizer output for model input tensors
+/** Returned by @ref HFTokenizer::encodeForModel(),
+    @ref HFTokenizer::encodeBatchForModel(), and
+    @ref HFTokenizer::encodeBatchPairsForModel().
+
+    The buffers are row-major with shape \c (rows, columns). They can be passed
+    directly to \c ML::Tensor::fromBuffer(buffer, shape) without materializing
+    per-row token lists.
+
+    @since tokenizer 1.2
+*/
+hashdecl Qore::Tokenizer::TokenizerModelInputBatch {
+    //! Row-major token ID buffer with shape \c shape
+    auto input_ids;
+    //! Row-major attention mask buffer with shape \c shape
+    auto attention_mask;
+    //! Row-major token type ID buffer with shape \c shape
+    auto token_type_ids;
+    //! Actual sequence length before batch padding for each row
+    auto sequence_lengths;
+    //! Tensor shape, always \c (rows, columns)
+    list<int> shape;
+    //! Number of batch rows
+    int rows;
+    //! Number of columns/tokens per padded row
+    int columns;
+    //! Dense buffer dtype, currently always \c "int64"
+    string dtype;
+}

@@ -255,66 +255,31 @@ public class CrossEncoderReranker {
         @return list of float relevance scores (0.0 to 1.0)
     */
     private list<float> scoreOnnx(string query, list<string> passages) {
-        # Tokenize all query-passage pairs
-        list<hash<auto>> encodings = ();
-        foreach string passage in (passages) {
-            hash<auto> enc = onnx_tokenizer.encodeAdvanced(query, {
-                "text_pair": passage,
-                "max_length": max_length,
-                "truncation": "longest_first",
-            });
-            push encodings, enc;
-        }
-
-        # Find max sequence length across all pairs for padding
-        int pad_len = 0;
-        foreach hash<auto> enc in (encodings) {
-            if (enc.input_ids.size() > pad_len) {
-                pad_len = enc.input_ids.size();
-            }
-        }
-
         int pad_token_id = onnx_tokenizer.getPadTokenId();
         if (pad_token_id < 0) {
             pad_token_id = 0;
         }
 
-        # Pad all sequences to uniform length and build input tensors
-        list<list<int>> all_input_ids = ();
-        list<list<int>> all_attention_mask = ();
-        list<list<int>> all_token_type_ids = ();
-
-        foreach hash<auto> enc in (encodings) {
-            list<int> ids = enc.input_ids;
-            list<int> mask = enc.attention_mask ?? (map 1, range(ids.size()));
-            list<int> type_ids = enc.token_type_ids ?? (map 0, range(ids.size()));
-
-            int pad_count = pad_len - ids.size();
-            if (pad_count > 0) {
-                ids += (map pad_token_id, range(pad_count));
-                mask += (map 0, range(pad_count));
-                type_ids += (map 0, range(pad_count));
-            }
-
-            push all_input_ids, ids;
-            push all_attention_mask, mask;
-            push all_token_type_ids, type_ids;
-        }
-
-        # Run inference in sub-batches for memory efficiency
+        # Tokenize and run inference in sub-batches for memory efficiency.
         int batch_size = 16;
         list<float> all_scores = ();
 
-        int total = all_input_ids.size();
+        int total = passages.size();
         int offset = 0;
         while (offset < total) {
             int end = min(offset + batch_size, total);
-            list<list<int>> batch_ids = all_input_ids[offset .. end - 1];
-            list<list<int>> batch_mask = all_attention_mask[offset .. end - 1];
-            list<list<int>> batch_types = all_token_type_ids[offset .. end - 1];
+            list<string> batch_passages = passages[offset .. end - 1];
+            list<string> batch_queries = map query, range(batch_passages.size());
 
-            hash<auto> inputs = makeOnnxTokenTensorInputs(batch_ids, batch_mask,
-                batch_types, batch_ids[0].size());
+            hash<Tokenizer::TokenizerModelInputBatch> token_batch = onnx_tokenizer.encodeBatchPairsForModel(
+                batch_queries, batch_passages, {
+                    "max_length": max_length,
+                    "truncation": "longest_first",
+                    "padding": "batch_longest",
+                    "pad_token_id": pad_token_id,
+                });
+
+            hash<auto> inputs = makeOnnxTokenTensorInputs(token_batch);
 
             hash<auto> result = onnx_model.runTensors(inputs);
 
@@ -357,21 +322,18 @@ public class CrossEncoderReranker {
         return all_scores;
     }
 
-    #! Builds ONNX Runtime tensor inputs from padded token IDs and masks
-    private hash<auto> makeOnnxTokenTensorInputs(list<list<int>> input_ids,
-            list<list<int>> attention_mask, list<list<int>> token_type_ids, int width) {
+    #! Builds ONNX Runtime tensor inputs from dense tokenizer buffers
+    private hash<auto> makeOnnxTokenTensorInputs(hash<Tokenizer::TokenizerModelInputBatch> token_batch) {
         hash<auto> inputs = {};
 
         if (onnx_input_names.hasKey("input_ids")) {
-            inputs{"input_ids"} = CrossEncoderReranker::makeInt64Tensor(input_ids, width, "input_ids");
+            inputs{"input_ids"} = ML::Tensor::fromBuffer(token_batch.input_ids, token_batch.shape);
         }
         if (onnx_input_names.hasKey("attention_mask")) {
-            inputs{"attention_mask"} = CrossEncoderReranker::makeInt64Tensor(
-                attention_mask, width, "attention_mask");
+            inputs{"attention_mask"} = ML::Tensor::fromBuffer(token_batch.attention_mask, token_batch.shape);
         }
         if (onnx_input_names.hasKey("token_type_ids")) {
-            inputs{"token_type_ids"} = CrossEncoderReranker::makeInt64Tensor(
-                token_type_ids, width, "token_type_ids");
+            inputs{"token_type_ids"} = ML::Tensor::fromBuffer(token_batch.token_type_ids, token_batch.shape);
         }
 
         if (!inputs.hasKey("input_ids")) {
@@ -388,24 +350,6 @@ public class CrossEncoderReranker {
             rv{input.name} = True;
         }
         return rv;
-    }
-
-    #! Converts padded token rows to a dense int64 Tensor
-    private static auto makeInt64Tensor(list<list<int>> rows, int width, string input_name) {
-        int row_count = rows.size();
-        buffer<int64> data = buffer<int64>::sized(row_count * width);
-        int offset = 0;
-        for (int i = 0; i < row_count; ++i) {
-            if (rows[i].size() != width) {
-                throw "RERANKER-ERROR",
-                    sprintf("token tensor '%s' row %d has length %d; expected %d",
-                        input_name, i, rows[i].size(), width);
-            }
-            for (int j = 0; j < width; ++j) {
-                data[offset++] = rows[i][j];
-            }
-        }
-        return ML::Tensor::fromBuffer(data, (row_count, width));
     }
 
     #! Scores via HTTP endpoint

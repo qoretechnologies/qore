@@ -133,6 +133,44 @@ printf("Text 2 length: %d\n", batch[1].input_ids.size());
 # Both: 10
     @endcode
 
+    @section tokenizer_model_inputs Dense Model Input Buffers
+
+    For ONNX inference, use the model-input APIs to avoid materializing
+    per-token Qore lists. These methods return row-major \c buffer<int64>
+    values and shape metadata that can be converted directly to
+    @ref Qore::ML::Tensor values.
+
+    @code{.py}
+%requires ml
+
+hash<Tokenizer::TokenizerModelInputBatch> batch = tok.encodeBatchForModel(
+    ("short text", "a much longer sentence"), {
+        "max_length": 128,
+        "truncation": "longest_first",
+        "padding": "batch_longest",
+    });
+
+hash<auto> inputs = {
+    "input_ids": ML::Tensor::fromBuffer(batch.input_ids, batch.shape),
+    "attention_mask": ML::Tensor::fromBuffer(batch.attention_mask, batch.shape),
+    "token_type_ids": ML::Tensor::fromBuffer(batch.token_type_ids, batch.shape),
+};
+hash<auto> outputs = model.runTensors(inputs);
+    @endcode
+
+    Sentence-pair models such as cross-encoder rerankers can use
+    \c encodeBatchPairsForModel():
+
+    @code{.py}
+hash<Tokenizer::TokenizerModelInputBatch> pairs = tok.encodeBatchPairsForModel(
+    ("What is Qore?", "What is ONNX?"),
+    ("Qore is an integration language.", "ONNX is a model format."), {
+        "max_length": 256,
+        "truncation": "longest_first",
+        "padding": "batch_longest",
+    });
+    @endcode
+
     @section tokenizer_offsets Offset Mapping and Special Tokens Mask
 
     Every encoding result includes byte-level offset mapping and a special tokens mask:
@@ -199,6 +237,9 @@ string clean = tok.decode(enc.input_ids, True);
     |@ref Tokenizer::HFTokenizer::encodeWithOptions "encodeWithOptions(text, text_pair, add_special)"|Encoding with sentence pair support
     |@ref Tokenizer::HFTokenizer::encodeAdvanced "encodeAdvanced(text, options)"|Full encoding with truncation, padding, sentence pairs
     |@ref Tokenizer::HFTokenizer::encodeBatch "encodeBatch(texts, options)"|Batch encoding with uniform output length
+    |@ref Tokenizer::HFTokenizer::encodeForModel "encodeForModel(text, options)"|Single-row dense model input buffers
+    |@ref Tokenizer::HFTokenizer::encodeBatchForModel "encodeBatchForModel(texts, options)"|Batch dense model input buffers
+    |@ref Tokenizer::HFTokenizer::encodeBatchPairsForModel "encodeBatchPairsForModel(texts, text_pairs, options)"|Sentence-pair dense model input buffers
     |@ref Tokenizer::HFTokenizer::decode "decode(ids, skip_special)"|Decode token IDs back to text
     |@ref Tokenizer::HFTokenizer::getVocabSize "getVocabSize()"|Return vocabulary size
     |@ref Tokenizer::HFTokenizer::idToToken "idToToken(id)"|Convert token ID to string
@@ -218,7 +259,27 @@ string clean = tok.decode(enc.input_ids, True);
     |\c offset_mapping|list\<list\<int\>\>|Byte-level (start, end) offsets in original text
     |\c special_tokens_mask|list\<int\>|1 for special tokens, 0 for content tokens
 
+    @section tokenizer_model_input_result Model Input Result Fields
+
+    The dense model-input methods return @ref Qore::Tokenizer::TokenizerModelInputBatch:
+
+    |!Field|!Type|!Description
+    |\c input_ids|buffer\<int64\>|Row-major token ID buffer
+    |\c attention_mask|buffer\<int64\>|Row-major attention mask buffer
+    |\c token_type_ids|buffer\<int64\>|Row-major segment ID buffer
+    |\c sequence_lengths|buffer\<int64\>|Unpadded sequence length for each row
+    |\c shape|list\<int\>|Tensor shape, always \c (rows, columns)
+    |\c rows|int|Number of batch rows
+    |\c columns|int|Padded token width
+    |\c dtype|string|Dense dtype, currently \c "int64"
+
     @section tokenizer_relnotes tokenizer Module Release Notes
+
+    @subsection tokenizer_1_2 tokenizer Module Version 1.2
+    - Dense model-input APIs: \c encodeForModel(), \c encodeBatchForModel(),
+      and \c encodeBatchPairsForModel() return row-major \c buffer<int64>
+      values for direct ONNX tensor creation without per-token list/hash
+      materialization
 
     @subsection tokenizer_1_0 tokenizer Module Version 1.0
     - BPE, WordPiece, and Unigram tokenization models

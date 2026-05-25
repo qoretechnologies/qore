@@ -233,28 +233,14 @@ public class EmbeddingModel {
             int end = min(offset + batch_size, total);
             list<string> batch_texts = texts[offset .. end - 1];
 
-            # Batch tokenize with padding to longest in batch
-            list<hash<auto>> encodings = onnx_tokenizer.encodeBatch(batch_texts, {
+            # Batch tokenize directly into dense int64 buffers.
+            hash<Tokenizer::TokenizerModelInputBatch> token_batch = onnx_tokenizer.encodeBatchForModel(batch_texts, {
                 "max_length": max_tokens,
                 "truncation": "longest_first",
-                "padding": "true",
+                "padding": "batch_longest",
             });
 
-            # Build input tensors
-            list<list<int>> batch_input_ids = ();
-            list<list<int>> batch_attention_mask = ();
-            list<list<int>> batch_token_type_ids = ();
-
-            foreach hash<auto> enc in (encodings) {
-                push batch_input_ids, enc.input_ids;
-                push batch_attention_mask,
-                    enc.attention_mask ?? (map 1, range(enc.input_ids.size()));
-                push batch_token_type_ids,
-                    enc.token_type_ids ?? (map 0, range(enc.input_ids.size()));
-            }
-
-            hash<auto> inputs = makeOnnxTokenTensorInputs(batch_input_ids,
-                batch_attention_mask, batch_token_type_ids, batch_input_ids[0].size());
+            hash<auto> inputs = makeOnnxTokenTensorInputs(token_batch);
 
             hash<auto> result = onnx_model.runTensors(inputs);
 
@@ -262,8 +248,10 @@ public class EmbeddingModel {
             auto hidden_states = result.last_hidden_state ?? result{result.firstKey()};
             hidden_states = hidden_states.toList();
 
+            list<list<int>> batch_attention_mask = EmbeddingModel::makeMaskRows(token_batch);
+
             # Pool and L2-normalize using C++ vector math from ml module
-            for (int i = 0; i < batch_input_ids.size(); ++i) {
+            for (int i = 0; i < token_batch.rows; ++i) {
                 list<list<float>> token_embeddings = cast<list<list<float>>>(hidden_states[i]);
                 list<float> pooled;
                 switch (pooling_strategy) {
@@ -296,21 +284,18 @@ public class EmbeddingModel {
         return all_embeddings;
     }
 
-    #! Builds ONNX Runtime tensor inputs from padded token IDs and masks
-    private hash<auto> makeOnnxTokenTensorInputs(list<list<int>> input_ids,
-            list<list<int>> attention_mask, list<list<int>> token_type_ids, int width) {
+    #! Builds ONNX Runtime tensor inputs from dense tokenizer buffers
+    private hash<auto> makeOnnxTokenTensorInputs(hash<Tokenizer::TokenizerModelInputBatch> token_batch) {
         hash<auto> inputs = {};
 
         if (onnx_input_names.hasKey("input_ids")) {
-            inputs{"input_ids"} = EmbeddingModel::makeInt64Tensor(input_ids, width, "input_ids");
+            inputs{"input_ids"} = ML::Tensor::fromBuffer(token_batch.input_ids, token_batch.shape);
         }
         if (onnx_input_names.hasKey("attention_mask")) {
-            inputs{"attention_mask"} = EmbeddingModel::makeInt64Tensor(
-                attention_mask, width, "attention_mask");
+            inputs{"attention_mask"} = ML::Tensor::fromBuffer(token_batch.attention_mask, token_batch.shape);
         }
         if (onnx_input_names.hasKey("token_type_ids")) {
-            inputs{"token_type_ids"} = EmbeddingModel::makeInt64Tensor(
-                token_type_ids, width, "token_type_ids");
+            inputs{"token_type_ids"} = ML::Tensor::fromBuffer(token_batch.token_type_ids, token_batch.shape);
         }
 
         if (!inputs.hasKey("input_ids")) {
@@ -329,22 +314,20 @@ public class EmbeddingModel {
         return rv;
     }
 
-    #! Converts padded token rows to a dense int64 Tensor
-    private static auto makeInt64Tensor(list<list<int>> rows, int width, string input_name) {
-        int row_count = rows.size();
-        buffer<int64> data = buffer<int64>::sized(row_count * width);
+    #! Converts the dense attention mask buffer to per-row lists for pooling
+    private static list<list<int>> makeMaskRows(hash<Tokenizer::TokenizerModelInputBatch> token_batch) {
+        list<int> flat_mask = token_batch.attention_mask.toList();
+        list<list<int>> rows = ();
         int offset = 0;
-        for (int i = 0; i < row_count; ++i) {
-            if (rows[i].size() != width) {
-                throw "EMBEDDING-ERROR",
-                    sprintf("token tensor '%s' row %d has length %d; expected %d",
-                        input_name, i, rows[i].size(), width);
-            }
-            for (int j = 0; j < width; ++j) {
-                data[offset++] = rows[i][j];
+        for (int i = 0; i < token_batch.rows; ++i) {
+            if (token_batch.columns) {
+                push rows, flat_mask[offset .. offset + token_batch.columns - 1];
+                offset += token_batch.columns;
+            } else {
+                push rows, ();
             }
         }
-        return ML::Tensor::fromBuffer(data, (row_count, width));
+        return rows;
     }
 
     #! Embeds texts via HTTP endpoint
