@@ -283,7 +283,9 @@ Acceptance checks:
 - Dry-run mode produces the exact generated command without requiring external
   quantization dependencies.
 - Quantized artifacts report source/output metadata and dependency information.
-- Registry lineage, calibration fingerprint storage, and validation result
+- QoreModelRegistry can register optimized and quantized artifacts as named
+  artifacts with source version/artifact lineage metadata.
+- Calibration fingerprint storage and original-vs-quantized validation result
   registration remain pending.
 
 ## Phase 7: Import and Conversion Tooling

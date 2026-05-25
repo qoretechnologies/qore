@@ -441,6 +441,125 @@ public class ModelRegistry {
         backend.registerNamedArtifact(name, version_id, artifact_name, artifact, info);
     }
 
+    #! Optimizes an ONNX model version and stores the optimized artifact metadata
+    /** The source version must have an ONNX Runtime execution plan. The optimized
+        artifact is stored as a named artifact on the same version with lineage
+        metadata linking it to the source entry artifact.
+
+        @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name name to use for the optimized artifact
+        @param options optional @ref QoreOnnxTools::OnnxOptimizationOptions hash
+
+        @return artifact metadata for the registered optimized artifact
+
+        @throw ML-REGISTRY-ERROR if the source version is not an ONNX Runtime model
+            or if the artifact name is invalid
+
+        @since QoreModelRegistry 2.4
+    */
+    hash<ModelArtifactInfo> registerOptimizedOnnxArtifact(string name, *string version_id,
+            string artifact_name, *hash<QoreOnnxTools::OnnxOptimizationOptions> options) {
+        if (!artifact_name.val()) {
+            artifact_name = "model.optimized.onnx";
+        }
+        validatePackageArtifactName(artifact_name);
+
+        hash<ModelVersionInfo> meta = getVersionManifest(name, version_id);
+        string entry_artifact = requireOnnxEntryArtifact(name, meta);
+        FsUtil::TmpDir dir("qore-model-registry-onnx-opt-", "");
+        string input_path = materializeOnnxPackage(name, meta.version_id, meta, entry_artifact,
+            dir.path);
+        string output_path = dir.path + DirSep + artifact_name;
+
+        hash<QoreOnnxTools::OnnxOptimizationOptions> opts =
+            options ?? <QoreOnnxTools::OnnxOptimizationOptions>{};
+        opts.force = True;
+        hash<QoreOnnxTools::OnnxOptimizationResult> result =
+            QoreOnnxTools::OnnxModelTools::optimize(input_path, output_path, opts);
+        binary data = ReadOnlyFile::readBinaryFile(output_path);
+        hash<ModelArtifactInfo> info = <ModelArtifactInfo>{
+            "name": artifact_name,
+            "role": "optimized_model",
+            "format": result.ort_format ? "ort" : "onnx",
+            "size": data.size(),
+            "safe_to_parse": True,
+            "executable": True,
+            "metadata": {
+                "lineage": {
+                    "type": "onnx-optimization",
+                    "source_version_id": meta.version_id,
+                    "source_artifact": entry_artifact,
+                    "ort_format": result.ort_format,
+                },
+                "optimization": result.optimization,
+                "validation": result.validation,
+            },
+        };
+        backend.registerNamedArtifact(name, meta.version_id, artifact_name, data, info);
+        return info;
+    }
+
+    #! Quantizes an ONNX model version and stores the quantized artifact metadata
+    /** The source version must have an ONNX Runtime execution plan. The
+        quantized artifact is stored as a named artifact on the same version
+        with lineage metadata linking it to the source entry artifact.
+
+        @param name the model name
+        @param version_id the version ID, or NOTHING/"latest"
+        @param artifact_name name to use for the quantized artifact
+        @param options optional @ref QoreOnnxTools::OnnxQuantizationOptions hash
+
+        @return artifact metadata for the registered quantized artifact
+
+        @throw ML-REGISTRY-ERROR if the source version is not an ONNX Runtime model
+            or if the artifact name is invalid
+        @throw QORE-ONNX-TOOLS-ERROR if quantization dependencies are unavailable
+            or ONNX Runtime quantization fails
+
+        @since QoreModelRegistry 2.4
+    */
+    hash<ModelArtifactInfo> registerQuantizedOnnxArtifact(string name, *string version_id,
+            string artifact_name, *hash<QoreOnnxTools::OnnxQuantizationOptions> options) {
+        if (!artifact_name.val()) {
+            artifact_name = "model.quantized.onnx";
+        }
+        validatePackageArtifactName(artifact_name);
+
+        hash<ModelVersionInfo> meta = getVersionManifest(name, version_id);
+        string entry_artifact = requireOnnxEntryArtifact(name, meta);
+        FsUtil::TmpDir dir("qore-model-registry-onnx-quant-", "");
+        string input_path = materializeOnnxPackage(name, meta.version_id, meta, entry_artifact,
+            dir.path);
+        string output_path = dir.path + DirSep + artifact_name;
+
+        hash<QoreOnnxTools::OnnxQuantizationOptions> opts =
+            options ?? <QoreOnnxTools::OnnxQuantizationOptions>{};
+        opts.force = True;
+        hash<QoreOnnxTools::OnnxQuantizationResult> result =
+            QoreOnnxTools::OnnxQuantizer::quantize(input_path, output_path, opts);
+        binary data = ReadOnlyFile::readBinaryFile(output_path);
+        hash<ModelArtifactInfo> info = <ModelArtifactInfo>{
+            "name": artifact_name,
+            "role": "quantized_model",
+            "format": "onnx",
+            "size": data.size(),
+            "safe_to_parse": True,
+            "executable": True,
+            "metadata": {
+                "lineage": {
+                    "type": "onnx-quantization",
+                    "source_version_id": meta.version_id,
+                    "source_artifact": entry_artifact,
+                    "method": result.method,
+                },
+                "quantization": result,
+            },
+        };
+        backend.registerNamedArtifact(name, meta.version_id, artifact_name, data, info);
+        return info;
+    }
+
     #! Loads a named artifact from a model package
     /** @param name the model name
         @param version_id the version ID, or NOTHING/"latest"
@@ -843,6 +962,33 @@ public class ModelRegistry {
             return new ML::OnnxModel(model_path, config);
         }
         return new ML::OnnxModel(model_path);
+    }
+
+    #! Requires an ONNX Runtime version and returns the entry artifact name
+    private static string requireOnnxEntryArtifact(string name, hash<ModelVersionInfo> meta) {
+        string runtime = meta.runtime ?? (meta.execution ? meta.execution.runtime : NOTHING)
+            ?? "metadata-only";
+        if (runtime != "onnxruntime" && meta.format != "onnx") {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("model '%s' version '%s' is not an ONNX Runtime model "
+                    "(format=%y, runtime=%y)", name, meta.version_id, meta.format, runtime);
+        }
+        string entry_artifact = meta.execution ? (meta.execution.entry_artifact ?? "model")
+            : "model";
+        validatePackageArtifactName(entry_artifact);
+        return entry_artifact;
+    }
+
+    #! Materializes an ONNX package entry artifact and external data files
+    private string materializeOnnxPackage(string name, string version_id,
+            hash<ModelVersionInfo> meta, string entry_artifact, string target_dir) {
+        string model_path = target_dir + DirSep + entry_artifact;
+        writeBinaryFile(model_path, backend.loadNamedArtifact(name, version_id, entry_artifact));
+        foreach string external_file in (getOnnxExternalDataArtifactNames(meta, entry_artifact)) {
+            writeBinaryFile(target_dir + DirSep + external_file,
+                backend.loadNamedArtifact(name, version_id, external_file));
+        }
+        return model_path;
     }
 
     #! Returns external-data artifact names referenced by ONNX package metadata

@@ -27,8 +27,10 @@
 %modern
 
 %requires(reexport) DataProvider
+%requires FsUtil
 %requires ml
 %requires Mime
+%requires QoreOnnxTools
 %requires Util
 
 %requires SqlUtil
@@ -230,6 +232,14 @@ reg.loadExecutable("torch-source", vid);
     @endcode
 
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
+
+    @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
+    - Added @ref QoreModelRegistry::ModelRegistry::registerOptimizedOnnxArtifact()
+      to create optimized ONNX/ORT artifacts with @ref qoreonnxtoolsintro "QoreOnnxTools"
+      and store lineage metadata on the source model version
+    - Added @ref QoreModelRegistry::ModelRegistry::registerQuantizedOnnxArtifact()
+      to create quantized ONNX artifacts with source version/artifact lineage and
+      ONNX Runtime dependency diagnostics
 
     @subsection qoremodelregistry_2_3 QoreModelRegistry Module Version 2.3
     - Added @ref QoreModelRegistry::ModelExecutableAdapter::runFeatureMatrixTensors()

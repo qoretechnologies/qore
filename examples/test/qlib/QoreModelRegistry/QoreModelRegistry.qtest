@@ -30,6 +30,7 @@
 %requires QUnit
 %requires Mime
 %requires DataProvider
+%requires QoreOnnxTools
 %requires QoreModelRegistry
 %requires ml
 
@@ -77,6 +78,8 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("executableAdapterOnnxTensor", \executableAdapterOnnxTensorTest());
         addTestCase("modelPackageInspection", \modelPackageInspectionTest());
         addTestCase("onnxPackageInspection", \onnxPackageInspectionTest());
+        addTestCase("onnxOptimizedArtifactRegistration", \onnxOptimizedArtifactRegistrationTest());
+        addTestCase("onnxQuantizedArtifactDependencyError", \onnxQuantizedArtifactDependencyErrorTest());
         addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
         addTestCase("restBackendCacheInvalidation", \restBackendCacheInvalidationTest());
         addTestCase("databaseBackendIntegration", \databaseBackendIntegrationTest());
@@ -1276,6 +1279,80 @@ class ModelRegistryTest inherits QUnit::Test {
         hash<auto> rows = adapter.runFeatureMatrix(((4.0,),), NOTHING);
         assertTrue(abs(9.0 - rows.Y[0].toFloat()) < 1e-5,
             sprintf("expected externally-materialized ONNX output 9.0, got %y", rows.Y[0]));
+    }
+
+    onnxOptimizedArtifactRegistrationTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_opt_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-opt-linear",
+            "description": "ONNX optimized artifact fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        hash<QoreModelRegistry::ModelArtifactInfo> info =
+            registry.registerOptimizedOnnxArtifact("onnx-opt-linear", vid,
+                "model.optimized.onnx",
+                <QoreOnnxTools::OnnxOptimizationOptions>{
+                    "session_config": <ML::OnnxSessionConfig>{"providers": ()},
+                });
+        assertEq("model.optimized.onnx", info.name);
+        assertEq("optimized_model", info.role);
+        assertEq("onnx", info.format);
+        assertTrue(info.size > 0);
+        assertEq("onnx-optimization", info.metadata.lineage.type);
+        assertEq(vid, info.metadata.lineage.source_version_id);
+        assertEq("model.onnx", info.metadata.lineage.source_artifact);
+        assertTrue(info.metadata.validation.valid);
+
+        list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
+            registry.listArtifacts("onnx-opt-linear", vid);
+        assertEq(1, (select artifacts, $1.role == "optimized_model").size(),
+            "optimized artifact should be registered in the manifest");
+        assertTrue(registry.loadNamedArtifact("onnx-opt-linear", vid,
+            "model.optimized.onnx").size() > 0);
+    }
+
+    onnxQuantizedArtifactDependencyErrorTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_quant_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-quant-linear",
+            "description": "ONNX quantized artifact dependency fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        assertThrows("QORE-ONNX-TOOLS-ERROR", sub() {
+            registry.registerQuantizedOnnxArtifact("onnx-quant-linear", vid,
+                "model.quantized.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "definitely-not-python-qore",
+                    "method": "dynamic",
+                });
+        });
+        assertEq(0, (select registry.listArtifacts("onnx-quant-linear", vid),
+            $1.role == "quantized_model").size(),
+            "failed quantization should not register an artifact");
     }
 
     filesystemBackendThreadSafetyTest() {
