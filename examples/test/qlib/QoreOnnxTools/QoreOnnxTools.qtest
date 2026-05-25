@@ -49,6 +49,7 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         addTestCase("ONNX optimization helper", \modelOptimizationTest());
         addTestCase("ONNX profile summarization", \onnxProfileSummaryTest());
         addTestCase("ONNX package creation", \onnxPackageCreationTest());
+        addTestCase("qore-onnx CLI smoke", \qoreOnnxCliSmokeTest());
         addTestCase("Unsafe source package classification", \unsafePackageClassificationTest());
         set_return_value(main());
     }
@@ -288,6 +289,61 @@ class QoreOnnxToolsTest inherits QUnit::Test {
             "default package creation should write a manifest");
     }
 
+    qoreOnnxCliSmokeTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("ONNX Runtime support is not available");
+        }
+
+        FsUtil::TmpDir dir("qore-onnx-cli-", "");
+        string model_path = getTestModelPath();
+
+        hash<auto> inspection = runCliJson(("inspect", "--json", model_path));
+        assertEq("qore-ml-test", inspection.info.producer_name);
+        assertEq("X", inspection.inputs[0].name);
+
+        hash<auto> validation = runCliJson(("validate", "--json", model_path));
+        assertTrue(validation.valid);
+
+        hash<auto> benchmark = runCliJson(("benchmark", "--json", "--runs", "1",
+            "--warmup-runs", "1", model_path));
+        assertEq(1, benchmark.runs);
+        assertTrue(benchmark.average_ms >= 0.0);
+
+        hash<auto> comparison = runCliJson(("compare", "--json", "--runs", "1",
+            model_path, model_path));
+        assertTrue(comparison.outputs_match);
+        assertEq(1, comparison.source_benchmark.runs);
+
+        string optimized_path = dir.path + DirSep + "optimized.onnx";
+        hash<auto> optimized = runCliJson(("optimize", "--json", "--force",
+            model_path, optimized_path));
+        assertTrue(is_file(optimized_path));
+        assertTrue(optimized.validation.valid);
+
+        string package_dir = dir.path + DirSep + "pkg";
+        hash<auto> package = runCliJson(("package", "--json", "--task", "regression",
+            "--no-validate", model_path, package_dir));
+        assertEq("test_linear.onnx", package.entry_artifact);
+        assertEq("regression", package.task);
+        assertTrue(is_file(package.manifest_path));
+
+        string calibration_path = dir.path + DirSep + "calibration.json";
+        writeTextFile(calibration_path, "[{\"X\":[[1.0],[2.0]]}]\n");
+        hash<auto> quant_plan = runCliJson(("quantize", "--json", "--dry-run",
+            "--method", "static", "--calibration-data", calibration_path,
+            model_path, dir.path + DirSep + "quantized.onnx"));
+        assertFalse(quant_plan.executed);
+        assertEq("static", quant_plan.method);
+        assertEq(calibration_path, quant_plan.calibration_fingerprint.path);
+        assertTrue(quant_plan.calibration_fingerprint.sha256.val());
+
+        hash<auto> dep = runCliJsonWithExpectedRcs(("check-python", "--json"), (0, 1));
+        assertTrue(dep.hasKey("available"));
+    }
+
     unsafePackageClassificationTest() {
         FsUtil::TmpDir dir("qore-onnx-tools-", "");
         string src_dir = dir.path + DirSep + "unsafe";
@@ -305,6 +361,50 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertFalse(result.executable);
         assertEq("huggingface", result.framework);
         assertEq(1, (select result.artifacts, $1.format == "pytorch-pickle").size());
+    }
+
+    private hash<auto> runCliJson(list<string> args) {
+        return runCliJsonWithExpectedRcs(args, (0,));
+    }
+
+    private hash<auto> runCliJsonWithExpectedRcs(list<string> args, list<int> expected_rcs) {
+        int rc;
+        string out = backquote(makeCliCommand(args), \rc);
+        bool rc_ok = expected_rcs.contains(rc);
+        assertTrue(rc_ok, sprintf("qore-onnx command exit status should be one of %y: %y\n%s",
+            expected_rcs, args, out));
+        if (!rc_ok) {
+            throw "TEST-ERROR", sprintf("qore-onnx command failed: %y", args);
+        }
+        if (!trim(out).val()) {
+            throw "TEST-ERROR", sprintf("qore-onnx command returned no JSON output: %y", args);
+        }
+%ifdef NoJson
+        throw "TEST-ERROR", "json module not available";
+%else
+        return parse_json(trim(out));
+%endif
+    }
+
+    private static string makeCliCommand(list<string> args) {
+        string root = get_script_dir() + "/../../../..";
+        string qore_bin = root + "/build/qore";
+        string cli = root + "/bin/qore-onnx";
+        string module_path = join(PathSep, (
+            root + "/qlib",
+            root + "/build/qlib-qmod",
+            root + "/build/modules/ml"
+        ));
+        string cmd = sprintf("QORE_MODULE_DIR=%s %s %s",
+            shellQuote(module_path), shellQuote(qore_bin), shellQuote(cli));
+        foreach string arg in (args) {
+            cmd += " " + shellQuote(arg);
+        }
+        return cmd;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
     private nothing writeTextFile(string path, string data) {

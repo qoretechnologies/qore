@@ -309,7 +309,7 @@ Acceptance checks:
 
 ## Phase 7: Import and Conversion Tooling
 
-Status: initial CLI implemented.
+Status: implemented with focused CLI smoke coverage.
 
 Add Qore CLI and registry workflows for model ingestion.  External Python tools
 may be invoked when installed, but Qore must record the exact command,
