@@ -210,6 +210,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # RegistryModel tests
         addTestCase("registry-model - field parsing", \registryModelFieldParsing());
         addTestCase("registry-model - ONNX package inference", \registryModelOnnxPackageInference());
+        addTestCase("registry-model - ONNX regression task output",
+            \registryModelOnnxRegressionPlanOutput());
+        addTestCase("registry-model - ONNX sequence classification task output",
+            \registryModelOnnxSequenceClassificationPlanOutput());
         addTestCase("registry-model - DataFrameBlock tensor path",
             \registryModelOnnxDataFrameTensorPath());
         addTestCase("registry-model - DataFrameBlock multi-column tensor path",
@@ -2725,6 +2729,117 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(is_file(profile_path), "registry ONNX profile file should exist");
         assertTrue(diag.profile_summary.operator_names.contains("Gemm"),
             "registry ONNX profile summary should include the test model operator");
+    }
+
+    registryModelOnnxRegressionPlanOutput() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_regression_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string package_dir = dir + DirSep + "linear_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(getTestModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "linear-onnx-regression",
+            "description": "test ONNX package with regression execution plan",
+            "task": "regression",
+            "execution_plan": {
+                "type": "onnx/regression",
+                "output_name": "Y",
+            },
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "linear-onnx-regression",
+            "version": vid,
+            "fields": "x",
+            "window_size": 3,
+        });
+
+        list<auto> results;
+        foreach hash<auto> rec in (({"x": 1.0}, {"x": 2.0}, {"x": 3.0})) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(3, results.size(), "regression task should emit one event per record");
+        assertEq("regression", results[0].prediction.task);
+        assertEq("regression", results[0].prediction.kind);
+        assertFloat(3.0, results[0].prediction.value, 1e-5);
+        assertEq("Y", results[0].prediction.output_name);
+        assertTrue(results[0].prediction.raw_outputs.hasKey("Y"));
+    }
+
+    registryModelOnnxSequenceClassificationPlanOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipSklearnOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_sequence_class_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string package_dir = dir + DirSep + "sklearn_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(getSklearnModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "sklearn-onnx-sequence-class",
+            "description": "test ONNX package with sequence classification execution plan",
+            "task": "sequence-classification",
+            "execution_plan": {
+                "type": "onnx/sequence-classification",
+                "label_output": "label",
+                "scores_output": "probabilities",
+            },
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "sklearn-onnx-sequence-class",
+            "version": vid,
+            "fields": ("sepal_length", "sepal_width", "petal_length", "petal_width"),
+            "window_size": 3,
+        });
+
+        list<auto> results;
+        foreach hash<auto> rec in (
+                {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2},
+                {"sepal_length": 7.0, "sepal_width": 3.2, "petal_length": 4.7, "petal_width": 1.4},
+                {"sepal_length": 6.3, "sepal_width": 3.3, "petal_length": 6.0, "petal_width": 2.5}) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(3, results.size(), "classification task should emit one event per record");
+        assertEq("sequence-classification", results[0].prediction.task);
+        assertEq("classification", results[0].prediction.kind);
+        assertEq(0, results[0].prediction.label);
+        assertTrue(results[0].prediction.hasKey("scores"));
+        assertTrue(results[0].prediction.raw_outputs.hasKey("label"));
+        assertTrue(results[0].prediction.raw_outputs.hasKey("probabilities"));
+%endif
     }
 
     registryModelOnnxDataFrameTensorPath() {

@@ -1908,6 +1908,10 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       QoreModelRegistry task-aware execution plans, so packages registered with
       \c task = "embedding" or \c task = "reranker" do not require duplicate
       processor mode options in pipeline definitions
+    - \c registry-model event output applies \c regression,
+      \c classification, and \c sequence-classification execution plans to
+      produce stable task fields such as \c value, \c label, and \c scores
+      while preserving raw ONNX outputs for diagnostics
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used

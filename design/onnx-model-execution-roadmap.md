@@ -358,6 +358,8 @@ Acceptance checks:
   `task = "reranker"`; processors infer ONNX mode and validate incompatible
   declared tasks.
 - Sequence classification and regression plans return clear typed outputs.
+  Implemented for `registry-model` event output with stable `value`, `label`,
+  `scores`, and `raw_outputs` fields.
 - Initial causal-LM support handles tokenizer input, attention masks, greedy
   decoding, stop tokens, and basic KV cache metadata.
 

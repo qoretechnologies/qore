@@ -249,6 +249,12 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         #! Runtime/provider diagnostics for the loaded model
         *hash<auto> provider_diagnostics;
 
+        #! Registry execution task, when declared
+        *string execution_task;
+
+        #! Registry execution plan metadata, when declared
+        *hash<auto> execution_plan;
+
         #! Output representation mode
         string output_mode = "events";
 
@@ -327,6 +333,13 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         } else {
             model = registry.loadExecutableAdapter(model_name, copts.version);
             loaded_version = model.getVersionId();
+        }
+        *hash<QoreModelRegistry::ModelVersionInfo> manifest = model.getManifest();
+        if (manifest) {
+            execution_task = AbstractDataProviderMLProcessor::getRegistryExecutionTask(manifest);
+            if (manifest.execution && manifest.execution.plan) {
+                execution_plan = manifest.execution.plan;
+            }
         }
         if (model.isOnnx()) {
             provider_diagnostics = model.getProviderDiagnostics();
@@ -534,7 +547,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "record_values": record_values,
                 "execution_provider": execution_provider,
                 "provider_diagnostics": provider_diagnostics,
-                "prediction": model_output,
+                "prediction": applyTaskOutputPlan(model_output),
             };
             if (include_diagnostics) {
                 event.inference_stats = model.getInferenceStats();
@@ -578,7 +591,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 "record_values": record_values,
                 "execution_provider": execution_provider,
                 "provider_diagnostics": provider_diagnostics,
-                "prediction": model_output,
+                "prediction": applyTaskOutputPlan(model_output),
             };
             if (include_diagnostics) {
                 event.inference_stats = model.getInferenceStats();
@@ -999,7 +1012,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             if (include_diagnostics) {
                 push result{"inference_stats"}, model.getInferenceStats();
             }
-            push result{"prediction"}, model_output;
+            push result{"prediction"}, applyTaskOutputPlan(model_output);
         }
     }
 
@@ -1039,8 +1052,104 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             if (include_diagnostics) {
                 push result{"inference_stats"}, model.getInferenceStats();
             }
-            push result{"prediction"}, model_output;
+            push result{"prediction"}, applyTaskOutputPlan(model_output);
         }
+    }
+
+    #! Applies task-aware output metadata for event-mode ONNX registry models
+    private hash<auto> applyTaskOutputPlan(hash<auto> model_output) {
+        if (!execution_task.val() || execution_task == "raw") {
+            return model_output;
+        }
+        switch (execution_task) {
+            case "regression":
+                return makeRegressionOutput(model_output);
+            case "classification":
+            case "sequence-classification":
+                return makeClassificationOutput(model_output);
+        }
+        return model_output;
+    }
+
+    private hash<auto> makeRegressionOutput(hash<auto> model_output) {
+        string output_name = resolveTaskOutputName(model_output,
+            ("value_output", "prediction_output", "score_output", "output_name"));
+        return {
+            "task": execution_task,
+            "kind": "regression",
+            "value": scalarOutputValue(model_output{output_name}),
+            "output_name": output_name,
+            "raw_outputs": model_output,
+        };
+    }
+
+    private hash<auto> makeClassificationOutput(hash<auto> model_output) {
+        string label_name = resolveTaskOutputName(model_output,
+            ("label_output", "label_name", "class_output"));
+        *string scores_name = resolveOptionalTaskOutputName(model_output,
+            ("scores_output", "probabilities_output", "probability_output", "logits_output"),
+            ("probabilities", "probability", "scores", "logits"));
+
+        hash<auto> rv = {
+            "task": execution_task,
+            "kind": "classification",
+            "label": scalarOutputValue(model_output{label_name}),
+            "label_output_name": label_name,
+            "raw_outputs": model_output,
+        };
+        if (scores_name.val()) {
+            rv.scores = model_output{scores_name};
+            rv.scores_output_name = scores_name;
+        }
+        return rv;
+    }
+
+    private string resolveTaskOutputName(hash<auto> model_output, list<string> plan_keys) {
+        *string rv = resolveOptionalTaskOutputName(model_output, plan_keys, ());
+        if (rv.val()) {
+            return rv;
+        }
+        list<string> output_names = sort(keys model_output);
+        if (!output_names) {
+            throw "PROCESSOR-ERROR",
+                sprintf("registry-model task %y produced no ONNX outputs", execution_task);
+        }
+        return output_names[0];
+    }
+
+    private *string resolveOptionalTaskOutputName(hash<auto> model_output,
+            list<string> plan_keys, list<string> preferred_names) {
+        if (execution_plan) {
+            foreach string key in (plan_keys) {
+                if (execution_plan.hasKey(key) && execution_plan{key}.val()) {
+                    return string(execution_plan{key});
+                }
+            }
+            if (exists execution_plan.output && execution_plan.output.typeCode() == NT_HASH) {
+                foreach string key in (plan_keys) {
+                    if (execution_plan.output.hasKey(key) && execution_plan.output{key}.val()) {
+                        return string(execution_plan.output{key});
+                    }
+                }
+                if (execution_plan.output.name.val()) {
+                    return string(execution_plan.output.name);
+                }
+            }
+        }
+
+        foreach string preferred in (preferred_names) {
+            if (model_output.hasKey(preferred)) {
+                return preferred;
+            }
+        }
+        return NOTHING;
+    }
+
+    private auto scalarOutputValue(auto value) {
+        if (value.typeCode() == NT_LIST && value.lsize() == 1) {
+            return value[0];
+        }
+        return value;
     }
 
     #! Appends compact column output for one registry ONNX tensor inference window

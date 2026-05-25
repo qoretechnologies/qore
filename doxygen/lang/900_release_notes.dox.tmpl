@@ -3283,6 +3283,9 @@ foreach string module_name in (registry.getProcessModules()) {
         execution-plan metadata through \c task, \c execution.task, and
         \c execution.plan; DataProviderML \c embed-text and \c rerank-text can
         infer registry-backed ONNX mode from \c embedding and \c reranker plans
+      - DataProviderML \c registry-model event output applies \c regression,
+        \c classification, and \c sequence-classification execution plans to
+        produce stable task fields while preserving raw ONNX outputs
       - QoreOnnxTools and \c qore-onnx compare can compare two ONNX/ORT
         artifacts for output compatibility and optional latency differences
 
