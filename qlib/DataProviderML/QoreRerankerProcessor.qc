@@ -347,6 +347,173 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
         return results;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash<auto>>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreRerankerProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (buffer || query_field.find(".") >= 0 || passage_field.find(".") >= 0) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *list<string> queries = stringColumnFromShape(records, shape, count, query_field);
+        *list<string> passages = stringColumnFromShape(records, shape, count, passage_field);
+        if (!exists queries || !exists passages) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        list<float> scores = reranker.score(queries[0], passages);
+        if (scores.lsize() != count) {
+            throw "PROCESSOR-ERROR",
+                sprintf("reranker returned %d scores for %d input rows", scores.lsize(), count);
+        }
+
+        list<hash<auto>> scored;
+        for (int i = 0; i < scores.lsize(); ++i) {
+            push scored, {"index": i, "score": scores[i]};
+        }
+        scored = sort(scored, int sub(hash<auto> a, hash<auto> b) {
+            return b.score <=> a.score;
+        });
+
+        int limit = min(top_k, scored.lsize());
+        list<int> selected_indices;
+        list<float> selected_scores;
+        list<int> ranks;
+        for (int i = 0; i < limit; ++i) {
+            push selected_indices, scored[i]."index";
+            push selected_scores, scored[i].score;
+            push ranks, i + 1;
+        }
+
+        return selectRerankedRows(records, shape, selected_indices, selected_scores, ranks);
+    }
+
+    #! Uses the row-oriented implementation when a shaped column path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        foreach auto row in (rows) {
+            processRecordImpl(row);
+        }
+        return;
+    }
+
+    #! Reads a top-level string column from a shaped block
+    private *list<string> stringColumnFromShape(auto records, DataProvider::DataProviderShape shape,
+            int count, string field) {
+        *auto column;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                if (records.columnNames().contains(field)) {
+                    column = records.getColumn(field);
+                }
+                break;
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    if (records.columnNames().contains(field)) {
+                        column = records.getColumn(field);
+                    }
+                } else if (records.hasKey(field)) {
+                    column = records{field};
+                }
+                break;
+            case DataProvider::DataProviderShape::HashOfLists:
+                if (records.hasKey(field)) {
+                    column = records{field};
+                }
+                break;
+        }
+        if (!exists column) {
+            return;
+        }
+        return QoreRerankerProcessor::columnToStrings(column, count, field);
+    }
+
+    #! Converts a shaped text column to string values using row-mode value semantics
+    private static list<string> columnToStrings(auto column, int count, string field) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        if (values.lsize() != count) {
+            throw "PROCESSOR-SHAPE-ERROR",
+                sprintf("text field %y has %d values but the shaped block has %d rows",
+                    field, values.lsize(), count);
+        }
+
+        list<string> texts;
+        foreach auto value in (values) {
+            push texts, value.toString();
+        }
+        return texts;
+    }
+
+    #! Builds a shaped top-k output block with reranker score and rank columns
+    private auto selectRerankedRows(auto records, DataProvider::DataProviderShape shape,
+            list<int> selected_indices, list<float> scores, list<int> ranks) {
+        hash<auto> columns;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                foreach string name in (records.columnNames()) {
+                    columns{name} = QoreRerankerProcessor::selectColumnValues(
+                        records.getColumn(name), selected_indices);
+                }
+                columns.reranker_score = scores;
+                columns.reranker_rank = ranks;
+                return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(columns);
+            case DataProvider::DataProviderShape::BufferColumns:
+                columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                foreach string name in (keys columns) {
+                    columns{name} = QoreRerankerProcessor::selectColumnValues(
+                        columns{name}, selected_indices);
+                }
+                columns.reranker_score = scores;
+                columns.reranker_rank = ranks;
+                return ColumnarResult::fromColumnHash(columns);
+            case DataProvider::DataProviderShape::HashOfLists:
+                foreach string name in (keys records) {
+                    columns{name} = QoreRerankerProcessor::selectColumnValues(
+                        records{name}, selected_indices);
+                }
+                columns.reranker_score = scores;
+                columns.reranker_rank = ranks;
+                return columns;
+        }
+        return records;
+    }
+
+    #! Selects a ranked subset from a list or dense buffer column
+    private static list<auto> selectColumnValues(auto column, list<int> selected_indices) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        list<auto> result;
+        if (values.typeCode() != NT_LIST) {
+            return DataProvider::AbstractDataProcessor::repeatValue(column, selected_indices.lsize());
+        }
+        foreach int index in (selected_indices) {
+            push result, values[index];
+        }
+        return result;
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;
