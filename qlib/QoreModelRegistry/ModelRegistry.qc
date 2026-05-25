@@ -602,6 +602,15 @@ public class ModelRegistry {
         opts.force = True;
         hash<QoreOnnxTools::OnnxQuantizationResult> result =
             QoreOnnxTools::OnnxQuantizer::quantize(input_path, output_path, opts);
+        *hash<QoreOnnxTools::OnnxCompareResult> comparison;
+        if (result.quantized_model) {
+            comparison = QoreOnnxTools::OnnxModelTools::compare(input_path, output_path,
+                <QoreOnnxTools::OnnxCompareOptions>{
+                    "benchmark": True,
+                    "warmup_runs": 1,
+                    "runs": 3,
+                });
+        }
         binary data = ReadOnlyFile::readBinaryFile(output_path);
         hash<ModelArtifactInfo> info = <ModelArtifactInfo>{
             "name": artifact_name,
@@ -618,6 +627,7 @@ public class ModelRegistry {
                     "method": result.method,
                 },
                 "quantization": result,
+                "comparison": comparison,
                 "deployment": makeOnnxDeploymentMetadata("ONNX", NOTHING,
                     result.quantized_model ? result.quantized_model.provider_report : NOTHING,
                     False),

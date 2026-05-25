@@ -66,6 +66,19 @@ hash<QoreOnnxTools::OnnxBenchmarkResult> benchmark =
         <QoreOnnxTools::OnnxBenchmarkOptions>{"runs": 100});
 printf("inputs=%y valid=%y avg=%fms\n",
     inspection.inputs, validation.valid, benchmark.average_ms);
+
+hash<QoreOnnxTools::OnnxCompareResult> comparison =
+    QoreOnnxTools::OnnxModelTools::compare(
+        "/models/customer-score.onnx",
+        "/models/customer-score-int8.onnx",
+        <QoreOnnxTools::OnnxCompareOptions>{
+            "abs_tolerance": 0.01,
+            "rel_tolerance": 0.01,
+            "benchmark": True,
+            "runs": 50,
+        });
+printf("match=%y max_abs=%f speedup=%y\n",
+    comparison.outputs_match, comparison.max_abs_error, comparison.speedup);
     @endcode
 
     @par Profile Summary Example
@@ -117,6 +130,8 @@ qore-onnx check-python --python /opt/onnx/bin/python3
 qore-onnx inspect --json /models/customer-score.onnx
 qore-onnx validate /models/customer-score.onnx
 qore-onnx benchmark --runs 100 /models/customer-score.onnx
+qore-onnx compare --abs-tolerance 0.01 --rel-tolerance 0.01 --runs 50 \
+    /models/customer-score.onnx /models/customer-score-int8.onnx
 qore-onnx profile --top-limit 20 /var/tmp/onnxruntime_profile.json
 qore-onnx optimize /models/customer-score.onnx /models/customer-score-opt.onnx
 qore-onnx package /models/customer-score.onnx /srv/model-packages/customer-score
@@ -132,6 +147,9 @@ qore-onnx quantize --method static --calibration-data calibration.json \
     - Initial release with ONNX Runtime Python quantization orchestration
     - Added dependency diagnostics and dry-run planning for quantization
     - Added ONNX model inspection, validation, optimization, and benchmark helpers
+    - Added ONNX model output and optional latency comparison helpers plus
+      \c qore-onnx compare for original-vs-optimized and original-vs-quantized
+      deployment validation
     - Added ONNX Runtime profile summarization by operator, provider, node, and
       session event
     - Added deterministic ONNX package assembly with companion artifact

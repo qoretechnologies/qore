@@ -38,10 +38,12 @@ class QoreOnnxCli {
     private {
         const Version = "1.0.0";
         const Opts = {
+            "abs_tolerance": "abs-tolerance=s",
             "activation_type": "activation-type=s",
             "benchmark_inputs": "benchmark-inputs=s",
             "calibration_data": "calibration-data=s",
             "calibration_method": "calibration-method=s",
+            "candidate_session_config": "candidate-session-config=s",
             "dry_run": "dry-run",
             "extra_options": "extra-options=s",
             "force": "f,force",
@@ -66,8 +68,10 @@ class QoreOnnxCli {
             "per_channel": "per-channel",
             "python": "python=s",
             "reduce_range": "reduce-range",
+            "rel_tolerance": "rel-tolerance=s",
             "runs": "runs=i",
             "session_config": "session-config=s",
+            "source_session_config": "source-session-config=s",
             "top_limit": "top-limit=i",
             "validate": "validate!",
             "version": "V,version",
@@ -105,6 +109,9 @@ class QoreOnnxCli {
                     break;
                 case "benchmark":
                     benchmark(opts);
+                    break;
+                case "compare":
+                    compareModels(opts);
                     break;
                 case "profile":
                     profile(opts);
@@ -168,6 +175,20 @@ class QoreOnnxCli {
         requireInput("benchmark", input_path);
         writeResult(QoreOnnxTools::OnnxModelTools::benchmark(input_path,
             buildBenchmarkOptions(opts)), opts);
+    }
+
+    private static nothing compareModels(hash<auto> opts) {
+        string source_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string candidate_path = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!source_path.val() || !candidate_path.val()) {
+            stderr.printf("qore-onnx: compare requires source and candidate model paths\n");
+            usage(2);
+        }
+        hash<QoreOnnxTools::OnnxCompareResult> result =
+            QoreOnnxTools::OnnxModelTools::compare(source_path, candidate_path,
+                buildCompareOptions(opts));
+        writeResult(result, opts);
+        exit(result.outputs_match ? 0 : 1);
     }
 
     private static nothing profile(hash<auto> opts) {
@@ -252,6 +273,34 @@ class QoreOnnxCli {
         return bopts;
     }
 
+    private static hash<QoreOnnxTools::OnnxCompareOptions> buildCompareOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxCompareOptions> copts =
+            <QoreOnnxTools::OnnxCompareOptions>{};
+        if (opts.source_session_config.val()) {
+            copts.source_session_config = cast<hash<ML::OnnxSessionConfig>>(
+                readJsonFile(opts.source_session_config));
+        } else if (opts.session_config.val()) {
+            copts.source_session_config = buildSessionConfig(opts);
+        }
+        if (opts.candidate_session_config.val()) {
+            copts.candidate_session_config = cast<hash<ML::OnnxSessionConfig>>(
+                readJsonFile(opts.candidate_session_config));
+        } else if (opts.session_config.val()) {
+            copts.candidate_session_config = buildSessionConfig(opts);
+        }
+        if (opts.benchmark_inputs.val()) {
+            copts.inputs = cast<hash<auto>>(readJsonFile(opts.benchmark_inputs));
+        }
+        if (opts.abs_tolerance.val()) copts.abs_tolerance = opts.abs_tolerance.toFloat();
+        if (opts.rel_tolerance.val()) copts.rel_tolerance = opts.rel_tolerance.toFloat();
+        if (exists opts.runs || exists opts.warmup_runs) copts.benchmark = True;
+        if (exists opts.runs) copts.runs = opts.runs;
+        if (exists opts.warmup_runs) copts.warmup_runs = opts.warmup_runs;
+        if (exists opts.keep_output) copts.keep_outputs = opts.keep_output;
+        return copts;
+    }
+
     private static hash<QoreOnnxTools::OnnxOptimizationOptions> buildOptimizationOptions(
             hash<auto> opts) {
         hash<QoreOnnxTools::OnnxOptimizationOptions> oopts =
@@ -312,6 +361,7 @@ class QoreOnnxCli {
         printf("  qore-onnx inspect [--session-config PATH] [--json] INPUT.onnx\n");
         printf("  qore-onnx validate [--session-config PATH] [--json] INPUT.onnx\n");
         printf("  qore-onnx benchmark [OPTIONS] INPUT.onnx\n");
+        printf("  qore-onnx compare [OPTIONS] SOURCE.onnx CANDIDATE.onnx\n");
         printf("  qore-onnx profile [--top-limit N] [--json] PROFILE.json\n");
         printf("  qore-onnx optimize [OPTIONS] INPUT.onnx OUTPUT.onnx\n");
         printf("  qore-onnx package [OPTIONS] INPUT.onnx|PACKAGE_DIR OUTPUT_DIR\n");
@@ -324,6 +374,15 @@ class QoreOnnxCli {
         printf("  --warmup-runs N                  Warmup inference runs, default 1\n");
         printf("  --benchmark-inputs PATH          JSON input hash; generated when omitted\n");
         printf("  --keep-output                    Include the final output in benchmark results\n\n");
+        printf("Compare options:\n");
+        printf("  --abs-tolerance N                Absolute numeric tolerance, default 0.0001\n");
+        printf("  --rel-tolerance N                Relative numeric tolerance, default 0.0001\n");
+        printf("  --source-session-config PATH     JSON OnnxSessionConfig for the source model\n");
+        printf("  --candidate-session-config PATH  JSON OnnxSessionConfig for the candidate model\n");
+        printf("  --benchmark-inputs PATH          JSON input hash; generated when omitted\n");
+        printf("  --runs N                         Also benchmark both models with N timed runs\n");
+        printf("  --warmup-runs N                  Warmup runs for comparison benchmarks\n");
+        printf("  --keep-output                    Include source and candidate outputs\n\n");
         printf("Profile options:\n");
         printf("  --top-limit N                    Maximum node/session rows, default 20\n\n");
         printf("Optimize options:\n");

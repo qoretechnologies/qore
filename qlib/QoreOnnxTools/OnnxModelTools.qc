@@ -90,6 +90,80 @@ public hashdecl OnnxBenchmarkResult {
     *hash<auto> output;
 }
 
+#! Difference between source and candidate ONNX outputs
+public hashdecl OnnxOutputDifference {
+    #! Output path, for example \c Y[0][2]
+    string path;
+    #! Stable difference code
+    string code;
+    #! Human-readable difference message
+    string message;
+    #! Source value
+    auto expected;
+    #! Candidate value
+    auto actual;
+    #! Absolute error for numeric comparisons
+    *float abs_error;
+    #! Relative error for numeric comparisons
+    *float rel_error;
+}
+
+#! Options for comparing two ONNX model artifacts
+public hashdecl OnnxCompareOptions {
+    #! Optional source model session configuration
+    *hash<ML::OnnxSessionConfig> source_session_config;
+    #! Optional candidate model session configuration
+    *hash<ML::OnnxSessionConfig> candidate_session_config;
+    #! Optional input hash; when omitted, default single-row inputs are generated from source metadata
+    *hash<auto> inputs;
+    #! Absolute tolerance for numeric output comparisons
+    float abs_tolerance = 0.0001;
+    #! Relative tolerance for numeric output comparisons
+    float rel_tolerance = 0.0001;
+    #! Also benchmark both models with the comparison input
+    bool benchmark = False;
+    #! Number of warmup runs when \c benchmark is True
+    int warmup_runs = 1;
+    #! Number of timed runs when \c benchmark is True
+    int runs = 10;
+    #! Include source and candidate output hashes in the result
+    bool keep_outputs = False;
+}
+
+#! Result of comparing two ONNX model artifacts
+public hashdecl OnnxCompareResult {
+    #! Source model path
+    string source_path;
+    #! Candidate model path
+    string candidate_path;
+    #! True if all comparable outputs match within tolerance and no structural differences were found
+    bool outputs_match;
+    #! Number of scalar values compared
+    int compared_values = 0;
+    #! Maximum absolute error seen in numeric output comparisons
+    float max_abs_error = 0.0;
+    #! Maximum relative error seen in numeric output comparisons
+    float max_rel_error = 0.0;
+    #! Structured output differences
+    list<hash<OnnxOutputDifference>> differences = ();
+    #! Input hash used for the comparison
+    hash<auto> inputs;
+    #! Source output, when requested
+    *hash<auto> source_output;
+    #! Candidate output, when requested
+    *hash<auto> candidate_output;
+    #! Source benchmark, when requested
+    *hash<OnnxBenchmarkResult> source_benchmark;
+    #! Candidate benchmark, when requested
+    *hash<OnnxBenchmarkResult> candidate_benchmark;
+    #! Candidate/source average latency ratio, when benchmarking was requested
+    *float latency_ratio;
+    #! Source/candidate average latency speedup, when benchmarking was requested
+    *float speedup;
+    #! Candidate average latency minus source average latency in milliseconds
+    *float latency_delta_ms;
+}
+
 #! ONNX optimization options
 public hashdecl OnnxOptimizationOptions {
     #! Optional ONNX session configuration used while creating the optimized artifact
@@ -306,6 +380,106 @@ public class OnnxModelTools {
         return rv;
     }
 
+    /** Compares two ONNX/ORT model artifacts on the same input.
+
+        This helper is designed for deployment validation, including original
+        vs optimized and original vs quantized artifact checks. It verifies
+        output structure, compares numeric scalar values with absolute and
+        relative tolerances, and can optionally benchmark both artifacts with
+        the same input hash.
+
+        @param source_path reference model path
+        @param candidate_path candidate model path
+        @param options comparison options
+
+        @return structured output-difference and optional latency comparison
+
+        @throw QORE-ONNX-TOOLS-ERROR if paths/options are invalid
+        @throw ML-ONNX-ERROR if either model cannot load or execute
+    */
+    static hash<OnnxCompareResult> compare(string source_path, string candidate_path,
+            *hash<OnnxCompareOptions> options) {
+        validateModelPath(source_path);
+        validateModelPath(candidate_path);
+        hash<OnnxCompareOptions> opts = options ?? <OnnxCompareOptions>{};
+        if (opts.abs_tolerance < 0.0) {
+            throw "QORE-ONNX-TOOLS-ERROR", "abs_tolerance must be >= 0";
+        }
+        if (opts.rel_tolerance < 0.0) {
+            throw "QORE-ONNX-TOOLS-ERROR", "rel_tolerance must be >= 0";
+        }
+        if (opts.warmup_runs < 0) {
+            throw "QORE-ONNX-TOOLS-ERROR", "warmup_runs must be >= 0";
+        }
+        if (opts.runs <= 0) {
+            throw "QORE-ONNX-TOOLS-ERROR", "runs must be > 0";
+        }
+
+        ML::OnnxModel source(source_path, normalizeSessionConfig(opts.source_session_config));
+        ML::OnnxModel candidate(candidate_path, normalizeSessionConfig(
+            opts.candidate_session_config));
+        hash<auto> inputs = opts.inputs ?? buildDefaultInputs(source.getInputInfo());
+        hash<auto> source_output = source.run(inputs);
+        hash<auto> candidate_output = candidate.run(inputs);
+
+        list<hash<OnnxOutputDifference>> differences = ();
+        hash<auto> stats = {
+            "compared_values": 0,
+            "max_abs_error": 0.0,
+            "max_rel_error": 0.0,
+        };
+        compareValue(\differences, \stats, source_output, candidate_output, "",
+            opts.abs_tolerance, opts.rel_tolerance);
+
+        hash<OnnxCompareResult> rv = <OnnxCompareResult>{
+            "source_path": source_path,
+            "candidate_path": candidate_path,
+            "outputs_match": !differences,
+            "compared_values": stats.compared_values,
+            "max_abs_error": stats.max_abs_error,
+            "max_rel_error": stats.max_rel_error,
+            "differences": differences,
+            "inputs": inputs,
+        };
+        if (opts.keep_outputs) {
+            rv.source_output = source_output;
+            rv.candidate_output = candidate_output;
+        }
+
+        if (opts.benchmark) {
+            hash<OnnxBenchmarkOptions> source_bopts = <OnnxBenchmarkOptions>{
+                "warmup_runs": opts.warmup_runs,
+                "runs": opts.runs,
+                "inputs": inputs,
+            };
+            if (opts.source_session_config) {
+                source_bopts.session_config = opts.source_session_config;
+            }
+            hash<OnnxBenchmarkOptions> candidate_bopts = <OnnxBenchmarkOptions>{
+                "warmup_runs": opts.warmup_runs,
+                "runs": opts.runs,
+                "inputs": inputs,
+            };
+            if (opts.candidate_session_config) {
+                candidate_bopts.session_config = opts.candidate_session_config;
+            }
+            rv.source_benchmark = benchmark(source_path, source_bopts);
+            rv.candidate_benchmark = benchmark(candidate_path, candidate_bopts);
+            rv.latency_delta_ms = rv.candidate_benchmark.average_ms
+                - rv.source_benchmark.average_ms;
+            if (rv.source_benchmark.average_ms > 0.0) {
+                rv.latency_ratio = rv.candidate_benchmark.average_ms
+                    / rv.source_benchmark.average_ms;
+            }
+            if (rv.candidate_benchmark.average_ms > 0.0) {
+                rv.speedup = rv.source_benchmark.average_ms
+                    / rv.candidate_benchmark.average_ms;
+            }
+        }
+
+        return rv;
+    }
+
     #! Builds default single-row input values from ONNX input metadata
     static hash<auto> buildDefaultInputs(list<hash<ML::OnnxTensorInfo>> inputs) {
         if (!inputs) {
@@ -360,6 +534,115 @@ public class OnnxModelTools {
             default:
                 return 0;
         }
+    }
+
+    private static nothing compareValue(reference<list<hash<OnnxOutputDifference>>> differences,
+            reference<hash<auto>> stats, auto expected, auto actual, string path,
+            float abs_tolerance, float rel_tolerance) {
+        int expected_type = expected.typeCode();
+        int actual_type = actual.typeCode();
+        if (isNumericType(expected_type) && isNumericType(actual_type)) {
+            compareNumeric(\differences, \stats, expected, actual, path,
+                abs_tolerance, rel_tolerance);
+            return;
+        }
+        if (expected_type == NT_LIST || actual_type == NT_LIST) {
+            if (expected_type != NT_LIST || actual_type != NT_LIST) {
+                addDifference(\differences, path, "type-mismatch",
+                    sprintf("expected type %d but candidate has type %d", expected_type,
+                        actual_type), expected, actual);
+                return;
+            }
+            if (expected.size() != actual.size()) {
+                addDifference(\differences, path, "list-size-mismatch",
+                    sprintf("expected list size %d but candidate has size %d",
+                        expected.size(), actual.size()), expected, actual);
+            }
+            int n = expected.size() < actual.size() ? expected.size() : actual.size();
+            for (int i = 0; i < n; ++i) {
+                compareValue(\differences, \stats, expected[i], actual[i],
+                    path + sprintf("[%d]", i), abs_tolerance, rel_tolerance);
+            }
+            return;
+        }
+        if (expected_type == NT_HASH || actual_type == NT_HASH) {
+            if (expected_type != NT_HASH || actual_type != NT_HASH) {
+                addDifference(\differences, path, "type-mismatch",
+                    sprintf("expected type %d but candidate has type %d", expected_type,
+                        actual_type), expected, actual);
+                return;
+            }
+            foreach string key in (keys expected) {
+                string child_path = path.val() ? path + "." + key : key;
+                if (!actual.hasKey(key)) {
+                    addDifference(\differences, child_path, "missing-key",
+                        sprintf("candidate output is missing key %y", key),
+                        expected{key}, NOTHING);
+                    continue;
+                }
+                compareValue(\differences, \stats, expected{key}, actual{key},
+                    child_path, abs_tolerance, rel_tolerance);
+            }
+            foreach string key in (keys actual) {
+                if (!expected.hasKey(key)) {
+                    string child_path = path.val() ? path + "." + key : key;
+                    addDifference(\differences, child_path, "unexpected-key",
+                        sprintf("candidate output has unexpected key %y", key),
+                        NOTHING, actual{key});
+                }
+            }
+            return;
+        }
+        ++stats.compared_values;
+        if (expected != actual) {
+            addDifference(\differences, path, "value-mismatch",
+                "non-numeric output values are not equal", expected, actual);
+        }
+    }
+
+    private static nothing compareNumeric(reference<list<hash<OnnxOutputDifference>>> differences,
+            reference<hash<auto>> stats, auto expected, auto actual, string path,
+            float abs_tolerance, float rel_tolerance) {
+        float e = expected.toFloat();
+        float a = actual.toFloat();
+        float abs_error = abs(e - a);
+        float denom = abs(e) > 1.0 ? abs(e) : 1.0;
+        float rel_error = abs_error / denom;
+        ++stats.compared_values;
+        if (abs_error > stats.max_abs_error) {
+            stats.max_abs_error = abs_error;
+        }
+        if (rel_error > stats.max_rel_error) {
+            stats.max_rel_error = rel_error;
+        }
+        if (abs_error > abs_tolerance && rel_error > rel_tolerance) {
+            hash<OnnxOutputDifference> diff = <OnnxOutputDifference>{
+                "path": path,
+                "code": "numeric-mismatch",
+                "message": sprintf("numeric values differ by abs=%f rel=%f",
+                    abs_error, rel_error),
+                "expected": expected,
+                "actual": actual,
+                "abs_error": abs_error,
+                "rel_error": rel_error,
+            };
+            push differences, diff;
+        }
+    }
+
+    private static bool isNumericType(int type_code) {
+        return type_code == NT_INT || type_code == NT_FLOAT || type_code == NT_NUMBER;
+    }
+
+    private static nothing addDifference(reference<list<hash<OnnxOutputDifference>>> differences,
+            string path, string code, string message, auto expected, auto actual) {
+        push differences, <OnnxOutputDifference>{
+            "path": path,
+            "code": code,
+            "message": message,
+            "expected": expected,
+            "actual": actual,
+        };
     }
 
     private static nothing validateTensorList(reference<list<hash<OnnxValidationIssue>>> issues,

@@ -255,7 +255,9 @@ Acceptance checks:
 
 ## Phase 6: Quantization and Calibration
 
-Status: initial Qore orchestration implemented.
+Status: Qore orchestration and original-vs-candidate comparison implemented;
+full static calibration workflow coverage remains dependent on external
+calibration data and Python quantization availability.
 
 Use existing ONNX Runtime and Optimum tooling when available; Qore owns
 orchestration, validation, registry metadata, and deployment comparison.
@@ -268,8 +270,10 @@ Workflows:
 - hardware presets such as `avx2`, `avx512`, `avx512_vnni`, `arm64`, and
   `tensorrt`: option metadata is accepted and passed through for tooling that
   supports the requested target
-- original vs quantized accuracy comparison: pending
-- original vs quantized latency comparison: pending
+- original vs quantized accuracy/output comparison: implemented through
+  `QoreOnnxTools::OnnxModelTools::compare()` and `qore-onnx compare`
+- original vs quantized latency comparison: implemented through optional
+  benchmark fields in the same comparison API
 
 APIs:
 
@@ -293,8 +297,9 @@ Acceptance checks:
 - Quantized artifacts report source/output metadata and dependency information.
 - QoreModelRegistry can register optimized and quantized artifacts as named
   artifacts with source version/artifact lineage metadata.
-- Calibration fingerprint storage and original-vs-quantized validation result
-  registration remain pending.
+- Successful validated quantization registration stores original-vs-quantized
+  output and latency comparison metadata on the quantized artifact.
+- Calibration fingerprint storage remains pending.
 
 ## Phase 7: Import and Conversion Tooling
 

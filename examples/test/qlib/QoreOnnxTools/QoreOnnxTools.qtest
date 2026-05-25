@@ -45,6 +45,7 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         addTestCase("Missing quantization dependency message", \missingDependencyMessageTest());
         addTestCase("ONNX model inspection and validation", \modelInspectionValidationTest());
         addTestCase("ONNX benchmark with generated inputs", \modelBenchmarkTest());
+        addTestCase("ONNX model comparison", \modelCompareTest());
         addTestCase("ONNX optimization helper", \modelOptimizationTest());
         addTestCase("ONNX profile summarization", \onnxProfileSummaryTest());
         addTestCase("ONNX package creation", \onnxPackageCreationTest());
@@ -141,6 +142,26 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertTrue(result.average_ms >= 0.0);
         assertTrue(result.inputs.hasKey("X"));
         assertTrue(result.stats.run_count >= 3);
+    }
+
+    modelCompareTest() {
+        hash<QoreOnnxTools::OnnxCompareResult> result =
+            QoreOnnxTools::OnnxModelTools::compare(getTestModelPath(), getTestModelPath(),
+                <QoreOnnxTools::OnnxCompareOptions>{
+                    "benchmark": True,
+                    "warmup_runs": 1,
+                    "runs": 2,
+                    "keep_outputs": True,
+                });
+        assertTrue(result.outputs_match);
+        assertEq(0, result.differences.size());
+        assertTrue(result.compared_values > 0);
+        assertEq(0.0, result.max_abs_error);
+        assertTrue(result.source_output.hasKey("Y"));
+        assertTrue(result.candidate_output.hasKey("Y"));
+        assertEq(2, result.source_benchmark.runs);
+        assertEq(2, result.candidate_benchmark.runs);
+        assertTrue(result.speedup > 0.0);
     }
 
     modelOptimizationTest() {
