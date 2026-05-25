@@ -3321,6 +3321,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
       - EmbeddingModel and CrossEncoderReranker accept in-memory ONNX model artifacts
         from registries in addition to filesystem paths
+      - EmbeddingModel and CrossEncoderReranker now feed local ONNX models with
+        dense \c ML::Tensor token inputs and skip optional tokenizer tensors that
+        are not declared by the model
       - TokenCounter, DocumentChunker, EmbeddingModel, and CrossEncoderReranker can
         apply tokenizer_config.json companion settings from registry model packages
       - new module providing document chunking and token counting for RAG pipelines

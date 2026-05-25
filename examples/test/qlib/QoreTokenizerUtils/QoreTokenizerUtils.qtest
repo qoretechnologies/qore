@@ -6,6 +6,8 @@
 */
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/tokenizer"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QoreTokenizerUtils
 %requires tokenizer
@@ -59,9 +61,11 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         addTestCase("StructuredDocumentChunker paragraph merging", \structuredParagraphMergeTest());
         addTestCase("EmbeddingModel config validation", \embeddingConfigTest());
         addTestCase("EmbeddingModel ONNX config validation", \embeddingOnnxConfigTest());
+        addTestCase("EmbeddingModel ONNX tensor inference", \embeddingOnnxTensorInferenceTest());
         addTestCase("EmbeddingModel empty batch", \embeddingEmptyBatchTest());
         addTestCase("CrossEncoderReranker config validation", \rerankerConfigTest());
         addTestCase("CrossEncoderReranker ONNX config validation", \rerankerOnnxConfigTest());
+        addTestCase("CrossEncoderReranker ONNX tensor inference", \rerankerOnnxTensorInferenceTest());
         addTestCase("CrossEncoderReranker empty input", \rerankerEmptyTest());
         addTestCase("CrossEncoderReranker rerankWithScores ordering", \rerankerWithScoresOrderingTest());
         addTestCase("CrossEncoderReranker rerank/rerankWithScores agree on indices",
@@ -69,6 +73,26 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         addTestCase("CrossEncoderReranker rerankWithScores truncation", \rerankerTruncationTest());
         addTestCase("CrossEncoderReranker RerankerScoredHit hashdecl", \rerankerScoredHitHashdeclTest());
         set_return_value(main());
+    }
+
+    private string getTokenModelPath(string filename) {
+        string path = normalize_dir(get_script_dir() + "/../../../../modules/ml/test/data/" + filename);
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/" + filename;
+        }
+        return path;
+    }
+
+    private bool skipTokenOnnxFixture(string path) {
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("ml module was not built with ONNX Runtime support");
+            return True;
+        }
+        if (!is_file(path)) {
+            testSkip("ONNX token model fixture not found at: " + path);
+            return True;
+        }
+        return False;
     }
 
     # ===================== DocumentChunker Tests =====================
@@ -482,6 +506,32 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         }
     }
 
+    embeddingOnnxTensorInferenceTest() {
+        string model_path = getTokenModelPath("test_token_embedding.onnx");
+        if (skipTokenOnnxFixture(model_path)) {
+            return;
+        }
+
+        QoreTokenizerUtils::EmbeddingModel emb(<QoreTokenizerUtils::EmbeddingConfig>{
+            "mode": "onnx",
+            "model_path": model_path,
+            "tokenizer_config": tokenizer_config,
+            "max_tokens": 16,
+        });
+
+        list<list<float>> result = emb.embedBatch(("hello world", "machine learning"));
+        assertEq(2, result.size(), "ONNX embedding should preserve input row count");
+        assertEq(2, result[0].size(), "test embedding model returns two dimensions");
+        assertEq(2, emb.getDimension(), "embedding dimension should be cached");
+
+        foreach list<float> vec in (result) {
+            float norm = sqrt(vec[0] * vec[0] + vec[1] * vec[1]);
+            assertTrue(abs(norm - 1.0) < 1e-5,
+                sprintf("normalized embedding norm should be 1.0; got %f", norm));
+            assertTrue(vec[1] > 0.0, "attention-mask feature should survive mean pooling");
+        }
+    }
+
     embeddingEmptyBatchTest() {
         auto emb = new QoreTokenizerUtils::EmbeddingModel(
             <QoreTokenizerUtils::EmbeddingConfig>{
@@ -553,6 +603,36 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
                     });
             });
         }
+    }
+
+    rerankerOnnxTensorInferenceTest() {
+        string model_path = getTokenModelPath("test_token_reranker.onnx");
+        if (skipTokenOnnxFixture(model_path)) {
+            return;
+        }
+
+        QoreTokenizerUtils::CrossEncoderReranker rr(<QoreTokenizerUtils::RerankerConfig>{
+            "mode": "onnx",
+            "model_path": model_path,
+            "tokenizer_config": tokenizer_config,
+            "max_length": 24,
+            "activation": "sigmoid",
+        });
+
+        list<float> scores = rr.score("machine learning", (
+            "machine learning systems",
+            "weather forecast",
+        ));
+        assertEq(2, scores.size(), "ONNX reranker should return one score per passage");
+        foreach float score in (scores) {
+            assertTrue(score > 0.0 && score < 1.0,
+                sprintf("sigmoid score should be in (0, 1); got %f", score));
+        }
+
+        list<hash<QoreTokenizerUtils::RerankerScoredHit>> hits = rr.rerankWithScores(
+            "machine learning", ("machine learning systems", "weather forecast"), 2);
+        assertEq(2, hits.size(), "rerankWithScores should keep requested rows");
+        assertTrue(hits[0].score >= hits[1].score, "ONNX reranker hits should be sorted");
     }
 
     rerankerEmptyTest() {

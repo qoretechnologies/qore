@@ -2894,7 +2894,7 @@ qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/da
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
 qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
-qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
+qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer;modules/ml/ml")
 qore_user_module("qlib/QoreCrypto" "")
 qore_user_module("qlib/QoreLlmTypes.qm" "")
 qore_user_module("qlib/QoreLlmUtils" "QoreLlmTypes")

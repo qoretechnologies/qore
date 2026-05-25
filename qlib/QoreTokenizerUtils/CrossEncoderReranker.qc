@@ -73,7 +73,7 @@ public hashdecl RerankerConfig {
 
     Supports two backends:
     - \b HTTP: Calls a reranker API endpoint that accepts query/passages pairs
-    - \b ONNX: Runs a local ONNX cross-encoder model (not yet implemented)
+    - \b ONNX: Runs a local ONNX cross-encoder model through dense tensor inputs
 
     @par Example: Re-rank retrieval candidates
     @code{.py}
@@ -115,6 +115,8 @@ public class CrossEncoderReranker {
         *ML::OnnxModel onnx_model;
         #! HuggingFace tokenizer for ONNX mode
         *Tokenizer::HFTokenizer onnx_tokenizer;
+        #! Input tensors accepted by the ONNX model
+        hash<string, bool> onnx_input_names = {};
     }
 
     #! Creates a CrossEncoderReranker with the given configuration
@@ -152,6 +154,7 @@ public class CrossEncoderReranker {
             onnx_model = exists config.model_data
                 ? new ML::OnnxModel(config.model_data)
                 : new ML::OnnxModel(config.model_path);
+            onnx_input_names = CrossEncoderReranker::buildOnnxInputNameMap(onnx_model);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
             if (config.tokenizer_runtime_config) {
                 onnx_tokenizer.loadConfig(config.tokenizer_runtime_config);
@@ -304,18 +307,16 @@ public class CrossEncoderReranker {
             list<list<int>> batch_mask = all_attention_mask[offset .. end - 1];
             list<list<int>> batch_types = all_token_type_ids[offset .. end - 1];
 
-            hash<auto> inputs = {
-                "input_ids": batch_ids,
-                "attention_mask": batch_mask,
-                "token_type_ids": batch_types,
-            };
+            hash<auto> inputs = makeOnnxTokenTensorInputs(batch_ids, batch_mask,
+                batch_types, batch_ids[0].size());
 
-            hash<auto> result = onnx_model.run(inputs);
+            hash<auto> result = onnx_model.runTensors(inputs);
 
             # Extract logits and apply sigmoid
             # Cross-encoder models typically output logits in a "logits" key
             # or a single unnamed output; handle both
             auto logits = result.logits ?? result{result.firstKey()};
+            logits = logits.toList();
 
             if (logits.typeCode() == NT_LIST) {
                 foreach auto logit_row in (logits) {
@@ -348,6 +349,57 @@ public class CrossEncoderReranker {
         }
 
         return all_scores;
+    }
+
+    #! Builds ONNX Runtime tensor inputs from padded token IDs and masks
+    private hash<auto> makeOnnxTokenTensorInputs(list<list<int>> input_ids,
+            list<list<int>> attention_mask, list<list<int>> token_type_ids, int width) {
+        hash<auto> inputs = {};
+
+        if (onnx_input_names.hasKey("input_ids")) {
+            inputs{"input_ids"} = CrossEncoderReranker::makeInt64Tensor(input_ids, width, "input_ids");
+        }
+        if (onnx_input_names.hasKey("attention_mask")) {
+            inputs{"attention_mask"} = CrossEncoderReranker::makeInt64Tensor(
+                attention_mask, width, "attention_mask");
+        }
+        if (onnx_input_names.hasKey("token_type_ids")) {
+            inputs{"token_type_ids"} = CrossEncoderReranker::makeInt64Tensor(
+                token_type_ids, width, "token_type_ids");
+        }
+
+        if (!inputs.hasKey("input_ids")) {
+            throw "RERANKER-ERROR",
+                "ONNX reranker model must expose a standard 'input_ids' tensor input";
+        }
+        return inputs;
+    }
+
+    #! Builds a hash map of declared ONNX model input names
+    private static hash<string, bool> buildOnnxInputNameMap(auto model) {
+        hash<string, bool> rv = {};
+        foreach hash<ML::OnnxTensorInfo> input in (model.getInputInfo()) {
+            rv{input.name} = True;
+        }
+        return rv;
+    }
+
+    #! Converts padded token rows to a dense int64 Tensor
+    private static auto makeInt64Tensor(list<list<int>> rows, int width, string input_name) {
+        int row_count = rows.size();
+        buffer<int64> data = buffer<int64>::sized(row_count * width);
+        int offset = 0;
+        for (int i = 0; i < row_count; ++i) {
+            if (rows[i].size() != width) {
+                throw "RERANKER-ERROR",
+                    sprintf("token tensor '%s' row %d has length %d; expected %d",
+                        input_name, i, rows[i].size(), width);
+            }
+            for (int j = 0; j < width; ++j) {
+                data[offset++] = rows[i][j];
+            }
+        }
+        return ML::Tensor::fromBuffer(data, (row_count, width));
     }
 
     #! Scores via HTTP endpoint

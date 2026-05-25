@@ -99,6 +99,9 @@ foreach hash<auto> chunk in (chunks) {
     - TokenCounter, DocumentChunker, EmbeddingModel, and CrossEncoderReranker can
       apply optional \c tokenizer_config.json companion settings through
       \c tokenizer_runtime_config
+    - Local ONNX embedding and reranking paths use dense \c ML::Tensor inputs
+      for \c input_ids, \c attention_mask, and \c token_type_ids, and only send
+      tokenizer tensors declared by the model
     - Enables QoreModelRegistry-backed ONNX execution for DataProviderML processors
       without temporary files
 

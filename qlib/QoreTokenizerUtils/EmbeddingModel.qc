@@ -101,6 +101,8 @@ public class EmbeddingModel {
         *ML::OnnxModel onnx_model;
         #! HuggingFace tokenizer for ONNX mode
         *Tokenizer::HFTokenizer onnx_tokenizer;
+        #! Input tensors accepted by the ONNX model
+        hash<string, bool> onnx_input_names = {};
     }
 
     #! Creates an EmbeddingModel with the given configuration
@@ -144,6 +146,7 @@ public class EmbeddingModel {
             onnx_model = exists config.model_data
                 ? new ML::OnnxModel(config.model_data)
                 : new ML::OnnxModel(config.model_path);
+            onnx_input_names = EmbeddingModel::buildOnnxInputNameMap(onnx_model);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
             if (config.tokenizer_runtime_config) {
                 onnx_tokenizer.loadConfig(config.tokenizer_runtime_config);
@@ -244,34 +247,33 @@ public class EmbeddingModel {
                     enc.token_type_ids ?? (map 0, range(enc.input_ids.size()));
             }
 
-            hash<auto> inputs = {
-                "input_ids": batch_input_ids,
-                "attention_mask": batch_attention_mask,
-                "token_type_ids": batch_token_type_ids,
-            };
+            hash<auto> inputs = makeOnnxTokenTensorInputs(batch_input_ids,
+                batch_attention_mask, batch_token_type_ids, batch_input_ids[0].size());
 
-            hash<auto> result = onnx_model.run(inputs);
+            hash<auto> result = onnx_model.runTensors(inputs);
 
             # Get the last hidden state (typically the first output)
             auto hidden_states = result.last_hidden_state ?? result{result.firstKey()};
+            hidden_states = hidden_states.toList();
 
             # Pool and L2-normalize using C++ vector math from ml module
             for (int i = 0; i < batch_input_ids.size(); ++i) {
+                list<list<float>> token_embeddings = cast<list<list<float>>>(hidden_states[i]);
                 list<float> pooled;
                 switch (pooling_strategy) {
                     case "cls":
                         # CLS token pooling — use the first token's embedding
-                        pooled = hidden_states[i][0];
+                        pooled = token_embeddings[0];
                         break;
                     case "max":
                         # Max pooling — element-wise max across masked tokens
                         pooled = ML::ml_max_pool(
-                            hidden_states[i], batch_attention_mask[i]);
+                            token_embeddings, batch_attention_mask[i]);
                         break;
                     default:
                         # Mean pooling (default)
                         pooled = ML::ml_mean_pool(
-                            hidden_states[i], batch_attention_mask[i]);
+                            token_embeddings, batch_attention_mask[i]);
                 }
                 list<float> normalized = ML::ml_l2_normalize(pooled);
 
@@ -286,6 +288,57 @@ public class EmbeddingModel {
         }
 
         return all_embeddings;
+    }
+
+    #! Builds ONNX Runtime tensor inputs from padded token IDs and masks
+    private hash<auto> makeOnnxTokenTensorInputs(list<list<int>> input_ids,
+            list<list<int>> attention_mask, list<list<int>> token_type_ids, int width) {
+        hash<auto> inputs = {};
+
+        if (onnx_input_names.hasKey("input_ids")) {
+            inputs{"input_ids"} = EmbeddingModel::makeInt64Tensor(input_ids, width, "input_ids");
+        }
+        if (onnx_input_names.hasKey("attention_mask")) {
+            inputs{"attention_mask"} = EmbeddingModel::makeInt64Tensor(
+                attention_mask, width, "attention_mask");
+        }
+        if (onnx_input_names.hasKey("token_type_ids")) {
+            inputs{"token_type_ids"} = EmbeddingModel::makeInt64Tensor(
+                token_type_ids, width, "token_type_ids");
+        }
+
+        if (!inputs.hasKey("input_ids")) {
+            throw "EMBEDDING-ERROR",
+                "ONNX embedding model must expose a standard 'input_ids' tensor input";
+        }
+        return inputs;
+    }
+
+    #! Builds a hash map of declared ONNX model input names
+    private static hash<string, bool> buildOnnxInputNameMap(auto model) {
+        hash<string, bool> rv = {};
+        foreach hash<ML::OnnxTensorInfo> input in (model.getInputInfo()) {
+            rv{input.name} = True;
+        }
+        return rv;
+    }
+
+    #! Converts padded token rows to a dense int64 Tensor
+    private static auto makeInt64Tensor(list<list<int>> rows, int width, string input_name) {
+        int row_count = rows.size();
+        buffer<int64> data = buffer<int64>::sized(row_count * width);
+        int offset = 0;
+        for (int i = 0; i < row_count; ++i) {
+            if (rows[i].size() != width) {
+                throw "EMBEDDING-ERROR",
+                    sprintf("token tensor '%s' row %d has length %d; expected %d",
+                        input_name, i, rows[i].size(), width);
+            }
+            for (int j = 0; j < width; ++j) {
+                data[offset++] = rows[i][j];
+            }
+        }
+        return ML::Tensor::fromBuffer(data, (row_count, width));
     }
 
     #! Embeds texts via HTTP endpoint
