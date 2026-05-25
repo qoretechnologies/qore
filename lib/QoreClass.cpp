@@ -6336,12 +6336,12 @@ QoreValue BuiltinNormalMethodVariantBase::evalMethod(QoreObject* self, CodeEvalu
 QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, CodeEvaluationHelper& ceh,
         ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), nullptr, runtime_get_class());
-    QoreValue arg = n;
+    QoreValue arg = n.isEnum() ? n.getEnumBaseValue() : n;
     ValueHolder materialized(xsink);
-    if (n.isShortString()) {
+    if (arg.isShortString()) {
         char buf[7];
-        n.getShortString(buf);
-        materialized = QoreValue(new QoreStringNode(buf, n.shortStringLen(), QCS_UTF8));
+        arg.getShortString(buf);
+        materialized = QoreValue(new QoreStringNode(buf, arg.shortStringLen(), QCS_UTF8));
         arg = *materialized;
     }
     return evalImpl(nullptr, (AbstractPrivateData*)&arg, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);

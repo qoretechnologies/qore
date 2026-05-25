@@ -11239,6 +11239,15 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     ExceptionSink xsink;
 
     {
+        std::vector<std::string> prepended, appended;
+        std::string mp_error;
+        if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
+                prepended, appended, mp_error)) {
+            applyModulePathListsToProgram(tpgm, prepended, appended);
+        }
+    }
+
+    {
         std::string cmd_error;
         if (!applyAOTModuleCommandsToProgram(tpgm, metadata,
                 static_cast<uint32_t>(metadata_len), label, cmd_error)) {
@@ -11246,6 +11255,42 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                 "module-command replay failed: %s\n",
                 label ? label : "<script>", cmd_error.c_str());
             return 5;
+        }
+    }
+
+    // Load module dependencies before deserialization so that:
+    //   1. Module-contributed namespaces, classes, functions, etc. are properly registered
+    //      via the standard QoreBuiltinModule::addToProgramImpl path, which calls
+    //      addFeature()/commitFeature().  Without this, the AOT metadata-deserialization
+    //      path skips feature tracking, leaving runTimeLoadModule()'s lock-free fast path
+    //      blind to modules that were %requires'd at AOT compile time - any subsequent
+    //      load_module(name) call goes through the slow path, tries to re-load the module,
+    //      and fails with "Namespace 'X' already exists" if the AOT metadata had also
+    //      deserialized any items into that namespace.
+    //   2. Base-class and type references inside the deserialized metadata resolve.
+    // Mirrors the AOT v2 / module-init dependency-load step.
+    {
+        std::vector<std::string> deps;
+        std::string dep_error;
+        if (readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
+            printd(2, "qore_aot_script_register(%s): loading %d dependencies\n",
+                label ? label : "<script>", (int)deps.size());
+            size_t dep_cancel_i = 0;
+            for (const std::string& dep : deps) {
+                if (dep_cancel_i && !(dep_cancel_i % 100)
+                        && qore_check_cancel(&xsink, "AOT script dependency load")) {
+                    xsink.handleExceptions();
+                    return 6;
+                }
+                int dep_rc = MM.runTimeLoadModule(&xsink, dep.c_str(), tpgm);
+                if (dep_rc < 0 || xsink.isException()) {
+                    printd(2, "qore_aot_script_register(%s): dependency '%s' load error "
+                        "(rc=%d) - continuing; may resolve later or via fallback\n",
+                        label ? label : "<script>", dep.c_str(), dep_rc);
+                    xsink.clear();
+                }
+                ++dep_cancel_i;
+            }
         }
     }
 
@@ -11417,24 +11462,21 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     uint64_t us_init = 0;
 
     {
-        ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
-        if (xsink.isException()) {
-            xsink.handleExceptions();
-            return 2;
-        }
-
-        // Replay every blob's serialized %module-cmd directives before any
-        // metadata deserialization.  Batch compilation can serialize a parse
-        // setup command only with the source that issued it; type resolution in
-        // a different fragment must still see that setup regardless of linked
-        // object registration order.
-        size_t cancel_i = 0;
+        size_t setup_cancel_i = 0;
         for (auto& d : batch->deferred) {
-            if (cancel_i && !(cancel_i % 100)
-                    && qore_check_cancel(&xsink, "AOT script batch module-command replay")) {
+            if (setup_cancel_i && !(setup_cancel_i % 100)
+                    && qore_check_cancel(&xsink, "AOT script batch module setup")) {
                 xsink.handleExceptions();
                 return 8;
             }
+
+            std::vector<std::string> prepended, appended;
+            std::string mp_error;
+            if (readModulePathLists(d.metadata, static_cast<uint32_t>(d.metadata_len),
+                    prepended, appended, mp_error)) {
+                applyModulePathListsToProgram(tpgm, prepended, appended);
+            }
+
             std::string cmd_error;
             if (!applyAOTModuleCommandsToProgram(tpgm, d.metadata,
                     static_cast<uint32_t>(d.metadata_len),
@@ -11444,10 +11486,62 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     d.label.c_str(), cmd_error.c_str());
                 return 6;
             }
-            ++cancel_i;
+            ++setup_cancel_i;
+        }
+    }
+
+    // Load module dependencies for every deferred blob BEFORE entering the
+    // parse-context helper.  Each blob's dependency list comes from the AOT
+    // compile-time featureList capture; running them through MM.runTimeLoadModule
+    // funnels module-contributed namespaces through QoreBuiltinModule::addToProgramImpl,
+    // which is what populates featureList/committedFeatureList.  Without this step,
+    // a subsequent runtime load_module(name) call (e.g. defensive load_module("json")
+    // in a binary that also has %requires json) cannot hit the lock-free fast path,
+    // goes through the slow path, and tries to re-register namespaces that the AOT
+    // metadata-deserialization step below would otherwise leave invisible to the
+    // feature tracker - raising "Namespace 'X' already exists in '::Qore'".
+    // Mirrors qore_aot_run_v2 / qore_aot_module_init_v3.
+    {
+        size_t dep_cancel_i = 0;
+        for (auto& d : batch->deferred) {
+            if (dep_cancel_i && !(dep_cancel_i % 100)
+                    && qore_check_cancel(&xsink, "AOT script batch dependency load")) {
+                xsink.handleExceptions();
+                return 11;
+            }
+            std::vector<std::string> deps;
+            std::string dep_error;
+            if (readDependencies(d.metadata, static_cast<uint32_t>(d.metadata_len),
+                    deps, dep_error)) {
+                size_t dep_load_i = 0;
+                for (const std::string& dep : deps) {
+                    if (dep_load_i && !(dep_load_i % 100)
+                            && qore_check_cancel(&xsink, "AOT script batch dependency module load")) {
+                        xsink.handleExceptions();
+                        return 12;
+                    }
+                    int dep_rc = MM.runTimeLoadModule(&xsink, dep.c_str(), tpgm);
+                    if (dep_rc < 0 || xsink.isException()) {
+                        printd(2, "qore_aot_script_end_batch(%s): dependency '%s' load "
+                            "error (rc=%d) - continuing\n",
+                            d.label.c_str(), dep.c_str(), dep_rc);
+                        xsink.clear();
+                    }
+                    ++dep_load_i;
+                }
+            }
+            ++dep_cancel_i;
+        }
+    }
+
+    {
+        ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
+        if (xsink.isException()) {
+            xsink.handleExceptions();
+            return 2;
         }
 
-        cancel_i = 0;
+        size_t cancel_i = 0;
         for (auto& d : batch->deferred) {
             if (cancel_i && !(cancel_i % 100)
                     && qore_check_cancel(&xsink, "AOT script batch metadata deserialization")) {

@@ -101,6 +101,10 @@ class TypeMemberPseudoTest {
     }
 }
 
+public enum ShortStringPseudoEnum : string {
+    Input = "Input",
+}
+
 int sub ftest(int i, ...) {
     return 1;
 }
@@ -3072,6 +3076,13 @@ class ReflectionTest inherits QUnit::Test {
         c = PseudoClass::forType(StringType);
         assertTrue(c.isEqual(StringPseudoClass));
         assertFalse(c.isEqual(IntPseudoClass));
+
+        PseudoClass enum_string_class = PseudoClass::forValue(ShortStringPseudoEnum::Input);
+        assertTrue(enum_string_class.isEqual(StringPseudoClass));
+        PseudoMethod enum_size = enum_string_class.getMethod("size");
+        assertEq(5, enum_size.call(ShortStringPseudoEnum::Input));
+        PseudoMethodVariant enum_size_variant = enum_size.getVariants()[0];
+        assertEq(5, enum_size_variant.call(ShortStringPseudoEnum::Input));
 
         assertTrue(ValuePseudoClass.isEqual(PseudoClass::forType(StringType.getOrNothingType())));
 
