@@ -1893,10 +1893,33 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
         if (it->second->isClosed()
                 && !it->second->hasCompletedStreams()
                 && !it->second->hasDispatchedStreams()) {
+            // Report the close before erasing so the persistent-session teardown
+            // path is not lost when this is the only place the session is reaped
+            // (e.g. a session that closed without any reset/abandon event).
+            if (it->second->reportCloseIfNew()) {
+                lifecycle_closed_sessions_.push_back(it->first);
+            }
             sock->priv->socket->priv->removeQuicSession(it->first);
             it = sessions_.erase(it);
         } else {
             ++it;
+        }
+    }
+}
+
+void SocketQuicServerPollOperation::collectSessionLifecycleEvents() {
+    // Called on the I/O thread with sock->priv->m held.  Folds two cheap
+    // per-session checks: drain peer-reset reports and detect newly-closed
+    // sessions (closed-but-not-yet-reaped sessions are reported here; reaped
+    // ones are reported in cleanupClosedSessions()).  reportCloseIfNew() is
+    // one-shot per session, so the two paths never double-report.
+    for (auto& entry : sessions_) {
+        std::vector<int64_t> resets = entry.second->takePendingPeerResetReports();
+        for (int64_t stream_id : resets) {
+            lifecycle_peer_resets_.emplace_back(entry.first, stream_id);
+        }
+        if (entry.second->reportCloseIfNew()) {
+            lifecycle_closed_sessions_.push_back(entry.first);
         }
     }
 }
@@ -1965,6 +1988,13 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         break;  // EAGAIN — no more data
                     }
                 }
+
+                // Surface per-session lifecycle events (peer stream resets and
+                // session closes) seen while draining packets above, so the
+                // controller can tear down a persistent dedicated handler thread
+                // on a multiplexed connection.  Done before the early-return
+                // completed-stream checks so it runs on every READING poll.
+                collectSessionLifecycleEvents();
 
                 // Headers-only mode: check for streams with HEADERS complete
                 // (either from this drain or a previous cycle)

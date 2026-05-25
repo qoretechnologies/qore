@@ -39,6 +39,7 @@
 #include "qore/QoreQueue.h"
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 // Forward declarations for EventNotifier QPP type references
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -184,6 +185,7 @@ void Http2PollOperationPriv::continueReading(ExceptionSink* xsink) {
 void Http2PollOperationPriv::cleanup(ExceptionSink* xsink) {
     releaseCurrentOp(xsink);
     clearStreamQueues(xsink);
+    deregisterPersistentSessionQueue(xsink);
 
     if (request) {
         request->deref(xsink);
@@ -255,6 +257,14 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     // The inner op may have processed DATA frames for CONNECT streams that
     // need to be delivered to handler threads via their registered Queues.
     drainStreamQueues(xsink);
+    if (*xsink) {
+        h2_state = H2ServerState::CLOSED;
+        return nullptr;
+    }
+
+    // Release a persistent dedicated handler thread if the client abandoned a
+    // stream on this still-open connection (peer RST_STREAM) — see issue #5339.
+    deliverPersistentSessionClose(xsink);
     if (*xsink) {
         h2_state = H2ServerState::CLOSED;
         return nullptr;
@@ -530,6 +540,81 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
     // Wake the I/O thread so it applies the pending registration
     ExceptionSink wake_xsink;
     wakeIoThread(&wake_xsink);
+}
+
+void Http2PollOperationPriv::registerPersistentSessionQueue(Queue* queue, QoreObject* queue_obj,
+        ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    // Replace any previous binding (one persistent session per H2 connection).
+    if (persistent_session_queue) {
+        persistent_session_queue->deref(xsink);
+    }
+    if (persistent_session_queue_obj) {
+        persistent_session_queue_obj->deref(xsink);
+    }
+    persistent_session_queue = queue;
+    persistent_session_queue_obj = queue_obj;
+}
+
+void Http2PollOperationPriv::deregisterPersistentSessionQueue(ExceptionSink* xsink) {
+    Queue* q;
+    QoreObject* qobj;
+    {
+        AutoLocker al(op_lock);
+        q = persistent_session_queue;
+        qobj = persistent_session_queue_obj;
+        persistent_session_queue = nullptr;
+        persistent_session_queue_obj = nullptr;
+    }
+    if (q) {
+        q->deref(xsink);
+    }
+    if (qobj) {
+        qobj->deref(xsink);
+    }
+}
+
+void Http2PollOperationPriv::deliverPersistentSessionClose(ExceptionSink* xsink) {
+    // I/O thread: if the peer reset any stream this cycle, release the
+    // persistent dedicated handler thread bound to this connection by pushing a
+    // {"type":"close"} hash to its Queue.  One persistent session per H2
+    // connection, so any reset abandons it.  The dedicated loop's teardown then
+    // runs on the binding thread.
+    //
+    // NOTE: called from continuePoll() which already holds op_lock, so this
+    // method must NOT re-acquire it (op_lock is non-recursive).  register /
+    // deregister run on other threads under op_lock, so they are excluded for
+    // the duration of this access.
+    std::vector<int32_t> resets = sock->takeHttp2PeerResetReportsForAsyncPoll();
+    if (resets.empty()) {
+        return;
+    }
+    if (!persistent_session_queue) {
+        return;
+    }
+    // Take ownership of the held refs (clear the binding so a duplicate event
+    // does not double-deliver and the dedicated loop's deregister is a no-op).
+    Queue* q = persistent_session_queue;
+    QoreObject* qobj = persistent_session_queue_obj;
+    persistent_session_queue = nullptr;
+    persistent_session_queue_obj = nullptr;
+    ASYNC_IO_TRACE("Http2PollOperationPriv::deliverPersistentSessionClose "
+        "pushing persistent close after %zu peer reset(s)\n", resets.size());
+    ReferenceHolder<QoreHashNode> close_entry(new QoreHashNode(autoTypeInfo), xsink);
+    close_entry->setKeyValue("type", new QoreStringNode("close"), xsink);
+    if (!*xsink) {
+        // Queue::push takes the ref on success; on error the caller derefs
+        // (mirrors drainStreamQueues()).
+        QoreHashNode* entry = close_entry.release();
+        q->push(xsink, entry);
+        if (*xsink) {
+            entry->deref(xsink);
+        }
+    }
+    q->deref(xsink);
+    if (qobj) {
+        qobj->deref(xsink);
+    }
 }
 
 void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
@@ -1009,6 +1094,33 @@ nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
 
     priv->registerStreamQueue(static_cast<int32_t>(stream_id), queue_ptr,
         const_cast<QoreObject*>(obj_queue), notifier_ptr, notifier_obj_ptr);
+}
+
+//! Binds a Queue to receive the persistent-session close signal for this connection
+/** Called by the async-I/O controller when a multiplexed persistent handler
+    session is dedicated.  When the peer resets a stream on this still-open H2
+    connection (e.g. a timed-out request), continuePoll() pushes a
+    \c {"type":"close"} hash to the Queue, releasing the dedicated handler thread
+    parked on it so its teardown runs on the binding thread.
+
+    @param queue the persistent-session Queue
+
+    @since %Qore 2.3
+*/
+nothing Http2PollOperationBase::registerPersistentSessionQueue(Queue[Queue] queue) {
+    Queue* queue_ptr = queue.release();
+    const_cast<QoreObject*>(obj_queue)->ref();
+    priv->registerPersistentSessionQueue(queue_ptr, const_cast<QoreObject*>(obj_queue), xsink);
+}
+
+//! Unbinds the persistent-session close Queue for this connection
+/** Called by the async-I/O controller when the persistent session ends (clean
+    commit, explicit end, or after a delivered close).
+
+    @since %Qore 2.3
+*/
+nothing Http2PollOperationBase::deregisterPersistentSessionQueue() {
+    priv->deregisterPersistentSessionQueue(xsink);
 }
 
 //! Registers a Queue backed by a C++ WebSocketStreamFrameState for a CONNECT stream
