@@ -24,6 +24,8 @@
 %modern
 %enable-all-warnings
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/dataframe"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
@@ -108,6 +110,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # ONNX model tests
         addTestCase("onnx-model - basic inference", \onnxModelBasicInference());
         addTestCase("onnx-model - flush partial", \onnxModelFlushPartial());
+        addTestCase("onnx-model - DataFrameBlock tensor path", \onnxModelDataFrameTensorPath());
         addTestCase("onnx-model - capabilities", \onnxModelCapabilities());
         addTestCase("onnx-model - constructor validation", \onnxModelConstructorValidation());
 
@@ -1377,6 +1380,33 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # Flush should process remaining
         DataProviderMLProcessorsTest::collectResult(\results, proc.flushRecords());
         assertEq(3, results.lsize());
+    }
+
+    onnxModelDataFrameTensorPath() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 5,
+        });
+
+        DataFrame::DataFrame df({
+            "x": new buffer<float64>((1.0, 2.0, 3.0, 4.0, 5.0)),
+        });
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(5, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+
+        list<auto> outputs = result.getColumn("model_output");
+        assertEq(5, outputs.lsize());
+        assertFloat(3.0, outputs[0].Y, 1e-5);
+        assertFloat(11.0, outputs[4].Y, 1e-5);
+%endif
     }
 
     onnxModelCapabilities() {

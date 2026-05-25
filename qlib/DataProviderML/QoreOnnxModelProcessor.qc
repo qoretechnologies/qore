@@ -176,6 +176,9 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         #! Input tensor name
         *string input_tensor;
 
+        #! Input tensor dtype for ML::Tensor construction
+        string input_dtype = "float32";
+
         #! ONNX model path
         string model_path;
 
@@ -262,9 +265,29 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             }
             input_tensor = inputs[0].name;
         }
+        foreach hash<ML::OnnxTensorInfo> info in (model.getInputInfo()) {
+            if (info.name == input_tensor) {
+                input_dtype = QoreOnnxModelProcessor::onnxTypeToTensorDtype(info.type);
+                break;
+            }
+        }
 
         buffer = ();
         configured = True;
+    }
+
+    #! Converts ONNX metadata type names to ML::Tensor dtype names
+    private static string onnxTypeToTensorDtype(string type) {
+        switch (type) {
+            case "float": return "float32";
+            case "double": return "float64";
+            case "int8": return "int8";
+            case "int16": return "int16";
+            case "int32": return "int32";
+            case "int64": return "int64";
+            case "bool": return "bool";
+        }
+        return "float32";
     }
 
     #! Returns the name of this data provider
@@ -352,6 +375,155 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             };
         }
         return events;
+    }
+
+    #! Processes records in bulk hash-of-lists format
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processCompleteShapeWindows(records, DataProvider::DataProviderShape::HashOfLists);
+        if (exists result) {
+            return cast<hash<auto>>(result);
+        }
+        *auto fallback = processShapeRowsFallback(records, DataProvider::DataProviderShape::HashOfLists);
+        if (!exists fallback) {
+            return;
+        }
+        return cast<hash<auto>>(fallback);
+    }
+
+    #! Processes records in an explicitly negotiated pipeline shape
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        *auto result = processCompleteShapeWindows(records, shape);
+        if (exists result) {
+            return AbstractDataProviderMLProcessor::convertBulkOutputShape(result, shape);
+        }
+        return processShapeRowsFallback(records, shape);
+    }
+
+    #! Uses the row-oriented implementation as a semantics-preserving fallback
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Processes complete shaped windows with a single tensor inference call per window
+    private *hash<auto> processCompleteShapeWindows(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreOnnxModelProcessor: not configured; provide constructor options";
+        }
+        if (buffer) {
+            return;
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count || count % window_size) {
+            return;
+        }
+
+        list<list<float>> matrix = matrixFromShape(records, shape);
+        hash<auto> result;
+        for (int start = 0; start < count; start += window_size) {
+            list<list<float>> window = count == window_size
+                ? matrix
+                : matrix[start..(start + window_size - 1)];
+            appendTensorWindowEventResult(\result, window);
+        }
+        return result;
+    }
+
+    #! Extracts numeric input fields as a model matrix from a shaped block
+    private list<list<float>> matrixFromShape(auto records, DataProvider::DataProviderShape shape) {
+        if (shape == DataProvider::DataProviderShape::DataFrameBlock) {
+            return cast<list<list<float>>>(records.toMatrix(fields));
+        }
+
+        if (shape == DataProvider::DataProviderShape::BufferColumns) {
+            auto df = DataProvider::AbstractDataProcessor::convertShape(
+                records, shape, DataProvider::DataProviderShape::DataFrameBlock)[0];
+            return cast<list<list<float>>>(df.toMatrix(fields));
+        }
+
+        list<list<float>> matrix;
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        for (int i = 0; i < count; ++i) {
+            list<float> row;
+            foreach string f in (fields) {
+                push row, records{f}[i].toFloat();
+            }
+            push matrix, row;
+        }
+        return matrix;
+    }
+
+    #! Appends one tensor inference window to a hash-of-lists event result
+    private appendTensorWindowEventResult(reference<hash<auto>> result, list<list<float>> matrix) {
+        ML::Tensor input(data: matrix, dtype: input_dtype);
+        hash<auto> outputs = model.runTensors({input_tensor: input});
+        int count = matrix.lsize();
+
+        hash<auto> output_values;
+        foreach string okey in (keys outputs) {
+            output_values{okey} = tensorOutputToRows(cast<ML::Tensor>(outputs{okey}), count);
+        }
+
+        for (int i = 0; i < count; ++i) {
+            hash<auto> record_values;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                record_values{fields[j]} = matrix[i][j];
+            }
+            hash<auto> model_output;
+            foreach string okey in (keys output_values) {
+                auto oval = output_values{okey};
+                if (oval.typeCode() == NT_LIST && oval.lsize() == count) {
+                    model_output{okey} = oval[i];
+                } else {
+                    model_output{okey} = oval;
+                }
+            }
+            push result{"event_type"}, "onnx-model";
+            push result{"model_path"}, model_path;
+            push result{"execution_provider"}, model.getProviderInfo();
+            push result{"record_values"}, record_values;
+            push result{"model_output"}, model_output;
+        }
+    }
+
+    #! Converts a tensor output to row-addressable values where possible
+    private auto tensorOutputToRows(ML::Tensor tensor, int row_count) {
+        list<int> shape = tensor.getShape();
+        if (shape.lsize() == 1 && shape[0] == row_count) {
+            return tensor.getBuffer().toList();
+        }
+        if (shape.lsize() == 2 && shape[0] == row_count && shape[1] == 1) {
+            return tensor.getBuffer().toList();
+        }
+        auto nested = tensor.toList();
+        if (nested.typeCode() == NT_LIST && nested.lsize() == row_count) {
+            return nested;
+        }
+        return nested;
     }
 
     #! Supports shaped bulk API
