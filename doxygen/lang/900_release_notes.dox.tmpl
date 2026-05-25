@@ -2073,6 +2073,9 @@ foreach string module_name in (registry.getProcessModules()) {
         ML::Tensor::l2NormalizeRows() provide dense ONNX postprocessing for
         classifier logits, top-k selection, and transformer embedding pooling
         without nested list materialization
+      - ML::Tensor::toColumnBuffers() splits rank-1 and rank-2 tensor outputs
+        into dense column buffers so DataFrame and DataProviderML column output
+        modes can avoid nested row-list materialization for vector outputs
       - ONNX inference supports float, double, int8, int16, int32, int64, and bool
         tensor input/output conversion
       - OnnxModel automatic provider selection falls back to CPU when an advertised

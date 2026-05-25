@@ -467,6 +467,104 @@ static QoreTensor* qore_tensor_l2_normalize_rows_typed(const QoreTensor* tensor,
     return new QoreTensor(output.release(), shape);
 }
 
+template <typename T>
+static int qore_tensor_fill_column_buffer(const QoreTensor* tensor, size_t column, QoreBufferNode& output,
+        ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    size_t rows = static_cast<size_t>(shape[0]);
+    size_t width = shape.size() == 1 ? 1 : static_cast<size_t>(shape[1]);
+    const T* src = static_cast<const T*>(tensor->getBuffer()->getRawData());
+    T* dst = static_cast<T*>(output.getRawData());
+    for (size_t row = 0; row < rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "splitting tensor columns")) {
+            return -1;
+        }
+        dst[row] = src[(row * width) + column];
+    }
+    return 0;
+}
+
+static int qore_tensor_fill_bool_column_buffer(const QoreTensor* tensor, size_t column, QoreBufferNode& output,
+        ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    size_t rows = static_cast<size_t>(shape[0]);
+    size_t width = shape.size() == 1 ? 1 : static_cast<size_t>(shape[1]);
+    const QoreBufferNode* input = tensor->getBuffer();
+    for (size_t row = 0; row < rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "splitting bool tensor columns")) {
+            return -1;
+        }
+        if (output.setEntry(row, input->getReferencedEntry((row * width) + column, xsink), xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static QoreListNode* qore_tensor_to_column_buffers(const QoreTensor* tensor, ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    if (shape.size() != 1 && shape.size() != 2) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "toColumnBuffers() requires a rank-1 or rank-2 tensor; got rank %zu", shape.size());
+        return nullptr;
+    }
+    if (tensor->getBuffer()->hasNullableElements()) {
+        xsink->raiseException("ML-TENSOR-ERROR",
+            "toColumnBuffers() does not support nullable tensor buffers");
+        return nullptr;
+    }
+    if (tensor->getBuffer()->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    size_t rows = static_cast<size_t>(shape[0]);
+    size_t columns = shape.size() == 1 ? 1 : static_cast<size_t>(shape[1]);
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t column = 0; column < columns; ++column) {
+        if (column && !(column % 100) && qore_check_cancel(xsink, "building tensor column buffers")) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(tensor->getElementType(), false, rows), xsink);
+        int rc = 0;
+        switch (tensor->getElementType()) {
+            case QoreBufferElementType::Float32:
+                rc = qore_tensor_fill_column_buffer<float>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Float64:
+                rc = qore_tensor_fill_column_buffer<double>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int8:
+                rc = qore_tensor_fill_column_buffer<int8_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int16:
+                rc = qore_tensor_fill_column_buffer<int16_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int32:
+                rc = qore_tensor_fill_column_buffer<int32_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int64:
+                rc = qore_tensor_fill_column_buffer<int64_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Bool:
+                rc = qore_tensor_fill_bool_column_buffer(tensor, column, **buffer, xsink);
+                break;
+            default:
+                xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                    "toColumnBuffers() does not support tensor dtype '%s'",
+                    qore_buffer_element_type_name(tensor->getElementType()));
+                return nullptr;
+        }
+        if (rc || *xsink) {
+            return nullptr;
+        }
+        rv->push(buffer.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
 //! Dense tensor value for ML model inference
 /** A Tensor stores model input or output data as a dense \c buffer<T> plus
     explicit shape metadata. It is the bridge between Qore's columnar dense
@@ -932,6 +1030,32 @@ Tensor Tensor::l2NormalizeRows() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Splits a rank-1 or rank-2 tensor into dense column buffers
+/** @return a list of \c buffer<T> values, one for each logical column
+
+    Rank-1 tensors return one buffer with the tensor data. Rank-2 tensors are
+    interpreted as row-major \c (rows, columns) matrices and return one
+    contiguous buffer per column. This method is intended for DataFrame and
+    DataProvider columnar output paths that need flat dense columns without
+    first materializing nested row lists.
+
+    @par Example
+    @code{.q}
+    ML::Tensor logits = new ML::Tensor(new buffer<float32>((0.2f, 0.8f, 0.4f, 0.6f)), (2, 2));
+    list<auto> columns = logits.toColumnBuffers();
+    # columns[0] contains (0.2f, 0.4f), columns[1] contains (0.8f, 0.6f)
+    @endcode
+
+    @throw ML-TENSOR-SHAPE-ERROR if the tensor rank is not 1 or 2
+    @throw ML-TENSOR-ERROR if the tensor buffer is nullable
+    @throw ML-TENSOR-DTYPE-ERROR if the tensor dtype is unsupported
+
+    @since ml 1.1
+*/
+list<auto> Tensor::toColumnBuffers() [flags=RET_VALUE_ONLY] {
+    return qore_tensor_to_column_buffers(tensor, xsink);
 }
 
 //! Returns the tensor dtype

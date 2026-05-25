@@ -1707,26 +1707,19 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         list<int> shape = tensor.getShape();
         if ((shape.lsize() == 1 && shape[0] == row_count)
                 || (shape.lsize() == 2 && shape[0] == row_count && shape[1] == 1)) {
-            if (single_window && !result.hasKey(name)) {
-                result{name} = tensor.getBuffer();
-            } else {
-                appendColumnValues(\result, name, tensor.getBuffer().toList());
+            appendColumnValues(\result, name, tensor.getBuffer(), single_window);
+            return;
+        }
+
+        if (shape.lsize() == 2 && shape[0] == row_count) {
+            list<auto> columns = tensor.toColumnBuffers();
+            for (int j = 0; j < shape[1]; ++j) {
+                appendColumnValues(\result, sprintf("%s_%d", name, j), columns[j], single_window);
             }
             return;
         }
 
         auto nested = tensor.toList();
-        if (shape.lsize() == 2 && shape[0] == row_count) {
-            for (int j = 0; j < shape[1]; ++j) {
-                list<auto> values;
-                for (int i = 0; i < row_count; ++i) {
-                    push values, nested[i][j];
-                }
-                appendColumnValues(\result, sprintf("%s_%d", name, j), values);
-            }
-            return;
-        }
-
         if (nested.typeCode() == NT_LIST && nested.lsize() == row_count) {
             appendColumnValues(\result, name, nested);
             return;
@@ -1736,9 +1729,17 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             DataProvider::AbstractDataProcessor::repeatValue(nested, row_count));
     }
 
-    private appendColumnValues(reference<hash<auto>> result, string name, list<auto> values) {
+    private appendColumnValues(reference<hash<auto>> result, string name, auto values, bool single_window = False) {
+        if (single_window && values.typeCode() == NT_BUFFER && !result.hasKey(name)) {
+            result{name} = values;
+            return;
+        }
         if (!result.hasKey(name)) {
             result{name} = ();
+        }
+        if (values.typeCode() == NT_BUFFER) {
+            result{name} += values.toList();
+            return;
         }
         result{name} += values;
     }

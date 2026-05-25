@@ -446,6 +446,14 @@ if (caps.has_onnx) {
     Qore::ML::Tensor probabilities = logits.sigmoid();
     Qore::ML::Tensor labels = logits.argmax(axis: -1);
     hash<auto> top3 = logits.topK(k: 2, axis: -1);
+
+    # Split rank-2 ONNX outputs directly into dense DataFrame columns.
+    list<auto> probability_columns = logits.toColumnBuffers();
+    DataFrame::DataFrame scored({
+        "class_0": probability_columns[0],
+        "class_1": probability_columns[1],
+        "class_2": probability_columns[2],
+    });
 }
     @endcode
 
@@ -810,6 +818,9 @@ if (!caps.has_onnx) {
       @ref Qore::ML::Tensor::poolTokenEmbeddings() "Tensor::poolTokenEmbeddings()",
       and @ref Qore::ML::Tensor::l2NormalizeRows() "Tensor::l2NormalizeRows()"
       for dense ONNX postprocessing without nested list materialization
+    - Added @ref Qore::ML::Tensor::toColumnBuffers() "Tensor::toColumnBuffers()"
+      to split rank-1 and rank-2 tensor outputs into dense column buffers for
+      DataFrame and DataProvider pipelines
     - ONNX tensor conversion now supports float, double, int8, int16, int32,
       int64, and bool inputs and outputs
     - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now

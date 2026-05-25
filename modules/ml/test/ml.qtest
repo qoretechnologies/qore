@@ -515,6 +515,13 @@ public class MlTest inherits QUnit::Test {
         assertEq(((2.0,), (1.0,)), top.values.toList());
         assertEq(((1,), (1,)), top.indices.toList());
 
+        list<auto> column_buffers = logits.toColumnBuffers();
+        assertEq(2, column_buffers.size(), "rank-2 tensor should split to one buffer per column");
+        assertEq((0.0, -2.0), column_buffers[0].toList());
+        assertEq((2.0, 1.0), column_buffers[1].toList());
+        ML::Tensor rank1(data: new buffer<float32>((9.0, 8.0)), shape: (2,));
+        assertEq((9.0, 8.0), rank1.toColumnBuffers()[0].toList());
+
         ML::Tensor hidden(data: new buffer<float32>((
             1.0, 2.0, 3.0,
             3.0, 4.0, 5.0,
@@ -550,6 +557,10 @@ public class MlTest inherits QUnit::Test {
         });
         assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
             logits.topK(k: 3);
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor rank3(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (1, 2, 2));
+            rank3.toColumnBuffers();
         });
     }
 

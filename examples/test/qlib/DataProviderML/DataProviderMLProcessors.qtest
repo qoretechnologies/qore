@@ -117,6 +117,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("onnx-model - DataFrameBlock tensor path", \onnxModelDataFrameTensorPath());
         addTestCase("onnx-model - DataFrameBlock multi-column tensor path",
             \onnxModelDataFrameMultiColumnTensorPath());
+        addTestCase("onnx-model - DataFrameBlock vector compact columns",
+            \onnxModelDataFrameVectorColumnOutput());
         addTestCase("onnx-model - DataFrameBlock compact columns", \onnxModelDataFrameColumnOutput());
         addTestCase("onnx-model - DataFrameBlock compact partial columns",
             \onnxModelDataFramePartialColumnOutput());
@@ -221,6 +223,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             \registryModelOnnxDataFrameTensorPath());
         addTestCase("registry-model - DataFrameBlock multi-column tensor path",
             \registryModelOnnxDataFrameMultiColumnTensorPath());
+        addTestCase("registry-model - DataFrameBlock vector compact columns",
+            \registryModelOnnxDataFrameVectorColumnOutput());
         addTestCase("registry-model - DataFrameBlock compact columns",
             \registryModelOnnxDataFrameColumnOutput());
         addTestCase("registry-model - DataFrameBlock compact partial columns",
@@ -1764,6 +1768,48 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
 %endif
     }
 
+    onnxModelDataFrameVectorColumnOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipSklearnOnnx()) {
+            return;
+        }
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": getSklearnModelPath(),
+            "fields": ("sepal_length", "sepal_width", "petal_length", "petal_width"),
+            "window_size": 3,
+            "output_mode": "columns",
+        });
+
+        DataFrame::DataFrame df({
+            "sepal_length": new buffer<float32>((5.1, 7.0, 6.3)),
+            "sepal_width": new buffer<float32>((3.5, 3.2, 3.3)),
+            "petal_length": new buffer<float32>((1.4, 4.7, 6.0)),
+            "petal_width": new buffer<float32>((0.2, 1.4, 2.5)),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertTrue(result.columnNames().contains("label"), "vector column output should include labels");
+        assertTrue(result.columnNames().contains("probabilities_0"),
+            "vector column output should split rank-2 tensor output");
+        assertEq("buffer<int64>", result.getColumnBuffer("label").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("probabilities_0").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("probabilities_1").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("probabilities_2").fullType());
+        assertEq((0, 1, 2), result.getColumnBuffer("label").toList());
+
+        list<auto> p0 = result.getColumnBuffer("probabilities_0").toList();
+        list<auto> p1 = result.getColumnBuffer("probabilities_1").toList();
+        list<auto> p2 = result.getColumnBuffer("probabilities_2").toList();
+        for (int i = 0; i < 3; ++i) {
+            assertFloat(1.0, p0[i].toFloat() + p1[i].toFloat() + p2[i].toFloat(), 1e-5);
+        }
+%endif
+    }
+
     onnxModelDataFrameColumnOutput() {
 %ifdef NoDataFrame
         testSkip("dataframe module not available");
@@ -3084,6 +3130,72 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         ML::Tensor probabilities = result.probabilities;
         assertEq((3, 3), probabilities.getShape());
         assertEq("buffer<float32>", probabilities.getBuffer().fullType());
+%endif
+    }
+
+    registryModelOnnxDataFrameVectorColumnOutput() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipSklearnOnnx()) {
+            return;
+        }
+
+        string dir = tmp_location() + DirSep + "reg_model_onnx_vector_columns_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+
+        string package_dir = dir + DirSep + "sklearn_onnx";
+        mkdir_ex(package_dir, 0755, True);
+        File f();
+        f.open(package_dir + DirSep + "model.onnx", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(getSklearnModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "sklearn-onnx-vector-columns",
+            "description": "test ONNX package for vector column registry inference",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        DataProviderML::QoreRegistryModelProcessor proc({
+            "registry_path": dir,
+            "model_name": "sklearn-onnx-vector-columns",
+            "version": vid,
+            "fields": ("sepal_length", "sepal_width", "petal_length", "petal_width"),
+            "window_size": 3,
+            "output_mode": "columns",
+        });
+
+        DataFrame::DataFrame df({
+            "sepal_length": new buffer<float32>((5.1, 7.0, 6.3)),
+            "sepal_width": new buffer<float32>((3.5, 3.2, 3.3)),
+            "petal_length": new buffer<float32>((1.4, 4.7, 6.0)),
+            "petal_width": new buffer<float32>((0.2, 1.4, 2.5)),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock));
+        assertTrue(result.columnNames().contains("label"),
+            "registry vector column output should include labels");
+        assertTrue(result.columnNames().contains("probabilities_0"),
+            "registry vector column output should split rank-2 tensor output");
+        assertEq("buffer<int64>", result.getColumnBuffer("label").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("probabilities_0").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("probabilities_1").fullType());
+        assertEq("buffer<float32>", result.getColumnBuffer("probabilities_2").fullType());
+        assertEq((0, 1, 2), result.getColumnBuffer("label").toList());
+
+        list<auto> p0 = result.getColumnBuffer("probabilities_0").toList();
+        list<auto> p1 = result.getColumnBuffer("probabilities_1").toList();
+        list<auto> p2 = result.getColumnBuffer("probabilities_2").toList();
+        for (int i = 0; i < 3; ++i) {
+            assertFloat(1.0, p0[i].toFloat() + p1[i].toFloat() + p2[i].toFloat(), 1e-5);
+        }
 %endif
     }
 

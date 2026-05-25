@@ -420,6 +420,34 @@ public namespace OnnxBench {
         }
     }
 
+    public nothing sub verifyProcessorVectorFrame(string name, DataFrame::DataFrame frame, int rows) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        foreach string column in (("label", "probabilities_0", "probabilities_1", "probabilities_2")) {
+            if (!frame.columnNames().contains(column)) {
+                throw "BENCHMARK-ERROR", sprintf("%s missing column %y", name, column);
+            }
+        }
+        if (frame.getColumnBuffer("label").fullType() != "buffer<int64>") {
+            throw "BENCHMARK-ERROR", sprintf("%s returned non-dense label column: %y",
+                name, frame.getColumnBuffer("label").fullType());
+        }
+        foreach string column in (("probabilities_0", "probabilities_1", "probabilities_2")) {
+            if (frame.getColumnBuffer(column).fullType() != "buffer<float32>") {
+                throw "BENCHMARK-ERROR", sprintf("%s returned non-dense column %y: %y",
+                    name, column, frame.getColumnBuffer(column).fullType());
+            }
+        }
+        if (rows >= 3) {
+            list<auto> labels = frame.getColumnBuffer("label").toList();
+            if (labels[0].toInt() != 0 || labels[1].toInt() != 1 || labels[2].toInt() != 2) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned unexpected first labels: %y",
+                    name, labels[0..2]);
+            }
+        }
+    }
+
     public nothing sub verifyTokenRows(string name, list<auto> rows_out, int rows) {
         if (rows_out.size() != rows) {
             throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, rows_out.size(), rows);
