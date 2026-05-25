@@ -516,6 +516,7 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
             "mode": "onnx",
             "model_path": model_path,
             "tokenizer_config": tokenizer_config,
+            "session_config": <ML::OnnxSessionConfig>{"providers": ()},
             "max_tokens": 16,
         });
 
@@ -615,6 +616,7 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
             "mode": "onnx",
             "model_path": model_path,
             "tokenizer_config": tokenizer_config,
+            "session_config": <ML::OnnxSessionConfig>{"providers": ()},
             "max_length": 24,
             "activation": "sigmoid",
         });

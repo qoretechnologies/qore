@@ -134,6 +134,18 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 "type": AbstractDataProviderTypeMap."string",
                 "required": False,
             },
+            "onnx_session_config": <DataProviderOptionInfo>{
+                "display_name": "ONNX Session Config",
+                "short_desc": "Provider and threading config for ONNX Runtime",
+                "desc": "Optional `ML::OnnxSessionConfig` hash passed to the local ONNX "
+                    "cross-encoder model. Use this to select execution providers, disable "
+                    "GPU auto-detection with `{\"providers\": ()}`, or tune "
+                    "`intra_op_threads`, `inter_op_threads`, and graph optimization. "
+                    "Registry package execution config is used by default when present; "
+                    "this option overrides it.",
+                "type": AbstractDataProviderTypeMap."*hash",
+                "example_value": {"providers": ()},
+            },
             "registry_model_name": <DataProviderOptionInfo>{
                 "display_name": "Registry Model Name",
                 "short_desc": "Registry package containing reranker artifacts",
@@ -187,6 +199,9 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
         #! The reranker instance
         QoreTokenizerUtils::CrossEncoderReranker reranker;
 
+        #! Optional ONNX Runtime session configuration
+        *hash<ML::OnnxSessionConfig> onnx_session_config;
+
         #! Registry backend options
         hash<auto> registry_options;
 
@@ -224,6 +239,9 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
             "mode": reranker_mode,
             "max_length": copts.max_length ?? 512,
         });
+        if (exists copts.onnx_session_config) {
+            onnx_session_config = cast<hash<ML::OnnxSessionConfig>>(copts.onnx_session_config);
+        }
 
         if (reranker_mode == "http") {
             if (!copts.reranker_url.val()) {
@@ -243,6 +261,10 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 string artifact_name = copts.registry_model_artifact_name
                     ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
                     ?? "model";
+                if (manifest.execution && manifest.execution.config) {
+                    rconfig.session_config =
+                        cast<hash<ML::OnnxSessionConfig>>(manifest.execution.config);
+                }
                 rconfig.model_data = registry.loadNamedArtifact(copts.registry_model_name,
                     manifest.version_id, artifact_name);
                 hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
@@ -272,6 +294,9 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 throw "CONSTRUCTOR-ERROR",
                     "json module is required for tokenizer config parsing";
 %endif
+            }
+            if (onnx_session_config) {
+                rconfig.session_config = onnx_session_config;
             }
         }
 

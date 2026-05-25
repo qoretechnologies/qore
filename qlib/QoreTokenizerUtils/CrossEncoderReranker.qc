@@ -54,6 +54,8 @@ public hashdecl RerankerConfig {
     *hash<auto> tokenizer_config;
     #! ONNX mode: optional parsed tokenizer_config.json companion settings
     *hash<auto> tokenizer_runtime_config;
+    #! ONNX mode: optional session configuration for providers, threading, and graph optimization
+    *hash<ML::OnnxSessionConfig> session_config;
     #! Maximum sequence length for query+passage pairs; default 512
     int max_length = 512;
     #! Activation function for ONNX logits: "sigmoid" (default, binary relevance),
@@ -151,9 +153,13 @@ public class CrossEncoderReranker {
             }
             max_length = config.max_length;
             activation = config.activation;
-            onnx_model = exists config.model_data
-                ? new ML::OnnxModel(config.model_data)
-                : new ML::OnnxModel(config.model_path);
+            onnx_model = exists config.session_config
+                ? (exists config.model_data
+                    ? new ML::OnnxModel(config.model_data, config.session_config)
+                    : new ML::OnnxModel(config.model_path, config.session_config))
+                : (exists config.model_data
+                    ? new ML::OnnxModel(config.model_data)
+                    : new ML::OnnxModel(config.model_path));
             onnx_input_names = CrossEncoderReranker::buildOnnxInputNameMap(onnx_model);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
             if (config.tokenizer_runtime_config) {

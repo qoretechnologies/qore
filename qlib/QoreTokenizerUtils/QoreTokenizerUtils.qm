@@ -73,7 +73,10 @@ module QoreTokenizerUtils {
     and chat templates when available. ONNX embedding and re-ranking models can be
     loaded from either filesystem paths or in-memory binary artifacts, which allows
     QoreModelRegistry database and REST backends to execute registered ONNX packages
-    without first writing temporary model files.
+    without first writing model files to disk.  Local ONNX paths also accept
+    \c ML::OnnxSessionConfig through \c session_config so callers can select
+    execution providers, disable GPU auto-detection for CPU-only deployments, and
+    tune runtime threading.
 
     @par Example: Chunk a document for RAG
     @code{.py}
@@ -102,6 +105,8 @@ foreach hash<auto> chunk in (chunks) {
     - Local ONNX embedding and reranking paths use dense \c ML::Tensor inputs
       for \c input_ids, \c attention_mask, and \c token_type_ids, and only send
       tokenizer tensors declared by the model
+    - EmbeddingModel and CrossEncoderReranker accept \c session_config for
+      ONNX Runtime provider, threading, and graph-optimization settings
     - Enables QoreModelRegistry-backed ONNX execution for DataProviderML processors
       without temporary files
 

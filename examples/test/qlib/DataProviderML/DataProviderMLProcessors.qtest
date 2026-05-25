@@ -3085,6 +3085,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "embedding_mode": "onnx",
             "embedding_model_path": getTokenEmbeddingModelPath(),
             "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
             "max_tokens": 8,
         });
 
@@ -3118,6 +3119,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "embedding_mode": "onnx",
             "embedding_model_path": getTokenEmbeddingModelPath(),
             "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
             "max_tokens": 8,
         });
 
@@ -3156,6 +3158,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "reranker_mode": "onnx",
             "reranker_model_path": getTokenRerankerModelPath(),
             "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
             "max_length": 24,
         });
 
@@ -3193,6 +3196,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "reranker_mode": "onnx",
             "reranker_model_path": getTokenRerankerModelPath(),
             "tokenizer_config_path": getTokenizerConfigPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
             "max_length": 24,
         });
 

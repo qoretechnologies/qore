@@ -45,6 +45,8 @@ public hashdecl EmbeddingConfig {
     *hash<auto> tokenizer_config;
     #! ONNX mode: optional parsed tokenizer_config.json companion settings
     *hash<auto> tokenizer_runtime_config;
+    #! ONNX mode: optional session configuration for providers, threading, and graph optimization
+    *hash<ML::OnnxSessionConfig> session_config;
     #! Maximum input tokens (longer inputs are truncated); default 512
     int max_tokens = 512;
     #! HTTP endpoint format: "auto" (try OpenAI then bge-m3 fallback),
@@ -143,9 +145,13 @@ public class EmbeddingModel {
             }
             max_tokens = config.max_tokens;
             pooling_strategy = config.pooling_strategy;
-            onnx_model = exists config.model_data
-                ? new ML::OnnxModel(config.model_data)
-                : new ML::OnnxModel(config.model_path);
+            onnx_model = exists config.session_config
+                ? (exists config.model_data
+                    ? new ML::OnnxModel(config.model_data, config.session_config)
+                    : new ML::OnnxModel(config.model_path, config.session_config))
+                : (exists config.model_data
+                    ? new ML::OnnxModel(config.model_data)
+                    : new ML::OnnxModel(config.model_path));
             onnx_input_names = EmbeddingModel::buildOnnxInputNameMap(onnx_model);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
             if (config.tokenizer_runtime_config) {

@@ -2578,6 +2578,9 @@ foreach string module_name in (registry.getProcessModules()) {
         columns directly; embed-text appends an \c embedding column, and
         rerank-text emits top-k rows with \c reranker_score and
         \c reranker_rank columns without per-row hash materialization
+      - embed-text and rerank-text accept \c onnx_session_config and inherit
+        QoreModelRegistry package execution config for ONNX Runtime provider,
+        threading, and graph-optimization settings
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module
@@ -3329,6 +3332,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - EmbeddingModel and CrossEncoderReranker now feed local ONNX models with
         dense \c ML::Tensor token inputs and skip optional tokenizer tensors that
         are not declared by the model
+      - EmbeddingModel and CrossEncoderReranker accept \c session_config for
+        ONNX Runtime provider, threading, and graph-optimization settings
       - TokenCounter, DocumentChunker, EmbeddingModel, and CrossEncoderReranker can
         apply tokenizer_config.json companion settings from registry model packages
       - new module providing document chunking and token counting for RAG pipelines

@@ -1890,6 +1890,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       text columns directly; \c embed-text appends an \c embedding column, and
       \c rerank-text emits top-k rows with \c reranker_score and
       \c reranker_rank columns without per-row hash materialization
+    - \c embed-text and \c rerank-text accept \c onnx_session_config and inherit
+      QoreModelRegistry package execution config for ONNX Runtime provider,
+      threading, and graph-optimization settings
     - \c onnx-model and \c registry-model support \c input_map for ONNX models
       that require multiple named input tensors; the action catalog no longer
       requires \c fields when \c input_map is used
