@@ -241,6 +241,28 @@ ColumnarResult ColumnarResult::filter(auto mask) [flags=RET_VALUE_ONLY] {
     return qore_columnar_result_to_object(result->filter(mask, xsink), xsink);
 }
 
+//! Returns rows selected by explicit zero-based indices in the given order
+/** @param indices row indices to return; duplicate indices are allowed
+
+    @return a new ColumnarResult with rows selected in \a indices order
+
+    Dense buffer columns are preserved as dense buffers. Use this when a
+    ranked or sampled output must keep a specific row order that cannot be
+    represented by a boolean mask.
+
+    @par Example:
+    @code{.py}
+    ColumnarResult top_rows = result.take((4, 0, 2));
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if any row index is outside the result row range
+
+    @since %Qore 2.3
+*/
+ColumnarResult ColumnarResult::take(list<int> indices) [flags=RET_VALUE_ONLY] {
+    return qore_columnar_result_to_object(result->take(indices, xsink), xsink);
+}
+
 //! Returns a contiguous row slice as a new ColumnarResult
 /** @param offset zero-based first row
     @param count number of rows to include

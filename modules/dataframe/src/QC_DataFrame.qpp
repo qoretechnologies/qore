@@ -49,6 +49,30 @@ static bool qdfHasMethod(const QoreObject* obj, const char* name) {
     return cls && cls->findMethod(name);
 }
 
+static std::vector<int64_t> qdfListToRowIndices(const QoreListNode* indices, int64_t row_count,
+        ExceptionSink* xsink) {
+    std::vector<int64_t> rv;
+    rv.reserve(indices ? indices->size() : 0);
+    if (!indices) {
+        return rv;
+    }
+
+    for (size_t i = 0; i < indices->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame row indices")) {
+            return {};
+        }
+        int64_t index = indices->retrieveEntry(i).getAsBigInt();
+        if (index < 0 || index >= row_count) {
+            xsink->raiseException("DATAFRAME-RANGE-ERROR",
+                "row index " QLLD " at offset " QLLD " is outside row range 0.." QLLD,
+                index, static_cast<int64>(i), row_count ? row_count - 1 : 0);
+            return {};
+        }
+        rv.push_back(index);
+    }
+    return rv;
+}
+
 static QoreObject* qdfGetSqlStatement(QoreObject* ds, ValueHolder& stmt_val,
         ExceptionSink* xsink) {
     if (!qdfHasMethod(ds, "getSQLStatement")) {
@@ -778,6 +802,39 @@ DataFrame DataFrame::filter(string column, string op, auto value) [flags=RET_VAL
 */
 DataFrame DataFrame::filter(RowMask[QoreDataFrameRowMask] mask) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->filterMask(mask->getMask(), xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns rows selected by explicit zero-based indices in the given order
+/** @param indices row indices to return; duplicate indices are allowed
+
+    @return a new DataFrame with rows selected in \a indices order
+
+    Dense buffer columns are preserved as dense columns. Use this for ranked
+    or sampled outputs where a boolean row mask is not sufficient because the
+    output order matters.
+
+    @par Example:
+    @code{.py}
+    DataFrame ranked = df.takeRows((4, 0, 2));
+    @endcode
+
+    @throw DATAFRAME-RANGE-ERROR if any row index is outside the DataFrame row range
+
+    @since %Qore 2.3
+*/
+DataFrame DataFrame::takeRows(list<int> indices) [flags=RET_VALUE_ONLY] {
+    std::vector<int64_t> rows = qdfListToRowIndices(indices, df->numRows(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreDataFrame* result = df->selectRows(rows, xsink);
     if (!result) {
         return QoreValue();
     }

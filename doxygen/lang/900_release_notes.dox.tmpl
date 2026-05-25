@@ -1971,10 +1971,12 @@ foreach string module_name in (registry.getProcessModules()) {
         for production ETL and analytics workloads that benefit from keeping
         data columnar instead of materializing row hashes
       - \c ColumnarResult::filter(), \c ColumnarResult::slice(),
+        \c ColumnarResult::take(), \c DataFrame::takeRows(),
         \c ColumnarResult::combineMasks(), \c ColumnarResult::invertMask(),
         \c ColumnarResult::nullMask(), and \c ColumnarResult::stringPredicateMask()
-        provide dense filtering, contiguous slicing, boolean-mask composition,
-        and native string-predicate masks for SQL/DataFrame analytics flows
+        provide dense filtering, contiguous slicing, ordered row gathering,
+        boolean-mask composition, and native string-predicate masks for
+        SQL/DataFrame analytics flows
       - DataFrame-backed DataProvider searches accept DPQL strings and structured
         \c hash<DataProviderExpression> filters directly while preserving \c DataFrameBlock shape for bulk reads
       - \c DataFrame::concat(axis:1) implements horizontal concat with row-count

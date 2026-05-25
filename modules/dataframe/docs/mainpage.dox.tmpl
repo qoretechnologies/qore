@@ -219,7 +219,14 @@ buffer<bool> selected_mask = columns.combineMasks(high, active, "&&");
 ColumnarResult high_active = columns.filter(selected_mask);
 ColumnarResult missing_scores = columns.filter(columns.nullMask("score"));
 ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
+ColumnarResult ranked_rows = columns.take((3, 0, 2));
+DataFrame::DataFrame ranked_df = scores.takeRows((3, 0, 2));
     @endcode
+
+    Use @ref Qore::SQL::ColumnarResult::take() "ColumnarResult::take()" and
+    @ref DataFrame::DataFrame::takeRows() "DataFrame::takeRows()" when row order
+    matters, for example after ranking model scores. These APIs gather explicit
+    row indices and keep primitive columns in dense buffer form.
 
     Use @ref DataFrame::DataFrame::concat() "DataFrame::concat()" with
     \c axis:1 for horizontal concat. This shares existing column data when

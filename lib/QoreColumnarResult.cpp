@@ -660,6 +660,80 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
     return QoreValue();
 }
 
+static std::vector<size_t> columnar_take_indices(const QoreListNode* indices, size_t row_count,
+        ExceptionSink* xsink) {
+    std::vector<size_t> rv;
+    rv.reserve(indices ? indices->size() : 0);
+    if (!indices) {
+        return rv;
+    }
+
+    for (size_t i = 0; i < indices->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking columnar row indices")) {
+            return {};
+        }
+        int64_t index = indices->retrieveEntry(i).getAsBigInt();
+        if (index < 0 || static_cast<size_t>(index) >= row_count) {
+            xsink->raiseException("COLUMNAR-RESULT-ERROR",
+                "row index " QLLD " at offset " QLLD " is outside row range 0.." QLLD,
+                index, static_cast<int64>(i), static_cast<int64>(row_count ? row_count - 1 : 0));
+            return {};
+        }
+        rv.push_back(static_cast<size_t>(index));
+    }
+    return rv;
+}
+
+static QoreValue columnar_take_value(QoreValue value, const std::vector<size_t>& indices, ExceptionSink* xsink) {
+    if (value.getType() == NT_LIST) {
+        const QoreListNode* source = value.get<const QoreListNode>();
+        ReferenceHolder<QoreListNode> rv(new QoreListNode(source->getValueTypeInfo()), xsink);
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar list rows")) {
+                return QoreValue();
+            }
+            rv->push(source->retrieveEntry(indices[i]).refSelf(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return rv.release();
+    }
+
+    if (value.getType() == NT_BUFFER) {
+        const QoreBufferNode* source = value.get<const QoreBufferNode>();
+        if (source->getElementType() == QoreBufferElementType::String) {
+            ReferenceHolder<QoreListNode> values(new QoreListNode(source->getElementTypeInfo()), xsink);
+            for (size_t i = 0; i < indices.size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar string buffer rows")) {
+                    return QoreValue();
+                }
+                values->push(source->getReferencedEntry(indices[i], xsink), xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+            }
+            return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
+        }
+
+        ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
+            source->hasNullableElements(), indices.size()), xsink);
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar buffer rows")) {
+                return QoreValue();
+            }
+            ValueHolder entry(source->getReferencedEntry(indices[i], xsink), xsink);
+            if (*xsink || rv->setEntry(i, *entry, xsink)) {
+                return QoreValue();
+            }
+        }
+        return rv.release();
+    }
+
+    assert(false);
+    return QoreValue();
+}
+
 static QoreValue columnar_slice_value(QoreValue value, size_t offset, size_t count, ExceptionSink* xsink) {
     if (value.getType() == NT_LIST) {
         const QoreListNode* source = value.get<const QoreListNode>();
@@ -3733,6 +3807,30 @@ QoreColumnarResult* QoreColumnarResult::filter(QoreValue mask, ExceptionSink* xs
         }
         const Column& column = columns[i];
         ValueHolder data(columnar_filter_value(column.data, mask, selected, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->addColumn(column.name.c_str(), data.release(), column.schema, xsink)) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+QoreColumnarResult* QoreColumnarResult::take(const QoreListNode* row_indices, ExceptionSink* xsink) const {
+    assert(xsink);
+    std::vector<size_t> indices = columnar_take_indices(row_indices, row_count, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreColumnarResult> rv(new QoreColumnarResult, xsink);
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar result rows")) {
+            return nullptr;
+        }
+        const Column& column = columns[i];
+        ValueHolder data(columnar_take_value(column.data, indices, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }

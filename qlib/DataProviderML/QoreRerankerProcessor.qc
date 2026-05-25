@@ -512,17 +512,17 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
         hash<auto> columns;
         switch (shape) {
             case DataProvider::DataProviderShape::DataFrameBlock:
-                foreach string name in (records.columnNames()) {
-                    columns{name} = QoreRerankerProcessor::selectColumnValues(
-                        records.getColumn(name), selected_indices);
-                }
-                columns.reranker_score = scores;
-                columns.reranker_rank = ranks;
-                return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(columns);
+                return records.takeRows(selected_indices)
+                    .withColumn("reranker_score", scores)
+                    .withColumn("reranker_rank", ranks);
             case DataProvider::DataProviderShape::BufferColumns:
-                columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
-                    ? records.toColumnHash()
-                    : records + {};
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    columns = records.take(selected_indices).toColumnHash();
+                    columns.reranker_score = scores;
+                    columns.reranker_rank = ranks;
+                    return ColumnarResult::fromColumnHash(columns);
+                }
+                columns = records + {};
                 foreach string name in (keys columns) {
                     columns{name} = QoreRerankerProcessor::selectColumnValues(
                         columns{name}, selected_indices);

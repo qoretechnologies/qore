@@ -178,6 +178,9 @@ public:
     //! Returns a new result with rows selected by a boolean list or buffer mask.
     DLLEXPORT QoreColumnarResult* filter(QoreValue mask, ExceptionSink* xsink) const;
 
+    //! Returns a new result with rows selected by explicit zero-based indices.
+    DLLEXPORT QoreColumnarResult* take(const QoreListNode* indices, ExceptionSink* xsink) const;
+
     //! Returns a contiguous row slice, preserving dense buffer columns as views.
     DLLEXPORT QoreColumnarResult* slice(size_t offset, size_t count, ExceptionSink* xsink) const;
 

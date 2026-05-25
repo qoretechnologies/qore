@@ -135,6 +135,10 @@ public:
     //! Filter rows using a row bitmap mask
     DLLLOCAL QoreDataFrame* filterMask(const std::vector<uint8_t>& mask, ExceptionSink* xsink) const;
 
+    //! Build a new DataFrame from an arbitrary row index list
+    DLLLOCAL QoreDataFrame* selectRows(const std::vector<int64_t>& indices,
+        ExceptionSink* xsink) const;
+
     //! Sort by one or more columns
     DLLLOCAL QoreDataFrame* sortBy(const QoreListNode* columns,
         const QoreListNode* ascending, ExceptionSink* xsink) const;
@@ -262,10 +266,6 @@ private:
 
     //! Build a new DataFrame from a contiguous row range
     DLLLOCAL QoreDataFrame* sliceRows(int64_t start, int64_t count,
-        ExceptionSink* xsink) const;
-
-    //! Build a new DataFrame from an arbitrary row index list
-    DLLLOCAL QoreDataFrame* selectRows(const std::vector<int64_t>& indices,
         ExceptionSink* xsink) const;
 
     //! Rebuild col_index from columns vector

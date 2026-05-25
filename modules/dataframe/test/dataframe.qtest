@@ -81,6 +81,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("filterTest", \filterTest());
         addTestCase("sortByTest", \sortByTest());
         addTestCase("horizontalConcatTest", \horizontalConcatTest());
+        addTestCase("takeRowsTest", \takeRowsTest());
         addTestCase("columnarResultFilterTest", \columnarResultFilterTest());
         addTestCase("fillnaDropnaTest", \fillnaDropnaTest());
         addTestCase("valueCountsTest", \valueCountsTest());
@@ -667,6 +668,38 @@ sub invalid_dataframe_api() {
 
         assertThrows("COLUMNAR-RESULT-ERROR", \result.filter(), (new buffer<int64>((1, 0, 1, 0)),),
             "ColumnarResult::filter rejects non-boolean buffers as masks");
+    }
+
+    takeRowsTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+        });
+
+        DataFrame::DataFrame ranked = df.takeRows((3, 0, 2, 2));
+        assertEq((4, 1, 3, 3), ranked.getColumnBuffer("id").toList(),
+            "DataFrame::takeRows preserves requested row order and duplicates");
+        assertEq("buffer<float64>", ranked.getColumnBuffer("amount").fullType(),
+            "DataFrame::takeRows preserves dense buffer columns");
+        assertEq(("Dave", "Alice", "Carol", "Carol"), ranked.getColumn("name"));
+
+        ColumnarResult columns = df.toColumnarResult();
+        ColumnarResult selected = columns.take((2, 0));
+        assertEq((3, 1), selected.getColumn("id").toList(),
+            "ColumnarResult::take preserves requested row order");
+        assertEq("buffer<int64>", selected.getColumn("id").fullType(),
+            "ColumnarResult::take preserves dense integer buffers");
+        assertEq(("Carol", "Alice"), selected.getColumn("name").toList(),
+            "ColumnarResult::take preserves string columns");
+
+        assertThrows("DATAFRAME-RANGE-ERROR", \df.takeRows(), ((4,),),
+            "DataFrame::takeRows rejects out-of-range rows");
+        assertThrows("COLUMNAR-RESULT-ERROR", \columns.take(), ((-1,),),
+            "ColumnarResult::take rejects negative rows");
     }
 
     fillnaDropnaTest() {
