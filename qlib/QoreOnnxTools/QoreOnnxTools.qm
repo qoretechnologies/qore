@@ -154,6 +154,8 @@ qore-onnx quantize --method static --calibration-data calibration.json \
     @subsection qoreonnxtools_1_0 QoreOnnxTools Module Version 1.0
     - Initial release with ONNX Runtime Python quantization orchestration
     - Added dependency diagnostics and dry-run planning for quantization
+    - Static quantization plans and results include SHA-256 calibration data
+      fingerprints for reproducible deployment metadata
     - Added ONNX model inspection, validation, optimization, and benchmark helpers
     - Added ONNX model output and optional latency comparison helpers plus
       \c qore-onnx compare for original-vs-optimized and original-vs-quantized

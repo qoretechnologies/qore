@@ -74,6 +74,20 @@ public hashdecl OnnxQuantizationOptions {
     bool validate = True;
 }
 
+#! Fingerprint for static quantization calibration data
+public hashdecl OnnxCalibrationFingerprint {
+    #! Calibration data source path
+    string path;
+    #! Calibration data format
+    string format;
+    #! Digest algorithm used for \c sha256
+    string digest;
+    #! Lowercase hex SHA-256 digest of the calibration data file
+    string sha256;
+    #! Calibration data file size in bytes
+    int size;
+}
+
 #! Result of ONNX quantization
 public hashdecl OnnxQuantizationResult {
     #! Source ONNX model path
@@ -94,6 +108,8 @@ public hashdecl OnnxQuantizationResult {
     *string output;
     #! Dependency status for the selected Python executable
     hash<OnnxPythonDependencyInfo> dependency;
+    #! Static calibration data fingerprint, when calibration data is supplied
+    *hash<OnnxCalibrationFingerprint> calibration_fingerprint;
     #! Source model metadata when available
     *hash<auto> source_model;
     #! Quantized model metadata when validation is enabled and succeeds
@@ -205,6 +221,7 @@ public class OnnxQuantizer {
             "executed": False,
             "command": command,
             "dependency": dep,
+            "calibration_fingerprint": makeCalibrationFingerprint(opts),
             "source_model": inspectModel(input_path),
         };
 
@@ -332,6 +349,22 @@ public class OnnxQuantizer {
                 sprintf("unsupported %s %y; valid values are 'QInt8' and 'QUInt8'",
                     opt_name, value);
         }
+    }
+
+    private static *hash<OnnxCalibrationFingerprint> makeCalibrationFingerprint(
+            hash<OnnxQuantizationOptions> opts) {
+        if (!opts.calibration_data_json_path.val()) {
+            return NOTHING;
+        }
+
+        binary data = ReadOnlyFile::readBinaryFile(opts.calibration_data_json_path);
+        return <OnnxCalibrationFingerprint>{
+            "path": opts.calibration_data_json_path,
+            "format": "json",
+            "digest": "sha256",
+            "sha256": digest("sha256", data).toHex(),
+            "size": data.size(),
+        };
     }
 
     private static list<string> buildCommand(string script_path, string input_path,

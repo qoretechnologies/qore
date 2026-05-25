@@ -100,6 +100,27 @@ class QoreOnnxToolsTest inherits QUnit::Test {
                 dir.path + DirSep + "static.onnx",
                 <QoreOnnxTools::OnnxQuantizationOptions>{"method": "static"});
         });
+
+        string calibration_path = dir.path + DirSep + "calibration.json";
+        writeTextFile(calibration_path, "[{\"X\":[[1.0],[2.0],[3.0]]}]\n");
+        binary calibration_data = ReadOnlyFile::readBinaryFile(calibration_path);
+
+        hash<QoreOnnxTools::OnnxQuantizationResult> plan =
+            QoreOnnxTools::OnnxQuantizer::plan(getTestModelPath(),
+                dir.path + DirSep + "static.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "method": "static",
+                    "calibration_data_json_path": calibration_path,
+                });
+
+        assertTrue(exists plan.calibration_fingerprint,
+            "static quantization dry run should include calibration fingerprint metadata");
+        assertEq(calibration_path, plan.calibration_fingerprint.path);
+        assertEq("json", plan.calibration_fingerprint.format);
+        assertEq("sha256", plan.calibration_fingerprint.digest);
+        assertEq(calibration_data.size(), plan.calibration_fingerprint.size);
+        assertEq(digest("sha256", calibration_data).toHex(),
+            plan.calibration_fingerprint.sha256);
     }
 
     missingDependencyMessageTest() {

@@ -3309,6 +3309,9 @@ foreach string module_name in (registry.getProcessModules()) {
         execution-plan metadata through \c task, \c execution.task, and
         \c execution.plan; DataProviderML \c embed-text and \c rerank-text can
         infer registry-backed ONNX mode from \c embedding and \c reranker plans
+      - QoreOnnxTools static quantization plans record SHA-256 calibration data
+        fingerprints, and QoreModelRegistry stores those fingerprints in
+        quantized artifact lineage metadata
       - QoreModelRegistry ModelExecutableAdapter ONNX execution methods accept
         selected output names for registry-backed multi-output ONNX packages
       - DataProviderML ONNX processors and QoreModelRegistry ModelExecutableAdapter

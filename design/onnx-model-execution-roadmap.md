@@ -259,9 +259,10 @@ Acceptance checks:
 
 ## Phase 6: Quantization and Calibration
 
-Status: Qore orchestration and original-vs-candidate comparison implemented;
-full static calibration workflow coverage remains dependent on external
-calibration data and Python quantization availability.
+Status: completed for Qore orchestration, calibration metadata, registry
+lineage, and original-vs-candidate comparison; actual static quantization
+execution remains dependent on caller-supplied calibration data and Python
+quantization availability.
 
 Use existing ONNX Runtime and Optimum tooling when available; Qore owns
 orchestration, validation, registry metadata, and deployment comparison.
@@ -291,7 +292,7 @@ APIs:
   calibration input, op/node filters, extra ONNX Runtime quantization options,
   overwrite policy, and validation.
 - `OnnxQuantizationResult`: implemented for command, dependency, source model,
-  output model, and metadata reporting.
+  output model, calibration fingerprint, and metadata reporting.
 
 Acceptance checks:
 
@@ -303,7 +304,8 @@ Acceptance checks:
   artifacts with source version/artifact lineage metadata.
 - Successful validated quantization registration stores original-vs-quantized
   output and latency comparison metadata on the quantized artifact.
-- Calibration fingerprint storage remains pending.
+- Static calibration data fingerprints are stored in quantization results and
+  promoted into QoreModelRegistry quantized artifact lineage metadata.
 
 ## Phase 7: Import and Conversion Tooling
 

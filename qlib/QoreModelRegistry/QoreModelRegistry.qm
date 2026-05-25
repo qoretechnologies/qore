@@ -380,7 +380,8 @@ reg.loadExecutable("torch-source", vid);
       and store lineage metadata on the source model version
     - Added @ref QoreModelRegistry::ModelRegistry::registerQuantizedOnnxArtifact()
       to create quantized ONNX artifacts with source version/artifact lineage and
-      ONNX Runtime dependency diagnostics; successful validated quantization
+      ONNX Runtime dependency diagnostics; static calibration fingerprints are
+      promoted into lineage metadata, and successful validated quantization
       records original-vs-quantized output and latency comparison metadata
     - Added \c optimized_artifacts and \c quantized_artifacts manifest lists plus
       @ref QoreModelRegistry::ModelRegistry::loadOnnxArtifactExecutable() and

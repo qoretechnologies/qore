@@ -612,6 +612,15 @@ public class ModelRegistry {
                 });
         }
         binary data = ReadOnlyFile::readBinaryFile(output_path);
+        hash<auto> lineage = {
+            "type": "onnx-quantization",
+            "source_version_id": meta.version_id,
+            "source_artifact": entry_artifact,
+            "method": result.method,
+        };
+        if (result.calibration_fingerprint) {
+            lineage.calibration_fingerprint = result.calibration_fingerprint;
+        }
         hash<ModelArtifactInfo> info = <ModelArtifactInfo>{
             "name": artifact_name,
             "role": "quantized_model",
@@ -620,12 +629,7 @@ public class ModelRegistry {
             "safe_to_parse": True,
             "executable": True,
             "metadata": {
-                "lineage": {
-                    "type": "onnx-quantization",
-                    "source_version_id": meta.version_id,
-                    "source_artifact": entry_artifact,
-                    "method": result.method,
-                },
+                "lineage": lineage,
                 "quantization": result,
                 "comparison": comparison,
                 "deployment": makeOnnxDeploymentMetadata("ONNX", NOTHING,
