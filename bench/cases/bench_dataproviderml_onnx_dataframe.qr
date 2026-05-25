@@ -1,0 +1,48 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlOnnxDataFrame
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlOnnxDataFrame {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("dataproviderml_onnx_dataframe: skipped (ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_onnx_dataframe");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        int rows = OnnxBench::rows();
+        DataFrame::DataFrame frame;
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": model_path,
+            "fields": "x",
+            "window_size": rows,
+        });
+
+        r.setup = sub () {
+            frame = OnnxBench::makeFrame(rows);
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame result = proc.processRecordsShape(frame, DataProviderShape::DataFrameBlock);
+            OnnxBench::verifyProcessorFrame("dataproviderml_onnx_dataframe", result, rows, "model_output");
+        };
+
+        exit(r.run());
+    }
+}

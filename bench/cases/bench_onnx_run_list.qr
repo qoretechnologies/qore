@@ -1,0 +1,42 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchOnnxRunList
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchOnnxRunList {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("onnx_run_list: skipped (ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("onnx_run_list");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        ML::OnnxModel model(model_path, <ML::OnnxSessionConfig>{"providers": ()});
+        list<list<float>> input;
+
+        r.setup = sub () {
+            input = OnnxBench::makeNestedInput(rows);
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = model.run({"X": input});
+            OnnxBench::verifyListOutput("onnx_run_list", result.Y, rows);
+        };
+
+        exit(r.run());
+    }
+}

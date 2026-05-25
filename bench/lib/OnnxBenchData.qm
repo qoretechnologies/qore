@@ -1,0 +1,182 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OnnxBenchData.qm Qore user module providing shared ONNX benchmark data generators
+
+/*  OnnxBenchData.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%requires dataframe
+%requires ml
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+module OnnxBenchData {
+    version = "0.1";
+    desc    = "Shared deterministic data generation for ONNX benchmarks";
+    author  = "Qore developers";
+    url     = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace OnnxBench {
+    public int sub rows() {
+        *string env_rows = ENV.QORE_BENCH_ONNX_ROWS;
+        return env_rows ? env_rows.toInt() : 10000;
+    }
+
+    public int sub approxBytes(int rows) {
+        # One float input column and one float output column.
+        return rows * 8;
+    }
+
+    public bool sub canRunOnnx(string model_path) {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        return caps.has_onnx && is_file(model_path);
+    }
+
+    public string sub modelPath() {
+        string path = get_script_dir() + "/../../modules/ml/test/data/test_linear.onnx";
+        if (is_file(path)) {
+            return path;
+        }
+        return "modules/ml/test/data/test_linear.onnx";
+    }
+
+    public list<list<float>> sub makeNestedInput(int rows) {
+        list<list<float>> input;
+        for (int i = 0; i < rows; ++i) {
+            push input, (i.toFloat(),);
+        }
+        return input;
+    }
+
+    public buffer<float32> sub makeFloat32Input(int rows) {
+        buffer<float32> input = buffer<float32>::sized(rows);
+        for (int i = 0; i < rows; ++i) {
+            input[i] = i.toFloat();
+        }
+        return input;
+    }
+
+    public DataFrame::DataFrame sub makeFrame(int rows) {
+        buffer<float64> input = buffer<float64>::sized(rows);
+        for (int i = 0; i < rows; ++i) {
+            input[i] = i.toFloat();
+        }
+        return new DataFrame::DataFrame({"x": input});
+    }
+
+    public list<hash<auto>> sub makeRecords(int rows) {
+        list<hash<auto>> records;
+        for (int i = 0; i < rows; ++i) {
+            push records, {"x": i.toFloat()};
+        }
+        return records;
+    }
+
+    public nothing sub verifyListOutput(string name, list<auto> values, int rows) {
+        if (values.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, values.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifyTensorOutput(string name, ML::Tensor tensor, int rows) {
+        if (tensor.getShape() != (rows, 1)) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned shape %y; expected (%d, 1)", name, tensor.getShape(), rows);
+        }
+        buffer<float32> values = tensor.getBuffer();
+        if (values.lsize() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d dense values; expected %d", name, values.lsize(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifyProcessorRows(string name, list<auto> rows_out, int rows) {
+        if (rows_out.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, rows_out.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = rows_out[rows - 1].model_output.Y.toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifyProcessorFrame(string name, DataFrame::DataFrame frame, int rows, string column) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        list<auto> values = frame.getColumn(column);
+        if (values.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d values; expected %d", name, values.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].Y.toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub collectResult(reference<list<auto>> results, auto r) {
+        if (exists r) {
+            if (r.typeCode() == NT_LIST) {
+                results += r;
+            } else {
+                push results, r;
+            }
+        }
+    }
+
+    public nothing sub cleanupDir(string dir) {
+        if (!is_dir(dir)) {
+            return;
+        }
+        Dir d();
+        d.chdir(dir);
+        foreach string subdir in (d.listDirs()) {
+            cleanupDir(dir + DirSep + subdir);
+        }
+        foreach string f in (d.listFiles()) {
+            unlink(dir + DirSep + f);
+        }
+        rmdir(dir);
+    }
+}
