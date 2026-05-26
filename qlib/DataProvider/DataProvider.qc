@@ -182,6 +182,7 @@ public class DataProvider {
             "jotform": "JotformDataProvider",
 
             # provided by the json module
+            "fhirrest": "FhirRestDataProvider",
             "jsonread": "JsonFileDataProvider",
             "jsonwrite": "JsonFileDataProvider",
 
