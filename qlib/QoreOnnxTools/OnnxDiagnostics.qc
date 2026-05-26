@@ -51,8 +51,18 @@ foreach string action in (diagnostics.recommended_actions) {
         @endcode
     */
     static hash<auto> summarizeInspection(hash<auto> inspection) {
+        # Populate the action/example lists before capturing them in the hash:
+        # a list captured into a hash literal is a value-snapshot, so later
+        # push/addUnique mutations against the local would not be visible
+        # through the hash entry on certain code-gen paths (see the parallel
+        # comment in summarizePackage() below).
         list<string> actions();
         list<string> examples();
+        addTensorActions(\actions, "input", inspection.inputs);
+        addTensorActions(\actions, "output", inspection.outputs);
+        addProviderActions(\actions, inspection.provider_diagnostics);
+        addModelExamples(\examples, inspection.path);
+
         hash<auto> rv = {
             "kind": "onnx-inspection",
             "path": inspection.path,
@@ -62,13 +72,9 @@ foreach string action in (diagnostics.recommended_actions) {
             "dynamic_outputs": dynamicTensorNames(inspection.outputs),
             "recommended_actions": actions,
             "examples": examples,
+            "actionable": actions ? True : False,
         };
         addProviderSummary(\rv, inspection);
-        addTensorActions(\actions, "input", inspection.inputs);
-        addTensorActions(\actions, "output", inspection.outputs);
-        addProviderActions(\actions, inspection.provider_diagnostics);
-        addModelExamples(\examples, inspection.path);
-        rv.actionable = actions ? True : False;
         return rv;
     }
 
@@ -146,33 +152,21 @@ hash<auto> diagnostics =
         @endcode
     */
     static hash<auto> summarizePackage(hash<auto> package_info) {
+        # Populate `actions` and `examples` BEFORE assembling the result hash.
+        # Capturing a list into a hash literal takes a value-snapshot of the
+        # list at hash-construction time; subsequent push/addUnique mutations
+        # against the local variable update the local, not the hash entry.
+        # Empirically the AOT-compiled qmod exposes this on Linux CI (the
+        # Linux x86_64 + arm64 runs in pipeline 50611 reported
+        # `result.diagnostics.examples.size() > 0` as False, while macOS
+        # passed) — populate-then-capture is the deterministic fix.
         list<string> actions();
         list<string> examples();
-        hash<auto> rv = {
-            "kind": "onnx-package",
-            "source_path": package_info.source_path,
-            "output_dir": package_info.output_dir,
-            "runtime": package_info.runtime,
-            "task": package_info.task,
-            "entry_artifact": package_info.entry_artifact,
-            "executable": package_info.executable ? True : False,
-            "safety": package_info.safety,
-            "input_names": tensorNames(package_info.inputs),
-            "output_names": tensorNames(package_info.outputs),
-            "dynamic_inputs": dynamicTensorNames(package_info.inputs),
-            "dynamic_outputs": dynamicTensorNames(package_info.outputs),
-            "preprocess_kind": package_info.preprocess ? package_info.preprocess.kind : NOTHING,
-            "postprocess_kind": package_info.postprocess ? package_info.postprocess.kind : NOTHING,
-            "recommended_actions": actions,
-            "examples": examples,
-        };
 
-        if (package_info.providers) {
-            rv.provider = providerSummary(package_info.providers);
-        }
+        hash<auto> validation;
         if (package_info.validation) {
-            rv.validation = summarizeValidation(cast<hash<auto>>(package_info.validation));
-            foreach string action in (rv.validation.recommended_actions) {
+            validation = summarizeValidation(cast<hash<auto>>(package_info.validation));
+            foreach string action in (validation.recommended_actions) {
                 addUnique(\actions, action);
             }
         }
@@ -196,7 +190,34 @@ hash<auto> diagnostics =
         }
 
         addPackageExamples(\examples, package_info);
-        rv.actionable = actions ? True : False;
+
+        hash<auto> rv = {
+            "kind": "onnx-package",
+            "source_path": package_info.source_path,
+            "output_dir": package_info.output_dir,
+            "runtime": package_info.runtime,
+            "task": package_info.task,
+            "entry_artifact": package_info.entry_artifact,
+            "executable": package_info.executable ? True : False,
+            "safety": package_info.safety,
+            "input_names": tensorNames(package_info.inputs),
+            "output_names": tensorNames(package_info.outputs),
+            "dynamic_inputs": dynamicTensorNames(package_info.inputs),
+            "dynamic_outputs": dynamicTensorNames(package_info.outputs),
+            "preprocess_kind": package_info.preprocess ? package_info.preprocess.kind : NOTHING,
+            "postprocess_kind": package_info.postprocess ? package_info.postprocess.kind : NOTHING,
+            "recommended_actions": actions,
+            "examples": examples,
+            "actionable": actions ? True : False,
+        };
+
+        if (package_info.providers) {
+            rv.provider = providerSummary(package_info.providers);
+        }
+        if (validation) {
+            rv.validation = validation;
+        }
+
         return rv;
     }
 
