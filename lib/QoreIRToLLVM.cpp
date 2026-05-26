@@ -1656,19 +1656,68 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
 
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    auto i64_nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
     auto clear_alloca = [&](llvm::Value* alloca) {
         llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+        builder->CreateStore(i64_nothing, alloca);
         builder->CreateCall(helper, {val, xsink_arg});
     };
 
-    for (auto& [key, alloca] : local_reload_trackers) {
-        (void)key;
-        clear_alloca(alloca);
+    // The tracker for each local holds an explicit +1 ref to the value currently
+    // cached in the alloca, paired one-to-one with the alloca's cached copy so
+    // any consumer that reads the alloca (or that LLVM's mem2reg forwards from
+    // the prior store) keeps the referent alive.  Immediately decreffing the
+    // tracker at a temp boundary breaks that pairing for SSA values that LLVM
+    // has already forwarded past the boundary — e.g.,
+    //   StoreLocal @parse_opts %v  // refSelf'd into ctx->locals[slot] AND tracker
+    //   discard.temps              // flushes tracker => decref %v
+    //   ... %v used directly as a call arg (LLVM elided the LoadLocal) ...
+    // After the flush, the only remaining ref is on ctx->locals[slot]; in the
+    // case where parse_opts is a block-scoped pre-instantiated local the call
+    // arg still names the same payload pointer, but the explicit decref drove
+    // the QoreBigIntNode (or any other heap value) to refcount 0 and freed it
+    // prematurely, leaving the call arg dangling.  The fix mirrors
+    // reloadLocalFromRuntime()'s deferred-decref pattern: rotate tracker → deferred
+    // and decref the old deferred, so a still-live SSA value is guaranteed at
+    // least one additional cycle of life before its referent goes away.  This
+    // is the same one-cycle window already used by single-local reloads (see
+    // ConstantList.h comments on "AOT module v3" lifetime).  Net refcount delta
+    // across this routine is unchanged (one decref per tracker) — only the
+    // ordering moves the decref past the next reload site.
+    for (auto& [key, tracker_alloca] : local_reload_trackers) {
+        auto deferred_it = local_reload_deferred.find(key);
+        if (deferred_it == local_reload_deferred.end()) {
+            // No deferred slot — fall back to immediate decref; this is a
+            // best-effort safety net for paths that never go through
+            // reloadLocalFromRuntime() (which lazily creates the deferred
+            // alloca).  In practice paths that create a tracker also create
+            // its deferred counterpart, so this branch is rare.
+            clear_alloca(tracker_alloca);
+            continue;
+        }
+        // Read both, swap tracker -> deferred, decref the OLD deferred (which
+        // is from two cycles ago — every consumer of the prior tracker value
+        // has had a chance to retire by now).  Reset tracker to NOTHING so the
+        // next reload starts fresh.
+        llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
+        llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it->second);
+        builder->CreateStore(i64_nothing, tracker_alloca);
+        builder->CreateStore(tracker_val, deferred_it->second);
+        builder->CreateCall(helper, {old_deferred, xsink_arg});
     }
-    for (auto& [key, alloca] : local_reload_deferred) {
+    // Any deferred slot whose tracker was already gone (consumed above when
+    // the tracker entry preceded the deferred entry in iteration order, or
+    // belonging to a local that never had a tracker created) still needs to
+    // be drained — the deferred slot is the second-to-last live reference,
+    // not the very last, so decreffing it here matches the established
+    // one-cycle deferral semantics.
+    for (auto& [key, deferred_alloca] : local_reload_deferred) {
         (void)key;
-        clear_alloca(alloca);
+        if (local_reload_trackers.find(key) != local_reload_trackers.end()) {
+            // Already rotated above; skip to avoid double-decref.
+            continue;
+        }
+        clear_alloca(deferred_alloca);
     }
 
     if (local_reload_epoch) {
