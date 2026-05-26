@@ -484,6 +484,23 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
     #! Returns the target URL with any password masked for safe display/logging
     abstract string getSafeUrl();
 
+    #! Sets the connection path prepended to all request paths
+    /** @param path the connection path (e.g., \c "/api/v2")
+
+        @since RestClient 2.5
+    */
+    abstract setConnectionPath(*string path);
+
+    #! Returns the current connection path
+    /** @since RestClient 2.5
+    */
+    abstract *string getConnectionPath();
+
+    #! Clears the connection path
+    /** @since RestClient 2.5
+    */
+    abstract clearConnectionPath();
+
     #! Returns the current REST schema validator (may be a @ref NullRestSchemaValidator)
     abstract RestSchemaValidator::AbstractRestSchemaValidator getValidator();
 
