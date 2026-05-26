@@ -151,7 +151,7 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
                 return ln->equals(*rn) ? 0 : 1;
             }
             case NT_FLOAT: {
-                float f = r.getAsFloat();
+                double f = r.getAsFloat();
                 if (std::isnan(f)) {
                     xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on right hand side of logical comparison operator");
                     return 0;
@@ -190,7 +190,7 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
 
         switch (lt) {
             case NT_FLOAT: {
-                float lf = l.getAsFloat();
+                double lf = l.getAsFloat();
                 if (std::isnan(lf)) {
                     xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on left hand side of logical comparison operator");
                     return 0;
@@ -219,13 +219,18 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
     }
 
     if (lt == NT_FLOAT || rt == NT_FLOAT) {
-        float lf = l.getAsFloat();
+        // Use double (not float) — getAsFloat() returns a 64-bit double; storing
+        // it in a 32-bit float silently truncates ~9 decimal digits of precision,
+        // so two distinct doubles that round to the same single-precision
+        // representation (e.g. 0.999999998 and 0.999999996 near saturation)
+        // would compare as equal, breaking sort stability.
+        double lf = l.getAsFloat();
         if (std::isnan(lf)) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on left hand side of logical comparison operator");
             return 0;
         }
 
-        float rf = r.getAsFloat();
+        double rf = r.getAsFloat();
         if (std::isnan(rf)) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on right hand side of logical comparison operator");
             return 0;

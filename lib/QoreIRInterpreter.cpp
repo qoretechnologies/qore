@@ -3198,6 +3198,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         if (owns_slot_ref && removeCleanupEntry(cleanup, vid)) {
             values[vid].discard(xsink);
+            // CRITICAL: clear the slot bits after discard.  The discard drops
+            // the slot's +1 ref, and if that was the last reference the node
+            // is freed.  Leaving the stale pointer in values[vid] turns any
+            // later read (e.g., Return -> values[ret->value.id].discard)
+            // into a use-after-free crash dereferencing freed memory.
+            values[vid] = QoreValue();
         } else {
             removeCleanupEntry(cleanup, vid);
             values[vid] = QoreValue();
