@@ -9981,7 +9981,7 @@ int QoreSocket::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* x
         return -1;
     }
 
-    if (qore_on_async_io_thread()) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
         priv->alpn_protocols = std::move(proto_list);
         return 0;
     }
@@ -11732,6 +11732,11 @@ bool QoreSocket::pendingHttpChunkedBody() const {
 }
 
 void QoreSocket::setSslVerifyMode(int mode) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        priv->setSslVerifyMode(mode);
+        return;
+    }
+
     qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetSslVerifyMode, mode),
@@ -11746,6 +11751,11 @@ int QoreSocket::getSslVerifyMode() const {
 }
 
 void QoreSocket::acceptAllCertificates(bool accept_all) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        priv->acceptAllCertificates(accept_all);
+        return;
+    }
+
     qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetAcceptAllCertificates, accept_all),
