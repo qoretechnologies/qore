@@ -212,6 +212,7 @@ aωb\r
         assertTrue(is_mime_json("application/problem+json"));
         assertTrue(is_mime_json("application/merge-patch+json"));
         assertTrue(is_mime_json("application/json-patch+json"));
+        assertTrue(is_mime_json("application/fhir+json"));
         assertTrue(is_mime_json("application/geo+json"));
         assertTrue(is_mime_json("application/manifest+json"));
 

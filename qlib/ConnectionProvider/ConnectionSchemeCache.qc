@@ -191,6 +191,8 @@ public class ConnectionSchemeCache {
             "jotform": "JotformRestClient",
 
             # provided by the json module
+            "fhir": "FhirRestClient",
+            "fhirs": "FhirRestClient",
             "jsonrpc": "JsonRpcClient",
             "jsonrpcs": "JsonRpcClient",
             "mcp": "McpClient",
