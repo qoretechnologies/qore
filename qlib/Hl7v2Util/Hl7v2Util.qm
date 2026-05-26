@@ -1,0 +1,185 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Hl7v2Util.qm Qore user module for working with HL7 v2 messages
+
+/*  Hl7v2Util.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%requires Util
+%requires(reexport) DataProvider
+
+%modern
+
+module Hl7v2Util {
+    version = "1.0";
+    desc = "user module for parsing and writing HL7 v2 messages";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new Hl7v2ReadDataProviderFactory());
+        DataProvider::registerFactory(new Hl7v2WriteDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": Hl7v2Util::AppName,
+            "display_name": "HL7 v2 Messages",
+            "short_desc": "Read and write HL7 v2 delimited messages",
+            "desc": "Read and write HL7 v2 pipe-delimited healthcare messages. The first implementation "
+                "is structure-agnostic: it preserves segment order, supports custom delimiters from `MSH`, "
+                "handles HL7 escape sequences, and exposes parsed segments through the DataProvider API.",
+            "logo": Hl7v2Logo,
+            "logo_file_name": "hl7v2-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::DataTransformation,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "read",
+            "subtype": "hl7v2read",
+            "display_name": "Read HL7 v2 Message",
+            "short_desc": "Read HL7 v2 message data from a file",
+            "desc": "Read HL7 v2 message data from a file and return one record per segment.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2ReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2ReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "read-data",
+            "subtype": "hl7v2read",
+            "display_name": "Read HL7 v2 Inline Data",
+            "short_desc": "Read HL7 v2 message data from an inline string",
+            "desc": "Read HL7 v2 message data from an inline string and return one record per segment.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2ReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2ReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "write",
+            "subtype": "hl7v2write",
+            "display_name": "Write HL7 v2 Message",
+            "short_desc": "Write HL7 v2 message data to a file",
+            "desc": "Write HL7 v2 message data to a file from parsed segments or simple segment records.",
+            "action_code": DPAT_CREATE,
+            "cls": "Hl7v2Util::Hl7v2WriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2WriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage Hl7v2Util Module
+
+    @tableofcontents
+
+    @section hl7v2utilintro Hl7v2Util Module Introduction
+
+    The %Hl7v2Util module provides structure-agnostic parsing and writing for
+    HL7 v2 delimited healthcare messages.
+
+    To use this module, use \c "%requires Hl7v2Util" in your code.
+
+    All public symbols are defined in the Hl7v2Util namespace.
+
+    @subsection hl7v2utilfeatures Key Features
+
+    - Parses message delimiters from the \c MSH segment.
+    - Preserves segment order, including unknown custom \c Z segments.
+    - Supports field, repetition, component, and subcomponent separators.
+    - Handles standard HL7 escape sequences such as \c "\\F\\", \c "\\S\\",
+      \c "\\R\\", \c "\\T\\", \c "\\E\\", and \c "\\.br\\".
+    - Provides address helpers for common expressions such as \c "MSH-9",
+      \c "PID-3(2).1", and \c "OBX-5".
+    - Exposes read and write data providers for pipeline integration.
+
+    @subsection hl7v2utilexamples Examples
+
+    @code{.py}
+%requires Hl7v2Util
+
+string msg = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+    "PID|1||12345^^^MRN^MR||Doe^Jane\r";
+
+Hl7v2Message h(msg);
+printf("Message type: %s\n", h.getAddress("MSH-9"));
+printf("Patient family name: %s\n", h.getAddress("PID-5.1"));
+
+string roundtrip = h.getText();
+    @endcode
+
+    DataProvider usage:
+
+    @code{.py}
+%requires Hl7v2Util
+
+Hl7v2ReadDataProvider reader({"data": msg});
+AbstractDataProviderRecordIterator i = reader.searchRecords();
+while (i.next()) {
+    hash<auto> segment = i.getValue();
+    printf("%03d %s\n", segment.index, segment.tag);
+}
+    @endcode
+
+    @subsection hl7v2utiltrademark Trademark Notice
+
+    HL7 is a trademark of Health Level Seven International. This module provides
+    an implementation utility for HL7 v2 message syntax and does not imply
+    endorsement by Health Level Seven International.
+
+    @since 2.0
+
+    @par Release Notes
+
+    - added the initial \c Hl7v2Util module with structure-agnostic HL7 v2
+      parsing, writing, address helpers, and read/write data providers
+*/
+
+#! Hl7v2Util module namespace
+public namespace Hl7v2Util {
+    #! DataProvider app name
+    public const AppName = "HL7v2";
+
+    #! HL7 v2 app logo
+    public const Hl7v2Logo = File::readTextFile(get_script_dir() + "/hl7v2-logo.svg");
+}

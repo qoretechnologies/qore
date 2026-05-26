@@ -141,6 +141,8 @@ public class DataProvider {
             "filepoller": "FilePoller",
             "fixedlengthread": "FixedLengthUtil",
             "fixedlengthwrite": "FixedLengthUtil",
+            "hl7v2read": "Hl7v2Util",
+            "hl7v2write": "Hl7v2Util",
             # provided by the jni module
             "flyway": "FlywayDataProvider",
 

@@ -1885,6 +1885,14 @@ cargo install tree-sitter-cli@0.26.5
       - service segment filtering option to skip envelope segments during iteration
       - DataProvider integration for use in data pipelines and integration workflows
 
+    - @ref hl7v2utilintro "Hl7v2Util" module
+      - new module for structure-agnostic parsing and writing of HL7 v2 delimited healthcare messages
+      - delimiter parsing from `MSH-1` and `MSH-2`, including field, repetition, component, escape, and subcomponent separators
+      - standard escape handling for message fields, including delimiter escapes and line-break escapes
+      - segment-order preserving parser with support for unknown custom `Z` segments
+      - address helpers for common values such as `MSH-9`, `PID-3(2).1`, and `OBX-5`
+      - DataProvider integration for reading and writing HL7 v2 message files and inline data
+
     - @ref elasticsearchloggerappenderintro "ElasticSearchLoggerAppender" module
       - new module providing a logger appender that sends log events to <a href="https://www.elastic.co/elasticsearch">ElasticSearch</a> using the Bulk API with
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe

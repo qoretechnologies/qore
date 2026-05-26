@@ -1,0 +1,213 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  hl7v2util.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/Hl7v2Util
+
+%exec-class Hl7v2UtilTest
+
+class Hl7v2UtilTest inherits QUnit::Test {
+    private {
+        const Message = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "EVN|A01|202605261201\r"
+            "PID|1||12345^^^MRN^MR~98765^^^SSN^SS||Doe^Jane^A||19800101|F|||123 Main^^Metropolis^NY^10001\r"
+            "OBX|1|ST|NOTE||Line\\.br\\break and value \\F\\ separator\r"
+            "ZPI|custom|segment\r";
+
+        const CustomDelimiterMessage = "MSH*;!%$*SRC*FAC*DST*FAC*202605261200**ADT;A01*MSG0002*P*2.5.1\r"
+            "PID*1**12345;;;MRN;MR**Doe;Jane\r";
+    }
+
+    constructor() : QUnit::Test("Hl7v2Util test", "1.0") {
+        addTestCase("delimiter test", \delimiterTest());
+        addTestCase("message parse test", \messageParseTest());
+        addTestCase("address test", \addressTest());
+        addTestCase("escape test", \escapeTest());
+        addTestCase("roundtrip test", \roundtripTest());
+        addTestCase("custom delimiter test", \customDelimiterTest());
+        addTestCase("writer test", \writerTest());
+        addTestCase("data provider test", \dataProviderTest());
+        addTestCase("factory and action catalog test", \factoryAndActionCatalogTest());
+        addTestCase("negative test", \negativeTest());
+
+        set_return_value(main());
+    }
+
+    delimiterTest() {
+        Hl7v2Delimiters d();
+        assertEq("|", d.getFieldSeparator());
+        assertEq("^", d.getComponentSeparator());
+        assertEq("~", d.getRepetitionSeparator());
+        assertEq("\\", d.getEscapeCharacter());
+        assertEq("&", d.getSubcomponentSeparator());
+        assertEq("^~\\&", d.getEncodingCharacters());
+
+        Hl7v2Delimiters custom("MSH*;!%$*SRC");
+        assertEq("*", custom.getFieldSeparator());
+        assertEq(";", custom.getComponentSeparator());
+        assertEq("!", custom.getRepetitionSeparator());
+        assertEq("%", custom.getEscapeCharacter());
+        assertEq("$", custom.getSubcomponentSeparator());
+        assertEq(";!%$", custom.getEncodingCharacters());
+    }
+
+    messageParseTest() {
+        Hl7v2Base base();
+        hash<Hl7v2MessageInfo> msg = base.parseMessage(Message);
+        assertEq("|", msg.delimiters.field_separator);
+        assertEq(5, msg.segments.size());
+        assertEq(("MSH", "EVN", "PID", "OBX", "ZPI"), map $1.tag, msg.segments);
+
+        hash<Hl7v2Segment> msh = msg.segments[0];
+        assertEq("MSH", msh.tag);
+        assertEq("|", msh.fields[0].raw);
+        assertEq("^~\\&", msh.fields[1].raw);
+        assertEq("ADT^A01", msh.fields[8].raw);
+
+        hash<Hl7v2Segment> pid = msg.segments[2];
+        assertEq("PID", pid.tag);
+        assertEq(2, pid.fields[2].repetitions.size());
+        assertEq("12345", pid.fields[2].repetitions[0][0]);
+        assertEq("98765", pid.fields[2].repetitions[1][0]);
+        assertEq("MRN", pid.fields[2].repetitions[0][3]);
+    }
+
+    addressTest() {
+        Hl7v2Message msg(Message);
+        assertEq("ADT^A01", msg.getAddress("MSH-9"));
+        assertEq("ADT", msg.getAddress("MSH-9.1"));
+        assertEq("A01", msg.getAddress("MSH-9.2"));
+        assertEq("Doe^Jane^A", msg.getAddress("PID-5"));
+        assertEq("Doe", msg.getAddress("PID-5.1"));
+        assertEq("Jane", msg.getAddress("PID-5.2"));
+        assertEq("12345", msg.getAddress("PID-3.1"));
+        assertEq("98765", msg.getAddress("PID-3(2).1"));
+        assertNothing(msg.getAddress("PV1-2"));
+    }
+
+    escapeTest() {
+        Hl7v2Message msg(Message);
+        assertEq("Line\nbreak and value | separator", msg.getAddress("OBX-5"));
+
+        Hl7v2Delimiters d();
+        assertEq("A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G", d.escape("A|B^C~D&E\\F\nG"));
+        assertEq("A|B^C~D&E\\F\nG", d.unescape("A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G"));
+        assertEq("ABC", d.unescape("\\X414243\\"));
+        assertEq("\\Q\\", d.unescape("\\Q\\"));
+    }
+
+    roundtripTest() {
+        Hl7v2Message msg(Message);
+        assertEq(Message, msg.getText());
+    }
+
+    customDelimiterTest() {
+        Hl7v2Message msg(CustomDelimiterMessage);
+        assertEq("ADT;A01", msg.getAddress("MSH-9"));
+        assertEq("ADT", msg.getAddress("MSH-9.1"));
+        assertEq("A01", msg.getAddress("MSH-9.2"));
+        assertEq("Doe", msg.getAddress("PID-5.1"));
+        assertEq("Jane", msg.getAddress("PID-5.2"));
+        assertEq(CustomDelimiterMessage, msg.getText());
+    }
+
+    writerTest() {
+        Hl7v2Base base();
+        string seg = base.formatSegment({
+            "tag": "PID",
+            "fields": ("1", "", ("12345", "", "", "MRN", "MR"), "", ("Doe", "Jane")),
+        });
+        assertEq("PID|1||12345^^^MRN^MR||Doe^Jane", seg);
+
+        string escaped = base.formatSegment({
+            "tag": "OBX",
+            "fields": ("1", "ST", "NOTE", "", "A|B^C~D&E\\F\nG"),
+        });
+        assertEq("OBX|1|ST|NOTE||A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G", escaped);
+    }
+
+    dataProviderTest() {
+        Hl7v2ReadDataProvider reader({"data": Message});
+        AbstractDataProviderRecordIterator i = reader.searchRecords();
+        list<string> tags = ();
+        while (i.next()) {
+            push tags, i.getValue().tag;
+        }
+        assertEq(("MSH", "EVN", "PID", "OBX", "ZPI"), tags);
+
+        TmpDir tmp();
+        string path = tmp.path + "/out.hl7";
+        Hl7v2WriteDataProvider writer({"path": path});
+        Hl7v2Message msg(Message);
+        writer.createRecord({"message": msg.getMessage()});
+        assertEq(Message, ReadOnlyFile::readTextFile(path));
+
+        string custom_path = tmp.path + "/custom.hl7";
+        Hl7v2WriteDataProvider custom_writer({"path": custom_path});
+        Hl7v2Message custom_msg(CustomDelimiterMessage);
+        custom_writer.createRecord({"message": custom_msg.getMessage()});
+        assertEq(CustomDelimiterMessage, ReadOnlyFile::readTextFile(custom_path));
+
+        Hl7v2ReadDataProvider file_reader({"path": path});
+        AbstractDataProviderRecordIterator j = file_reader.searchRecords({"tag": "PID"});
+        assertTrue(j.next());
+        assertEq("PID", j.getValue().tag);
+        assertFalse(j.next());
+    }
+
+    factoryAndActionCatalogTest() {
+        hash<DataProviderFactoryInfo> read_info = DataProvider::getFactoryEx("hl7v2read").getInfo();
+        assertEq("hl7v2read", read_info.name);
+        hash<DataProviderFactoryInfo> write_info = DataProvider::getFactoryEx("hl7v2write").getInfo();
+        assertEq("hl7v2write", write_info.name);
+
+        hash<auto> app = DataProviderActionCatalog::getApp(Hl7v2Util::AppName);
+        assertEq("HL7 v2 Messages", app.display_name);
+        assertTrue(app.desc =~ /structure-agnostic/);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions(Hl7v2Util::AppName);
+        list<string> names = map $1.action, actions;
+        assertTrue(inlist("read", names));
+        assertTrue(inlist("read-data", names));
+        assertTrue(inlist("write", names));
+    }
+
+    negativeTest() {
+        Hl7v2Base base();
+        assertThrows("HL7V2-PARSE-ERROR", sub () { base.parseSegment("PI"); });
+        assertThrows("HL7V2-PARSE-ERROR", sub () { base.parseSegment("piD|1"); });
+        assertThrows("HL7V2-PARSE-ERROR", sub () { base.parseMessage(""); });
+        assertThrows("HL7V2-DELIMITER-ERROR", sub () { new Hl7v2Delimiters("MSH|^~"); });
+        assertThrows("HL7V2-ESCAPE-ERROR", sub () { base.parseMessage("MSH|^~\\&|A\rOBX|1|ST|NOTE||bad \\F\r"); });
+        assertThrows("HL7V2-ADDRESS-ERROR", sub () { Hl7v2Base::parseAddress("PID"); });
+        assertThrows("HL7V2-ADDRESS-ERROR", sub () { (new Hl7v2Message(Message)).getAddress("PID-0"); });
+        assertThrows("HL7V2-READ-ERROR", sub () { new Hl7v2ReadDataProvider({}); });
+        assertThrows("HL7V2-WRITE-ERROR", sub () { new Hl7v2WriteDataProvider({}); });
+    }
+}
