@@ -65,6 +65,7 @@ class QoreStringNode;
 class QoreListNode;
 class ExceptionSink;
 class QoreProgram;
+struct QorePluginModuleHandle;
 
 //! Context passed to the module init callback
 /** @since %Qore 2.0
@@ -72,6 +73,8 @@ class QoreProgram;
 struct QoreModuleInitContext {
     //! path to the module itself
     std::string path;
+    //! opaque plugin-registration handle; valid only during module init
+    const QorePluginModuleHandle* plugin_module_handle = nullptr;
 };
 
 //! signature of the module constructor/initialization function

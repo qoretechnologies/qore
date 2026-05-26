@@ -80,6 +80,32 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 };
 
+class QoreFunctionalBufferOperator : public FunctionalOperatorInterface {
+protected:
+    QoreBufferNode* b;
+    bool fwd;
+    size_t pos = 0;
+    ExceptionSink* xsink;
+
+public:
+    DLLLOCAL QoreFunctionalBufferOperator(bool f, QoreBufferNode* n_b, ExceptionSink* xs)
+            : b(n_b), fwd(f), xsink(xs) {
+        if (!fwd) {
+            pos = b->size();
+        }
+    }
+
+    DLLLOCAL virtual ~QoreFunctionalBufferOperator() {
+        b->deref(xsink);
+    }
+
+    DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
+        return b->getElementTypeInfo();
+    }
+
+    DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
+};
+
 class QoreFunctionalSingleValueOperator : public FunctionalOperatorInterface {
 protected:
     QoreValue v{};

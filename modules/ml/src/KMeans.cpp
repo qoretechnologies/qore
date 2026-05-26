@@ -328,6 +328,89 @@ QoreListNode* QoreKMeans::predictMatrix(const MatrixXd& data, ExceptionSink* xsi
     return rv.release();
 }
 
+QoreHashNode* QoreKMeans::predictMatrixColumns(const MatrixXd& data, bool include_centroid_distances,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() before predictMatrixColumns()");
+        return nullptr;
+    }
+    if (data.cols() != n_features) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "input has %d features but model was trained with %d features",
+            static_cast<int>(data.cols()), n_features);
+        return nullptr;
+    }
+
+    size_t n_rows = static_cast<size_t>(data.rows());
+    ReferenceHolder<QoreBufferNode> cluster_buffer(
+        new QoreBufferNode(QoreBufferElementType::Int64, false, n_rows), xsink);
+    ReferenceHolder<QoreBufferNode> distance_buffer(
+        new QoreBufferNode(QoreBufferElementType::Float64, false, n_rows), xsink);
+    int64* clusters = static_cast<int64*>(cluster_buffer->getRawData());
+    double* distances = static_cast<double*>(distance_buffer->getRawData());
+
+    ReferenceHolder<QoreListNode> centroid_buffers(new QoreListNode(autoTypeInfo), xsink);
+    std::vector<double*> centroid_values;
+    if (include_centroid_distances) {
+        centroid_values.reserve(k);
+        for (int c = 0; c < k; ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "KMeans centroid buffer allocation")) {
+                return nullptr;
+            }
+            ReferenceHolder<QoreBufferNode> buffer(
+                new QoreBufferNode(QoreBufferElementType::Float64, false, n_rows), xsink);
+            centroid_values.push_back(static_cast<double*>(buffer->getRawData()));
+            centroid_buffers->push(buffer.release(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "KMeans predictMatrixColumns")) {
+            return nullptr;
+        }
+
+        double min_dist = std::numeric_limits<double>::max();
+        int best = 0;
+        for (int c = 0; c < k; ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "KMeans centroid distance calculation")) {
+                return nullptr;
+            }
+            double d = (data.row(i) - centroids.row(c)).norm();
+            if (include_centroid_distances) {
+                centroid_values[c][i] = d;
+            }
+            if (d < min_dist) {
+                min_dist = d;
+                best = c;
+            }
+        }
+        clusters[i] = best;
+        distances[i] = min_dist;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("cluster", cluster_buffer.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("distance", distance_buffer.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (include_centroid_distances) {
+        rv->setKeyValue("centroid_distances", centroid_buffers.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
 QoreListNode* QoreKMeans::getCentroids(ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lk(mtx);
     if (!fitted) {

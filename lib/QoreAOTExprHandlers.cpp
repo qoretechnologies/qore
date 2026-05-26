@@ -1895,6 +1895,58 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
 }
 
 // ============================================================================
+// COMPLEX_BUFFER_NEW (107)
+// ============================================================================
+
+static bool write_expr_complex_buffer_new(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        if (ncb->typeInfo) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
+            ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(ncb->typeInfo).c_str());
+            ctx.writer.writeU8(static_cast<uint8_t>(ncb->initKind));
+            if (ncb->args.hasNode()) {
+                ctx.writer.writeU8(1);
+                return ::classifyAndWriteExpr(ctx.writer, ncb->args,
+                    ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            }
+            ctx.writer.writeU8(0);
+            return true;
+        }
+    }
+    return false;
+}
+
+static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
+    const char* type_path = ctx.reader.readStringRef(ctx.ptr);
+    if (!type_path || !*type_path) {
+        return QoreValue();
+    }
+    QoreComplexBufferInitKind init_kind = static_cast<QoreComplexBufferInitKind>(
+        QoreAOTBinaryReader::readU8(ctx.ptr));
+    uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue arg_val;
+    if (num_args > 0) {
+        std::string arg_err;
+        arg_val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        if (!arg_err.empty()) {
+            arg_val.discard(nullptr);
+            arg_val = QoreValue();
+        }
+    }
+    std::string type_error;
+    QoreAOTTypeResolver type_resolver(ctx.pgm);
+    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
+    if (!ti) {
+        arg_val.discard(nullptr);
+        return QoreValue();
+    }
+    NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val, init_kind);
+    return QoreValue(ncb);
+}
+
+// ============================================================================
 // CONST_ENUM (19)
 // ============================================================================
 

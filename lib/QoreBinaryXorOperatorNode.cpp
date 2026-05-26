@@ -29,15 +29,40 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/qore_program_private.h"
 
 QoreString QoreBinaryXorOperatorNode::op_str("^ (binary xor) operator expression");
+
+static void set_binary_xor_analysis_bitwise(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left_analysis, const QoreParseAnalysis& right_analysis,
+        const QorePluginResolvedOperationInfo* plugin_op = nullptr) {
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    if (!plugin_op || (!plugin_op->signature.return_nullable && !plugin_op->info.can_return_nothing)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
 
 QoreValue QoreBinaryXorOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) return QoreValue();
     ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink) return QoreValue();
+
+    if (qore_plugin_value_may_have_operation(*lh) || qore_plugin_value_may_have_operation(*rh)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "bit_xor",
+            QorePluginHelperAbi::BinaryValue, *lh, *rh, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
 
     return lh->getAsBigInt() ^ rh->getAsBigInt();
 }
@@ -64,6 +89,20 @@ int QoreBinaryXorOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             err = -1;
         }
         right_analysis = parse_context.analysis;
+    }
+
+    if (!err) {
+        QorePluginResolvedOperationInfo plugin_op;
+        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, parse_context.typeInfo,
+            "bit_xor", QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
+        if (plugin_rc < 0) {
+            err = -1;
+        } else if (!plugin_rc) {
+            parse_context.typeInfo = plugin_op.signature.return_type;
+            set_binary_xor_analysis_bitwise(parse_context, left_analysis, right_analysis, &plugin_op);
+            return err;
+        }
     }
 
     // see if any of the arguments cannot be converted to an integer, if so generate a warning
@@ -121,13 +160,6 @@ int QoreBinaryXorOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
-    parse_context.analysis.clear();
-    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
-    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
-    parse_context.analysis.known_type = parse_context.typeInfo;
-    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
-        && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
-        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
-    }
+    set_binary_xor_analysis_bitwise(parse_context, left_analysis, right_analysis);
     return err;
 }

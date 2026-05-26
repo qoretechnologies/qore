@@ -449,7 +449,7 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 106: LOG_ANE
     {"LOG_ANE", 106, true, write_slot_LOG_ANE, "Logical absolute not-equals operator"},
 
-    {nullptr, 107, false, nullptr, nullptr},
+    {"COMPLEX_BUFFER_NEW", 107, true, write_slot_COMPLEX_BUFFER_NEW, "Complex buffer construction"},
     {nullptr, 108, false, nullptr, nullptr},
     {nullptr, 109, false, nullptr, nullptr},
     {nullptr, 110, false, nullptr, nullptr},

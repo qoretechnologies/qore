@@ -37,7 +37,7 @@ QoreOcrProcessor proc({
 });
     @endcode
 */
-public class QoreOcrProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreOcrProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -188,9 +188,9 @@ public class QoreOcrProcessor inherits DataProvider::AbstractDataProvider {
         return result;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

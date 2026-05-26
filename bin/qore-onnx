@@ -1,0 +1,526 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  qore-onnx Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QoreOnnxTools
+%requires ml
+%requires Util
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class QoreOnnxCli
+
+class QoreOnnxCli {
+    private {
+        const Version = "1.0.0";
+        const Opts = {
+            "abs_tolerance": "abs-tolerance=s",
+            "activation_type": "activation-type=s",
+            "benchmark_inputs": "benchmark-inputs=s",
+            "benchmarks": "benchmarks=s",
+            "calibration_data": "calibration-data=s",
+            "calibration_method": "calibration-method=s",
+            "candidate_session_config": "candidate-session-config=s",
+            "dry_run": "dry-run",
+            "dynamic_axes": "dynamic-axes=s",
+            "extra_options": "extra-options=s",
+            "force": "f,force",
+            "golden_vectors": "golden-vectors=s",
+            "help": "h,help",
+            "input": "i,input=s",
+            "json": "J,json",
+            "keep_output": "keep-output",
+            "include_companions": "include-companions!",
+            "include_external_data": "include-external-data!",
+            "manifest": "manifest!",
+            "manifest_name": "manifest-name=s",
+            "method": "m,method=s",
+            "minimum_onnxruntime_version": "minimum-onnxruntime-version=s",
+            "no_include_companions": "no-include-companions",
+            "no_include_external_data": "no-include-external-data",
+            "no_manifest": "no-manifest",
+            "no_validate": "no-validate",
+            "nodes_to_exclude": "nodes-to-exclude=s",
+            "nodes_to_quantize": "nodes-to-quantize=s",
+            "op_types": "op-types=s",
+            "opset": "opset=i",
+            "ort_format": "ort-format",
+            "output": "o,output=s",
+            "per_channel": "per-channel",
+            "postprocess": "postprocess=s",
+            "preprocess": "preprocess=s",
+            "python": "python=s",
+            "reduce_range": "reduce-range",
+            "rel_tolerance": "rel-tolerance=s",
+            "runs": "runs=i",
+            "session_config": "session-config=s",
+            "source_session_config": "source-session-config=s",
+            "task": "task=s",
+            "top_limit": "top-limit=i",
+            "validate": "validate!",
+            "version": "V,version",
+            "warmup_runs": "warmup-runs=i",
+            "weight_type": "weight-type=s",
+        };
+    }
+
+    constructor() {
+        GetOpt getopt(Opts);
+        hash<auto> opts = getopt.parse3(\ARGV);
+
+        if (opts.version) {
+            printf("qore-onnx %s\n", Version);
+            exit(0);
+        }
+        if (opts.help || !ARGV) {
+            usage(opts.help ? 0 : 2);
+        }
+
+        string command = shift ARGV;
+        try {
+            switch (command) {
+                case "quantize":
+                    quantize(opts);
+                    break;
+                case "check-python":
+                    checkPython(opts);
+                    break;
+                case "inspect":
+                    inspect(opts);
+                    break;
+                case "validate":
+                    validate(opts);
+                    break;
+                case "benchmark":
+                    benchmark(opts);
+                    break;
+                case "compare":
+                    compareModels(opts);
+                    break;
+                case "profile":
+                    profile(opts);
+                    break;
+                case "optimize":
+                    optimize(opts);
+                    break;
+                case "package":
+                    packageModel(opts);
+                    break;
+                default:
+                    stderr.printf("qore-onnx: unsupported command %y\n", command);
+                    usage(2);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qore-onnx: %s: %s\n", ex.err, ex.desc);
+            exit(1);
+        }
+    }
+
+    private static nothing quantize(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string output_path = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!input_path.val() || !output_path.val()) {
+            stderr.printf("qore-onnx: quantize requires input and output paths\n");
+            usage(2);
+        }
+
+        hash<QoreOnnxTools::OnnxQuantizationOptions> qopts = buildQuantOptions(opts);
+        hash<QoreOnnxTools::OnnxQuantizationResult> result =
+            QoreOnnxTools::OnnxQuantizer::quantize(input_path, output_path, qopts);
+        writeResult(result, opts);
+    }
+
+    private static nothing checkPython(hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxQuantizationOptions> qopts = buildQuantOptions(opts);
+        hash<QoreOnnxTools::OnnxPythonDependencyInfo> result =
+            QoreOnnxTools::OnnxQuantizer::checkPythonDependencies(qopts);
+        writeResult(result, opts);
+        exit(result.available ? 0 : 1);
+    }
+
+    private static nothing inspect(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("inspect", input_path);
+        writeResult(QoreOnnxTools::OnnxModelTools::inspect(input_path,
+            buildSessionConfig(opts)), opts, "inspect");
+    }
+
+    private static nothing validate(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("validate", input_path);
+        hash<QoreOnnxTools::OnnxValidationResult> result =
+            QoreOnnxTools::OnnxModelTools::validate(input_path, buildSessionConfig(opts));
+        writeResult(result, opts, "validate");
+        exit(result.valid ? 0 : 1);
+    }
+
+    private static nothing benchmark(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("benchmark", input_path);
+        writeResult(QoreOnnxTools::OnnxModelTools::benchmark(input_path,
+            buildBenchmarkOptions(opts)), opts);
+    }
+
+    private static nothing compareModels(hash<auto> opts) {
+        string source_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string candidate_path = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!source_path.val() || !candidate_path.val()) {
+            stderr.printf("qore-onnx: compare requires source and candidate model paths\n");
+            usage(2);
+        }
+        hash<QoreOnnxTools::OnnxCompareResult> result =
+            QoreOnnxTools::OnnxModelTools::compare(source_path, candidate_path,
+                buildCompareOptions(opts));
+        writeResult(result, opts);
+        exit(result.outputs_match ? 0 : 1);
+    }
+
+    private static nothing profile(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        requireInput("profile", input_path);
+        writeResult(QoreOnnxTools::OnnxProfileTools::summarizeProfile(input_path,
+            exists opts.top_limit ? opts.top_limit : 20), opts);
+    }
+
+    private static nothing optimize(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string output_path = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!input_path.val() || !output_path.val()) {
+            stderr.printf("qore-onnx: optimize requires input and output paths\n");
+            usage(2);
+        }
+        writeResult(QoreOnnxTools::OnnxModelTools::optimize(input_path, output_path,
+            buildOptimizationOptions(opts)), opts);
+    }
+
+    private static nothing packageModel(hash<auto> opts) {
+        string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
+        string output_dir = opts.output ?? (ARGV ? shift ARGV : NOTHING);
+        if (!input_path.val() || !output_dir.val()) {
+            stderr.printf("qore-onnx: package requires input and output directory paths\n");
+            usage(2);
+        }
+        writeResult(QoreOnnxTools::OnnxPackageTools::createPackage(input_path, output_dir,
+            buildPackageOptions(opts)), opts, "package");
+    }
+
+    private static nothing requireInput(string command, *string input_path) {
+        if (!input_path.val()) {
+            stderr.printf("qore-onnx: %s requires an input model path\n", command);
+            usage(2);
+        }
+    }
+
+    private static hash<QoreOnnxTools::OnnxQuantizationOptions> buildQuantOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxQuantizationOptions> qopts =
+            <QoreOnnxTools::OnnxQuantizationOptions>{};
+        if (opts.python.val()) qopts.python = opts.python;
+        if (opts.method.val()) qopts.method = opts.method;
+        if (opts.weight_type.val()) qopts.weight_type = opts.weight_type;
+        if (opts.activation_type.val()) qopts.activation_type = opts.activation_type;
+        if (opts.calibration_method.val()) qopts.calibration_method = opts.calibration_method;
+        if (opts.op_types.val()) qopts.op_types = opts.op_types;
+        if (opts.nodes_to_quantize.val()) qopts.nodes_to_quantize = opts.nodes_to_quantize;
+        if (opts.nodes_to_exclude.val()) qopts.nodes_to_exclude = opts.nodes_to_exclude;
+        if (opts.calibration_data.val()) qopts.calibration_data_json_path = opts.calibration_data;
+        if (opts.extra_options.val()) qopts.extra_options_json_path = opts.extra_options;
+        if (exists opts.per_channel) qopts.per_channel = opts.per_channel;
+        if (exists opts.reduce_range) qopts.reduce_range = opts.reduce_range;
+        if (exists opts.dry_run) qopts.dry_run = opts.dry_run;
+        if (exists opts.force) qopts.force = opts.force;
+        if (exists opts.validate) qopts.validate = opts.validate;
+        if (exists opts.no_validate) qopts.validate = False;
+        return qopts;
+    }
+
+    private static *hash<ML::OnnxSessionConfig> buildSessionConfig(hash<auto> opts) {
+        if (!opts.session_config.val()) {
+            return NOTHING;
+        }
+        return cast<hash<ML::OnnxSessionConfig>>(readJsonFile(opts.session_config));
+    }
+
+    private static hash<QoreOnnxTools::OnnxBenchmarkOptions> buildBenchmarkOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxBenchmarkOptions> bopts =
+            <QoreOnnxTools::OnnxBenchmarkOptions>{};
+        if (exists opts.runs) bopts.runs = opts.runs;
+        if (exists opts.warmup_runs) bopts.warmup_runs = opts.warmup_runs;
+        if (exists opts.keep_output) bopts.keep_output = opts.keep_output;
+        if (opts.session_config.val()) {
+            bopts.session_config = buildSessionConfig(opts);
+        }
+        if (opts.benchmark_inputs.val()) {
+            bopts.inputs = cast<hash<auto>>(readJsonFile(opts.benchmark_inputs));
+        }
+        return bopts;
+    }
+
+    private static hash<QoreOnnxTools::OnnxCompareOptions> buildCompareOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxCompareOptions> copts =
+            <QoreOnnxTools::OnnxCompareOptions>{};
+        if (opts.source_session_config.val()) {
+            copts.source_session_config = cast<hash<ML::OnnxSessionConfig>>(
+                readJsonFile(opts.source_session_config));
+        } else if (opts.session_config.val()) {
+            copts.source_session_config = buildSessionConfig(opts);
+        }
+        if (opts.candidate_session_config.val()) {
+            copts.candidate_session_config = cast<hash<ML::OnnxSessionConfig>>(
+                readJsonFile(opts.candidate_session_config));
+        } else if (opts.session_config.val()) {
+            copts.candidate_session_config = buildSessionConfig(opts);
+        }
+        if (opts.benchmark_inputs.val()) {
+            copts.inputs = cast<hash<auto>>(readJsonFile(opts.benchmark_inputs));
+        }
+        if (opts.abs_tolerance.val()) copts.abs_tolerance = opts.abs_tolerance.toFloat();
+        if (opts.rel_tolerance.val()) copts.rel_tolerance = opts.rel_tolerance.toFloat();
+        if (exists opts.runs || exists opts.warmup_runs) copts.benchmark = True;
+        if (exists opts.runs) copts.runs = opts.runs;
+        if (exists opts.warmup_runs) copts.warmup_runs = opts.warmup_runs;
+        if (exists opts.keep_output) copts.keep_outputs = opts.keep_output;
+        return copts;
+    }
+
+    private static hash<QoreOnnxTools::OnnxOptimizationOptions> buildOptimizationOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxOptimizationOptions> oopts =
+            <QoreOnnxTools::OnnxOptimizationOptions>{};
+        if (opts.session_config.val()) {
+            oopts.session_config = buildSessionConfig(opts);
+        }
+        if (exists opts.ort_format) oopts.ort_format = opts.ort_format;
+        if (exists opts.force) oopts.force = opts.force;
+        if (exists opts.validate) oopts.validate = opts.validate;
+        if (exists opts.no_validate) oopts.validate = False;
+        return oopts;
+    }
+
+    private static hash<QoreOnnxTools::OnnxPackageOptions> buildPackageOptions(
+            hash<auto> opts) {
+        hash<QoreOnnxTools::OnnxPackageOptions> popts =
+            <QoreOnnxTools::OnnxPackageOptions>{};
+        if (opts.session_config.val()) {
+            popts.session_config = buildSessionConfig(opts);
+        }
+        if (opts.task.val()) popts.task = opts.task;
+        if (exists opts.opset) popts.opset = opts.opset;
+        if (opts.minimum_onnxruntime_version.val()) {
+            popts.minimum_onnxruntime_version = opts.minimum_onnxruntime_version;
+        }
+        if (opts.preprocess.val()) {
+            popts.preprocess = cast<hash<auto>>(readJsonFile(opts.preprocess));
+        }
+        if (opts.postprocess.val()) {
+            popts.postprocess = cast<hash<auto>>(readJsonFile(opts.postprocess));
+        }
+        if (opts.dynamic_axes.val()) {
+            popts.dynamic_axes = cast<hash<auto>>(readJsonFile(opts.dynamic_axes));
+        }
+        if (opts.benchmarks.val()) {
+            popts.benchmarks = cast<hash<auto>>(readJsonFile(opts.benchmarks));
+        }
+        if (opts.golden_vectors.val()) {
+            popts.golden_vectors =
+                cast<list<hash<auto>>>(readJsonFile(opts.golden_vectors));
+        }
+        if (exists opts.force) popts.force = opts.force;
+        if (exists opts.include_companions) popts.include_companions = opts.include_companions;
+        if (exists opts.no_include_companions) popts.include_companions = False;
+        if (exists opts.include_external_data) popts.include_external_data = opts.include_external_data;
+        if (exists opts.no_include_external_data) popts.include_external_data = False;
+        if (exists opts.manifest) popts.write_manifest = opts.manifest;
+        if (exists opts.no_manifest) popts.write_manifest = False;
+        if (opts.manifest_name.val()) popts.manifest_name = opts.manifest_name;
+        if (exists opts.validate) popts.validate = opts.validate;
+        if (exists opts.no_validate) popts.validate = False;
+        return popts;
+    }
+
+    private static auto readJsonFile(string path) {
+%ifdef NoJson
+        throw "QORE-ONNX-ERROR", "the json module is required for JSON input options";
+%else
+        return parse_json(ReadOnlyFile::readTextFile(path));
+%endif
+    }
+
+    private static nothing writeResult(auto result, hash<auto> opts, *string command = NOTHING) {
+        if (opts.json) {
+%ifdef NoJson
+            throw "QORE-ONNX-ERROR", "the json module is required for --json output";
+%else
+            printf("%s\n", make_json(result));
+%endif
+            return;
+        }
+        if (command.val()) {
+            switch (command) {
+                case "inspect":
+                    writeInspectResult(cast<hash<auto>>(result));
+                    return;
+                case "validate":
+                    writeValidationResult(cast<hash<auto>>(result));
+                    return;
+                case "package":
+                    writePackageResult(cast<hash<auto>>(result));
+                    return;
+            }
+        }
+        printf("%y\n", result);
+    }
+
+    private static nothing writeInspectResult(hash<auto> result) {
+        printf("ONNX model: %s\n", result.path);
+        printf("  size: %d bytes\n", result.size);
+        printf("  producer: %s\n", result.info.producer_name.val()
+            ? result.info.producer_name : "(unknown)");
+        printf("  active provider: %s\n", result.provider_report.active_provider.val()
+            ? result.provider_report.active_provider : result.info.active_provider);
+        printf("  inputs: %s\n", join(", ", map string($1.name), result.inputs));
+        printf("  outputs: %s\n", join(", ", map string($1.name), result.outputs));
+        writeDiagnostics(result.diagnostics);
+    }
+
+    private static nothing writeValidationResult(hash<auto> result) {
+        printf("ONNX validation: %s\n", result.path);
+        printf("  valid: %y\n", result.valid ? True : False);
+        if (result.issues) {
+            printf("  issues:\n");
+            foreach hash<auto> issue in (result.issues) {
+                printf("    [%s] %s: %s\n", issue.level, issue.code, issue.message);
+                if (issue.hint.val()) {
+                    printf("      hint: %s\n", issue.hint);
+                }
+            }
+        }
+        writeDiagnostics(result.diagnostics);
+    }
+
+    private static nothing writePackageResult(hash<auto> result) {
+        printf("ONNX package: %s\n", result.output_dir);
+        printf("  runtime: %s\n", result.runtime);
+        printf("  task: %s\n", result.task.val() ? result.task : "(none)");
+        printf("  entry artifact: %s\n", result.entry_artifact);
+        printf("  executable: %y\n", result.executable ? True : False);
+        if (result.manifest_path.val()) {
+            printf("  manifest: %s\n", result.manifest_path);
+        }
+        if (result.providers && result.providers.active_provider.val()) {
+            printf("  active provider: %s\n", result.providers.active_provider);
+        }
+        writeDiagnostics(result.diagnostics);
+    }
+
+    private static nothing writeDiagnostics(*hash<auto> diagnostics) {
+        if (!diagnostics) {
+            return;
+        }
+        if (diagnostics.recommended_actions) {
+            printf("  recommended actions:\n");
+            foreach string action in (diagnostics.recommended_actions) {
+                printf("    - %s\n", action);
+            }
+        }
+        if (diagnostics.examples) {
+            printf("  examples:\n");
+            foreach string example in (diagnostics.examples) {
+                printf("    %s\n", example);
+            }
+        }
+    }
+
+    private static nothing usage(int rc) {
+        printf("Usage:\n");
+        printf("  qore-onnx check-python [--python PATH] [--json]\n");
+        printf("  qore-onnx inspect [--session-config PATH] [--json] INPUT.onnx\n");
+        printf("  qore-onnx validate [--session-config PATH] [--json] INPUT.onnx\n");
+        printf("  qore-onnx benchmark [OPTIONS] INPUT.onnx\n");
+        printf("  qore-onnx compare [OPTIONS] SOURCE.onnx CANDIDATE.onnx\n");
+        printf("  qore-onnx profile [--top-limit N] [--json] PROFILE.json\n");
+        printf("  qore-onnx optimize [OPTIONS] INPUT.onnx OUTPUT.onnx\n");
+        printf("  qore-onnx package [OPTIONS] INPUT.onnx|PACKAGE_DIR OUTPUT_DIR\n");
+        printf("  qore-onnx quantize [OPTIONS] INPUT.onnx OUTPUT.onnx\n\n");
+        printf("Common options:\n");
+        printf("  --session-config PATH            JSON OnnxSessionConfig hash\n");
+        printf("  --json                           Emit JSON output\n\n");
+        printf("Benchmark options:\n");
+        printf("  --runs N                         Timed inference runs, default 10\n");
+        printf("  --warmup-runs N                  Warmup inference runs, default 1\n");
+        printf("  --benchmark-inputs PATH          JSON input hash; generated when omitted\n");
+        printf("  --keep-output                    Include the final output in benchmark results\n\n");
+        printf("Compare options:\n");
+        printf("  --abs-tolerance N                Absolute numeric tolerance, default 0.0001\n");
+        printf("  --rel-tolerance N                Relative numeric tolerance, default 0.0001\n");
+        printf("  --source-session-config PATH     JSON OnnxSessionConfig for the source model\n");
+        printf("  --candidate-session-config PATH  JSON OnnxSessionConfig for the candidate model\n");
+        printf("  --benchmark-inputs PATH          JSON input hash; generated when omitted\n");
+        printf("  --runs N                         Also benchmark both models with N timed runs\n");
+        printf("  --warmup-runs N                  Warmup runs for comparison benchmarks\n");
+        printf("  --keep-output                    Include source and candidate outputs\n\n");
+        printf("Profile options:\n");
+        printf("  --top-limit N                    Maximum node/session rows, default 20\n\n");
+        printf("Optimize options:\n");
+        printf("  --ort-format                     Save optimized artifact in ORT format\n");
+        printf("  --force                          Overwrite output file\n");
+        printf("  --no-validate                    Skip loading the output model after optimization\n\n");
+        printf("Package options:\n");
+        printf("  --task NAME                     Store an ONNX task in the package manifest\n");
+        printf("  --opset N                       Store an ONNX opset version in the package manifest\n");
+        printf("  --minimum-onnxruntime-version V Store deployment runtime requirement metadata\n");
+        printf("  --preprocess PATH               JSON preprocessing contract metadata\n");
+        printf("  --postprocess PATH              JSON postprocessing contract metadata\n");
+        printf("  --dynamic-axes PATH             JSON dynamic-axis metadata hash\n");
+        printf("  --benchmarks PATH               JSON benchmark metadata hash\n");
+        printf("  --golden-vectors PATH           JSON list of golden validation vectors\n");
+        printf("  --manifest-name NAME             Manifest filename, default qore-onnx-package.json\n");
+        printf("  --no-manifest                    Do not write a package manifest\n");
+        printf("  --no-include-companions          Skip tokenizer/config companion files\n");
+        printf("  --no-include-external-data       Skip common ONNX external-data files\n");
+        printf("  --force                          Allow existing output directory files\n");
+        printf("  --no-validate                    Skip ONNX package validation\n\n");
+        printf("Quantize options:\n");
+        printf("  --method dynamic|static          Quantization method, default dynamic\n");
+        printf("  --python PATH                    Python executable, default QORE_ONNX_PYTHON or python3\n");
+        printf("  --weight-type QInt8|QUInt8       Quantized weight type, default QInt8\n");
+        printf("  --activation-type QInt8|QUInt8   Static activation type, default QUInt8\n");
+        printf("  --calibration-data PATH          Static calibration JSON records\n");
+        printf("  --extra-options PATH             ONNX Runtime extra_options JSON object\n");
+        printf("  --op-types CSV                   Restrict quantization to ONNX op types\n");
+        printf("  --nodes-to-quantize CSV          Restrict quantization to ONNX node names\n");
+        printf("  --nodes-to-exclude CSV           Exclude ONNX node names from quantization\n");
+        printf("  --per-channel                    Enable per-channel quantization\n");
+        printf("  --reduce-range                   Enable reduced-range quantization\n");
+        printf("  --dry-run                        Print the execution plan only\n");
+        printf("  --force                          Overwrite output file\n");
+        printf("  --no-validate                    Skip loading the output model after quantization\n");
+        exit(rc);
+    }
+}

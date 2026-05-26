@@ -122,6 +122,8 @@ module SqlUtil {
       \c DESC support for column operator expressions
     - fixed implicit join generation for composite foreign key constraints whose stored column order differs from
       the referenced primary key order
+    - added @ref SqlUtil::AbstractTable::bulkInsert() "AbstractTable::bulkInsert()" as a generic bulk insert
+      hook for driver-specific high-throughput implementations
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index

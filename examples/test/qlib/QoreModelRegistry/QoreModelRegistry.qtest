@@ -25,10 +25,13 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
 %requires Util
 %requires QUnit
 %requires Mime
 %requires DataProvider
+%requires QoreOnnxExport
+%requires QoreOnnxTools
 %requires QoreModelRegistry
 %requires ml
 
@@ -68,8 +71,19 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("deleteTenantStorage", \deleteTenantStorageTest());
         addTestCase("dataProviderNavigation", \dataProviderNavigationTest());
         addTestCase("dataProviderSearch", \dataProviderSearchTest());
+        addTestCase("dataProviderPackageCreate", \dataProviderPackageCreateTest());
         addTestCase("dataProviderFactory", \dataProviderFactoryTest());
         addTestCase("filesystemBackendDirect", \filesystemBackendDirectTest());
+        addTestCase("namedArtifacts", \namedArtifactsTest());
+        addTestCase("executableAdapterNative", \executableAdapterNativeTest());
+        addTestCase("executableAdapterOnnxTensor", \executableAdapterOnnxTensorTest());
+        addTestCase("executableAdapterOnnxStorageDtypes", \executableAdapterOnnxStorageDtypesTest());
+        addTestCase("modelPackageInspection", \modelPackageInspectionTest());
+        addTestCase("onnxPackageInspection", \onnxPackageInspectionTest());
+        addTestCase("onnxExecutionPlanMetadata", \onnxExecutionPlanMetadataTest());
+        addTestCase("onnxRegistryDeploymentContract", \onnxRegistryDeploymentContractTest());
+        addTestCase("onnxOptimizedArtifactRegistration", \onnxOptimizedArtifactRegistrationTest());
+        addTestCase("onnxQuantizedArtifactDependencyError", \onnxQuantizedArtifactDependencyErrorTest());
         addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
         addTestCase("restBackendCacheInvalidation", \restBackendCacheInvalidationTest());
         addTestCase("databaseBackendIntegration", \databaseBackendIntegrationTest());
@@ -112,6 +126,73 @@ class ModelRegistryTest inherits QUnit::Test {
         ML::LinearRegression lr({"fit_intercept": True});
         lr.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)), (2.0, 4.0, 6.0, 8.0, 10.0));
         return lr;
+    }
+
+    private string getTestOnnxModelPath() {
+        string dir = get_script_dir();
+        string path = dir + "/../../../../modules/ml/test/data/test_linear.onnx";
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/test_linear.onnx";
+        }
+        return path;
+    }
+
+    private bool skipOnnx() {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        if (!caps.has_onnx) {
+            testSkip("ONNX Runtime not available");
+            return True;
+        }
+        if (!is_file(getTestOnnxModelPath())) {
+            testSkip("test ONNX model not found");
+            return True;
+        }
+        return False;
+    }
+
+    private nothing writeTextFile(string path, string data) {
+        File f();
+        f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(data);
+    }
+
+    private nothing writeBinaryFile(string path, binary data) {
+        File f();
+        f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(data);
+    }
+
+    private binary makeOnnxIdentityModel(list<hash<auto>> specs) {
+        list<hash<auto>> nodes = ();
+        list<hash<auto>> inputs = ();
+        list<hash<auto>> outputs = ();
+
+        foreach hash<auto> spec in (specs) {
+            string input_name = spec.name + "_in";
+            string output_name = spec.name + "_out";
+            nodes += QoreOnnxExport::OnnxGraphBuilder::makeNode(
+                "Identity", (input_name,), (output_name,));
+            inputs += QoreOnnxExport::OnnxGraphBuilder::makeInput(input_name, 1, spec.type);
+            outputs += QoreOnnxExport::OnnxGraphBuilder::makeOutput(output_name, 1, spec.type);
+        }
+
+        hash<auto> model_hash = QoreOnnxExport::OnnxGraphBuilder::buildModel(
+            "qore_registry_type_identity", nodes, inputs, outputs, (),
+            ({"domain": "", "version": 13},), "qore-model-registry-test");
+        model_hash.ir_version = 8;
+        model_hash.doc_string = "QoreModelRegistry ONNX dtype adapter fixture";
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(model_hash);
+    }
+
+    private binary makeSafeTensorsFixture() {
+        string header = "{\"weight\":{\"dtype\":\"F32\",\"shape\":[2],\"data_offsets\":[0,8]}}";
+        int len = header.size();
+        binary prefix = binary(chr(len & 0xff))
+            + binary(chr((len >> 8) & 0xff))
+            + binary(chr((len >> 16) & 0xff))
+            + binary(chr((len >> 24) & 0xff))
+            + <00000000>;
+        return prefix + binary(header) + <0000000000000000>;
     }
 
     registrationRoundTripTest() {
@@ -831,6 +912,90 @@ class ModelRegistryTest inherits QUnit::Test {
         assertEq(vid1, results[0].version_id, "should be the KMeans version");
     }
 
+    dataProviderPackageCreateTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string registry_dir = dir + DirSep + "registry";
+        string package_dir = dir + DirSep + "dp_package";
+        mkdir_ex(registry_dir, 0755, True);
+        mkdir_ex(package_dir, 0755, True);
+
+        writeTextFile(package_dir + DirSep + "config.json",
+            "{\"model_type\":\"bert\",\"architectures\":[\"BertModel\"]}");
+        writeTextFile(package_dir + DirSep + "tokenizer.json",
+            "{\"model\":{\"type\":\"WordPiece\",\"vocab\":{\"[UNK]\":0}}}");
+        writeTextFile(package_dir + DirSep + "tokenizer_config.json",
+            "{\"model_max_length\":256}");
+        writeBinaryFile(package_dir + DirSep + "model.safetensors",
+            makeSafeTensorsFixture());
+
+        QoreModelRegistry::ModelRegistry registry({"path": registry_dir});
+        QoreModelRegistry::ModelRegistryDataProvider dp(registry);
+
+        hash<auto> created = dp.createRecord({
+            "name": "dp-package",
+            "package_path": package_dir,
+            "description": "DataProvider-created package",
+            "tags": ("data-provider",),
+        });
+        assertEq("dp-package", created.name, "created package model name should match");
+        assertEq("metadata-only", created.runtime, "SafeTensors package runtime");
+        assertEq("tokenizer.json", created.tokenizer_json,
+            "tokenizer artifact should be exposed in created record");
+        assertTrue(created.artifact_count >= 4,
+            "created record should expose package artifact count");
+
+        *list<string> children = dp.getChildProviderNames();
+        assertTrue(children.contains("dp-package"),
+            "root provider cache should be invalidated after create");
+
+        AbstractDataProvider versions_dp = dp.getChildProvider("dp-package");
+        assertTrue(versions_dp instanceof QoreModelRegistry::ModelVersionsDataProvider,
+            "created model child should be a versions provider");
+
+        AbstractDataProviderRecordIterator it =
+            versions_dp.searchRecords({"version_id": created.version_id});
+        assertTrue(it.next(), "created version should be searchable");
+        hash<auto> version_record = it.getValue();
+        assertEq(created.version_id, version_record.version_id,
+            "version search should return created version");
+        assertEq("tokenizer.json", version_record.tokenizer_json,
+            "version record should expose tokenizer metadata");
+        assertFalse(it.next(), "version_id filter should return one record");
+
+        *list<string> version_children = versions_dp.getChildProviderNames();
+        assertTrue(version_children.contains(created.version_id),
+            "version provider should expose version IDs as artifact children");
+
+        AbstractDataProvider artifacts_dp = versions_dp.getChildProvider(created.version_id);
+        assertTrue(artifacts_dp instanceof QoreModelRegistry::ModelVersionArtifactsDataProvider,
+            "version child should be an artifact provider");
+
+        it = artifacts_dp.searchRecords({"role": "tokenizer"});
+        assertTrue(it.next(), "artifact provider should find tokenizer artifact");
+        assertEq("tokenizer.json", it.getValue().name,
+            "tokenizer artifact name should match");
+
+        string notes_path = dir + DirSep + "notes.json";
+        writeTextFile(notes_path, "{\"source\":\"dataprovider\"}");
+        hash<auto> artifact = artifacts_dp.createRecord({
+            "artifact_path": notes_path,
+            "role": "metadata",
+            "format": "json",
+            "safe_to_parse": True,
+        });
+        assertEq("notes.json", artifact.name,
+            "artifact path create should default artifact_name to basename");
+        assertEq("metadata", artifact.role, "artifact role override should be applied");
+        assertEq(File::readBinaryFile(notes_path).size(),
+            registry.loadNamedArtifact("dp-package", created.version_id, "notes.json").size(),
+            "DataProvider-created artifact should round-trip through registry");
+
+        it = artifacts_dp.searchRecords({"name": "notes.json"});
+        assertTrue(it.next(), "new artifact should be searchable");
+        assertEq("json", it.getValue().format, "new artifact format should match");
+    }
+
     dataProviderFactoryTest() {
         # Verify factory is registered
         *AbstractDataProviderFactory factory =
@@ -909,6 +1074,674 @@ class ModelRegistryTest inherits QUnit::Test {
         # Delete model
         backend.deleteModel("direct-test");
         assertEq(0, backend.listModels().size(), "should have 0 models after delete");
+    }
+
+    namedArtifactsTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        ML::KMeans km = createFittedKMeans();
+        string vid = registry.register(km, {"name": "artifact-model"});
+
+        binary tokenizer = binary("{\"model\":{\"type\":\"WordPiece\",\"vocab\":{}}}");
+        registry.registerNamedArtifact("artifact-model", vid, "tokenizer.json",
+            tokenizer, <QoreModelRegistry::ModelArtifactInfo>{
+                "name": "tokenizer.json",
+                "role": "tokenizer",
+                "format": "json",
+                "size": tokenizer.size(),
+                "safe_to_parse": True,
+                "executable": False,
+            });
+
+        list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
+            registry.listArtifacts("artifact-model", vid);
+        assertEq(2, artifacts.size(),
+            "native model plus tokenizer artifact should be listed");
+        assertEq(tokenizer.size(),
+            registry.loadNamedArtifact("artifact-model", vid, "tokenizer.json").size(),
+            "named tokenizer artifact should round-trip");
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("artifact-model", vid);
+        assertEq(2, manifest.artifacts.size(),
+            "manifest should include named artifact metadata");
+        assertThrows("ML-REGISTRY-ERROR", \registry.loadNamedArtifact(),
+            ("artifact-model", vid, "../bad"));
+    }
+
+    executableAdapterNativeTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        ML::KMeans km({"k": 2, "seed": 42});
+        km.fit((
+            {"x": 1.0, "y": 1.0},
+            {"x": 1.1, "y": 1.1},
+            {"x": 5.0, "y": 5.0},
+            {"x": 5.1, "y": 5.1},
+        ));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.register(km, {"name": "adapter-kmeans"});
+
+        QoreModelRegistry::ModelExecutableAdapter adapter =
+            registry.loadExecutableAdapter("adapter-kmeans", vid);
+        assertEq("qore-ml", adapter.getRuntime(), "native model runtime should be qore-ml");
+        assertFalse(adapter.isOnnx(), "native model should not be reported as ONNX");
+        assertEq(vid, adapter.getVersionId(), "adapter should expose loaded version ID");
+
+        hash<ML::KMeansResult> prediction = adapter.predict({"x": 1.0, "y": 1.0});
+        assertTrue(prediction.hasKey("cluster"), "native adapter predict should call predict()");
+
+        hash<auto> batch = adapter.runFeatureMatrix(((1.0, 1.0), (5.0, 5.0)), NOTHING);
+        assertTrue(batch.hasKey("prediction"), "native matrix adapter result should have prediction key");
+        assertEq(2, batch.prediction.size(), "native matrix adapter should return two predictions");
+    }
+
+    executableAdapterOnnxTensorTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_adapter";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "adapter-onnx",
+            "description": "adapter ONNX tensor execution fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        QoreModelRegistry::ModelExecutableAdapter adapter =
+            registry.loadExecutableAdapter("adapter-onnx", vid);
+        assertEq("onnxruntime", adapter.getRuntime(), "ONNX adapter runtime should be onnxruntime");
+        assertTrue(adapter.isOnnx(), "adapter should identify ONNX models");
+
+        hash<auto> tensors = adapter.runFeatureMatrixTensors(((1.0,), (2.0,), (3.0,)), NOTHING);
+        assertTrue(tensors.hasKey("Y"), "tensor result should contain ONNX output");
+        ML::Tensor y = tensors.Y;
+        assertEq("float32", y.getDtype(), "ONNX tensor dtype should be preserved");
+        assertEq((3, 1), y.getShape(), "ONNX tensor output shape should be preserved");
+
+        list<auto> values = y.toList();
+        assertTrue(abs(3.0 - values[0][0].toFloat()) < 1e-5,
+            sprintf("expected tensor output 3.0, got %y", values[0][0]));
+        assertTrue(abs(5.0 - values[1][0].toFloat()) < 1e-5,
+            sprintf("expected tensor output 5.0, got %y", values[1][0]));
+        assertTrue(abs(7.0 - values[2][0].toFloat()) < 1e-5,
+            sprintf("expected tensor output 7.0, got %y", values[2][0]));
+
+        hash<auto> rows = adapter.runFeatureMatrix(((1.0,), (2.0,), (3.0,)), NOTHING);
+        assertTrue(rows.hasKey("Y"), "row result should contain ONNX output");
+        assertTrue(abs(3.0 - rows.Y[0].toFloat()) < 1e-5,
+            sprintf("expected row output 3.0, got %y", rows.Y[0]));
+        assertTrue(abs(5.0 - rows.Y[1].toFloat()) < 1e-5,
+            sprintf("expected row output 5.0, got %y", rows.Y[1]));
+        assertTrue(abs(7.0 - rows.Y[2].toFloat()) < 1e-5,
+            sprintf("expected row output 7.0, got %y", rows.Y[2]));
+
+        hash<auto> selected = adapter.runFeatureMatrixTensors(((1.0,), (2.0,), (3.0,)), NOTHING, ("Y",));
+        assertEq(1, selected.size(), "selected adapter tensor output should only include requested tensors");
+        assertTrue(selected.Y instanceof ML::Tensor,
+            "selected adapter tensor output should preserve ML::Tensor values");
+
+        hash<auto> diagnostics = adapter.getProviderDiagnostics();
+        assertEq("onnxruntime", diagnostics.runtime,
+            "provider diagnostics should include runtime");
+        assertTrue(diagnostics.hasKey("active_provider"),
+            "provider diagnostics should include active provider");
+        assertTrue(diagnostics.available_providers.size() > 0,
+            "provider diagnostics should include ONNX Runtime providers");
+        assertEq("X", diagnostics.inputs[0].name,
+            "provider diagnostics should include input tensor metadata");
+        assertTrue(diagnostics.io_binding.initialized,
+            "adapter tensor execution should initialize reusable I/O binding");
+        assertEq(3, diagnostics.io_binding.run_count,
+            "adapter tensor execution should use reusable I/O binding for tensor runs");
+        assertEq(("Y",), diagnostics.io_binding.bound_outputs,
+            "adapter reusable I/O binding should track selected output bindings");
+    }
+
+    executableAdapterOnnxStorageDtypesTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_adapter_dtypes";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx", makeOnnxIdentityModel((
+            {"name": "f16", "type": QoreOnnxExport::ONNX_FLOAT16},
+            {"name": "bf16", "type": QoreOnnxExport::ONNX_BFLOAT16},
+            {"name": "u8", "type": QoreOnnxExport::ONNX_UINT8},
+            {"name": "u16", "type": QoreOnnxExport::ONNX_UINT16},
+            {"name": "u32", "type": QoreOnnxExport::ONNX_UINT32},
+            {"name": "u64", "type": QoreOnnxExport::ONNX_UINT64},
+            {"name": "s", "type": QoreOnnxExport::ONNX_STRING},
+        )));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "adapter-onnx-dtypes",
+            "description": "adapter ONNX storage dtype fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        QoreModelRegistry::ModelExecutableAdapter adapter =
+            registry.loadExecutableAdapter("adapter-onnx-dtypes", vid);
+
+        assertEq("float32", adapter.getOnnxInputTensorDtype("f16_in"));
+        assertEq("float32", adapter.getOnnxInputTensorDtype("bf16_in"));
+        assertEq("int64", adapter.getOnnxInputTensorDtype("u8_in"));
+        assertEq("int64", adapter.getOnnxInputTensorDtype("u16_in"));
+        assertEq("int64", adapter.getOnnxInputTensorDtype("u32_in"));
+        assertEq("int64", adapter.getOnnxInputTensorDtype("u64_in"));
+        assertEq("string", adapter.getOnnxInputTensorDtype("s_in"));
+
+        hash<auto> tensor_out = adapter.runTensors({
+            "f16_in": new ML::Tensor(data: ((1.5,), (-2.0,)), dtype: "float32"),
+            "bf16_in": new ML::Tensor(data: ((3.0,), (4.5,)), dtype: "float32"),
+            "u8_in": new ML::Tensor(data: ((0,), (255,)), dtype: "int64"),
+            "u16_in": new ML::Tensor(data: ((0,), (65535,)), dtype: "int64"),
+            "u32_in": new ML::Tensor(data: ((0,), (4000000000,)), dtype: "int64"),
+            "u64_in": new ML::Tensor(data: ((0,), (9223372036854775807,)), dtype: "int64"),
+            "s_in": new ML::Tensor(data: (("alpha",), ("beta",)), dtype: "string"),
+        });
+
+        assertEq("float32", tensor_out.f16_out.getDtype());
+        assertTrue(abs(1.5 - tensor_out.f16_out.toList()[0][0].toFloat()) < 0.001,
+            "float16 output should round-trip through float32 storage");
+        assertTrue(abs(-2.0 - tensor_out.f16_out.toList()[1][0].toFloat()) < 0.001,
+            "negative float16 output should round-trip through float32 storage");
+        assertEq("float32", tensor_out.bf16_out.getDtype());
+        assertTrue(abs(4.5 - tensor_out.bf16_out.toList()[1][0].toFloat()) < 0.01,
+            "bfloat16 output should round-trip through float32 storage");
+        assertEq("int64", tensor_out.u8_out.getDtype());
+        assertEq(((0,), (255,)), tensor_out.u8_out.toList());
+        assertEq(((0,), (65535,)), tensor_out.u16_out.toList());
+        assertEq(((0,), (4000000000,)), tensor_out.u32_out.toList());
+        assertEq(((0,), (9223372036854775807,)), tensor_out.u64_out.toList());
+        assertEq("alpha", tensor_out.s_out.toList()[0][0]);
+        assertEq("beta", tensor_out.s_out.toList()[1][0]);
+
+        string f16_package_dir = dir + DirSep + "onnx_adapter_f16";
+        mkdir_ex(f16_package_dir, 0755, True);
+        writeBinaryFile(f16_package_dir + DirSep + "model.onnx", makeOnnxIdentityModel((
+            {"name": "f16", "type": QoreOnnxExport::ONNX_FLOAT16},
+        )));
+        string f16_vid = registry.registerPackage(f16_package_dir, {
+            "name": "adapter-onnx-f16",
+            "description": "adapter ONNX single float16 fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+        QoreModelRegistry::ModelExecutableAdapter f16_adapter =
+            registry.loadExecutableAdapter("adapter-onnx-f16", f16_vid);
+
+        hash<auto> f16 = f16_adapter.runFeatureTensor(
+            new ML::Tensor(data: ((1.5,), (-2.0,)), dtype: "float32"),
+            "f16_in", ("f16_out",));
+        assertTrue(abs(1.5 - f16.f16_out.toList()[0][0].toFloat()) < 0.001,
+            "runFeatureTensor() should accept float32 storage for float16 input");
+
+        hash<auto> matrix_out = f16_adapter.runFeatureMatrixTensors(
+            ((1.5,), (-2.0,)), "f16_in", ("f16_out",));
+        assertTrue(abs(-2.0 - matrix_out.f16_out.toList()[1][0].toFloat()) < 0.001,
+            "runFeatureMatrixTensors() should use float32 storage for float16 input");
+
+        string u8_package_dir = dir + DirSep + "onnx_adapter_u8";
+        mkdir_ex(u8_package_dir, 0755, True);
+        writeBinaryFile(u8_package_dir + DirSep + "model.onnx", makeOnnxIdentityModel((
+            {"name": "u8", "type": QoreOnnxExport::ONNX_UINT8},
+        )));
+        string u8_vid = registry.registerPackage(u8_package_dir, {
+            "name": "adapter-onnx-u8",
+            "description": "adapter ONNX single uint8 fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+        QoreModelRegistry::ModelExecutableAdapter u8_adapter =
+            registry.loadExecutableAdapter("adapter-onnx-u8", u8_vid);
+
+        hash<auto> u8 = u8_adapter.runFeatureTensor(
+            new ML::Tensor(data: ((0,), (255,)), dtype: "int64"),
+            "u8_in", ("u8_out",));
+        assertEq(((0,), (255,)), u8.u8_out.toList());
+
+        hash<auto> row_out = u8_adapter.runFeatureMatrix(
+            ((0.0,), (255.0,)), "u8_in", ("u8_out",));
+        assertEq((0, 255), row_out.u8_out);
+
+        assertThrows("ML-REGISTRY-ERROR", "string dtype", sub() {
+            adapter.runFeatureMatrixTensors(((1.0,),), "s_in");
+        });
+    }
+
+    modelPackageInspectionTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "hf_package";
+        mkdir_ex(package_dir, 0755, True);
+
+        writeTextFile(package_dir + DirSep + "config.json",
+            "{\"model_type\":\"bert\",\"architectures\":[\"BertModel\"],\"torch_dtype\":\"float32\"}");
+        writeTextFile(package_dir + DirSep + "tokenizer.json",
+            "{\"model\":{\"type\":\"WordPiece\",\"vocab\":{\"[UNK]\":0}}}");
+        writeTextFile(package_dir + DirSep + "tokenizer_config.json",
+            "{\"model_max_length\":512,\"chat_template\":\"{{ messages }}\"}");
+        writeBinaryFile(package_dir + DirSep + "model.safetensors",
+            makeSafeTensorsFixture());
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "hf-source",
+            "description": "metadata-only HuggingFace source package",
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("hf-source", vid);
+        assertEq("huggingface", manifest.framework, "framework should be inferred");
+        assertEq("weights-only", manifest.artifact_kind,
+            "SafeTensors package is weights-only");
+        assertEq("metadata-only", manifest.runtime,
+            "SafeTensors is not locally executable");
+        assertFalse(manifest.executable,
+            "SafeTensors package should not be executable");
+        assertEq("safe-metadata", manifest.safety,
+            "SafeTensors should be safe metadata");
+        assertEq("tokenizer.json", manifest.tokenizer.tokenizer_json,
+            "tokenizer artifact should be detected");
+        assertEq(512, manifest.tokenizer.model_max_length,
+            "tokenizer_config model_max_length should be captured");
+        assertTrue(manifest.tokenizer.has_chat_template,
+            "chat template flag should be captured");
+        hash<auto> model_config = registry.loadJsonArtifact("hf-source", vid, "config.json");
+        assertEq("bert", model_config.model_type,
+            "JSON artifact helper should parse config.json");
+        hash<auto> tokenizer_config = registry.loadTokenizerConfig("hf-source", vid);
+        assertEq("WordPiece", tokenizer_config.model.type,
+            "tokenizer helper should load tokenizer.json from the manifest");
+        hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig("hf-source", vid);
+        assertEq("WordPiece", tokenizer_package.tokenizer_json.model.type,
+            "tokenizer package helper should include tokenizer.json");
+        assertEq(512, tokenizer_package.tokenizer_config.model_max_length,
+            "tokenizer package helper should include tokenizer_config.json");
+
+        list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
+            registry.listArtifacts("hf-source", vid);
+        assertTrue(artifacts.size() >= 4,
+            "all package artifacts should be registered");
+        assertThrows("ML-REGISTRY-ERROR", \registry.loadExecutable(), ("hf-source", vid));
+    }
+
+    onnxPackageInspectionTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+        writeBinaryFile(package_dir + DirSep + "model.onnx.data", <01020304>);
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-linear",
+            "description": "ONNX metadata inspection fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-linear", vid);
+        assertEq("onnx", manifest.framework, "ONNX package framework should be inferred");
+        assertEq("onnxruntime", manifest.runtime, "ONNX package runtime should be onnxruntime");
+        assertEq("raw", manifest.task, "plain ONNX packages should default to raw task");
+        assertEq("onnx/raw", manifest.execution.plan.type,
+            "plain ONNX packages should expose a raw execution plan");
+        assertEq("onnx-preprocess", manifest.preprocess.kind,
+            "plain ONNX packages should expose a generated preprocessing contract");
+        assertEq("onnx-postprocess", manifest.postprocess.kind,
+            "plain ONNX packages should expose a generated postprocessing contract");
+        assertEq("raw", manifest.execution.plan.postprocess.output_mode,
+            "plain ONNX execution plans should expose raw postprocessing metadata");
+        assertEq("onnxruntime", manifest.execution.plan.runtime,
+            "plain ONNX execution plans should expose runtime metadata");
+        assertEq("model.onnx", manifest.execution.plan.entry_artifact,
+            "plain ONNX execution plans should expose the entry artifact");
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y,
+            "plain ONNX execution plans should expose output-shape metadata");
+        assertEq("onnx-package", manifest.diagnostics.kind,
+            "plain ONNX packages should expose actionable diagnostics");
+        assertEq("onnx-package", manifest.execution.diagnostics.kind,
+            "execution metadata should expose actionable diagnostics");
+        assertEq("executable", manifest.artifact_kind, "ONNX package should be executable");
+        assertTrue(manifest.execution.input_schema.tensors.size() > 0,
+            "ONNX input tensor metadata should be stored in execution input_schema");
+        assertEq("X", manifest.execution.input_schema.tensors[0].name,
+            "test ONNX model input tensor should be captured");
+        assertEq("Y", manifest.execution.output_schema.tensors[0].name,
+            "test ONNX model output tensor should be captured");
+        assertEq(0, manifest.execution.config.providers.size(),
+            "ONNX session configuration should be stored in execution metadata");
+
+        list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
+            registry.listArtifacts("onnx-linear", vid);
+        assertTrue((select artifacts, $1.role == "external_data").size() > 0,
+            "common ONNX external data artifact should be preserved");
+        hash<QoreModelRegistry::ModelArtifactInfo> model_artifact =
+            (select artifacts, $1.name == "model.onnx")[0];
+        assertTrue(model_artifact.metadata.metadata_read,
+            "ONNX Runtime should read model metadata during inspection");
+        assertTrue(model_artifact.metadata.has_external_data,
+            "common adjacent ONNX external data files should be recorded");
+
+        QoreModelRegistry::ModelExecutableAdapter adapter =
+            registry.loadExecutableAdapter("onnx-linear", vid);
+        hash<auto> rows = adapter.runFeatureMatrix(((4.0,),), NOTHING);
+        assertTrue(abs(9.0 - rows.Y[0].toFloat()) < 1e-5,
+            sprintf("expected externally-materialized ONNX output 9.0, got %y", rows.Y[0]));
+    }
+
+    onnxExecutionPlanMetadataTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_plan_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-plan-linear",
+            "description": "ONNX execution-plan metadata fixture",
+            "task": "regression",
+            "execution_plan": {
+                "type": "onnx/regression",
+                "output": {"kind": "score"},
+            },
+            "preprocess": {"input_layout": "row-major"},
+            "postprocess": {"output_field": "score"},
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-plan-linear", vid);
+        assertEq("regression", manifest.task);
+        assertEq("regression", manifest.execution.task);
+        assertEq("onnx/regression", manifest.execution.plan.type);
+        assertEq("model.onnx", manifest.execution.plan.artifact_name);
+        assertEq("row-major", manifest.execution.preprocess.input_layout);
+        assertEq("score", manifest.execution.postprocess.output_field);
+        assertEq("onnx-preprocess", manifest.execution.plan.preprocess.kind);
+        assertEq("score", manifest.execution.plan.postprocess.output_field);
+        assertEq("Y", manifest.execution.plan.postprocess.value_output);
+        assertEq("X", manifest.execution.plan.input_schema.tensors[0].name);
+        assertEq("Y", manifest.execution.plan.output_schema.tensors[0].name);
+        assertEq("onnxruntime", manifest.execution.plan.runtime);
+        assertEq("model.onnx", manifest.execution.plan.entry_artifact);
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y);
+
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            registry.registerPackage(package_dir, {
+                "name": "onnx-plan-conflict",
+                "task": "embedding",
+                "execution_plan": {"type": "onnx/regression"},
+                "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+            });
+        });
+    }
+
+    onnxRegistryDeploymentContractTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_contract_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+        writeBinaryFile(package_dir + DirSep + "model.onnx.data", <01020304>);
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-contract-linear",
+            "description": "ONNX deployment contract fixture",
+            "task": "regression",
+            "opset": 17,
+            "minimum_onnxruntime_version": "1.16.0",
+            "dynamic_axes": {"X": (0,)},
+            "benchmarks": {"baseline": {"average_ms": 0.0}},
+            "golden_vectors": ({"inputs": {"X": ((4.0,),)}, "outputs": {"Y": ((9.0,),)}},),
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-contract-linear", vid);
+        assertEq("regression", manifest.task,
+            "task should be stored at version level");
+        assertEq(17, manifest.opset, "declared opset should be stored");
+        assertEq("1.16.0", manifest.minimum_onnxruntime_version,
+            "minimum ONNX Runtime version should be stored");
+        assertEq("X", manifest.inputs[0].name,
+            "input tensor contract should be stored at version level");
+        assertEq("Y", manifest.outputs[0].name,
+            "output tensor contract should be stored at version level");
+        assertEq(0, manifest.dynamic_axes.X[0],
+            "declared dynamic axis metadata should be stored");
+        assertEq(0, manifest.execution.plan.dynamic_axes.X[0],
+            "declared dynamic axis metadata should be stored in the execution plan");
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y,
+            "execution plan should expose output-shape metadata");
+        assertTrue(manifest.external_data.contains("model.onnx.data"),
+            "external-data companions should be exposed at version level");
+        assertTrue(manifest.validation.valid,
+            "registration-time ONNX validation should be visible in the manifest");
+        assertEq("CPUExecutionProvider", manifest.providers.active_provider,
+            "provider diagnostics should expose the active provider");
+        assertEq("onnx-package", manifest.diagnostics.kind,
+            "registration-time ONNX diagnostics should be visible in the manifest");
+        assertEq(0.0, manifest.benchmarks.baseline.average_ms,
+            "benchmark metadata should be preserved");
+        assertEq(1, manifest.golden_vectors.size(),
+            "golden vectors should be preserved");
+
+        hash<auto> inspection = registry.inspectOnnxVersion("onnx-contract-linear", vid);
+        assertEq("X", inspection.inputs[0].name,
+            "registry inspect action should expose input metadata");
+
+        hash<QoreOnnxTools::OnnxValidationResult> validation =
+            registry.validateOnnxVersion("onnx-contract-linear", vid);
+        assertTrue(validation.valid,
+            "registry validate action should validate the ONNX entry artifact");
+
+        hash<QoreOnnxTools::OnnxBenchmarkResult> benchmark =
+            registry.benchmarkOnnxVersion("onnx-contract-linear", vid, NOTHING,
+                <QoreOnnxTools::OnnxBenchmarkOptions>{
+                    "warmup_runs": 0,
+                    "runs": 1,
+                });
+        assertEq(1, benchmark.runs,
+            "registry benchmark action should run with caller options");
+
+        hash<QoreOnnxTools::OnnxCompareResult> comparison =
+            registry.compareOnnxVersions("onnx-contract-linear", vid, vid,
+                <QoreOnnxTools::OnnxCompareOptions>{
+                    "warmup_runs": 0,
+                    "runs": 1,
+                });
+        assertTrue(comparison.outputs_match,
+            "registry compare action should compare version artifacts");
+
+        QoreModelRegistry::ModelRegistryDataProvider dp(registry);
+        AbstractDataProvider versions_dp = dp.getChildProvider("onnx-contract-linear");
+        AbstractDataProviderRecordIterator it =
+            versions_dp.searchRecords({"version_id": vid});
+        assertTrue(it.next(), "deployment-contract version should be searchable");
+        hash<auto> record = it.getValue();
+        assertEq("CPUExecutionProvider", record.active_provider,
+            "DataProvider navigation should expose provider diagnostics");
+        assertTrue(record.validation_valid,
+            "DataProvider navigation should expose validation status");
+        assertEq("onnx-package", record.diagnostics.kind,
+            "DataProvider navigation should expose actionable diagnostics");
+        assertEq("X", record.inputs[0].name,
+            "DataProvider API metadata should expose input contract fields");
+
+        string packaged_dir = dir + DirSep + "onnx_contract_packaged";
+        QoreOnnxTools::OnnxPackageTools::createPackage(package_dir, packaged_dir,
+            <QoreOnnxTools::OnnxPackageOptions>{
+                "task": "regression",
+                "opset": 18,
+                "minimum_onnxruntime_version": "1.17.0",
+                "preprocess": {"input_layout": "matrix"},
+                "postprocess": {"output_field": "score"},
+                "benchmarks": {"cpu": {"runs": 1}},
+                "golden_vectors": ({"inputs": {"X": ((5.0,),)}, "outputs": {"Y": ((11.0,),)}},),
+                "session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            });
+        string packaged_vid = registry.registerPackage(packaged_dir, {
+            "name": "onnx-contract-packaged",
+        });
+        hash<QoreModelRegistry::ModelVersionInfo> packaged_manifest =
+            registry.getVersionManifest("onnx-contract-packaged", packaged_vid);
+        assertEq("regression", packaged_manifest.task,
+            "qore-onnx package manifest task should be ingested");
+        assertEq(18, packaged_manifest.opset,
+            "qore-onnx package manifest opset should be ingested");
+        assertEq("1.17.0", packaged_manifest.minimum_onnxruntime_version,
+            "qore-onnx package manifest runtime requirement should be ingested");
+        assertEq("matrix", packaged_manifest.preprocess.input_layout,
+            "qore-onnx package manifest preprocessing contract should be ingested");
+        assertEq("score", packaged_manifest.postprocess.output_field,
+            "qore-onnx package manifest postprocessing contract should be ingested");
+        assertEq("onnx-postprocess", packaged_manifest.execution.plan.postprocess.kind,
+            "qore-onnx package execution plan should preserve postprocessing contract metadata");
+        assertEq("onnx-package", packaged_manifest.diagnostics.kind,
+            "qore-onnx package manifest diagnostics should be ingested");
+        assertEq("Y", packaged_manifest.execution.plan.postprocess.value_output,
+            "qore-onnx package execution plan should preserve model output binding metadata");
+        assertEq("model.onnx", packaged_manifest.execution.plan.entry_artifact,
+            "qore-onnx package execution plan should preserve the entry artifact");
+        assertEq(packaged_manifest.outputs[0].shape,
+            packaged_manifest.execution.plan.output_shapes.Y,
+            "qore-onnx package execution plan should preserve output-shape metadata");
+        assertEq(1, packaged_manifest.benchmarks.cpu.runs,
+            "qore-onnx package manifest benchmark metadata should be ingested");
+        assertEq(1, packaged_manifest.golden_vectors.size(),
+            "qore-onnx package manifest golden vectors should be ingested");
+    }
+
+    onnxOptimizedArtifactRegistrationTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_opt_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-opt-linear",
+            "description": "ONNX optimized artifact fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        hash<QoreModelRegistry::ModelArtifactInfo> info =
+            registry.registerOptimizedOnnxArtifact("onnx-opt-linear", vid,
+                "model.optimized.onnx",
+                <QoreOnnxTools::OnnxOptimizationOptions>{
+                    "session_config": <ML::OnnxSessionConfig>{"providers": ()},
+                });
+        assertEq("model.optimized.onnx", info.name);
+        assertEq("optimized_model", info.role);
+        assertEq("onnx", info.format);
+        assertTrue(info.size > 0);
+        assertEq("onnx-optimization", info.metadata.lineage.type);
+        assertEq(vid, info.metadata.lineage.source_version_id);
+        assertEq("model.onnx", info.metadata.lineage.source_artifact);
+        assertTrue(info.metadata.deployment.hardware_specific,
+            "optimized artifacts should record provider-specific deployment metadata");
+        assertEq("CPUExecutionProvider", info.metadata.deployment.active_provider);
+        assertTrue(info.metadata.validation.valid);
+
+        QoreModelRegistry::ModelExecutableAdapter opt_adapter =
+            registry.loadOnnxArtifactAdapter("onnx-opt-linear", vid,
+                "model.optimized.onnx", NOTHING);
+        hash<auto> optimized_rows = opt_adapter.runFeatureMatrix(((4.0,),), NOTHING);
+        assertTrue(abs(9.0 - optimized_rows.Y[0].toFloat()) < 1e-5,
+            sprintf("expected optimized ONNX output 9.0, got %y", optimized_rows.Y[0]));
+
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            registry.loadOnnxArtifactExecutable("onnx-opt-linear", vid,
+                "model.optimized.onnx",
+                <ML::OnnxSessionConfig>{
+                    "providers": (<ML::OnnxProviderConfig>{"name": "CUDA"},),
+                });
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest =
+            registry.getVersionManifest("onnx-opt-linear", vid);
+        assertEq(1, manifest.optimized_artifacts.size(),
+            "optimized artifact should be exposed in derived manifest metadata");
+        assertEq("model.optimized.onnx", manifest.optimized_artifacts[0].name);
+
+        list<hash<QoreModelRegistry::ModelArtifactInfo>> artifacts =
+            registry.listArtifacts("onnx-opt-linear", vid);
+        assertEq(1, (select artifacts, $1.role == "optimized_model").size(),
+            "optimized artifact should be registered in the manifest");
+        assertTrue(registry.loadNamedArtifact("onnx-opt-linear", vid,
+            "model.optimized.onnx").size() > 0);
+    }
+
+    onnxQuantizedArtifactDependencyErrorTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_quant_package";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "onnx-quant-linear",
+            "description": "ONNX quantized artifact dependency fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+        });
+
+        assertThrows("QORE-ONNX-TOOLS-ERROR", sub() {
+            registry.registerQuantizedOnnxArtifact("onnx-quant-linear", vid,
+                "model.quantized.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "definitely-not-python-qore",
+                    "method": "dynamic",
+                });
+        });
+        assertEq(0, (select registry.listArtifacts("onnx-quant-linear", vid),
+            $1.role == "quantized_model").size(),
+            "failed quantization should not register an artifact");
     }
 
     filesystemBackendThreadSafetyTest() {

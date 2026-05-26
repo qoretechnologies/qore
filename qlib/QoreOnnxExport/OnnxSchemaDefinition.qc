@@ -172,6 +172,7 @@ public Protobuf::ProtobufSchema sub getOnnxSchema() {
 public const ONNX_FLOAT = 1;
 public const ONNX_UINT8 = 2;
 public const ONNX_INT8 = 3;
+public const ONNX_UINT16 = 4;
 public const ONNX_INT16 = 5;
 public const ONNX_INT32 = 6;
 public const ONNX_INT64 = 7;
@@ -181,6 +182,7 @@ public const ONNX_FLOAT16 = 10;
 public const ONNX_DOUBLE = 11;
 public const ONNX_UINT32 = 12;
 public const ONNX_UINT64 = 13;
+public const ONNX_BFLOAT16 = 16;
 
 #! ONNX AttributeProto type constants
 public const ONNX_ATTR_FLOAT = 1;

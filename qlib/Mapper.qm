@@ -39,7 +39,7 @@
 %requires(reexport) DataProvider
 
 module Mapper {
-    version = "1.7";
+    version = "1.8";
     desc = "user module providing basic data mapping infrastructure";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -307,6 +307,16 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     runtime options duplicate existing functionality and are confusing and error-prone to use.
 
     @section mapperrelnotes Release Notes
+
+    @subsection mapperv1_8 Mapper v1.8
+    - added @ref DataProvider::DataProviderShape "DataProviderShape" support for \c DataFrameBlock,
+      \c BufferColumns, \c HashOfLists, and row-record inputs
+    - updated @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept
+      @ref Qore::SQL::ColumnarResult "ColumnarResult", hash-of-\c buffer<T>, and \c DataFrame input while preserving
+      columnar output shape when possible
+    - updated @ref Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" and
+      @ref Mapper::Mapper::mapAutoInput() "Mapper::mapAutoInput()" to consume shaped DataProvider bulk streams with
+      \c getShapedValue(); \c mapAutoInput() now accumulates all bulk blocks before returning
 
     @subsection mapperv1_7 Mapper v1.7
     - added @ref Mapper::Mapper::getMapHash() "Mapper::getMapHash()" to return the original field mapping hash
@@ -872,6 +882,24 @@ Mapper mapv(DataMap);
     */
     private bool supportsBulkApiImpl() {
         return True;
+    }
+
+    #! Returns the input shapes supported by this mapper
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (disable_bulk || global_submappers)
+            ? (DataProviderShape::RowRecords,)
+            : (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+                DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns the output shapes supported by this mapper
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
+    }
+
+    #! Processes data in an explicitly negotiated shape
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        return mapRecordsShape(records, shape, True);
     }
 
     #! Returns the expected type of data to be submitted, if available
@@ -2076,8 +2104,8 @@ Mapper mapv(DataMap);
                 # bulk read + bulk write for high performance mapping
                 AbstractDataProviderBulkRecordInterface i = input_provider.searchRecordsBulk(NOTHING,
                     input_provider_search, input_search_options);
-                while (*hash<auto> records = i.getValue()) {
-                    mapBulk(records);
+                while (*auto records = i.getShapedValue()) {
+                    mapRecordsShape(records, AbstractDataProcessor::detectShape(records), False);
                 }
             } else {
                 # bulk output with normal input
@@ -2088,8 +2116,8 @@ Mapper mapv(DataMap);
                 # bulk read + bulk write for high performance mapping
                 AbstractDataProviderBulkRecordInterface i = input_provider.searchRecordsBulk(NOTHING,
                     input_provider_search, input_search_options);
-                while (*hash<auto> records = i.getValue()) {
-                    map mapData($1), records.contextIterator();
+                while (*auto records = i.getShapedValue()) {
+                    mapRecordsShape(records, AbstractDataProcessor::detectShape(records), False);
                 }
             } else {
                 # bulk output with normal input
@@ -2139,8 +2167,9 @@ Mapper mapv(DataMap);
                 AbstractDataProviderBulkRecordInterface i = input_provider.searchRecordsBulk(NOTHING,
                     input_provider_search, input_search_options);
                 list<hash<auto>> rv;
-                while (*hash<auto> records = i.getValue()) {
-                    map rv += asOutputRecord($1), mapBulk(records).contextIterator();
+                while (*auto records = i.getShapedValue()) {
+                    *auto mapped = mapRecordsShape(records, AbstractDataProcessor::detectShape(records), False);
+                    appendMappedRows(\rv, mapped);
                 }
                 return rv;
             } else {
@@ -2152,9 +2181,12 @@ Mapper mapv(DataMap);
                 # bulk read + bulk write for high performance mapping
                 AbstractDataProviderBulkRecordInterface i = input_provider.searchRecordsBulk(NOTHING,
                     input_provider_search, input_search_options);
-                while (*hash<auto> records = i.getValue()) {
-                    return map mapData($1), records.contextIterator();
+                list<hash<auto>> rv;
+                while (*auto records = i.getShapedValue()) {
+                    *auto mapped = mapRecordsShape(records, AbstractDataProcessor::detectShape(records), False);
+                    appendMappedRows(\rv, mapped);
                 }
+                return rv;
             } else {
                 # bulk output with normal input
                 return map mapData($1), getInputProviderRecordIterator();
@@ -2174,6 +2206,60 @@ Mapper mapv(DataMap);
 
     private:internal hash<auto> asOutputRecord(auto rec) {
         return cast<hash<auto>>(rec);
+    }
+
+    #! Appends mapped output in any supported pipeline shape to a row list
+    private appendMappedRows(reference<list<hash<auto>>> rv, *auto mapped) {
+        if (!exists mapped) {
+            return;
+        }
+
+        DataProviderShape shape = AbstractDataProcessor::detectShape(mapped);
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+                map rv += asOutputRecord($1), mapped.contextIterator();
+                return;
+            case DataProviderShape::BufferColumns:
+            case DataProviderShape::DataFrameBlock:
+                map rv += asOutputRecord($1), AbstractDataProcessor::convertShape(mapped, shape,
+                    DataProviderShape::RowRecords).iterator();
+                return;
+            case DataProviderShape::RowRecords:
+                if (mapped.typeCode() == NT_LIST) {
+                    map rv += asOutputRecord($1), mapped.iterator();
+                } else {
+                    push rv, asOutputRecord(mapped);
+                }
+                return;
+        }
+    }
+
+    #! Maps input in any supported pipeline shape
+    private *auto mapRecordsShape(auto records, DataProviderShape shape, bool preserve_shape) {
+        if ((disable_bulk || global_submappers) && shape != DataProviderShape::RowRecords) {
+            return mapAll(AbstractDataProcessor::convertShape(records, shape, DataProviderShape::RowRecords));
+        }
+
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return mapData(records);
+            case DataProviderShape::HashOfLists:
+                return mapBulk(records);
+            case DataProviderShape::BufferColumns:
+            case DataProviderShape::DataFrameBlock: {
+                *hash<auto> mapped = mapBulk(AbstractDataProcessor::convertShape(records, shape,
+                    DataProviderShape::HashOfLists)[0]);
+                if (!mapped) {
+                    return;
+                }
+                return preserve_shape
+                    ? AbstractDataProcessor::convertShape(mapped, DataProviderShape::HashOfLists, shape)[0]
+                    : mapped;
+            }
+        }
+
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
     }
 
     #! maps all input records and returns the mapped data as a list of output records
@@ -2276,6 +2362,9 @@ Mapper mapv(DataMap);
                 return mapAll(recs);
 
             case NT_HASH:
+                if (AbstractDataProcessor::isHashOfBuffers(recs)) {
+                    return mapRecordsShape(recs, DataProviderShape::BufferColumns, True);
+                }
                 if (recs.firstValue().typeCode() == NT_LIST) {
                     # there are more records (hash of lists)
                     return disable_bulk ? mapAll(recs) : mapBulk(recs);
@@ -2286,6 +2375,12 @@ Mapper mapv(DataMap);
             case NT_OBJECT: {
                 if ((recs instanceof AbstractIterator) || (recs instanceof AbstractDataProviderBulkRecordInterface)) {
                     return mapAll(recs);
+                }
+                if (AbstractDataProcessor::isDataFrameBlock(recs)) {
+                    return mapRecordsShape(recs, DataProviderShape::DataFrameBlock, True);
+                }
+                if (AbstractDataProcessor::isColumnarResult(recs)) {
+                    return mapRecordsShape(recs, DataProviderShape::BufferColumns, True);
                 }
                 # otherwise throw an exception
                 break;

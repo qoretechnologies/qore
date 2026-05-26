@@ -37,7 +37,7 @@
 %requires ml
 
 module QoreTokenizerUtils {
-    version = "1.1.0";
+    version = "1.2.0";
     desc = "user module providing document chunking, token counting, embeddings, and "
         "re-ranking for RAG pipelines";
     author = "Qore Technologies, s.r.o.";
@@ -68,8 +68,24 @@ module QoreTokenizerUtils {
     - @ref QoreTokenizerUtils::SemanticDocumentChunker "SemanticDocumentChunker" — chunks
       documents at semantic boundaries detected by embedding similarity
 
-    All classes accept a HuggingFace `tokenizer.json` configuration and produce output
-    compatible with any ONNX embedding model or LLM API.
+    All classes accept a HuggingFace `tokenizer.json` configuration and can also
+    apply companion `tokenizer_config.json` settings such as model maximum length
+    and chat templates when available. ONNX embedding and re-ranking models can be
+    loaded from either filesystem paths or in-memory binary artifacts, which allows
+    QoreModelRegistry database and REST backends to execute registered ONNX packages
+    without first writing model files to disk.  Local ONNX paths also accept
+    \c ML::OnnxSessionConfig through \c session_config so callers can select
+    execution providers, disable GPU auto-detection for CPU-only deployments, and
+    tune runtime threading.
+
+    ONNX embedding callers that need columnar or tensor-native pipelines can use
+    @ref QoreTokenizerUtils::EmbeddingModel::embedBatchTensor() "EmbeddingModel::embedBatchTensor()"
+    to receive a dense \c ML::Tensor directly and split it into flat
+    \c buffer<float32> columns without first materializing nested row lists.
+    Multi-output ONNX embedding and reranker models can set \c output_names
+    to ask ONNX Runtime to materialize only the tensor used downstream, for
+    example \c ("last_hidden_state",) for embedding pooling or \c ("logits",)
+    for cross-encoder scoring.
 
     @par Example: Chunk a document for RAG
     @code{.py}
@@ -88,6 +104,26 @@ foreach hash<auto> chunk in (chunks) {
     @endcode
 
     @section qoretokenizerutilsrelnotes QoreTokenizerUtils Module Release Notes
+
+    @subsection qoretokenizerutils_1_2 QoreTokenizerUtils Module Version 1.2
+    - EmbeddingModel and CrossEncoderReranker can load ONNX models from in-memory
+      \c model_data artifacts as well as filesystem \c model_path values
+    - TokenCounter, DocumentChunker, EmbeddingModel, and CrossEncoderReranker can
+      apply optional \c tokenizer_config.json companion settings through
+      \c tokenizer_runtime_config
+    - Local ONNX embedding and reranking paths use dense \c ML::Tensor inputs
+      for \c input_ids, \c attention_mask, and \c token_type_ids, and only send
+      tokenizer tensors declared by the model
+    - EmbeddingModel exposes @ref QoreTokenizerUtils::EmbeddingModel::embedBatchTensor()
+      "embedBatchTensor()" for tensor-native embedding consumers and dense
+      DataProviderML column output
+    - EmbeddingModel and CrossEncoderReranker accept \c session_config for
+      ONNX Runtime provider, threading, and graph-optimization settings
+    - EmbeddingModel and CrossEncoderReranker accept \c output_names for
+      local ONNX execution so multi-output models do not materialize unused
+      tensors
+    - Enables QoreModelRegistry-backed ONNX execution for DataProviderML processors
+      without temporary files
 
     @subsection qoretokenizerutils_1_1 QoreTokenizerUtils Module Version 1.1
     - Added @ref QoreTokenizerUtils::StructuredDocumentChunker "StructuredDocumentChunker"

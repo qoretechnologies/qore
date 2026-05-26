@@ -1,0 +1,39 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameGroupByAgg
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameGroupByAgg {
+    constructor() {
+        Bench::BenchRunner r("dataframe_groupby_agg");
+        r.iterations = 10;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame grouped = df.groupBy(("region", "status")).agg({
+                "amount": ("sum", "mean"),
+                "score": "max",
+                "id": "count",
+            });
+            DataFrameBench::verifyRows("dataframe_groupby_agg", grouped, 1);
+        };
+
+        exit(r.run());
+    }
+}

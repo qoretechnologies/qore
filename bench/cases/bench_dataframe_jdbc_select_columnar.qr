@@ -1,0 +1,95 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameJdbcSelectColumnar
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%try-module jni
+%define NoJni
+%endtry
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameJdbcSelectColumnar {
+    constructor() {
+%ifdef NoJni
+        printf("dataframe_jdbc_select_columnar: skipped (jni module not available)\n");
+        exit(0);
+%endif
+        *string connstr = ENV.QORE_DB_CONNSTR_JDBC_PGSQL;
+        if (!connstr) {
+            printf("dataframe_jdbc_select_columnar: skipped (QORE_DB_CONNSTR_JDBC_PGSQL not set)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataframe_jdbc_select_columnar");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::sqlRows();
+        Datasource ds(connstr);
+        string table = "qore_df_jdbc_bench_query_" + string(getpid());
+        on_exit {
+            try {
+                ds.exec("DROP TABLE IF EXISTS " + table);
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        try {
+            ds.open();
+            ds.close();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("dataframe_jdbc_select_columnar: skipped (%s: %s)\n", ex.err, ex.desc);
+            exit(0);
+        }
+
+        r.setup = sub () {
+            ds.open();
+            ds.exec("DROP TABLE IF EXISTS " + table);
+            ds.exec("CREATE TABLE " + table + " ("
+                "id int, customer_id int, status text, amount double precision, "
+                "score double precision, region text, flag boolean)");
+            list<string> values;
+            for (int i = 0; i < rows; ++i) {
+                push values, sprintf("(%d,%d,'%s',%.10f,%.10f,'%s',%s)",
+                    i, i % 10000, DataFrameBench::statusFor(i),
+                    DataFrameBench::amountFor(i), DataFrameBench::scoreFor(i),
+                    DataFrameBench::regionFor(i), (i % 7) == 0 ? "true" : "false");
+                if (values.size() >= 500) {
+                    ds.exec("INSERT INTO " + table
+                        + " (id, customer_id, status, amount, score, region, flag) VALUES "
+                        + values.join(","));
+                    values = ();
+                }
+            }
+            if (values.size()) {
+                ds.exec("INSERT INTO " + table
+                    + " (id, customer_id, status, amount, score, region, flag) VALUES "
+                    + values.join(","));
+            }
+            ds.commit();
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            ColumnarResult result = ds.selectColumnar(
+                "SELECT id, customer_id, status, amount, score, region, flag FROM " + table);
+            DataFrameBench::verifyColumnarRows("dataframe_jdbc_select_columnar", result, rows);
+            if (result.getColumn("id").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "dataframe_jdbc_select_columnar lost dense id storage";
+            }
+        };
+
+        int rc = r.run();
+        ds.exec("DROP TABLE IF EXISTS " + table);
+        ds.commit();
+        ds.close();
+        exit(rc);
+    }
+}

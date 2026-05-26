@@ -39,6 +39,9 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             "supports_bulk_read": True,
             "supports_bulk_create": True,
             "supports_bulk_upsert": True,
+            "bulk_read_shapes": (DataProviderShape::BufferColumns, DataProviderShape::HashOfLists),
+            "bulk_create_shapes": (DataProviderShape::BufferColumns, DataProviderShape::HashOfLists),
+            "bulk_upsert_shapes": (DataProviderShape::BufferColumns, DataProviderShape::HashOfLists),
             "supports_children": False,
             "supports_add_field": True,
             "supports_update_field": True,
@@ -121,6 +124,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 - \c "key": (required) the column name to return
                 - \c "type": (optional) the data type for the output placeholder buffer (ex:
                   @ref Qore::Type::Number "Type::Number")
+            - \c block_size: maximum rows per bulk insert operation
         */
         const CreateOptions = {
             "returning": <DataProviderOptionInfo>{
@@ -132,6 +136,14 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                     "- `key` (required): the column name to return\n"
                     "- `type` (optional): the data type for the output placeholder buffer (e.g. `number`)",
             },
+            "block_size": <DataProviderOptionInfo>{
+                "display_name": "Block Size",
+                "short_desc": "Maximum rows per bulk insert operation",
+                "type": AbstractDataProviderTypeMap."*int",
+                "desc": "Maximum number of rows to submit in each bulk insert operation. Dense columnar input is "
+                    "sliced by this value before compatibility conversion for DBI drivers that need hash-of-lists "
+                    "bulk data.",
+            },
         };
 
         #! Upsert options; see details below
@@ -141,6 +153,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
               option should be set to the columns to omit in the update clause
+            - \c block_size: maximum rows per bulk upsert operation
         */
         const UpsertOptions = {
             "upsert_strategy": <DataProviderOptionInfo>{
@@ -183,6 +196,14 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "desc": "Allows for an asymmetrical upsert where the complete set of column values is inserted, but "
                     "a smaller set is updated in case the unique key values are present in the target table; the "
                     "value of this option should be set to the columns to omit in the update clause",
+            },
+            "block_size": <DataProviderOptionInfo>{
+                "display_name": "Block Size",
+                "short_desc": "Maximum rows per bulk upsert operation",
+                "type": AbstractDataProviderTypeMap."*int",
+                "desc": "Maximum number of rows to submit in each bulk upsert operation. Dense columnar input is "
+                    "sliced by this value before compatibility conversion for DBI drivers that need hash-of-lists "
+                    "bulk data.",
             },
         };
 
@@ -442,6 +463,32 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         return recs + rh;
     }
 
+    #! Creates the given shaped records in the data provider
+    /** @param recs the shaped input record block
+        @param shape the shape of \a recs
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format
+    */
+    private *hash<auto> createRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        DbOperationTransactionHelper db(table);
+        hash<auto> rh;
+        if (create_options.returning) {
+            create_options.rowcode = sub (hash<auto> h) {
+                rh = h;
+            };
+        }
+        BulkInsertOperation bulk(table, create_options + {
+            "info_log": sub (string fmt, ...) {
+                logArgs(LoggerLevel::LevelInfo, fmt, argv);
+            },
+        });
+        on_error bulk.discard();
+        bulk.queueData(recs);
+        bulk.flush();
+        return AbstractDataProcessor::convertShape(recs, shape, DataProviderShape::HashOfLists)[0] + rh;
+    }
+
     #! Upserts the given record to the data provider
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options (see @ref UpsertOptions) after processing by validateUpsertOptions()
@@ -481,6 +528,30 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         bulk.queueData(recs);
         bulk.flush();
         return map UpsertResultVerified, xrange(recs.firstValue().lsize());
+    }
+
+    #! Upserts the given shaped records in the data provider
+    /** @param recs the shaped input record block
+        @param shape the shape of \a recs
+        @param upsert_options the upsert options after processing by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order
+    */
+    private *list<string> upsertRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        DbOperationTransactionHelper db(table);
+        # Map string upsert_strategy to integer constant (same as upsertRecordImpl)
+        int strategy = AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
+            ?? AbstractTable::UpsertAuto;
+        BulkUpsertOperation bulk(table, upsert_options + {
+            "upsert_strategy": strategy,
+            "info_log": sub (string fmt, ...) {
+                logArgs(LoggerLevel::LevelInfo, fmt, argv);
+            },
+        });
+        on_error bulk.discard();
+        bulk.queueData(recs);
+        bulk.flush();
+        return map UpsertResultVerified, xrange(AbstractDataProcessor::shapeRecordCount(recs, shape));
     }
 
     #! Returns a single record matching the search options

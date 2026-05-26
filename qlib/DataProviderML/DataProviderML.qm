@@ -33,6 +33,8 @@
 %endtry
 
 %requires QoreModelRegistry
+%requires QoreOnnxTools
+%requires tokenizer
 %requires QoreTokenizerUtils
 %requires QoreStructuredExtraction
 %requires QoreGuardrails
@@ -40,7 +42,7 @@
 %requires QoreVisionExtraction
 
 module DataProviderML {
-    version = "1.0";
+    version = "1.4.0";
     desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -164,7 +166,8 @@ module DataProviderML {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreKMeansProcessor::ConstructorOptions{"online",}, {
+                QoreKMeansProcessor::ConstructorOptions{"online", "output_mode", "include_input_fields",
+                    "include_centroid_distances"}, {
                     "loc": "constructor",
                 }
             ),
@@ -197,7 +200,8 @@ module DataProviderML {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QorePCAProcessor::ConstructorOptions{"n_components", "variance_threshold"}, {
+                QorePCAProcessor::ConstructorOptions{"n_components", "variance_threshold", "output_mode",
+                    "include_input_fields"}, {
                     "loc": "constructor",
                 }
             ),
@@ -361,17 +365,23 @@ module DataProviderML {
                     "can be exported to ONNX format and deployed here for real-time scoring "
                     "of loan applications. Records accumulate in a batch; when full, all are "
                     "passed through the model. Output fields depend on the specific model "
-                    "(e.g., class probabilities, regression values, embeddings).",
+                    "(e.g., class probabilities, regression values, embeddings); use "
+                    "`output_names` to materialize only selected ONNX outputs.",
                 "action_code": DPAT_PIPELINE_PROCESSOR,
                 "processor_capabilities": DPC_AGGREGATE,
                 "cls": "DataProviderML::QoreOnnxModelProcessor",
                 "groups": (AppGroup::Analytics,),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     QoreOnnxModelProcessor::ConstructorOptions{
-                        "model_path", "fields", "window_size",
+                        "model_path", "window_size",
                     }, {
                         "preselected": True,
                         "required": True,
+                        "loc": "constructor",
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    QoreOnnxModelProcessor::ConstructorOptions{"fields", "input_map"}, {
+                        "preselected": True,
                         "loc": "constructor",
                     }
                 ) + DataProviderActionCatalog::getActionOptionFromFields(
@@ -379,7 +389,7 @@ module DataProviderML {
                         "input_tensor", "execution_providers",
                         "cuda_device_id", "intra_op_threads",
                         "inter_op_threads", "graph_optimization_level",
-                        "log_severity",
+                        "log_severity", "output_names", "output_mode", "include_input_fields",
                     }, {
                         "loc": "constructor",
                     }
@@ -399,22 +409,30 @@ module DataProviderML {
                 "in the registry (KMeans, LinearRegression, IsolationForest, etc.). "
                 "The model is loaded once and reused for all subsequent batches. "
                 "Specify `tag` to load a specific tagged version (e.g., 'production') "
-                "or `version` for a specific version ID.",
+                "or `version` for a specific version ID. For registry-backed ONNX models, "
+                "use `output_names` to materialize only selected output tensors.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRegistryModelProcessor",
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
-                    "registry_path", "model_name", "fields", "window_size",
+                    "registry_path", "model_name", "window_size",
                 }, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRegistryModelProcessor::ConstructorOptions{"fields", "input_map"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
-                    "version", "tag", "tenant_id",
+                    "version", "tag", "tenant_id", "input_tensor", "output_names", "output_mode",
+                    "include_input_fields", "prompt_field", "max_new_tokens", "stop_token_ids",
+                    "registry_tokenizer_artifact_name",
                 }, {
                     "loc": "constructor",
                 }
@@ -487,6 +505,10 @@ module DataProviderML {
                     "required": True,
                     "loc": "constructor",
                 }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreStandardScalerProcessor::ConstructorOptions{"output_mode", "include_input_fields"}, {
+                    "loc": "constructor",
+                }
             ),
         });
 
@@ -510,7 +532,9 @@ module DataProviderML {
                 "maximum of each field; subsequent windows apply the same normalization. Each "
                 "record receives:\n"
                 "- `scaled_values` — field values converted to the target range\n"
-                "- `record_values` — the original values for comparison",
+                "- `record_values` — the original values for comparison\n\n"
+                "Set `output_mode` to `dataframe` to return flat `scaled_<field>` columns "
+                "for DataFrame analytics pipelines instead of nested event hashes.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreMinMaxScalerProcessor",
@@ -523,6 +547,10 @@ module DataProviderML {
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreMinMaxScalerProcessor::ConstructorOptions{"feature_min", "feature_max"}, {
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreMinMaxScalerProcessor::ConstructorOptions{"output_mode", "include_input_fields"}, {
                     "loc": "constructor",
                 }
             ),
@@ -1186,13 +1214,18 @@ module DataProviderML {
             "cls": "DataProviderML::QoreTokenizeProcessor",
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                QoreTokenizeProcessor::ConstructorOptions{"text_field", "tokenizer_config_path"}, {
+                QoreTokenizeProcessor::ConstructorOptions{"text_field",}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreTokenizeProcessor::ConstructorOptions{"add_special_tokens",}, {
+                QoreTokenizeProcessor::ConstructorOptions{
+                    "tokenizer_config_path", "tokenizer_model_name", "tokenizer_model_version",
+                    "tokenizer_artifact_name", "registry_backend_type", "registry_path",
+                    "registry_datasource", "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id", "add_special_tokens",
+                }, {
                     "loc": "constructor",
                 }
             ),
@@ -1217,13 +1250,19 @@ module DataProviderML {
             "cls": "DataProviderML::QoreChunkTextProcessor",
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                QoreChunkTextProcessor::ConstructorOptions{"text_field", "tokenizer_config_path"}, {
+                QoreChunkTextProcessor::ConstructorOptions{"text_field",}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreChunkTextProcessor::ConstructorOptions{"chunk_size", "chunk_overlap"}, {
+                QoreChunkTextProcessor::ConstructorOptions{
+                    "tokenizer_config_path", "tokenizer_model_name", "tokenizer_model_version",
+                    "tokenizer_artifact_name", "registry_backend_type", "registry_path",
+                    "registry_datasource", "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id", "chunk_size",
+                    "chunk_overlap",
+                }, {
                     "loc": "constructor",
                 }
             ),
@@ -1243,7 +1282,9 @@ module DataProviderML {
                 "database like Qdrant or pgvector, then find relevant passages by comparing "
                 "vectors.\n\n"
                 "Supports any OpenAI-compatible embedding endpoint (SGLang, vLLM, OpenAI, "
-                "Azure OpenAI) or a local ONNX model.",
+                "Azure OpenAI) or a local ONNX model. For multi-output ONNX embedding "
+                "models, `output_names` can request only the hidden-state tensor needed "
+                "for pooling.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreEmbedTextProcessor",
@@ -1257,6 +1298,13 @@ module DataProviderML {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreEmbedTextProcessor::ConstructorOptions{
                     "embedding_url", "embedding_model", "embedding_api_key", "window_size",
+                    "embedding_model_path", "tokenizer_config_path", "max_tokens",
+                    "pooling_strategy", "output_names", "output_mode", "registry_model_name",
+                    "registry_model_version", "registry_model_artifact_name",
+                    "registry_tokenizer_artifact_name",
+                    "registry_backend_type", "registry_path", "registry_datasource",
+                    "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id",
                 }, {
                     "loc": "constructor",
                 }
@@ -1313,7 +1361,9 @@ module DataProviderML {
                 "Accumulates all candidate records, scores them, and emits the top-k most "
                 "relevant records enriched with:\n"
                 "- `reranker_score` — relevance score (0.0 to 1.0)\n"
-                "- `reranker_rank` — rank position (1 = most relevant)",
+                "- `reranker_rank` — rank position (1 = most relevant)\n\n"
+                "For multi-output ONNX reranker models, `output_names` can request only "
+                "the logits tensor used for scoring.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRerankerProcessor",
@@ -1329,7 +1379,12 @@ module DataProviderML {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRerankerProcessor::ConstructorOptions{
                     "top_k", "reranker_url", "reranker_api_key",
-                    "reranker_model_path", "tokenizer_config_path", "max_length",
+                    "reranker_model_path", "tokenizer_config_path", "max_length", "output_names",
+                    "registry_model_name", "registry_model_version",
+                    "registry_model_artifact_name", "registry_tokenizer_artifact_name",
+                    "registry_backend_type", "registry_path", "registry_datasource",
+                    "registry_table_prefix", "registry_rest_client",
+                    "registry_rest_base_path", "registry_tenant_id",
                 }, {
                     "loc": "constructor",
                 }
@@ -1360,7 +1415,7 @@ module DataProviderML {
             "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreSemanticChunkProcessor::ConstructorOptions{
-                    "text_field", "tokenizer_config_path", "embedding_mode",
+                    "text_field", "embedding_mode",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -1370,7 +1425,11 @@ module DataProviderML {
                 QoreSemanticChunkProcessor::ConstructorOptions{
                     "chunk_size", "chunk_overlap", "similarity_threshold", "segment_size",
                     "embedding_url", "embedding_model", "embedding_api_key",
-                    "embedding_model_path",
+                    "embedding_model_path", "tokenizer_config_path", "registry_model_name",
+                    "registry_model_version", "registry_model_artifact_name",
+                    "registry_tokenizer_artifact_name", "registry_backend_type",
+                    "registry_path", "registry_datasource", "registry_table_prefix",
+                    "registry_rest_client", "registry_rest_base_path", "registry_tenant_id",
                 }, {
                     "loc": "constructor",
                 }
@@ -1610,7 +1669,380 @@ module DataProviderML {
     logic can combine anomaly scores, cluster assignments, and forecasts for comprehensive
     decision-making.
 
+    @section dataproviderml_columnar Columnar and DataFrame Input
+
+    DataProviderML processors accept the standard DataProvider pipeline shapes:
+    \c RowRecords, \c HashOfLists, \c BufferColumns, and \c DataFrameBlock.  This
+    allows SQL columnar results, dense buffer columns, and DataFrame blocks to
+    flow into ML processors without requiring the %DataProviderML module itself
+    to depend on the \c dataframe module.
+
+    Shape-aware input is converted through the DataProvider shape API and bulk
+    processor outputs preserve the negotiated \c DataFrameBlock or
+    \c BufferColumns shape when possible.  This keeps downstream shape-aware
+    processors in columnar bulk mode while preserving the existing row-oriented
+    processor behavior for single records and compatibility hash-of-lists input.
+    The \c text-normalize, \c tokenize, \c schema-validation,
+    \c embed-text, and \c rerank-text processors read top-level columns
+    directly from shaped inputs without first materializing per-row hashes.
+    \c text-normalize appends a normalized text column, \c tokenize appends a
+    token-count column, \c schema-validation appends validation columns or
+    filters invalid rows, \c embed-text appends an \c embedding column by
+    default or flat dense \c embedding_0, \c embedding_1, ... columns with
+    \c output_mode = "columns", and
+    \c rerank-text emits the configured top-k rows with \c reranker_score and
+    \c reranker_rank columns while preserving the negotiated shape.
+
+    StandardScaler, MinMaxScaler, KMeans, and PCA also support
+    \c output_mode = "dataframe".  This mode returns flat DataFrame columns
+    instead of nested event hashes, which is clearer and much faster for
+    analytical pipelines.  The default \c output_mode remains \c "events" for
+    compatibility.  In DataFrame mode, \c include_input_fields = False can omit
+    unchanged input columns when the next step only needs model outputs.  KMeans additionally supports
+    \c include_centroid_distances = False when only the winning \c cluster and
+    nearest \c distance are needed.
+
+    ONNX processors also support compact output modes for high-throughput
+    scoring.  \c output_mode = "columns" or \c "dataframe" returns model output
+    tensors as flat dense output columns, while \c output_mode = "tensor"
+    returns raw @ref Qore::ML::Tensor "ML::Tensor" outputs for callers that can
+    consume tensor data directly.  When shaped input columns are already stored
+    with the model's expected dtype, the processor can build the input tensor
+    directly from those columns and slice tensor views for each \c window_size
+    batch instead of materializing row hashes or row matrices.
+    Row-aligned tensor outputs from multiple windows are concatenated before
+    compact column conversion, so scalar and vector model outputs remain dense
+    buffer columns when the model returns dense tensor data.
+    Multi-column dense feature frames use @ref Qore::ML::Tensor::fromColumns()
+    "ML::Tensor::fromColumns()" to pack top-level numeric buffer columns into
+    model tensors in native code.  Shaped ONNX inputs smaller than
+    \c window_size are processed immediately as partial tensor batches; larger
+    shaped inputs are split into \c window_size batches with the final
+    remainder processed as a smaller tensor batch instead of falling back to
+    row buffering.
+
+    ONNX models with multiple input tensors can use \c input_map instead of
+    \c fields.  The map key is the ONNX input tensor name and the value is one
+    field name or an ordered field list for that tensor.  This keeps token ID,
+    attention mask, segment ID, feature, and side-channel inputs explicit and
+    avoids relying on a single merged feature matrix.  \c input_tensor is
+    ignored when \c input_map is configured.
+
+    @par DataFrameBlock example:
+    @code{.py}
+%requires dataframe
+%requires DataProviderML
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10, 11, 3, 10),
+});
+
+DataProviderML::QoreIsolationForestProcessor proc({
+    "fields": "amount,hour",
+    "window_size": 4,
+});
+
+DataFrame::DataFrame events = proc.processRecordsShape(
+    df, DataProviderShape::DataFrameBlock);
+
+# events is a DataFrameBlock with columns such as:
+#   event_type, anomaly_score, is_anomaly, record_values
+    @endcode
+
+    @par Flat DataFrame output example:
+    @code{.py}
+DataProviderML::QoreKMeansProcessor kmeans({
+    "fields": "amount,hour",
+    "window_size": 4,
+    "k": 2,
+    "output_mode": "dataframe",
+    "include_input_fields": False,
+    "include_centroid_distances": False,
+});
+
+DataFrame::DataFrame clusters = kmeans.processRecordsShape(
+    df, DataProviderShape::DataFrameBlock);
+
+# clusters has compact analytical columns:
+#   cluster: buffer<int64>
+#   distance: buffer<float64>
+    DataFrame::DataFrame summary = clusters.groupBy(("cluster",)).agg({
+        "distance": ("mean", "max"),
+        "cluster": "count",
+});
+    @endcode
+
+    @section dataproviderml_registry_artifacts Registry-Backed AI Artifacts
+
+    Text and ONNX processors can load model package artifacts directly from
+    @ref qoremodelregistryintro "QoreModelRegistry". This avoids scattering
+    \c tokenizer.json and ONNX files across pipeline hosts and keeps the model,
+    tokenizer, and metadata versioned together. When a package includes
+    \c tokenizer_config.json, those companion settings are loaded with
+    \c tokenizer.json so tokenizer utilities can use model-level limits and
+    chat templates. For ONNX packages, the processor can also read the
+    registry execution plan's \c runtime, \c entry_artifact,
+    \c output_shapes, \c tokenizer, \c preprocess, \c postprocess, and
+    \c tensor_contract fields instead of requiring every pipeline to repeat
+    package-specific details.
+
+    Processors that support registry-backed artifacts include:
+    - @ref DataProviderML::QoreTokenizeProcessor "tokenize"
+    - @ref DataProviderML::QoreChunkTextProcessor "chunk-text"
+    - @ref DataProviderML::QoreEmbedTextProcessor "embed-text"
+    - @ref DataProviderML::QoreRerankerProcessor "rerank-text"
+    - @ref DataProviderML::QoreSemanticChunkProcessor "semantic-chunk-text"
+    - @ref DataProviderML::QoreRegistryModelProcessor "registry-model"
+
+    @par Registry tokenizer example:
+    @code{.py}
+%requires DataProviderML
+
+DataProviderML::QoreTokenizeProcessor proc({
+    "text_field": "body",
+    "tokenizer_model_name": "bge-small-en",
+    "registry_path": "/var/models",
+});
+
+hash<auto> out = proc.processRecord({"body": "enterprise search"});
+printf("tokens=%d\n", out.body_token_count);
+    @endcode
+
+    @par Registry ONNX embedding example:
+    @code{.py}
+DataProviderML::QoreEmbedTextProcessor proc({
+    "text_field": "chunk_text",
+    "registry_model_name": "bge-small-en",
+    "registry_path": "/var/models",
+    "window_size": 32,
+    "output_names": ("last_hidden_state",),
+});
+
+# When the registry package declares task: "embedding" or an onnx/embedding
+# execution plan, embed-text infers local ONNX mode from the manifest.  The
+# explicit embedding_mode option can still be supplied when a legacy package
+# has only raw ONNX execution metadata.
+
+list<auto> rows = proc.processRecord({"chunk_text": "contract renewal terms"});
+    @endcode
+
+    @par Registry ONNX DataFrameBlock example:
+    @code{.py}
+%requires DataProviderML
+%requires dataframe
+
+DataProviderML::QoreRegistryModelProcessor proc({
+    "registry_path": "/var/models",
+    "model_name": "credit-score-onnx",
+    "version": "production",
+    "fields": ("income", "debt_ratio", "history_months"),
+    "window_size": 1024,
+    "output_mode": "columns",
+    "output_names": ("probabilities",),
+});
+
+DataFrame::DataFrame batch({
+    "income": new buffer<float64>((75000.0, 54000.0)),
+    "debt_ratio": new buffer<float64>((0.28, 0.41)),
+    "history_months": new buffer<float64>((120.0, 36.0)),
+});
+
+auto scored = proc.processRecordsShape(batch, DataProviderShape::DataFrameBlock);
+list<auto> probabilities = scored.getColumn("probabilities_1");
+    @endcode
+
+    @par Multi-input ONNX example:
+    @code{.py}
+DataProviderML::QoreRegistryModelProcessor proc({
+    "registry_path": "/var/models",
+    "model_name": "text-classifier-onnx",
+    "tag": "production",
+    "input_map": {
+        "input_ids": "token_ids",
+        "attention_mask": "attention_mask",
+        "token_type_ids": "segment_ids",
+    },
+    "window_size": 256,
+    "output_mode": "columns",
+    "output_names": ("logits",),
+    "include_input_fields": False,
+});
+
+auto logits = proc.processRecordsShape(token_batches,
+    DataProviderShape::DataFrameBlock);
+    @endcode
+
+    In event mode, task-aware registry plans such as \c regression and
+    \c sequence-classification require their planned value or label output to
+    be included in \c output_names. Use \c output_mode = "columns" or
+    \c output_mode = "tensor" when a pipeline needs raw selected tensors
+    without task-specific event shaping.
+
+    @par Registry causal-LM example:
+    @code{.py}
+DataProviderML::QoreRegistryModelProcessor generator({
+    "registry_path": "/var/models",
+    "model_name": "customer-reply-lm",
+    "tag": "production",
+    "prompt_field": "prompt",
+    "max_new_tokens": 64,
+    "stop_token_ids": (2,),
+    "window_size": 1,
+});
+
+# The package manifest declares task: "causal-lm" and an onnx/causal-lm
+# execution plan. The processor loads tokenizer.json from the same registry
+# package, builds input_ids and attention_mask tensors, runs greedy decoding,
+# and returns a typed text-generation prediction with token counts and
+# KV-cache capability metadata.
+list<auto> events = generator.processRecord({
+    "prompt": "Draft a short account renewal summary for Acme:",
+});
+printf("reply=%s\n", events[0].prediction.text);
+    @endcode
+
+    @par Registry causal-LM compact column example:
+    @code{.py}
+DataProviderML::QoreRegistryModelProcessor generator({
+    "registry_path": "/var/models",
+    "model_name": "customer-reply-lm",
+    "tag": "production",
+    "prompt_field": "prompt",
+    "output_mode": "columns",
+    "include_input_fields": True,
+    "max_new_tokens": 64,
+});
+
+auto prompts = ColumnarResult::fromColumnHash({
+    "prompt": (
+        "Draft a renewal summary for Acme:",
+        "Draft a renewal summary for Globex:",
+    ),
+});
+
+auto replies = generator.processRecordsShape(prompts,
+    DataProviderShape::BufferColumns);
+list<string> generated = replies.getColumn("generated_text").toList();
+    @endcode
+
+    @par BufferColumns example:
+    @code{.py}
+%requires DataProviderML
+
+auto columns = ColumnarResult::fromColumnHash({
+    "x": new buffer<float64>((1.0, 2.0, 3.0)),
+    "y": new buffer<float64>((10.0, 20.0, 30.0)),
+});
+
+DataProviderML::QoreStandardScalerProcessor scaler({
+    "fields": "x,y",
+    "window_size": 3,
+});
+
+ColumnarResult scaled = scaler.processRecordsShape(
+    columns, DataProviderShape::BufferColumns);
+assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-scaler", "standard-scaler");
+    @endcode
+
     @section dataproviderml_relnotes Release Notes
+
+    @subsection dataproviderml_v1_4 DataProviderML v1.4
+    - Tokenization, chunking, embedding, re-ranking, and semantic chunking processors
+      can load \c tokenizer.json, companion \c tokenizer_config.json settings, and
+      ONNX artifacts from QoreModelRegistry packages
+    - \c registry-model now uses QoreModelRegistry executable metadata so native Qore
+      ML and ONNX registry packages are supported with descriptive errors for
+      metadata-only PyTorch/HuggingFace packages
+    - \c onnx-model and registry-backed ONNX inference use tensor execution for
+      \c DataFrameBlock, \c BufferColumns, and \c HashOfLists windows,
+      preserving bulk pipeline shapes without per-row inference calls; dense
+      buffer inputs are sliced as tensor views across \c window_size batches
+      and row-aligned tensor outputs are concatenated before compact column
+      conversion so dense output buffers survive multi-window scoring
+    - \c onnx-model and registry-backed ONNX tensor execution reuse
+      \c ML::OnnxIoBinding for stable shaped windows, avoiding repeated output
+      binding setup and exposing binding diagnostics through
+      \c getDiagnostics()
+    - \c onnx-model and \c registry-model support compact \c output_mode values
+      \c "columns", \c "dataframe", and \c "tensor"; dense input columns with
+      the expected ONNX dtype use a direct tensor path to avoid row matrix
+      materialization across all windowed batches
+    - \c onnx-model and registry-backed ONNX \c registry-model processors accept
+      \c output_names to request selected ONNX outputs only; this avoids
+      materializing unused labels, scores, logits, or embeddings in multi-output
+      models
+    - multi-column dense ONNX inputs are packed with
+      @ref Qore::ML::Tensor::fromColumns() "ML::Tensor::fromColumns()" to avoid
+      row hash and nested list materialization
+    - shaped ONNX inputs smaller than \c window_size, or with a final remainder
+      window, are processed directly as tensor batches instead of falling back
+      through row buffering
+    - \c text-normalize, \c tokenize, \c schema-validation,
+      \c embed-text, and \c rerank-text preserve
+      \c DataFrameBlock, \c BufferColumns, and \c HashOfLists input shapes by
+      reading top-level columns directly; \c text-normalize appends a
+      normalized text column, \c tokenize appends a token-count column,
+      \c schema-validation appends \c _is_valid and \c _validation_errors or
+      filters invalid rows, \c embed-text appends an \c embedding column or
+      flat dense embedding dimension columns, and
+      \c rerank-text emits top-k rows with \c reranker_score and
+      \c reranker_rank columns without per-row hash materialization
+    - \c embed-text supports \c output_mode = "columns" to split ONNX embedding
+      tensors into dense \c embedding_N buffer columns for DataFrame and
+      BufferColumns pipelines
+    - \c embed-text and \c rerank-text accept \c onnx_session_config and inherit
+      QoreModelRegistry package execution config for ONNX Runtime provider,
+      threading, and graph-optimization settings
+    - \c embed-text and \c rerank-text accept \c output_names for local and
+      registry-backed ONNX execution, and inherit selected output names from
+      registry execution plans, so multi-output embedding and reranker models
+      do not materialize unused tensors
+    - \c embed-text and \c rerank-text can infer local ONNX mode from
+      QoreModelRegistry task-aware execution plans, so packages registered with
+      \c task = "embedding" or \c task = "reranker" do not require duplicate
+      processor mode options in pipeline definitions
+    - \c registry-model event output applies \c regression,
+      \c classification, and \c sequence-classification execution plans to
+      produce stable task fields such as \c value, \c label, and \c scores
+      while preserving raw ONNX outputs for diagnostics
+    - \c registry-model and registry-backed \c embed-text / \c rerank-text
+      consume normalized ONNX package execution plans with runtime,
+      entry-artifact, tokenizer, tensor-contract, output-shape,
+      preprocessing, and postprocessing metadata
+    - \c registry-model supports initial \c causal-lm execution plans for
+      registry ONNX packages, including registry tokenizer loading,
+      \c input_ids and \c attention_mask tensor construction, greedy decoding,
+      stop-token handling, generated token metadata, and KV-cache reuse for
+      matching ONNX \c past* input and \c present* output tensor pairs
+    - \c registry-model \c causal-lm packages support compact
+      \c output_mode = "columns" and \c output_mode = "dataframe" generation
+      output, returning prompt-aligned columns such as \c generated_text,
+      \c generated_token_ids, \c input_token_count,
+      \c generated_token_count, and \c finish_reason without materializing
+      per-row event or prediction hashes
+    - \c onnx-model and \c registry-model support \c input_map for ONNX models
+      that require multiple named input tensors; the action catalog no longer
+      requires \c fields when \c input_map is used
+    - Shared registry backend options support filesystem, database, and REST model
+      registry backends for AI pipeline artifacts
+    - \c onnx-model and \c registry-model expose ONNX Runtime provider,
+      inference-stat, and profile-summary diagnostics through \c getDiagnostics();
+      emitted events can include compact diagnostics when requested, and
+      registry-backed processors expose actionable package diagnostics from
+      QoreModelRegistry manifests
+
+    @subsection dataproviderml_v1_3 DataProviderML v1.3
+    - DataProviderML processors now accept \c DataFrameBlock,
+      \c BufferColumns, and \c HashOfLists input shapes through the DataProvider
+      shape API and preserve \c DataFrameBlock or \c BufferColumns output shapes
+      for bulk event outputs when possible
+    - StandardScaler, MinMaxScaler, KMeans, and PCA can emit flat DataFrame
+      output with dense buffer columns through \c output_mode = "dataframe";
+      optional slim output flags omit unchanged input columns and KMeans
+      centroid-distance columns for high-throughput analytics
+    - added \c AbstractDataProviderMLProcessor as the common shape-aware base
+      for DataProviderML processors
 
     @subsection dataproviderml_v1_1 DataProviderML v1.1
     - changed \c fields option type from \c string to \c softlist<string> for multi-select UI
@@ -1794,6 +2226,10 @@ public namespace DataProviderML {
         #! values are the corresponding results (e.g., predicted classes, probabilities,
         #! or regression values)
         hash<auto> model_output;
+        #! Runtime/provider diagnostics when requested
+        *hash<auto> provider_diagnostics;
+        #! ONNX inference counters and latency statistics when requested
+        *hash<auto> inference_stats;
     }
 
     #! Registry model inference event hashdecl
@@ -1808,6 +2244,12 @@ public namespace DataProviderML {
         string version_id;
         #! The input field values passed to the model
         hash<auto> record_values;
+        #! The ONNX Runtime execution provider used for registry-backed ONNX models
+        *string execution_provider;
+        #! Runtime/provider diagnostics for registry-backed models
+        *hash<auto> provider_diagnostics;
+        #! ONNX inference counters and latency statistics when requested
+        *hash<auto> inference_stats;
         #! The model's prediction result
         auto prediction;
     }

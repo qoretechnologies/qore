@@ -1,0 +1,206 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DataFrameExpr.qpp
+
+    Qore DataFrame expression helper classes
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "QC_DataFrameExpr.h"
+
+using namespace QoreDataFrameNS;
+
+static QoreValue makeRowMaskObject(QoreDataFrameRowMask* result, QoreProgram* pgm, ExceptionSink* xsink) {
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_ROWMASK, pgm), xsink);
+    obj->setPrivate(CID_ROWMASK, result);
+    return obj.release();
+}
+
+//! A lazy reference to one DataFrame column for building row predicates
+/** Column references are created by @ref DataFrame::column() and participate in
+    registered plugin comparison operators. Comparing a ColumnRef with a scalar
+    value returns a RowMask that can filter the same DataFrame.
+
+    @par Example:
+    @code{.py}
+    %requires dataframe
+
+    DataFrame df(({"name": "Ada", "age": 42}, {"name": "Bo", "age": 17}));
+    RowMask adults = df.column("age") >= 18;
+    DataFrame adult_rows = df[adults];
+    @endcode
+
+    @since dataframe 1.0
+*/
+qclass ColumnRef [arg=QoreDataFrameColumnRef* col; ns=Qore::DataFrame; flags=final];
+
+//! ColumnRefs cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+ColumnRef::copy() {
+    xsink->raiseException("COPY-ERROR", "DataFrame ColumnRef objects cannot be copied");
+}
+
+//! Returns the referenced column name
+/** @return the referenced column name
+*/
+string ColumnRef::name() [flags=CONSTANT] {
+    return new QoreStringNode(col->getColumnName());
+}
+
+//! Returns the referenced column values as a list
+/** @return the referenced column values as a list
+*/
+list<auto> ColumnRef::values() [flags=RET_VALUE_ONLY] {
+    return col->values(xsink);
+}
+
+//! Compares the referenced column with a scalar value
+/** @param op the comparison operator: \c ==, \c !=, \c <, \c <=, \c >, or \c >=
+    @param value the scalar value to compare against
+
+    @return a RowMask selecting matching rows
+
+    This method is equivalent to using the comparison operators directly, but
+    is useful when the operator is selected dynamically.
+
+    @par Example:
+    @code{.py}
+    RowMask selected = df.column("amount").compare(">=", 100.0);
+    @endcode
+*/
+RowMask ColumnRef::compare(string op, auto value) [flags=RET_VALUE_ONLY] {
+    return makeRowMaskObject(col->compare(op->c_str(), value, xsink), getProgram(), xsink);
+}
+
+//! A bitmap mask selecting DataFrame rows
+/** Row masks are normally produced by comparing @ref ColumnRef values:
+
+    @par Example:
+    @code{.py}
+    RowMask high_value = df.column("amount") > 1000;
+    RowMask current = df.column("status") == "current";
+    DataFrame filtered = df.filter(high_value & current);
+    @endcode
+
+    Row masks support predicate composition with the \c &, \c |, \c ^, and \c ~
+    operators. These operators combine the masks directly without materializing
+    rows, which lets a caller build one composite predicate and filter the
+    DataFrame once. The named methods @ref RowMask::intersect(), @ref
+    RowMask::unionWith(), @ref RowMask::symmetricDifference(), and @ref
+    RowMask::invert() provide the same behavior where method calls are clearer.
+
+    @since dataframe 1.0
+*/
+qclass RowMask [arg=QoreDataFrameRowMask* mask; ns=Qore::DataFrame; flags=final];
+
+//! Creates a RowMask from a list of booleans
+/** @param values boolean mask values; \c True selects the row at the same index
+
+    @throw USER-EXCEPTION if construction is cancelled
+
+    @par Example:
+    @code{.py}
+    RowMask first_and_third((True, False, True));
+    DataFrame selected = df.filter(first_and_third);
+    @endcode
+*/
+RowMask::constructor(list<bool> values) {
+    QoreDataFrameRowMask* result = QoreDataFrameRowMask::fromList(values, xsink);
+    if (!result) {
+        return;
+    }
+    self->setPrivate(CID_ROWMASK, result);
+}
+
+//! RowMasks cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+RowMask::copy() {
+    xsink->raiseException("COPY-ERROR", "DataFrame RowMask objects cannot be copied");
+}
+
+//! Returns the number of rows represented by the mask
+/** @return the mask length
+*/
+int RowMask::size() [flags=CONSTANT] {
+    return mask->size();
+}
+
+//! Returns the number of selected rows
+/** @return the number of true bits in the mask
+*/
+int RowMask::count() [flags=RET_VALUE_ONLY] {
+    return mask->count(xsink);
+}
+
+//! Converts the mask to a list of booleans
+/** @return a list where True means the corresponding row is selected
+*/
+list<bool> RowMask::toList() [flags=RET_VALUE_ONLY] {
+    return mask->toList(xsink);
+}
+
+//! Returns the intersection of two row masks
+/** @param other the row mask to combine with this mask
+    @return a row mask selecting rows where both masks are true
+
+    @par Example:
+    @code{.py}
+    RowMask selected = (df.column("status") == "current").intersect(df.column("score") >= 90.0);
+    DataFrame rows = df.filter(selected);
+    @endcode
+
+    @throw DATAFRAME-ROWMASK-ERROR if the masks have different lengths
+*/
+RowMask RowMask::intersect(RowMask[QoreDataFrameRowMask] other) [flags=RET_VALUE_ONLY] {
+    return makeRowMaskObject(mask->intersect(**other, xsink), getProgram(), xsink);
+}
+
+//! Returns the union of two row masks
+/** @param other the row mask to combine with this mask
+    @return a row mask selecting rows where either mask is true
+
+    @par Example:
+    @code{.py}
+    RowMask reviewed = high_priority.unionWith(recently_updated);
+    @endcode
+
+    @throw DATAFRAME-ROWMASK-ERROR if the masks have different lengths
+*/
+RowMask RowMask::unionWith(RowMask[QoreDataFrameRowMask] other) [flags=RET_VALUE_ONLY] {
+    return makeRowMaskObject(mask->unionWith(**other, xsink), getProgram(), xsink);
+}
+
+//! Returns the symmetric difference of two row masks
+/** @param other the row mask to compare with this mask
+    @return a row mask selecting rows where exactly one mask is true
+
+    @par Example:
+    @code{.py}
+    RowMask changed_selection = before.symmetricDifference(after);
+    @endcode
+
+    @throw DATAFRAME-ROWMASK-ERROR if the masks have different lengths
+*/
+RowMask RowMask::symmetricDifference(RowMask[QoreDataFrameRowMask] other) [flags=RET_VALUE_ONLY] {
+    return makeRowMaskObject(mask->symmetricDifference(**other, xsink), getProgram(), xsink);
+}
+
+//! Returns the inverse of this row mask
+/** @return a row mask selecting rows not selected by this mask
+
+    @par Example:
+    @code{.py}
+    RowMask active = df.column("status") == "active";
+    DataFrame inactive_rows = df.filter(active.invert());
+    @endcode
+*/
+RowMask RowMask::invert() [flags=RET_VALUE_ONLY] {
+    return makeRowMaskObject(mask->invert(xsink), getProgram(), xsink);
+}

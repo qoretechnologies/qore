@@ -93,6 +93,8 @@ public:
     QoreIRInstruction* createQuaternaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second, QoreIRValue third,
         QoreIRValue fourth, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createUnaryOp(QoreIROpcode op, QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    QoreIRPluginInstruction* createPluginOp(QoreIROpcode op, QoreIRPluginOperationRef operation,
+        const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr, bool auto_ref = true);
     QoreIRLocalInstruction* createStoreLocal(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr, bool weak = false);
@@ -154,6 +156,8 @@ public:
     QoreIRNewComplexHashInstruction* createNewComplexHash(const NewComplexHashNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
     QoreIRNewComplexListInstruction* createNewComplexList(const NewComplexListNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    QoreIRNewComplexBufferInstruction* createNewComplexBuffer(const NewComplexBufferNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
     // VarRefNewObjectNode construction (non-object types)
     QoreIRVrnConstructInstruction* createVrnConstruct(const VarRefNewObjectNode* vrn,

@@ -29,7 +29,7 @@ public namespace DataProviderML {
     mode to predict class labels for each record based on its nearest neighbors.
 
 */
-public class QoreKNNClassificationProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreKNNClassificationProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -310,9 +310,9 @@ public class QoreKNNClassificationProcessor inherits DataProvider::AbstractDataP
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

@@ -30,7 +30,7 @@ public namespace DataProviderML {
     record is passed through enriched with additional computed fields.
 
 */
-public class QoreRollingStatsProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -256,9 +256,9 @@ public class QoreRollingStatsProcessor inherits DataProvider::AbstractDataProvid
         return result;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

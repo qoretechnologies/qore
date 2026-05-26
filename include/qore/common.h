@@ -155,6 +155,7 @@ class AbstractPrivateData;
 class QoreMethod;
 class QoreBuiltinMethod;
 class QoreClass;
+class QoreBufferNode;
 class TypedHashDecl;
 class QoreExternalFunction;
 class QoreExternalGlobalVar;

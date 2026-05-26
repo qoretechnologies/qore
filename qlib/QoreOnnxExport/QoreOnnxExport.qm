@@ -55,17 +55,17 @@ module QoreOnnxExport {
     @section qoreonnxexportalgos Supported Algorithms
 
     |!Algorithm|!ONNX Graph|!Notes
-    |@ref ML::StandardScaler "StandardScaler"|\c Sub → \c Div|Feature normalization
-    |@ref ML::MinMaxScaler "MinMaxScaler"|\c Sub → \c Div → \c Mul → \c Add|Range scaling
-    |@ref ML::Imputer "Imputer"|\c IsNaN → \c Where|Missing value replacement
-    |@ref ML::LinearRegression "LinearRegression"|\c MatMul → \c Add|Linear prediction
-    |@ref ML::LogisticRegression "LogisticRegression"|\c MatMul → \c Add → \c Sigmoid/\c Softmax|Classification
-    |@ref ML::PCA "PCA"|\c Sub [→ \c Div] → \c MatMul|Dimensionality reduction
-    |@ref ML::KMeans "KMeans"|Distance computation → \c ArgMin|Cluster assignment
-    |@ref ML::DecisionTree "DecisionTree"|\c TreeEnsembleClassifier or \c TreeEnsembleRegressor|Classification and regression
-    |@ref ML::RandomForest "RandomForest"|\c TreeEnsembleClassifier or \c TreeEnsembleRegressor|Ensemble with averaging
-    |@ref ML::GradientBoostedTrees "GradientBoostedTrees"|\c TreeEnsembleRegressor → \c Sigmoid/\c Softmax|Boosted ensemble with post-processing
-    |@ref ML::IsolationForest "IsolationForest"|\c TreeEnsembleRegressor → score|Anomaly detection
+    |@ref ML::StandardScaler "StandardScaler"|<code>Sub</code> → <code>Div</code>|Feature normalization
+    |@ref ML::MinMaxScaler "MinMaxScaler"|<code>Sub</code> → <code>Div</code> → <code>Mul</code> → <code>Add</code>|Range scaling
+    |@ref ML::Imputer "Imputer"|<code>IsNaN</code> → <code>Where</code>|Missing value replacement
+    |@ref ML::LinearRegression "LinearRegression"|<code>MatMul</code> → <code>Add</code>|Linear prediction
+    |@ref ML::LogisticRegression "LogisticRegression"|<code>MatMul</code> → <code>Add</code> → <code>Sigmoid</code>/<code>Softmax</code>|Classification
+    |@ref ML::PCA "PCA"|<code>Sub</code> [→ <code>Div</code>] → <code>MatMul</code>|Dimensionality reduction
+    |@ref ML::KMeans "KMeans"|Distance computation → <code>ArgMin</code>|Cluster assignment
+    |@ref ML::DecisionTree "DecisionTree"|<code>TreeEnsembleClassifier</code> or <code>TreeEnsembleRegressor</code>|Classification and regression
+    |@ref ML::RandomForest "RandomForest"|<code>TreeEnsembleClassifier</code> or <code>TreeEnsembleRegressor</code>|Ensemble with averaging
+    |@ref ML::GradientBoostedTrees "GradientBoostedTrees"|<code>TreeEnsembleRegressor</code> → <code>Sigmoid</code>/<code>Softmax</code>|Boosted ensemble with post-processing
+    |@ref ML::IsolationForest "IsolationForest"|<code>TreeEnsembleRegressor</code> → score|Anomaly detection
 
     @note All tensor data is exported as \c float (32-bit). Qore ML models use
     \c double (64-bit) internally, so there is a minor precision reduction in the

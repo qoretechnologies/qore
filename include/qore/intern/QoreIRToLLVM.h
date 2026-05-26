@@ -306,6 +306,7 @@ private:
     // reads. This keeps LLVM IR size O(calls + local reads), not O(calls * locals).
     llvm::AllocaInst* local_reload_epoch = nullptr;
     std::unordered_map<const void*, llvm::AllocaInst*> local_valid_epochs;
+    bool local_reload_boundary_cleanup_pending = false;
 
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
@@ -448,6 +449,12 @@ private:
     // Deferring by one cycle ensures the old value survives until the next
     // reload, by which time the SSA value has been consumed.
     std::unordered_map<const void*, llvm::Value*> local_reload_deferred;
+
+    // Release reload tracker refs that survived a side-effecting statement.
+    // Deferred reload refs keep pre-call SSA values alive through the rest of
+    // the statement; at DiscardTemps those temps are dead and the refs can be
+    // dropped before the next source statement observes destructor timing.
+    void flushLocalReloadStateAtTempBoundary(llvm::Module& module);
 
     // Error return block: used for exception cleanup when outside a try block.
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution

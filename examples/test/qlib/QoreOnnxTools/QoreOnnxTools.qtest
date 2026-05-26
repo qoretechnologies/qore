@@ -1,0 +1,488 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreOnnxTools.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
+%requires QUnit
+%requires FsUtil
+%requires QoreOnnxTools
+%requires ml
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class QoreOnnxToolsTest
+
+class QoreOnnxToolsTest inherits QUnit::Test {
+    constructor() : Test("QoreOnnxToolsTest", "1.0") {
+        addTestCase("Python dependency diagnostics", \pythonDependencyDiagnosticsTest());
+        addTestCase("Dynamic quantization dry run", \dynamicQuantizationDryRunTest());
+        addTestCase("Static quantization requires calibration", \staticRequiresCalibrationTest());
+        addTestCase("Missing quantization dependency message", \missingDependencyMessageTest());
+        addTestCase("ONNX model inspection and validation", \modelInspectionValidationTest());
+        addTestCase("ONNX benchmark with generated inputs", \modelBenchmarkTest());
+        addTestCase("ONNX model comparison", \modelCompareTest());
+        addTestCase("ONNX optimization helper", \modelOptimizationTest());
+        addTestCase("ONNX profile summarization", \onnxProfileSummaryTest());
+        addTestCase("ONNX package creation", \onnxPackageCreationTest());
+        addTestCase("qore-onnx CLI smoke", \qoreOnnxCliSmokeTest());
+        addTestCase("Unsafe source package classification", \unsafePackageClassificationTest());
+        set_return_value(main());
+    }
+
+    private static string getTestModelPath() {
+        return get_script_dir() + "/../../../../modules/ml/test/data/test_linear.onnx";
+    }
+
+    pythonDependencyDiagnosticsTest() {
+        hash<QoreOnnxTools::OnnxPythonDependencyInfo> dep =
+            QoreOnnxTools::OnnxQuantizer::checkPythonDependencies(
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "definitely-not-python-qore",
+                });
+        assertFalse(dep.available);
+        assertEq("definitely-not-python-qore", dep.python);
+        assertTrue(dep.rc != 0);
+        assertTrue(dep.install_hint.val());
+    }
+
+    dynamicQuantizationDryRunTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        string output_path = dir.path + DirSep + "quantized.onnx";
+
+        hash<QoreOnnxTools::OnnxQuantizationResult> plan =
+            QoreOnnxTools::OnnxQuantizer::plan(getTestModelPath(), output_path,
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "/opt/qore-python/bin/python3",
+                    "method": "dynamic",
+                    "weight_type": "QInt8",
+                    "op_types": "MatMul,Gemm",
+                    "per_channel": True,
+                });
+
+        assertFalse(plan.executed);
+        assertEq(getTestModelPath(), plan.input_path);
+        assertEq(output_path, plan.output_path);
+        assertEq("dynamic", plan.method);
+        assertTrue(plan.command.contains("--per-channel"));
+        assertTrue(plan.command.contains("--op-types"));
+        assertTrue(plan.command.contains("MatMul,Gemm"));
+        assertTrue(exists plan.source_model);
+    }
+
+    staticRequiresCalibrationTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        assertThrows("QORE-ONNX-TOOLS-ERROR", sub() {
+            QoreOnnxTools::OnnxQuantizer::plan(getTestModelPath(),
+                dir.path + DirSep + "static.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{"method": "static"});
+        });
+
+        string calibration_path = dir.path + DirSep + "calibration.json";
+        writeTextFile(calibration_path, "[{\"X\":[[1.0],[2.0],[3.0]]}]\n");
+        binary calibration_data = ReadOnlyFile::readBinaryFile(calibration_path);
+
+        hash<QoreOnnxTools::OnnxQuantizationResult> plan =
+            QoreOnnxTools::OnnxQuantizer::plan(getTestModelPath(),
+                dir.path + DirSep + "static.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "method": "static",
+                    "calibration_data_json_path": calibration_path,
+                });
+
+        assertTrue(exists plan.calibration_fingerprint,
+            "static quantization dry run should include calibration fingerprint metadata");
+        assertEq(calibration_path, plan.calibration_fingerprint.path);
+        assertEq("json", plan.calibration_fingerprint.format);
+        assertEq("sha256", plan.calibration_fingerprint.digest);
+        assertEq(calibration_data.size(), plan.calibration_fingerprint.size);
+        assertEq(digest("sha256", calibration_data).toHex(),
+            plan.calibration_fingerprint.sha256);
+    }
+
+    missingDependencyMessageTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        assertThrows("QORE-ONNX-TOOLS-ERROR", sub() {
+            QoreOnnxTools::OnnxQuantizer::quantize(getTestModelPath(),
+                dir.path + DirSep + "quantized.onnx",
+                <QoreOnnxTools::OnnxQuantizationOptions>{
+                    "python": "definitely-not-python-qore",
+                    "method": "dynamic",
+                });
+        });
+    }
+
+    modelInspectionValidationTest() {
+        hash<auto> inspection = QoreOnnxTools::OnnxModelTools::inspect(getTestModelPath());
+        assertEq(getTestModelPath(), inspection.path);
+        assertTrue(inspection.size > 0);
+        assertEq("qore-ml-test", inspection.info.producer_name);
+        assertEq("X", inspection.inputs[0].name);
+        assertEq("Y", inspection.outputs[0].name);
+        assertEq("onnx-inspection", inspection.diagnostics.kind);
+        assertTrue(inspection.diagnostics.input_names.contains("X"));
+        assertTrue(inspection.diagnostics.output_names.contains("Y"));
+
+        hash<QoreOnnxTools::OnnxValidationResult> validation =
+            QoreOnnxTools::OnnxModelTools::validate(getTestModelPath());
+        assertTrue(validation.valid);
+        assertEq(0, validation.issues.size());
+        assertTrue(exists validation.inspection);
+        assertEq("CPUExecutionProvider", validation.provider_report.active_provider);
+        assertEq("onnx-validation", validation.diagnostics.kind);
+        assertTrue(validation.diagnostics.valid);
+        assertEq(0, validation.diagnostics.issue_counts.error);
+        assertTrue(validation.diagnostics.examples.size() > 0);
+    }
+
+    modelBenchmarkTest() {
+        hash<QoreOnnxTools::OnnxBenchmarkResult> result =
+            QoreOnnxTools::OnnxModelTools::benchmark(getTestModelPath(),
+                <QoreOnnxTools::OnnxBenchmarkOptions>{
+                    "warmup_runs": 1,
+                    "runs": 2,
+                });
+        assertEq(2, result.runs);
+        assertEq(2, result.latencies_ms.size());
+        assertTrue(result.average_ms >= 0.0);
+        assertTrue(result.inputs.hasKey("X"));
+        assertTrue(result.stats.run_count >= 3);
+    }
+
+    modelCompareTest() {
+        hash<QoreOnnxTools::OnnxCompareResult> result =
+            QoreOnnxTools::OnnxModelTools::compare(getTestModelPath(), getTestModelPath(),
+                <QoreOnnxTools::OnnxCompareOptions>{
+                    "benchmark": True,
+                    "warmup_runs": 1,
+                    "runs": 2,
+                    "keep_outputs": True,
+                });
+        assertTrue(result.outputs_match);
+        assertEq(0, result.differences.size());
+        assertTrue(result.compared_values > 0);
+        assertEq(0.0, result.max_abs_error);
+        assertTrue(result.source_output.hasKey("Y"));
+        assertTrue(result.candidate_output.hasKey("Y"));
+        assertEq(2, result.source_benchmark.runs);
+        assertEq(2, result.candidate_benchmark.runs);
+        assertTrue(result.speedup > 0.0);
+    }
+
+    modelOptimizationTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        string output_path = dir.path + DirSep + "optimized.onnx";
+        hash<QoreOnnxTools::OnnxOptimizationResult> result =
+            QoreOnnxTools::OnnxModelTools::optimize(getTestModelPath(), output_path);
+        assertEq(getTestModelPath(), result.input_path);
+        assertEq(output_path, result.output_path);
+        assertTrue(is_file(output_path));
+        assertFalse(result.ort_format);
+        assertTrue(result.validation.valid);
+        assertEq("ONNX", result.optimization.output_format);
+    }
+
+    onnxProfileSummaryTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        FsUtil::TmpFile prefix("qore-onnx-tools-profile-", "");
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "profile_file_prefix": prefix.path,
+        });
+        model.run({"X": ((6.0,),)});
+        string profile_path = model.endProfiling();
+        on_exit { unlink(profile_path); }
+
+        hash<QoreOnnxTools::OnnxProfileSummary> summary =
+            QoreOnnxTools::OnnxProfileTools::summarizeProfile(profile_path);
+        assertEq(profile_path, summary.profile_path);
+        assertTrue(summary.event_count > 0);
+        assertTrue(summary.node_event_count > 0);
+        assertTrue(summary.session_event_count > 0);
+        assertTrue(summary.total_node_us > 0);
+        assertTrue(summary.total_node_ms > 0.0);
+        assertTrue(summary.operator_names.contains("Gemm"));
+        assertTrue(summary.provider_names.contains("CPUExecutionProvider"));
+        assertEq("Gemm", summary.operators[0].name);
+        assertEq("CPUExecutionProvider", summary.providers[0].name);
+        assertTrue(summary.nodes[0].total_us > 0);
+        assertTrue(summary.sessions[0].total_us > 0);
+    }
+
+    onnxPackageCreationTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        string src_dir = dir.path + DirSep + "src";
+        string out_dir = dir.path + DirSep + "pkg";
+        mkdir_ex(src_dir, 0755, True);
+        writeBinaryFile(src_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestModelPath()));
+        writeBinaryFile(src_dir + DirSep + "model.onnx.data", <01020304>);
+        writeTextFile(src_dir + DirSep + "config.json",
+            "{\"model_type\":\"linear\",\"architectures\":[\"QoreLinear\"]}");
+        writeTextFile(src_dir + DirSep + "tokenizer.json", "{}");
+
+        hash<QoreOnnxTools::OnnxPackageResult> result =
+            QoreOnnxTools::OnnxPackageTools::createPackage(src_dir, out_dir,
+                <QoreOnnxTools::OnnxPackageOptions>{
+                    "task": "regression",
+                    "opset": 17,
+                    "minimum_onnxruntime_version": "1.16.0",
+                    "preprocess": {"input_layout": "row-major"},
+                    "postprocess": {"output_field": "Y"},
+                    "benchmarks": {"baseline": {"average_ms": 0.0}},
+                    "golden_vectors": ({"inputs": {"X": ((4.0,),)}, "outputs": {"Y": ((9.0,),)}},),
+                });
+        assertEq("model.onnx", result.entry_artifact);
+        assertEq("onnx", result.framework);
+        assertEq("onnxruntime", result.runtime);
+        assertEq("regression", result.task);
+        assertEq(17, result.opset);
+        assertEq("1.16.0", result.minimum_onnxruntime_version);
+        assertEq("X", result.inputs[0].name);
+        assertEq("Y", result.outputs[0].name);
+        assertTrue(result.external_data.contains("model.onnx.data"));
+        assertEq("tokenizer.json", result.tokenizer.artifact_name);
+        assertEq("CPUExecutionProvider", result.providers.active_provider);
+        assertEq("safe", result.safety);
+        assertTrue(result.executable);
+        assertTrue(is_file(out_dir + DirSep + "model.onnx"));
+        assertTrue(is_file(out_dir + DirSep + "model.onnx.data"));
+        assertTrue(is_file(out_dir + DirSep + "config.json"));
+        assertTrue(is_file(result.manifest_path));
+        assertEq(1, (select result.artifacts, $1.role == "external_data").size());
+        assertEq(1, (select result.artifacts, $1.role == "tokenizer").size());
+        assertTrue(result.validation.valid);
+        assertTrue(result.artifacts[0].sha256.val());
+        assertEq("onnx-package", result.diagnostics.kind);
+        assertEq("regression", result.diagnostics.task);
+        assertTrue(result.diagnostics.examples.size() > 0);
+%ifndef NoJson
+        hash<auto> manifest = parse_json(ReadOnlyFile::readTextFile(result.manifest_path));
+        assertEq("regression", manifest.task);
+        assertEq(17, manifest.opset);
+        assertEq("model.onnx", manifest.execution.entry_artifact);
+        assertEq("onnx-package", manifest.diagnostics.kind);
+        assertEq("regression", manifest.diagnostics.task);
+        assertEq("onnx-preprocess", manifest.preprocess.kind);
+        assertEq("regression", manifest.preprocess.task);
+        assertEq("feature-matrix", manifest.preprocess.input_mode);
+        assertEq("row-major", manifest.preprocess.input_layout);
+        assertEq("onnx-postprocess", manifest.postprocess.kind);
+        assertEq("scalar", manifest.postprocess.output_mode);
+        assertEq("Y", manifest.postprocess.output_field);
+        assertEq("Y", manifest.execution.plan.postprocess.value_output);
+        assertEq("onnxruntime", manifest.execution.plan.runtime);
+        assertEq("model.onnx", manifest.execution.plan.entry_artifact);
+        assertEq("tokenizer.json", manifest.execution.plan.tokenizer.artifact_name);
+        assertEq("tokenizer.json", manifest.tokenizer.artifact_name);
+        assertEq(0, manifest.execution.plan.dynamic_axes.X[0]);
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y);
+        assertEq(0, manifest.execution.plan.tensor_contract.dynamic_axes.X[0]);
+        assertEq("Y", manifest.outputs[0].name);
+        assertTrue(manifest.validation.valid);
+        assertEq(0.0, manifest.benchmarks.baseline.average_ms.toFloat());
+%endif
+
+        string default_out_dir = dir.path + DirSep + "default-pkg";
+        hash<QoreOnnxTools::OnnxPackageResult> default_result =
+            QoreOnnxTools::OnnxPackageTools::createPackage(src_dir, default_out_dir);
+        assertTrue(is_file(default_result.manifest_path),
+            "default package creation should write a manifest");
+        assertEq("onnx-preprocess", default_result.preprocess.kind,
+            "default ONNX packages should expose a generated preprocessing contract");
+        assertEq("onnx-postprocess", default_result.postprocess.kind,
+            "default ONNX packages should expose a generated postprocessing contract");
+        assertEq("raw", default_result.postprocess.output_mode,
+            "plain ONNX packages should default to raw postprocessing");
+        assertEq("raw", default_result.execution.plan.postprocess.output_mode,
+            "execution plans should include generated postprocessing contracts");
+        assertEq("onnxruntime", default_result.execution.plan.runtime,
+            "execution plans should include the runtime");
+        assertEq("model.onnx", default_result.execution.plan.entry_artifact,
+            "execution plans should include the entry artifact");
+        assertEq("onnx-package", default_result.diagnostics.kind,
+            "default package creation should expose package diagnostics");
+    }
+
+    qoreOnnxCliSmokeTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("ONNX Runtime support is not available");
+        }
+
+        FsUtil::TmpDir dir("qore-onnx-cli-", "");
+        string model_path = getTestModelPath();
+
+        hash<auto> inspection = runCliJson(("inspect", "--json", model_path));
+        assertEq("qore-ml-test", inspection.info.producer_name);
+        assertEq("X", inspection.inputs[0].name);
+        assertEq("onnx-inspection", inspection.diagnostics.kind);
+
+        hash<auto> validation = runCliJson(("validate", "--json", model_path));
+        assertTrue(validation.valid);
+        assertEq("onnx-validation", validation.diagnostics.kind);
+
+        hash<auto> benchmark = runCliJson(("benchmark", "--json", "--runs", "1",
+            "--warmup-runs", "1", model_path));
+        assertEq(1, benchmark.runs);
+        assertTrue(benchmark.average_ms >= 0.0);
+
+        hash<auto> comparison = runCliJson(("compare", "--json", "--runs", "1",
+            model_path, model_path));
+        assertTrue(comparison.outputs_match);
+        assertEq(1, comparison.source_benchmark.runs);
+
+        string optimized_path = dir.path + DirSep + "optimized.onnx";
+        hash<auto> optimized = runCliJson(("optimize", "--json", "--force",
+            model_path, optimized_path));
+        assertTrue(is_file(optimized_path));
+        assertTrue(optimized.validation.valid);
+
+        string package_dir = dir.path + DirSep + "pkg";
+        hash<auto> package = runCliJson(("package", "--json", "--task", "regression",
+            "--no-validate", model_path, package_dir));
+        assertEq("test_linear.onnx", package.entry_artifact);
+        assertEq("regression", package.task);
+        assertEq("onnx-preprocess", package.preprocess.kind);
+        assertEq("scalar", package.postprocess.output_mode);
+        assertEq("Y", package.execution.plan.postprocess.value_output);
+        assertEq("onnxruntime", package.execution.plan.runtime);
+        assertEq("test_linear.onnx", package.execution.plan.entry_artifact);
+        assertEq(package.outputs[0].shape, package.execution.plan.output_shapes.Y);
+        assertEq("onnx-package", package.diagnostics.kind);
+        assertTrue(package.diagnostics.examples.size() > 0);
+        assertTrue(is_file(package.manifest_path));
+
+        string package_text = runCliText(("package", "--task", "regression",
+            "--no-validate", model_path, dir.path + DirSep + "pkg-text"));
+        assertTrue(package_text =~ /ONNX package:/);
+        assertTrue(package_text =~ /recommended actions:/);
+        assertTrue(package_text =~ /examples:/);
+
+        string calibration_path = dir.path + DirSep + "calibration.json";
+        writeTextFile(calibration_path, "[{\"X\":[[1.0],[2.0]]}]\n");
+        hash<auto> quant_plan = runCliJson(("quantize", "--json", "--dry-run",
+            "--method", "static", "--calibration-data", calibration_path,
+            model_path, dir.path + DirSep + "quantized.onnx"));
+        assertFalse(quant_plan.executed);
+        assertEq("static", quant_plan.method);
+        assertEq(calibration_path, quant_plan.calibration_fingerprint.path);
+        assertTrue(quant_plan.calibration_fingerprint.sha256.val());
+
+        hash<auto> dep = runCliJsonWithExpectedRcs(("check-python", "--json"), (0, 1));
+        assertTrue(dep.hasKey("available"));
+    }
+
+    unsafePackageClassificationTest() {
+        FsUtil::TmpDir dir("qore-onnx-tools-", "");
+        string src_dir = dir.path + DirSep + "unsafe";
+        string out_dir = dir.path + DirSep + "unsafe-pkg";
+        mkdir_ex(src_dir, 0755, True);
+        writeBinaryFile(src_dir + DirSep + "pytorch_model.bin", <01020304>);
+        writeTextFile(src_dir + DirSep + "config.json",
+            "{\"model_type\":\"bert\",\"architectures\":[\"BertForSequenceClassification\"]}");
+
+        hash<QoreOnnxTools::OnnxPackageResult> result =
+            QoreOnnxTools::OnnxPackageTools::createPackage(src_dir, out_dir,
+                <QoreOnnxTools::OnnxPackageOptions>{"write_manifest": False});
+        assertEq("metadata-only", result.runtime);
+        assertEq("unsafe-pickle", result.safety);
+        assertFalse(result.executable);
+        assertEq("huggingface", result.framework);
+        assertEq(1, (select result.artifacts, $1.format == "pytorch-pickle").size());
+    }
+
+    private hash<auto> runCliJson(list<string> args) {
+        return runCliJsonWithExpectedRcs(args, (0,));
+    }
+
+    private hash<auto> runCliJsonWithExpectedRcs(list<string> args, list<int> expected_rcs) {
+        int rc;
+        string out = backquote(makeCliCommand(args), \rc);
+        bool rc_ok = expected_rcs.contains(rc);
+        assertTrue(rc_ok, sprintf("qore-onnx command exit status should be one of %y: %y\n%s",
+            expected_rcs, args, out));
+        if (!rc_ok) {
+            throw "TEST-ERROR", sprintf("qore-onnx command failed: %y", args);
+        }
+        if (!trim(out).val()) {
+            throw "TEST-ERROR", sprintf("qore-onnx command returned no JSON output: %y", args);
+        }
+%ifdef NoJson
+        throw "TEST-ERROR", "json module not available";
+%else
+        return parse_json(trim(out));
+%endif
+    }
+
+    private string runCliText(list<string> args) {
+        int rc;
+        string out = backquote(makeCliCommand(args), \rc);
+        assertEq(0, rc, sprintf("qore-onnx text command should succeed: %y\n%s",
+            args, out));
+        assertTrue(trim(out).val(),
+            sprintf("qore-onnx text command returned no output: %y", args));
+        return out;
+    }
+
+    private static string makeCliCommand(list<string> args) {
+        string root = get_script_dir() + "/../../../..";
+        string qore_bin = root + "/build/qore";
+        string cli = root + "/bin/qore-onnx";
+        string module_path = join(PathSep, (
+            root + "/qlib",
+            root + "/build/qlib-qmod",
+            root + "/build/modules/ml"
+        ));
+        string cmd = sprintf("QORE_MODULE_DIR=%s %s %s",
+            shellQuote(module_path), shellQuote(qore_bin), shellQuote(cli));
+        foreach string arg in (args) {
+            cmd += " " + shellQuote(arg);
+        }
+        return cmd;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private nothing writeTextFile(string path, string data) {
+        File f();
+        f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(data);
+    }
+
+    private nothing writeBinaryFile(string path, binary data) {
+        File f();
+        f.open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(data);
+    }
+}

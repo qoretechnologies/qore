@@ -163,7 +163,7 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
 
 HashDeclMemberInfo* HashDeclMemberInfo::instantiate(const QoreTypeInfo* receiver_type_info) const {
     HashDeclMemberInfo* rv = new HashDeclMemberInfo(*this);
-    rv->typeInfo = qore_substitute_type_params(typeInfo, receiver_type_info);
+    rv->typeInfo = qore_substitute_type_params_if_needed(typeInfo, receiver_type_info);
     return rv;
 }
 
@@ -259,7 +259,7 @@ static const TypedHashDecl* instantiate_parent_hashdecl(const TypedHashDecl* par
     }
 
     const QoreTypeInfo* parent_type = parent->getTypeInfo();
-    const QoreTypeInfo* instantiated_type = qore_substitute_type_params(parent_type, receiver_type_info);
+    const QoreTypeInfo* instantiated_type = qore_substitute_type_params_if_needed(parent_type, receiver_type_info);
     const TypedHashDecl* instantiated_parent = QoreTypeInfo::getUniqueReturnHashDecl(instantiated_type);
     return instantiated_parent ? instantiated_parent : parent;
 }

@@ -49,6 +49,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 // Monotonic counter for globally unique object hashes.  Pointer addresses
 // alone are not unique because malloc reuses freed addresses; the counter
@@ -56,11 +57,18 @@
 // previously-used address.
 static std::atomic<uint64_t> object_id_seq{0};
 
+static const std::string qore_trace_object_refs_filter = [] {
+    const char* env = getenv("QORE_TRACE_OBJECT_REFS");
+    return env ? std::string(env) : std::string();
+}();
+
+static const bool qore_trace_object_refs_enabled = !qore_trace_object_refs_filter.empty();
+
 static bool qore_trace_object_refs_for_class(const char* cls) {
-    const char* filter = getenv("QORE_TRACE_OBJECT_REFS");
-    if (!filter || !*filter || !cls) {
+    if (!qore_trace_object_refs_enabled || !cls) {
         return false;
     }
+    const char* filter = qore_trace_object_refs_filter.c_str();
     if (!strcmp(filter, "*")) {
         return true;
     }
@@ -88,16 +96,18 @@ static bool qore_trace_object_refs_for_class(const char* cls) {
 }
 
 static bool qore_trace_object_ref_should_backtrace(int before, int after) {
-    if (getenv("QORE_TRACE_OBJECT_REF_BACKTRACE")) {
+    static const bool always_backtrace = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE") != nullptr;
+    if (always_backtrace) {
         return true;
     }
 
-    const char* low_refs = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
-    if (!low_refs || !*low_refs) {
-        return false;
-    }
-
-    int threshold = atoi(low_refs);
+    static const int threshold = [] {
+        const char* low_refs = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
+        if (!low_refs || !*low_refs) {
+            return 0;
+        }
+        return atoi(low_refs);
+    }();
     if (threshold <= 0) {
         return false;
     }
@@ -1149,8 +1159,10 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
             "rrefs %d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
             references.load() - 1, rrefs.load(), rrefs.load() - (real ? 1 : 0));
-        qore_trace_object_ref("deref", this, obj, status == OS_OK ? getClassName() : "<deleted>",
-            references.load(), references.load() - 1, real);
+        if (qore_trace_object_refs_enabled) {
+            qore_trace_object_ref("deref", this, obj, status == OS_OK ? getClassName() : "<deleted>",
+                references.load(), references.load() - 1, real);
+        }
 
         robject_dereference_helper qodh(this, real);
         int ref_copy = qodh.getRefs();
@@ -1652,7 +1664,9 @@ void qore_object_private::customRefIntern(bool real) {
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customRefIntern() this: %p obj: %p '%s' references %d->%d " \
         "rrefs: %d->%d\n", this, obj, getClassName(), references.load(), references.load() + 1, rrefs.load(),
         rrefs.load() + (real ? 1 : 0));
-    qore_trace_object_ref("ref", this, obj, getClassName(), references.load(), references.load() + 1, real);
+    if (qore_trace_object_refs_enabled) {
+        qore_trace_object_ref("ref", this, obj, getClassName(), references.load(), references.load() + 1, real);
+    }
     ++references;
     if (real)
         ++rrefs;

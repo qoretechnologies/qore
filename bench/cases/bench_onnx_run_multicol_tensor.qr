@@ -1,0 +1,56 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchOnnxRunMultiColumnTensor
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchOnnxRunMultiColumnTensor {
+    constructor() {
+        string model_path = OnnxBench::sklearnModelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("onnx_run_multicol_tensor: skipped (ONNX Runtime or sklearn test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("onnx_run_multicol_tensor");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        ML::OnnxModel model(model_path, <ML::OnnxSessionConfig>{"providers": ()});
+        ML::Tensor input;
+
+        r.setup = sub () {
+            DataFrame::DataFrame frame = OnnxBench::makeSklearnFrame(rows);
+            buffer<float32> packed = buffer<float32>::sized(rows * 4);
+            buffer<float32> sepal_length = frame.getColumnBuffer("sepal_length");
+            buffer<float32> sepal_width = frame.getColumnBuffer("sepal_width");
+            buffer<float32> petal_length = frame.getColumnBuffer("petal_length");
+            buffer<float32> petal_width = frame.getColumnBuffer("petal_width");
+            for (int i = 0; i < rows; ++i) {
+                int offset = i * 4;
+                packed[offset] = sepal_length[i];
+                packed[offset + 1] = sepal_width[i];
+                packed[offset + 2] = petal_length[i];
+                packed[offset + 3] = petal_width[i];
+            }
+            input = new ML::Tensor(packed, (rows, 4));
+            r.bytes_processed = OnnxBench::approxSklearnBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = model.runTensors({"X": input});
+            OnnxBench::verifySklearnTensorOutput("onnx_run_multicol_tensor", result, rows);
+        };
+
+        exit(r.run());
+    }
+}

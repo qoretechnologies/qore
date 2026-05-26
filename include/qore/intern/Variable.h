@@ -404,6 +404,7 @@ protected:
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    DLLLOCAL int setBufferElementLValue(QoreBufferNode* b, size_t index);
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
@@ -438,6 +439,9 @@ private:
     int rdt = 0;
 
     RObject* robj = nullptr;
+    QoreBufferNode* buffer_lvalue = nullptr;
+    size_t buffer_lvalue_index = 0;
+    QoreValue buffer_lvalue_value;
 
 public:
     QoreLValueGeneric* val = nullptr;

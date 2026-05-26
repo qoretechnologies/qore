@@ -72,7 +72,7 @@ static cl_mod_list_t cl_mod_list;
 static QoreParseOptions parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
-static qore_exec_mode_t exec_mode = QEM_TIERED;
+static qore_exec_mode_t exec_mode = QEM_AST;
 static bool user_requested_exec_mode = false;
 
 // lock options
@@ -175,6 +175,20 @@ static bool is_directory(const char* path) {
     return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
 }
 
+//! Returns true when the global legacy escape hatch is enabled.
+static bool old_style_default_enabled() {
+    const char* env = getenv("QORE_OLD_STYLE_DEFAULT");
+    return env && *env && strcmp(env, "0") != 0;
+}
+
+//! Auto-enable %modern for non-file command-line sources unless globally disabled.
+static void auto_enable_modern_for_command_line_source(QoreProgram* pgm) {
+    if (!old_style_default_enabled()) {
+        pgm->parseSetParseOptions(PO_MODERN);
+        warnings = QP_WARN_ALL;
+    }
+}
+
 static const char usage[] = "usage: %s [option(s)]... [program file]\n";
 static const char suggest[] = "try '%s -h' for more information.\n";
 
@@ -185,7 +199,7 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
-   "      --exec-mode=arg          execution mode: ast, ir, jit, or tiered (default)\n"
+   "      --exec-mode=arg          execution mode: ast (default), ir, jit, or tiered\n"
    "                               (tiered auto-promotes AST->IR->JIT per function)\n"
    "      --ir-dump                dump IR representation before execution\n"
    "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"
@@ -1616,6 +1630,13 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       // set time zone if requested
       if (cmd_zone)
          qpgm->parseSetTimeZone(cmd_zone);
+
+      // Named files are handled by parseFile(), which preserves the legacy
+      // .q opt-out.  Other entry points do not carry an extension, so they
+      // follow the modern default unless the environment disables it.
+      if (eval_arg || cl_pgm || !program_file_name) {
+         auto_enable_modern_for_command_line_source(*qpgm);
+      }
 
       // lock the parse options if necessary
       if (lock_options)

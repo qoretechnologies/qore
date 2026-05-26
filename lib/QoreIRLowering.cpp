@@ -9,6 +9,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRLowering.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
+#include <qore/intern/QorePluginRegistry.h>
 
 #include <qore/DateTimeNode.h>
 #include <qore/QoreObject.h>
@@ -155,29 +156,54 @@
 // Forward declaration from Function.cpp - collects all locals from a statement tree
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
-static bool isTerminatorOpcode(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::Br:
-        case QoreIROpcode::BrIf:
-        case QoreIROpcode::BranchIfLtLocalInt:
-        case QoreIROpcode::Invoke:
-        case QoreIROpcode::IteratorNext:
-        case QoreIROpcode::Return:
-        case QoreIROpcode::ReturnNothing:
-        case QoreIROpcode::Throw:
-        case QoreIROpcode::Rethrow:
-        case QoreIROpcode::ThreadExit:
-            return true;
-        default:
-            return false;
-    }
-}
-
 static bool blockHasTerminator(const QoreIRBasicBlock* block) {
     if (!block || block->instructions.empty()) {
         return false;
     }
-    return isTerminatorOpcode(block->instructions.back()->opcode);
+    return isTerminator(block->instructions.back()->opcode);
+}
+
+void QoreIRLoweringContext::setError(const std::string& message) {
+    error = message;
+}
+
+void QoreIRLoweringContext::setError(const char* message) {
+    error = message ? message : "";
+}
+
+const std::string& QoreIRLoweringContext::getError() const {
+    return error;
+}
+
+void QoreIRLoweringContext::setResult(QoreIRValue value) {
+    result = value;
+}
+
+QoreIRValue QoreIRLoweringContext::getResult() const {
+    return result;
+}
+
+QoreIRLowering& QoreIRLoweringContext::getLowering() const {
+    return lowering;
+}
+
+static bool pluginLoweringClaimsNode(uint64_t claimed_node_kinds, qore_type_t node_type) {
+    return node_type >= 0 && node_type < 64 && (claimed_node_kinds & (1ULL << node_type));
+}
+
+static void setPluginLoweringError(std::string& error, const QorePluginLoweringInfo& info,
+        const char* subreason, const char* detail) {
+    error = "PLUGIN-LOWERING-CLAIM-VIOLATED: plugin lowering callback for module=\"";
+    error += info.module_name;
+    error += "\", operation=\"";
+    error += info.operation_name.empty() ? "<unknown>" : info.operation_name;
+    error += "\", local_operation_id=\"";
+    error += std::to_string(info.local_operation_id);
+    error += "\" ";
+    error += detail ? detail : "failed";
+    error += " (subreason=\"";
+    error += subreason ? subreason : "lowering_failed";
+    error += "\", section=3.7)";
 }
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
@@ -221,6 +247,174 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
     return val.getTypeInfo();
 }
 
+static QoreIRPluginOperationRef pluginOperationRefFromInfo(const QorePluginResolvedOperationInfo& info,
+        QoreProgram* pgm) {
+    QoreIRPluginOperationRef ref;
+    ref.global_operation_id = info.global_operation_id;
+    ref.module_name = info.module_name;
+    ref.local_operation_id = info.local_operation_id;
+    ref.canonical_signature_version = info.canonical_signature_version;
+    ref.signature_hash = info.signature_hash;
+    ref.fp_reassociation_enabled = pgm && qore_plugin_allows_fp_reassociation(info, pgm->getParseOptions());
+    return ref;
+}
+
+static QoreIRValue tryDescriptorPluginSubscriptLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreValue&, const QoreSquareBracketsOperatorNode* op,
+        std::string& error) {
+    QorePluginResolvedOperationInfo info;
+    int rc = qore_plugin_resolve_program_operation_info(parse_context ? parse_context->pgm : nullptr,
+        getExprTypeInfo(op->getLeft()), getExprTypeInfo(op->getRight()), "subscript",
+        QorePluginHelperAbi::SubscriptValue, info, nullptr);
+    if (rc > 0) {
+        return QoreIRValue();
+    }
+    if (rc < 0) {
+        error = "failed to resolve descriptor-based plugin subscript operation";
+        return QoreIRValue();
+    }
+
+    QoreIRValue lhs = lowering.lowerExpression(op->getLeft(), error);
+    if (!lhs.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue rhs = lowering.lowerExpression(op->getRight(), error);
+    if (!rhs.isValid()) {
+        return QoreIRValue();
+    }
+    return builder.createPluginOp(QoreIROpcode::PluginSubscript,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
+}
+
+static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreValue&, const QoreSquareBracketsRangeOperatorNode* op,
+        std::string& error) {
+    QorePluginResolvedOperationInfo info;
+    int rc = qore_plugin_resolve_program_operation_info(parse_context ? parse_context->pgm : nullptr,
+        getExprTypeInfo(op->get(0)), nullptr, "slice", QorePluginHelperAbi::CallValueList, info, nullptr);
+    if (rc > 0) {
+        return QoreIRValue();
+    }
+    if (rc < 0) {
+        error = "failed to resolve descriptor-based plugin slice operation";
+        return QoreIRValue();
+    }
+    if (info.signature.arity != 0xff) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue seq = lowering.lowerExpression(op->get(0), error);
+    if (!seq.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue start = lowering.lowerExpression(op->get(1), error);
+    if (!start.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue end = lowering.lowerExpression(op->get(2), error);
+    if (!end.isValid()) {
+        return QoreIRValue();
+    }
+    return builder.createPluginOp(QoreIROpcode::PluginCall,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {seq, start, end},
+        op->loc)->result;
+}
+
+static QoreIRValue tryDescriptorPluginBinaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreBinaryOperatorNode<>* op, const char* operation_name,
+        std::string& error) {
+    QorePluginResolvedOperationInfo info;
+    int rc = qore_plugin_resolve_program_operation_info(parse_context ? parse_context->pgm : nullptr,
+        getExprTypeInfo(op->getLeft()), getExprTypeInfo(op->getRight()), operation_name,
+        QorePluginHelperAbi::BinaryValue, info, nullptr);
+    if (rc > 0) {
+        return QoreIRValue();
+    }
+    if (rc < 0) {
+        error = "failed to resolve descriptor-based plugin binary operation '";
+        error += operation_name;
+        error += "'";
+        return QoreIRValue();
+    }
+
+    QoreIRValue lhs = lowering.lowerExpression(op->getLeft(), error);
+    if (!lhs.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue rhs = lowering.lowerExpression(op->getRight(), error);
+    if (!rhs.isValid()) {
+        return QoreIRValue();
+    }
+    return builder.createPluginOp(QoreIROpcode::PluginBinary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
+}
+
+static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreBinaryNotOperatorNode* op, const char* operation_name,
+        std::string& error) {
+    QorePluginResolvedOperationInfo info;
+    int rc = qore_plugin_resolve_program_operation_info(parse_context ? parse_context->pgm : nullptr,
+        getExprTypeInfo(op->getExp()), nullptr, operation_name, QorePluginHelperAbi::UnaryValue, info, nullptr);
+    if (rc > 0) {
+        return QoreIRValue();
+    }
+    if (rc < 0) {
+        error = "failed to resolve descriptor-based plugin unary operation '";
+        error += operation_name;
+        error += "'";
+        return QoreIRValue();
+    }
+
+    QoreIRValue value = lowering.lowerExpression(op->getExp(), error);
+    if (!value.isValid()) {
+        return QoreIRValue();
+    }
+    return builder.createPluginOp(QoreIROpcode::PluginUnary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {value}, op->loc)->result;
+}
+
+static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
+        QoreParseContext* parse_context, const QoreValue& expr, const AbstractQoreNode* node,
+        std::string& error) {
+    if (auto* subscript = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return tryDescriptorPluginSubscriptLowering(lowering, builder, parse_context, expr, subscript, error);
+    }
+    if (auto* slice = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        return tryDescriptorPluginSliceLowering(lowering, builder, parse_context, expr, slice, error);
+    }
+    if (auto* bit_not = dynamic_cast<const QoreBinaryNotOperatorNode*>(node)) {
+        return tryDescriptorPluginUnaryLowering(lowering, builder, parse_context, bit_not, "bit_not", error);
+    }
+    if (auto* bit_and = dynamic_cast<const QoreBinaryAndOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, bit_and, "bit_and", error);
+    }
+    if (auto* bit_or = dynamic_cast<const QoreBinaryOrOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, bit_or, "bit_or", error);
+    }
+    if (auto* bit_xor = dynamic_cast<const QoreBinaryXorOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, bit_xor, "bit_xor", error);
+    }
+    if (auto* ne = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, ne, "ne", error);
+    }
+    if (auto* eq = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, eq, "eq", error);
+    }
+    if (auto* le = dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, le, "le", error);
+    }
+    if (auto* lt = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, lt, "lt", error);
+    }
+    if (auto* ge = dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, ge, "ge", error);
+    }
+    if (auto* gt = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)) {
+        return tryDescriptorPluginBinaryLowering(lowering, builder, parse_context, gt, "gt", error);
+    }
+    return QoreIRValue();
+}
+
 QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_parse_context)
         : builder(n_builder), parse_context(n_parse_context) {
 }
@@ -239,6 +433,69 @@ QoreIRValue QoreIRLowering::lowerConditionValue(const QoreValue& cond, std::stri
     // BrIf calls getAsBool() on its operand, so ToBool is redundant here.
     // Skip the ToBool emission to reduce instruction count.
     return lowerExpression(cond, error);
+}
+
+QoreIRValue QoreIRLowering::tryPluginLowering(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return QoreIRValue();
+    }
+
+    std::vector<QorePluginLoweringInfo> lowerers;
+    if (qore_plugin_get_lowering_infos(parse_context ? parse_context->pgm : nullptr, node->getType(), lowerers,
+            nullptr)) {
+        error = "failed to query plugin lowering callbacks";
+        return QoreIRValue();
+    }
+
+    QoreIRLoweringContext ctx(*this, error);
+    size_t callback_count = 0;
+    for (const QorePluginLoweringInfo& info : lowerers) {
+        if (++callback_count % 100 == 0 && qore_check_cancel(nullptr, "plugin lowering callbacks")) {
+            error = "plugin lowering callback dispatch cancelled";
+            return QoreIRValue();
+        }
+        ctx.setResult(QoreIRValue());
+        QorePluginLoweringResult result = info.lowering(&ctx, node, parse_context, &builder);
+        if (!error.empty()) {
+            return QoreIRValue();
+        }
+
+        switch (result) {
+            case QorePluginLoweringResult::Lowered: {
+                QoreIRValue lowered = ctx.getResult();
+                if (lowered.isValid()) {
+                    return lowered;
+                }
+                QoreIRBasicBlock* block = builder.getBlock();
+                if (block && !block->instructions.empty() && block->instructions.back()->result.isValid()) {
+                    return block->instructions.back()->result;
+                }
+                setPluginLoweringError(error, info, "lowered_without_result",
+                    "returned Lowered but did not set a result or emit a result-producing instruction");
+                return QoreIRValue();
+            }
+            case QorePluginLoweringResult::NotApplicable:
+                if (pluginLoweringClaimsNode(info.claimed_node_kinds, node->getType())) {
+                    setPluginLoweringError(error, info, "claimed_not_applicable",
+                        "claimed the AST node kind but returned NotApplicable");
+                    return QoreIRValue();
+                }
+                break;
+            case QorePluginLoweringResult::Erroneous:
+                if (error.empty()) {
+                    setPluginLoweringError(error, info, "erroneous_without_diagnostic",
+                        "returned Erroneous without setting a diagnostic");
+                }
+                return QoreIRValue();
+            default:
+                setPluginLoweringError(error, info, "invalid_result",
+                    "returned an invalid QorePluginLoweringResult value");
+                return QoreIRValue();
+        }
+    }
+
+    return tryDescriptorPluginLowering(*this, builder, parse_context, expr, node, error);
 }
 
 bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
@@ -488,12 +745,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreValue expr = ret_stmt->getExpression();
         if (!expr || expr.isNothing()) {
             // Emit block cleanups for all active scopes before returning.
-            // CF_SKIP_LVARS: pre-instantiated locals mechanism handles local cleanup
-            // at function exit. The break/continue paths need explicit UninstantiateLocal
-            // because execution continues after the loop, but on return the function
-            // exits immediately and the caller handles cleanup.
+            // Include lvar cleanup here so object destructors run before the
+            // source-level caller resumes.  The function wrapper still pops
+            // pre-instantiated local slots later; UninstantiateLocal clears the
+            // value without corrupting that stack ownership contract.
             // Also handles RefForeach cleanup (record + finalize without fill remaining).
-            if (!emitBlockCleanups(0, error, false, CF_SKIP_LVARS)) {
+            if (!emitBlockCleanups(0, error, false)) {
                 return false;
             }
             // Emit CatchCleanup for all active catch scopes before returning
@@ -517,6 +774,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!cleanup_before_return) {
             for (const auto& entry : cleanup_stack) {
                 if (entry.type == BlockCleanupEntry::Scope
+                        || entry.type == BlockCleanupEntry::Lvars
+                        || entry.type == BlockCleanupEntry::CatchVar
                         || entry.type == BlockCleanupEntry::RefForeachRecord
                         || entry.type == BlockCleanupEntry::RefForeach
                         || entry.type == BlockCleanupEntry::Context) {
@@ -528,9 +787,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (cleanup_before_return) {
             lowered = builder.createRefSelf(lowered, stmt->loc)->result;
         }
-        // Emit block cleanups for all active scopes (fires on_exit handlers).
-        // Same as ReturnNothing — CF_SKIP_LVARS, and handles RefForeach cleanup.
-        if (!emitBlockCleanups(0, error, false, CF_SKIP_LVARS)) {
+        // Emit block cleanups for all active scopes (fires on_exit handlers,
+        // clears lvar values, and handles RefForeach cleanup).
+        if (!emitBlockCleanups(0, error, false)) {
             return false;
         }
         // Emit CatchCleanup for all active catch scopes before returning
@@ -2375,19 +2634,23 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     // RefForeach (finalize/write-back).
     //
     // A HandlerBarrier entry (pushed by lowerHandlersAtExit around a
-    // handler body being inlined) acts as a hard floor: when we
-    // encounter one on the walk, raise `target_depth` to just below it
-    // so the Scope entry that fired this handler is not revisited.
-    // Without the clamp, a non-local exit inside the handler body would
+    // handler body being inlined) marks the Scope entry that fired the
+    // handler as protected.  Non-local exits from inside the handler must
+    // not revisit that Scope entry, or the same handler range would be
+    // inlined recursively.  Other cleanup entries below the protected Scope
+    // still have to run, especially Lvars, so object destructors fire before
+    // the source-level caller resumes.
+    // Without the protected-scope skip, a non-local exit inside the handler body would
     // recursively re-enter `lowerHandlersAtExit` on the same handler
     // range and infinite-recurse (see 8fb555ac1 for the symmetric fix
     // on TryStatement / RefForeach).  The barrier's own `handler_start`
-    // records the depth the creator of the barrier wants to clamp to.
+    // records the depth just above the Scope entry to protect.
+    size_t protected_scope_index = SIZE_MAX;
     for (size_t j = cleanup_stack.size(); j > target_depth; --j) {
         if (cleanup_stack[j - 1].type == BlockCleanupEntry::HandlerBarrier) {
             const size_t clamp_to = cleanup_stack[j - 1].handler_start;
-            if (clamp_to > target_depth) {
-                target_depth = clamp_to;
+            if (clamp_to > target_depth && clamp_to != 0) {
+                protected_scope_index = clamp_to - 1;
             }
             break;  // only the innermost barrier matters
         }
@@ -2399,6 +2662,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         const BlockCleanupEntry entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
+                if ((i - 1) == protected_scope_index) {
+                    break;
+                }
                 // Clear the runtime OBE registration before executing inline
                 // handler code.  A handler can contain a non-local exit; if the
                 // ScopeExit ran after the inline body, that exit path would
@@ -2949,7 +3215,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // If handler doesn't end with a terminator, add return nothing
         QoreIRBasicBlock* final_block = handler_builder.getBlock();
         if (!final_block || final_block->instructions.empty() ||
-                !isTerminatorOpcode(final_block->instructions.back()->opcode)) {
+                !isTerminator(final_block->instructions.back()->opcode)) {
             handler_builder.createReturnNothing();
         }
 
@@ -3065,7 +3331,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // If handler doesn't end with a terminator, add return nothing
         QoreIRBasicBlock* final_block = handler_builder.getBlock();
         if (!final_block || final_block->instructions.empty() ||
-                !isTerminatorOpcode(final_block->instructions.back()->opcode)) {
+                !isTerminator(final_block->instructions.back()->opcode)) {
             handler_builder.createReturnNothing();
         }
 
@@ -3566,6 +3832,13 @@ static bool isConstIndexListSubscript(const QoreValue& expr,
             reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
         return false;
     }
+    if (vr->ref.id) {
+        const QoreTypeInfo* container_ti = reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo();
+        if (QoreTypeInfo::isType(container_ti, NT_BUFFER)
+                || QoreTypeInfo::getReturnComplexBufferOrNothing(container_ti)) {
+            return false;
+        }
+    }
 
     // Set output parameters and succeed
     container_var = vr;
@@ -3810,6 +4083,11 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (!registry_error.empty()) {
         error = registry_error;
         return QoreIRValue();
+    }
+
+    QoreIRValue plugin_lowered = tryPluginLowering(expr, error);
+    if (plugin_lowered.isValid() || !error.empty()) {
+        return plugin_lowered;
     }
 
     // Dispatch through explicitly claimed expression handlers. Once a handler
@@ -4098,8 +4376,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals, new_hd->loc, nullptr)
                 ->result;
         }
-        const QoreTypeInfo* hd_type_info = qore_substitute_type_params(new_hd->hd->getTypeInfo(),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* hd_type_info = qore_substitute_type_params_if_needed(new_hd->hd->getTypeInfo());
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hd_type_info);
         if (!hd) {
             error = "hashdecl construction target could not be resolved after generic type substitution";
@@ -4148,6 +4425,31 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             return inst->result;
         }
         return builder.createNewComplexList(new_cl, expr, new_cl->loc)->result;
+    }
+    if (auto* new_cb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        if (!new_cb->args.isNothing() && !new_cb->shouldEvaluateWithNode()) {
+            QoreIRValue arg = lowerExpression(new_cb->args, error);
+            if (!arg.isValid()) {
+                return QoreIRValue();
+            }
+            operands.push_back(arg);
+        }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, new_cb->loc);
+            inst->invoke_opcode = QoreIROpcode::NewComplexBuffer;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        auto* inst = builder.createNewComplexBuffer(new_cb, expr, new_cb->loc);
+        inst->operands = std::move(operands);
+        return inst->result;
     }
     // ParseNewComplexTypeNode and ParseNoEvalNode are parse-time-only nodes whose evalImpl()
     // asserts false — they cannot be delegated to AST evaluation
@@ -4543,8 +4845,7 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
         // This ensures local variable references in the hash initializer are properly
         // lowered as individual IR instructions (LoadLocal etc.), enabling correct AOT
         // serialization instead of baking pre-evaluated values into the AST.
-        const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(vrn->getTypeInfo(),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* runtime_type_info = qore_substitute_type_params_if_needed(vrn->getTypeInfo());
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
         if (hd && vrn->isHashDeclConstruct()) {
             // Undo ast_delegate_count: hashdecl args are fully lowered via IR,
@@ -12340,6 +12641,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         virtual_implicit = saved;
 
         bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+        QoreIRValue old_element;
+        QoreIRValue old_argv;
         if (needs_implicit_push) {
             QoreIRFunction* func = builder.getFunction();
 
@@ -12347,22 +12650,19 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             push_elem->result = func->createValue();
             push_elem->operands.push_back(index_val);
             push_elem->loc = ms->loc;
-            QoreIRValue old_element = push_elem->result;
+            old_element = push_elem->result;
 
             auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
             push_argv->result = func->createValue();
             push_argv->operands.push_back(element_val);
             push_argv->loc = ms->loc;
-            QoreIRValue old_argv = push_argv->result;
+            old_argv = push_argv->result;
 
             size_t insert_pos = 1;  // After element load
             body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
                 std::move(push_elem));
             body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
                 std::move(push_argv));
-
-            builder.createPopImplicitArg(old_argv, ms->loc);
-            builder.createPopImplicitElement(old_element, ms->loc);
         }
 
         builder.createListAppend(result_list, map_result, ms->loc);
@@ -12370,6 +12670,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
         // Continue block: increment index, loop back
         builder.setBlock(cont_block);
+
+        if (needs_implicit_push) {
+            builder.createPopImplicitArg(old_argv, ms->loc);
+            builder.createPopImplicitElement(old_element, ms->loc);
+        }
 
         QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,

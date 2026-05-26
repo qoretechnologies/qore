@@ -38,3 +38,4 @@ const QoreParseOptions QoreParseOptions::NO_NEW(0, 1LL << 3);              // bi
 const QoreParseOptions QoreParseOptions::BROKEN_SOFT_TYPES(0, 1LL << 4);   // bit 68
 const QoreParseOptions QoreParseOptions::NO_SUMMARIZE(0, 1LL << 5);        // bit 69
 const QoreParseOptions QoreParseOptions::NO_MODULE_PATH_DIRECTIVES(0, 1LL << 6); // bit 70
+const QoreParseOptions QoreParseOptions::FP_FAST_MATH(0, 1LL << 7);        // bit 71

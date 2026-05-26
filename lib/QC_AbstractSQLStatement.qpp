@@ -29,6 +29,9 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreColumnarResult.h>
+
+#include "qore/intern/QC_ColumnarResult.h"
 
 // Type tag only — `AbstractSQLStatement` is a Qore-language abstract class
 // implemented per-driver (e.g. Qore::SQL::SQLStatement).  No C++ iterator
@@ -47,6 +50,22 @@
 // rows in larger batches via selectRows()/fetchRows(), not to optimise
 // the iterator dispatch.
 class AbstractSQLStatement {};
+
+static QoreObject* qore_abstract_sqlstatement_fetch_columnar(QoreObject* self, int rows, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(rows, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder result(self->evalMethod("fetchColumns", *args, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    return qore_columnar_result_to_object(
+        qore_columnar_result_from_value(*result, nullptr, "AbstractSQLStatement::fetchColumns()", xsink), xsink);
+}
 
 //! This class defines an abstract interface for the @ref Qore::SQL::SQLStatement "SQLStatement" class
 /** @since %Qore 0.9.0
@@ -522,6 +541,33 @@ hash<auto> h = stmt.fetchColumns(-1);
     - Exceptions could be thrown by the DBI driver when the statement is prepared or when attempting to bind the given arguments to buffer specifications or when the statement is executed or when row values are retrieved; see the relevant DBI driver docs for more information
 */
 abstract hash<auto> AbstractSQLStatement::fetchColumns(softint rows = -1) [flags=NAMED_ARGS];
+
+//! Retrieves a block of rows as a columnar result; automatically advances the row pointer
+/** If the argument passed is omitted or less than or equal to zero, then all available rows from the current row
+    position are retrieved; if fewer rows are available than requested, then only the rows available are retrieved.
+
+    The base implementation keeps existing AbstractSQLStatement subclasses source-compatible by calling
+    AbstractSQLStatement::fetchColumns() and converting the returned column hash.
+
+    @param rows The maximum number of rows to retrieve, if this argument is omitted, negative, or equal to zero, then
+    all available rows from the current row position are retrieved
+
+    @return a ColumnarResult object
+
+    @par Example:
+    @code{.py}
+ColumnarResult result = stmt.fetchColumnar(rows: -1);
+buffer<int64> ids = result.getColumn("id");
+    @endcode
+
+    @throw SQLSTATEMENT-ERROR No %SQL has been set with AbstractSQLStatement::prepare() or
+    AbstractSQLStatement::prepareRaw()
+
+    @since %Qore 2.3
+*/
+ColumnarResult AbstractSQLStatement::fetchColumnar(softint rows = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_abstract_sqlstatement_fetch_columnar(self, (int)rows, xsink);
+}
 
 //! Describes columns in the statement result.
 /**

@@ -85,7 +85,7 @@ public class DpqlActionSession {
         /** When True, search expression validation rules are enforced:
             - Field references can only be used with server-supported operators
             - At least one condition must reference a record field
-            - Qorus-only operators cannot contain field references
+            - Local-only operators cannot contain field references
 
             @since DataProvider 3.4
         */

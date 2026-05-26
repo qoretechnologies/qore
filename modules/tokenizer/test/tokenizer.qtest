@@ -10,6 +10,8 @@
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/tokenizer"
+
 %try-module json
 %define NoJson
 %endtry
@@ -38,7 +40,9 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("truncationTest", \truncationTest());
         addTestCase("paddingTest", \paddingTest());
         addTestCase("batchEncodingTest", \batchEncodingTest());
+        addTestCase("modelInputTensorBatchTest", \modelInputTensorBatchTest());
         addTestCase("unicodeDigitTest", \unicodeDigitTest());
+        addTestCase("replaceRegexNormalizerTest", \replaceRegexNormalizerTest());
         addTestCase("decoderCleanupTest", \decoderCleanupTest());
         addTestCase("wordIdsTest", \wordIdsTest());
         addTestCase("addTokensTest", \addTokensTest());
@@ -184,6 +188,35 @@ class TokenizerTest inherits QUnit::Test {
         hash<auto> enc3 = tok.encode("café résumé naïve");
         assertTrue(enc3.input_ids.size() > 2,
             "accented input should tokenize without crash");
+    }
+
+    replaceRegexNormalizerTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        hash<auto> config = {
+            "normalizer": {
+                "type": "Replace",
+                "pattern": {"Regex": "[0-9]+"},
+                "content": " NUM ",
+            },
+            "pre_tokenizer": {"type": "WhitespaceSplit"},
+            "model": {
+                "type": "WordPiece",
+                "vocab": {
+                    "[UNK]": 0,
+                    "abc": 1,
+                    "NUM": 2,
+                    "def": 3,
+                },
+                "unk_token": "[UNK]",
+            },
+        };
+        Tokenizer::HFTokenizer tok(config);
+
+        hash<auto> enc = tok.encode("abc123def456");
+        assertEq((1, 2, 3, 2), enc.input_ids,
+            "Replace normalizer should support HuggingFace Regex patterns");
     }
 
     vocabLookupTest() {
@@ -392,6 +425,65 @@ class TokenizerTest inherits QUnit::Test {
         assertEq(2, batch.size(), "batch should have 2 elements");
         assertEq(batch[0].input_ids.size(), batch[1].input_ids.size(),
             "batch elements should have same length");
+    }
+
+    modelInputTensorBatchTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        hash<Tokenizer::TokenizerModelInputBatch> single = tok.encodeForModel("hi", {
+            "max_length": 8,
+            "truncation": "longest_first",
+            "padding": "max_length",
+        });
+        assertEq((1, 8), single.shape, "single model input shape");
+        assertEq(1, single.rows, "single model input rows");
+        assertEq(8, single.columns, "single model input columns");
+        assertEq("buffer<int64>", single.input_ids.fullType(), "input_ids dense int64 buffer");
+        assertEq((101, 7632, 102, 0, 0, 0, 0, 0), single.input_ids.toList(),
+            "single input_ids match padded encodeAdvanced output");
+        assertEq((1, 1, 1, 0, 0, 0, 0, 0), single.attention_mask.toList(),
+            "single attention mask marks padding");
+        assertEq((3,), single.sequence_lengths.toList(), "single sequence length before padding");
+
+        hash<Tokenizer::TokenizerModelInputBatch> batch = tok.encodeBatchForModel(
+            ("short", "a much longer sentence for testing"), {
+                "max_length": 10,
+                "truncation": "longest_first",
+                "padding": "batch_longest",
+            });
+        assertEq(2, batch.rows, "batch model input rows");
+        assertTrue(batch.columns <= 10, "batch model input respects max_length");
+        assertEq(batch.rows * batch.columns, batch.input_ids.size(),
+            "batch input buffer has row-major element count");
+        assertEq(batch.input_ids.size(), batch.attention_mask.size(),
+            "attention mask buffer length matches input IDs");
+        assertEq(batch.input_ids.size(), batch.token_type_ids.size(),
+            "token type buffer length matches input IDs");
+        assertEq((3, batch.columns), batch.sequence_lengths.toList(),
+            "batch sequence lengths preserve unpadded row widths");
+
+        hash<Tokenizer::TokenizerModelInputBatch> pairs = tok.encodeBatchPairsForModel(
+            ("What is AI?", "What is ML?"),
+            ("AI is intelligence.", "ML uses data."), {
+                "max_length": 16,
+                "truncation": "longest_first",
+                "padding": "batch_longest",
+            });
+        assertEq(2, pairs.rows, "pair batch model input rows");
+        assertTrue(pairs.token_type_ids.toList().contains(1),
+            "pair batch token_type_ids mark second sequence");
+
+        assertThrows("TOKENIZER-ERROR", sub() {
+            tok.encodeBatchPairsForModel(("a",), ("b", "c"), {});
+        });
     }
 
     errorCasesTest() {

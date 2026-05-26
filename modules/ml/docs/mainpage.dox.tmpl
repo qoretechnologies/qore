@@ -13,6 +13,59 @@
     implementations of common ML algorithms. Optional ONNX Runtime support allows running
     pre-trained models from frameworks like PyTorch, scikit-learn, and TensorFlow.
 
+    @section mldata Matrix, DataFrame, and Pipeline Data
+
+    The core \c ml module is intentionally matrix-oriented and does not depend on
+    the \c dataframe module.  This keeps the binary module small and usable in
+    installations that do not need DataFrame APIs.  Use row matrices
+    (\c list<list<float>>) or list-of-record hashes for direct model APIs, and
+    use DataFrame conversion or DataProviderML processors when the source data is
+    columnar.
+
+    @par DataFrame to matrix example:
+    @code{.py}
+%requires dataframe
+%requires ml
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10.0, 11.0, 3.0, 10.0),
+});
+
+list<auto> matrix = df.toMatrix(("amount", "hour"));
+
+Qore::ML::StandardScaler scaler();
+scaler.fitMatrix(matrix);
+list<auto> scaled = scaler.transformMatrix(matrix);
+    @endcode
+
+    @par Shape-aware pipeline example:
+    @code{.py}
+%requires dataframe
+%requires DataProviderML
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10.0, 11.0, 3.0, 10.0),
+});
+
+DataProviderML::QoreIsolationForestProcessor proc({
+    "fields": "amount,hour",
+    "window_size": 4,
+});
+
+hash<auto> events = proc.processRecordsShape(
+    df, DataProviderShape::DataFrameBlock);
+    @endcode
+
+    \c DataProviderML processors also accept \c BufferColumns input,
+    including @ref Qore::SQL::ColumnarResult "ColumnarResult" values
+    produced by SQL queries.  Rectangular bulk outputs preserve
+    \c DataFrameBlock or \c BufferColumns shapes when possible so downstream
+    shape-aware processors can continue in columnar bulk mode; processors with
+    naturally row-oriented or multi-output responses keep \c HashOfLists or row
+    compatibility.
+
     @section mlalgorithms Available Algorithms
 
     @subsection mlalgo_table Algorithm Overview
@@ -321,8 +374,23 @@
     When compiled with ONNX Runtime support, the module provides:
     - @ref Qore::ML::OnnxModel "OnnxModel" — Loads and runs pre-trained ONNX models for inference.
       For example, a credit scoring model trained in scikit-learn can be exported to ONNX and
-      deployed in a %Qore pipeline for real-time scoring. Supports float, double, int32, and
-      int64 tensor types. ONNX Runtime sessions are thread-safe for concurrent inference.
+      deployed in a %Qore pipeline for real-time scoring. Supports float, double, int8, int16,
+      int32, int64, and bool tensor types. ONNX Runtime sessions are thread-safe for concurrent
+      inference. The \c run(), \c runTensors(), and \c runBatch() methods accept optional
+      output tensor names so multi-output models can materialize only the values needed by
+      the caller.
+    - @ref Qore::ML::OnnxSessionPool "OnnxSessionPool" — Keeps a bounded set of immutable
+      ONNX sessions ready for concurrent service requests. Use it when production traffic needs
+      explicit limits for session count, concurrent runs, queue depth, and acquisition timeout.
+      The pool also supports ordered \c runBatch() chunking with \c dynamic_batch_size so large
+      request lists can be split into stable mini-batches without changing result order. The
+      Future-returning \c runAsync(), \c runTensorsAsync(), and \c runBatchAsync() methods let
+      service handlers submit work without blocking; when \c dynamic_batch_size and
+      \c dynamic_batch_wait_ms are configured, concurrent \c runAsync() callers are coalesced
+      into ordered batches and each Future resolves to its own result.
+    - @ref Qore::ML::Tensor "Tensor" — Dense tensor wrapper around \c buffer<T> plus explicit
+      shape metadata. Use it with @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()"
+      to avoid converting large numeric inputs and outputs through nested lists.
 
     To check ONNX availability at runtime:
     @code{.py}
@@ -330,6 +398,66 @@ hash<Qore::ML::MLCapabilities> caps = Qore::ML::ml_get_capabilities();
 if (caps.has_onnx) {
     Qore::ML::OnnxModel model("/path/to/model.onnx");
     hash<auto> result = model.run({"input": data});
+    hash<auto> scores = model.run({"input": data}, ("probabilities",));
+
+    Qore::ML::Tensor dense(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+    hash<auto> tensor_result = model.runTensors({"input": dense}, ("output",));
+    Qore::ML::Tensor output = tensor_result.output;
+    printf("output dtype=%s shape=%y\n", output.getDtype(), output.getShape());
+
+    Qore::ML::OnnxSessionPool pool("/path/to/model.onnx",
+        <Qore::ML::OnnxSessionConfig>{"providers": ()}, {
+            "max_sessions": 4,
+            "queue_depth": 64,
+            "timeout_ms": 250,
+            "dynamic_batch_size": 128,
+            "dynamic_batch_wait_ms": 2,
+        });
+    hash<auto> pooled_result = pool.run({"input": data});
+    hash<auto> pooled_scores = pool.run({"input": data}, ("probabilities",));
+    Future<hash<auto>> pooled_future = pool.runAsync({"input": data});
+    hash<auto> async_result = pooled_future.get(5s);
+    hash<auto> pool_stats = pool.getPoolStats();
+
+    # Pack dense DataFrame columns directly into a row-major model tensor.
+    Qore::ML::Tensor features = Qore::ML::Tensor::fromColumns((
+        df.getColumnBuffer("income"),
+        df.getColumnBuffer("debt_ratio"),
+        df.getColumnBuffer("history_months"),
+    ), "float32");
+
+    # Reshape and row-slice tensors without materializing nested lists.
+    Qore::ML::Tensor flat = features.reshape((features.size(),));
+    Qore::ML::Tensor first_batch = features.sliceRows(offset: 0, count: 128);
+    Qore::ML::Tensor next_batch = features.sliceRows(offset: 128, count: 128);
+    Qore::ML::Tensor combined = Qore::ML::Tensor::concatRows((first_batch, next_batch));
+
+    # Postprocess ONNX transformer outputs while they are still dense tensors.
+    # "last_hidden_state" has shape (batch, tokens, embedding_dim); "attention_mask"
+    # has shape (batch, tokens). The result has shape (batch, embedding_dim).
+    Qore::ML::Tensor input_ids(data: new buffer<int64>((101, 2023, 2003, 102)), shape: (1, 4));
+    Qore::ML::Tensor attention_mask(data: new buffer<int64>((1, 1, 1, 1)), shape: (1, 4));
+    hash<auto> token_outputs = model.runTensors({
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+    });
+    Qore::ML::Tensor sentence_embeddings = token_outputs.last_hidden_state
+        .poolTokenEmbeddings(attention_mask: attention_mask, strategy: "mean")
+        .l2NormalizeRows();
+
+    # Classifier and reranker logits can also be postprocessed natively.
+    Qore::ML::Tensor logits(data: new buffer<float32>((0.2, 2.4, -0.7, 1.1, 0.4, 3.2)), shape: (2, 3));
+    Qore::ML::Tensor probabilities = logits.sigmoid();
+    Qore::ML::Tensor labels = logits.argmax(axis: -1);
+    hash<auto> top3 = logits.topK(k: 2, axis: -1);
+
+    # Split rank-2 ONNX outputs directly into dense DataFrame columns.
+    list<auto> probability_columns = logits.toColumnBuffers();
+    DataFrame::DataFrame scored({
+        "class_0": probability_columns[0],
+        "class_1": probability_columns[1],
+        "class_2": probability_columns[2],
+    });
 }
     @endcode
 
@@ -670,11 +798,50 @@ if (!caps.has_onnx) {
 
     # Score a loan application: income, debt_ratio, credit_history_months, ...
     hash<auto> result = credit_model.run({"X": ((75000.0, 0.28, 120.0),)});
+    hash<auto> probabilities = credit_model.run(
+        {"X": ((75000.0, 0.28, 120.0),)}, ("probabilities",));
     printf("Credit score: %y\n", result);
 }
     @endcode
 
     @section mlreleasenotes ml Module Release Notes
+
+    @subsection ml_1_1 ml Module Version 1.1
+    - Added @ref Qore::ML::Tensor "Tensor" and
+      @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()" for dense
+      ONNX inference with \c buffer<T> storage and explicit shape metadata
+    - @ref Qore::ML::OnnxModel::run() "OnnxModel::run()",
+      @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()",
+      @ref Qore::ML::OnnxModel::runBatch() "OnnxModel::runBatch()", and the
+      synchronous @ref Qore::ML::OnnxSessionPool "OnnxSessionPool" inference
+      methods can request selected ONNX output tensors by name, avoiding
+      unnecessary materialization for multi-output models
+    - Added @ref Qore::ML::Tensor::fromColumns() "Tensor::fromColumns()" to
+      pack equal-length dense column buffers into a row-major tensor without
+      row hash or nested list materialization
+    - Added @ref Qore::ML::Tensor::reshape() "Tensor::reshape()",
+      @ref Qore::ML::Tensor::sliceRows() "Tensor::sliceRows()", and
+      @ref Qore::ML::Tensor::concatRows() "Tensor::concatRows()" for
+      zero-copy tensor reshaping, row slicing, and native batch assembly
+    - Added @ref Qore::ML::Tensor::sigmoid() "Tensor::sigmoid()",
+      @ref Qore::ML::Tensor::softmax() "Tensor::softmax()",
+      @ref Qore::ML::Tensor::argmax() "Tensor::argmax()",
+      @ref Qore::ML::Tensor::topK() "Tensor::topK()",
+      @ref Qore::ML::Tensor::poolTokenEmbeddings() "Tensor::poolTokenEmbeddings()",
+      and @ref Qore::ML::Tensor::l2NormalizeRows() "Tensor::l2NormalizeRows()"
+      for dense ONNX postprocessing without nested list materialization
+    - Added @ref Qore::ML::Tensor::toColumnBuffers() "Tensor::toColumnBuffers()"
+      to split rank-1 and rank-2 tensor outputs into dense column buffers for
+      DataFrame and DataProvider pipelines
+    - ONNX tensor conversion now supports float, double, int8, int16, int32,
+      int64, and bool inputs and outputs
+    - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now
+      falls back to CPU when an advertised GPU provider cannot create a session,
+      for example when CUDA libraries are not installed; explicit provider
+      configurations still report provider initialization errors to the caller
+    - DataFrame and columnar workflows are documented through
+      \c DataFrame::toMatrix() for direct model APIs and through shape-aware
+      \c DataProviderML processors for pipeline use
 
     @subsection ml_1_0 ml Module Version 1.0
     - Initial release with native ML algorithms, preprocessing tools, feature engineering,

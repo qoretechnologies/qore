@@ -55,6 +55,7 @@
 #include "QC_AbstractConstant.h"
 #include "QC_ClassConstant.h"
 #include "QC_Type.h"
+#include "QC_PluginRegistry.h"
 #include "QC_Namespace.h"
 #include "QC_Constant.h"
 #include "QC_GlobalVar.h"
@@ -117,6 +118,7 @@ static void reflection_module_init(QoreModuleInitContext& ctx, ExceptionSink& xs
     preinitAbstractConstantClass();
     preinitClassConstantClass();
     preinitTypeClass();
+    preinitPluginRegistryClass();
     preinitNamespaceClass();
     preinitConstantClass();
     preinitGlobalVarClass();
@@ -158,6 +160,7 @@ static void reflection_module_init(QoreModuleInitContext& ctx, ExceptionSink& xs
     ReflectionNS.addSystemClass(initAbstractConstantClass(ReflectionNS));
     ReflectionNS.addSystemClass(initClassConstantClass(ReflectionNS));
     ReflectionNS.addSystemClass(initTypeClass(ReflectionNS));
+    ReflectionNS.addSystemClass(initPluginRegistryClass(ReflectionNS));
     ReflectionNS.addSystemClass(initNamespaceClass(ReflectionNS));
     ReflectionNS.addSystemClass(initConstantClass(ReflectionNS));
     ReflectionNS.addSystemClass(initGlobalVarClass(ReflectionNS));

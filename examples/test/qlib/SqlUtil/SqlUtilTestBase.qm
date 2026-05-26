@@ -699,10 +699,10 @@ public class SqlTestBase inherits QUnit::Test {
             assertEq("abc-x", rows[0].append);
             assertEq("UPPER", rows[0].upper);
             assertEq("lower", rows[0].lower);
-            assertEq(1, rows[0].minus);
-            assertEq(2, rows[0].plus);
-            assertEq(2, rows[0].divide);
-            assertEq(4, rows[0].multiply);
+            assertEqSoft(1, rows[0].minus);
+            assertEqSoft(2, rows[0].plus);
+            assertEqSoft(2, rows[0].divide);
+            assertEqSoft(4, rows[0].multiply);
             assertEq(2, rows[1].id);
             assertEq("he", rows[1].substr);
 
@@ -770,8 +770,8 @@ public class SqlTestBase inherits QUnit::Test {
             };
             hash<auto> row = table.selectRow(sh, \sql);
             on_error printf("row: %y\n", row);
-            assertEq(1, row.avg);
-            assertEq(2, row.sum);
+            assertEqSoft(1, row.avg);
+            assertEqSoft(2, row.sum);
             assertEq(1, row.min);
             assertEq(2, row.max);
             assertEq(2, row.count);

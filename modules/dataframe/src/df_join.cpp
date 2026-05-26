@@ -28,6 +28,36 @@ static void ensureFloatCapacity(Eigen::VectorXd& vec, int64_t needed) {
     vec.conservativeResize(new_cap);
 }
 
+// Reserve append capacity for a column while keeping n_rows as the logical size.
+static void reserveAppendCapacity(QoreDataFrameNS::ColumnData& col, int64_t rows) {
+    if (rows <= 0) {
+        return;
+    }
+    col.null_mask.reserve(rows);
+    switch (col.type) {
+        case QoreDataFrameNS::ColumnType::INT64:
+            col.int_data.reserve(rows);
+            break;
+        case QoreDataFrameNS::ColumnType::FLOAT64:
+            ensureFloatCapacity(col.float_data, rows);
+            break;
+        case QoreDataFrameNS::ColumnType::STRING:
+            col.str_data.reserve(rows);
+            break;
+        case QoreDataFrameNS::ColumnType::BOOL:
+            col.bool_data.reserve(rows);
+            break;
+        case QoreDataFrameNS::ColumnType::DATE:
+            col.date_data.reserve(rows);
+            break;
+        case QoreDataFrameNS::ColumnType::AUTO:
+            col.auto_data.reserve(rows);
+            break;
+        default:
+            break;
+    }
+}
+
 namespace QoreDataFrameNS {
 
 // Build a string key from column values at a given row index
@@ -58,6 +88,11 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
                 case ColumnType::DATE:
                     key += std::to_string(cd.date_data[row]);
                     break;
+                case ColumnType::AUTO: {
+                    QoreStringValueHelper sh(cd.auto_data[row]);
+                    key += sh->c_str();
+                    break;
+                }
                 default:
                     break;
             }
@@ -95,6 +130,9 @@ static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
                 case ColumnType::DATE:
                     dest.date_data.push_back(0);
                     break;
+                case ColumnType::AUTO:
+                    dest.appendAutoValue(QoreValue());
+                    break;
                 default:
                     break;
             }
@@ -116,6 +154,9 @@ static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
                     break;
                 case ColumnType::DATE:
                     dest.date_data.push_back(src.date_data[row_idx]);
+                    break;
+                case ColumnType::AUTO:
+                    dest.appendAutoValue(src.auto_data[row_idx]);
                     break;
                 default:
                     break;
@@ -242,11 +283,236 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         right_key_indices.push_back(rit->second);
     }
 
+    bool single_int64_key = left_key_indices.size() == 1
+        && columns[left_key_indices[0]].data->type == ColumnType::INT64
+        && other->columns[right_key_indices[0]].data->type == ColumnType::INT64;
+
     // Build hash table from the right DataFrame: key → list of row indices
     std::unordered_map<std::string, std::vector<int64_t>> right_hash;
-    for (int64_t r = 0; r < other->n_rows; ++r) {
-        std::string key = buildJoinKey(right_key_indices, other->columns, r);
-        right_hash[key].push_back(r);
+    std::unordered_map<int64_t, std::vector<int64_t>> right_int64_hash;
+    std::unordered_map<int64_t, int64_t> right_int64_unique_hash;
+    std::vector<int64_t> right_null_rows;
+    bool unique_right_keys = false;
+    if (single_int64_key && how == "left") {
+        unique_right_keys = true;
+        right_int64_unique_hash.reserve(other->n_rows);
+        const ColumnData& rkey = *other->columns[right_key_indices[0]].data;
+        for (int64_t r = 0; r < other->n_rows; ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                return nullptr;
+            }
+            if (rkey.isNull(r)) {
+                if (!right_null_rows.empty()) {
+                    unique_right_keys = false;
+                    break;
+                }
+                right_null_rows.push_back(r);
+            } else {
+                auto inserted = right_int64_unique_hash.emplace(rkey.int_data[r], r);
+                if (!inserted.second) {
+                    unique_right_keys = false;
+                    break;
+                }
+            }
+        }
+
+        if (!unique_right_keys) {
+            right_null_rows.clear();
+            right_int64_unique_hash.clear();
+        }
+    }
+
+    if (single_int64_key && !unique_right_keys) {
+        right_int64_hash.reserve(other->n_rows);
+        const ColumnData& rkey = *other->columns[right_key_indices[0]].data;
+        for (int64_t r = 0; r < other->n_rows; ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                return nullptr;
+            }
+            if (rkey.isNull(r)) {
+                right_null_rows.push_back(r);
+            } else {
+                right_int64_hash[rkey.int_data[r]].push_back(r);
+            }
+        }
+    } else if (!single_int64_key) {
+        right_hash.reserve(other->n_rows);
+        for (int64_t r = 0; r < other->n_rows; ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                return nullptr;
+            }
+            std::string key = buildJoinKey(right_key_indices, other->columns, r);
+            right_hash[key].push_back(r);
+        }
+    }
+
+    if (single_int64_key && how == "left") {
+        if (unique_right_keys) {
+            const ColumnData& lkey = *columns[left_key_indices[0]].data;
+            std::vector<int64_t> right_row_for_left(n_rows, -1);
+            for (int64_t l = 0; l < n_rows; ++l) {
+                if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                    return nullptr;
+                }
+                if (lkey.isNull(l)) {
+                    if (!right_null_rows.empty()) {
+                        right_row_for_left[l] = right_null_rows[0];
+                    }
+                } else {
+                    auto i = right_int64_unique_hash.find(lkey.int_data[l]);
+                    if (i != right_int64_unique_hash.end()) {
+                        right_row_for_left[l] = i->second;
+                    }
+                }
+            }
+
+            auto* fast_df = new QoreDataFrame();
+            fast_df->n_rows = n_rows;
+
+            for (size_t i = 0; i < left_key_indices.size(); ++i) {
+                const Column& src = columns[left_key_indices[i]];
+                Column out_col;
+                out_col.name = src.name;
+                out_col.data = src.data;
+                fast_df->col_index[out_col.name] = fast_df->columns.size();
+                fast_df->columns.push_back(std::move(out_col));
+            }
+
+            for (size_t i = 0; i < columns.size(); ++i) {
+                if (key_names.count(columns[i].name)) {
+                    continue;
+                }
+                Column out_col;
+                out_col.name = columns[i].name;
+                out_col.data = columns[i].data;
+                fast_df->col_index[out_col.name] = fast_df->columns.size();
+                fast_df->columns.push_back(std::move(out_col));
+            }
+
+            for (size_t i = 0; i < other->columns.size(); ++i) {
+                if (key_names.count(other->columns[i].name)) {
+                    continue;
+                }
+
+                const Column& src_col = other->columns[i];
+                const ColumnData& src = *src_col.data;
+                auto cd = std::make_shared<ColumnData>();
+                cd->type = src.type;
+                cd->n_rows = n_rows;
+                cd->null_mask.resize(n_rows, 0);
+
+                switch (src.type) {
+                    case ColumnType::INT64:
+                        cd->int_data.resize(n_rows);
+                        for (int64_t l = 0; l < n_rows; ++l) {
+                            if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                                delete fast_df;
+                                return nullptr;
+                            }
+                            int64_t r = right_row_for_left[l];
+                            if (r < 0 || src.isNull(r)) {
+                                cd->null_mask[l] = 1;
+                                cd->int_data[l] = 0;
+                            } else {
+                                cd->int_data[l] = src.int_data[r];
+                            }
+                        }
+                        break;
+                    case ColumnType::FLOAT64:
+                        cd->float_data.resize(n_rows);
+                        for (int64_t l = 0; l < n_rows; ++l) {
+                            if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                                delete fast_df;
+                                return nullptr;
+                            }
+                            int64_t r = right_row_for_left[l];
+                            if (r < 0 || src.isNull(r)) {
+                                cd->null_mask[l] = 1;
+                                cd->float_data(l) = std::numeric_limits<double>::quiet_NaN();
+                            } else {
+                                cd->float_data(l) = src.float_data(r);
+                            }
+                        }
+                        break;
+                    case ColumnType::STRING:
+                        cd->str_data.resize(n_rows);
+                        for (int64_t l = 0; l < n_rows; ++l) {
+                            if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                                delete fast_df;
+                                return nullptr;
+                            }
+                            int64_t r = right_row_for_left[l];
+                            if (r < 0 || src.isNull(r)) {
+                                cd->null_mask[l] = 1;
+                            } else {
+                                cd->str_data[l] = src.str_data[r];
+                            }
+                        }
+                        break;
+                    case ColumnType::BOOL:
+                        cd->bool_data.resize(n_rows);
+                        for (int64_t l = 0; l < n_rows; ++l) {
+                            if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                                delete fast_df;
+                                return nullptr;
+                            }
+                            int64_t r = right_row_for_left[l];
+                            if (r < 0 || src.isNull(r)) {
+                                cd->null_mask[l] = 1;
+                                cd->bool_data[l] = 0;
+                            } else {
+                                cd->bool_data[l] = src.bool_data[r];
+                            }
+                        }
+                        break;
+                    case ColumnType::DATE:
+                        cd->date_data.resize(n_rows);
+                        for (int64_t l = 0; l < n_rows; ++l) {
+                            if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                                delete fast_df;
+                                return nullptr;
+                            }
+                            int64_t r = right_row_for_left[l];
+                            if (r < 0 || src.isNull(r)) {
+                                cd->null_mask[l] = 1;
+                                cd->date_data[l] = 0;
+                            } else {
+                                cd->date_data[l] = src.date_data[r];
+                            }
+                        }
+                        break;
+                    case ColumnType::AUTO:
+                        cd->auto_data.resize(n_rows);
+                        for (int64_t l = 0; l < n_rows; ++l) {
+                            if (l && !(l % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
+                                delete fast_df;
+                                return nullptr;
+                            }
+                            int64_t r = right_row_for_left[l];
+                            if (r < 0 || src.isNull(r)) {
+                                cd->null_mask[l] = 1;
+                            } else {
+                                cd->setAutoValue(l, src.auto_data[r], xsink);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+
+                std::string name = src_col.name;
+                if (fast_df->col_index.count(name)) {
+                    name += "_right";
+                }
+                Column out_col;
+                out_col.name = name;
+                out_col.data = std::move(cd);
+                fast_df->col_index[out_col.name] = fast_df->columns.size();
+                fast_df->columns.push_back(std::move(out_col));
+            }
+
+            return fast_df;
+        }
     }
 
     // Set up output columns: key columns + left non-key + right non-key
@@ -319,18 +585,47 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         right_dest.push_back(df->columns[right_nonkey_start + i].data);
     }
 
+    int64_t reserve_rows = (how == "right") ? other->n_rows : n_rows;
+    if (how == "outer") {
+        reserve_rows += other->n_rows;
+    }
+    for (auto& col : df->columns) {
+        reserveAppendCapacity(*col.data, reserve_rows);
+    }
+
     // Track which right rows were matched (for right/outer joins)
     std::vector<bool> right_matched(other->n_rows, false);
 
     // Probe: iterate left rows
     int64_t result_rows = 0;
+    const ColumnData* left_int64_key = single_int64_key ? columns[left_key_indices[0]].data.get() : nullptr;
     for (int64_t l = 0; l < n_rows; ++l) {
-        std::string key = buildJoinKey(left_key_indices, columns, l);
-        auto it = right_hash.find(key);
+        const std::vector<int64_t>* matched_rows = nullptr;
+        std::unordered_map<std::string, std::vector<int64_t>>::const_iterator string_it;
+        std::unordered_map<int64_t, std::vector<int64_t>>::const_iterator int_it;
 
-        if (it != right_hash.end()) {
+        if (single_int64_key) {
+            if (left_int64_key->isNull(l)) {
+                if (!right_null_rows.empty()) {
+                    matched_rows = &right_null_rows;
+                }
+            } else {
+                int_it = right_int64_hash.find(left_int64_key->int_data[l]);
+                if (int_it != right_int64_hash.end()) {
+                    matched_rows = &int_it->second;
+                }
+            }
+        } else {
+            std::string key = buildJoinKey(left_key_indices, columns, l);
+            string_it = right_hash.find(key);
+            if (string_it != right_hash.end()) {
+                matched_rows = &string_it->second;
+            }
+        }
+
+        if (matched_rows) {
             // Matched: emit one output row per right match
-            for (int64_t r : it->second) {
+            for (int64_t r : *matched_rows) {
                 appendRow(key_dest, columns, out_key_src, l);
                 appendRow(left_dest, columns, left_nonkey_src, l);
                 appendRow(right_dest, other->columns, right_nonkey_src, r);

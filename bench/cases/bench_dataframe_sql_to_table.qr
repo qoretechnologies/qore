@@ -1,0 +1,59 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameSqlToTable
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameSqlToTable {
+    constructor() {
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            printf("dataframe_sql_to_table: skipped (QORE_DB_CONNSTR_PGSQL not set)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataframe_sql_to_table");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::sqlRows() / 2;
+        DataFrame::DataFrame df;
+        Datasource ds(connstr);
+        try {
+            ds.open();
+            ds.close();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("dataframe_sql_to_table: skipped (%s: %s)\n", ex.err, ex.desc);
+            exit(0);
+        }
+
+        r.setup = sub () {
+            df = DataFrameBench::makeFrame(rows);
+            ds.open();
+            ds.exec("DROP TABLE IF EXISTS qore_df_bench_insert");
+            ds.exec("CREATE TABLE qore_df_bench_insert ("
+                "id int, customer_id int, status text, amount float8, score float8, region text, flag bool)");
+            ds.commit();
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            ds.exec("TRUNCATE qore_df_bench_insert");
+            df.toTable(ds, "qore_df_bench_insert");
+            ds.commit();
+        };
+
+        int rc = r.run();
+        ds.exec("DROP TABLE IF EXISTS qore_df_bench_insert");
+        ds.commit();
+        ds.close();
+        exit(rc);
+    }
+}

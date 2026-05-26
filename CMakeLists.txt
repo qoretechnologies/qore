@@ -262,6 +262,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_SingleValueIterator.qpp
     lib/QC_AbstractDatasource.qpp
     lib/QC_AbstractSQLStatement.qpp
+    lib/QC_ColumnarResult.qpp
     lib/QC_RangeIterator.qpp
     lib/QC_StringSplitIterator.qpp
     lib/QC_StringRegexSplitIterator.qpp
@@ -382,6 +383,7 @@ set(PSEUDO_QPP_SRC
     lib/Pseudo_QC_String.qpp
     lib/Pseudo_QC_Binary.qpp
     lib/Pseudo_QC_List.qpp
+    lib/Pseudo_QC_Buffer.qpp
     lib/Pseudo_QC_Bool.qpp
     lib/Pseudo_QC_Int.qpp
     lib/Pseudo_QC_Float.qpp
@@ -408,6 +410,7 @@ set(QORE_BIN_FILES
     bin/qore-i18n
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
+    bin/qore-onnx
     bin/qdiff
     bin/qfmt
     bin/qpatch
@@ -449,7 +452,9 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/218_enums.dox.tmpl
     doxygen/lang/220_threading.dox.tmpl
     doxygen/lang/222_sandboxing.dox.tmpl
+    doxygen/lang/224_plugin_types.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
+    doxygen/lang/226_ai_model_deployment.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl
     doxygen/lang/240_command_line_processing.dox.tmpl
@@ -1382,6 +1387,8 @@ set(LIBQORE_CPP_SRC
     lib/DateTimeNode.cpp
     lib/qore_date_private.cpp
     lib/QoreHashNode.cpp
+    lib/QoreBufferNode.cpp
+    lib/QoreColumnarResult.cpp
     lib/BinaryNode.cpp
     lib/QoreNumberNode.cpp
     lib/QoreNullNode.cpp
@@ -1419,6 +1426,7 @@ set(LIBQORE_CPP_SRC
     lib/support.cpp
     lib/QoreType.cpp
     lib/ModuleManager.cpp
+    lib/QorePluginRegistry.cpp
     lib/QoreException.cpp
     lib/ExceptionSink.cpp
     lib/QoreStandardException.cpp
@@ -1719,6 +1727,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTimeNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/qore_date_private.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHashNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBufferNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreColumnarResult.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/BinaryNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNumberNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNullNode.cpp\"
@@ -1763,6 +1773,7 @@ if (SINGLE_COMPILATION_UNIT)
 #endif
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreType.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ModuleManager.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePluginRegistry.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreException.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ExceptionSink.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreStandardException.cpp\"
@@ -2021,6 +2032,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_ThreadPool.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractDatasource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractSQLStatement.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ColumnarResult.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Datasource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_DatasourcePool.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractConnectionPool.cpp\"
@@ -2283,6 +2295,111 @@ add_executable(qore ${QORE_CPP_SRC})
 target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
+
+if (SINGLE_COMPILATION_UNIT)
+    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC})
+else (SINGLE_COMPILATION_UNIT)
+    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC})
+endif (SINGLE_COMPILATION_UNIT)
+
+add_executable(qore-ir-phase0-smoke EXCLUDE_FROM_ALL
+    examples/test/ir/phase0_metadata_smoke.cpp
+    ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
+add_dependencies(qore-ir-phase0-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
+target_compile_definitions(qore-ir-phase0-smoke PRIVATE
+    _QORE_LIB_INTERN
+    HAVE_UNIX_CONFIG_H
+    MODULE_DIR="${MODULE_DIR}"
+    MODULE_VER_DIR="${MODULE_VER_DIR}"
+    USER_MODULE_DIR="${USER_MODULE_DIR}"
+    USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}"
+    QORE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}")
+if (APPLE)
+    target_compile_definitions(qore-ir-phase0-smoke PRIVATE __APPLE_USE_RFC_3542)
+endif()
+target_include_directories(qore-ir-phase0-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${BZIP2_INCLUDE_DIR}
+    ${ICONV_INCLUDE_DIR}
+    ${MPFR_INCLUDE_DIRS}
+    ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+    ${PCRE2_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
+    ${LLVM_INCLUDE_DIRS})
+target_link_libraries(qore-ir-phase0-smoke PRIVATE ${QORE_LIBS})
+if(LLVM_LIBS)
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE ${LLVM_LIBS})
+elseif(TARGET LLVM::LLVM)
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE LLVM::LLVM)
+endif()
+if (WIN32 OR MINGW OR MSYS)
+    target_compile_definitions(qore-ir-phase0-smoke PRIVATE BUILDING_DLL)
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE ${WINSOCKET_LIBRARIES})
+endif (WIN32 OR MINGW OR MSYS)
+if (ADDRESS_SANITIZER)
+    target_compile_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
+add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
+    examples/test/ir/plugin_registry_smoke.cpp
+    ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
+add_dependencies(qore-ir-plugin-registry-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
+target_compile_definitions(qore-ir-plugin-registry-smoke PRIVATE
+    _QORE_LIB_INTERN
+    HAVE_UNIX_CONFIG_H
+    MODULE_DIR="${MODULE_DIR}"
+    MODULE_VER_DIR="${MODULE_VER_DIR}"
+    USER_MODULE_DIR="${USER_MODULE_DIR}"
+    USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}"
+    QORE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}")
+if (APPLE)
+    target_compile_definitions(qore-ir-plugin-registry-smoke PRIVATE __APPLE_USE_RFC_3542)
+endif()
+target_include_directories(qore-ir-plugin-registry-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${BZIP2_INCLUDE_DIR}
+    ${ICONV_INCLUDE_DIR}
+    ${MPFR_INCLUDE_DIRS}
+    ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+    ${PCRE2_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
+    ${LLVM_INCLUDE_DIRS})
+target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${QORE_LIBS})
+if(LLVM_LIBS)
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${LLVM_LIBS})
+elseif(TARGET LLVM::LLVM)
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE LLVM::LLVM)
+endif()
+if (WIN32 OR MINGW OR MSYS)
+    target_compile_definitions(qore-ir-plugin-registry-smoke PRIVATE BUILDING_DLL)
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${WINSOCKET_LIBRARIES})
+endif (WIN32 OR MINGW OR MSYS)
+if (ADDRESS_SANITIZER)
+    target_compile_options(qore-ir-plugin-registry-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(qore-ir-plugin-registry-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
+add_executable(qore-arrow-c-data-smoke EXCLUDE_FROM_ALL
+    examples/test/ir/arrow_c_data_smoke.cpp)
+target_link_libraries(qore-arrow-c-data-smoke PRIVATE libqore)
+target_include_directories(qore-arrow-c-data-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/include)
+if (WIN32 OR MINGW OR MSYS)
+    target_compile_definitions(qore-arrow-c-data-smoke PRIVATE BUILDING_DLL)
+    target_link_libraries(qore-arrow-c-data-smoke PRIVATE ${WINSOCKET_LIBRARIES})
+endif (WIN32 OR MINGW OR MSYS)
+if (ADDRESS_SANITIZER)
+    target_compile_options(qore-arrow-c-data-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(qore-arrow-c-data-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
+add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
@@ -2774,12 +2891,13 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "Logger;MapperUtil;Mime;ProviderIndexUtil;Util;reflection" "../../doxygen/DataProvider-Full.svg;Qore-Q-square.svg")
-qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreModelRegistry;QoreTokenizerUtils;QoreStructuredExtraction;QoreGuardrails;QoreOcrUtils;QoreVisionExtraction")
+qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreModelRegistry;QoreOnnxTools;QoreTokenizerUtils;QoreStructuredExtraction;QoreGuardrails;QoreOcrUtils;QoreVisionExtraction")
 qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
-qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
+qore_user_module("qlib/QoreModelRegistry" "DataProvider;FsUtil;modules/ml/ml;Mime;QoreOnnxTools;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
+qore_user_module("qlib/QoreOnnxTools" "modules/ml/ml;FsUtil;Util")
 qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
-qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
+qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer;modules/ml/ml")
 qore_user_module("qlib/QoreCrypto" "")
 qore_user_module("qlib/QoreLlmTypes.qm" "")
 qore_user_module("qlib/QoreLlmUtils" "QoreLlmTypes")
@@ -2828,7 +2946,7 @@ qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime;Logge
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/SmtpClient.qm" "ConnectionProvider;MailMessage;Mime")
-qore_user_module("qlib/WebSocketHandler.qm" "AsyncSocketIo;HttpServerUtil;WebSocketUtil;Logger")
+qore_user_module("qlib/WebSocketHandler.qm" "AsyncApi;AsyncSocketIo;HttpServerUtil;WebSocketUtil;Logger")
 qore_user_module("qlib/WebUtil.qm" "HttpServerUtil;Mime;Util")
 
 # base 5 modules
@@ -2840,7 +2958,7 @@ qore_user_module("qlib/OracleSqlUtilBase.qm" "SqlUtil;Util;DataProvider")
 qore_user_module("qlib/PgsqlSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/Sqlite3SqlUtil.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/XdbcFirebirdSqlUtilBase.qm" "SqlUtil;DataProvider")
-qore_user_module("qlib/WebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;DataProvider;AsyncSocketIo")
+qore_user_module("qlib/WebSocketClient.qm" "AsyncApi;ConnectionProvider;Util;WebSocketUtil;DataProvider;AsyncSocketIo")
 qore_user_module("qlib/TableMapper.qm" "MapperUtil;Mapper;SqlUtil;DataProvider")
 qore_user_module("qlib/DbDataProvider" "DataProvider;SqlUtil;BulkSqlUtil;ConnectionProvider")
 qore_user_module("qlib/FtpPoller.qm" "FtpPollerUtil;Util;DataProvider")

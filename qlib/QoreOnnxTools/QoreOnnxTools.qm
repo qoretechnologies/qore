@@ -1,0 +1,224 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreOnnxTools.qm module providing ONNX deployment tooling helpers
+
+/*  QoreOnnxTools.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires ml
+%requires FsUtil
+%requires Util
+
+%try-module json
+%define NoJson
+%endtry
+
+module QoreOnnxTools {
+    version = "1.0.0";
+    desc = "user module providing ONNX deployment tooling helpers";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreOnnxTools Module
+
+    @tableofcontents
+
+    @section qoreonnxtoolsintro QoreOnnxTools Module Introduction
+
+    The %QoreOnnxTools module provides production-oriented orchestration helpers
+    for ONNX model deployment workflows. The module does not reimplement the
+    Python ONNX Runtime tooling; instead it validates Qore inputs, builds
+    repeatable tool invocations, records metadata, and reports missing Python
+    dependencies with actionable installation guidance.
+
+    Package manifests created by this module are self-describing deployment
+    contracts. They include tensor schemas, dynamic axes, tokenizer companion
+    metadata, preprocessing and postprocessing contracts, output-shape maps,
+    provider diagnostics, validation status, benchmark metadata, and examples
+    that can be shown directly by CLI or registry tools.
+
+    @par Inspection, Validation, and Benchmark Example
+    @code{.q}
+hash<auto> inspection =
+    QoreOnnxTools::OnnxModelTools::inspect("/models/customer-score.onnx");
+hash<QoreOnnxTools::OnnxValidationResult> validation =
+    QoreOnnxTools::OnnxModelTools::validate("/models/customer-score.onnx");
+hash<QoreOnnxTools::OnnxBenchmarkResult> benchmark =
+    QoreOnnxTools::OnnxModelTools::benchmark(
+        "/models/customer-score.onnx",
+        <QoreOnnxTools::OnnxBenchmarkOptions>{"runs": 100});
+printf("inputs=%y valid=%y avg=%fms\n",
+    inspection.inputs, validation.valid, benchmark.average_ms);
+
+hash<QoreOnnxTools::OnnxCompareResult> comparison =
+    QoreOnnxTools::OnnxModelTools::compare(
+        "/models/customer-score.onnx",
+        "/models/customer-score-int8.onnx",
+        <QoreOnnxTools::OnnxCompareOptions>{
+            "abs_tolerance": 0.01,
+            "rel_tolerance": 0.01,
+            "benchmark": True,
+            "runs": 50,
+        });
+printf("match=%y max_abs=%f speedup=%y\n",
+    comparison.outputs_match, comparison.max_abs_error, comparison.speedup);
+    @endcode
+
+    @par Profile Summary Example
+    @code{.q}
+hash<QoreOnnxTools::OnnxProfileSummary> profile =
+    QoreOnnxTools::OnnxProfileTools::summarizeProfile(
+        "/var/tmp/onnxruntime_profile.json");
+foreach hash<QoreOnnxTools::OnnxProfileAggregateInfo> op in (profile.operators) {
+    printf("op=%s provider=%s total=%fms count=%d\n",
+        op.name, op.provider, op.total_ms, op.count);
+}
+    @endcode
+
+    @par Dynamic Quantization Example
+    @code{.q}
+hash<QoreOnnxTools::OnnxQuantizationResult> info =
+    QoreOnnxTools::OnnxQuantizer::quantize(
+        "/models/customer-score.onnx",
+        "/models/customer-score-int8.onnx",
+        <QoreOnnxTools::OnnxQuantizationOptions>{
+            "method": "dynamic",
+            "weight_type": "QInt8",
+        });
+printf("quantized=%s runtime=%s\n",
+    info.output_path, info.dependency.onnxruntime_version);
+    @endcode
+
+    @par Static Calibration Example
+    @code{.q}
+QoreOnnxTools::OnnxQuantizer::quantize(
+    "/models/reranker.onnx",
+    "/models/reranker-static-int8.onnx",
+    <QoreOnnxTools::OnnxQuantizationOptions>{
+        "method": "static",
+        "calibration_data_json_path": "/models/calibration-records.json",
+        "activation_type": "QUInt8",
+        "weight_type": "QInt8",
+    });
+    @endcode
+
+    Static calibration JSON must contain a list of records. Each record maps
+    ONNX input names to nested numeric arrays. The generated Python helper
+    converts each record to NumPy arrays and passes them to ONNX Runtime's
+    \c CalibrationDataReader.
+
+    @par Package Contract Example
+    @code{.q}
+hash<QoreOnnxTools::OnnxPackageResult> package =
+    QoreOnnxTools::OnnxPackageTools::createPackage(
+        "/models/customer-score.onnx",
+        "/srv/model-packages/customer-score",
+        <QoreOnnxTools::OnnxPackageOptions>{
+            "task": "regression",
+            "minimum_onnxruntime_version": "1.16.0",
+            "dynamic_axes": {"X": (0,)},
+            "benchmarks": {"cpu": {"average_ms": 0.19, "runs": 1000}},
+            "golden_vectors": ({
+                "inputs": {"X": ((41.0, 10000.0, 0.7),)},
+                "outputs": {"Y": ((0.82,),)},
+            },),
+        });
+
+printf("runtime=%s entry=%s output-shape=%y\n",
+    package.execution.plan.runtime,
+    package.execution.plan.entry_artifact,
+    package.execution.plan.output_shapes.Y);
+printf("recommended actions=%y\n", package.diagnostics.recommended_actions);
+    @endcode
+
+    The execution plan is intended for both humans and automation. It keeps
+    \c runtime, \c task, \c entry_artifact, \c input_schema,
+    \c output_schema, \c dynamic_axes, \c tensor_contract, \c tokenizer,
+    \c preprocess, \c postprocess, and \c output_shapes in one place so
+    QoreModelRegistry and DataProviderML can run the package without repeating
+    package-specific configuration.
+
+    @par CLI Examples
+    @code{.sh}
+qore-onnx check-python --python /opt/onnx/bin/python3
+qore-onnx inspect /models/customer-score.onnx
+qore-onnx inspect --json /models/customer-score.onnx
+qore-onnx validate /models/customer-score.onnx
+qore-onnx benchmark --runs 100 /models/customer-score.onnx
+qore-onnx compare --abs-tolerance 0.01 --rel-tolerance 0.01 --runs 50 \
+    /models/customer-score.onnx /models/customer-score-int8.onnx
+qore-onnx profile --top-limit 20 /var/tmp/onnxruntime_profile.json
+qore-onnx optimize /models/customer-score.onnx /models/customer-score-opt.onnx
+qore-onnx package /models/customer-score.onnx /srv/model-packages/customer-score
+qore-onnx package --task regression --opset 17 \
+    --minimum-onnxruntime-version 1.16.0 \
+    --preprocess preprocess-contract.json \
+    --postprocess postprocess-contract.json \
+    --dynamic-axes dynamic-axes.json \
+    --benchmarks benchmarks.json \
+    --golden-vectors golden-vectors.json \
+    /models/customer-score.onnx /srv/model-packages/customer-score
+qore-onnx quantize --method dynamic --weight-type QInt8 \
+    /models/customer-score.onnx /models/customer-score-int8.onnx
+qore-onnx quantize --method static --calibration-data calibration.json \
+    /models/reranker.onnx /models/reranker-static-int8.onnx
+    @endcode
+
+    @section qoreonnxtoolsrelnotes QoreOnnxTools Module Release Notes
+
+    @subsection qoreonnxtools_1_0 QoreOnnxTools Module Version 1.0
+    - Initial release with ONNX Runtime Python quantization orchestration
+    - Added dependency diagnostics and dry-run planning for quantization
+    - Static quantization plans and results include SHA-256 calibration data
+      fingerprints for reproducible deployment metadata
+    - Added ONNX model inspection, validation, optimization, and benchmark helpers
+    - Added ONNX model output and optional latency comparison helpers plus
+      \c qore-onnx compare for original-vs-optimized and original-vs-quantized
+      deployment validation
+    - Added ONNX Runtime profile summarization by operator, provider, node, and
+      session event
+    - Added deterministic ONNX package assembly with companion artifact
+      classification and manifest generation
+    - ONNX package manifests now include deployment contract metadata for
+      registry ingestion: task, opset, producer, minimum ONNX Runtime version,
+      input/output tensors, dynamic axes, external-data files,
+      preprocessing/postprocessing contracts, execution metadata, provider
+      diagnostics, validation, benchmarks, golden vectors, and
+      optimized/quantized artifact lists
+    - Added standard ONNX preprocessing and postprocessing contracts for raw,
+      regression, classification, embedding, reranker, token-classification,
+      sequence-classification, encoder-decoder, and causal-LM package tasks
+    - Added normalized execution plans with runtime, task, entry artifact,
+      tensor contracts, dynamic axes, tokenizer companion metadata, output
+      shapes, preprocessing, and postprocessing in one automation-friendly
+      structure
+    - Added shared actionable diagnostics for inspection, validation, and
+      package creation; \c qore-onnx inspect, \c validate, and \c package now
+      print readable summaries by default and still support machine-readable
+      \c --json output
+    - Added benchmark coverage for ONNX package-plan creation and registry
+      ingestion in \c bench/cases/bench_onnx_package_plan.qr
+*/

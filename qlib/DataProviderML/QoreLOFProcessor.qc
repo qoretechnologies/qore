@@ -29,7 +29,7 @@ public namespace DataProviderML {
     score each record for anomalousness based on local density.
 
 */
-public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreLOFProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -234,9 +234,9 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

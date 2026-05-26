@@ -1,0 +1,251 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DataFrameSolutions.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires DataProviderML
+%requires ml
+
+%try-module dataframe
+%define NoDataFrame
+%endtry
+
+%try-module DataProviderDataFrame
+%define NoDataProviderDataFrame
+%endtry
+
+%exec-class DataFrameSolutionsTest
+
+class DataFrameSolutionsTest inherits QUnit::Test {
+    constructor() : Test("DataFrameSolutionsTest", "1.0", \ARGV) {
+        addTestCase("solution - DataFrame ETL analytics", \etlAnalyticsSolution());
+        addTestCase("solution - DataFrame AI analytics", \aiAnalyticsSolution());
+        set_return_value(main());
+    }
+
+    etlAnalyticsSolution() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+        return;
+%endif
+        DataFrame::DataFrame orders({
+            "id": (1, 2, 3, 4, 5, 6),
+            "customer_id": (10, 20, 10, 30, 20, 40),
+            "status": ("active", "active", "inactive", "active", "active", "active"),
+            "amount": (120.0, 305.0, 50.0, 700.0, 180.0, 95.0),
+            "score": (91.0, 87.0, 99.0, 94.0, 97.0, 90.0),
+            "region": ("north", "south", "north", "west", "south", "remote"),
+        });
+        DataFrame::DataFrame customers({
+            "customer_id": (10, 20, 30, 40),
+            "segment": ("enterprise", "midmarket", "enterprise", "smb"),
+            "weight": (1.2, 1.05, 1.4, 0.9),
+        });
+
+        DataFrame::RowMask selected = (orders.column("status") == "active").intersect(
+            orders.column("score") >= 90.0);
+        DataFrame::DataFrame filtered = orders.filter(selected);
+        assertEq(4, filtered.numRows(), "filter keeps active high-scoring orders");
+
+        DataFrame::DataFrame enriched = filtered.join(customers, ("customer_id",), "left");
+        assertEq(4, enriched.numRows(), "dimension join preserves filtered rows");
+        assertEq(8, enriched.numCols(), "dimension join adds customer attributes without duplicating join keys");
+
+        DataFrame::DataFrame ranked = enriched
+            .withColumn("segment_rank", enriched.rowNumber({
+                "partition_by": ("region", "segment"),
+                "order_by": ("amount",),
+            }))
+            .withColumn("rolling_amount", enriched.rollingMean("amount", 2, {
+                "partition_by": ("region", "segment"),
+                "order_by": ("amount",),
+            }));
+        assertEq(10, ranked.numCols(), "window-derived columns are available for downstream work");
+
+        DataFrame::DataFrame grouped = ranked.groupBy(("region", "segment")).agg({
+            "amount": ("sum", "mean"),
+            "score": "max",
+            "id": "count",
+        });
+        assertTrue(grouped.numRows() >= 3, "grouped aggregate has regional segment rows");
+
+        ColumnarResult columnar = grouped.toColumnarResult();
+        DataFrame::DataFrame round_trip = DataFrame::DataFrame::fromColumnarResult(columnar);
+        assertEq(grouped.numRows(), round_trip.numRows(), "columnar round-trip preserves aggregate rows");
+
+        DataProviderDataFrame::DataFrameDataProvider provider(ranked);
+        AbstractDataProviderBulkRecordInterface bulk = provider.searchRecordsBulk(2);
+        assertEq(DataProviderShape::DataFrameBlock, bulk.getValueShape(),
+            "DataFrame provider exposes DataFrameBlock bulk reads");
+        *auto block = bulk.getShapedValue();
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(block, DataProviderShape::DataFrameBlock),
+            "DataFrame provider returns shaped DataFrame blocks");
+    }
+
+    aiAnalyticsSolution() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        DataFrame::DataFrame features({
+            "feature1": (0.0, 0.1, 0.2, 10.0, 10.1, 10.2),
+            "feature2": (0.0, 0.1, 0.0, 10.0, 10.1, 10.0),
+            "feature3": (1.0, 1.1, 1.0, 9.0, 9.1, 9.0),
+            "target": (0.2, 0.25, 0.3, 20.0, 20.2, 20.4),
+            "cohort": ("a", "a", "a", "b", "b", "b"),
+        });
+
+        DataProviderML::QoreStandardScalerProcessor scaler({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+        });
+        DataFrame::DataFrame scaled_events = scaler.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(scaled_events),
+            "standard scaler preserves DataFrameBlock output");
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(scaled_events, DataProviderShape::DataFrameBlock),
+            "standard scaler preserves row count");
+        assertEq(6, scaled_events.numRows(), "standard scaler output can be inspected as a DataFrame");
+
+        DataProviderML::QoreStandardScalerProcessor flat_scaler({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "output_mode": "dataframe",
+        });
+        DataFrame::DataFrame flat_scaled = flat_scaler.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertEq(6, flat_scaled.numRows(), "standard scaler dataframe output preserves row count");
+        assertTrue(flat_scaled.columnNames().contains("scaled_feature1"),
+            "standard scaler dataframe output has flat scaled columns");
+        assertTrue(flat_scaled.columnNames().contains("feature1"),
+            "standard scaler dataframe output includes input columns by default");
+
+        DataProviderML::QoreStandardScalerProcessor slim_scaler({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "output_mode": "dataframe",
+            "include_input_fields": False,
+        });
+        DataFrame::DataFrame slim_scaled = slim_scaler.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertTrue(slim_scaled.columnNames().contains("scaled_feature1"),
+            "standard scaler slim dataframe output keeps scaled columns");
+        assertFalse(slim_scaled.columnNames().contains("feature1"),
+            "standard scaler slim dataframe output omits input columns");
+
+        DataProviderML::QoreMinMaxScalerProcessor minmax({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "output_mode": "dataframe",
+        });
+        DataFrame::DataFrame normalized = minmax.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertEq(6, normalized.numRows(), "min-max scaler dataframe output preserves row count");
+        assertTrue(normalized.columnNames().contains("scaled_feature1"),
+            "min-max scaler dataframe output exposes normalized columns");
+        assertTrue(normalized.columnNames().contains("feature1"),
+            "min-max scaler dataframe output includes input columns by default");
+
+        DataProviderML::QoreMinMaxScalerProcessor slim_minmax({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "output_mode": "dataframe",
+            "include_input_fields": False,
+        });
+        DataFrame::DataFrame slim_normalized = slim_minmax.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertTrue(slim_normalized.columnNames().contains("scaled_feature1"),
+            "min-max scaler slim dataframe output keeps normalized columns");
+        assertFalse(slim_normalized.columnNames().contains("feature1"),
+            "min-max scaler slim dataframe output omits input columns");
+
+        DataProviderML::QoreKMeansProcessor kmeans({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "k": 2,
+        });
+        DataFrame::DataFrame clusters = kmeans.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+        assertEq(6, clusters.numRows(), "kmeans output can be inspected as a DataFrame");
+        DataFrame::DataFrame cluster_summary = clusters.groupBy(("cluster",)).agg({
+            "distance": ("mean", "max"),
+            "event_type": "count",
+        });
+        assertTrue(cluster_summary.numRows() >= 2, "kmeans separates the two obvious cohorts");
+
+        DataProviderML::QoreKMeansProcessor flat_kmeans({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "k": 2,
+            "output_mode": "dataframe",
+        });
+        DataFrame::DataFrame flat_clusters = flat_kmeans.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertEq(6, flat_clusters.numRows(), "kmeans dataframe output preserves row count");
+        assertTrue(flat_clusters.columnNames().contains("centroid_distance_0"),
+            "kmeans dataframe output exposes centroid distances as flat columns");
+
+        DataProviderML::QoreKMeansProcessor slim_kmeans({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "k": 2,
+            "output_mode": "dataframe",
+            "include_input_fields": False,
+            "include_centroid_distances": False,
+        });
+        DataFrame::DataFrame slim_clusters = slim_kmeans.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertTrue(slim_clusters.columnNames().contains("cluster"),
+            "kmeans slim dataframe output keeps cluster column");
+        assertTrue(slim_clusters.columnNames().contains("distance"),
+            "kmeans slim dataframe output keeps nearest distance column");
+        assertFalse(slim_clusters.columnNames().contains("feature1"),
+            "kmeans slim dataframe output omits input columns");
+        assertFalse(slim_clusters.columnNames().contains("centroid_distance_0"),
+            "kmeans slim dataframe output omits optional centroid distances");
+
+        DataProviderML::QorePCAProcessor pca({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "n_components": 2,
+        });
+        DataFrame::DataFrame pca_frame = pca.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+        assertEq(6, pca_frame.numRows(), "PCA output can be inspected as a DataFrame");
+
+        DataProviderML::QorePCAProcessor flat_pca({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "n_components": 2,
+            "output_mode": "dataframe",
+        });
+        DataFrame::DataFrame flat_pca_frame = flat_pca.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertEq(6, flat_pca_frame.numRows(), "PCA dataframe output preserves row count");
+        assertTrue(flat_pca_frame.columnNames().contains("component_0"),
+            "PCA dataframe output exposes components as flat columns");
+
+        DataProviderML::QorePCAProcessor slim_pca({
+            "fields": "feature1,feature2,feature3",
+            "window_size": 6,
+            "n_components": 2,
+            "output_mode": "dataframe",
+            "include_input_fields": False,
+        });
+        DataFrame::DataFrame slim_pca_frame = slim_pca.processRecordsShape(
+            features, DataProviderShape::DataFrameBlock);
+        assertTrue(slim_pca_frame.columnNames().contains("component_0"),
+            "PCA slim dataframe output keeps component columns");
+        assertFalse(slim_pca_frame.columnNames().contains("feature1"),
+            "PCA slim dataframe output omits input columns");
+    }
+}

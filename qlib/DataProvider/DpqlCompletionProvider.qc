@@ -99,7 +99,7 @@ public hashdecl DpqlCompletionContext {
     /** When set, completions are filtered to enforce search expression rules:
         - At top level: only server operators and field references
         - After field reference: only server comparison operators
-        - Inside Qorus-only subtree: no field references
+        - Inside local-only subtree: no field references
 
         @since DataProvider 3.4
     */

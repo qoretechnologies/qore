@@ -10,7 +10,213 @@
 
 #include "df_column.h"
 
+#include <cassert>
+#include <cstring>
+#include <limits>
+#include <utility>
+
 namespace QoreDataFrameNS {
+
+namespace {
+
+static std::vector<QoreValue> refAutoData(const std::vector<QoreValue>& old) {
+    std::vector<QoreValue> rv;
+    rv.reserve(old.size());
+    for (const QoreValue& v : old) {
+        rv.push_back(v.refSelf());
+    }
+    return rv;
+}
+
+static void discardAutoData(std::vector<QoreValue>& values, ExceptionSink* xsink) {
+    for (QoreValue& v : values) {
+        v.discard(xsink);
+    }
+    values.clear();
+}
+
+static bool getBitmapBit(const uint8_t* bytes, size_t bit_offset, int64_t index) {
+    if (!bytes) {
+        return true;
+    }
+    size_t bit = bit_offset + static_cast<size_t>(index);
+    return bytes[bit / 8] & (uint8_t(1) << (bit % 8));
+}
+
+static int checkRawBufferData(const void* data, int64_t n, QoreBufferElementType type, ExceptionSink* xsink) {
+    if (n && !data) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "buffer<%s> has no host data available for DataFrame conversion",
+            qore_buffer_element_type_name(type));
+        return -1;
+    }
+    return 0;
+}
+
+static void splitMicros(int64_t micros, int64_t& seconds, int& microseconds) {
+    seconds = micros / 1000000;
+    microseconds = static_cast<int>(micros % 1000000);
+    if (microseconds < 0) {
+        --seconds;
+        microseconds += 1000000;
+    }
+}
+
+static bool isDurationColumn(const ColumnData& col) {
+    return col.has_columnar_schema && col.columnar_schema.kind == QoreColumnarTypeKind::Duration;
+}
+
+static DateTimeNode* makeDateFromMicros(int64_t micros, bool duration) {
+    int64_t seconds = 0;
+    int microseconds = 0;
+    splitMicros(micros, seconds, microseconds);
+    if (duration) {
+        return DateTimeNode::makeRelative(0, 0, 0, 0, 0, seconds, microseconds);
+    }
+    return DateTimeNode::makeAbsolute(currentTZ(), seconds, microseconds);
+}
+
+}
+
+ColumnData::ColumnData(const ColumnData& old)
+        : type(old.type), n_rows(old.n_rows), dense_buffer(old.dense_buffer),
+        dense_buffer_type(old.dense_buffer_type), external_column_kind(old.external_column_kind),
+        external_column_owner(old.external_column_owner), float_data(old.float_data), int_data(old.int_data),
+        str_data(old.str_data), bool_data(old.bool_data), date_data(old.date_data),
+        auto_data(refAutoData(old.auto_data)), columnar_schema(old.columnar_schema),
+        has_columnar_schema(old.has_columnar_schema), null_mask(old.null_mask) {
+    if (dense_buffer) {
+        dense_buffer->ref();
+    }
+}
+
+ColumnData::ColumnData(ColumnData&& old) noexcept
+        : type(old.type), n_rows(old.n_rows), dense_buffer(old.dense_buffer),
+        dense_buffer_type(old.dense_buffer_type), external_column_kind(old.external_column_kind),
+        external_column_owner(std::move(old.external_column_owner)), float_data(std::move(old.float_data)),
+        int_data(std::move(old.int_data)), str_data(std::move(old.str_data)),
+        bool_data(std::move(old.bool_data)), date_data(std::move(old.date_data)),
+        auto_data(std::move(old.auto_data)), columnar_schema(std::move(old.columnar_schema)),
+        has_columnar_schema(old.has_columnar_schema), null_mask(std::move(old.null_mask)) {
+    old.dense_buffer = nullptr;
+    old.dense_buffer_type = QoreBufferElementType::Invalid;
+    old.external_column_kind = ExternalColumnKind::NONE;
+    old.has_columnar_schema = false;
+}
+
+ColumnData& ColumnData::operator=(const ColumnData& old) {
+    if (this != &old) {
+        std::vector<QoreValue> new_auto_data = refAutoData(old.auto_data);
+        if (old.dense_buffer) {
+            old.dense_buffer->ref();
+        }
+        ExceptionSink xsink;
+        if (dense_buffer) {
+            dense_buffer->deref(&xsink);
+        }
+        discardAutoData(auto_data, &xsink);
+
+        type = old.type;
+        n_rows = old.n_rows;
+        dense_buffer = old.dense_buffer;
+        dense_buffer_type = old.dense_buffer_type;
+        external_column_kind = old.external_column_kind;
+        external_column_owner = old.external_column_owner;
+        float_data = old.float_data;
+        int_data = old.int_data;
+        str_data = old.str_data;
+        bool_data = old.bool_data;
+        date_data = old.date_data;
+        auto_data = std::move(new_auto_data);
+        columnar_schema = old.columnar_schema;
+        has_columnar_schema = old.has_columnar_schema;
+        null_mask = old.null_mask;
+    }
+    return *this;
+}
+
+ColumnData& ColumnData::operator=(ColumnData&& old) noexcept {
+    if (this != &old) {
+        ExceptionSink xsink;
+        if (dense_buffer) {
+            dense_buffer->deref(&xsink);
+        }
+        discardAutoData(auto_data, &xsink);
+
+        type = old.type;
+        n_rows = old.n_rows;
+        dense_buffer = old.dense_buffer;
+        dense_buffer_type = old.dense_buffer_type;
+        external_column_kind = old.external_column_kind;
+        external_column_owner = std::move(old.external_column_owner);
+        float_data = std::move(old.float_data);
+        int_data = std::move(old.int_data);
+        str_data = std::move(old.str_data);
+        bool_data = std::move(old.bool_data);
+        date_data = std::move(old.date_data);
+        auto_data = std::move(old.auto_data);
+        columnar_schema = std::move(old.columnar_schema);
+        has_columnar_schema = old.has_columnar_schema;
+        null_mask = std::move(old.null_mask);
+
+        old.dense_buffer = nullptr;
+        old.dense_buffer_type = QoreBufferElementType::Invalid;
+        old.external_column_kind = ExternalColumnKind::NONE;
+        old.has_columnar_schema = false;
+    }
+    return *this;
+}
+
+ColumnData::~ColumnData() {
+    ExceptionSink xsink;
+    if (dense_buffer) {
+        dense_buffer->deref(&xsink);
+    }
+    discardAutoData(auto_data, &xsink);
+}
+
+void ColumnData::setDenseBufferRef(const QoreBufferNode* buffer) {
+    clearExternalColumnRef();
+    if (dense_buffer) {
+        ExceptionSink xsink;
+        dense_buffer->deref(&xsink);
+        dense_buffer = nullptr;
+        dense_buffer_type = QoreBufferElementType::Invalid;
+    }
+    if (buffer) {
+        dense_buffer = const_cast<QoreBufferNode*>(buffer);
+        dense_buffer->ref();
+        dense_buffer_type = buffer->getElementType();
+    }
+}
+
+void ColumnData::setExternalColumnRef(ExternalColumnKind kind, std::shared_ptr<void> owner) {
+    external_column_kind = owner ? kind : ExternalColumnKind::NONE;
+    external_column_owner = std::move(owner);
+}
+
+void ColumnData::clearExternalColumnRef() {
+    external_column_kind = ExternalColumnKind::NONE;
+    external_column_owner.reset();
+}
+
+QoreBufferNode* ColumnData::refDenseBuffer() const {
+    if (!dense_buffer) {
+        return nullptr;
+    }
+    dense_buffer->ref();
+    return dense_buffer;
+}
+
+void ColumnData::setAutoValue(int64_t i, QoreValue value, ExceptionSink* xsink) {
+    assert(i >= 0 && i < static_cast<int64_t>(auto_data.size()));
+    auto_data[i].discard(xsink);
+    auto_data[i] = value.refSelf();
+}
+
+void ColumnData::appendAutoValue(QoreValue value) {
+    auto_data.push_back(value.refSelf());
+}
 
 const char* columnTypeName(ColumnType type) {
     switch (type) {
@@ -58,12 +264,10 @@ QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
         case ColumnType::BOOL:
             return QoreValue((bool)bool_data[i]);
         case ColumnType::DATE:
-            return QoreValue(DateTimeNode::makeAbsolute(currentTZ(),
-                date_data[i] / 1000000, (int)(date_data[i] % 1000000)));
+            return QoreValue(makeDateFromMicros(date_data[i], isDurationColumn(*this)));
         case ColumnType::AUTO:
-            // AUTO columns are not yet supported; inferColumnType() never
-            // returns AUTO — it resolves to a concrete type or STRING
-            return QoreValue();
+            assert(i < static_cast<int64_t>(auto_data.size()));
+            return auto_data[i].refSelf();
         default:
             return QoreValue();
     }
@@ -79,6 +283,7 @@ ColumnType inferColumnType(const QoreListNode* values) {
     bool has_string = false;
     bool has_bool = false;
     bool has_date = false;
+    bool has_auto = false;
 
     for (size_t i = 0; i < values->size(); ++i) {
         QoreValue v = values->retrieveEntry(i);
@@ -105,12 +310,14 @@ ColumnType inferColumnType(const QoreListNode* values) {
                 has_date = true;
                 break;
             default:
-                // Unknown type → string fallback
-                has_string = true;
+                has_auto = true;
                 break;
         }
     }
 
+    if (has_auto) {
+        return ColumnType::AUTO;
+    }
     // Priority: if mixed numeric, widen to float64
     if (has_string) {
         return ColumnType::STRING;
@@ -130,7 +337,7 @@ ColumnType inferColumnType(const QoreListNode* values) {
     if (has_date && !has_int && !has_float && !has_bool) {
         return ColumnType::DATE;
     }
-    // Mixed types → string
+    // Mixed primitive types → string
     if (has_int || has_float || has_bool || has_date) {
         return ColumnType::STRING;
     }
@@ -219,6 +426,21 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
             }
             break;
         }
+        case ColumnType::AUTO: {
+            col->auto_data.resize(n);
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame auto column")) {
+                    return nullptr;
+                }
+                QoreValue v = values->retrieveEntry(i);
+                if (v.isNullOrNothing()) {
+                    col->null_mask[i] = 1;
+                } else {
+                    col->setAutoValue(i, v, xsink);
+                }
+            }
+            break;
+        }
         default:
             break;
     }
@@ -228,11 +450,471 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
 
 std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
         ExceptionSink* xsink) {
-    ColumnType type = inferColumnType(values);
-    return buildColumnData(values, type, xsink);
+    int64_t n = values ? (int64_t)values->size() : 0;
+    if (!n) {
+        return buildColumnData(values, ColumnType::STRING, xsink);
+    }
+
+    auto col = std::make_shared<ColumnData>();
+    col->type = ColumnType::AUTO;
+    col->n_rows = n;
+    col->null_mask.resize(n, 0);
+
+    auto set_float_nulls = [&](int64_t count) -> bool {
+        for (int64_t j = 0; j < count; ++j) {
+            if (j && !(j % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+                return true;
+            }
+            if (col->null_mask[j]) {
+                col->float_data(j) = std::numeric_limits<double>::quiet_NaN();
+            }
+        }
+        return false;
+    };
+
+    auto initialize_type = [&](ColumnType type, int64_t initialized_rows) -> bool {
+        col->type = type;
+        switch (type) {
+            case ColumnType::FLOAT64:
+                col->float_data.resize(n);
+                return set_float_nulls(initialized_rows);
+            case ColumnType::INT64:
+                col->int_data.resize(n);
+                break;
+            case ColumnType::STRING:
+                col->str_data.resize(n);
+                break;
+            case ColumnType::BOOL:
+                col->bool_data.resize(n);
+                break;
+            case ColumnType::DATE:
+                col->date_data.resize(n);
+                break;
+            case ColumnType::AUTO:
+                col->auto_data.resize(n);
+                break;
+            default:
+                break;
+        }
+        return false;
+    };
+
+    auto widen_int_to_float = [&](int64_t initialized_rows) -> bool {
+        Eigen::VectorXd float_data(n);
+        for (int64_t j = 0; j < initialized_rows; ++j) {
+            if (j && !(j % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+                return true;
+            }
+            float_data(j) = col->null_mask[j]
+                ? std::numeric_limits<double>::quiet_NaN() : (double)col->int_data[j];
+        }
+        col->int_data.clear();
+        col->int_data.shrink_to_fit();
+        col->float_data = std::move(float_data);
+        col->type = ColumnType::FLOAT64;
+        return false;
+    };
+
+    for (int64_t i = 0; i < n; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+            return nullptr;
+        }
+
+        QoreValue v = values->retrieveEntry(i);
+        if (v.isNullOrNothing()) {
+            col->null_mask[i] = 1;
+            if (col->type == ColumnType::FLOAT64) {
+                col->float_data(i) = std::numeric_limits<double>::quiet_NaN();
+            }
+            continue;
+        }
+
+        switch (v.getType()) {
+            case NT_INT:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::INT64, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type == ColumnType::FLOAT64) {
+                    col->float_data(i) = v.getAsFloat();
+                    continue;
+                } else if (col->type != ColumnType::INT64) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->int_data[i] = v.getAsBigInt();
+                break;
+
+            case NT_FLOAT:
+            case NT_NUMBER:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::FLOAT64, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type == ColumnType::INT64) {
+                    if (widen_int_to_float(i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::FLOAT64) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->float_data(i) = v.getAsFloat();
+                break;
+
+            case NT_STRING: {
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::STRING, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::STRING) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                QoreStringValueHelper str(v);
+                col->str_data[i] = str->c_str();
+                break;
+            }
+
+            case NT_BOOLEAN:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::BOOL, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::BOOL) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->bool_data[i] = v.getAsBool() ? 1 : 0;
+                break;
+
+            case NT_DATE:
+                if (col->type == ColumnType::AUTO) {
+                    if (initialize_type(ColumnType::DATE, i)) {
+                        return nullptr;
+                    }
+                } else if (col->type != ColumnType::DATE) {
+                    return buildColumnData(values, ColumnType::STRING, xsink);
+                }
+                col->date_data[i] = v.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                break;
+
+            default:
+                return buildColumnData(values, ColumnType::AUTO, xsink);
+        }
+    }
+
+    if (col->type == ColumnType::AUTO) {
+        if (initialize_type(ColumnType::FLOAT64, n)) {
+            return nullptr;
+        }
+    }
+
+    return col;
+}
+
+std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* values,
+        ExceptionSink* xsink) {
+    if (!values) {
+        return std::make_shared<ColumnData>();
+    }
+    if (values->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    auto col = std::make_shared<ColumnData>();
+    int64_t n = values ? (int64_t)values->size() : 0;
+    col->n_rows = n;
+    col->null_mask.resize(n, 0);
+    col->setDenseBufferRef(values);
+    QoreBufferElementType element_type = values->getElementType();
+    bool all_valid = true;
+    const uint8_t* validity = nullptr;
+    size_t validity_bit_offset = 0;
+    if (values->hasNullableElements()) {
+        all_valid = values->countValid(xsink) == values->size();
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!all_valid) {
+            validity = values->getRawValidityData();
+            validity_bit_offset = values->getRawValidityBitOffset();
+        }
+    }
+
+    switch (element_type) {
+        case QoreBufferElementType::Int8:
+        case QoreBufferElementType::Int16:
+        case QoreBufferElementType::Int32:
+        case QoreBufferElementType::Int64: {
+            col->type = ColumnType::INT64;
+            col->int_data.resize(n);
+            const void* raw_data = values->getRawData();
+            if (checkRawBufferData(raw_data, n, element_type, xsink)) {
+                return nullptr;
+            }
+            if (all_valid) {
+                switch (element_type) {
+                    case QoreBufferElementType::Int8: {
+                        const int8_t* src = static_cast<const int8_t*>(raw_data);
+                        for (int64_t i = 0; i < n; ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                                return nullptr;
+                            }
+                            col->int_data[i] = src[i];
+                        }
+                        break;
+                    }
+                    case QoreBufferElementType::Int16: {
+                        const int16_t* src = static_cast<const int16_t*>(raw_data);
+                        for (int64_t i = 0; i < n; ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                                return nullptr;
+                            }
+                            col->int_data[i] = src[i];
+                        }
+                        break;
+                    }
+                    case QoreBufferElementType::Int32: {
+                        const int32_t* src = static_cast<const int32_t*>(raw_data);
+                        for (int64_t i = 0; i < n; ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                                return nullptr;
+                            }
+                            col->int_data[i] = src[i];
+                        }
+                        break;
+                    }
+                    case QoreBufferElementType::Int64: {
+                        const int64_t* src = static_cast<const int64_t*>(raw_data);
+                        if (n) {
+                            std::memcpy(col->int_data.data(), src, n * sizeof(int64_t));
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            } else if (element_type == QoreBufferElementType::Int64) {
+                const int64_t* src = static_cast<const int64_t*>(raw_data);
+                if (n) {
+                    std::memcpy(col->int_data.data(), src, n * sizeof(int64_t));
+                }
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
+                        col->null_mask[i] = 1;
+                        col->int_data[i] = 0;
+                    }
+                }
+            } else {
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
+                        col->null_mask[i] = 1;
+                        col->int_data[i] = 0;
+                    } else {
+                        switch (element_type) {
+                            case QoreBufferElementType::Int8:
+                                col->int_data[i] = static_cast<const int8_t*>(raw_data)[i];
+                                break;
+                            case QoreBufferElementType::Int16:
+                                col->int_data[i] = static_cast<const int16_t*>(raw_data)[i];
+                                break;
+                            case QoreBufferElementType::Int32:
+                                col->int_data[i] = static_cast<const int32_t*>(raw_data)[i];
+                                break;
+                            case QoreBufferElementType::Int64:
+                                col->int_data[i] = static_cast<const int64_t*>(raw_data)[i];
+                                break;
+                            default:
+                                assert(false);
+                        }
+                    }
+                }
+            }
+            break;
+        }
+        case QoreBufferElementType::Float32:
+        case QoreBufferElementType::Float64: {
+            col->type = ColumnType::FLOAT64;
+            col->float_data.resize(n);
+            const void* raw_data = values->getRawData();
+            if (checkRawBufferData(raw_data, n, element_type, xsink)) {
+                return nullptr;
+            }
+            if (all_valid) {
+                if (element_type == QoreBufferElementType::Float64) {
+                    const double* src = static_cast<const double*>(raw_data);
+                    if (n) {
+                        std::memcpy(col->float_data.data(), src, n * sizeof(double));
+                    }
+                } else {
+                    const float* src = static_cast<const float*>(raw_data);
+                    for (int64_t i = 0; i < n; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                            return nullptr;
+                        }
+                        col->float_data(i) = src[i];
+                    }
+                }
+            } else if (element_type == QoreBufferElementType::Float64) {
+                const double* src = static_cast<const double*>(raw_data);
+                if (n) {
+                    std::memcpy(col->float_data.data(), src, n * sizeof(double));
+                }
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
+                        col->null_mask[i] = 1;
+                        col->float_data(i) = std::numeric_limits<double>::quiet_NaN();
+                    }
+                }
+            } else {
+                const float* src = static_cast<const float*>(raw_data);
+                for (int64_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                        return nullptr;
+                    }
+                    if (!getBitmapBit(validity, validity_bit_offset, i)) {
+                        col->null_mask[i] = 1;
+                        col->float_data(i) = std::numeric_limits<double>::quiet_NaN();
+                    } else {
+                        col->float_data(i) = src[i];
+                    }
+                }
+            }
+            break;
+        }
+        case QoreBufferElementType::Bool: {
+            col->type = ColumnType::BOOL;
+            col->bool_data.resize(n);
+            const uint8_t* data = static_cast<const uint8_t*>(values->getRawData());
+            if (checkRawBufferData(data, n, element_type, xsink)) {
+                return nullptr;
+            }
+            size_t data_bit_offset = values->getRawDataBitOffset();
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                    return nullptr;
+                }
+                if (!all_valid && !getBitmapBit(validity, validity_bit_offset, i)) {
+                    col->null_mask[i] = 1;
+                    col->bool_data[i] = 0;
+                } else {
+                    col->bool_data[i] = getBitmapBit(data, data_bit_offset, i) ? 1 : 0;
+                }
+            }
+            break;
+        }
+        case QoreBufferElementType::String: {
+            col->type = ColumnType::STRING;
+            col->str_data.resize(n);
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column from buffer")) {
+                    return nullptr;
+                }
+                if (values->isElementNull(i)) {
+                    col->null_mask[i] = 1;
+                } else {
+                    ValueHolder value(values->getReferencedEntry(i, xsink), xsink);
+                    if (!getDataFrameString(*value, col->str_data[i])) {
+                        xsink->raiseException("DATAFRAME-ERROR",
+                            "buffer<string> element " QLLD " could not be converted to a DataFrame string", i);
+                        return nullptr;
+                    }
+                }
+            }
+            break;
+        }
+        case QoreBufferElementType::Decimal128: {
+            col->type = ColumnType::AUTO;
+            col->auto_data.resize(n);
+            col->columnar_schema.kind = QoreColumnarTypeKind::Decimal128;
+            col->columnar_schema.column_type = QoreColumnarColumnType::Number;
+            col->columnar_schema.buffer_type = QoreBufferElementType::Decimal128;
+            col->columnar_schema.nullable = values->hasNullableElements();
+            col->columnar_schema.precision = values->getDecimalPrecision();
+            col->columnar_schema.scale = values->getDecimalScale();
+            col->has_columnar_schema = true;
+            for (int64_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame decimal column from buffer")) {
+                    return nullptr;
+                }
+                if (values->isElementNull(i)) {
+                    col->null_mask[i] = 1;
+                } else {
+                    ValueHolder value(values->getReferencedEntry(i, xsink), xsink);
+                    col->setAutoValue(i, *value, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                }
+            }
+            break;
+        }
+        default:
+            xsink->raiseException("DATAFRAME-ERROR",
+                "unsupported buffer element type '%s' for DataFrame column",
+                qore_buffer_element_type_name(values->getElementType()));
+            return nullptr;
+    }
+
+    return col;
+}
+
+std::shared_ptr<ColumnData> buildColumnDataFromTemporalBuffer(const QoreBufferNode* values,
+        ExceptionSink* xsink) {
+    if (!values) {
+        return std::make_shared<ColumnData>();
+    }
+    if (values->getElementType() != QoreBufferElementType::Int64) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "dense temporal ColumnarResult columns require buffer<int64> storage; got buffer<%s>",
+            qore_buffer_element_type_name(values->getElementType()));
+        return nullptr;
+    }
+    if (values->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    auto col = std::make_shared<ColumnData>();
+    int64_t n = static_cast<int64_t>(values->size());
+    col->type = ColumnType::DATE;
+    col->n_rows = n;
+    col->date_data.resize(n);
+    col->null_mask.resize(n, 0);
+    col->setDenseBufferRef(values);
+
+    const int64_t* raw = static_cast<const int64_t*>(values->getRawData());
+    if (checkRawBufferData(raw, n, values->getElementType(), xsink)) {
+        return nullptr;
+    }
+    if (n) {
+        std::memcpy(col->date_data.data(), raw, n * sizeof(int64_t));
+    }
+    if (values->hasNullableElements()) {
+        for (int64_t i = 0; i < n; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame temporal column from buffer")) {
+                return nullptr;
+            }
+            if (values->isElementNull(i)) {
+                col->null_mask[i] = 1;
+                col->date_data[i] = 0;
+            }
+        }
+    }
+    return col;
 }
 
 QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
+    if (col.hasDenseBuffer() && col.type != ColumnType::DATE) {
+        return col.dense_buffer->toList(xsink);
+    }
+
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
     for (int64_t i = 0; i < col.n_rows; ++i) {
@@ -253,9 +935,11 @@ QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
                     list->push((bool)col.bool_data[i], xsink);
                     break;
                 case ColumnType::DATE:
-                    list->push(DateTimeNode::makeAbsolute(currentTZ(),
-                        col.date_data[i] / 1000000,
-                        (int)(col.date_data[i] % 1000000)), xsink);
+                    list->push(makeDateFromMicros(col.date_data[i], isDurationColumn(col)), xsink);
+                    break;
+                case ColumnType::AUTO:
+                    assert(i < static_cast<int64_t>(col.auto_data.size()));
+                    list->push(col.auto_data[i].refSelf(), xsink);
                     break;
                 default:
                     list->push(QoreValue(), xsink);
@@ -265,6 +949,145 @@ QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
     }
 
     return list.release();
+}
+
+QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
+        int64_t count, ExceptionSink* xsink) {
+    if (start < 0 || count < 0 || start + count > col.n_rows) {
+        xsink->raiseException("DATAFRAME-INDEX-ERROR",
+            "column slice start " QLLD " count " QLLD " out of range for " QLLD " rows",
+            start, count, col.n_rows);
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+
+    if (col.hasDenseBuffer() && col.type != ColumnType::DATE) {
+        ReferenceHolder<QoreBufferNode> buffer(col.dense_buffer->slice(
+            static_cast<size_t>(start), static_cast<size_t>(count), xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return buffer->toList(xsink);
+    }
+
+    for (int64_t i = start; i < start + count; ++i) {
+        if (i != start && !((i - start) % 100)
+                && qore_check_cancel(xsink, "converting DataFrame column range to list")) {
+            return nullptr;
+        }
+        if (col.isNull(i)) {
+            list->push(QoreValue(), xsink);
+        } else {
+            switch (col.type) {
+                case ColumnType::FLOAT64:
+                    list->push(col.float_data(i), xsink);
+                    break;
+                case ColumnType::INT64:
+                    list->push(col.int_data[i], xsink);
+                    break;
+                case ColumnType::STRING:
+                    list->push(new QoreStringNode(col.str_data[i]), xsink);
+                    break;
+                case ColumnType::BOOL:
+                    list->push((bool)col.bool_data[i], xsink);
+                    break;
+                case ColumnType::DATE:
+                    list->push(makeDateFromMicros(col.date_data[i], isDurationColumn(col)), xsink);
+                    break;
+                case ColumnType::AUTO:
+                    assert(i < static_cast<int64_t>(col.auto_data.size()));
+                    list->push(col.auto_data[i].refSelf(), xsink);
+                    break;
+                default:
+                    list->push(QoreValue(), xsink);
+                    break;
+            }
+        }
+    }
+
+    return list.release();
+}
+
+QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) {
+    if (col.hasDenseBuffer()) {
+        return col.refDenseBuffer();
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    switch (col.type) {
+        case ColumnType::FLOAT64:
+            element_type = QoreBufferElementType::Float64;
+            break;
+        case ColumnType::INT64:
+            element_type = QoreBufferElementType::Int64;
+            break;
+        case ColumnType::BOOL:
+            element_type = QoreBufferElementType::Bool;
+            break;
+        case ColumnType::STRING:
+            element_type = QoreBufferElementType::String;
+            break;
+        case ColumnType::DATE:
+            element_type = QoreBufferElementType::Int64;
+            break;
+        default:
+            xsink->raiseException("DATAFRAME-COLUMN-ERROR",
+                "column type '%s' cannot be represented as a dense buffer",
+                columnTypeName(col.type));
+            return nullptr;
+    }
+
+    if (element_type == QoreBufferElementType::String) {
+        ReferenceHolder<QoreListNode> values(columnToQoreList(col, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new QoreBufferNode(element_type, col.countNull() > 0, *values, xsink);
+    }
+
+    ReferenceHolder<QoreBufferNode> buffer(
+        new QoreBufferNode(element_type, col.countNull() > 0, static_cast<size_t>(col.n_rows)), xsink);
+
+    for (int64_t i = 0; i < col.n_rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building dense DataFrame column buffer")) {
+            return nullptr;
+        }
+        if (col.isNull(i)) {
+            if (buffer->setEntry(static_cast<size_t>(i), QoreValue(), xsink)) {
+                return nullptr;
+            }
+            continue;
+        }
+
+        QoreValue value;
+        switch (col.type) {
+            case ColumnType::FLOAT64:
+                value = QoreValue(col.float_data(i));
+                break;
+            case ColumnType::INT64:
+                value = QoreValue(col.int_data[i]);
+                break;
+            case ColumnType::DATE:
+                value = QoreValue(col.date_data[i]);
+                break;
+            case ColumnType::BOOL:
+                value = QoreValue(static_cast<bool>(col.bool_data[i]));
+                break;
+            case ColumnType::STRING:
+                value = QoreValue::makeStringValue(col.str_data[i]);
+                break;
+            default:
+                assert(false);
+                break;
+        }
+        ValueHolder value_holder(value, xsink);
+        if (buffer->setEntry(static_cast<size_t>(i), *value_holder, xsink)) {
+            return nullptr;
+        }
+    }
+
+    return buffer.release();
 }
 
 } // namespace QoreDataFrameNS

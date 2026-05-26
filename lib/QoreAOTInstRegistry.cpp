@@ -224,12 +224,6 @@ static const AbstractQoreFunctionVariant* instRegistryFindMethodVariantByRef(
     return variant;
 }
 
-static bool instRegistryIsRangeSliceOpcode(QoreIROpcode opcode) {
-    return opcode == QoreIROpcode::RangeSliceAny
-        || opcode == QoreIROpcode::RangeSliceInt
-        || opcode == QoreIROpcode::RangeSliceFloat;
-}
-
 static std::string instRegistryGetFunctionCallName(const FunctionCallNode* call) {
     const FunctionEntry* fe = call->getFunctionEntry();
     if (!fe || !fe->getNamespace()) {
@@ -908,7 +902,7 @@ static bool writeExpr(AOTInstWriteCtx& ctx) {
     const QoreValue& expr = ((isUnaryInvokeOpcode(ei->opcode) && !ei->operands.empty())
             || (isBinaryInvokeOpcode(ei->opcode) && ei->operands.size() >= 2)
             || (ei->opcode == QoreIROpcode::ListAssignAny && ei->operands.size() >= 2)
-            || (instRegistryIsRangeSliceOpcode(ei->opcode) && ei->operands.size() >= 3))
+            || (isRangeSliceOpcode(ei->opcode) && ei->operands.size() >= 3))
         ? QoreValue()
         : ei->expr;
     if (!expr_written && !ctx.writeExpr(ctx.writer, expr)) {
@@ -1464,7 +1458,7 @@ static bool writeInvoke(AOTInstWriteCtx& ctx) {
     } else if (ii->invoke_opcode == QoreIROpcode::CallClosureDirect
             || (isUnaryInvokeOpcode(ii->invoke_opcode) && !ii->operands.empty())
             || (isBinaryInvokeOpcode(ii->invoke_opcode) && ii->operands.size() >= 2)
-            || (instRegistryIsRangeSliceOpcode(ii->invoke_opcode) && ii->operands.size() >= 3)
+            || (isRangeSliceOpcode(ii->invoke_opcode) && ii->operands.size() >= 3)
             || (ii->invoke_opcode == QoreIROpcode::ListAssignAny && ii->operands.size() >= 2)) {
         if (!ctx.writeExpr(ctx.writer, QoreValue())) {
             return false;
@@ -2197,6 +2191,87 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexList(
     ni->operands = operands;
     ni->exception_target = exc_target;
     return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
+// Group 65: NewComplexBuffer - Complex buffer creation
+// ============================================================================
+
+static bool writeNewComplexBuffer(AOTInstWriteCtx& ctx) {
+    auto* ni = static_cast<const QoreIRNewComplexBufferInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ni->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readNewComplexBuffer(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        ctx.error = error;
+        return nullptr;
+    }
+    auto* ni = new QoreIRNewComplexBufferInstruction(nullptr, expr);
+    ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    ni->result = QoreIRValue(result_id);
+    ni->operands = operands;
+    ni->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
+// Group 66: Plugin - Module-registered plugin operation dispatch
+// ============================================================================
+
+static bool writePlugin(AOTInstWriteCtx& ctx) {
+    auto* pi = static_cast<const QoreIRPluginInstruction*>(ctx.inst);
+    if (pi->operation.module_name.empty()) {
+        return false;
+    }
+    if (!ctx.writer.addPluginOperationRef(pi->operation.module_name.c_str(),
+            pi->operation.local_operation_id, pi->operation.canonical_signature_version,
+            pi->operation.signature_hash)) {
+        return false;
+    }
+    // Process-global operation IDs are assigned at module registration time and
+    // are not stable across runs.  Persist only the module/local reference and
+    // let the loader/JIT resolve the current process ID when executing.
+    ctx.writer.writeU32(0);
+    ctx.writer.writeStringRef(pi->operation.module_name.c_str());
+    ctx.writer.writeU16(pi->operation.local_operation_id);
+    ctx.writer.writeU8(pi->operation.canonical_signature_version);
+    ctx.writer.writeU32(static_cast<uint32_t>(pi->operation.signature_hash & 0xffffffffu));
+    ctx.writer.writeU32(static_cast<uint32_t>(pi->operation.signature_hash >> 32));
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readPlugin(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    QoreIRPluginOperationRef ref;
+    ref.global_operation_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    const char* module_name = ctx.reader.readStringRef(ctx.ptr);
+    ref.module_name = module_name ? module_name : "";
+    ref.local_operation_id = QoreAOTBinaryReader::readU16(ctx.ptr);
+    ref.canonical_signature_version = QoreAOTBinaryReader::readU8(ctx.ptr);
+    uint64_t sig_lo = QoreAOTBinaryReader::readU32(ctx.ptr);
+    uint64_t sig_hi = QoreAOTBinaryReader::readU32(ctx.ptr);
+    ref.signature_hash = sig_lo | (sig_hi << 32);
+    if (!ref.module_name.empty()) {
+        ref.global_operation_id = 0;
+    }
+
+    auto* pi = new QoreIRPluginInstruction(static_cast<QoreIROpcode>(opcode_raw), std::move(ref));
+    pi->result = QoreIRValue(result_id);
+    pi->operands = operands;
+    pi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(pi);
 }
 
 // ============================================================================
@@ -3372,9 +3447,16 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     { "TypedBase", 64, true, false, writeTypedBase, readTypedBase,
       "Base instruction with element type metadata" },
 
-    // Remaining 65-255: Unsupported/undefined
-    UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
-    UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
+    // Index 65: NewComplexBuffer
+    { "NewComplexBuffer", 65, true, false, writeNewComplexBuffer, readNewComplexBuffer,
+      "Complex buffer creation" },
+
+    // Index 66: Plugin
+    { "Plugin", 66, true, false, writePlugin, readPlugin,
+      "Plugin operation dispatch" },
+
+    // Remaining 67-255: Unsupported/undefined
+    UNUSED_ENTRY(67), UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
     UNUSED_ENTRY(72), UNUSED_ENTRY(73), UNUSED_ENTRY(74), UNUSED_ENTRY(75),
     UNUSED_ENTRY(76), UNUSED_ENTRY(77), UNUSED_ENTRY(78), UNUSED_ENTRY(79),
     UNUSED_ENTRY(80), UNUSED_ENTRY(81), UNUSED_ENTRY(82), UNUSED_ENTRY(83),

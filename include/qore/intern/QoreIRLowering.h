@@ -61,6 +61,39 @@ class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
 class QoreIROnBlockExitInstruction;
 
+class QoreIRLowering;
+
+//! Per-callback state passed to plugin IR lowering hooks.
+/** Plugin lowering callbacks use this object to publish their lowered IR result
+ *  and, on failure, the diagnostic that should be propagated to the caller.
+ */
+class QoreIRLoweringContext {
+public:
+    //! Sets the diagnostic for a failed plugin lowering callback.
+    DLLLOCAL void setError(const std::string& message);
+    //! Sets the diagnostic for a failed plugin lowering callback.
+    DLLLOCAL void setError(const char* message);
+    //! Returns the current plugin lowering diagnostic.
+    DLLLOCAL const std::string& getError() const;
+    //! Sets the IR value produced by a successful plugin lowering callback.
+    DLLLOCAL void setResult(QoreIRValue value);
+    //! Returns the IR value produced by a successful plugin lowering callback.
+    DLLLOCAL QoreIRValue getResult() const;
+    //! Returns the active lowering pass for advanced callbacks that need it.
+    DLLLOCAL QoreIRLowering& getLowering() const;
+
+private:
+    friend class QoreIRLowering;
+
+    DLLLOCAL QoreIRLoweringContext(QoreIRLowering& lowering, std::string& error)
+            : lowering(lowering), error(error) {
+    }
+
+    QoreIRLowering& lowering;
+    std::string& error;
+    QoreIRValue result;
+};
+
 class QoreIRLowering {
 public:
     //! Handler metadata for inline compilation at block exit points
@@ -253,6 +286,7 @@ private:
     QoreIROpcode selectFoldOpcode(const QoreParseAnalysis& analysis,
         QoreIROpcode any_op, QoreIROpcode int_op, QoreIROpcode float_op) const;
     bool ensureBuilderContext(std::string& error) const;
+    QoreIRValue tryPluginLowering(const QoreValue& expr, std::string& error);
     QoreIRBasicBlock* createBlock(const std::string& prefix);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
@@ -354,10 +388,11 @@ private:
      *  @param end_index end index in block_handlers (SIZE_MAX = through the end)
      *  @param barrier_depth cleanup_stack depth to set as a hard floor while a
      *    handler body is being inlined — any `emitBlockCleanups` invoked from a
-     *    non-local exit (return/break/continue) inside the handler body clamps
-     *    its walk at this depth so the firing Scope entry (which still owns
-     *    this handler range) can't re-enter `lowerHandlersAtExit` on the same
-     *    handlers.  SIZE_MAX = no barrier.  Implemented via a
+     *    non-local exit (return/break/continue) inside the handler body skips
+     *    the firing Scope entry (which still owns this handler range) so it
+     *    can't re-enter `lowerHandlersAtExit` on the same handlers. Cleanup
+     *    entries below that Scope, such as block locals, still run. SIZE_MAX =
+     *    no barrier. Implemented via a
      *    HandlerBarrier entry pushed on cleanup_stack for the duration of the
      *    handler body lowering.
      *  @return false if lowering failed
@@ -383,11 +418,9 @@ private:
     struct BlockCleanupEntry {
         //! HandlerBarrier is a sentinel pushed around a handler body being
         //! inlined by lowerHandlersAtExit().  It has no cleanup effect, but
-        //! emitBlockCleanups() treats it as a hard floor — the walk stops
-        //! at the barrier so a non-local exit inside the handler body can
-        //! not reach back past the firing Scope entry and re-enter the same
-        //! handler range (infinite-recursion guard; symmetric to the
-        //! TryStatement/RefForeach anchors added in 8fb555ac1).
+        //! emitBlockCleanups() uses it to skip the firing Scope entry so a
+        //! non-local exit inside the handler body cannot re-enter the same
+        //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries

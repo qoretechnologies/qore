@@ -60,6 +60,10 @@ QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     qore_type_t lt = lh->getType();
     qore_type_t rt = rh->getType();
 
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::Multiply, xsink);
+    }
+
     // relative date * int/float/number => relative date
     if (lt == NT_DATE || rt == NT_DATE) {
         const DateTimeNode* dt = lt == NT_DATE ? lh->get<DateTimeNode>() : rh->get<DateTimeNode>();
@@ -134,8 +138,12 @@ int QoreMultiplicationOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         del.release();
     }
 
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(leftTypeInfo, rightTypeInfo,
+        QoreBufferBinaryOperation::Multiply);
+    if (bufferResultTypeInfo) {
+        returnTypeInfo = bufferResultTypeInfo;
     // if either side is a date, return type is date (relative date * scalar => relative date)
-    if (QoreTypeInfo::isType(leftTypeInfo, NT_DATE) || QoreTypeInfo::isType(rightTypeInfo, NT_DATE)) {
+    } else if (QoreTypeInfo::isType(leftTypeInfo, NT_DATE) || QoreTypeInfo::isType(rightTypeInfo, NT_DATE)) {
         returnTypeInfo = dateTypeInfo;
     // if either side is a float, then the return type is float (highest priority)
     } else if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {

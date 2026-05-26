@@ -30,6 +30,8 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreColumnarResult.h>
+#include "qore/intern/QC_ColumnarResult.h"
 #include "qore/intern/QC_SQLStatement.h"
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
@@ -58,7 +60,7 @@ extern QoreClass* QC_ABSTRACTDATASOURCE;
     @note
     - Most commands are executed implicitly; for example, in the example above there is no call to SQLStatement::exec() as it is executed implicitly in the initial call to SQLStatement::next().
     - Current column values in query results iterated with SQLStatement::next() as above can also be dereferenced directly from the SQLStatement object by using the column name in lower case as a member name (using SQLStatement::memberGate(), see that method for an example)
-    - Query results can also be returned in blocks using SQLStatement::fetchRows() and SQLStatement::fetchColumns() ("rows" and "columns" in this case refer to the output data format; also using these methods there is no need to call SQLStatement::next())
+    - Query results can also be returned in blocks using SQLStatement::fetchRows(), SQLStatement::fetchColumns(), and SQLStatement::fetchColumnar() ("rows" and "columns" in this case refer to the output data format; also using these methods there is no need to call SQLStatement::next())
     - When using an SQLStatement object with a DatasourcePool, the statement will be automatically closed when the connection is returned to the pool (for example, by committing or rolling back the transaction).
 
     The following methods are useful when executing all statements:
@@ -84,6 +86,7 @@ extern QoreClass* QC_ABSTRACTDATASOURCE;
     - SQLStatement::fetchRow()
     - SQLStatement::fetchRows()
     - SQLStatement::fetchColumns()
+    - SQLStatement::fetchColumnar()
 
     The following methods are useful when executing stored procedures, functions, or other non-select SQL statements:
     - SQLStatement::getOutput()
@@ -680,6 +683,35 @@ hash<auto> h = stmt.fetchColumns(-1);
  */
 hash<auto> SQLStatement::fetchColumns(softint rows = -1) [flags=NAMED_ARGS] {
    return stmt->fetchColumns((int)rows, xsink);
+}
+
+//! Retrieves a block of rows as a columnar result; automatically advances the row pointer
+/** If the argument passed is omitted or less than or equal to zero, then all available rows from the current row
+    position are retrieved; if fewer rows are available than requested, then only the rows available are retrieved.
+
+    @param rows The maximum number of rows to retrieve, if this argument is omitted, negative, or equal to zero, then
+    all available rows from the current row position are retrieved
+
+    @return a ColumnarResult object
+
+    @par Example:
+    @code{.py}
+ColumnarResult result = stmt.fetchColumnar(rows: -1);
+buffer<int64> ids = result.getColumn("id");
+    @endcode
+
+    @throw SQLSTATEMENT-ERROR No %SQL has been set with SQLStatement::prepare() or SQLStatement::prepareRaw()
+
+    @note
+    - There is no need to call SQLStatement::next() when calling this method; the method automatically iterates through
+      the given number of rows
+    - Drivers with @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT can fill the result directly; other drivers use the
+      compatibility fallback based on SQLStatement::fetchColumns()
+
+    @since %Qore 2.3
+ */
+ColumnarResult SQLStatement::fetchColumnar(softint rows = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return qore_columnar_result_to_object(stmt->fetchColumnar((int)rows, xsink), xsink);
 }
 
 //! Describes columns in the statement result.

@@ -148,6 +148,7 @@ public:
 
     //! Sets the runtime value (val + saved_val) for AOT init functions
     DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink);
+    DLLLOCAL void materializeRuntimeRefs(ExceptionSink* xsink);
 
     // Follows a chain of RuntimeConstantRefNode indirections (const A = B;
     // const B = ...) to the terminal stored value while preserving unresolved

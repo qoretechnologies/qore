@@ -1490,9 +1490,14 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
-    // COMPLEX_HASH_NEW: stringref + u8 num_args + N×classifyAndWriteExpr-encoded args
-    if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW) {
+    // COMPLEX_HASH_NEW/COMPLEX_LIST_NEW: stringref + u8 num_args + N×encoded args
+    // COMPLEX_BUFFER_NEW recursive expressions always carry an init-kind byte.
+    if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW
+            || ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
         rdr.readStringRef(p);  // type path
+        if (ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
+            QoreAOTBinaryReader::readU8(p);  // QoreComplexBufferInitKind
+        }
         uint8_t na = QoreAOTBinaryReader::readU8(p);
         for (uint8_t i = 0; i < na; ++i) {
             skipOneExpr(rdr, p, e);  // each arg
@@ -2346,6 +2351,49 @@ static QoreAOTContext* buildContextFromSlotMap(
                         ctx->exprs[i] = toBitsNB(QoreValue(ncl));
                     } else {
                         printd(0, "AOT v2: cannot resolve type '%s' for complex list: %s\n",
+                            ref1, type_error.c_str());
+                        arg_val.discard(nullptr);
+                        has_unsupported = true;
+                    }
+                } else {
+                    arg_val.discard(nullptr);
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::COMPLEX_BUFFER_NEW: {
+                // ref1 = type path, followed by one serialized list initializer
+                ref1 = reader.readStringRef(ptr);
+                QoreComplexBufferInitKind init_kind = QoreComplexBufferInitKind::Constructor;
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+                    init_kind = static_cast<QoreComplexBufferInitKind>(QoreAOTBinaryReader::readU8(ptr));
+                }
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                QoreValue arg_val;
+                if (num_args > 0) {
+                    std::string arg_err;
+                    arg_val = readOneExpr(reader, ptr, end, arg_err, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    if (!arg_err.empty()) {
+                        printd(0, "AOT v2: error reading complex buffer arg for '%s': %s\n",
+                            ref1 ? ref1 : "", arg_err.c_str());
+                        arg_val.discard(nullptr);
+                        arg_val = QoreValue();
+                        has_unsupported = true;
+                    }
+                }
+                if (has_unsupported) {
+                    continue;
+                }
+                if (ref1 && *ref1) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    if (ti) {
+                        NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val, init_kind);
+                        ctx->exprs[i] = toBitsNB(QoreValue(ncb));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve type '%s' for complex buffer: %s\n",
                             ref1, type_error.c_str());
                         arg_val.discard(nullptr);
                         has_unsupported = true;
@@ -5438,6 +5486,18 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             break;
         }
 
+        case QoreIRInstGroup::NewComplexBuffer: {
+            QoreValue expr = readExpr(reader, ptr, end, error);
+            if (!error.empty()) {
+                return nullptr;
+            }
+            auto* ni = new QoreIRNewComplexBufferInstruction(nullptr, expr);
+            ni->opcode = opcode;
+            expr.discard(nullptr);
+            inst.reset(ni);
+            break;
+        }
+
         case QoreIRInstGroup::VrnConstruct: {
             QoreValue expr = readExpr(reader, ptr, end, error);
             if (!error.empty()) {
@@ -6538,22 +6598,33 @@ static void registerAOTFunctionsFromSlotMaps(
             printd(5, "AOT slot-reg: method '%s'::'%s' class=%p\n",
                 class_name.c_str(), method_name.c_str(), (void*)qc);
             if (qc && !skip_special_method) {
-                // Use parseFindLocalMethod/parseFindLocalStaticMethod instead of
-                // findMethod/findStaticMethod — the latter checks committedEmpty()
-                // which returns true for deserialized (pending) variants
-                qore_class_private* qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+                // Use parse-time lookup instead of findMethod/findStaticMethod;
+                // runtime lookup checks committedEmpty(), which returns true for
+                // deserialized pending variants.  Slot-map entries can refer to
+                // self/private methods, so resolve in the class context instead
+                // of only checking the local method map.
+                qore_class_private* qcp = nullptr;
                 // Collect both normal and static methods — a class can have both
                 // a non-static and a static method with the same name (e.g.,
                 // getDisplayName() and static getDisplayName(string)).
                 // We search both to find the variant matching the target signature.
                 // When key_is_static, search static first and fall back to
                 // instance only if no static variant is present.
-                const QoreMethod* m = key_is_static
-                    ? qcp->parseFindLocalStaticMethod(method_name.c_str())
-                    : qcp->parseFindLocalMethod(method_name.c_str());
-                const QoreMethod* m_static = key_is_static
-                    ? nullptr
-                    : qcp->parseFindLocalStaticMethod(method_name.c_str());
+                const QoreMethod* m = nullptr;
+                const QoreMethod* m_static = nullptr;
+                if (key_is_static) {
+                    qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+                    m = qcp->parseFindLocalStaticMethod(method_name.c_str());
+                    if (!m) {
+                        m = findAOTStaticMethod(qc, method_name.c_str());
+                    }
+                } else {
+                    m = resolveAOTSelfMethod(qc, method_name.c_str(), qcp);
+                    m_static = qcp->parseFindLocalStaticMethod(method_name.c_str());
+                    if (!m_static) {
+                        m_static = findAOTStaticMethod(qc, method_name.c_str());
+                    }
+                }
                 if (!m) {
                     m = m_static;
                     m_static = nullptr;

@@ -1,0 +1,67 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFramePipelineFilterGroup
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+%requires DataProviderDataFrame
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFramePipelineFilterGroup {
+    constructor() {
+        Bench::BenchRunner r("dataframe_pipeline_filter_group");
+        r.iterations = 6;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+        *DataProviderPipeline pipe;
+        list<auto> rows_out;
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+                },
+                <DataProviderExpression>{
+                    "exp": ">=",
+                    "args": (<DataProviderFieldReference>{"field": "score"}, 90.0),
+                },
+            ),
+        };
+
+        r.setup = sub () {
+            df = DataFrameBench::makeFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+            pipe = new DataProviderPipeline(<PipelineOptionInfo>{
+                "name": "dataframe-benchmark-pipeline",
+                "synchronous": True,
+                "output_callback": sub (auto row) {
+                    push rows_out, row;
+                },
+            });
+            pipe.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+            pipe.append(new QoreGroupByProcessor({
+                "group_by": "region",
+                "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
+            }));
+        };
+
+        r.measure = sub () {
+            rows_out = ();
+            pipe.submit(df);
+            pipe.waitDone();
+            if (!rows_out.size()) {
+                throw "BENCHMARK-ERROR", "dataframe_pipeline_filter_group produced no rows";
+            }
+        };
+
+        exit(r.run());
+    }
+}

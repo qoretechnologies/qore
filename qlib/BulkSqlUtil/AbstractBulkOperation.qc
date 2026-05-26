@@ -199,6 +199,11 @@ on_error ds.rollback();
             - discard()
         */
         queueData(hash data) {
+            if (isHashOfBuffers(data)) {
+                queueBufferColumns(data, data.firstValue().lsize());
+                return;
+            }
+
             # prepare buffer hash if necessary
             if (!hbuf)
                 setupInitialRowColumns(data);
@@ -305,6 +310,27 @@ on_error ds.rollback();
             flushIntern();
         }
 
+        #! queues shaped row data in the block buffer
+        /** @param data bulk row data in hash-of-lists, dense buffer-column, or ColumnarResult form
+
+            @since %BulkSqlUtil 1.4
+        */
+        queueData(auto data) {
+            if (data.typeCode() == NT_OBJECT && data.className() == "ColumnarResult") {
+                queueBufferColumns(data.toColumnHash(), data.numRows());
+                return;
+            }
+            if (isHashOfBuffers(data)) {
+                queueBufferColumns(data, data.firstValue().lsize());
+                return;
+            }
+            if (data.typeCode() == NT_OBJECT && data.fullType() == "object<DataFrame>") {
+                queueData(data.toColumnarResult());
+                return;
+            }
+            queueData(cast<hash<auto>>(data));
+        }
+
         #! returns the current size of the cache as a number of rows
         /** @return the current size of the cache as a number of rows
 
@@ -360,6 +386,45 @@ on_error ds.rollback();
         #! sets up the block buffer given the initial template row for inserting
         private setupInitialRow(hash<auto> row) {
             map hbuf.$1 = (), keys row;
+        }
+
+        #! Returns True if the value is a hash of dense column buffers
+        private bool isHashOfBuffers(auto data) {
+            if (data.typeCode() != NT_HASH || !data) {
+                return False;
+            }
+            foreach auto value in (data.iterator()) {
+                if (value.typeCode() != NT_BUFFER) {
+                    return False;
+                }
+            }
+            return True;
+        }
+
+        #! Queues dense column blocks in block-sized slices to avoid materializing large packed inputs at once
+        private queueBufferColumns(hash<auto> data, int rows) {
+            for (int offset = 0; offset < rows; offset += block_size) {
+                int count = rows - offset;
+                if (count > block_size) {
+                    count = block_size;
+                }
+                queueData(bufferColumnsToHashList(sliceBufferColumns(data, offset, count)));
+            }
+        }
+
+        #! Returns a contiguous slice of dense buffer or list columns
+        private hash<auto> sliceBufferColumns(hash<auto> data, int offset, int count) {
+            return map {
+                $1.key: $1.value.typeCode() == NT_BUFFER
+                    ? $1.value.view(offset, count)
+                    : ($1.value.typeCode() == NT_LIST ? $1.value[offset..(offset + count - 1)] : $1.value)
+            }, data.pairIterator();
+        }
+
+        #! Converts dense buffer columns to the hash-of-lists compatibility representation
+        private hash<auto> bufferColumnsToHashList(hash<auto> data) {
+            return map {$1.key: $1.value.typeCode() == NT_BUFFER ? $1.value.toList() : $1.value},
+                data.pairIterator();
         }
 
         #! flushes any remaining batched data to the database; this method should always be called before committing the transaction or destroying the object

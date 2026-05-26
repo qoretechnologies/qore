@@ -44,6 +44,7 @@
 #include "qore/intern/qore_debug_narrowing.h"
 
 #include <atomic>
+#include <memory>
 
 template <class T>
 class LocalRefHelper : public RuntimeReferenceHelper {
@@ -157,6 +158,25 @@ public:
 };
 
 class LocalVarValue : public VarValueBase {
+private:
+    struct TypeSubstitutionCache {
+        const QoreTypeInfo* inputTypeInfo = nullptr;
+        const QoreTypeInfo* inputRefTypeInfo = nullptr;
+        const QoreTypeInfo* receiverTypeInfo = nullptr;
+        const UserSignature* typeParamOwner = nullptr;
+        type_vec_t typeParamArgs;
+        const QoreTypeInfo* resolvedTypeInfo = nullptr;
+        const QoreTypeInfo* resolvedRefTypeInfo = nullptr;
+
+        DLLLOCAL bool matches(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+                const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst) const;
+        DLLLOCAL void set(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+                const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst,
+                const QoreTypeInfo* resolvedTypeInfo, const QoreTypeInfo* resolvedRefTypeInfo);
+    };
+
+    mutable std::unique_ptr<TypeSubstitutionCache> type_substitution_cache;
+
 public:
     DLLLOCAL void set(const char* n_id, const void* n_local_var, const QoreTypeInfo* varTypeInfo, QoreValue nval, bool assign,
             bool static_assignment) {
@@ -190,6 +210,7 @@ public:
 
         id = n_id;
         local_var = n_local_var;
+        type_substitution_cache.reset();
         block_cleared = false;
 
         // try to set an optimized value type for the value holder if possible
@@ -215,6 +236,8 @@ public:
 
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
             const QoreTypeInfo* refTypeInfo) const;
+    DLLLOCAL void resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const QoreTypeInfo*& refTypeInfo,
+            bool typeInfoNeedsSubstitution, bool refTypeInfoNeedsSubstitution) const;
     DLLLOCAL void remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInfo);
 
     DLLLOCAL void syncValue(QoreValue nval, ExceptionSink* xsink) {
@@ -474,13 +497,15 @@ public:
         is_auto_type = isAutoTypeInfo(base_ti);
         typeInfo = base_ti;
         refTypeInfo = QoreTypeInfo::getReferenceTarget(base_ti);
+        updateTypeSubstitutionFlags();
     }
 
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), closure_use(old.closure_use),
             parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
             is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
-            narrowedTypeInfo(old.narrowedTypeInfo) {
+            narrowedTypeInfo(old.narrowedTypeInfo), type_info_needs_substitution(old.type_info_needs_substitution),
+            ref_type_info_needs_substitution(old.ref_type_info_needs_substitution) {
     }
 
     DLLLOCAL ~LocalVar() {
@@ -679,8 +704,12 @@ public:
             }
             // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
             const QoreTypeInfo* ti = getTypeInfoForLValue();
-            ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
-            return val->getLValue(lvh, for_remove, ti, refTypeInfo);
+            const QoreTypeInfo* rti = refTypeInfo;
+            if (type_info_needs_substitution || ref_type_info_needs_substitution) {
+                val->resolveLValueTypeInfo(ti, rti, type_info_needs_substitution,
+                    ref_type_info_needs_substitution);
+            }
+            return val->getLValue(lvh, for_remove, ti, rti);
         }
 
         // Prefer cvstack lookup (topmost = current function's own variable).
@@ -732,6 +761,7 @@ public:
         typeInfo = base_ti;
         refTypeInfo = QoreTypeInfo::getReferenceTarget(base_ti);
         narrowedTypeInfo = nullptr;
+        updateTypeSubstitutionFlags();
     }
 
     //! Returns the type info for this variable at parse time
@@ -871,9 +901,16 @@ private:
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
+    bool type_info_needs_substitution = false;
+    bool ref_type_info_needs_substitution = false;
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_try_find_lvar(this);
+    }
+
+    DLLLOCAL void updateTypeSubstitutionFlags() {
+        type_info_needs_substitution = qore_type_contains_type_parameter(typeInfo);
+        ref_type_info_needs_substitution = qore_type_contains_type_parameter(refTypeInfo);
     }
 
     //! Helper to detect if a type is an auto type that can be narrowed

@@ -205,6 +205,14 @@ public:
     */
     DLLEXPORT static const QoreParseOptions NO_MODULE_PATH_DIRECTIVES;
 
+    //! extended option: allow IEEE-unsafe floating-point optimizer rewrites (bit 71)
+    /** This option is off by default. Optimizers may only reassociate floating-point
+        plugin operations when this Program option is set and the registered operation
+        descriptor also sets QorePluginOpcodeInfoExtended::fp_reassociation_allowed.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions FP_FAST_MATH;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)

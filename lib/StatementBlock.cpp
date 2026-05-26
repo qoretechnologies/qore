@@ -329,28 +329,11 @@ void StatementBlock::exec() {
     exec(&xsink);
 }
 
-static bool isIRTerminatorOpcode(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::Br:
-        case QoreIROpcode::BrIf:
-        case QoreIROpcode::BranchIfLtLocalInt:
-        case QoreIROpcode::Invoke:
-        case QoreIROpcode::Return:
-        case QoreIROpcode::ReturnNothing:
-        case QoreIROpcode::Throw:
-        case QoreIROpcode::Rethrow:
-        case QoreIROpcode::ThreadExit:
-            return true;
-        default:
-            return false;
-    }
-}
-
 static bool irBlockHasTerminator(const QoreIRBasicBlock* block) {
     if (!block || block->instructions.empty()) {
         return false;
     }
-    return isIRTerminatorOpcode(block->instructions.back()->opcode);
+    return isTerminator(block->instructions.back()->opcode);
 }
 
 static void push_top_level_local_var(LocalVar* lv, const QoreProgramLocation* loc) {

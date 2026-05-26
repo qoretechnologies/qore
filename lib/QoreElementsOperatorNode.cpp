@@ -61,6 +61,7 @@ QoreValue QoreElementsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
         case NT_HASH: return v->get<const QoreHashNode>()->size();
         case NT_OBJECT: return v->get<const QoreObject>()->size(xsink);
         case NT_BINARY: return v->get<const BinaryNode>()->size();
+        case NT_BUFFER: return v->get<const QoreBufferNode>()->size();
     }
 
     return 0;
@@ -85,11 +86,12 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
         && !QoreTypeInfo::parseAccepts(hashTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(stringTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(binaryTypeInfo, parse_context.typeInfo)
+        && !QoreTypeInfo::parseAccepts(bufferTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(objectTypeInfo, parse_context.typeInfo)) {
         QoreStringNode* edesc = new QoreStringNode("the argument given to the 'elements' operator is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
         edesc->concat(", so this expression will always return 0; the 'elements' operator can only return a value " \
-            "with lists, hashes, strings, binary objects, and objects");
+            "with lists, hashes, strings, binary objects, buffers, and objects");
         qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
             edesc);
     }

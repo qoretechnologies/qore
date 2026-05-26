@@ -38,10 +38,12 @@
 #include <vector>
 #include <utility>
 #include <functional>
+#include <atomic>
 
 #include "qore/intern/QoreTypeSpec.h"
 
 class UserSignature;
+class QoreComplexBufferTypeInfo;
 
 enum class QoreWildcardKind : unsigned char {
     Unbounded,
@@ -77,6 +79,14 @@ public:
 
     DLLLOCAL virtual ~QoreTypeInfo() = default;
 
+    DLLLOCAL signed char getContainsTypeParameterCache() const {
+        return contains_type_parameter_cache.load(std::memory_order_relaxed);
+    }
+
+    DLLLOCAL void setContainsTypeParameterCache(bool contains_type_parameter) const {
+        contains_type_parameter_cache.store(contains_type_parameter ? 1 : 0, std::memory_order_relaxed);
+    }
+
     // Accessors for accept_vec encapsulation
     DLLLOCAL bool isAcceptVecEmpty() const {
         return accept_vec.empty();
@@ -88,6 +98,24 @@ public:
 
     DLLLOCAL bool hasOneAcceptSpec() const {
         return accept_vec.size() == 1;
+    }
+
+    DLLLOCAL bool acceptsRuntimeValueWithoutFilter(const QoreValue& n) const {
+        if (n.isEnum()) {
+            return false;
+        }
+
+        qore_type_t t = n.getType();
+        if (t == NT_OBJECT) {
+            return false;
+        }
+
+        for (const QoreAcceptSpec& as : accept_vec) {
+            if (!as.map && as.spec.isRuntimeBaseType(t)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
@@ -307,6 +335,17 @@ public:
             : ti->return_vec[0].spec.getComplexList();
     }
 
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* getUniqueReturnComplexBuffer(const QoreTypeInfo* ti) {
+        if (!ti || ti->return_vec.size() > 1 || !hasType(ti)) {
+            return nullptr;
+        }
+        return ti->return_vec[0].spec.getComplexBuffer();
+    }
+
+    //! Returns the complex buffer type info if this is a concrete buffer<T> type
+    DLLLOCAL static const QoreComplexBufferTypeInfo* getComplexBufferType(const QoreTypeInfo* ti);
+
     //! Returns the complex code type info if this is a typed callable type
     /** @param ti the type to check
         @return the QoreComplexCodeTypeInfo pointer if this is a typed callable, nullptr otherwise
@@ -402,6 +441,9 @@ public:
     }
 
     // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* getReturnComplexBufferOrNothing(const QoreTypeInfo* ti);
+
+    // static version of method, checking for null pointer
     DLLLOCAL static bool hasComplexType(const QoreTypeInfo* ti) {
         if (!ti) {
             return false;
@@ -456,6 +498,9 @@ public:
     DLLLOCAL static void acceptInputParam(const QoreTypeInfo* ti, int param_num, const char* param_name, QoreValue& n,
             ExceptionSink* xsink) {
         if (hasType(ti)) {
+            if (ti->acceptsRuntimeValueWithoutFilter(n)) {
+                return;
+            }
             ti->acceptInputIntern(xsink, "parameter", false, param_num, param_name, n);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink);
@@ -669,6 +714,9 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getComplexListValueType(const QoreTypeInfo* ti);
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* getComplexBufferValueType(const QoreTypeInfo* ti);
 
     DLLLOCAL void getAcceptTypes(ReferenceHolder<QoreHashNode>& h, bool simple = false) const {
         for (auto& i : getAcceptSpecs()) {
@@ -885,6 +933,7 @@ protected:
 
 private:
     const q_accept_vec_t accept_vec;
+    mutable std::atomic<signed char> contains_type_parameter_cache {-1};
 };
 
 class QoreAnyTypeInfo : public QoreTypeInfo {
@@ -1434,6 +1483,63 @@ public:
 class QoreAutoNoNarrowListOrNothingTypeInfo : public QoreComplexListOrNothingTypeInfo {
 public:
     DLLLOCAL QoreAutoNoNarrowListOrNothingTypeInfo() : QoreComplexListOrNothingTypeInfo(autoNoNarrowTypeInfo) {
+    }
+};
+
+class QoreComplexBufferTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreComplexBufferTypeInfo(QoreBufferElementType element_type, bool nullable_elements);
+
+    DLLLOCAL QoreBufferElementType getBufferElementType() const {
+        return element_type;
+    }
+
+    DLLLOCAL bool hasNullableElements() const {
+        return nullable_elements;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getElementTypeInfo() const;
+
+protected:
+    QoreString pname;
+    QoreBufferElementType element_type;
+    bool nullable_elements;
+
+    DLLLOCAL QoreComplexBufferTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
+            const QoreString& tname, QoreBufferElementType element_type, bool nullable_elements);
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const;
+
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const;
+
+    DLLLOCAL const char* getPathImpl() const {
+        assert(!pname.empty());
+        return pname.c_str();
+    }
+};
+
+class QoreComplexBufferOrNothingTypeInfo : public QoreComplexBufferTypeInfo {
+public:
+    DLLLOCAL QoreComplexBufferOrNothingTypeInfo(QoreBufferElementType element_type, bool nullable_elements,
+        const QoreTypeInfo* value_type);
+
+protected:
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const;
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return QoreValue();
     }
 };
 
@@ -2270,6 +2376,38 @@ protected:
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+};
+
+class QoreBufferTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreBufferTypeInfo() : QoreTypeInfo("buffer",
+        q_accept_vec_t {
+            {NT_BUFFER, nullptr, true},
+        },
+        q_return_vec_t {{NT_BUFFER, true}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+};
+
+class QoreBufferOrNothingTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreBufferOrNothingTypeInfo() : QoreTypeInfo("*buffer",
+        q_accept_vec_t {
+            {NT_BUFFER, nullptr},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        },
+        q_return_vec_t {{NT_BUFFER}, {NT_NOTHING}}) {
+    }
+
+protected:
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
         return false;
     }
@@ -3510,6 +3648,9 @@ struct QoreTypeParamInstantiation {
     }
 };
 
+//! Returns the current call-local generic type-parameter instantiation, if any
+DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
+
 // qore_get_union_type / qore_get_union_or_nothing_type are now declared DLLEXPORT in
 // include/qore/QoreType.h so module qpp signatures can use union<...> types.
 // type_vec_t is defined in include/qore/common.h.
@@ -3536,6 +3677,16 @@ DLLLOCAL const QoreTypeInfo* qore_get_wildcard_super_type(const QoreTypeInfo* bo
 
 //! Returns true if the type info or any nested generic argument contains a wildcard
 DLLLOCAL bool qore_type_contains_wildcard(const QoreTypeInfo* ti);
+
+//! Returns true if the type info or any nested generic argument contains a symbolic type parameter
+DLLLOCAL bool qore_type_contains_type_parameter(const QoreTypeInfo* ti);
+
+//! Substitutes symbolic type parameters in the given type only if the type can contain symbolic parameters
+DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti);
+
+//! Substitutes symbolic type parameters in the given type only if the type can contain symbolic parameters
+DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
+    const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst = nullptr);
 
 //! Checks whether a target generic type argument accepts a source type argument
 DLLLOCAL qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,

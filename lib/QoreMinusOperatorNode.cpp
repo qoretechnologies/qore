@@ -63,6 +63,10 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     qore_type_t lt = lh->getType();
     qore_type_t rt = rh->getType();
 
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::Subtract, xsink);
+    }
+
     if (rt == NT_NOTHING) {
         return lh.takeReferencedValue();
     }
@@ -174,8 +178,12 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         del.release();
     }
 
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(leftTypeInfo, rightTypeInfo,
+        QoreBufferBinaryOperation::Subtract);
+    if (bufferResultTypeInfo) {
+        returnTypeInfo = bufferResultTypeInfo;
     // issue #4834: if the rhs is NOTHING, then return the type of the lhs and raise a warning
-    if (QoreTypeInfo::isType(rightTypeInfo, NT_NOTHING)) {
+    } else if (QoreTypeInfo::isType(rightTypeInfo, NT_NOTHING)) {
         returnTypeInfo = leftTypeInfo;
         QoreStringNode* edesc = new QoreStringNode("subtracting NOTHING from ");
         QoreTypeInfo::getThisType(leftTypeInfo, *edesc);

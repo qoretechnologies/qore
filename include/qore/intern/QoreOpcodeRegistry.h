@@ -12,7 +12,16 @@
 #ifndef _QORE_OPCODE_REGISTRY_H
 #define _QORE_OPCODE_REGISTRY_H
 
+#include <cstdint>
 #include <string>
+
+enum QoreOpcodePropertyFlag : uint32_t {
+    QORE_OPCODE_PROPERTY_NONE = 0u,
+    QORE_OPCODE_PROPERTY_CALL_INVOKE = 1u << 0,
+    QORE_OPCODE_PROPERTY_REGEX_INVOKE = 1u << 1,
+    QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE = 1u << 2,
+    QORE_OPCODE_PROPERTY_RANGE_SLICE = 1u << 3,
+};
 
 //! Centralized metadata for IR opcodes - SINGLE SOURCE OF TRUTH
 //!
@@ -35,6 +44,11 @@ struct OpcodeInfo {
     bool skip_aot_expr_slot;            //! Skip EXPR_TREE slot when operands are pre-evaluated (AOT)
     bool is_unary_invoke;               //! Unary computation op (Invoke dispatches via qore_rt_unary_op)
     bool is_binary_invoke;              //! Binary computation op (Invoke dispatches via qore_rt_binary_op)
+    uint32_t property_flags = QORE_OPCODE_PROPERTY_NONE; //! Additional conservative opcode-family flags
+
+    constexpr bool hasProperty(QoreOpcodePropertyFlag flag) const {
+        return (property_flags & flag) != 0;
+    }
 };
 
 //! Encode a minimum operand count for variable-length instructions.
@@ -43,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[371] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[379] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -147,11 +161,11 @@ constexpr OpcodeInfo OPCODE_REGISTRY[371] = {
     { "KeysAny"                       , false, false, false,  1, "KeysAny", false, true , "ParseNode", true , false, true , true , false }, // 100
     { "KeysList"                      , false, false, false,  1, "KeysList", false, true , "ParseNode", true , false, true , true , false }, // 101
     { "KeysHash"                      , false, false, false,  1, "KeysHash", false, true , "ParseNode", true , false, true , true , false }, // 102
-    { "RegexMatchAny"                 , false, false, false,  1, "RegexMatchAny", false, true , "ParseNode", true , false, true , false, false }, // 103
-    { "RegexMatchBool"                , false, true , false,  1, "RegexMatchBool", false, true , "ParseNode", true , false, true , false, false }, // 104
-    { "RegexNMatchBool"               , false, true , false,  1, "RegexNMatchBool", false, true , "ParseNode", true , false, true , false, false }, // 105
-    { "RegexExtractAny"               , false, false, false,  1, "RegexExtractAny", false, true , "ParseNode", true , false, true , false, false }, // 106
-    { "RegexExtractList"              , false, false, false,  1, "RegexExtractList", false, true , "ParseNode", true , false, true , false, false }, // 107
+    { "RegexMatchAny"                 , false, false, false,  1, "RegexMatchAny", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_REGEX_INVOKE }, // 103
+    { "RegexMatchBool"                , false, true , false,  1, "RegexMatchBool", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_REGEX_INVOKE }, // 104
+    { "RegexNMatchBool"               , false, true , false,  1, "RegexNMatchBool", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_REGEX_INVOKE }, // 105
+    { "RegexExtractAny"               , false, false, false,  1, "RegexExtractAny", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_REGEX_INVOKE }, // 106
+    { "RegexExtractList"              , false, false, false,  1, "RegexExtractList", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_REGEX_INVOKE }, // 107
     { "RegexSubstAny"                 , false, false, false,  1, "RegexSubstAny", false, true , "ParseNode", true , false, false, false, false }, // 108
     { "RegexSubstString"              , false, true , false,  1, "RegexSubstString", false, true , "ParseNode", true , false, false, false, false }, // 109
     { "InstanceOfBool"                , false, true , false,  1, "InstanceOfBool", false, true , "ParseNode", true , false, true , false, false }, // 110
@@ -167,14 +181,14 @@ constexpr OpcodeInfo OPCODE_REGISTRY[371] = {
     { "ExistsBool"                    , false, true , false,  1, "ExistsBool", false, true , "ParseNode", true , false, true , true , false }, // 120
     { "ElementsAny"                   , false, false, false,  1, "ElementsAny", false, true , "ParseNode", true , false, true , true , false }, // 121
     { "ElementsInt"                   , false, true , false,  1, "ElementsInt", false, true , "ParseNode", true , false, true , true , false }, // 122
-    { "DotEvalAny"                    , false, false, false,  1, "DotEvalAny", false, true , "ParseNode", true , false, false, false, false }, // 123
-    { "DotEvalInt"                    , false, false, false,  1, "DotEvalInt", false, true , "ParseNode", true , false, false, false, false }, // 124
-    { "DotEvalFloat"                  , false, false, false,  1, "DotEvalFloat", false, true , "ParseNode", true , false, false, false, false }, // 125
-    { "DotEvalString"                 , false, false, false,  1, "DotEvalString", false, true , "ParseNode", true , false, false, false, false }, // 126
-    { "DotEvalDate"                   , false, false, false,  1, "DotEvalDate", false, true , "ParseNode", true , false, false, false, false }, // 127
-    { "DotEvalList"                   , false, false, false,  1, "DotEvalList", false, true , "ParseNode", true , false, false, false, false }, // 128
-    { "DotEvalHash"                   , false, false, false,  1, "DotEvalHash", false, true , "ParseNode", true , false, false, false, false }, // 129
-    { "DotEvalObject"                 , false, false, false,  1, "DotEvalObject", false, true , "ParseNode", true , false, false, false, false }, // 130
+    { "DotEvalAny"                    , false, false, false,  1, "DotEvalAny", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 123
+    { "DotEvalInt"                    , false, false, false,  1, "DotEvalInt", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 124
+    { "DotEvalFloat"                  , false, false, false,  1, "DotEvalFloat", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 125
+    { "DotEvalString"                 , false, false, false,  1, "DotEvalString", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 126
+    { "DotEvalDate"                   , false, false, false,  1, "DotEvalDate", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 127
+    { "DotEvalList"                   , false, false, false,  1, "DotEvalList", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 128
+    { "DotEvalHash"                   , false, false, false,  1, "DotEvalHash", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 129
+    { "DotEvalObject"                 , false, false, false,  1, "DotEvalObject", false, true , "ParseNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE }, // 130
     { "MapSelectList"                 , false, false, false,  3, "MapSelectList", false, true , "ParseNode", true , false, false, false, false }, // 131
     { "HashMap"                       , false, false, false,  3, "HashMap", false, true , "ParseNode", true , false, false, false, false }, // 132
     { "HashMapSelect"                 , false, false, false,  4, "HashMapSelect", false, true , "ParseNode", true , false, false, false, false }, // 133
@@ -290,9 +304,9 @@ constexpr OpcodeInfo OPCODE_REGISTRY[371] = {
     { "RangeInt"                      , false, false, false,  2, "RangeInt", false, true , "ParseNode", true , false, true , false, true  }, // 243
     { "RangeFloat"                    , false, false, false,  2, "RangeFloat", false, true , "ParseNode", true , false, true , false, true  }, // 244
     { "RangeDate"                     , false, false, false,  2, "RangeDate", false, true , "ParseNode", true , false, true , false, true  }, // 245
-    { "RangeSliceAny"                 , false, false, false,  3, "RangeSliceAny", false, true , "ParseNode", true , false, true , false, false }, // 246
-    { "RangeSliceInt"                 , false, false, false,  3, "RangeSliceInt", false, true , "ParseNode", true , false, true , false, false }, // 247
-    { "RangeSliceFloat"               , false, false, false,  3, "RangeSliceFloat", false, true , "ParseNode", true , false, true , false, false }, // 248
+    { "RangeSliceAny"                 , false, false, false,  3, "RangeSliceAny", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_RANGE_SLICE }, // 246
+    { "RangeSliceInt"                 , false, false, false,  3, "RangeSliceInt", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_RANGE_SLICE }, // 247
+    { "RangeSliceFloat"               , false, false, false,  3, "RangeSliceFloat", false, true , "ParseNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_RANGE_SLICE }, // 248
     { "CastAny"                       , false, false, false,  1, "CastAny", false, true , "ParseNode", true , false, true , false, false }, // 249
     { "CastList"                      , false, false, false,  1, "CastList", false, true , "ParseNode", true , false, true , false, false }, // 250
     { "CastHash"                      , false, false, false,  1, "CastHash", false, true , "ParseNode", true , false, true , false, false }, // 251
@@ -339,17 +353,17 @@ constexpr OpcodeInfo OPCODE_REGISTRY[371] = {
     { "VrnConstruct"                  , false, false, false, OPCODE_MIN_OPERANDS(0), "VrnConstruct", false, true , "ParseNode", true , false, false, false, false }, // 292
     { "HashSetKeyValue"               , false, false, false,  3, "HashSetKeyValue", false, true , "ParseNode", false, false, false, false, false }, // 293
     { "IteratorCreateReverse"         , false, false, false,  1, "IteratorCreateReverse", false, true , "ParseNode", true , false, false, false, false }, // 294
-    { "Call"                          , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 295
-    { "CallDirect"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 296
-    { "CallIndirect"                  , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 297
-    { "CallMethod"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 298
-    { "CallMethodDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 299
+    { "Call"                          , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 295
+    { "CallDirect"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 296
+    { "CallIndirect"                  , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 297
+    { "CallMethod"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 298
+    { "CallMethodDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 299
     { "InvokeMethodDirect"            , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 300
-    { "CallStatic"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 301
-    { "CallStaticDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 302
+    { "CallStatic"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 301
+    { "CallStaticDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 302
     { "DotEvalMethodDirect"           , true , false, false, -1, "DotEvalMethodDirect", false, true , "ParseNode", true , false, false, false, false }, // 303
     { "InvokeDotEvalMethodDirect"     , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 304
-    { "CallClosureDirect"             , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, true , false, false }, // 305
+    { "CallClosureDirect"             , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, true , false, false, QORE_OPCODE_PROPERTY_CALL_INVOKE }, // 305
     { "Invoke"                        , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 306
     { "GuardInt"                      , false, false, false,  1, "GuardInt", false, true , "ParseNode", false, false, false, false, false }, // 307
     { "GetObjectClass"                , false, false, false,  1, "GetObjectClass", false, true , "ParseNode", true , false, false, false, false }, // 308
@@ -415,12 +429,20 @@ constexpr OpcodeInfo OPCODE_REGISTRY[371] = {
     { "RefSelf"                       , false, false, false,  1, "Create owned reference to value", false, false, "ParseNode", true , false, false, false, false }, // 368
     { "DebugBlock"                    , false, false, false,  0, "Debug-only StatementBlock entry marker", false, false, "ParseNode", false, false, false, false, false }, // 369
     { "CheckException"                , false, false, false,  0, "Route pending cleanup exception to the active handler", false, true , "ParseNode", false, false, false, false, false }, // 370
+    { "NewComplexBuffer"              , false, false, false, OPCODE_MIN_OPERANDS(0), "NewComplexBuffer", false, true , "ParseNode", true , false, false, false, false }, // 371
+    { "PluginUnary"                   , false, false, false,  1, "Dispatch module-registered unary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 372
+    { "PluginBinary"                  , false, false, false,  2, "Dispatch module-registered binary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 373
+    { "PluginCall"                    , false, false, false, OPCODE_MIN_OPERANDS(1), "Dispatch module-registered receiver call with value-list arguments", true , true , "PluginOperation", true , false, false, false, false }, // 374
+    { "PluginSubscript"               , false, false, false,  2, "Dispatch module-registered subscript operation", true , true , "PluginOperation", true , false, false, false, false }, // 375
+    { "PluginConstruct"               , false, false, false, OPCODE_MIN_OPERANDS(0), "Dispatch module-registered construct/static factory operation", true , true , "PluginOperation", true , false, false, false, false }, // 376
+    { "PluginDenseBufferUnary"         , false, false, false,  2, "Dispatch module-registered dense-buffer unary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 377
+    { "PluginDenseBufferBinary"        , false, false, false,  3, "Dispatch module-registered dense-buffer binary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 378
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 371,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 371"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 379,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 379"
 );
 
 //! ============================================================================
@@ -522,6 +544,30 @@ inline bool getOpcodeIsBinaryInvoke(int opcode_id) {
     return info ? info->is_binary_invoke : false;
 }
 
+//! Check if opcode is a call-type op dispatched through Invoke
+inline bool getOpcodeIsCallInvoke(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->hasProperty(QORE_OPCODE_PROPERTY_CALL_INVOKE) : false;
+}
+
+//! Check if opcode is a non-substitution regex op dispatched through Invoke
+inline bool getOpcodeIsRegexInvoke(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->hasProperty(QORE_OPCODE_PROPERTY_REGEX_INVOKE) : false;
+}
+
+//! Check if opcode is a dot-eval op dispatched through Invoke
+inline bool getOpcodeIsDotEvalInvoke(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->hasProperty(QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE) : false;
+}
+
+//! Check if opcode is a range-slice expression op
+inline bool getOpcodeIsRangeSlice(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->hasProperty(QORE_OPCODE_PROPERTY_RANGE_SLICE) : false;
+}
+
 //! Validate opcode registry invariants that are not expressible as static_asserts.
 inline bool qore_ir_validate_opcode_registry(std::string& error) {
     constexpr int REGISTRY_SIZE = sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]);
@@ -554,6 +600,27 @@ inline bool qore_ir_validate_opcode_registry(std::string& error) {
         if (info.is_unary_invoke && info.is_binary_invoke) {
             error = "opcode registry entry '" + std::string(info.name)
                 + "' is both unary-invoke and binary-invoke";
+            return false;
+        }
+        if ((info.property_flags & ~(QORE_OPCODE_PROPERTY_CALL_INVOKE
+                    | QORE_OPCODE_PROPERTY_REGEX_INVOKE
+                    | QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE
+                    | QORE_OPCODE_PROPERTY_RANGE_SLICE)) != 0) {
+            error = "opcode registry entry '" + std::string(info.name)
+                + "' has unknown property flags";
+            return false;
+        }
+        if (info.hasProperty(QORE_OPCODE_PROPERTY_CALL_INVOKE)
+                && (info.hasProperty(QORE_OPCODE_PROPERTY_REGEX_INVOKE)
+                    || info.hasProperty(QORE_OPCODE_PROPERTY_DOT_EVAL_INVOKE)
+                    || info.hasProperty(QORE_OPCODE_PROPERTY_RANGE_SLICE))) {
+            error = "opcode registry entry '" + std::string(info.name)
+                + "' mixes incompatible invoke/range property flags";
+            return false;
+        }
+        if (info.hasProperty(QORE_OPCODE_PROPERTY_RANGE_SLICE) && info.expected_operands != 3) {
+            error = "opcode registry entry '" + std::string(info.name)
+                + "' is a range-slice opcode without three operands";
             return false;
         }
 

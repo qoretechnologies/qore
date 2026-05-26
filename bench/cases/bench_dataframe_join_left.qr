@@ -1,0 +1,37 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameJoinLeft
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameJoinLeft {
+    constructor() {
+        Bench::BenchRunner r("dataframe_join_left");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame facts;
+        DataFrame::DataFrame customers;
+
+        r.setup = sub () {
+            facts = DataFrameBench::makeFrame(rows);
+            customers = DataFrameBench::makeCustomerFrame(10000);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame joined = facts.join(customers, ("customer_id",), "left");
+            DataFrameBench::verifyRows("dataframe_join_left", joined, rows);
+        };
+
+        exit(r.run());
+    }
+}

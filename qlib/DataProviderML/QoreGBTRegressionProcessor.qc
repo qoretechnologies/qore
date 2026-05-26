@@ -30,7 +30,7 @@ public namespace DataProviderML {
     that correct each other's mistakes.
 
 */
-public class QoreGBTRegressionProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreGBTRegressionProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -299,9 +299,9 @@ public class QoreGBTRegressionProcessor inherits DataProvider::AbstractDataProvi
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

@@ -1,0 +1,312 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DataFrameBenchData.qm Qore user module providing shared DataFrame benchmark data generators
+
+/*  DataFrameBenchData.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%requires dataframe
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+module DataFrameBenchData {
+    version = "0.1";
+    desc    = "Shared deterministic data generation for DataFrame benchmarks";
+    author  = "Qore developers";
+    url     = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DataFrameBench {
+    public int sub defaultRows() {
+        *string env_rows = ENV.QORE_BENCH_DF_ROWS;
+        return env_rows ? env_rows.toInt() : 100000;
+    }
+
+    public int sub sqlRows() {
+        *string env_rows = ENV.QORE_BENCH_DF_SQL_ROWS;
+        return env_rows ? env_rows.toInt() : 20000;
+    }
+
+    public int sub solutionRows() {
+        *string env_rows = ENV.QORE_BENCH_DF_SOLUTION_ROWS;
+        return env_rows ? env_rows.toInt() : defaultRows();
+    }
+
+    public int sub aiRows() {
+        *string env_rows = ENV.QORE_BENCH_DF_AI_ROWS;
+        return env_rows ? env_rows.toInt() : 20000;
+    }
+
+    public int sub approxBytes(int rows) {
+        # Seven scalar columns: three int/bool-ish columns, two floats, and two short strings.
+        return rows * 64;
+    }
+
+    public int sub approxAnalyticBytes(int rows) {
+        # Four dense numeric columns, one dense label, and one short cohort string.
+        return rows * 56;
+    }
+
+    public int sub approxWideBytes(int rows) {
+        # id + group fields + three numeric measures used by reshape/cleaning cases.
+        return rows * 80;
+    }
+
+    public string sub statusFor(int i) {
+        return (i % 5) == 0 ? "inactive" : "active";
+    }
+
+    public string sub regionFor(int i) {
+        switch (i % 6) {
+            case 0:
+                return "north";
+            case 1:
+                return "south";
+            case 2:
+                return "east";
+            case 3:
+                return "west";
+            case 4:
+                return "central";
+        }
+        return "remote";
+    }
+
+    public float sub amountFor(int i) {
+        return float((i * 37) % 100000) / 10.0;
+    }
+
+    public float sub scoreFor(int i) {
+        return float(50 + ((i * 17) % 5000)) / 50.0;
+    }
+
+    public hash<auto> sub makeColumns(int rows) {
+        list<int> ids;
+        list<int> customer_ids;
+        list<string> statuses;
+        list<float> amounts;
+        list<float> scores;
+        list<string> regions;
+        list<bool> flags;
+
+        for (int i = 0; i < rows; ++i) {
+            push ids, i;
+            push customer_ids, i % 10000;
+            push statuses, statusFor(i);
+            push amounts, amountFor(i);
+            push scores, scoreFor(i);
+            push regions, regionFor(i);
+            push flags, (i % 7) == 0;
+        }
+
+        return {
+            "id": ids,
+            "customer_id": customer_ids,
+            "status": statuses,
+            "amount": amounts,
+            "score": scores,
+            "region": regions,
+            "flag": flags,
+        };
+    }
+
+    public hash<auto> sub makeBufferColumns(int rows) {
+        buffer<int64> ids = buffer<int64>::sized(rows);
+        buffer<int64> customer_ids = buffer<int64>::sized(rows);
+        list<string> statuses;
+        buffer<float64> amounts = buffer<float64>::sized(rows);
+        buffer<float64> scores = buffer<float64>::sized(rows);
+        list<string> regions;
+        buffer<bool> flags = buffer<bool>::sized(rows);
+
+        for (int i = 0; i < rows; ++i) {
+            ids[i] = i;
+            customer_ids[i] = i % 10000;
+            push statuses, statusFor(i);
+            amounts[i] = amountFor(i);
+            scores[i] = scoreFor(i);
+            push regions, regionFor(i);
+            flags[i] = (i % 7) == 0;
+        }
+
+        return {
+            "id": ids,
+            "customer_id": customer_ids,
+            "status": statuses,
+            "amount": amounts,
+            "score": scores,
+            "region": regions,
+            "flag": flags,
+        };
+    }
+
+    public list<hash<auto>> sub makeRecords(int rows) {
+        list<hash<auto>> records;
+        for (int i = 0; i < rows; ++i) {
+            push records, {
+                "id": i,
+                "customer_id": i % 10000,
+                "status": statusFor(i),
+                "amount": amountFor(i),
+                "score": scoreFor(i),
+                "region": regionFor(i),
+                "flag": (i % 7) == 0,
+            };
+        }
+        return records;
+    }
+
+    public hash<auto> sub makeCustomerColumns(int rows) {
+        list<int> customer_ids;
+        list<string> segments;
+        list<string> regions;
+        list<float> weights;
+
+        for (int i = 0; i < rows; ++i) {
+            push customer_ids, i;
+            push segments, (i % 3) == 0 ? "enterprise" : ((i % 3) == 1 ? "midmarket" : "smb");
+            push regions, regionFor(i);
+            push weights, float(100 + (i % 25)) / 100.0;
+        }
+
+        return {
+            "customer_id": customer_ids,
+            "segment": segments,
+            "customer_region": regions,
+            "weight": weights,
+        };
+    }
+
+    public DataFrame::DataFrame sub makeFrame(int rows) {
+        return new DataFrame::DataFrame(makeColumns(rows));
+    }
+
+    public DataFrame::DataFrame sub makeBufferFrame(int rows) {
+        return new DataFrame::DataFrame(makeBufferColumns(rows));
+    }
+
+    public ColumnarResult sub makeColumnarResult(int rows) {
+        return makeBufferFrame(rows).toColumnarResult();
+    }
+
+    public DataFrame::DataFrame sub makeCustomerFrame(int rows) {
+        return new DataFrame::DataFrame(makeCustomerColumns(rows));
+    }
+
+    public hash<auto> sub makeNullableColumns(int rows) {
+        list<int> ids;
+        list<string> regions;
+        list<auto> amount_a;
+        list<auto> amount_b;
+        list<auto> amount_c;
+        list<auto> category;
+
+        for (int i = 0; i < rows; ++i) {
+            push ids, i;
+            push regions, regionFor(i);
+            push amount_a, (i % 11) == 10 ? NOTHING : amountFor(i);
+            push amount_b, (i % 13) == 12 ? NOTHING : scoreFor(i);
+            push amount_c, (i % 17) == 16 ? NOTHING : targetFor(i);
+            push category, (i % 19) == 18 ? NOTHING : statusFor(i);
+        }
+
+        return {
+            "id": ids,
+            "region": regions,
+            "amount_a": amount_a,
+            "amount_b": amount_b,
+            "amount_c": amount_c,
+            "category": category,
+        };
+    }
+
+    public DataFrame::DataFrame sub makeNullableFrame(int rows) {
+        return new DataFrame::DataFrame(makeNullableColumns(rows));
+    }
+
+    public float sub feature1For(int i) {
+        return float((i % 1000) - 500) / 25.0;
+    }
+
+    public float sub feature2For(int i) {
+        return float(((i * 17) % 1200) - 600) / 30.0;
+    }
+
+    public float sub feature3For(int i) {
+        return float(((i * 31) % 900) - 450) / 20.0;
+    }
+
+    public float sub targetFor(int i) {
+        float x1 = feature1For(i);
+        float x2 = feature2For(i);
+        float x3 = feature3For(i);
+        return (x1 * 1.7) - (x2 * 0.8) + (x3 * 0.35) + float(i % 11) / 10.0;
+    }
+
+    public hash<auto> sub makeAnalyticColumns(int rows) {
+        buffer<float64> feature1 = buffer<float64>::sized(rows);
+        buffer<float64> feature2 = buffer<float64>::sized(rows);
+        buffer<float64> feature3 = buffer<float64>::sized(rows);
+        buffer<float64> target = buffer<float64>::sized(rows);
+        buffer<int64> label = buffer<int64>::sized(rows);
+        list<string> cohorts;
+
+        for (int i = 0; i < rows; ++i) {
+            feature1[i] = feature1For(i);
+            feature2[i] = feature2For(i);
+            feature3[i] = feature3For(i);
+            target[i] = targetFor(i);
+            label[i] = target[i] >= 0.0 ? 1 : 0;
+            push cohorts, regionFor(i);
+        }
+
+        return {
+            "feature1": feature1,
+            "feature2": feature2,
+            "feature3": feature3,
+            "target": target,
+            "label": label,
+            "cohort": cohorts,
+        };
+    }
+
+    public DataFrame::DataFrame sub makeAnalyticFrame(int rows) {
+        return new DataFrame::DataFrame(makeAnalyticColumns(rows));
+    }
+
+    public nothing sub verifyRows(string name, DataFrame::DataFrame df, int min_rows) {
+        if (df.numRows() < min_rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s produced %d rows, expected at least %d",
+                name, df.numRows(), min_rows);
+        }
+    }
+
+    public nothing sub verifyColumnarRows(string name, ColumnarResult result, int min_rows) {
+        if (result.numRows() < min_rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s produced %d rows, expected at least %d",
+                name, result.numRows(), min_rows);
+        }
+    }
+}

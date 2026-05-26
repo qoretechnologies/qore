@@ -156,6 +156,7 @@ int qore_list_private::parseCheckComplexListInitialization(const QoreProgramLoca
                             return -1;
                         }
                     }
+                    break;
                 }
                 case NT_PARSE_LIST: {
                     const type_vec_t& value_types = exp.get<const QoreParseListNode>()->getValueTypes();
@@ -169,6 +170,7 @@ int qore_list_private::parseCheckComplexListInitialization(const QoreProgramLoca
                             return -1;
                         }
                     }
+                    break;
                 }
             }
         } else if (!QoreTypeInfo::parseAccepts(typeInfo, vti2)) {

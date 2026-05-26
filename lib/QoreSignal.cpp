@@ -60,7 +60,7 @@ void QoreSignalHandler::runHandler(int sig, ExceptionSink *xsink) {
 }
 
 QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false), waiting(0), num_handlers(0),
-        thread_running(false), cmd(C_None) {
+        thread_running(false), cmd(C_None), thread_joinable(false) {
     //printd(5, "QoreSignalManager::QoreSignalManager() QORE_SIGNAL_MAX: %d\n", QORE_SIGNAL_MAX);
     // initilize handlers
     for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
@@ -173,7 +173,7 @@ void QoreSignalManager::del() {
     // can be called if it's already stopped...
     stop_signal_thread_unlocked();
     sl.unlock();
-    tcount.waitForZero();
+    wait_signal_thread_stopped();
     assert(!num_handlers);
     //printd(5, "QoreSignalManager::del() all handlers deleted\n");
 }
@@ -221,7 +221,35 @@ void QoreSignalManager::stop_signal_thread() {
 
     // wait for thread to exit (may be already gone)
     sl.unlock();
+    wait_signal_thread_stopped();
+}
+
+void QoreSignalManager::wait_signal_thread_stopped() {
     tcount.waitForZero();
+
+    bool join = false;
+    pthread_t join_ptid;
+    {
+        AutoLocker al(&mutex);
+        if (thread_joinable) {
+            join_ptid = ptid;
+            thread_joinable = false;
+            join = true;
+        }
+    }
+
+    if (join && !pthread_equal(join_ptid, pthread_self())) {
+#ifdef DEBUG
+        int rc =
+#endif
+            pthread_join(join_ptid, nullptr);
+#ifdef DEBUG
+        if (rc) {
+            printd(0, "pthread_join() returned %d: %s\n", rc, strerror(rc));
+        }
+        assert(!rc);
+#endif
+    }
 }
 
 void QoreSignalManager::preFork() {
@@ -240,7 +268,7 @@ void QoreSignalManager::preFork() {
 
     // wait for thread to exit (may be already gone)
     sl.unlock();
-    tcount.waitForZero();
+    wait_signal_thread_stopped();
 
     printd(5, "QoreSignalManager::preFork() pid: %d signal handling thread stopped\n", getpid());
 }
@@ -417,10 +445,10 @@ void QoreSignalManager::signal_handler_thread() {
     // run thread cleanup handlers
     tclist.exec();
 
-    tcount.dec();
-
     // clean up thread-local storage before exiting (issue #5085)
     qore_thread_local_storage_cleanup();
+
+    tcount.dec();
 
     //fprintf(stderr, "signal handler thread stopped (count: %d) &ptid: %p\n", tcount.getCount(), &ptid);
     //fflush(stderr);
@@ -448,6 +476,8 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
         tid = -1;
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create signal handler thread");
         thread_running = false;
+    } else {
+        thread_joinable = true;
     }
 
     printd(5, "QoreSignalManager::start_signal_thread() pid: %d, rc: %d\n", getpid(), rc);

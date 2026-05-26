@@ -1,0 +1,38 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameReshape
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameReshape {
+    constructor() {
+        Bench::BenchRunner r("dataframe_reshape");
+        r.iterations = 6;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeNullableFrame(rows);
+            r.bytes_processed = DataFrameBench::approxWideBytes(rows) * 4;
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame long_df = df.melt(("id", "region"), ("amount_a", "amount_b", "amount_c"),
+                "metric", "value");
+            DataFrameBench::verifyRows("dataframe_reshape/melt", long_df, rows * 3);
+            DataFrame::DataFrame wide = long_df.pivot("id", "metric", "value", "mean");
+            DataFrameBench::verifyRows("dataframe_reshape/pivot", wide, rows);
+        };
+
+        exit(r.run());
+    }
+}

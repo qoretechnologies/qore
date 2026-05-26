@@ -967,6 +967,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             return PARSE_OPTION_END;
                                         }
 <enable_warning><<EOF>>                 { AST_FLEX_DO_EOF }
+^%fp-fast-math{WS}*$                    { yylval->parseopt = new ASTParseOption(APOK_FP_FAST_MATH); return PARSE_OPTION_FULL; }
 ^%exec-class{WS}*$                      { yylval->parseopt = new ASTStringParseOption(APOK_EXEC_CLASS); return PARSE_OPTION_FULL; }
 ^%exec-class{WS}+                       { BEGIN(exec_class_state); return PARSE_OPTION_BEGIN; }
 <exec_class_state>{

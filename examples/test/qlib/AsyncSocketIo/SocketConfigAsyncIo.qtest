@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+
+%exec-class SocketConfigAsyncIoTest
+
+class SocketTlsConfigPollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        bool done = False;
+    }
+
+    string getGoal() {
+        return "socket-tls-configured";
+    }
+
+    string getState() {
+        return done ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        Socket sock();
+        sock.setSslVerifyMode(SSL_VERIFY_PEER);
+        sock.acceptAllCertificates(True);
+        sock.setAlpnProtocols(("h2",));
+        done = True;
+        return NOTHING;
+    }
+}
+
+public class SocketConfigAsyncIoTest inherits QUnit::Test {
+    constructor() : Test("SocketConfigAsyncIoTest", "1.0") {
+        addTestCase("TLS setup setters are safe from continuePoll", \tlsSetupSettersFromContinuePoll());
+        set_return_value(main());
+    }
+
+    tlsSetupSettersFromContinuePoll() {
+        EventNotifier notifier();
+        SocketTlsConfigPollOperation op();
+
+        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": "socket-tls-config-continue-poll",
+            "to": 10s,
+        });
+
+        hash<SocketPollResultInfo> result = q.get(10s);
+        assertNothing(result.ex);
+        assertTrue(op.goalReached());
+    }
+}

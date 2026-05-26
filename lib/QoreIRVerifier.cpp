@@ -512,6 +512,12 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     error = "invoke instruction missing expr";
                     return false;
                 }
+            } else if (isPluginDispatchOpcode(inst->opcode)) {
+                auto* plugin_inst = dynamic_cast<const QoreIRPluginInstruction*>(inst.get());
+                if (!plugin_inst || !plugin_inst->operation.isValid()) {
+                    error = "plugin dispatch instruction missing operation reference";
+                    return false;
+                }
             }
         }
     }
@@ -1097,6 +1103,8 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
             return &static_cast<const QoreIRNewComplexHashInstruction*>(inst)->expr;
         case QoreIROpcode::NewComplexList:
             return &static_cast<const QoreIRNewComplexListInstruction*>(inst)->expr;
+        case QoreIROpcode::NewComplexBuffer:
+            return &static_cast<const QoreIRNewComplexBufferInstruction*>(inst)->expr;
 
         // VarRefNewObjectNode construction
         case QoreIROpcode::VrnConstruct:

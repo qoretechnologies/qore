@@ -106,7 +106,7 @@ public class StructuredDocumentChunker inherits DocumentChunker {
     */
     constructor(hash<auto> tokenizer_config, *hash<auto> options)
             : DocumentChunker(tokenizer_config, options + {"chunk_overlap": options.chunk_overlap ?? 50}) {
-        counter = new TokenCounter(tokenizer_config);
+        counter = new TokenCounter(tokenizer_config, options.tokenizer_runtime_config);
     }
 
     #! Chunks structured text blocks into token-bounded chunks with metadata

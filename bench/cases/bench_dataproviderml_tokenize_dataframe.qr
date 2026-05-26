@@ -1,0 +1,46 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlTokenizeDataFrame
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlTokenizeDataFrame {
+    constructor() {
+        if (!OnnxBench::canRunTokenizer()) {
+            printf("dataproviderml_tokenize_dataframe: skipped (tokenizer fixture not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_tokenize_dataframe");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = OnnxBench::textRows();
+        DataFrame::DataFrame frame;
+        DataProviderML::QoreTokenizeProcessor proc({
+            "text_field": "body",
+            "tokenizer_config_path": OnnxBench::tokenizerPath(),
+            "add_special_tokens": False,
+        });
+
+        r.setup = sub () {
+            frame = OnnxBench::makeTextFrame(rows);
+            r.bytes_processed = OnnxBench::approxTextBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame result = proc.processRecordsShape(frame, DataProviderShape::DataFrameBlock);
+            OnnxBench::verifyTokenFrame("dataproviderml_tokenize_dataframe", result, rows);
+        };
+
+        exit(r.run());
+    }
+}

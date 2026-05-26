@@ -119,6 +119,100 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
         return result;
     }
 
+    #! Returns True if configured fields can be evaluated against a column block
+    private bool canUseColumnShapes() {
+        hash<string, bool> input_names;
+        foreach hash<auto> i in (field_map.pairIterator()) {
+            if (i.key.find(".") >= 0 || i.value.find(".") >= 0 || input_names{i.value}) {
+                return False;
+            }
+            input_names{i.value} = True;
+        }
+        foreach hash<auto> i in (field_map.pairIterator()) {
+            if (i.key != i.value && input_names{i.key}) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Returns input fields in configured output order
+    private list<string> getInputFieldList() {
+        list<string> fields;
+        foreach hash<auto> i in (field_map.pairIterator()) {
+            push fields, i.value;
+        }
+        return fields;
+    }
+
+    #! Applies configured projection and safe renames to a DataFrame
+    private auto selectDataFrame(auto records) {
+        auto result = records.select(getInputFieldList());
+        foreach hash<auto> i in (field_map.pairIterator()) {
+            if (i.key != i.value) {
+                result.renameColumn(i.value, i.key);
+            }
+        }
+        return result;
+    }
+
+    #! Applies configured projection to a column hash
+    private hash<auto> selectColumnBlock(hash<auto> records) {
+        hash<auto> result;
+        foreach hash<auto> i in (field_map.pairIterator()) {
+            result{i.key} = records{i.value};
+        }
+        return result;
+    }
+
+    #! Processes an explicitly-shaped block without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        if (!field_map) {
+            throw "PROCESSOR-ERROR", "QoreSelectFieldsProcessor: no field specification configured; "
+                "provide the 'fields' option";
+        }
+        if (!canUseColumnShapes()) {
+            list<auto> rows = shape == DataProviderShape::RowRecords
+                ? (records,) : AbstractDataProcessor::convertShape(records, shape, DataProviderShape::RowRecords);
+            *list<auto> selected = processRecordsImpl(rows);
+            if (!selected) {
+                return;
+            }
+            if (shape == DataProviderShape::RowRecords) {
+                return selected.size() == 1 ? selected[0] : selected;
+            }
+            switch (shape) {
+                case DataProviderShape::HashOfLists:
+                    return AbstractDataProcessor::recordsToHashList(selected);
+                case DataProviderShape::DataFrameBlock:
+                    return AbstractDataProcessor::getDataFrameClass().newObject(selected);
+                case DataProviderShape::BufferColumns:
+                    return ColumnarResult::fromRows(selected);
+            }
+        }
+
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+            case DataProviderShape::DataFrameBlock:
+                return selectDataFrame(records);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return ColumnarResult::fromColumnHash(selectColumnBlock(records.toColumnHash()));
+                }
+                return selectColumnBlock(records);
+            case DataProviderShape::HashOfLists:
+                return selectColumnBlock(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Processes hash-of-lists blocks without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        return processRecordsShapeImpl(records, DataProviderShape::HashOfLists);
+    }
+
     #! Computes the output type based on the input type and the configured field selection
     /** @param input_type the output type from the preceding pipeline state
 
@@ -151,14 +245,25 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
         return rv.getFields() ? rv : NOTHING;
     }
 
-    #! Indicates that this processor does not support the bulk API
+    #! Indicates that this processor supports the bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_TRANSFORM;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
     }
 
 }

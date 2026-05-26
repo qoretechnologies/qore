@@ -7,7 +7,18 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 
 QORE_BIN="${QORE_BIN:-$REPO/build/qore}"
-QORE_MODULE_DIR="$HERE/lib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}"
+MODULE_PATHS=("$HERE/lib")
+for path in "$REPO"/build/modules/*; do
+    if [[ -d "$path" ]]; then
+        MODULE_PATHS+=("$path")
+    fi
+done
+for path in "$REPO/build/qlib-qmod" "$REPO/qlib"; do
+    if [[ -d "$path" ]]; then
+        MODULE_PATHS+=("$path")
+    fi
+done
+QORE_MODULE_DIR="$(IFS=:; echo "${MODULE_PATHS[*]}")${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}"
 export QORE_MODULE_DIR
 
 ITERATIONS=""
@@ -26,6 +37,17 @@ usage: $0 [options]
   --baseline=FILE   compare current run against baseline suite JSON
   --filter=REGEX    only run cases whose name matches REGEX
   --quiet           suppress per-case human report (JSON save still works)
+
+environment:
+  QORE_BIN                 qore executable to benchmark (default: build/qore)
+  QORE_BENCH_DF_ROWS       DataFrame in-memory benchmark row count (default: 100000)
+  QORE_BENCH_DF_SQL_ROWS   DataFrame SQL benchmark row count (default: 20000)
+  QORE_BENCH_DF_SOLUTION_ROWS
+                           End-to-end ETL solution row count (default: QORE_BENCH_DF_ROWS)
+  QORE_BENCH_DF_AI_ROWS    End-to-end AI/analytics solution row count (default: 20000)
+  QORE_BENCH_ONNX_ROWS     ONNX inference benchmark row count (default: 10000)
+  QORE_BENCH_TEXT_ROWS     DataProviderML tokenizer/text model row count (default: 2000)
+  QORE_DB_CONNSTR_PGSQL    enables optional PostgreSQL DataFrame SQL cases
 EOF
     exit 1
 }

@@ -217,6 +217,45 @@ list<hash<KMeansResult>> KMeans::predictMatrix(list<list<float>> matrix) {
     return kmeans->predictMatrix(mat, xsink);
 }
 
+//! Predicts cluster assignments for multiple rows as dense column buffers
+/** @param matrix a list of lists of numeric values
+    @param options optional hash:
+           - \c include_centroid_distances (bool, default True): include a
+             \c centroid_distances list with one \c buffer<float64> per centroid
+    @return a hash with \c cluster (\c buffer<int64>), \c distance
+            (\c buffer<float64>), and optionally \c centroid_distances
+
+    @par Example:
+    @code{.py}
+KMeans km({"k": 3, "seed": 42});
+km.fitMatrix(training_data);
+hash<auto> cols = km.predictMatrixColumns(new_data, {
+    "include_centroid_distances": False,
+});
+DataFrame::DataFrame clusters({
+    "cluster": cols.cluster,
+    "distance": cols.distance,
+});
+    @endcode
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+hash<auto> KMeans::predictMatrixColumns(list<list<float>> matrix, *hash<auto> options) {
+    bool include_centroid_distances = true;
+    if (options) {
+        QoreValue v = options->getKeyValue("include_centroid_distances");
+        if (!v.isNullOrNothing()) {
+            include_centroid_distances = v.getAsBool();
+        }
+    }
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return kmeans->predictMatrixColumns(mat, include_centroid_distances, xsink);
+}
+
 //! Returns the number of clusters
 /** @return the k value
 */

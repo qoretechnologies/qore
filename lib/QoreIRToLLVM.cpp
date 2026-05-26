@@ -38,10 +38,14 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QorePluginRegistry.h"
+
+#include <qore/QorePluginLLVM.h>
+
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 370,
+static_assert(QORE_IR_MAX_OPCODE == 378,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -369,6 +373,9 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // Guard type helper: (i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_guard_type",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    // Profile-guided plugin guard helper: (i64, ptr, ptr, i32) -> i64
+    module.getOrInsertFunction("qore_rt_guard_plugin_type_profiled",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, i32_type}, false));
 
     // InstanceOf helper: (i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_instanceof",
@@ -504,6 +511,7 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_new_hash_decl_aot", aot_load_local_ft);
     module.getOrInsertFunction("qore_rt_new_complex_hash_aot", aot_load_local_ft);
     module.getOrInsertFunction("qore_rt_new_complex_list_aot", aot_load_local_ft);
+    module.getOrInsertFunction("qore_rt_new_complex_buffer_aot", aot_load_local_ft);
     // lvalue_load_aot: (ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_lvalue_load_aot", aot_load_local_ft);
     // lvalue_store_aot: (ptr, i32, i64, ptr) -> i64
@@ -1631,6 +1639,47 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module) {
             }
         }
         pending_ssa_cleanup.resize(mark.pending_ssa_count);
+    }
+
+    flushLocalReloadStateAtTempBoundary(module);
+}
+
+void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
+    if (!local_reload_boundary_cleanup_pending) {
+        return;
+    }
+    local_reload_boundary_cleanup_pending = false;
+
+    if (local_reload_trackers.empty() && local_reload_deferred.empty()) {
+        return;
+    }
+
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    auto clear_alloca = [&](llvm::Value* alloca) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+        builder->CreateCall(helper, {val, xsink_arg});
+    };
+
+    for (auto& [key, alloca] : local_reload_trackers) {
+        (void)key;
+        clear_alloca(alloca);
+    }
+    for (auto& [key, alloca] : local_reload_deferred) {
+        (void)key;
+        clear_alloca(alloca);
+    }
+
+    if (local_reload_epoch) {
+        llvm::Value* epoch = builder->CreateLoad(i64_type, local_reload_epoch);
+        llvm::Value* next_epoch = builder->CreateAdd(epoch,
+                llvm::ConstantInt::get(i64_type, 1), "local_reload_epoch_next");
+        builder->CreateStore(next_epoch, local_reload_epoch);
+        for (auto& [key, valid_epoch] : local_valid_epochs) {
+            (void)key;
+            builder->CreateStore(epoch, valid_epoch);
+        }
     }
 }
 
@@ -2839,6 +2888,7 @@ void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Functi
     llvm::Value* next_epoch = builder->CreateAdd(epoch,
             llvm::ConstantInt::get(i64_type, 1), "local_reload_epoch_next");
     builder->CreateStore(next_epoch, epoch_alloca);
+    local_reload_boundary_cleanup_pending = true;
     (void)module;
 }
 
@@ -3565,6 +3615,7 @@ static bool canEmitAotInvokeExprFallback(const QoreIRInstruction* inst) {
         case QoreIROpcode::NewHashDecl:
         case QoreIROpcode::NewComplexHash:
         case QoreIROpcode::NewComplexList:
+        case QoreIROpcode::NewComplexBuffer:
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
         case QoreIROpcode::ExtractAny:
@@ -3650,6 +3701,8 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
         expr = &new_ch->expr;
     } else if (auto* new_cl = dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         expr = &new_cl->expr;
+    } else if (auto* new_cb = dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+        expr = &new_cb->expr;
     }
 
     if (expr) {
@@ -4294,6 +4347,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_reload_deferred.clear();
     local_reload_epoch = nullptr;
     local_valid_epochs.clear();
+    local_reload_boundary_cleanup_pending = false;
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
     landingpad_blocks.clear();
@@ -8541,9 +8595,46 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             } else if (inv->invoke_opcode == QoreIROpcode::NewHashDecl
                     || inv->invoke_opcode == QoreIROpcode::NewComplexHash
-                    || inv->invoke_opcode == QoreIROpcode::NewComplexList) {
+                    || inv->invoke_opcode == QoreIROpcode::NewComplexList
+                    || inv->invoke_opcode == QoreIROpcode::NewComplexBuffer) {
                 // Typed container construction invoke
-                if (aot_mode) {
+                if (inv->invoke_opcode == QoreIROpcode::NewComplexBuffer && !inv->operands.empty()) {
+                    auto* init_val = getVal(inv->operands[0].id, error);
+                    if (!init_val) { return false; }
+                    llvm::Value* init_boxed = boxValue(init_val, inv->operands[0].id);
+                    auto* ncb = dynamic_cast<const NewComplexBufferNode*>(inv->expr.getInternalNode());
+                    if (!ncb) {
+                        return setExpressionFallbackError(error, inst,
+                                "NewComplexBuffer invoke expression is not a NewComplexBufferNode");
+                    }
+                    const QoreTypeInfo* typeInfo = specializeType(ncb->typeInfo);
+                    llvm::Value* init_kind_arg = llvm::ConstantInt::get(i32_type,
+                        static_cast<int32_t>(ncb->initKind));
+                    if (aot_mode) {
+                        std::string type_path = qore_ir_get_type_path(typeInfo);
+                        llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                        auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i32_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value_kind_by_type_path", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value_kind_by_type_path_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {type_path_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
+                    } else {
+                        llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(typeInfo));
+                        llvm::Value* type_as_ptr = builder->CreateIntToPtr(type_ptr, ptr_type);
+                        auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i32_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value_kind", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_new_complex_buffer_from_value_kind_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {type_as_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
+                    }
+                } else if (aot_mode) {
                     QoreValue expr_val = inv->expr;
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
@@ -8552,12 +8643,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         ? "qore_rt_new_hash_decl_aot"
                         : (inv->invoke_opcode == QoreIROpcode::NewComplexHash
                             ? "qore_rt_new_complex_hash_aot"
-                            : "qore_rt_new_complex_list_aot");
+                            : (inv->invoke_opcode == QoreIROpcode::NewComplexList
+                                ? "qore_rt_new_complex_list_aot"
+                                : "qore_rt_new_complex_buffer_aot"));
                     const char* helper_throwing_name = inv->invoke_opcode == QoreIROpcode::NewHashDecl
                         ? "qore_rt_new_hash_decl_aot_throwing"
                         : (inv->invoke_opcode == QoreIROpcode::NewComplexHash
                             ? "qore_rt_new_complex_hash_aot_throwing"
-                            : "qore_rt_new_complex_list_aot_throwing");
+                            : (inv->invoke_opcode == QoreIROpcode::NewComplexList
+                                ? "qore_rt_new_complex_list_aot_throwing"
+                                : "qore_rt_new_complex_buffer_aot_throwing"));
                     auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(helper_name, ft);
@@ -8591,7 +8686,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto helper = module.getOrInsertFunction("qore_rt_new_complex_hash",
                                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                         result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
-                    } else {
+                    } else if (inv->invoke_opcode == QoreIROpcode::NewComplexList) {
                         auto* ncl = dynamic_cast<const NewComplexListNode*>(node);
                         if (!ncl) {
                             return setExpressionFallbackError(error, inst,
@@ -8601,6 +8696,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 reinterpret_cast<uint64_t>(ncl));
                         llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
                         auto helper = module.getOrInsertFunction("qore_rt_new_complex_list",
+                                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                    } else {
+                        auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node);
+                        if (!ncb) {
+                            return setExpressionFallbackError(error, inst,
+                                    "NewComplexBuffer invoke expression is not a NewComplexBufferNode");
+                        }
+                        llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(ncb));
+                        llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
+                        auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer",
                                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                         result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
                     }
@@ -10560,6 +10667,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -10574,6 +10682,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -10588,6 +10697,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -10602,6 +10712,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -10668,6 +10779,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -10682,6 +10794,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -10696,6 +10809,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -10710,6 +10824,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -12445,6 +12560,77 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_new_complex_list", ncl_ft);
                 auto helper_throwing = module.getOrInsertFunction(
                         "qore_rt_new_complex_list_throwing", ncl_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {node_as_ptr, xsink_arg}, module, llvm_func, inst);
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::NewComplexBuffer: {
+            const auto* ncbinst = static_cast<const QoreIRNewComplexBufferInstruction*>(inst);
+            llvm::Value* result;
+            if (!inst->operands.empty()) {
+                auto* init_val = getVal(inst->operands[0].id, error);
+                if (!init_val) { return false; }
+                llvm::Value* init_boxed = boxValue(init_val, inst->operands[0].id);
+                const NewComplexBufferNode* ncb = ncbinst->node
+                    ? ncbinst->node
+                    : dynamic_cast<const NewComplexBufferNode*>(ncbinst->expr.getInternalNode());
+                if (!ncb) {
+                    return setExpressionFallbackError(error, inst,
+                            "NewComplexBuffer expression is not a NewComplexBufferNode");
+                }
+                const QoreTypeInfo* typeInfo = specializeType(ncb->typeInfo);
+                llvm::Value* init_kind_arg = llvm::ConstantInt::get(i32_type,
+                    static_cast<int32_t>(ncb->initKind));
+                if (aot_mode) {
+                    std::string type_path = qore_ir_get_type_path(typeInfo);
+                    llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                    auto ncb_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_new_complex_buffer_from_value_kind_by_type_path", ncb_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_new_complex_buffer_from_value_kind_by_type_path_throwing", ncb_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {type_path_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
+                } else {
+                    llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(typeInfo));
+                    llvm::Value* type_as_ptr = builder->CreateIntToPtr(type_ptr, ptr_type);
+                    auto ncb_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer_from_value_kind", ncb_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_new_complex_buffer_from_value_kind_throwing", ncb_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {type_as_ptr, init_boxed, init_kind_arg, xsink_arg}, module, llvm_func, inst);
+                }
+            } else if (aot_mode) {
+                QoreValue expr_val = ncbinst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto ncb_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer_aot", ncb_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_complex_buffer_aot_throwing", ncb_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
+            } else {
+                llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(ncbinst->node));
+                llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
+                auto ncb_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_complex_buffer", ncb_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_complex_buffer_throwing", ncb_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {node_as_ptr, xsink_arg}, module, llvm_func, inst);
             }
@@ -14928,6 +15114,168 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        case QoreIROpcode::PluginUnary:
+        case QoreIROpcode::PluginBinary:
+        case QoreIROpcode::PluginSubscript:
+        case QoreIROpcode::PluginCall:
+        case QoreIROpcode::PluginConstruct:
+        case QoreIROpcode::PluginDenseBufferUnary:
+        case QoreIROpcode::PluginDenseBufferBinary: {
+            const auto* pinst = static_cast<const QoreIRPluginInstruction*>(inst);
+            uint32_t global_id = pinst->operation.global_operation_id;
+            if (!global_id) {
+                if (pinst->operation.module_name.empty()) {
+                    error = "plugin dispatch instruction has no global operation id or module-local reference";
+                    return false;
+                }
+                ExceptionSink lookup_xsink;
+                if (qore_plugin_get_process_operation_id_checked(pinst->operation.module_name.c_str(),
+                        pinst->operation.local_operation_id,
+                        pinst->operation.canonical_signature_version,
+                        pinst->operation.signature_hash, &global_id, &lookup_xsink)) {
+                    error = "cannot resolve plugin operation ";
+                    error += pinst->operation.module_name;
+                    error += ":";
+                    error += std::to_string(pinst->operation.local_operation_id);
+                    return false;
+                }
+            }
+
+            llvm::Value* gid = llvm::ConstantInt::get(i32_type, global_id);
+            llvm::Value* result = nullptr;
+            QorePluginLLVMCodegenInfo codegen_info;
+            if (!qore_plugin_get_llvm_codegen_info(global_id, codegen_info, nullptr) && codegen_info.codegen) {
+                std::vector<llvm::Value*> boxed_operands;
+                boxed_operands.reserve(inst->operands.size());
+                for (const QoreIRValue& operand : inst->operands) {
+                    llvm::Value* value = getVal(operand.id, error);
+                    if (!value) {
+                        return false;
+                    }
+                    boxed_operands.push_back(boxValue(value, operand.id));
+                }
+
+                const char* codegen_error = nullptr;
+                QorePluginLLVMCodegenContext codegen_ctx = {};
+                codegen_ctx.struct_size = sizeof(codegen_ctx);
+                codegen_ctx.abi_version = QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION;
+                codegen_ctx.global_operation_id = global_id;
+                codegen_ctx.helper_abi = codegen_info.signature.helper_abi;
+                codegen_ctx.signature = &codegen_info.signature;
+                codegen_ctx.llvm_context = &ctx;
+                codegen_ctx.builder = builder.get();
+                codegen_ctx.module = &module;
+                codegen_ctx.function = llvm_func;
+                codegen_ctx.xsink_value = xsink_arg;
+                codegen_ctx.qore_value_type = i64_type;
+                codegen_ctx.pointer_type = ptr_type;
+                codegen_ctx.boxed_operands = boxed_operands.empty() ? nullptr : boxed_operands.data();
+                codegen_ctx.num_operands = static_cast<uint32_t>(boxed_operands.size());
+                codegen_ctx.error_message = &codegen_error;
+                codegen_ctx.operation_info = &codegen_info.info;
+                codegen_ctx.fp_reassociation_enabled = pinst->operation.fp_reassociation_enabled;
+
+                result = codegen_info.codegen(&codegen_ctx);
+                if (!result) {
+                    error = "plugin LLVM codegen callback returned null for ";
+                    error += codegen_info.module_name;
+                    error += ":";
+                    error += codegen_info.operation_name;
+                    if (codegen_error && *codegen_error) {
+                        error += ": ";
+                        error += codegen_error;
+                    }
+                    return false;
+                }
+                if (!result->getType()->isIntegerTy(64)) {
+                    error = "plugin LLVM codegen callback for ";
+                    error += codegen_info.module_name;
+                    error += ":";
+                    error += codegen_info.operation_name;
+                    error += " returned ";
+                    std::string type_str;
+                    llvm::raw_string_ostream os(type_str);
+                    result->getType()->print(os);
+                    error += os.str();
+                    error += "; expected i64 QoreValue bits";
+                    return false;
+                }
+            }
+            if (!result && inst->opcode == QoreIROpcode::PluginUnary) {
+                auto* val = getVal(inst->operands[0].id, error);
+                if (!val) { return false; }
+                llvm::Value* boxed = boxValue(val, inst->operands[0].id);
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_unary",
+                        llvm::FunctionType::get(i64_type, {i32_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, boxed, xsink_arg});
+            } else if (!result && (inst->opcode == QoreIROpcode::PluginBinary
+                    || inst->opcode == QoreIROpcode::PluginSubscript)) {
+                auto* lhs = getVal(inst->operands[0].id, error);
+                auto* rhs = getVal(inst->operands[1].id, error);
+                if (!lhs || !rhs) { return false; }
+                llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+                llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+                const char* helper_name = inst->opcode == QoreIROpcode::PluginSubscript
+                    ? "qore_rt_plugin_subscript" : "qore_rt_plugin_binary";
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, lhs_boxed, rhs_boxed, xsink_arg});
+            } else if (!result && inst->opcode == QoreIROpcode::PluginCall) {
+                auto* self = getVal(inst->operands[0].id, error);
+                if (!self) { return false; }
+                llvm::Value* self_boxed = boxValue(self, inst->operands[0].id);
+                llvm::Value* args_array = nullptr;
+                int nargs = 0;
+                if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                    return false;
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_call_args",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, self_boxed, args_array,
+                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else if (!result && inst->opcode == QoreIROpcode::PluginConstruct) {
+                llvm::Value* args_array = nullptr;
+                int nargs = 0;
+                if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+                    return false;
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_construct_args",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, args_array,
+                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else if (!result && inst->opcode == QoreIROpcode::PluginDenseBufferUnary) {
+                auto* result_buffer = getVal(inst->operands[0].id, error);
+                auto* value = getVal(inst->operands[1].id, error);
+                if (!result_buffer || !value) { return false; }
+                llvm::Value* result_boxed = boxValue(result_buffer, inst->operands[0].id);
+                llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_dense_buffer_unary_values",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, result_boxed, value_boxed, xsink_arg});
+            } else if (!result) {
+                auto* result_buffer = getVal(inst->operands[0].id, error);
+                auto* lhs = getVal(inst->operands[1].id, error);
+                auto* rhs = getVal(inst->operands[2].id, error);
+                if (!result_buffer || !lhs || !rhs) { return false; }
+                llvm::Value* result_boxed = boxValue(result_buffer, inst->operands[0].id);
+                llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[1].id);
+                llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[2].id);
+                auto helper = module.getOrInsertFunction("qore_rt_plugin_dense_buffer_binary_values",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {gid, result_boxed, lhs_boxed, rhs_boxed, xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            reloadAllLocalsFromRuntime(module, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::Summarize: {
             error = "unsupported IR statement lowering: legacy summarize statement has no native LLVM lowering";
             if (inst->loc) {
@@ -14964,15 +15312,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                     reinterpret_cast<uint64_t>(ginst->type_info));
             llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_guard_type",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            llvm::Value* guard_result = builder->CreateCall(helper, {boxed, ti_as_ptr});
+            bool profile_hot = false;
+            llvm::Value* guard_result = nullptr;
+            if (current_ir_func && ginst->guard_id < current_ir_func->guard_profile_count) {
+                const TypeProfile& prof = current_ir_func->guard_profiles[ginst->guard_id];
+                if (prof.total() >= 50) {
+                    QoreIRTypeProfileKey key = prof.dominantKey();
+                    if (key.kind == QoreIRTypeProfileKind::PluginType
+                            && !key.plugin_module_name.empty()
+                            && key.type_info) {
+                        profile_hot = true;
+                        llvm::Value* module_name = builder->CreateGlobalStringPtr(key.plugin_module_name);
+                        llvm::Value* local_type_id = llvm::ConstantInt::get(i32_type,
+                            static_cast<uint32_t>(key.plugin_local_type_id));
+                        auto helper = module.getOrInsertFunction("qore_rt_guard_plugin_type_profiled",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type}, false));
+                        guard_result = builder->CreateCall(helper,
+                            {boxed, ti_as_ptr, module_name, local_type_id});
+                    }
+                }
+            }
+            if (!guard_result) {
+                auto helper = module.getOrInsertFunction("qore_rt_guard_type",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                guard_result = builder->CreateCall(helper, {boxed, ti_as_ptr});
+            }
             llvm::Value* guard_pass = builder->CreateICmpNE(guard_result,
                     llvm::ConstantInt::get(i64_type, 0));
             if (ginst->deopt_target) {
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
                 llvm::BasicBlock* deopt = getOrCreateJitDeoptBlock(module, llvm_func);
-                builder->CreateCondBr(guard_pass, cont, deopt);
+                if (profile_hot) {
+                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
+                    builder->CreateCondBr(guard_pass, cont, deopt, weights);
+                } else {
+                    builder->CreateCondBr(guard_pass, cont, deopt);
+                }
                 builder->SetInsertPoint(cont);
             }
             if (inst->result.isValid()) {

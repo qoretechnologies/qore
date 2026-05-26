@@ -156,8 +156,10 @@ constexpr uint64_t QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS = 1ULL << 48; //!< hashdec
 constexpr uint64_t QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS = 1ULL << 49; //!< class/hashdecl type parameter records preserve default type arguments
 constexpr uint64_t QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS = 1ULL << 50; //!< hashdecl parent records may preserve parameterized generic parent type paths
 constexpr uint64_t QORE_AOT_FEAT_TYPE_PARAM_BOUNDS = 1ULL << 51; //!< class/hashdecl type parameter records preserve bound type arguments
+constexpr uint64_t QORE_AOT_FEAT_PLUGIN_DISPATCH = 1ULL << 52; //!< IR debug/AOT records may contain plugin dispatch opcodes
+constexpr uint64_t QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND = 1ULL << 53; //!< complex buffer records/slots preserve sized/filled factory kind
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -183,6 +185,9 @@ enum class QoreAOTSectionType : uint16_t {
     MODULE_PATH_APPEND  = 20,  //!< Per-Program %append-module-path expanded path list (count u32 + count × StringRef)
     BUILD_INFO      = 21,  //!< Producer/build metadata as key-value string pairs
     MODULE_COMMANDS = 22,  //!< `%module-cmd` directives (count u32 + count × module StringRef + command StringRef)
+    PLUGIN_TYPE_REGISTRY = 23,  //!< Plugin module/type/operation metadata for referenced plugin imports
+    PLUGIN_IMPORTS       = 24,  //!< Required plugin modules and local type/operation ids
+    PLUGIN_HELPER_REFS   = 25,  //!< AOT plugin helper slot refs to plugin imports
 };
 
 //! Value type tags for serialized constant values
@@ -217,7 +222,7 @@ enum class QoreAOTValueTag : uint8_t {
     //! At load time, the value is resolved by looking up the referenced constant.
     VT_CONST_REF  = 16,
     //! Complex-type default construction expression: NewComplexListNode /
-    //! NewComplexHashNode / NewHashDeclNode. Encoded as kind(u8) + type path +
+    //! NewComplexHashNode / NewComplexBufferNode / NewHashDeclNode. Encoded as kind(u8) + type path +
     //! num_args + recursive args. Used for class member initializers declared
     //! with the constructor-call form, e.g. `list<auto> elems()`.
     VT_NEW_COMPLEX_DEFAULT = 17,
@@ -227,6 +232,10 @@ enum class QoreAOTValueTag : uint8_t {
     //! Native AOT expression payload for computed member defaults.
     //! Encoded as size(u32) + one inline AOTExprKind expression.
     VT_EXPR_NATIVE = 19,
+    //! Module-defined plugin value instance.
+    //! Encoded as import_idx(u16) + local_type_id(u16) + serializer_format_version(u16)
+    //! + reserved(u16) + payload_len(u32) + payload bytes.
+    VT_PLUGIN_INSTANCE = 20,
 };
 
 //! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
@@ -338,6 +347,22 @@ public:
 //! Binary format writer for AOT metadata
 class QoreAOTBinaryWriter {
 public:
+    struct PluginImportRecord {
+        std::string module_name;
+        std::string plugin_abi_version;
+        std::string operation_set_version;
+        std::vector<uint16_t> required_type_ids;
+        std::vector<uint16_t> required_operation_ids;
+    };
+
+    struct PluginHelperRefRecord {
+        uint16_t slot_idx = 0;
+        uint16_t import_idx = 0;
+        uint16_t op_local_id = 0;
+        uint8_t canonical_signature_version = 0;
+        uint64_t signature_hash = 0;
+    };
+
     QoreAOTStringPool strings;
     //! Optional program-wide constant reverse map, used by writeValue to encode
     //! unserializable node pointers (e.g. QoreObject inside a folded hash literal)
@@ -375,6 +400,14 @@ public:
     std::vector<std::string> type_path_table;
     std::unordered_map<std::string, uint32_t> type_path_index;
 
+    //! Plugin imports collected while serializing plugin-dispatch IR.
+    //! Process-global operation ids are intentionally not serialized; QORD
+    //! stores module-local symbolic refs that resolve against the live process
+    //! registry when the artifact is loaded.
+    std::vector<PluginImportRecord> plugin_imports;
+    std::unordered_map<std::string, uint16_t> plugin_import_index;
+    std::vector<PluginHelperRefRecord> plugin_helper_refs;
+
     //! Intern a type path.  Returns a u32 index that the reader dereferences
     //! against the TYPE_TABLE section.  Empty/null path gets index 0
     //! (reserved — resolves to nullptr/no-constraint).
@@ -406,6 +439,17 @@ public:
     //! Called once after all functions/methods have been serialized so
     //! the table contains every path referenced in variant signatures.
     void writeTypeTableSection();
+
+    //! Record a module-local plugin operation reference for later PLUGIN_*
+    //! section emission.
+    bool addPluginOperationRef(const char* module_name, uint16_t op_local_id,
+        uint8_t canonical_signature_version, uint64_t signature_hash);
+
+    //! Record a module-local plugin type reference for later PLUGIN_* section emission.
+    bool addPluginTypeRef(const char* module_name, uint16_t local_type_id, uint16_t* import_idx = nullptr);
+
+    //! Emit PLUGIN_IMPORTS / PLUGIN_TYPE_REGISTRY / PLUGIN_HELPER_REFS.
+    bool writePluginSections(std::string& error);
 
 private:
     std::vector<uint8_t> buffer;
@@ -1028,6 +1072,7 @@ enum class AOTExprKind : uint8_t {
     UNARY_MINUS        = 104, //!< Unary minus operator: operand(AOTExprKind)
     LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
     LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)
+    COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: type_path + init kind in expr streams; ref1=type_path, flags=init kind in slot maps
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -1482,8 +1527,9 @@ class QoreAOTBinaryDeserializer {
         //! (e.g. `hash<ComponentInfo>()`, `hash<string, T>()`, `list<T>()`)
         //! that references a type not yet registered at class-read time.
         //! Resolved in the second pass after all types exist.
-        //! kind: 0=complex list, 1=complex hash, 2=hashdecl
+        //! kind: 0=complex list, 1=complex hash, 2=hashdecl, 3=complex buffer
         int8_t pending_complex_default_kind = -1;
+        int8_t pending_complex_buffer_init_kind = 0;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
         //! Deferred VT_EXPR_TREE default.  Expression trees can reference
@@ -1518,6 +1564,7 @@ class QoreAOTBinaryDeserializer {
         std::string pending_enum_member;
         //! Same deferred-complex-default channel as PendingInstanceMember.
         int8_t pending_complex_default_kind = -1;
+        int8_t pending_complex_buffer_init_kind = 0;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
         //! Same deferred-expression-tree channel as PendingInstanceMember.
@@ -1571,9 +1618,10 @@ class QoreAOTBinaryDeserializer {
         std::vector<QoreValue> pending_new_args;
 
         // Deferred VT_NEW_COMPLEX_DEFAULT: kind 0=complex list,
-        // 1=complex hash, 2=hashdecl.  path is the element/value/hashdecl
+        // 1=complex hash, 2=hashdecl, 3=complex buffer. path is the element/value/hashdecl
         // type path; args are the constructor args (owned).
         int8_t pending_complex_default_kind = -1;
+        int8_t pending_complex_buffer_init_kind = 0;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
 
@@ -1672,6 +1720,7 @@ private:
     //! run after shells across all sibling sessions exist so
     //! cross-blob complex types resolve correctly.
     bool resolveTypeTable(std::string& error);
+    bool resolvePluginImports(std::string& error);
 
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
@@ -2375,6 +2424,8 @@ enum class QoreIRInstGroup : uint8_t {
     Background = 62,        //!< QoreIRBackgroundInstruction
     ContextRef = 63,        //!< QoreIRContextRefInstruction
     TypedBase = 64,         //!< QoreIRInstruction with element_type metadata
+    NewComplexBuffer = 65,  //!< QoreIRNewComplexBufferInstruction
+    Plugin = 66,            //!< QoreIRPluginInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

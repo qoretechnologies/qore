@@ -64,6 +64,7 @@ class QoreSandboxManager;
 #include <cstdarg>
 #include <map>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include <set>
 
@@ -527,7 +528,7 @@ public:
         parsing_stub_declarations : 1
         ;
 
-    qore_exec_mode_t exec_mode = QEM_TIERED;
+    qore_exec_mode_t exec_mode = QEM_AST;
     bool user_requested_exec_mode = false;
     bool ir_dump = false;
     bool ir_fallback_warn = false;
@@ -538,6 +539,40 @@ public:
     mutable QoreThreadLock ir_fallback_lock;
     typedef std::map<std::string, int> ir_fallback_counts_t;
     mutable ir_fallback_counts_t ir_fallback_counts;
+
+    struct PluginFallbackSiteInfo {
+        std::string file;
+        int line = -1;
+        std::string operation_name;
+        std::string lhs_type;
+        std::string rhs_type;
+        std::string reason;
+    };
+
+    mutable QoreThreadLock plugin_fallback_lock;
+    mutable std::deque<PluginFallbackSiteInfo> plugin_fallback_sites;
+
+    DLLLOCAL void recordPluginFallbackSite(PluginFallbackSiteInfo&& info, size_t limit) const {
+        if (!limit) {
+            return;
+        }
+        AutoLocker al(plugin_fallback_lock);
+        if (plugin_fallback_sites.size() >= limit) {
+            size_t drop = plugin_fallback_sites.size() - limit + 1;
+            plugin_fallback_sites.erase(plugin_fallback_sites.begin(), plugin_fallback_sites.begin() + drop);
+        }
+        plugin_fallback_sites.push_back(std::move(info));
+    }
+
+    DLLLOCAL std::vector<PluginFallbackSiteInfo> getPluginFallbackSites() const {
+        AutoLocker al(plugin_fallback_lock);
+        return std::vector<PluginFallbackSiteInfo>(plugin_fallback_sites.begin(), plugin_fallback_sites.end());
+    }
+
+    DLLLOCAL void clearPluginFallbackSites() const {
+        AutoLocker al(plugin_fallback_lock);
+        plugin_fallback_sites.clear();
+    }
 
     //! Records an IR fallback event for later reporting
     DLLLOCAL void recordIRFallback(const std::string& reason) const {

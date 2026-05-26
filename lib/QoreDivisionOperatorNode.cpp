@@ -108,6 +108,15 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
         }
     }
 
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(lti, rti,
+        QoreBufferBinaryOperation::Divide);
+    if (bufferResultTypeInfo) {
+        parse_context.typeInfo = bufferResultTypeInfo;
+        typeInfo = bufferResultTypeInfo;
+        set_binary_analysis_div(parse_context, left_analysis, right_analysis);
+        return err;
+    }
+
     // check for optimizations based on type; but only if types are known on both sides, although the highest
     // priority (number) can be assigned if either side is known to have it can be assigned if either side is a float
     if (QoreTypeInfo::isType(lti, NT_NUMBER) || QoreTypeInfo::isType(rti, NT_NUMBER)) {
@@ -163,6 +172,10 @@ QoreValue QoreDivisionOperatorNode::bigIntDivision(ExceptionSink* xsink) const {
 QoreValue QoreDivisionOperatorNode::doDivision(QoreValue lh, QoreValue rh, ExceptionSink* xsink) {
     qore_type_t lt = lh.getType();
     qore_type_t rt = rh.getType();
+
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return qore_buffer_binary_op(lh, rh, QoreBufferBinaryOperation::Divide, xsink);
+    }
 
     if (lt == NT_NUMBER) {
         switch (rt) {

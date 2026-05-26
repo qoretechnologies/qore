@@ -72,6 +72,10 @@ public:
     //! Predict clusters for multiple points
     DLLLOCAL QoreListNode* predictMatrix(const MatrixXd& data, ExceptionSink* xsink);
 
+    //! Predict clusters for multiple points as dense column buffers
+    DLLLOCAL QoreHashNode* predictMatrixColumns(const MatrixXd& data, bool include_centroid_distances,
+        ExceptionSink* xsink);
+
     //! Get centroids as a Qore list
     DLLLOCAL QoreListNode* getCentroids(ExceptionSink* xsink);
 

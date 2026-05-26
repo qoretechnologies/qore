@@ -85,6 +85,16 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
             hash<ModelVersionInfo> metadata) {
         string version_id = metadata.version_id;
         string ext = metadata.format ?? "qml";
+        if (!metadata.artifacts) {
+            metadata.artifacts = (<ModelArtifactInfo>{
+                "name": "model",
+                "role": "model",
+                "format": ext,
+                "size": artifact.size(),
+                "safe_to_parse": ext == "qml" || ext == "onnx",
+                "executable": ext == "qml" || ext == "onnx",
+            },);
+        }
 
         # Create model directory
         string model_dir = getModelDir(name);
@@ -103,12 +113,7 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
 
             # Save metadata file
 %ifndef NoJson
-            string meta_file = model_dir + DirSep + "v_" + version_id + ".meta.json";
-            {
-                File f();
-                f.open(meta_file, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-                f.write(make_json(metadata, JGF_ADD_FORMATTING));
-            }
+            writeVersionMetadataFiles(model_dir, version_id, metadata);
 %endif
         } catch (hash<ExceptionInfo> ex) {
             # Clean up orphaned files on error
@@ -122,6 +127,48 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         updateIndex(model_dir, metadata);
 
         return version_id;
+    }
+
+    nothing registerNamedArtifact(string name, string version_id, string artifact_name,
+            binary artifact, hash<ModelArtifactInfo> metadata) {
+        validateArtifactName(artifact_name);
+        string model_dir = getModelDir(name);
+        hash<ModelVersionInfo> version_meta = getVersionMetadata(name, version_id);
+
+        string artifact_dir = getVersionArtifactDir(model_dir, version_id);
+        if (!is_dir(artifact_dir)) {
+            mkdir_ex(artifact_dir, 0755, True);
+        }
+
+        string artifact_file = artifact_dir + DirSep + artifact_name;
+        {
+            File f();
+            f.open(artifact_file, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+            f.write(artifact);
+        }
+
+        metadata.name = artifact_name;
+        metadata.size = artifact.size();
+        if (!metadata.path_hint.val()) {
+            metadata.path_hint = "v_" + version_id + DirSep + "artifacts" + DirSep
+                + artifact_name;
+        }
+
+        list<hash<ModelArtifactInfo>> artifacts = version_meta.artifacts ?? ();
+        bool replaced = False;
+        for (int i = 0; i < artifacts.size(); ++i) {
+            if (artifacts[i].name == artifact_name) {
+                artifacts[i] = metadata;
+                replaced = True;
+                break;
+            }
+        }
+        if (!replaced) {
+            push artifacts, metadata;
+        }
+        version_meta.artifacts = artifacts;
+
+        updateVersionMetadata(model_dir, version_id, version_meta);
     }
 
     binary loadArtifact(string name, string version_id) {
@@ -151,10 +198,61 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         return f.readBinary(-1);
     }
 
+    binary loadNamedArtifact(string name, string version_id, string artifact_name) {
+        validateArtifactName(artifact_name);
+        if (artifact_name == "model") {
+            return loadArtifact(name, version_id);
+        }
+
+        string model_dir = getModelDir(name);
+        string artifact_file = getVersionArtifactDir(model_dir, version_id)
+            + DirSep + artifact_name;
+        if (!is_file(artifact_file)) {
+            hash<ModelVersionInfo> meta = getVersionMetadata(name, version_id);
+            foreach hash<ModelArtifactInfo> artifact_info in (meta.artifacts) {
+                if (artifact_info.name == artifact_name) {
+                    string primary_file = model_dir + DirSep + "v_" + version_id
+                        + "." + artifact_info.format;
+                    if (is_file(primary_file)) {
+                        File f();
+                        f.open(primary_file, O_RDONLY);
+                        return f.readBinary(-1);
+                    }
+                }
+            }
+            throw "ML-REGISTRY-ERROR",
+                sprintf("artifact '%s' not found for model '%s' version '%s'",
+                    artifact_name, name, version_id);
+        }
+        File f();
+        f.open(artifact_file, O_RDONLY);
+        return f.readBinary(-1);
+    }
+
+    list<hash<ModelArtifactInfo>> listArtifacts(string name, string version_id) {
+        hash<ModelVersionInfo> meta = getVersionManifest(name, version_id);
+        if (meta.artifacts) {
+            return meta.artifacts;
+        }
+        return (<ModelArtifactInfo>{
+            "name": "model",
+            "role": "model",
+            "format": meta.format,
+            "size": meta.file_size,
+            "safe_to_parse": meta.format == "qml" || meta.format == "onnx",
+            "executable": meta.format == "qml" || meta.format == "onnx",
+        },);
+    }
+
     list<hash<ModelVersionInfo>> listVersions(string name) {
         string model_dir = getModelDir(name);
         hash<auto> index = loadIndex(model_dir);
-        return cast<list<hash<ModelVersionInfo>>>(index.versions ?? ());
+        list<hash<ModelVersionInfo>> result();
+        foreach auto version in (index.versions ?? ()) {
+            push result, AbstractModelRegistryBackend::normalizeVersionInfo(
+                cast<hash<auto>>(version));
+        }
+        return result;
     }
 
     list<string> listModels() {
@@ -260,6 +358,10 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
                         unlink(artifact_file);
                     }
                 }
+                string package_dir = model_dir + DirSep + "v_" + versions[i].version_id;
+                if (is_dir(package_dir)) {
+                    deleteDirRecursive(package_dir);
+                }
                 string meta_file = base + ".meta.json";
                 if (is_file(meta_file)) {
                     unlink(meta_file);
@@ -279,13 +381,7 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
             throw "ML-REGISTRY-ERROR", sprintf("model '%s' not found%s", name,
                 tenant_id ? sprintf(" (tenant '%s')", tenant_id) : "");
         }
-        # Delete all files in directory
-        Dir d();
-        d.chdir(model_dir);
-        foreach string entry in (d.listFileNames()) {
-            unlink(model_dir + DirSep + entry);
-        }
-        rmdir(model_dir);
+        deleteDirRecursive(model_dir);
 
         # Invalidate cache
         index_mutex.lock();
@@ -302,6 +398,28 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         }
         throw "ML-REGISTRY-ERROR",
             sprintf("version '%s' not found for model '%s'", version_id, name);
+    }
+
+    hash<ModelVersionInfo> getVersionManifest(string name, string version_id) {
+        hash<ModelVersionInfo> meta = getVersionMetadata(name, version_id);
+%ifndef NoJson
+        string manifest_file = getVersionDir(getModelDir(name), version_id)
+            + DirSep + "manifest.json";
+        if (is_file(manifest_file)) {
+            hash<auto> manifest = parse_json(ReadOnlyFile::readTextFile(manifest_file));
+            if (manifest.artifacts) {
+                meta.artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(
+                    manifest.artifacts);
+            }
+            if (manifest.execution) {
+                meta.execution = cast<hash<ModelExecutionInfo>>(manifest.execution);
+            }
+            if (manifest.tokenizer) {
+                meta.tokenizer = cast<hash<TokenizerArtifactInfo>>(manifest.tokenizer);
+            }
+        }
+%endif
+        return meta;
     }
 
     list<string> listTenants() {
@@ -433,6 +551,77 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         hash<auto> index = loadIndexUnlocked(model_dir);
         push index.versions, metadata;
         saveIndexUnlocked(model_dir, index);
+    }
+
+    #! Private: updates a version metadata entry in the index and metadata files
+    private nothing updateVersionMetadata(string model_dir, string version_id,
+            hash<ModelVersionInfo> metadata) {
+        index_mutex.lock();
+        on_exit index_mutex.unlock();
+        hash<auto> index = loadIndexUnlocked(model_dir);
+        bool found = False;
+        for (int i = 0; i < index.versions.size(); ++i) {
+            if (index.versions[i].version_id == version_id) {
+                index.versions[i] = metadata;
+                found = True;
+                break;
+            }
+        }
+        if (!found) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("version '%s' not found", version_id);
+        }
+%ifndef NoJson
+        writeVersionMetadataFiles(model_dir, version_id, metadata);
+%endif
+        saveIndexUnlocked(model_dir, index);
+    }
+
+    #! Private: writes metadata and package manifest files
+    private nothing writeVersionMetadataFiles(string model_dir, string version_id,
+            hash<ModelVersionInfo> metadata) {
+%ifndef NoJson
+        string meta_file = model_dir + DirSep + "v_" + version_id + ".meta.json";
+        {
+            File f();
+            f.open(meta_file, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+            f.write(make_json(metadata, JGF_ADD_FORMATTING));
+        }
+
+        string version_dir = getVersionDir(model_dir, version_id);
+        if (!is_dir(version_dir)) {
+            mkdir_ex(version_dir, 0755, True);
+        }
+        string manifest_file = version_dir + DirSep + "manifest.json";
+        {
+            File f();
+            f.open(manifest_file, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+            f.write(make_json(metadata, JGF_ADD_FORMATTING));
+        }
+%endif
+    }
+
+    #! Private: returns the package directory for a version
+    private string getVersionDir(string model_dir, string version_id) {
+        return model_dir + DirSep + "v_" + version_id;
+    }
+
+    #! Private: returns the named-artifact directory for a version
+    private string getVersionArtifactDir(string model_dir, string version_id) {
+        return getVersionDir(model_dir, version_id) + DirSep + "artifacts";
+    }
+
+    #! Private: validates an artifact name as a package-local filename
+    private static nothing validateArtifactName(string artifact_name) {
+        if (!artifact_name.val()) {
+            throw "ML-REGISTRY-ERROR", "artifact name must not be empty";
+        }
+        if (artifact_name == "." || artifact_name == ".."
+                || artifact_name =~ /[\\\/]/) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("invalid artifact name '%s': path separators and traversal "
+                    "segments are not allowed", artifact_name);
+        }
     }
 
     #! Private: returns the effective base directory, scoped to tenant if applicable

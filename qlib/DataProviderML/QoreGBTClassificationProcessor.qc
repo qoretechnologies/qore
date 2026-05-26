@@ -30,7 +30,7 @@ public namespace DataProviderML {
     correct each other's mistakes.
 
 */
-public class QoreGBTClassificationProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreGBTClassificationProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -302,9 +302,9 @@ public class QoreGBTClassificationProcessor inherits DataProvider::AbstractDataP
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

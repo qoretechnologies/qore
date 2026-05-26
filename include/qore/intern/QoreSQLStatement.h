@@ -42,6 +42,7 @@
 #define STMT_DEFINED   3
 
 class DBActionHelper;
+class QoreColumnarResult;
 
 class QoreSQLStatement : public AbstractPrivateData, public SQLStatement {
     friend class DBActionHelper;
@@ -109,6 +110,7 @@ public:
 
     DLLLOCAL QoreListNode* fetchRows(int rows, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* fetchColumns(int rows, ExceptionSink* xsink);
+    DLLLOCAL QoreColumnarResult* fetchColumnar(int rows, ExceptionSink* xsink);
 
     DLLLOCAL QoreHashNode* describe(ExceptionSink* xsink);
 

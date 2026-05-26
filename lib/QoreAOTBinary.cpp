@@ -134,9 +134,11 @@
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
+#include "qore/intern/QorePluginRegistry.h"
 
 #include <qore/QoreBigFloatNode.h>
 #include <qore/QoreBigIntNode.h>
+#include <qore/QoreBufferNode.h>
 #include <qore/QoreNothingNode.h>
 #include <qore/QoreObject.h>
 
@@ -155,6 +157,16 @@
 static thread_local std::string qore_aot_expr_serialization_error;
 
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
+static bool qorePluginQordTrace() {
+    return std::getenv("QORE_PLUGIN_QORD_TRACE") != nullptr;
+}
+
+static void tracePluginQord(const std::string& msg) {
+    if (qorePluginQordTrace()) {
+        std::fprintf(stderr, "QORE_PLUGIN_QORD_TRACE: %s\n", msg.c_str());
+    }
+}
 
 static void qoreAOTClearExprSerializationError() {
     qore_aot_expr_serialization_error.clear();
@@ -513,6 +525,14 @@ static bool readDeferredMemberDefault(
         }
         ptr += 1;  // consume tag
         uint8_t kind = QoreAOTBinaryReader::readU8(ptr);
+        QoreComplexBufferInitKind buffer_init_kind = QoreComplexBufferInitKind::Constructor;
+        if (kind == 3 && (reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+            if (ptr + 1 > end) {
+                error = "unexpected end of data reading complex buffer init kind";
+                return false;
+            }
+            buffer_init_kind = static_cast<QoreComplexBufferInitKind>(QoreAOTBinaryReader::readU8(ptr));
+        }
         if (ptr + 8 > end) {
             error = "unexpected end of data reading complex_default type path";
             return false;
@@ -542,6 +562,7 @@ static bool readDeferredMemberDefault(
             args.push_back(arg);
         }
         pim.pending_complex_default_kind = static_cast<int8_t>(kind);
+        pim.pending_complex_buffer_init_kind = static_cast<int8_t>(buffer_init_kind);
         pim.pending_complex_default_path = type_path;
         pim.pending_complex_default_args = std::move(args);
         default_val = QoreValue();
@@ -869,6 +890,17 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
                 return false;
             }
             return skip_fixed(len, "binary payload");
+        }
+
+        case QoreAOTValueTag::VT_PLUGIN_INSTANCE: {
+            if (!skip_fixed(8, "plugin value instance header")) {
+                return false;
+            }
+            uint32_t payload_len = 0;
+            if (!read_count(payload_len, "plugin value payload length")) {
+                return false;
+            }
+            return skip_fixed(payload_len, "plugin value payload");
         }
 
         case QoreAOTValueTag::VT_LIST: {
@@ -1767,6 +1799,16 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
             + getAOTSerializableTypePath(list_ti) + ">";
     }
 
+    const QoreTypeInfo* buffer_ti = QoreTypeInfo::getReturnComplexBufferOrNothing(ti);
+    if (buffer_ti) {
+        const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(buffer_ti);
+        if (bti) {
+            return std::string(or_nothing ? "*" : "") + "buffer<"
+                + (bti->hasNullableElements() ? "*" : "")
+                + qore_buffer_element_type_name(bti->getBufferElementType()) + ">";
+        }
+    }
+
     return raw_path ? raw_path : "";
 }
 
@@ -1831,7 +1873,7 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
     }
     const QoreTypeInfo* ti = list ? list->getTypeInfo() : nullptr;
     const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexList(ti);
-    if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+    if (vt && vt != anyTypeInfo) {
         std::string type_path = getAOTSerializableTypePath(ti);
         qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
             type_path.c_str());
@@ -1854,7 +1896,7 @@ static void qoreAOTWriteHashValueType(QoreAOTBinaryWriter& writer,
         }
         const QoreTypeInfo* ti = hash->getTypeInfo();
         const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexHash(ti);
-        if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+        if (vt && vt != anyTypeInfo) {
             std::string type_path = getAOTSerializableTypePath(ti);
             qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
                 type_path.c_str());
@@ -2086,6 +2128,33 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             }
             return true;
         }
+        case NT_PLUGIN_VALUE: {
+            QorePluginSerializedValueInfo plugin_value;
+            ExceptionSink xsink;
+            if (qore_plugin_serialize_value_node(v.getInternalNode(), plugin_value, &xsink) || xsink) {
+                if (xsink) {
+                    tracePluginQord("write failed: plugin value serialization failed: "
+                        + qoreAOTExceptionText(xsink));
+                }
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
+                return false;
+            }
+            uint16_t import_idx = 0;
+            if (!addPluginTypeRef(plugin_value.module_name.c_str(), plugin_value.local_type_id, &import_idx)) {
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
+                return false;
+            }
+            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_PLUGIN_INSTANCE));
+            writeU16(import_idx);
+            writeU16(plugin_value.local_type_id);
+            writeU16(plugin_value.serializer_format_version);
+            writeU16(0);
+            writeU32(static_cast<uint32_t>(plugin_value.payload.size()));
+            if (!plugin_value.payload.empty()) {
+                writeBytes(plugin_value.payload.data(), static_cast<uint32_t>(plugin_value.payload.size()));
+            }
+            return true;
+        }
         case NT_LIST: {
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_LIST));
             const QoreListNode* list = v.get<const QoreListNode>();
@@ -2194,6 +2263,32 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
                     writeValue(nch->args->get(i));
+                }
+                return true;
+            }
+            // NewComplexBufferNode: `buffer<T> m();` default-constructed complex buffer
+            if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+                std::string type_path = getAOTSerializableTypePath(ncb->typeInfo);
+                uint32_t nargs = 0;
+                const QoreListNode* arg_list = nullptr;
+                if (!ncb->args.isNothing()) {
+                    arg_list = ncb->args.getType() == NT_LIST
+                        ? ncb->args.get<const QoreListNode>() : nullptr;
+                    if (arg_list) {
+                        nargs = static_cast<uint32_t>(arg_list->size());
+                    }
+                }
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
+                writeU8(3); // kind: 3 = complex buffer
+                if ((feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+                    writeU8(static_cast<uint8_t>(ncb->initKind));
+                }
+                uint32_t tlen = static_cast<uint32_t>(type_path.size());
+                writeU32(tlen);
+                writeStringRef(type_path.c_str(), tlen);
+                writeU32(nargs);
+                for (uint32_t i = 0; i < nargs; ++i) {
+                    writeValue(arg_list->retrieveEntry(i));
                 }
                 return true;
             }
@@ -2462,6 +2557,86 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     return true;
 }
 
+static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
+        uint16_t import_idx, const char*& module_name, std::string& error) {
+    module_name = nullptr;
+    const QoreAOTSectionHeader* import_sec = reader.findSection(QoreAOTSectionType::PLUGIN_IMPORTS);
+    if (!import_sec) {
+        error = "QORD-PLUGIN-IMPORT-MISSING: plugin value instance requires PLUGIN_IMPORTS";
+        return false;
+    }
+    const uint8_t* ptr = reader.getSectionData(*import_sec);
+    if (!ptr) {
+        error = "invalid PLUGIN_IMPORTS section data";
+        return false;
+    }
+    const uint8_t* end = ptr + import_sec->size;
+    auto ensure = [&](size_t needed, const char* what) -> bool {
+        if (needed > static_cast<size_t>(end - ptr)) {
+            error = "unexpected end of PLUGIN_IMPORTS while reading ";
+            error += what;
+            return false;
+        }
+        return true;
+    };
+
+    if (!ensure(4, "import count")) {
+        return false;
+    }
+    uint32_t import_count = QoreAOTBinaryReader::readU32(ptr);
+    for (uint32_t i = 0; i < import_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT plugin import module lookup")) {
+            error = "operation cancelled during AOT plugin import module lookup";
+            return false;
+        }
+        if (!ensure(12, "plugin import strings")) {
+            return false;
+        }
+        const char* candidate_module = reader.readStringRef(ptr);
+        (void)reader.readStringRef(ptr);
+        (void)reader.readStringRef(ptr);
+        if (!candidate_module || !*candidate_module) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: invalid plugin import string reference";
+            return false;
+        }
+        if (!ensure(4, "plugin import type count")) {
+            return false;
+        }
+        uint32_t type_count = QoreAOTBinaryReader::readU32(ptr);
+        if (type_count > std::numeric_limits<size_t>::max() / sizeof(uint16_t)) {
+            error = "PLUGIN_IMPORTS type id byte count overflow";
+            return false;
+        }
+        size_t type_bytes = static_cast<size_t>(type_count) * sizeof(uint16_t);
+        if (!ensure(type_bytes, "plugin import type ids")) {
+            return false;
+        }
+        ptr += type_bytes;
+        if (!ensure(4, "plugin import operation count")) {
+            return false;
+        }
+        uint32_t operation_count = QoreAOTBinaryReader::readU32(ptr);
+        if (operation_count > std::numeric_limits<size_t>::max() / sizeof(uint16_t)) {
+            error = "PLUGIN_IMPORTS operation id byte count overflow";
+            return false;
+        }
+        size_t operation_bytes = static_cast<size_t>(operation_count) * sizeof(uint16_t);
+        if (!ensure(operation_bytes, "plugin import operation ids")) {
+            return false;
+        }
+        ptr += operation_bytes;
+        if (i == import_idx) {
+            module_name = candidate_module;
+            return true;
+        }
+    }
+
+    error = "QORD-PLUGIN-IMPORT-MISSING: plugin value import index ";
+    error += std::to_string(import_idx);
+    error += " is out of range";
+    return false;
+}
+
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
     if (ptr >= end) {
@@ -2631,6 +2806,40 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             return QoreValue(new BinaryNode(buf, len));
         }
 
+        case QoreAOTValueTag::VT_PLUGIN_INSTANCE: {
+            if (static_cast<size_t>(end - ptr) < 12) {
+                error = "unexpected end of data reading plugin value instance header";
+                return QoreValue();
+            }
+            uint16_t import_idx = readU16(ptr);
+            uint16_t local_type_id = readU16(ptr);
+            uint16_t serializer_version = readU16(ptr);
+            uint16_t reserved = readU16(ptr);
+            uint32_t payload_len = readU32(ptr);
+            if (reserved) {
+                error = "QORD-PLUGIN-RESERVED-NONZERO: plugin value instance reserved field is non-zero";
+                return QoreValue();
+            }
+            if (payload_len > static_cast<size_t>(end - ptr)) {
+                error = "unexpected end of data reading plugin value payload";
+                return QoreValue();
+            }
+            const char* module_name = nullptr;
+            if (!qoreAOTGetPluginImportModuleName(*this, import_idx, module_name, error)) {
+                return QoreValue();
+            }
+            ExceptionSink xsink;
+            QoreValue rv = qore_plugin_deserialize_value(module_name, local_type_id, serializer_version, ptr,
+                payload_len, &xsink);
+            ptr += payload_len;
+            if (xsink) {
+                error = qoreAOTExceptionText(xsink);
+                rv.discard(nullptr);
+                return QoreValue();
+            }
+            return rv;
+        }
+
         case QoreAOTValueTag::VT_LIST: {
             QoreAOTContainerValueType kind = QoreAOTContainerValueType::Plain;
             const char* type_path = nullptr;
@@ -2648,7 +2857,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 if (!error.empty()) {
                     return QoreValue();
                 }
-                list->push(elem, nullptr);
+                qore_list_private::get(**list)->pushIntern(elem);
             }
             QoreValue rv(list.release());
             if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
@@ -2685,7 +2894,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 if (!error.empty()) {
                     return QoreValue();
                 }
-                hash->setKeyValue(key, val, nullptr);
+                qore_hash_private::get(**hash)->setKeyValueIntern(key, val);
             }
             QoreValue rv(hash.release());
             if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
@@ -2799,6 +3008,14 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 return QoreValue();
             }
             uint8_t kind = readU8(ptr);
+            QoreComplexBufferInitKind buffer_init_kind = QoreComplexBufferInitKind::Constructor;
+            if (kind == 3 && (getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0) {
+                if (ptr + 1 > end) {
+                    error = "unexpected end of data reading complex buffer init kind";
+                    return QoreValue();
+                }
+                buffer_init_kind = static_cast<QoreComplexBufferInitKind>(readU8(ptr));
+            }
             if (ptr + 8 > end) {
                 error = "unexpected end of data reading complex_default type path";
                 return QoreValue();
@@ -2878,6 +3095,15 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
                 NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, list_args);
                 return QoreValue(ncl);
+            }
+            if (kind == 3) {
+                QoreValue buffer_args;
+                if (parse_args) {
+                    buffer_args = QoreValue(parse_args);
+                }
+                NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, buffer_args,
+                    buffer_init_kind);
+                return QoreValue(ncb);
             }
             // kind == 1: complex hash
             NewComplexHashNode* nch = new NewComplexHashNode(&loc_builtin, ti, parse_args);
@@ -3003,6 +3229,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"binary",          &binaryTypeInfo},
     {"hash",            &hashTypeInfo},
     {"list",            &listTypeInfo},
+    {"buffer",          &bufferTypeInfo},
     {"object",          &objectTypeInfo},
     {"nothing",         &nothingTypeInfo},
     {"null",            &nullTypeInfo},
@@ -3029,6 +3256,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"*binary",         &binaryOrNothingTypeInfo},
     {"*hash",           &hashOrNothingTypeInfo},
     {"*list",           &listOrNothingTypeInfo},
+    {"*buffer",         &bufferOrNothingTypeInfo},
     {"*object",         &objectOrNothingTypeInfo},
     {"*data",           &dataOrNothingTypeInfo},
     {"*code",           &codeOrNothingTypeInfo},
@@ -3736,6 +3964,25 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
         return or_nothing
             ? qore_get_complex_list_or_nothing_type(value_type)
             : qore_get_complex_list_type(value_type);
+    }
+
+    if (extract_aot_type_args(path, "buffer", or_nothing, args)) {
+        if (args.size() != 1) {
+            return nullptr;
+        }
+        bool nullable_elements = false;
+        std::string element_name = args[0];
+        if (!element_name.empty() && element_name[0] == '*') {
+            nullable_elements = true;
+            element_name.erase(0, 1);
+        }
+        QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+        if (!qore_buffer_element_type_from_name(element_name.c_str(), element_type)) {
+            return nullptr;
+        }
+        return or_nothing
+            ? qore_get_complex_buffer_or_nothing_type(element_type, nullable_elements)
+            : qore_get_complex_buffer_type(element_type, nullable_elements);
     }
 
     if (extract_aot_type_args(path, "softlist", or_nothing, args)) {
@@ -4888,6 +5135,22 @@ static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
                 }
                 const QoreListNode* args = ncl->args.getType() == NT_LIST
                     ? ncl->args.get<const QoreListNode>() : nullptr;
+                if (!args) {
+                    return false;
+                }
+                for (size_t i = 0; i < args->size(); ++i) {
+                    if (!aotValueTagPreservesMemberDefault(args->retrieveEntry(i))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (const auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+                if (ncb->args.isNothing()) {
+                    return true;
+                }
+                const QoreListNode* args = ncb->args.getType() == NT_LIST
+                    ? ncb->args.get<const QoreListNode>() : nullptr;
                 if (!args) {
                     return false;
                 }
@@ -6470,6 +6733,18 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             }
             return true;
         }
+        if (QoreTypeInfo::getComplexBufferType(vti)) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
+            writeTypePathRef(writer, vti);
+            writer.writeU8(static_cast<uint8_t>(QoreComplexBufferInitKind::Constructor));
+            const QoreValue& new_args = vrn->getNewArgs();
+            if (new_args.hasNode()) {
+                writer.writeU8(1);
+                return classifyAndWriteExpr(writer, new_args, parent_locals, parent_globals, const_reverse_map);
+            }
+            writer.writeU8(0);
+            return true;
+        }
         qoreAOTSetExprSerializationError("unsupported VarRefNewObjectNode constructor in "
             + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
         return false;
@@ -7174,6 +7449,21 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             } else {
                 writer.writeU8(0);
             }
+            return true;
+        }
+    }
+
+    // NewComplexBufferNode: complex typed buffer construction
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        if (ncb->typeInfo) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_BUFFER_NEW));
+            writeTypePathRef(writer, ncb->typeInfo);
+            writer.writeU8(static_cast<uint8_t>(ncb->initKind));
+            if (ncb->args.hasNode()) {
+                writer.writeU8(1);
+                return write_inline_expr(ncb->args);
+            }
+            writer.writeU8(0);
             return true;
         }
     }
@@ -8206,6 +8496,12 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst, std::s
     if (dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         return QoreIRInstGroup::NewComplexList;
     }
+    if (dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+        return QoreIRInstGroup::NewComplexBuffer;
+    }
+    if (dynamic_cast<const QoreIRPluginInstruction*>(inst)) {
+        return QoreIRInstGroup::Plugin;
+    }
     if (dynamic_cast<const QoreIRVrnConstructInstruction*>(inst)) {
         return QoreIRInstGroup::VrnConstruct;
     }
@@ -8585,6 +8881,392 @@ static bool checkAOTFeatureCompatibility(const QoreAOTBinaryReader& reader, std:
     return false;
 }
 
+static bool ensurePluginSectionBytes(const uint8_t* ptr, const uint8_t* end, size_t needed,
+        const char* section, std::string& error) {
+    if (ptr > end || static_cast<size_t>(end - ptr) < needed) {
+        error = section;
+        error += " section is truncated";
+        return false;
+    }
+    return true;
+}
+
+static bool checkAOTPluginCancel(size_t i, ExceptionSink& xsink, const char* operation, std::string& error);
+
+static uint64_t readPluginHash64(const uint8_t*& ptr) {
+    uint64_t lo = QoreAOTBinaryReader::readU32(ptr);
+    uint64_t hi = QoreAOTBinaryReader::readU32(ptr);
+    return lo | (hi << 32);
+}
+
+static const QorePluginAOTOperationInfo* findPluginAOTOperation(
+        const QorePluginAOTModuleInfo& info, uint16_t local_id, ExceptionSink& xsink, std::string& error) {
+    for (size_t i = 0; i < info.operations.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin operation metadata lookup", error)) {
+            return nullptr;
+        }
+        const QorePluginAOTOperationInfo& op = info.operations[i];
+        if (op.local_id == local_id) {
+            return &op;
+        }
+    }
+    return nullptr;
+}
+
+static const QorePluginAOTTypeInfo* findPluginAOTType(
+        const QorePluginAOTModuleInfo& info, uint16_t local_id, ExceptionSink& xsink, std::string& error) {
+    for (size_t i = 0; i < info.types.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin type metadata lookup", error)) {
+            return nullptr;
+        }
+        const QorePluginAOTTypeInfo& type = info.types[i];
+        if (type.local_type_id == local_id) {
+            return &type;
+        }
+    }
+    return nullptr;
+}
+
+bool QoreAOTBinaryDeserializer::resolvePluginImports(std::string& error) {
+    std::vector<QorePluginAOTModuleInfo> plugin_imports_resolved;
+    const QoreAOTSectionHeader* import_sec = reader.findSection(QoreAOTSectionType::PLUGIN_IMPORTS);
+    const QoreAOTSectionHeader* helper_sec = reader.findSection(QoreAOTSectionType::PLUGIN_HELPER_REFS);
+    const QoreAOTSectionHeader* registry_sec = reader.findSection(QoreAOTSectionType::PLUGIN_TYPE_REGISTRY);
+    if (!import_sec) {
+        if (helper_sec || registry_sec) {
+            error = "QORD-PLUGIN-HELPER-REF-INVALID: plugin helper/type sections require PLUGIN_IMPORTS";
+            tracePluginQord("load failed: PLUGIN_HELPER_REFS/PLUGIN_TYPE_REGISTRY present without PLUGIN_IMPORTS");
+            return false;
+        }
+        tracePluginQord("load: no PLUGIN_IMPORTS section present");
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*import_sec);
+    if (!ptr) {
+        error = "invalid PLUGIN_IMPORTS section data";
+        return false;
+    }
+    const uint8_t* end = ptr + import_sec->size;
+    if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_IMPORTS", error)) {
+        return false;
+    }
+    uint32_t import_count = QoreAOTBinaryReader::readU32(ptr);
+    tracePluginQord("load: resolving " + std::to_string(import_count) + " plugin import(s)");
+    plugin_imports_resolved.reserve(import_count);
+    std::vector<std::vector<uint16_t>> required_type_ids;
+    std::vector<std::vector<uint16_t>> required_operation_ids;
+    required_type_ids.reserve(import_count);
+    required_operation_ids.reserve(import_count);
+
+    ExceptionSink xsink;
+    for (uint32_t i = 0; i < import_count; ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin import resolution", error)) {
+            return false;
+        }
+        if (!ensurePluginSectionBytes(ptr, end, 12, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        const char* module_name = reader.readStringRef(ptr);
+        const char* plugin_abi_version = reader.readStringRef(ptr);
+        const char* operation_set_version = reader.readStringRef(ptr);
+        if (!module_name || !*module_name || !plugin_abi_version || !operation_set_version) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: invalid plugin import string reference";
+            tracePluginQord("load failed: invalid plugin import string reference at index " + std::to_string(i));
+            return false;
+        }
+        tracePluginQord("load: import[" + std::to_string(i) + "] module='" + module_name
+            + "' plugin_abi='" + plugin_abi_version + "' operation_set='" + operation_set_version + "'");
+
+        QorePluginAOTModuleInfo info;
+        if (qore_plugin_get_aot_module_info(module_name, info, &xsink) || xsink) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+            error += module_name;
+            error += "' is not loaded";
+            tracePluginQord("load failed: plugin module '" + std::string(module_name) + "' is not loaded");
+            return false;
+        }
+        if (info.plugin_abi_version != plugin_abi_version) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+            error += module_name;
+            error += "' ABI version mismatch";
+            tracePluginQord("load failed: plugin module '" + std::string(module_name)
+                + "' ABI version mismatch");
+            return false;
+        }
+        if (info.operation_set_version != operation_set_version) {
+            error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+            error += module_name;
+            error += "' operation-set version mismatch";
+            tracePluginQord("load failed: plugin module '" + std::string(module_name)
+                + "' operation-set version mismatch");
+            return false;
+        }
+
+        if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        uint32_t type_count = QoreAOTBinaryReader::readU32(ptr);
+        tracePluginQord("load: import[" + std::to_string(i) + "] requires "
+            + std::to_string(type_count) + " type id(s)");
+        if (!ensurePluginSectionBytes(ptr, end, static_cast<size_t>(type_count) * 2, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        std::vector<uint16_t> types;
+        types.reserve(type_count);
+        for (uint32_t n = 0; n < type_count; ++n) {
+            if (checkAOTPluginCancel(n, xsink, "QORD plugin required type validation", error)) {
+                return false;
+            }
+            uint16_t id = QoreAOTBinaryReader::readU16(ptr);
+            if (!findPluginAOTType(info, id, xsink, error)) {
+                if (!error.empty()) {
+                    return false;
+                }
+                error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+                error += module_name;
+                error += "' does not register required local type id ";
+                error += std::to_string(id);
+                tracePluginQord("load failed: plugin module '" + std::string(module_name)
+                    + "' missing required local type id " + std::to_string(id));
+                return false;
+            }
+            types.push_back(id);
+        }
+        if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        uint32_t op_count = QoreAOTBinaryReader::readU32(ptr);
+        tracePluginQord("load: import[" + std::to_string(i) + "] requires "
+            + std::to_string(op_count) + " operation id(s)");
+        if (!ensurePluginSectionBytes(ptr, end, static_cast<size_t>(op_count) * 2, "PLUGIN_IMPORTS", error)) {
+            return false;
+        }
+        std::vector<uint16_t> ops;
+        ops.reserve(op_count);
+        for (uint32_t n = 0; n < op_count; ++n) {
+            if (checkAOTPluginCancel(n, xsink, "QORD plugin required operation validation", error)) {
+                return false;
+            }
+            uint16_t id = QoreAOTBinaryReader::readU16(ptr);
+            if (!findPluginAOTOperation(info, id, xsink, error)) {
+                if (!error.empty()) {
+                    return false;
+                }
+                error = "QORD-PLUGIN-IMPORT-MISSING: plugin module '";
+                error += module_name;
+                error += "' does not register required local operation id ";
+                error += std::to_string(id);
+                tracePluginQord("load failed: plugin module '" + std::string(module_name)
+                    + "' missing required local operation id " + std::to_string(id));
+                return false;
+            }
+            ops.push_back(id);
+        }
+        required_type_ids.push_back(std::move(types));
+        required_operation_ids.push_back(std::move(ops));
+        plugin_imports_resolved.push_back(std::move(info));
+    }
+    if (ptr != end) {
+        error = "PLUGIN_IMPORTS section has trailing bytes";
+        return false;
+    }
+
+    if (registry_sec) {
+        ptr = reader.getSectionData(*registry_sec);
+        if (!ptr) {
+            error = "invalid PLUGIN_TYPE_REGISTRY section data";
+            return false;
+        }
+        end = ptr + registry_sec->size;
+        if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_TYPE_REGISTRY", error)) {
+            return false;
+        }
+        uint32_t module_count = QoreAOTBinaryReader::readU32(ptr);
+        tracePluginQord("load: validating PLUGIN_TYPE_REGISTRY for " + std::to_string(module_count)
+            + " module(s)");
+        for (uint32_t i = 0; i < module_count; ++i) {
+            if (checkAOTPluginCancel(i, xsink, "QORD plugin type registry validation", error)) {
+                return false;
+            }
+            if (!ensurePluginSectionBytes(ptr, end, 16, "PLUGIN_TYPE_REGISTRY", error)) {
+                return false;
+            }
+            const char* module_name = reader.readStringRef(ptr);
+            const char* plugin_abi_version = reader.readStringRef(ptr);
+            const char* operation_set_version = reader.readStringRef(ptr);
+            uint32_t type_count = QoreAOTBinaryReader::readU32(ptr);
+            const QorePluginAOTModuleInfo* live = nullptr;
+            for (size_t n = 0; n < plugin_imports_resolved.size(); ++n) {
+                if (checkAOTPluginCancel(n, xsink, "QORD plugin registry import matching", error)) {
+                    return false;
+                }
+                if (plugin_imports_resolved[n].module_name == (module_name ? module_name : "")) {
+                    live = &plugin_imports_resolved[n];
+                    break;
+                }
+            }
+            if (!live || live->plugin_abi_version != (plugin_abi_version ? plugin_abi_version : "")
+                    || live->operation_set_version != (operation_set_version ? operation_set_version : "")) {
+                error = "QORD-PLUGIN-IMPORT-MISSING: PLUGIN_TYPE_REGISTRY module metadata does not match imports";
+                tracePluginQord("load failed: PLUGIN_TYPE_REGISTRY module metadata mismatch");
+                return false;
+            }
+            tracePluginQord("load: registry module[" + std::to_string(i) + "] module='"
+                + (module_name ? module_name : "") + "' types=" + std::to_string(type_count));
+            for (uint32_t n = 0; n < type_count; ++n) {
+                if (checkAOTPluginCancel(n, xsink, "QORD plugin type metadata validation", error)) {
+                    return false;
+                }
+                if (!ensurePluginSectionBytes(ptr, end, 12, "PLUGIN_TYPE_REGISTRY", error)) {
+                    return false;
+                }
+                uint16_t local_id = QoreAOTBinaryReader::readU16(ptr);
+                uint16_t serializer_version = QoreAOTBinaryReader::readU16(ptr);
+                const char* type_name = reader.readStringRef(ptr);
+                const char* type_path = reader.readStringRef(ptr);
+                const QorePluginAOTTypeInfo* live_type = findPluginAOTType(*live, local_id, xsink, error);
+                if (!live_type && !error.empty()) {
+                    return false;
+                }
+                if (!live_type || live_type->serializer_format_version != serializer_version
+                        || live_type->type_name != (type_name ? type_name : "")
+                        || live_type->type_path != (type_path ? type_path : "")) {
+                    error = "QORD-PLUGIN-IMPORT-MISSING: plugin type metadata mismatch";
+                    tracePluginQord("load failed: plugin type metadata mismatch for module '"
+                        + std::string(module_name ? module_name : "") + "' local_type_id="
+                        + std::to_string(local_id));
+                    return false;
+                }
+            }
+            if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_TYPE_REGISTRY", error)) {
+                return false;
+            }
+            uint32_t op_count = QoreAOTBinaryReader::readU32(ptr);
+            tracePluginQord("load: registry module[" + std::to_string(i) + "] module='"
+                + (module_name ? module_name : "") + "' operations=" + std::to_string(op_count));
+            for (uint32_t n = 0; n < op_count; ++n) {
+                if (checkAOTPluginCancel(n, xsink, "QORD plugin operation metadata validation", error)) {
+                    return false;
+                }
+                if (!ensurePluginSectionBytes(ptr, end, 36, "PLUGIN_TYPE_REGISTRY", error)) {
+                    return false;
+                }
+                uint16_t local_id = QoreAOTBinaryReader::readU16(ptr);
+                uint8_t canonical_version = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t reserved = QoreAOTBinaryReader::readU8(ptr);
+                uint64_t signature_hash = readPluginHash64(ptr);
+                const char* operation_name = reader.readStringRef(ptr);
+                uint8_t arity = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t helper_abi = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t access = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t result_alias = QoreAOTBinaryReader::readU8(ptr);
+                ptr += 4; // nullability/reserved bytes; helper refs validate the hash.
+                const char* primary_type = reader.readStringRef(ptr);
+                const char* secondary_type = reader.readStringRef(ptr);
+                const char* return_type = reader.readStringRef(ptr);
+                (void)primary_type;
+                (void)secondary_type;
+                (void)return_type;
+                const QorePluginAOTOperationInfo* live_op = findPluginAOTOperation(*live, local_id, xsink, error);
+                if (!live_op && !error.empty()) {
+                    return false;
+                }
+                if (reserved || !live_op || live_op->canonical_signature_version != canonical_version
+                        || live_op->signature_hash != signature_hash
+                        || live_op->operation_name != (operation_name ? operation_name : "")
+                        || live_op->signature.arity != arity
+                        || static_cast<uint8_t>(live_op->signature.helper_abi) != helper_abi
+                        || static_cast<uint8_t>(live_op->signature.access) != access
+                        || static_cast<uint8_t>(live_op->signature.result_alias) != result_alias) {
+                    error = "QORD-PLUGIN-SIGNATURE-HASH-MISMATCH: plugin operation metadata mismatch";
+                    tracePluginQord("load failed: plugin operation metadata mismatch for module '"
+                        + std::string(module_name ? module_name : "") + "' local_operation_id="
+                        + std::to_string(local_id));
+                    return false;
+                }
+            }
+        }
+        if (ptr != end) {
+            error = "PLUGIN_TYPE_REGISTRY section has trailing bytes";
+            return false;
+        }
+    }
+
+    if (!helper_sec) {
+        tracePluginQord("load: no PLUGIN_HELPER_REFS section present");
+        return true;
+    }
+    ptr = reader.getSectionData(*helper_sec);
+    if (!ptr) {
+        error = "invalid PLUGIN_HELPER_REFS section data";
+        return false;
+    }
+    end = ptr + helper_sec->size;
+    if (!ensurePluginSectionBytes(ptr, end, 4, "PLUGIN_HELPER_REFS", error)) {
+        return false;
+    }
+    uint32_t helper_count = QoreAOTBinaryReader::readU32(ptr);
+    tracePluginQord("load: validating " + std::to_string(helper_count) + " plugin helper ref(s)");
+    for (uint32_t i = 0; i < helper_count; ++i) {
+        if (checkAOTPluginCancel(i, xsink, "QORD plugin helper-ref validation", error)) {
+            return false;
+        }
+        if (!ensurePluginSectionBytes(ptr, end, 16, "PLUGIN_HELPER_REFS", error)) {
+            return false;
+        }
+        uint16_t slot_idx = QoreAOTBinaryReader::readU16(ptr);
+        uint16_t import_idx = QoreAOTBinaryReader::readU16(ptr);
+        uint16_t op_local_id = QoreAOTBinaryReader::readU16(ptr);
+        uint8_t canonical_version = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t reserved = QoreAOTBinaryReader::readU8(ptr);
+        uint64_t signature_hash = readPluginHash64(ptr);
+        (void)slot_idx;
+        tracePluginQord("load: helper_ref[" + std::to_string(i) + "] slot="
+            + std::to_string(slot_idx) + " import_idx=" + std::to_string(import_idx)
+            + " op_local_id=" + std::to_string(op_local_id) + " canonical_signature_version="
+            + std::to_string(canonical_version));
+        if (reserved) {
+            error = "QORD-PLUGIN-RESERVED-NONZERO: PLUGIN_HELPER_REFS reserved byte is non-zero";
+            tracePluginQord("load failed: PLUGIN_HELPER_REFS reserved byte is non-zero");
+            return false;
+        }
+        if (import_idx >= plugin_imports_resolved.size()) {
+            error = "QORD-PLUGIN-HELPER-REF-INVALID: import_idx is out of range";
+            tracePluginQord("load failed: helper ref import_idx is out of range");
+            return false;
+        }
+        if (canonical_version != QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1) {
+            error = "QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED: unsupported canonical signature version";
+            tracePluginQord("load failed: unsupported canonical signature version "
+                + std::to_string(canonical_version));
+            return false;
+        }
+        const QorePluginAOTOperationInfo* op = findPluginAOTOperation(plugin_imports_resolved[import_idx],
+            op_local_id, xsink, error);
+        if (!op && !error.empty()) {
+            return false;
+        }
+        if (!op) {
+            error = "QORD-PLUGIN-HELPER-REF-INVALID: op_local_id is not registered";
+            tracePluginQord("load failed: helper ref operation local id is not registered");
+            return false;
+        }
+        if (op->signature_hash != signature_hash) {
+            error = "QORD-PLUGIN-SIGNATURE-HASH-MISMATCH: helper ref signature hash does not match live registry";
+            tracePluginQord("load failed: helper ref signature hash mismatch for op_local_id="
+                + std::to_string(op_local_id));
+            return false;
+        }
+    }
+    if (ptr != end) {
+        error = "PLUGIN_HELPER_REFS section has trailing bytes";
+        return false;
+    }
+    tracePluginQord("load: plugin QORD imports resolved successfully");
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
         const uint8_t* data, uint32_t size, std::string& error) {
     pgm = in_pgm;
@@ -8603,6 +9285,10 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
     // have the bit and fall back to inline-string type paths.
     uses_type_table = (reader.getHeader().feature_flags
         & QORE_AOT_FEAT_TYPE_TABLE) != 0;
+
+    if (!resolvePluginImports(error)) {
+        return false;
+    }
 
     // Create type resolver for this program
     type_resolver = new QoreAOTTypeResolver(pgm);
@@ -9799,6 +10485,15 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                             NewComplexListNode* ncl = new NewComplexListNode(
                                 &loc_builtin, cti, list_args);
                             pim.default_val = QoreValue(ncl);
+                        } else if (pim.pending_complex_default_kind == 3) {
+                            QoreValue buffer_args;
+                            if (parse_args) {
+                                buffer_args = QoreValue(parse_args);
+                            }
+                            NewComplexBufferNode* ncb = new NewComplexBufferNode(
+                                &loc_builtin, cti, buffer_args,
+                                static_cast<QoreComplexBufferInitKind>(pim.pending_complex_buffer_init_kind));
+                            pim.default_val = QoreValue(ncb);
                         } else {
                             NewComplexHashNode* nch = new NewComplexHashNode(
                                 &loc_builtin, cti, parse_args);
@@ -9817,6 +10512,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     }
                 }
                 pim.pending_complex_default_kind = -1;
+                pim.pending_complex_buffer_init_kind = 0;
                 pim.pending_complex_default_path.clear();
             }
 
@@ -10010,6 +10706,15 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                             NewComplexListNode* ncl = new NewComplexListNode(
                                 &loc_builtin, cti, list_args);
                             psm.default_val = QoreValue(ncl);
+                        } else if (psm.pending_complex_default_kind == 3) {
+                            QoreValue buffer_args;
+                            if (parse_args) {
+                                buffer_args = QoreValue(parse_args);
+                            }
+                            NewComplexBufferNode* ncb = new NewComplexBufferNode(
+                                &loc_builtin, cti, buffer_args,
+                                static_cast<QoreComplexBufferInitKind>(psm.pending_complex_buffer_init_kind));
+                            psm.default_val = QoreValue(ncb);
                         } else {
                             NewComplexHashNode* nch = new NewComplexHashNode(
                                 &loc_builtin, cti, parse_args);
@@ -10028,6 +10733,7 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                     }
                 }
                 psm.pending_complex_default_kind = -1;
+                psm.pending_complex_buffer_init_kind = 0;
                 psm.pending_complex_default_path.clear();
             }
 
@@ -10278,6 +10984,38 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
         }
     }
 
+    // Now that every class constant in the batch has a value, collapse any
+    // nested deferred sibling references that had to remain lazy during the
+    // first pass.  This preserves source semantics for constants such as a
+    // folded hash referring to a later sibling constant.
+    ExceptionSink xsink;
+    for (uint32_t i = 0; i < class_list.size() && i < pending_class_constants.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class constant materialization")) {
+            error = "AOT class constant materialization cancelled";
+            return false;
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        for (size_t j = 0; j < pending_class_constants[i].size(); ++j) {
+            if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT class constant materialization")) {
+                error = "AOT class constant materialization cancelled";
+                return false;
+            }
+            auto& pcc = pending_class_constants[i][j];
+            ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
+            if (!ce || ce->aot_shell_pending) {
+                continue;
+            }
+            ce->materializeRuntimeRefs(&xsink);
+            if (xsink) {
+                xsink.clear();
+            }
+        }
+    }
+
     // Clear pending data
     pending_class_constants.clear();
     return true;
@@ -10396,6 +11134,14 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                             }
                             phm.default_val = QoreValue(new NewComplexListNode(
                                 &loc_builtin, cti, list_args));
+                        } else if (phm.pending_complex_default_kind == 3) {
+                            QoreValue buffer_args;
+                            if (parse_args) {
+                                buffer_args = QoreValue(parse_args);
+                            }
+                            phm.default_val = QoreValue(new NewComplexBufferNode(
+                                &loc_builtin, cti, buffer_args,
+                                static_cast<QoreComplexBufferInitKind>(phm.pending_complex_buffer_init_kind)));
                         } else {
                             phm.default_val = QoreValue(new NewComplexHashNode(
                                 &loc_builtin, cti, parse_args));
@@ -10413,6 +11159,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     }
                 }
                 phm.pending_complex_default_kind = -1;
+                phm.pending_complex_buffer_init_kind = 0;
                 phm.pending_complex_default_path.clear();
             }
 
@@ -10649,6 +11396,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             std::string pending_new_class_path;
             std::vector<QoreValue> pending_new_args;
             int8_t pending_complex_default_kind = -1;
+            int8_t pending_complex_buffer_init_kind = 0;
             std::string pending_complex_default_path;
             std::vector<QoreValue> pending_complex_default_args;
             std::vector<uint8_t> pending_expr_tree_blob;
@@ -10757,6 +11505,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             phm.pending_new_class_path = std::move(mi.pending_new_class_path);
             phm.pending_new_args = std::move(mi.pending_new_args);
             phm.pending_complex_default_kind = mi.pending_complex_default_kind;
+            phm.pending_complex_buffer_init_kind = mi.pending_complex_buffer_init_kind;
             phm.pending_complex_default_path = std::move(mi.pending_complex_default_path);
             phm.pending_complex_default_args = std::move(mi.pending_complex_default_args);
             phm.pending_expr_tree_blob = std::move(mi.pending_expr_tree_blob);
@@ -12632,6 +13381,13 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     // writeFunctions/Methods so the table contains every path the
     // variants referenced via writer.internTypePath().
     writer.writeTypeTableSection();
+    section_error.clear();
+    if (!writer.writePluginSections(section_error)) {
+        if (error) {
+            *error = "PLUGIN sections: " + section_error;
+        }
+        return false;
+    }
 
     // Drop the non-owning CRM pointer — program_crm goes out of scope next.
     writer.const_reverse_map = nullptr;
@@ -12654,6 +13410,321 @@ void QoreAOTBinaryWriter::writeTypeTableSection() {
         writeStringRef(type_path_table[i].c_str());
     }
     endSection(idx);
+}
+
+bool QoreAOTBinaryWriter::addPluginOperationRef(const char* module_name, uint16_t op_local_id,
+        uint8_t canonical_signature_version, uint64_t signature_hash) {
+    if (!module_name || !*module_name || plugin_helper_refs.size() > UINT16_MAX) {
+        tracePluginQord("write failed: invalid plugin operation ref module name or helper ref count overflow");
+        return false;
+    }
+
+    uint16_t import_idx;
+    auto i = plugin_import_index.find(module_name);
+    if (i == plugin_import_index.end()) {
+        if (plugin_imports.size() > UINT16_MAX) {
+            return false;
+        }
+        import_idx = static_cast<uint16_t>(plugin_imports.size());
+        PluginImportRecord import;
+        import.module_name = module_name;
+        plugin_imports.push_back(std::move(import));
+        plugin_import_index.emplace(plugin_imports.back().module_name, import_idx);
+        tracePluginQord("write: added plugin import[" + std::to_string(import_idx) + "] module='"
+            + module_name + "'");
+    } else {
+        import_idx = i->second;
+    }
+
+    std::vector<uint16_t>& ops = plugin_imports[import_idx].required_operation_ids;
+    if (std::find(ops.begin(), ops.end(), op_local_id) == ops.end()) {
+        ops.push_back(op_local_id);
+    }
+
+    PluginHelperRefRecord ref;
+    ref.slot_idx = static_cast<uint16_t>(plugin_helper_refs.size());
+    ref.import_idx = import_idx;
+    ref.op_local_id = op_local_id;
+    ref.canonical_signature_version = canonical_signature_version;
+    ref.signature_hash = signature_hash;
+    plugin_helper_refs.push_back(ref);
+    tracePluginQord("write: added helper_ref[" + std::to_string(ref.slot_idx) + "] module='"
+        + module_name + "' import_idx=" + std::to_string(import_idx) + " op_local_id="
+        + std::to_string(op_local_id) + " canonical_signature_version="
+        + std::to_string(canonical_signature_version));
+    return true;
+}
+
+bool QoreAOTBinaryWriter::addPluginTypeRef(const char* module_name, uint16_t local_type_id, uint16_t* import_idx_out) {
+    if (import_idx_out) {
+        *import_idx_out = 0;
+    }
+    if (!module_name || !*module_name) {
+        tracePluginQord("write failed: invalid plugin type ref module name");
+        return false;
+    }
+
+    uint16_t import_idx;
+    auto i = plugin_import_index.find(module_name);
+    if (i == plugin_import_index.end()) {
+        if (plugin_imports.size() > UINT16_MAX) {
+            tracePluginQord("write failed: plugin import count overflow");
+            return false;
+        }
+        import_idx = static_cast<uint16_t>(plugin_imports.size());
+        PluginImportRecord import;
+        import.module_name = module_name;
+        plugin_imports.push_back(std::move(import));
+        plugin_import_index.emplace(plugin_imports.back().module_name, import_idx);
+        tracePluginQord("write: added plugin import[" + std::to_string(import_idx) + "] module='"
+            + module_name + "'");
+    } else {
+        import_idx = i->second;
+    }
+
+    std::vector<uint16_t>& types = plugin_imports[import_idx].required_type_ids;
+    if (std::find(types.begin(), types.end(), local_type_id) == types.end()) {
+        types.push_back(local_type_id);
+    }
+    if (import_idx_out) {
+        *import_idx_out = import_idx;
+    }
+    tracePluginQord("write: added type ref module='" + std::string(module_name) + "' import_idx="
+        + std::to_string(import_idx) + " local_type_id=" + std::to_string(local_type_id));
+    return true;
+}
+
+static bool checkAOTPluginCancel(size_t i, ExceptionSink& xsink, const char* operation, std::string& error) {
+    if (i && !(i % 100) && qore_check_cancel(&xsink, operation)) {
+        error = "operation cancelled during ";
+        error += operation;
+        return true;
+    }
+    return false;
+}
+
+static void writePluginSignatureMetadata(QoreAOTBinaryWriter& writer,
+        const QorePluginOperationSignature& sig) {
+    writer.writeU8(sig.arity);
+    writer.writeU8(static_cast<uint8_t>(sig.helper_abi));
+    writer.writeU8(static_cast<uint8_t>(sig.access));
+    writer.writeU8(static_cast<uint8_t>(sig.result_alias));
+    writer.writeU8(sig.primary_nullable ? 1 : 0);
+    writer.writeU8(sig.secondary_nullable ? 1 : 0);
+    writer.writeU8(sig.return_nullable ? 1 : 0);
+    writer.writeU8(0);
+    writer.writeStringRef(sig.primary_type ? qore_type_get_path(sig.primary_type) : "");
+    writer.writeStringRef(sig.secondary_type ? qore_type_get_path(sig.secondary_type) : "");
+    writer.writeStringRef(sig.return_type ? qore_type_get_path(sig.return_type) : "");
+}
+
+static void writePluginHash64(QoreAOTBinaryWriter& writer, uint64_t hash) {
+    writer.writeU32(static_cast<uint32_t>(hash & 0xffffffffu));
+    writer.writeU32(static_cast<uint32_t>(hash >> 32));
+}
+
+bool QoreAOTBinaryWriter::writePluginSections(std::string& error) {
+    if (plugin_imports.empty()) {
+        tracePluginQord("write: no plugin imports to serialize");
+        return true;
+    }
+
+    tracePluginQord("write: serializing " + std::to_string(plugin_imports.size())
+        + " plugin import(s) and " + std::to_string(plugin_helper_refs.size()) + " helper ref(s)");
+    ExceptionSink xsink;
+    std::vector<QorePluginAOTModuleInfo> infos;
+    infos.reserve(plugin_imports.size());
+    for (size_t i = 0; i < plugin_imports.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin import metadata lookup", error)) {
+            return false;
+        }
+        QorePluginAOTModuleInfo info;
+        if (qore_plugin_get_aot_module_info(plugin_imports[i].module_name.c_str(), info, &xsink) || xsink) {
+            error = "plugin import '";
+            error += plugin_imports[i].module_name;
+            error += "' is not registered in the process plugin registry";
+            tracePluginQord("write failed: plugin import '" + plugin_imports[i].module_name
+                + "' is not registered");
+            return false;
+        }
+        plugin_imports[i].plugin_abi_version = info.plugin_abi_version;
+        plugin_imports[i].operation_set_version = info.operation_set_version;
+        std::sort(plugin_imports[i].required_type_ids.begin(), plugin_imports[i].required_type_ids.end());
+        std::sort(plugin_imports[i].required_operation_ids.begin(), plugin_imports[i].required_operation_ids.end());
+        tracePluginQord("write: import[" + std::to_string(i) + "] module='" + plugin_imports[i].module_name
+            + "' types=" + std::to_string(plugin_imports[i].required_type_ids.size())
+            + " operations=" + std::to_string(plugin_imports[i].required_operation_ids.size()));
+        infos.push_back(std::move(info));
+    }
+
+    std::vector<std::unordered_map<uint16_t, size_t>> type_indexes(infos.size());
+    std::vector<std::unordered_map<uint16_t, size_t>> op_indexes(infos.size());
+    for (size_t i = 0; i < infos.size(); ++i) {
+        type_indexes[i].reserve(infos[i].types.size());
+        for (size_t n = 0; n < infos[i].types.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin type metadata indexing", error)) {
+                return false;
+            }
+            type_indexes[i].emplace(infos[i].types[n].local_type_id, n);
+        }
+        op_indexes[i].reserve(infos[i].operations.size());
+        for (size_t n = 0; n < infos[i].operations.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin operation metadata indexing", error)) {
+                return false;
+            }
+            op_indexes[i].emplace(infos[i].operations[n].local_id, n);
+        }
+    }
+    for (size_t i = 0; i < plugin_imports.size(); ++i) {
+        for (size_t n = 0; n < plugin_imports[i].required_type_ids.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin type ref validation", error)) {
+                return false;
+            }
+            uint16_t local_type_id = plugin_imports[i].required_type_ids[n];
+            if (type_indexes[i].find(local_type_id) == type_indexes[i].end()) {
+                error = "plugin type ref for import '";
+                error += plugin_imports[i].module_name;
+                error += "' references unregistered local type id ";
+                error += std::to_string(local_type_id);
+                tracePluginQord("write failed: type ref references unregistered local type id "
+                    + std::to_string(local_type_id));
+                return false;
+            }
+        }
+    }
+
+    uint32_t sec_idx = beginSection(QoreAOTSectionType::PLUGIN_IMPORTS);
+    tracePluginQord("write: emitting PLUGIN_IMPORTS");
+    writeU32(static_cast<uint32_t>(plugin_imports.size()));
+    for (size_t i = 0; i < plugin_imports.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin import section serialization", error)) {
+            return false;
+        }
+        const PluginImportRecord& import = plugin_imports[i];
+        writeStringRef(import.module_name.c_str());
+        writeStringRef(import.plugin_abi_version.c_str());
+        writeStringRef(import.operation_set_version.c_str());
+        writeU32(static_cast<uint32_t>(import.required_type_ids.size()));
+        for (size_t n = 0; n < import.required_type_ids.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin import type id serialization", error)) {
+                return false;
+            }
+            writeU16(import.required_type_ids[n]);
+        }
+        writeU32(static_cast<uint32_t>(import.required_operation_ids.size()));
+        for (size_t n = 0; n < import.required_operation_ids.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin import operation id serialization", error)) {
+                return false;
+            }
+            writeU16(import.required_operation_ids[n]);
+        }
+    }
+    endSection(sec_idx);
+
+    sec_idx = beginSection(QoreAOTSectionType::PLUGIN_TYPE_REGISTRY);
+    tracePluginQord("write: emitting PLUGIN_TYPE_REGISTRY");
+    writeU32(static_cast<uint32_t>(infos.size()));
+    for (size_t i = 0; i < infos.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin type registry section serialization", error)) {
+            return false;
+        }
+        const QorePluginAOTModuleInfo& info = infos[i];
+        writeStringRef(info.module_name.c_str());
+        writeStringRef(info.plugin_abi_version.c_str());
+        writeStringRef(info.operation_set_version.c_str());
+        writeU32(static_cast<uint32_t>(info.types.size()));
+        for (size_t n = 0; n < info.types.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin type metadata serialization", error)) {
+                return false;
+            }
+            const QorePluginAOTTypeInfo& type = info.types[n];
+            writeU16(type.local_type_id);
+            writeU16(type.serializer_format_version);
+            writeStringRef(type.type_name.c_str());
+            writeStringRef(type.type_path.c_str());
+        }
+        writeU32(static_cast<uint32_t>(info.operations.size()));
+        for (size_t n = 0; n < info.operations.size(); ++n) {
+            if (checkAOTPluginCancel(n, xsink, "AOT plugin operation metadata serialization", error)) {
+                return false;
+            }
+            const QorePluginAOTOperationInfo& op = info.operations[n];
+            writeU16(op.local_id);
+            writeU8(op.canonical_signature_version);
+            writeU8(0);
+            writePluginHash64(*this, op.signature_hash);
+            writeStringRef(op.operation_name.c_str());
+            writePluginSignatureMetadata(*this, op.signature);
+        }
+    }
+    endSection(sec_idx);
+
+    sec_idx = beginSection(QoreAOTSectionType::PLUGIN_HELPER_REFS);
+    tracePluginQord("write: emitting PLUGIN_HELPER_REFS");
+    writeU32(static_cast<uint32_t>(plugin_helper_refs.size()));
+    for (size_t i = 0; i < plugin_helper_refs.size(); ++i) {
+        if (checkAOTPluginCancel(i, xsink, "AOT plugin helper-ref section serialization", error)) {
+            return false;
+        }
+        PluginHelperRefRecord ref = plugin_helper_refs[i];
+        if (ref.import_idx >= infos.size()) {
+            error = "plugin helper ref has invalid import index ";
+            error += std::to_string(ref.import_idx);
+            tracePluginQord("write failed: helper ref import index is invalid");
+            return false;
+        }
+        auto oi = op_indexes[ref.import_idx].find(ref.op_local_id);
+        if (oi == op_indexes[ref.import_idx].end()) {
+            error = "plugin helper ref for import '";
+            error += plugin_imports[ref.import_idx].module_name;
+            error += "' references unregistered local operation id ";
+            error += std::to_string(ref.op_local_id);
+            tracePluginQord("write failed: helper ref references unregistered local operation id "
+                + std::to_string(ref.op_local_id));
+            return false;
+        }
+        const QorePluginAOTOperationInfo& op = infos[ref.import_idx].operations[oi->second];
+        if (!ref.canonical_signature_version) {
+            ref.canonical_signature_version = op.canonical_signature_version;
+        }
+        if (!ref.signature_hash) {
+            ref.signature_hash = op.signature_hash;
+        }
+        if (ref.canonical_signature_version != op.canonical_signature_version) {
+            error = "plugin helper ref for import '";
+            error += plugin_imports[ref.import_idx].module_name;
+            error += "' local operation id ";
+            error += std::to_string(ref.op_local_id);
+            error += " has canonical signature version ";
+            error += std::to_string(ref.canonical_signature_version);
+            error += " but the registered operation has ";
+            error += std::to_string(op.canonical_signature_version);
+            tracePluginQord("write failed: helper ref canonical signature version mismatch");
+            return false;
+        }
+        if (ref.signature_hash != op.signature_hash) {
+            error = "plugin helper ref for import '";
+            error += plugin_imports[ref.import_idx].module_name;
+            error += "' local operation id ";
+            error += std::to_string(ref.op_local_id);
+            error += " has a signature hash mismatch";
+            tracePluginQord("write failed: helper ref signature hash mismatch");
+            return false;
+        }
+        tracePluginQord("write: helper_ref[" + std::to_string(i) + "] slot="
+            + std::to_string(ref.slot_idx) + " import_idx=" + std::to_string(ref.import_idx)
+            + " op_local_id=" + std::to_string(ref.op_local_id) + " canonical_signature_version="
+            + std::to_string(ref.canonical_signature_version));
+        writeU16(ref.slot_idx);
+        writeU16(ref.import_idx);
+        writeU16(ref.op_local_id);
+        writeU8(ref.canonical_signature_version);
+        writeU8(0);
+        writePluginHash64(*this, ref.signature_hash);
+    }
+    endSection(sec_idx);
+    tracePluginQord("write: plugin QORD sections serialized successfully");
+    return true;
 }
 
 void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {

@@ -32,6 +32,8 @@
 #ifndef _QORE_QORE_DBI_PRIVATE_H
 #define _QORE_QORE_DBI_PRIVATE_H
 
+#include <qore/QoreColumnarResult.h>
+
 #include <map>
 
 // internal DBI definitions
@@ -59,6 +61,7 @@ struct dbi_driver_stmt {
     q_dbi_stmt_fetch_row_t fetch_row = nullptr;
     q_dbi_stmt_fetch_rows_t fetch_rows = nullptr;
     q_dbi_stmt_fetch_columns_t fetch_columns = nullptr;
+    q_dbi_stmt_fetch_columnar_t fetch_columnar = nullptr;
     q_dbi_stmt_fetch_row_t describe = nullptr;
     q_dbi_stmt_next_t next = nullptr;
     q_dbi_stmt_define_t define = nullptr;
@@ -85,6 +88,9 @@ struct DBIDriverFunctions {
     q_dbi_close_t close = nullptr;
     q_dbi_select_t select = nullptr;
     q_dbi_select_rows_t selectRows = nullptr;
+    q_dbi_select_typed_t selectTyped = nullptr;
+    q_dbi_select_rows_typed_t selectRowsTyped = nullptr;
+    q_dbi_select_columnar_t selectColumnar = nullptr;
     q_dbi_select_row_t selectRow = nullptr;
     q_dbi_exec_t execSQL = nullptr;
     q_dbi_execraw_t execRawSQL = nullptr;
@@ -183,6 +189,52 @@ struct qore_dbi_private {
     DLLLOCAL QoreValue selectRows(Datasource* ds, const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) const {
         DbiArgHelper dargs(args, (caps & DBI_CAP_HAS_NUMBER_SUPPORT), xsink);
         return f.selectRows(ds, sql, *dargs, xsink);
+    }
+
+    DLLLOCAL QoreValue selectTyped(Datasource* ds, const QoreString* sql, const QoreListNode* args,
+            ExceptionSink* xsink) const {
+        DbiArgHelper dargs(args, (caps & DBI_CAP_HAS_NUMBER_SUPPORT), xsink);
+        if (f.selectTyped) {
+            return f.selectTyped(ds, sql, *dargs, xsink);
+        }
+
+        ValueHolder res(f.select(ds, sql, *dargs, xsink), xsink);
+        if (*xsink || res->getType() != NT_HASH) {
+            return res.release();
+        }
+
+        QoreHashNode* rv = qore_dbi_make_typed_select_result(ds, res->get<const QoreHashNode>(), nullptr, xsink);
+        return rv ? QoreValue(rv) : QoreValue();
+    }
+
+    DLLLOCAL QoreValue selectRowsTyped(Datasource* ds, const QoreString* sql, const QoreListNode* args,
+            ExceptionSink* xsink) const {
+        DbiArgHelper dargs(args, (caps & DBI_CAP_HAS_NUMBER_SUPPORT), xsink);
+        if (f.selectRowsTyped) {
+            return f.selectRowsTyped(ds, sql, *dargs, xsink);
+        }
+
+        ValueHolder res(f.selectRows(ds, sql, *dargs, xsink), xsink);
+        if (*xsink || res->getType() != NT_LIST) {
+            return res.release();
+        }
+
+        QoreListNode* rv = qore_dbi_make_typed_select_rows_result(ds, res->get<const QoreListNode>(), nullptr, xsink);
+        return rv ? QoreValue(rv) : QoreValue();
+    }
+
+    DLLLOCAL QoreColumnarResult* selectColumnar(Datasource* ds, const QoreString* sql, const QoreListNode* args,
+            ExceptionSink* xsink) const {
+        DbiArgHelper dargs(args, (caps & DBI_CAP_HAS_NUMBER_SUPPORT), xsink);
+        if (f.selectColumnar) {
+            return f.selectColumnar(ds, sql, *dargs, xsink);
+        }
+
+        ValueHolder res(f.select(ds, sql, *dargs, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return qore_columnar_result_from_value(*res, nullptr, "DBI select() compatibility fallback", xsink);
     }
 
     DLLLOCAL QoreHashNode* selectRow(Datasource* ds, const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) const {
@@ -345,6 +397,18 @@ struct qore_dbi_private {
 
     DLLLOCAL QoreHashNode* stmt_fetch_columns(SQLStatement* stmt, int rows, ExceptionSink* xsink) const {
         return f.stmt.fetch_columns(stmt, rows, xsink);
+    }
+
+    DLLLOCAL QoreColumnarResult* stmt_fetch_columnar(SQLStatement* stmt, int rows, ExceptionSink* xsink) const {
+        if (f.stmt.fetch_columnar) {
+            return f.stmt.fetch_columnar(stmt, rows, xsink);
+        }
+
+        ReferenceHolder<QoreHashNode> columns(f.stmt.fetch_columns(stmt, rows, xsink), xsink);
+        if (*xsink || !columns) {
+            return nullptr;
+        }
+        return QoreColumnarResult::fromColumnHash(*columns, nullptr, xsink);
     }
 
     DLLLOCAL QoreHashNode* stmt_describe(SQLStatement* stmt, ExceptionSink* xsink) const {

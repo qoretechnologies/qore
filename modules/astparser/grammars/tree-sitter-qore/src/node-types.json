@@ -425,6 +425,10 @@
             "named": false
           },
           {
+            "type": "generic_scoped_identifier",
+            "named": true
+          },
+          {
             "type": "hash",
             "named": false
           },
@@ -2454,6 +2458,25 @@
     }
   },
   {
+    "type": "generic_scoped_identifier",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "generic_type",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "generic_type",
     "named": true,
     "fields": {
@@ -4365,6 +4388,10 @@
         },
         {
           "type": "foldr_expression",
+          "named": true
+        },
+        {
+          "type": "generic_scoped_identifier",
           "named": true
         },
         {

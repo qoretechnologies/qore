@@ -29,12 +29,8 @@
 %requires WebSocketUtil >= 1.6
 %requires Util
 %requires AsyncSocketIo
+%requires AsyncApi >= 1.0
 %requires(reexport) Logger
-
-# Optional AsyncAPI support
-%try-module AsyncApi >= 1.0
-%define NoAsyncApi
-%endtry
 
 %modern
 
@@ -117,6 +113,8 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @section websockethandler_relnotes WebSocketHandler Release History
 
     @subsection websockethandler_v2_8 Version 2.8
+    - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
+      metadata always resolves the typed AsyncAPI validator members and methods
     - HTTP/2 WebSocket connections now thread an \c io_wake closure into
       the @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext"
       they hand to the @ref WebSocketHandler::WebSocketConnection

@@ -30,6 +30,22 @@ class SourceGenericBox<T> {
         return local;
     }
 
+    T localLoop(T value) {
+        T local = value;
+        for (int i = 0; i < 10; ++i) {
+            local = value;
+        }
+        return local;
+    }
+
+    list<T> listLocalLoop(T value) {
+        list<T> local = ();
+        for (int i = 0; i < 10; ++i) {
+            local = (value,);
+        }
+        return local;
+    }
+
     nothing set(T value) {
         self.value = value;
     }
@@ -370,6 +386,14 @@ class SourceGenericCallMethods {
         return local;
     }
 
+    T echoLoop<T>(T value) {
+        T local = value;
+        for (int i = 0; i < 10; ++i) {
+            local = value;
+        }
+        return local;
+    }
+
     T first<T>(T first, T second) {
         return first;
     }
@@ -484,6 +508,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("generic inheritance", \genericInheritance());
         addTestCase("static generic methods", \staticGenericMethods());
         addTestCase("method-level generics", \methodLevelGenerics());
+        addTestCase("generic lvalue substitution cache", \genericLvalueSubstitutionCache());
         addTestCase("generic hashdecls", \genericHashDecls());
         addTestCase("generic wildcards", \genericWildcards());
         addTestCase("expression-site inference", \expressionSiteInference());
@@ -725,6 +750,25 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         int mixed_inferred_receiver_static = SourceGenericStaticChooser::choose("thirty-four", 34);
         assertEq(34, mixed_inferred_receiver_static);
+    }
+
+    genericLvalueSubstitutionCache() {
+        SourceGenericBox<int> ibox(1);
+        assertEq(7, ibox.localLoop(7));
+        assertEq((8,), ibox.listLocalLoop(8));
+        any bad_string = "bad";
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { ibox.localLoop(bad_string); });
+
+        SourceGenericBox<string> sbox("a");
+        assertEq("cached", sbox.localLoop("cached"));
+        assertEq(("value",), sbox.listLocalLoop("value"));
+        any bad_int = 9;
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { sbox.listLocalLoop(bad_int); });
+
+        SourceGenericCallMethods calls();
+        assertEq(31, calls.echoLoop<int>(31));
+        assertEq("thirty-two", calls.echoLoop<string>("thirty-two"));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { calls.echoLoop<int>(bad_string); });
     }
 
     genericHashDecls() {

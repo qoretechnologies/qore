@@ -45,6 +45,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/QoreIteratorBase.h"
@@ -102,6 +103,9 @@ const QoreAutoNoNarrowHashOrNothingTypeInfo staticAutoNoNarrowHashOrNothingTypeI
 const QoreListTypeInfo staticListTypeInfo;
 const QoreListOrNothingTypeInfo staticListOrNothingTypeInfo;
 const QoreEmptyListTypeInfo staticEmptyListTypeInfo;
+
+const QoreBufferTypeInfo staticBufferTypeInfo;
+const QoreBufferOrNothingTypeInfo staticBufferOrNothingTypeInfo;
 
 const QoreAutoListTypeInfo staticAutoListTypeInfo;
 const QoreAutoListOrNothingTypeInfo staticAutoListOrNothingTypeInfo;
@@ -187,6 +191,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *autoHashTypeInfo = &staticAutoHashTypeInfo,
    *autoNoNarrowHashTypeInfo = &staticAutoNoNarrowHashTypeInfo,
    *listTypeInfo = &staticListTypeInfo,
+   *bufferTypeInfo = &staticBufferTypeInfo,
    *autoListTypeInfo = &staticAutoListTypeInfo,
    *autoNoNarrowListTypeInfo = &staticAutoNoNarrowListTypeInfo,
    *emptyListTypeInfo = &staticEmptyListTypeInfo,
@@ -229,6 +234,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *autoHashOrNothingTypeInfo = &staticAutoHashOrNothingTypeInfo,
    *autoNoNarrowHashOrNothingTypeInfo = &staticAutoNoNarrowHashOrNothingTypeInfo,
    *listOrNothingTypeInfo = &staticListOrNothingTypeInfo,
+   *bufferOrNothingTypeInfo = &staticBufferOrNothingTypeInfo,
    *autoListOrNothingTypeInfo = &staticAutoListOrNothingTypeInfo,
    *autoNoNarrowListOrNothingTypeInfo = &staticAutoNoNarrowListOrNothingTypeInfo,
    *nullOrNothingTypeInfo = &staticNullOrNothingTypeInfo,
@@ -295,6 +301,22 @@ tmap_t ch_map,          // complex hash map
    cron_map,            // complex reference or nothing map
    csl_map,             // complex softlist map
    cslon_map;           // complex softlist or nothing map
+
+struct ComplexBufferCacheKey {
+    QoreBufferElementType elementType;
+    bool nullableElements;
+
+    bool operator<(const ComplexBufferCacheKey& other) const {
+        if (elementType != other.elementType) {
+            return elementType < other.elementType;
+        }
+        return nullableElements < other.nullableElements;
+    }
+};
+
+typedef std::map<ComplexBufferCacheKey, QoreTypeInfo*> complex_buffer_map_t;
+static complex_buffer_map_t cb_map,       // complex buffer map
+                            cbon_map;     // complex buffer or nothing map
 
 // Cache for union types - keyed by sorted vector of member types
 typedef std::map<type_vec_t, QoreUnionTypeInfo*> union_map_t;
@@ -419,6 +441,7 @@ void init_qore_types() {
     do_maps(NT_NUMBER,          "number", numberTypeInfo, numberOrNothingTypeInfo);
     do_maps(NT_BINARY,          "binary", binaryTypeInfo, binaryOrNothingTypeInfo);
     do_maps(NT_LIST,            "list", listTypeInfo, listOrNothingTypeInfo);
+    do_maps(NT_BUFFER,          "buffer", bufferTypeInfo, bufferOrNothingTypeInfo);
     do_maps(NT_HASH,            "hash", hashTypeInfo, hashOrNothingTypeInfo);
     do_maps(NT_OBJECT,          "object", objectTypeInfo, objectOrNothingTypeInfo);
     do_maps(NT_ALL,             "any", anyTypeInfo, anyTypeInfo);
@@ -489,6 +512,10 @@ void delete_qore_types() {
         delete i.second;
     for (auto& i : cslon_map)
         delete i.second;
+    for (auto& i : cb_map)
+        delete i.second;
+    for (auto& i : cbon_map)
+        delete i.second;
     // Clean up union type cache
     for (auto& i : union_map)
         delete i.second;
@@ -555,6 +582,15 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
         if (ti) {
             return qore_get_complex_list_type(ti);
+        }
+    }
+
+    {
+        const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexBufferOrNothing(typeInfo);
+        if (ti) {
+            const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
+            assert(bti);
+            return qore_get_complex_buffer_type(bti->getBufferElementType(), bti->hasNullableElements());
         }
     }
 
@@ -631,6 +667,16 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
         const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
         if (ti)
             return qore_get_complex_list_or_nothing_type(ti);
+    }
+
+    {
+        const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexBuffer(typeInfo);
+        if (ti) {
+            const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
+            assert(bti);
+            return qore_get_complex_buffer_or_nothing_type(bti->getBufferElementType(),
+                bti->hasNullableElements());
+        }
     }
 
     {
@@ -716,6 +762,57 @@ const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vt
 
     QoreComplexListOrNothingTypeInfo* ti = new QoreComplexListOrNothingTypeInfo(vti);
     clon_map.insert(i, tmap_t::value_type(vti, ti));
+    return ti;
+}
+
+static QoreString qore_make_complex_buffer_name(QoreBufferElementType element_type, bool nullable_elements,
+        bool or_nothing) {
+    QoreString rv;
+    if (or_nothing) {
+        rv.concat('*');
+    }
+    rv.concat("buffer<");
+    if (nullable_elements) {
+        rv.concat('*');
+    }
+    rv.concat(qore_buffer_element_type_name(element_type));
+    rv.concat('>');
+    return rv;
+}
+
+const QoreTypeInfo* qore_get_complex_buffer_type(QoreBufferElementType elementType, bool nullableElements) {
+    assert(elementType != QoreBufferElementType::Invalid);
+
+    AutoLocker al(ctl);
+
+    ComplexBufferCacheKey key{elementType, nullableElements};
+    complex_buffer_map_t::iterator i = cb_map.lower_bound(key);
+    if (i != cb_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreComplexBufferTypeInfo* ti = new QoreComplexBufferTypeInfo(elementType, nullableElements);
+    cb_map.insert(i, complex_buffer_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_complex_buffer_or_nothing_type(QoreBufferElementType elementType,
+        bool nullableElements) {
+    assert(elementType != QoreBufferElementType::Invalid);
+
+    const QoreTypeInfo* value_type = qore_get_complex_buffer_type(elementType, nullableElements);
+
+    AutoLocker al(ctl);
+
+    ComplexBufferCacheKey key{elementType, nullableElements};
+    complex_buffer_map_t::iterator i = cbon_map.lower_bound(key);
+    if (i != cbon_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreComplexBufferOrNothingTypeInfo* ti = new QoreComplexBufferOrNothingTypeInfo(elementType, nullableElements,
+        value_type);
+    cbon_map.insert(i, complex_buffer_map_t::value_type(key, ti));
     return ti;
 }
 
@@ -1155,6 +1252,110 @@ bool qore_type_contains_wildcard(const QoreTypeInfo* ti) {
         }
     }
     return false;
+}
+
+bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
+    if (!ti || !QoreTypeInfo::hasType(ti)) {
+        return false;
+    }
+
+    signed char cached = ti->getContainsTypeParameterCache();
+    if (cached != -1) {
+        return cached != 0;
+    }
+
+    if (qore_get_type_parameter_type_info(ti)) {
+        ti->setContainsTypeParameterCache(true);
+        return true;
+    }
+
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+            if (qore_type_contains_type_parameter(arg)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    if (const QoreWildcardTypeInfo* wti = QoreTypeInfo::getWildcardType(ti)) {
+        bool rv = qore_type_contains_type_parameter(wti->getBound());
+        ti->setContainsTypeParameterCache(rv);
+        return rv;
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (hp->isParameterizedHashDecl()) {
+            for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                if (qore_type_contains_type_parameter(arg)) {
+                    ti->setContainsTypeParameterCache(true);
+                    return true;
+                }
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        if (qore_type_contains_type_parameter(cti->getReturnType())) {
+            ti->setContainsTypeParameterCache(true);
+            return true;
+        }
+        for (const QoreTypeInfo* param : cti->getParamTypes()) {
+            if (qore_type_contains_type_parameter(param)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    if (QoreTypeInfo::getUnionType(ti)) {
+        for (const QoreReturnSpec& rt : ti->return_vec) {
+            const QoreTypeInfo* member = rt.spec.getTypeInfo();
+            if (member && member != nothingTypeInfo && qore_type_contains_type_parameter(member)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (subtype && qore_type_contains_type_parameter(subtype)) {
+        ti->setContainsTypeParameterCache(true);
+        return true;
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (subtype && qore_type_contains_type_parameter(subtype)) {
+        ti->setContainsTypeParameterCache(true);
+        return true;
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    bool rv = subtype && qore_type_contains_type_parameter(subtype);
+    ti->setContainsTypeParameterCache(rv);
+    return rv;
+}
+
+const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
+        : ti;
+}
+
+const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, receiver_type_info, type_param_inst)
+        : ti;
 }
 
 static qore_type_result_e qore_wildcard_accepts(const QoreWildcardTypeInfo* target_wc,
@@ -2066,6 +2267,10 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
             return static_cast<const QoreListNode*>(n)->getTypeInfo();
         case NT_WEAKREF_LIST:
             return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
+        case NT_BUFFER:
+            return static_cast<const QoreBufferNode*>(n)->getTypeInfo();
+        case NT_PLUGIN_VALUE:
+            return qore_plugin_get_value_type_info(n);
         case NT_REFERENCE:
             return static_cast<const ReferenceNode*>(n)->getTypeInfo();
         case NT_RUNTIME_CLOSURE: {
@@ -2240,7 +2445,7 @@ qore_type_result_e QoreTypeSpec::checkMatchType(const QoreTypeSpec& t, bool& may
     }
     if (u.t == ot) {
         // check special cases
-        if ((u.t == NT_LIST || u.t == NT_HASH) && t.typespec != QTS_TYPE && t.typespec != QTS_EMPTYLIST
+        if ((u.t == NT_LIST || u.t == NT_HASH || u.t == NT_BUFFER) && t.typespec != QTS_TYPE && t.typespec != QTS_EMPTYLIST
                 && t.typespec != QTS_EMPTYHASH) {
             max_result = QTI_NEAR;
             return QTI_NEAR;
@@ -2300,6 +2505,8 @@ qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
         return t == NT_HASH ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXLIST) {
         return t == NT_LIST ? QTI_IDENT : QTI_NOT_EQUAL;
+    } else if (typespec == QTS_COMPLEXBUFFER) {
+        return t == NT_BUFFER ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXSOFTLIST) {
         if (t == NT_LIST) {
             return QTI_IDENT;
@@ -2483,6 +2690,23 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     return true;
 }
 
+static bool qore_complex_buffer_accepts_runtime(const QoreTypeInfo* target_ti, const QoreBufferNode& source,
+        bool& needs_nullable_copy) {
+    needs_nullable_copy = false;
+    const QoreComplexBufferTypeInfo* target = QoreTypeInfo::getComplexBufferType(target_ti);
+    if (!target || target->getBufferElementType() != source.getElementType()) {
+        return false;
+    }
+    if (target->hasNullableElements() == source.hasNullableElements()) {
+        return true;
+    }
+    if (target->hasNullableElements() && !source.hasNullableElements()) {
+        needs_nullable_copy = true;
+        return true;
+    }
+    return false;
+}
+
 bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, q_type_map_t map,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
         LValueHelper* lvhelper) const {
@@ -2613,6 +2837,29 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             }
             break;
         }
+        case QTS_COMPLEXBUFFER: {
+            if (n.getType() == NT_BUFFER) {
+                QoreBufferNode* b = n.get<QoreBufferNode>();
+                bool needs_nullable_copy = false;
+                ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
+                if (needs_nullable_copy) {
+                    QoreBufferNode* copy = b->copy(true, xsink);
+                    if (!copy) {
+                        return true;
+                    }
+                    AbstractQoreNode* old = n.assign(copy);
+                    if (lvhelper) {
+                        lvhelper->saveTemp(old);
+                    } else {
+                        discard(old, xsink);
+                        if (xsink && *xsink) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            break;
+        }
         case QTS_HARDREF: {
             if (n.getType() == NT_REFERENCE) {
                 ok = true;
@@ -2731,6 +2978,8 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXHARDREF:
         case QTS_COMPLEXREF:
             return QoreTypeInfo::equal(u.ti, other.u.ti);
+        case QTS_COMPLEXBUFFER:
+            return u.ti == other.u.ti;
         case QTS_PARAMCLASS:
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
@@ -2922,6 +3171,18 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             return QTI_NOT_EQUAL;
         }
 
+        case QTS_COMPLEXBUFFER: {
+            if (ot != NT_BUFFER) {
+                return QTI_NOT_EQUAL;
+            }
+            const QoreBufferNode* b = n.get<const QoreBufferNode>();
+            bool needs_nullable_copy = false;
+            if (!qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy)) {
+                return QTI_NOT_EQUAL;
+            }
+            return needs_nullable_copy ? QTI_NEAR : (exact ? QTI_IDENT : QTI_AMBIGUOUS);
+        }
+
         case QTS_COMPLEXREF:
             if (ot == NT_REFERENCE) {
                 const QoreTypeInfo* ti = n.get<const ReferenceNode>()->getLValueTypeInfo();
@@ -2966,6 +3227,9 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                     }
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
                 }
+            }
+            if (u.t == NT_BUFFER && ot == NT_BUFFER) {
+                return QTI_NEAR;
             }
 
             if (u.t == NT_ALL || u.t == ot) {
@@ -3510,6 +3774,59 @@ static const QoreTypeInfo* qore_resolve_runtime_wildcard_type_arg(const QorePars
         : qore_get_wildcard_super_type(bound);
 }
 
+static constexpr const char* qore_buffer_supported_element_types =
+    "int8, int16, int32, int64, float32, float64, bool, string, decimal128";
+
+static const QoreTypeInfo* qore_resolve_runtime_buffer_type(const QoreParseTypeInfo& pti, bool or_nothing) {
+    if (pti.subtypes.size() != 1 || pti.subtypes[0]->hasExplicitSubtypeList()) {
+        return nullptr;
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    if (!qore_buffer_element_type_from_name(pti.subtypes[0]->cscope->ostr, element_type)) {
+        return nullptr;
+    }
+
+    return or_nothing
+        ? qore_get_complex_buffer_or_nothing_type(element_type, pti.subtypes[0]->or_nothing)
+        : qore_get_complex_buffer_type(element_type, pti.subtypes[0]->or_nothing);
+}
+
+static const QoreTypeInfo* qore_resolve_parse_buffer_type(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err) {
+    if (pti.subtypes.size() != 1) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s' with %d type arguments; base type 'buffer' "
+            "takes exactly one storage element type: %s. Use 'buffer<*T>' for nullable elements and '*buffer<T>' "
+            "for an optional buffer value", QoreParseTypeInfo::getName(&pti), (int)pti.subtypes.size(),
+            qore_buffer_supported_element_types);
+        err = -1;
+        return pti.or_nothing ? bufferOrNothingTypeInfo : bufferTypeInfo;
+    }
+
+    const QoreParseTypeInfo* element = pti.subtypes[0];
+    if (element->hasExplicitSubtypeList()) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; buffer<T> element type cannot itself have "
+            "type arguments; supported storage element types are: %s", QoreParseTypeInfo::getName(&pti),
+            qore_buffer_supported_element_types);
+        err = -1;
+        return pti.or_nothing ? bufferOrNothingTypeInfo : bufferTypeInfo;
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    if (!qore_buffer_element_type_from_name(element->cscope->ostr, element_type)) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid buffer element type '%s'. "
+            "Supported storage element types are: %s. Use 'buffer<*T>' for nullable elements and '*buffer<T>' for "
+            "an optional buffer value", QoreParseTypeInfo::getName(&pti), element->cscope->ostr,
+            qore_buffer_supported_element_types);
+        err = -1;
+        return pti.or_nothing ? bufferOrNothingTypeInfo : bufferTypeInfo;
+    }
+
+    return pti.or_nothing
+        ? qore_get_complex_buffer_or_nothing_type(element_type, element->or_nothing)
+        : qore_get_complex_buffer_type(element_type, element->or_nothing);
+}
+
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
     if (isWildcardTypeArg()) {
         return qore_resolve_runtime_wildcard_type_arg(*this);
@@ -3522,6 +3839,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
+    if (!strcmp(cscope->ostr, "buffer")) {
+        return qore_resolve_runtime_buffer_type(*this, or_nothing);
+    }
     if (!strcmp(cscope->ostr, "hash")) {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
@@ -3844,6 +4164,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeClass(const NamedScope& csc
 const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation* loc, int& err) const {
     if (isWildcardTypeArg()) {
         return qore_resolve_parse_wildcard_type_arg(*this, loc, err);
+    }
+    if (!strcmp(cscope->ostr, "buffer")) {
+        return qore_resolve_parse_buffer_type(*this, loc, err);
     }
     if (!strcmp(cscope->ostr, "hash")) {
         if (subtypes.size() == 1) {
@@ -4341,6 +4664,51 @@ QoreValue QoreHashDeclTypeInfo::getDefaultQoreValueImpl() const {
     //return new QoreHashNode(getFirstAcceptSpec().spec.getHashDecl(), xsink);
 }
 
+QoreComplexBufferTypeInfo::QoreComplexBufferTypeInfo(QoreBufferElementType element_type, bool nullable_elements)
+        : QoreTypeInfo(q_accept_vec_t {{QoreComplexBufferTypeSpec(this), nullptr, true}},
+            q_return_vec_t {{QoreComplexBufferTypeSpec(this), true}},
+            qore_make_complex_buffer_name(element_type, nullable_elements, false)),
+        element_type(element_type),
+        nullable_elements(nullable_elements) {
+    assert(element_type != QoreBufferElementType::Invalid);
+    pname = qore_make_complex_buffer_name(element_type, nullable_elements, false);
+}
+
+QoreComplexBufferTypeInfo::QoreComplexBufferTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
+        const QoreString& tname, QoreBufferElementType element_type, bool nullable_elements)
+        : QoreTypeInfo(std::move(a_vec), std::move(r_vec), tname), element_type(element_type),
+        nullable_elements(nullable_elements) {
+    assert(element_type != QoreBufferElementType::Invalid);
+}
+
+const QoreTypeInfo* QoreComplexBufferTypeInfo::getElementTypeInfo() const {
+    return qore_buffer_element_scalar_type_info(element_type, nullable_elements);
+}
+
+void QoreComplexBufferTypeInfo::getThisTypeImpl(QoreString& str) const {
+    qore_string_private::get(str)->concat(&tname);
+}
+
+QoreValue QoreComplexBufferTypeInfo::getDefaultQoreValueImpl() const {
+    return new QoreBufferNode(element_type, nullable_elements);
+}
+
+QoreComplexBufferOrNothingTypeInfo::QoreComplexBufferOrNothingTypeInfo(QoreBufferElementType element_type,
+        bool nullable_elements, const QoreTypeInfo* value_type)
+        : QoreComplexBufferTypeInfo(q_accept_vec_t {
+            {QoreComplexBufferTypeSpec(value_type), nullptr},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{QoreComplexBufferTypeSpec(value_type)}, {NT_NOTHING}},
+            qore_make_complex_buffer_name(element_type, nullable_elements, true), element_type, nullable_elements) {
+    assert(value_type);
+    pname = qore_make_complex_buffer_name(element_type, nullable_elements, true);
+}
+
+void QoreComplexBufferOrNothingTypeInfo::getThisTypeImpl(QoreString& str) const {
+    str.sprintf("%s or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexBuffer()));
+}
+
 QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti) : QoreComplexListTypeInfo(q_accept_vec_t {
             {
                 QoreComplexSoftListTypeSpec(vti),
@@ -4674,6 +5042,18 @@ const QoreTypeInfo* QoreTypeInfo::getReturnComplexHashOrNothing(const QoreTypeIn
         : ti->return_vec[0].spec.getComplexHash();
 }
 
+const QoreTypeInfo* QoreTypeInfo::getReturnComplexBufferOrNothing(const QoreTypeInfo* ti) {
+    if (!ti || !hasType(ti)) {
+        return nullptr;
+    }
+    if (ti->return_vec.size() > 1) {
+        if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+            return nullptr;
+        }
+    }
+    return ti->return_vec[0].spec.getComplexBuffer();
+}
+
 void QoreTypeInfo::getNodeType(QoreString& str, const QoreValue& n) {
     qore_type_t nt = n.getType();
     if (nt == NT_NOTHING) {
@@ -4823,6 +5203,23 @@ const QoreTypeInfo* QoreTypeInfo::getComplexListValueType(const QoreTypeInfo* ti
     return ti->return_vec[0].spec.getComplexList();
 }
 
+const QoreComplexBufferTypeInfo* QoreTypeInfo::getComplexBufferType(const QoreTypeInfo* ti) {
+    if (!hasType(ti)) {
+        return nullptr;
+    }
+    assert(!ti->return_vec.empty());
+    return dynamic_cast<const QoreComplexBufferTypeInfo*>(ti->return_vec[0].spec.getComplexBuffer());
+}
+
+const QoreTypeInfo* qore_get_complex_buffer_value_type(const QoreTypeInfo* ti) {
+    const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
+    return bti ? bti->getElementTypeInfo() : nullptr;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getComplexBufferValueType(const QoreTypeInfo* ti) {
+    return qore_get_complex_buffer_value_type(ti);
+}
+
 bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
         ExceptionSink* xsink) {
     if (!v.hasNode() || !target_ti || target_ti == autoTypeInfo) {
@@ -4851,7 +5248,7 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
     }
 
     const QoreTypeInfo* inner_h_vt = QoreTypeInfo::getComplexHashValueType(target_ti);
-    if (inner_h_vt && inner_h_vt != autoTypeInfo) {
+    if (inner_h_vt) {
         if (v.getType() != NT_HASH) {
             return true;
         }
@@ -4862,15 +5259,22 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             v = copy;
             h = copy;
         }
-        HashIterator hi(h);
-        while (hi.next()) {
-            hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
-            QoreValue cur(ha.swap(QoreValue()));
-            if (!QoreTypeInfo::retypeValue(cur, inner_h_vt, xsink)) {
+        if (inner_h_vt != autoTypeInfo) {
+            HashIterator hi(h);
+            size_t i = 0;
+            while (hi.next()) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "hash value retyping")) {
+                    return false;
+                }
+                hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
+                QoreValue cur(ha.swap(QoreValue()));
+                if (!QoreTypeInfo::retypeValue(cur, inner_h_vt, xsink)) {
+                    ha.swap(cur);
+                    return false;
+                }
                 ha.swap(cur);
-                return false;
+                ++i;
             }
-            ha.swap(cur);
         }
         qore_hash_private::get(*h)->complexTypeInfo
             = qore_get_complex_hash_type(inner_h_vt);
@@ -4878,7 +5282,7 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
     }
 
     const QoreTypeInfo* inner_l_vt = QoreTypeInfo::getComplexListValueType(target_ti);
-    if (inner_l_vt && inner_l_vt != autoTypeInfo) {
+    if (inner_l_vt) {
         if (v.getType() != NT_LIST) {
             return true;
         }
@@ -4890,14 +5294,19 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             l = copy;
         }
         qore_list_private* lp = qore_list_private::get(*l);
-        size_t n = l->size();
-        for (size_t i = 0; i < n; ++i) {
-            QoreValue cur = lp->swap(i, QoreValue());
-            if (!QoreTypeInfo::retypeValue(cur, inner_l_vt, xsink)) {
+        if (inner_l_vt != autoTypeInfo) {
+            size_t n = l->size();
+            for (size_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "list value retyping")) {
+                    return false;
+                }
+                QoreValue cur = lp->swap(i, QoreValue());
+                if (!QoreTypeInfo::retypeValue(cur, inner_l_vt, xsink)) {
+                    lp->swap(i, cur);
+                    return false;
+                }
                 lp->swap(i, cur);
-                return false;
             }
-            lp->swap(i, cur);
         }
         lp->complexTypeInfo = qore_get_complex_list_type(inner_l_vt);
         return true;

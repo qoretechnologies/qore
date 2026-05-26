@@ -1,0 +1,604 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OnnxBenchData.qm Qore user module providing shared ONNX benchmark data generators
+
+/*  OnnxBenchData.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%requires dataframe
+%requires ml
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+module OnnxBenchData {
+    version = "0.1";
+    desc    = "Shared deterministic data generation for ONNX benchmarks";
+    author  = "Qore developers";
+    url     = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace OnnxBench {
+    public int sub rows() {
+        *string env_rows = ENV.QORE_BENCH_ONNX_ROWS;
+        return env_rows ? env_rows.toInt() : 10000;
+    }
+
+    public int sub textRows() {
+        *string env_rows = ENV.QORE_BENCH_TEXT_ROWS;
+        return env_rows ? env_rows.toInt() : 2000;
+    }
+
+    public int sub approxBytes(int rows) {
+        # One float input column and one float output column.
+        return rows * 8;
+    }
+
+    public int sub approxSklearnBytes(int rows) {
+        # Four float32 input columns, three float32 probability outputs, and one int64 label.
+        return rows * ((4 + 3) * 4 + 8);
+    }
+
+    public bool sub canRunOnnx(string model_path) {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        return caps.has_onnx && is_file(model_path);
+    }
+
+    public string sub modelPath() {
+        string path = get_script_dir() + "/../../modules/ml/test/data/test_linear.onnx";
+        if (is_file(path)) {
+            return path;
+        }
+        return "modules/ml/test/data/test_linear.onnx";
+    }
+
+    public string sub sklearnModelPath() {
+        string path = get_script_dir() + "/../../modules/ml/test/data/test_sklearn_rf.onnx";
+        if (is_file(path)) {
+            return path;
+        }
+        return "modules/ml/test/data/test_sklearn_rf.onnx";
+    }
+
+    public string sub tokenizerPath() {
+        string path = get_script_dir()
+            + "/../../modules/tokenizer/test/test_data/bert-base-uncased-tokenizer.json";
+        if (is_file(path)) {
+            return path;
+        }
+        return "modules/tokenizer/test/test_data/bert-base-uncased-tokenizer.json";
+    }
+
+    public string sub tokenEmbeddingModelPath() {
+        string path = get_script_dir() + "/../../modules/ml/test/data/test_token_embedding.onnx";
+        if (is_file(path)) {
+            return path;
+        }
+        return "modules/ml/test/data/test_token_embedding.onnx";
+    }
+
+    public string sub tokenRerankerModelPath() {
+        string path = get_script_dir() + "/../../modules/ml/test/data/test_token_reranker.onnx";
+        if (is_file(path)) {
+            return path;
+        }
+        return "modules/ml/test/data/test_token_reranker.onnx";
+    }
+
+    public bool sub canRunTokenizer() {
+        return is_file(tokenizerPath());
+    }
+
+    public bool sub canRunTextOnnx(string model_path) {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        return caps.has_onnx && canRunTokenizer() && is_file(model_path);
+    }
+
+    public int sub approxTextBytes(int rows) {
+        return rows * 160;
+    }
+
+    public int sub tensorPostprocessRows() {
+        *string env_rows = ENV.QORE_BENCH_TENSOR_POSTPROCESS_ROWS;
+        return env_rows ? env_rows.toInt() : 256;
+    }
+
+    public int sub tensorPostprocessTokens() {
+        *string env_tokens = ENV.QORE_BENCH_TENSOR_POSTPROCESS_TOKENS;
+        return env_tokens ? env_tokens.toInt() : 64;
+    }
+
+    public int sub tensorPostprocessDim() {
+        *string env_dim = ENV.QORE_BENCH_TENSOR_POSTPROCESS_DIM;
+        return env_dim ? env_dim.toInt() : 64;
+    }
+
+    public int sub approxTensorPostprocessBytes(int rows, int tokens, int dim) {
+        return rows * tokens * ((dim * 4) + 8) + rows * dim * 4;
+    }
+
+    public buffer<float32> sub makeTokenHiddenStateBuffer(int rows, int tokens, int dim) {
+        int total = rows * tokens * dim;
+        buffer<float32> values = buffer<float32>::sized(total);
+        for (int i = 0; i < total; ++i) {
+            values[i] = ((i % 97).toFloat() - 48.0) / 32.0;
+        }
+        return values;
+    }
+
+    public buffer<int64> sub makeTokenMaskBuffer(int rows, int tokens) {
+        int total = rows * tokens;
+        buffer<int64> values = buffer<int64>::sized(total);
+        for (int i = 0; i < total; ++i) {
+            int token = i % tokens;
+            values[i] = (token && token < tokens - 3) ? 1 : 0;
+        }
+        return values;
+    }
+
+    public list<list<float>> sub makeNestedInput(int rows) {
+        list<list<float>> input;
+        for (int i = 0; i < rows; ++i) {
+            push input, (i.toFloat(),);
+        }
+        return input;
+    }
+
+    public buffer<float32> sub makeFloat32Input(int rows) {
+        buffer<float32> input = buffer<float32>::sized(rows);
+        for (int i = 0; i < rows; ++i) {
+            input[i] = i.toFloat();
+        }
+        return input;
+    }
+
+    public DataFrame::DataFrame sub makeFrame(int rows) {
+        buffer<float64> input = buffer<float64>::sized(rows);
+        for (int i = 0; i < rows; ++i) {
+            input[i] = i.toFloat();
+        }
+        return new DataFrame::DataFrame({"x": input});
+    }
+
+    public DataFrame::DataFrame sub makeFloat32Frame(int rows) {
+        buffer<float32> input = buffer<float32>::sized(rows);
+        for (int i = 0; i < rows; ++i) {
+            input[i] = i.toFloat();
+        }
+        return new DataFrame::DataFrame({"x": input});
+    }
+
+    public DataFrame::DataFrame sub makeSklearnFrame(int rows) {
+        buffer<float32> sepal_length = buffer<float32>::sized(rows);
+        buffer<float32> sepal_width = buffer<float32>::sized(rows);
+        buffer<float32> petal_length = buffer<float32>::sized(rows);
+        buffer<float32> petal_width = buffer<float32>::sized(rows);
+
+        for (int i = 0; i < rows; ++i) {
+            int cls = i % 3;
+            if (cls == 0) {
+                sepal_length[i] = 5.1;
+                sepal_width[i] = 3.5;
+                petal_length[i] = 1.4;
+                petal_width[i] = 0.2;
+            } else if (cls == 1) {
+                sepal_length[i] = 7.0;
+                sepal_width[i] = 3.2;
+                petal_length[i] = 4.7;
+                petal_width[i] = 1.4;
+            } else {
+                sepal_length[i] = 6.3;
+                sepal_width[i] = 3.3;
+                petal_length[i] = 6.0;
+                petal_width[i] = 2.5;
+            }
+        }
+
+        return new DataFrame::DataFrame({
+            "sepal_length": sepal_length,
+            "sepal_width": sepal_width,
+            "petal_length": petal_length,
+            "petal_width": petal_width,
+        });
+    }
+
+    public list<hash<auto>> sub makeRecords(int rows) {
+        list<hash<auto>> records;
+        for (int i = 0; i < rows; ++i) {
+            push records, {"x": i.toFloat()};
+        }
+        return records;
+    }
+
+    public string sub makeBodyText(int i) {
+        switch (i % 4) {
+            case 0:
+                return sprintf("Enterprise AI search pipeline record %d with customer notes", i);
+            case 1:
+                return sprintf("Machine learning operations need repeatable model scoring %d", i);
+            case 2:
+                return sprintf("Data integration jobs normalize text before retrieval %d", i);
+        }
+        return sprintf("Analytics workflows combine SQL data and local ONNX inference %d", i);
+    }
+
+    public string sub makePassageText(int i) {
+        switch (i % 5) {
+            case 0:
+                return sprintf("machine learning systems score enterprise search results %d", i);
+            case 1:
+                return sprintf("weather forecast data is unrelated to model registry metadata %d", i);
+            case 2:
+                return sprintf("data pipelines prepare dense vectors for retrieval augmented generation %d", i);
+            case 3:
+                return sprintf("bulk SQL loading can pass columnar data without row hashes %d", i);
+        }
+        return sprintf("local ONNX inference helps deployment workflows avoid Python services %d", i);
+    }
+
+    public list<hash<auto>> sub makeTextRecords(int rows) {
+        list<hash<auto>> records;
+        for (int i = 0; i < rows; ++i) {
+            push records, {
+                "id": i,
+                "body": makeBodyText(i),
+            };
+        }
+        return records;
+    }
+
+    public hash<auto> sub makeTextColumnHash(int rows) {
+        buffer<int64> ids = buffer<int64>::sized(rows);
+        list<string> bodies;
+        for (int i = 0; i < rows; ++i) {
+            ids[i] = i;
+            push bodies, makeBodyText(i);
+        }
+        return {
+            "id": ids,
+            "body": bodies,
+        };
+    }
+
+    public DataFrame::DataFrame sub makeTextFrame(int rows) {
+        return new DataFrame::DataFrame(makeTextColumnHash(rows));
+    }
+
+    public list<hash<auto>> sub makeRerankRecords(int rows) {
+        list<hash<auto>> records;
+        for (int i = 0; i < rows; ++i) {
+            push records, {
+                "id": i,
+                "query": "machine learning enterprise search",
+                "passage": makePassageText(i),
+            };
+        }
+        return records;
+    }
+
+    public hash<auto> sub makeRerankColumnHash(int rows) {
+        buffer<int64> ids = buffer<int64>::sized(rows);
+        list<string> queries;
+        list<string> passages;
+        for (int i = 0; i < rows; ++i) {
+            ids[i] = i;
+            push queries, "machine learning enterprise search";
+            push passages, makePassageText(i);
+        }
+        return {
+            "id": ids,
+            "query": queries,
+            "passage": passages,
+        };
+    }
+
+    public DataFrame::DataFrame sub makeRerankFrame(int rows) {
+        return new DataFrame::DataFrame(makeRerankColumnHash(rows));
+    }
+
+    public list<auto> sub columnToList(auto column) {
+        return column.typeCode() == NT_BUFFER ? column.toList() : column;
+    }
+
+    public nothing sub verifyListOutput(string name, list<auto> values, int rows) {
+        if (values.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, values.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifyTensorOutput(string name, ML::Tensor tensor, int rows) {
+        if (tensor.getShape() != (rows, 1)) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned shape %y; expected (%d, 1)", name, tensor.getShape(), rows);
+        }
+        buffer<float32> values = tensor.getBuffer();
+        if (values.lsize() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d dense values; expected %d", name, values.lsize(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifySklearnTensorOutput(string name, hash<auto> result, int rows) {
+        ML::Tensor labels = result.label;
+        if (labels.getShape() != (rows,)) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned label shape %y; expected (%d)",
+                name, labels.getShape(), rows);
+        }
+        ML::Tensor probabilities = result.probabilities;
+        if (probabilities.getShape() != (rows, 3)) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned probability shape %y; expected (%d, 3)",
+                name, probabilities.getShape(), rows);
+        }
+
+        if (rows >= 3) {
+            list<auto> label_values = labels.getBuffer().toList();
+            if (label_values[0].toInt() != 0 || label_values[1].toInt() != 1
+                    || label_values[2].toInt() != 2) {
+                throw "BENCHMARK-ERROR",
+                    sprintf("%s returned unexpected first labels: %y", name, label_values[0..2]);
+            }
+        }
+    }
+
+    public nothing sub verifyProcessorRows(string name, list<auto> rows_out, int rows) {
+        if (rows_out.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, rows_out.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = rows_out[rows - 1].model_output.Y.toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifyProcessorFrame(string name, DataFrame::DataFrame frame, int rows, string column) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        list<auto> values = frame.getColumn(column);
+        if (values.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d values; expected %d", name, values.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].Y.toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifyProcessorFlatFrame(string name, DataFrame::DataFrame frame, int rows, string column) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        list<auto> values = frame.getColumn(column);
+        if (values.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d values; expected %d", name, values.size(), rows);
+        }
+        if (rows) {
+            float expected = (rows - 1).toFloat() * 2.0 + 1.0;
+            float actual = values[rows - 1].toFloat();
+            if (abs(expected - actual) > 0.01) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned %f; expected %f", name, actual, expected);
+            }
+        }
+    }
+
+    public nothing sub verifyProcessorVectorFrame(string name, DataFrame::DataFrame frame, int rows) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        foreach string column in (("label", "probabilities_0", "probabilities_1", "probabilities_2")) {
+            if (!frame.columnNames().contains(column)) {
+                throw "BENCHMARK-ERROR", sprintf("%s missing column %y", name, column);
+            }
+        }
+        if (frame.getColumnBuffer("label").fullType() != "buffer<int64>") {
+            throw "BENCHMARK-ERROR", sprintf("%s returned non-dense label column: %y",
+                name, frame.getColumnBuffer("label").fullType());
+        }
+        foreach string column in (("probabilities_0", "probabilities_1", "probabilities_2")) {
+            if (frame.getColumnBuffer(column).fullType() != "buffer<float32>") {
+                throw "BENCHMARK-ERROR", sprintf("%s returned non-dense column %y: %y",
+                    name, column, frame.getColumnBuffer(column).fullType());
+            }
+        }
+        if (rows >= 3) {
+            list<auto> labels = frame.getColumnBuffer("label").toList();
+            if (labels[0].toInt() != 0 || labels[1].toInt() != 1 || labels[2].toInt() != 2) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned unexpected first labels: %y",
+                    name, labels[0..2]);
+            }
+        }
+    }
+
+    public nothing sub verifyTokenRows(string name, list<auto> rows_out, int rows) {
+        if (rows_out.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, rows_out.size(), rows);
+        }
+        if (rows && rows_out[rows - 1].body_token_count.toInt() <= 0) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned an invalid final token count", name);
+        }
+    }
+
+    public nothing sub verifyTokenFrame(string name, DataFrame::DataFrame frame, int rows) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        list<auto> counts = frame.getColumn("body_token_count");
+        if (counts.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d token counts; expected %d",
+                name, counts.size(), rows);
+        }
+        if (rows && counts[rows - 1].toInt() <= 0) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned an invalid final token count", name);
+        }
+    }
+
+    public nothing sub verifyTokenColumns(string name, auto columns, int rows) {
+        list<auto> counts = columnToList(columns.getColumn("body_token_count"));
+        if (counts.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d token counts; expected %d",
+                name, counts.size(), rows);
+        }
+        if (rows && counts[rows - 1].toInt() <= 0) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned an invalid final token count", name);
+        }
+    }
+
+    public nothing sub verifyEmbeddingList(string name, list<auto> embeddings, int rows) {
+        if (embeddings.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d embeddings; expected %d",
+                name, embeddings.size(), rows);
+        }
+        if (rows) {
+            list<float> last = embeddings[rows - 1];
+            if (last.size() != 2) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned embedding size %d; expected 2",
+                    name, last.size());
+            }
+            float norm = sqrt(last[0] * last[0] + last[1] * last[1]);
+            if (abs(norm - 1.0) > 1e-5) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned final embedding norm %f", name, norm);
+            }
+        }
+    }
+
+    public nothing sub verifyEmbedRows(string name, list<auto> rows_out, int rows) {
+        if (rows_out.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, rows_out.size(), rows);
+        }
+        list<auto> embeddings;
+        foreach auto row in (rows_out) {
+            push embeddings, row.embedding;
+        }
+        verifyEmbeddingList(name, embeddings, rows);
+    }
+
+    public nothing sub verifyEmbedFrame(string name, DataFrame::DataFrame frame, int rows) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        verifyEmbeddingList(name, frame.getColumn("embedding"), rows);
+    }
+
+    public nothing sub verifyEmbedColumns(string name, auto columns, int rows) {
+        verifyEmbeddingList(name, columnToList(columns.getColumn("embedding")), rows);
+    }
+
+    public nothing sub verifyEmbedFlatFrame(string name, DataFrame::DataFrame frame, int rows) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        verifyEmbedFlatColumns(name, frame, rows);
+    }
+
+    public nothing sub verifyEmbedFlatColumns(string name, auto columns, int rows) {
+        list<auto> c0 = columnToList(columns.getColumn("embedding_0"));
+        list<auto> c1 = columnToList(columns.getColumn("embedding_1"));
+        if (c0.size() != rows || c1.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned embedding columns with %d/%d rows; expected %d",
+                name, c0.size(), c1.size(), rows);
+        }
+        if (rows) {
+            float norm = sqrt(c0[rows - 1].toFloat() * c0[rows - 1].toFloat()
+                + c1[rows - 1].toFloat() * c1[rows - 1].toFloat());
+            if (abs(norm - 1.0) > 1e-5) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned final flat embedding norm %f", name, norm);
+            }
+        }
+    }
+
+    public nothing sub verifyRerankRows(string name, list<auto> rows_out, int rows) {
+        if (rows_out.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, rows_out.size(), rows);
+        }
+        if (rows && rows_out[0].reranker_rank.toInt() != 1) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned an invalid first rank", name);
+        }
+    }
+
+    public nothing sub verifyRerankFrame(string name, DataFrame::DataFrame frame, int rows) {
+        if (frame.numRows() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d rows; expected %d", name, frame.numRows(), rows);
+        }
+        list<auto> ranks = frame.getColumn("reranker_rank");
+        if (ranks.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d ranks; expected %d", name, ranks.size(), rows);
+        }
+        if (rows && ranks[0].toInt() != 1) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned an invalid first rank", name);
+        }
+    }
+
+    public nothing sub verifyRerankColumns(string name, auto columns, int rows) {
+        list<auto> ranks = columnToList(columns.getColumn("reranker_rank"));
+        if (ranks.size() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d ranks; expected %d", name, ranks.size(), rows);
+        }
+        if (rows && ranks[0].toInt() != 1) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned an invalid first rank", name);
+        }
+    }
+
+    public nothing sub collectResult(reference<list<auto>> results, auto r) {
+        if (exists r) {
+            if (r.typeCode() == NT_LIST) {
+                results += r;
+            } else {
+                push results, r;
+            }
+        }
+    }
+
+    public nothing sub cleanupDir(string dir) {
+        if (!is_dir(dir)) {
+            return;
+        }
+        Dir d();
+        d.chdir(dir);
+        foreach string subdir in (d.listDirs()) {
+            cleanupDir(dir + DirSep + subdir);
+        }
+        foreach string f in (d.listFiles()) {
+            unlink(dir + DirSep + f);
+        }
+        rmdir(dir);
+    }
+}

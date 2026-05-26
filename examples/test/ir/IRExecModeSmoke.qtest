@@ -44,6 +44,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR container guard smoke", \testIrContainerGuardSmoke());
         addTestCase("IR container deref smoke", \testIrContainerDerefSmoke());
         addTestCase("IR object field smoke", \testIrObjectFieldSmoke());
+        addTestCase("IR local object return cleanup", \testIrLocalObjectReturnCleanup());
         addTestCase("IR function call smoke", \testIrFunctionCallSmoke());
         addTestCase("IR method call smoke", \testIrMethodCallSmoke());
         addTestCase("IR cast smoke", \testIrCastSmoke());
@@ -1544,6 +1545,41 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("object-field:7\n", stdout_output, "Unexpected IR object field output");
+    }
+
+    testIrLocalObjectReturnCleanup() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("class X { string name() { return \"x\"; } }\n");
+        script.file.write("class T { X f() { X x(); return x; } }\n");
+        script.file.write("T t();\n");
+        script.file.write("X x = t.f();\n");
+        script.file.write("printf(\"%s\\n\", x.name());\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("x\n", stdout_output, "Unexpected IR local object return output");
     }
 
     testIrFunctionCallSmoke() {

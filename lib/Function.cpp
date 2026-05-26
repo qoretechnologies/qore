@@ -116,6 +116,26 @@ const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(const Qor
     return old;
 }
 
+bool AbstractFunctionSignature::needsTypeParameterSubstitution() const {
+    signed char cached = type_param_substitution_cache.load(std::memory_order_relaxed);
+    if (cached != -1) {
+        return cached != 0;
+    }
+
+    bool rv = qore_type_contains_type_parameter(returnTypeInfo);
+    if (!rv) {
+        for (const QoreTypeInfo* ti : typeList) {
+            if (qore_type_contains_type_parameter(ti)) {
+                rv = true;
+                break;
+            }
+        }
+    }
+
+    type_param_substitution_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+    return rv;
+}
+
 static void duplicateSignatureException(const char* cname, const char* name, const UserSignature* sig) {
     parseException(*sig->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) has already been declared",
         cname ? cname : "", cname ? "::" : "", name, sig->getSignatureText());
@@ -472,14 +492,27 @@ static const UserSignature* qore_find_signature_type_param_owner(const AbstractF
     return qore_find_signature_type_param_owner_in_type(sig->getReturnTypeInfo());
 }
 
-static const UserSignature* qore_get_variant_generic_signature(const AbstractQoreFunctionVariant* variant) {
-    const UserSignature* sig = variant ? qore_find_signature_type_param_owner(variant->getSignature()) : nullptr;
-    if (sig && sig->hasTypeParameters()) {
-        return sig;
+const UserSignature* AbstractQoreFunctionVariant::getGenericSignature() const {
+    const UserSignature* unknown = genericSignatureCacheUnknown();
+    const UserSignature* cached = generic_signature_cache.load(std::memory_order_acquire);
+    if (cached != unknown) {
+        return cached;
     }
 
-    sig = qore_get_variant_user_signature(variant);
-    return sig && sig->hasTypeParameters() ? sig : nullptr;
+    const UserSignature* sig = qore_find_signature_type_param_owner(getSignature());
+    if (!sig || !sig->hasTypeParameters()) {
+        sig = qore_get_variant_user_signature(this);
+        if (sig && !sig->hasTypeParameters()) {
+            sig = nullptr;
+        }
+    }
+
+    generic_signature_cache.store(sig, std::memory_order_release);
+    return sig;
+}
+
+static const UserSignature* qore_get_variant_generic_signature(const AbstractQoreFunctionVariant* variant) {
+    return variant ? variant->getGenericSignature() : nullptr;
 }
 
 static bool qore_method_type_args_compatible(const QoreTypeInfo* existing, const QoreTypeInfo* candidate) {
@@ -700,7 +733,8 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         if (!actual || !QoreTypeInfo::hasType(actual)) {
             continue;
         }
-        const QoreTypeInfo* formal = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
+        const QoreTypeInfo* formal = qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi),
+            receiver_type_info);
         if (!qore_infer_signature_type_args_from_type(sig, formal, actual, bindings)) {
             return false;
         }
@@ -989,7 +1023,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 
     receiver_type_info = explicit_receiver_type_info
         ? explicit_receiver_type_info
-        : qore_get_object_receiver_type_info(self);
+        : (self ? qore_get_object_receiver_type_info(self) : nullptr);
     if (receiver_type_info) {
         old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
         restore_receiver_type_info = true;
@@ -1023,7 +1057,16 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     if (variant) {
         // get default argument list of variant
         AbstractFunctionSignature* sig = variant->getSignature();
-        if (setTypeParamInstantiation(variant, sig)) {
+        auto setup_type_param_instantiation = [&]() -> int {
+            variant_needs_type_param_substitution = sig && sig->needsTypeParameterSubstitution();
+            if (!variant_needs_type_param_substitution && !variant->isUser()
+                    && !explicit_type_param_instantiation) {
+                return 0;
+            }
+            return setTypeParamInstantiation(variant, sig);
+        };
+
+        if (setup_type_param_instantiation()) {
             return;
         }
 
@@ -1043,7 +1086,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             xsink2.clear();
             tmp.discard();
             sig = variant->getSignature();
-            if (setTypeParamInstantiation(variant, sig)) {
+            if (setup_type_param_instantiation()) {
                 return;
             }
             // prepare all args
@@ -1062,7 +1105,16 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         }
         // get default argument list of variant
         AbstractFunctionSignature* sig = variant->getSignature();
-        if (setTypeParamInstantiation(variant, sig)) {
+        auto setup_type_param_instantiation = [&]() -> int {
+            variant_needs_type_param_substitution = sig && sig->needsTypeParameterSubstitution();
+            if (!variant_needs_type_param_substitution && !variant->isUser()
+                    && !explicit_type_param_instantiation) {
+                return 0;
+            }
+            return setTypeParamInstantiation(variant, sig);
+        };
+
+        if (setup_type_param_instantiation()) {
             return;
         }
         // prepare all args
@@ -1075,8 +1127,10 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     }
 
     setCallType(variant->getCallType());
-    setReturnTypeInfo(qore_substitute_type_params(variant->getReturnTypeInfo(), receiver_type_info,
-        &type_param_instantiation));
+    setReturnTypeInfo(variant_needs_type_param_substitution
+        ? qore_substitute_type_params_if_needed(variant->getReturnTypeInfo(), receiver_type_info,
+            &type_param_instantiation)
+        : variant->getReturnTypeInfo());
     old_rtflags = rc.getRuntimeFlags();
     rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
     restore_rtflags = true;
@@ -1120,6 +1174,17 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
 
 int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
         const AbstractFunctionSignature* sig) {
+    variant_needs_type_param_substitution = sig && sig->needsTypeParameterSubstitution();
+    if (!variant_needs_type_param_substitution && !variant->isUser()) {
+        type_param_instantiation.clear();
+        if (restore_type_param_instantiation) {
+            runtime_set_type_param_instantiation(old_type_param_instantiation);
+            restore_type_param_instantiation = false;
+            old_type_param_instantiation = nullptr;
+        }
+        return 0;
+    }
+
     const UserSignature* generic_sig = qore_get_variant_generic_signature(variant);
     if (!generic_sig) {
         type_param_instantiation.clear();
@@ -1149,15 +1214,6 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
 
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
         AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type) {
-    if (type_param_instantiation.empty()) {
-        if (!qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info, &type_param_instantiation,
-                explicit_type_param_instantiation)) {
-            xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
-                callName.c_str(), sig ? sig->getSignatureText() : "");
-            return -1;
-        }
-    }
-
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -1168,16 +1224,25 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
     OptionalObjectOnlySubstitutionHelper self_helper;
     bool self_set = false;
     for (unsigned i = 0; i < max; ++i) {
-        const QoreTypeInfo* paramTypeInfo = i < typeList.size()
-            ? qore_substitute_type_params(sig->getParamTypeInfo(i), receiver_type_info, &type_param_instantiation)
-            : nullptr;
+        const QoreTypeInfo* paramTypeInfo = nullptr;
+        auto get_param_type_info = [&]() -> const QoreTypeInfo* {
+            if (!paramTypeInfo && i < typeList.size()) {
+                paramTypeInfo = variant_needs_type_param_substitution
+                ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(i), receiver_type_info,
+                    &type_param_instantiation)
+                : sig->getParamTypeInfo(i);
+            }
+            return paramTypeInfo;
+        };
+
         bool use_default_arg = false;
         if (i < defaultArgList.size() && defaultArgList[i]) {
             if (!tmp) {
                 use_default_arg = true;
             } else {
                 QoreValue arg = tmp->retrieveEntry(i);
-                use_default_arg = arg.isNothing() || qore_is_defaulted_null_soft_arg(paramTypeInfo, arg, true);
+                use_default_arg = arg.isNothing()
+                    || (arg.isNull() && qore_is_defaulted_null_soft_arg(get_param_type_info(), arg, true));
             }
         }
         if (use_default_arg) {
@@ -1198,8 +1263,9 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 }
 
                 // process default argument with accepting type's filter if necessary
-                if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, p)) {
-                    QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), p, xsink);
+                const QoreTypeInfo* pti = get_param_type_info();
+                if (QoreTypeInfo::mayRequireFilter(pti, p)) {
+                    QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
                     if (*xsink) {
                         return -1;
                     }
@@ -1207,8 +1273,10 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
             }
         } else if (i < typeList.size()) {
             if (arg_type & ARG_OTHER) {
+                bool arg_exists = false;
                 QoreValue n{};  // value-initialized to NOTHING (bits=0)
                 if (tmp) {
+                    arg_exists = i < tmp.size();
                     n = tmp->retrieveEntry(i);
                 }
 
@@ -1216,19 +1284,21 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     continue;
                 }
 
-                const QoreTypeInfo* paramTypeInfo = qore_substitute_type_params(sig->getParamTypeInfo(i),
-                    receiver_type_info, &type_param_instantiation);
-                if (!paramTypeInfo) {
+                const QoreTypeInfo* pti = get_param_type_info();
+                if (!pti) {
                     continue;
                 }
                 // issue #3184: do not create a NOTHING argument if none is needed
-                if (!QoreTypeInfo::hasType(paramTypeInfo)
-                    || (tmp.size() < i && QoreTypeInfo::parseAcceptsReturns(paramTypeInfo, NT_NOTHING))) {
+                if (!QoreTypeInfo::hasType(pti)
+                    || (tmp.size() < i && QoreTypeInfo::parseAcceptsReturns(pti, NT_NOTHING))) {
+                    continue;
+                }
+                if (arg_exists && pti->acceptsRuntimeValueWithoutFilter(n)) {
                     continue;
                 }
                 // test for change or incompatibility
                 QoreValue& p = tmp.getEntryReference(i);
-                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), p, xsink);
+                QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
                 if (*xsink) {
                     return -1;
                 }
@@ -1558,6 +1628,7 @@ void UserSignature::setupFromAOTMetadata(
         int parseLocFirstLine,
         int parseLocLastLine) {
     returnTypeInfo = retType;
+    clearTypeParameterSubstitutionCache();
 
     const size_t nparams = paramTypes.size();
 
@@ -1660,6 +1731,7 @@ void UserSignature::replaceResolvedTypes(const QoreTypeInfo* retType,
     }
 
     typeList = std::move(paramTypes);
+    clearTypeParameterSubstitutionCache();
     for (size_t i = 0; i < typeList.size() && i < lv.size(); ++i) {
         if (lv[i]) {
             lv[i]->setTypeInfo(getParamLocalTypeInfo(typeList[i]));
@@ -1820,6 +1892,7 @@ int UserSignature::resolve() {
     // redo signature
     str.clear();
     AbstractFunctionSignature::addAbstractParameterSignature(str);
+    clearTypeParameterSubstitutionCache();
     return err;
 }
 
@@ -2564,13 +2637,15 @@ static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunc
     score = 0;
     nperfect = 0;
     score_len = sig->numParams();
+    bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
 
     for (unsigned pi = 0, e = sig->numParams(); pi < e; ++pi) {
         bool pos_supplied = supplied ? (pi < supplied->size() && (*supplied)[pi]) : (pi < arg_types.size());
         const QoreTypeInfo* actual = pos_supplied && pi < arg_types.size() ? arg_types[pi] : nullptr;
         bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(actual);
-        const QoreTypeInfo* formal = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info,
-            &method_inst);
+        const QoreTypeInfo* formal = needs_type_param_substitution
+            ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info, &method_inst)
+            : sig->getParamTypeInfo(pi);
 
         qore_type_result_e rc = QTI_UNASSIGNED;
         qore_type_result_e max_rc = QTI_UNASSIGNED;
@@ -2936,9 +3011,12 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
             int pscore = 0;
             bool ok = true;
+            bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info,
-                    &candidate_inst);
+                const QoreTypeInfo* t = needs_type_param_substitution
+                    ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
+                        &candidate_inst)
+                    : sig->getParamTypeInfo(pi);
                 QoreValue n{};  // value-initialized to NOTHING (bits=0)
                 if (args) {
                     n = args->retrieveEntry(pi);
@@ -3172,9 +3250,12 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
             int count = 0;
             bool ok = true;
+            bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info,
-                    &candidate_inst);
+                const QoreTypeInfo* t = needs_type_param_substitution
+                    ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
+                        &candidate_inst)
+                    : sig->getParamTypeInfo(pi);
                 const QoreTypeInfo* a = args[pi];
 
                 int rc = QoreTypeInfo::runtimeTypeMatch(t, a);
@@ -3472,10 +3553,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             bool variant_runtime_match = false;
             bool variant_soft_match = false;
             bool ok = true;
+            bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
 
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi),
-                    receiver_type_info, &candidate_inst);
+                const QoreTypeInfo* t = needs_type_param_substitution
+                    ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
+                        &candidate_inst)
+                    : sig->getParamTypeInfo(pi);
                 bool pos_supplied = pi < cb.supplied.size() && cb.supplied[pi];
                 const QoreTypeInfo* a = pos_supplied && pi < cb.arg_types.size() ? cb.arg_types[pi] : nullptr;
                 bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(a);
@@ -3885,10 +3969,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 bool variant_hard_match = false;  // true if missing type info (must do runtime dispatch)
                 bool variant_soft_match = false;  // true if union type partial match (may do runtime dispatch)
                 bool ok = true;
+                bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
 
                 for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                    const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi),
-                        receiver_type_info, &candidate_inst);
+                    const QoreTypeInfo* t = needs_type_param_substitution
+                        ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
+                            &candidate_inst)
+                        : sig->getParamTypeInfo(pi);
                     bool pos_has_arg = num_args && num_args > pi;
                     const QoreTypeInfo* a = pos_has_arg ? argTypeInfo[pi] : nullptr;
                     if (pos_has_arg) {
@@ -4496,6 +4583,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
     unsigned num_args = args ? args->size() : 0;
     // instantiate local vars from param list
     unsigned num_params = signature.numParams();
+    bool needs_type_param_substitution = signature.needsTypeParameterSubstitution();
 
     for (unsigned i = 0; i < num_params; ++i) {
         QoreValue val;
@@ -4507,8 +4595,10 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
                 val = (*args)->retrieveEntry(i).refSelf();
             }
 
-            const QoreTypeInfo* paramTypeInfo = qore_substitute_type_params(signature.getParamTypeInfo(i),
-                qore_get_current_receiver_type_info());
+            const QoreTypeInfo* paramTypeInfo
+                = needs_type_param_substitution
+                    ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+                    : signature.getParamTypeInfo(i);
             // Apply type filtering for complex hash parameters
             if (paramTypeInfo && val.getType() == NT_HASH) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, signature.getName(i), val, xsink);
@@ -4524,8 +4614,9 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
         //printd(5, "UserVariantBase::setupCall() eval %d: instantiating param lvar %p ('%s') (exp nt: %d '%s')\n",
         //    i, signature.lv[i], signature.lv[i]->getName(), np.getType(), np.getTypeName());
 
-        const QoreTypeInfo* paramTypeInfo = qore_substitute_type_params(signature.getParamTypeInfo(i),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* paramTypeInfo = needs_type_param_substitution
+            ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+            : signature.getParamTypeInfo(i);
         signature.lv[i]->instantiate(QoreValue(), paramTypeInfo);
     }
 
@@ -4752,17 +4843,7 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     if (!block || block->instructions.empty()) {
         return false;
     }
-    auto op = block->instructions.back()->opcode;
-    switch (op) {
-        case QoreIROpcode::Return:
-        case QoreIROpcode::ReturnNothing:
-        case QoreIROpcode::Br:
-        case QoreIROpcode::BrIf:
-        case QoreIROpcode::Rethrow:
-            return true;
-        default:
-            return false;
-    }
+    return isTerminator(block->instructions.back()->opcode);
 }
 
 QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,
@@ -4774,7 +4855,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
 
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
     // Store the return type info for type coercion in Return opcode lowering
-    func->return_type_info = qore_substitute_type_params(getReturnTypeInfo(), specialization_receiver_type_info,
+    func->return_type_info = qore_substitute_type_params_if_needed(getReturnTypeInfo(), specialization_receiver_type_info,
         specialization_type_param_instantiation);
     func->specialization_receiver_type_info = specialization_receiver_type_info;
     if (specialization_type_param_instantiation && !specialization_type_param_instantiation->empty()) {
@@ -5524,8 +5605,9 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
     }
 
     if (!*xsink) {
-        const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
+            ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
+            : signature.getReturnTypeInfo();
         if (rt && QoreTypeInfo::hasType(rt)) {
             if (val.isNothing()) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -5743,8 +5825,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         if (!*xsink) {
-            const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-                qore_get_current_receiver_type_info());
+            const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
+                ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
+                : signature.getReturnTypeInfo();
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -5887,8 +5970,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         if (!*xsink) {
-            const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-                qore_get_current_receiver_type_info());
+            const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
+                ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
+                : signature.getReturnTypeInfo();
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -5952,8 +6036,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     }
 
     if (!*xsink && val.isNothing()) {
-        const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
+            ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
+            : signature.getReturnTypeInfo();
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         if (*xsink) {
             xsink->overrideLocation(*signature.getParseLocation());
@@ -6057,8 +6142,9 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     // if return value is NOTHING; make sure it's valid; maybe there wasn't a return statement
     // only check if there isn't an active exception
     if (!*xsink && val.isNothing()) {
-        const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-            qore_get_current_receiver_type_info());
+        const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
+            ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
+            : signature.getReturnTypeInfo();
 
         // check return type
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);

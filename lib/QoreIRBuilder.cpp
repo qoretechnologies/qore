@@ -345,6 +345,15 @@ QoreIRInstruction* QoreIRBuilder::createUnaryOp(QoreIROpcode op, QoreIRValue val
     return inst;
 }
 
+QoreIRPluginInstruction* QoreIRBuilder::createPluginOp(QoreIROpcode op, QoreIRPluginOperationRef operation,
+        const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRPluginInstruction>(op, std::move(operation));
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = operands;
+    return inst;
+}
+
 QoreIRLocalInstruction* QoreIRBuilder::createLoadLocal(LocalVar* local, const QoreProgramLocation* loc, bool auto_ref) {
     auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::LoadLocal, local, auto_ref);
     inst->loc = loc;
@@ -548,6 +557,14 @@ QoreIRNewComplexHashInstruction* QoreIRBuilder::createNewComplexHash(const NewCo
 QoreIRNewComplexListInstruction* QoreIRBuilder::createNewComplexList(const NewComplexListNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRNewComplexListInstruction>(node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRNewComplexBufferInstruction* QoreIRBuilder::createNewComplexBuffer(const NewComplexBufferNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewComplexBufferInstruction>(node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;

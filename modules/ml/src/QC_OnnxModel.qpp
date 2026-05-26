@@ -34,6 +34,198 @@ extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
 extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
+
+//! Per-run ONNX Runtime options
+/** Configures options for one ONNX Runtime inference call. Use this class when
+    a deployment needs run tags, per-run logging, termination control, or
+    provider-specific run configuration entries.
+
+    @par Example:
+    @code{.py}
+OnnxRunOptions opts({"run_tag": "customer-scoring-batch"});
+hash<auto> out = model.runBound(binding, opts);
+    @endcode
+*/
+qclass OnnxRunOptions [arg=QoreOnnxRunOptions* options; ns=Qore::ML; flags=final];
+
+//! Creates ONNX Runtime run options
+/** @param options optional options hash
+
+    Recognized keys are:
+    - \c run_tag: string tag visible to ONNX Runtime logging and profiling
+    - \c log_severity_level: integer ONNX Runtime severity threshold
+    - \c log_verbosity_level: integer ONNX Runtime verbosity level
+    - \c terminate: bool; when True, the options start in the terminated state
+    - \c config: hash of string config entries passed to ONNX Runtime
+
+    @throw ML-ONNX-RUN-OPTIONS-ERROR if the options hash is invalid
+*/
+OnnxRunOptions::constructor(*hash<auto> options) [flags=NAMED_ARGS] {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxRunOptions> holder(new QoreOnnxRunOptions(options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXRUNOPTIONS, holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before creating OnnxRunOptions");
+#endif
+}
+
+//! Creates a copy of the OnnxRunOptions
+/** @throw COPY-ERROR OnnxRunOptions objects cannot be copied
+*/
+OnnxRunOptions::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxRunOptions objects cannot be copied");
+}
+
+//! Requests termination for runs using these options
+/** The same object can be reused after calling unsetTerminate().
+*/
+nothing OnnxRunOptions::setTerminate() {
+    options->setTerminate(xsink);
+}
+
+//! Clears a previous termination request
+/** After this call, the same OnnxRunOptions object can be used for normal
+    inference again.
+*/
+nothing OnnxRunOptions::unsetTerminate() {
+    options->unsetTerminate(xsink);
+}
+
+//! Returns structured run option metadata
+/** @return a hash containing the configured run tag, logging levels,
+    termination state, and config entries
+*/
+hash<auto> OnnxRunOptions::getInfo() [flags=RET_VALUE_ONLY] {
+    return options->getInfo(xsink);
+}
+
+//! Reusable ONNX Runtime I/O binding
+/** Holds ONNX Runtime input and output bindings for a specific @ref OnnxModel.
+    Bindings let production code reuse stable input tensors and output
+    allocation decisions across many runs instead of rebuilding every
+    Ort::Value for each call.
+
+    Create instances with @ref OnnxModel::createBinding().
+
+    @par Example:
+    @code{.py}
+OnnxIoBinding binding = model.createBinding();
+binding.bindInputs({"X": input_tensor});
+binding.bindOutputs();
+hash<auto> out = binding.run(tensors: True);
+    @endcode
+*/
+qclass OnnxIoBinding [arg=QoreOnnxIoBinding* binding; ns=Qore::ML; flags=final];
+
+//! Creates an OnnxIoBinding
+/** @throw ML-ONNX-BINDING-ERROR OnnxIoBinding objects must be created with
+    OnnxModel::createBinding()
+*/
+OnnxIoBinding::constructor() {
+    xsink->raiseException("ML-ONNX-BINDING-ERROR",
+        "OnnxIoBinding objects must be created with OnnxModel::createBinding()");
+}
+
+//! Creates a copy of the OnnxIoBinding
+/** @throw COPY-ERROR OnnxIoBinding objects cannot be copied
+*/
+OnnxIoBinding::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxIoBinding objects cannot be copied");
+}
+
+//! Binds one input tensor
+/** @param name model input tensor name
+    @param value tensor data; accepts the same values as OnnxModel::run(),
+        including nested lists, dense \c buffer<T>, and @ref ML::Tensor values
+
+    @throw ML-ONNX-BINDING-ERROR if the input name is unknown or the value is invalid
+*/
+nothing OnnxIoBinding::bindInput(string name, auto value) [flags=NAMED_ARGS] {
+    binding->bindInput(name->c_str(), value, xsink);
+}
+
+//! Binds all inputs from a hash keyed by model input tensor name
+/** @param inputs hash whose keys are model input names and whose values are
+    accepted input tensor data
+
+    @throw ML-ONNX-BINDING-ERROR if any required input is missing or invalid
+*/
+nothing OnnxIoBinding::bindInputs(hash<auto> inputs) [flags=NAMED_ARGS] {
+    binding->bindInputs(inputs, xsink);
+}
+
+//! Binds one output to ONNX Runtime-managed CPU memory
+/** @param name model output tensor name
+*/
+nothing OnnxIoBinding::bindOutput(string name) [flags=NAMED_ARGS] {
+    binding->bindOutput(name->c_str(), xsink);
+}
+
+//! Binds all model outputs to ONNX Runtime-managed CPU memory
+/** This is the usual output binding mode when callers want ONNX Runtime to
+    allocate output tensors according to the actual runtime shapes.
+*/
+nothing OnnxIoBinding::bindOutputs() {
+    binding->bindOutputs(xsink);
+}
+
+//! Binds one output to a preallocated numeric Tensor
+/** @param name model output tensor name
+    @param output preallocated @ref ML::Tensor receiving ONNX Runtime output
+
+    Preallocated output binding is supported for fixed-width numeric output
+    tensors whose buffer layout matches ONNX Runtime. Bool and string outputs
+    should use bindOutput() so ONNX Runtime can allocate the output.
+*/
+nothing OnnxIoBinding::bindOutputTensor(string name, Tensor output) [flags=NAMED_ARGS] {
+    binding->bindOutputTensor(name->c_str(), output, xsink);
+}
+
+//! Clears all bound inputs
+/** Existing bound input values are released. Bind new inputs before the next
+    run() call.
+*/
+nothing OnnxIoBinding::clearInputs() {
+    binding->clearInputs();
+}
+
+//! Clears all bound outputs
+/** Existing output allocation choices are released. Bind outputs before the next
+    run() call.
+*/
+nothing OnnxIoBinding::clearOutputs() {
+    binding->clearOutputs();
+}
+
+//! Runs inference with the current bindings
+/** @param options optional per-run options
+    @param tensors when True, return outputs as @ref ML::Tensor objects
+
+    @return a hash keyed by output tensor name
+*/
+hash<auto> OnnxIoBinding::run(*OnnxRunOptions options, bool tensors = False)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return binding->run(options, tensors, xsink);
+}
+
+//! Returns currently bound input names
+/** @return names in the order inputs were bound
+*/
+list<string> OnnxIoBinding::getBoundInputNames() [flags=RET_VALUE_ONLY] {
+    return binding->getBoundInputNames(xsink);
+}
+
+//! Returns currently bound output names
+/** @return names in the order outputs were bound
+*/
+list<string> OnnxIoBinding::getBoundOutputNames() [flags=RET_VALUE_ONLY] {
+    return binding->getBoundOutputNames(xsink);
+}
 
 //! The OnnxModel class loads and runs pre-trained ONNX models for inference
 /** Loads an ONNX model file and provides methods for running inference with
@@ -43,8 +235,9 @@ extern const TypedHashDecl* hashdeclOnnxSessionConfig;
     @par Thread Safety
     ONNX Runtime sessions are thread-safe for inference after creation, so
     concurrent run() calls from multiple threads on the same OnnxModel instance
-    are safe. Metadata methods (getModelInfo(), getInputInfo(), getOutputInfo(),
-    getProviderInfo()) are also safe for concurrent use.
+    are safe. Metadata and diagnostic methods (getModelInfo(), getInputInfo(),
+    getOutputInfo(), getProviderInfo(), getEffectiveProviderReport()) are also
+    safe for concurrent use.
 
     @par Example:
     @code{.py}
@@ -67,7 +260,9 @@ qclass OnnxModel [arg=QoreOnnxModel* model; ns=Qore::ML; flags=final; dom=FILESY
 /** @param model_path the filesystem path to the .onnx model file
 
     The best available GPU execution provider is automatically selected (CUDA on Linux,
-    CoreML on macOS). Falls back to CPU if no GPU provider is available.
+    CoreML on macOS). Falls back to CPU if no GPU provider is available, or if an
+    auto-selected provider is advertised but cannot create a session on this host.
+    Explicit provider configurations still report provider initialization errors.
 
     @par Example:
     @code{.py}
@@ -95,7 +290,8 @@ OnnxModel::constructor(string model_path) {
     @param options session configuration including execution providers, threading, and optimization
 
     If no \c providers are specified in the config, the best available GPU execution provider
-    is automatically selected (CUDA on Linux, CoreML on macOS), falling back to CPU.
+    is automatically selected (CUDA on Linux, CoreML on macOS), falling back to CPU if
+    no provider is available or the auto-selected provider cannot create a session.
     An explicit empty \c providers list disables auto-detection and uses CPU only.
 
     @par Example:
@@ -135,7 +331,8 @@ OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
     ONNX Runtime, so it may be freed immediately after the call returns.
 
     The best available GPU execution provider is automatically selected (CUDA
-    on Linux, CoreML on macOS), falling back to CPU.
+    on Linux, CoreML on macOS), falling back to CPU if no provider is available
+    or the auto-selected provider cannot create a session.
 
     @par Example:
     @code{.py}
@@ -164,7 +361,8 @@ OnnxModel::constructor(binary model_data) {
     @param options session configuration including execution providers, threading, and optimization
 
     If no \c providers are specified in the config, the best available GPU execution provider
-    is automatically selected (CUDA on Linux, CoreML on macOS), falling back to CPU.
+    is automatically selected (CUDA on Linux, CoreML on macOS), falling back to CPU if
+    no provider is available or the auto-selected provider cannot create a session.
     An explicit empty \c providers list disables auto-detection and uses CPU only.
 
     @par Example:
@@ -205,23 +403,154 @@ OnnxModel::copy() {
 /** @param inputs a hash where keys are input tensor names and values are the tensor data;
     scalars, lists, and nested lists are supported and automatically converted to the
     appropriate tensor types
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
 
     @return a hash where keys are output tensor names and values are the output data
 
     @par Example:
     @code{.py}
 hash<auto> outputs = model.run({"X": ((1.0, 2.0),)});
+hash<auto> probabilities = model.run({"X": batch}, ("probabilities",));
     @endcode
 
     @throw ML-ONNX-ERROR if the model is not loaded
-    @throw ML-ONNX-INFERENCE-ERROR if inference fails or input data is invalid
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or input/output data is invalid
 */
-hash<auto> OnnxModel::run(hash<auto> inputs) {
-    return model->run(inputs, xsink);
+hash<auto> OnnxModel::run(hash<auto> inputs, *list<string> output_names) {
+    return model->run(inputs, output_names, xsink);
+}
+
+//! Runs inference and returns output tensors as ML::Tensor objects
+/** @param inputs a hash where keys are input tensor names and values are tensor
+    data; scalars, lists, nested lists, \c buffer<T>, and @ref ML::Tensor values
+    are supported
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
+
+    @return a hash where keys are output tensor names and values are @ref ML::Tensor
+    objects preserving shape metadata. The tensor dtype is the Qore storage
+    dtype; ONNX \c float16 and \c bfloat16 values are materialized as
+    \c float32, and unsigned integer outputs are materialized as \c int64 until
+    native Qore buffer dtypes exist for those physical ONNX types.
+
+    @par Example:
+    @code{.py}
+ML::Tensor input(data: ((1.0, 2.0),), dtype: "float32");
+hash<auto> outputs = model.runTensors({"X": input});
+ML::Tensor y = outputs.Y;
+buffer<float32> raw = y.getBuffer();
+hash<auto> only_scores = model.runTensors({"X": input}, ("probabilities",));
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model is not loaded
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or input/output data is invalid
+*/
+hash<auto> OnnxModel::runTensors(hash<auto> inputs, *list<string> output_names) {
+    return model->runTensors(inputs, output_names, xsink);
+}
+
+//! Saves an optimized ONNX or ORT artifact from this model's original source
+/** @param output_path target path for the optimized artifact
+    @param options optional session configuration to use while recreating the
+        session and writing the optimized model
+    @param ort_format when True, writes ONNX Runtime ORT format regardless of
+        output path suffix
+
+    If \c output_path ends in \c ".ort", ORT format is selected automatically.
+    This method works for models created from paths and for models created from
+    in-memory bytes.
+
+    @return a hash containing the output path, output format, and effective
+        provider report used while creating the optimized artifact
+
+    @par Example:
+    @code{.py}
+OnnxModel model("/models/customer-score.onnx", <OnnxSessionConfig>{"providers": ()});
+hash<auto> info = model.saveOptimized(output_path: "/models/customer-score.ort");
+OnnxModel optimized("/models/customer-score.ort",
+    <OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
+    @endcode
+
+    @throw ML-ONNX-ERROR if the optimized artifact cannot be written
+    @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+*/
+hash<auto> OnnxModel::saveOptimized(string output_path,
+        *hash<OnnxSessionConfig> options, bool ort_format = False)
+        [flags=NAMED_ARGS] {
+    return model->saveOptimized(output_path->c_str(), options, ort_format, xsink);
+}
+
+//! Ends ONNX Runtime profiling for this model
+/** @return the generated ONNX Runtime profile file path, or @ref NOTHING if
+    profiling was not enabled or ONNX Runtime did not produce a profile file
+
+    Profiling is enabled when creating the model with
+    \c OnnxSessionConfig.enable_profiling or \c OnnxSessionConfig.profile_file_prefix.
+
+    @par Example:
+    @code{.py}
+OnnxModel model("/models/customer-score.onnx",
+    <OnnxSessionConfig>{"providers": (), "profile_file_prefix": "/tmp/customer-score"});
+hash<auto> out = model.run({"X": ((1.0,),)});
+*string profile_path = model.endProfiling();
+    @endcode
+
+    @throw ML-ONNX-PROFILING-ERROR if ONNX Runtime cannot end profiling
+*/
+*string OnnxModel::endProfiling() {
+    return model->endProfiling(xsink);
+}
+
+//! Returns Qore-side inference counters and latency statistics
+/** @return a hash with \c run_count, \c batch_items, \c total_ms, \c last_ms,
+    \c max_ms, \c avg_ms, \c profiling_enabled, \c profile_file_prefix, and
+    \c last_profile_file
+*/
+hash<auto> OnnxModel::getInferenceStats() [flags=RET_VALUE_ONLY] {
+    return model->getInferenceStats(xsink);
+}
+
+//! Resets Qore-side inference counters and latency statistics
+/** The ONNX Runtime profile state is not changed by this method.
+*/
+nothing OnnxModel::resetInferenceStats() {
+    model->resetInferenceStats();
+}
+
+//! Creates a reusable ONNX Runtime I/O binding for this model
+/** @return a new @ref OnnxIoBinding tied to this model session
+
+    @par Example:
+    @code{.py}
+OnnxIoBinding binding = model.createBinding();
+binding.bindInputs({"X": input_tensor});
+binding.bindOutputs();
+hash<auto> outputs = model.runBound(binding, tensors: True);
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model is not loaded
+*/
+OnnxIoBinding OnnxModel::createBinding() [flags=RET_VALUE_ONLY] {
+    return model->createBinding(getProgram(), xsink);
+}
+
+//! Runs a reusable ONNX Runtime I/O binding
+/** @param binding binding created by createBinding()
+    @param options optional per-run options
+    @param tensors when True, return outputs as @ref ML::Tensor objects
+
+    @return a hash keyed by output tensor name
+*/
+hash<auto> OnnxModel::runBound(OnnxIoBinding binding, *OnnxRunOptions options,
+        bool tensors = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return model->runBound(binding, options, tensors, xsink);
 }
 
 //! Runs batch inference on the model
 /** @param batch a list of input hashes; each hash has the same format as run()
+    @param output_names optional output tensor names to materialize for each
+        batch element; when omitted, all model outputs are returned
 
     @return a list of output hashes
 
@@ -234,10 +563,10 @@ list<hash<auto>> results = model.runBatch((
     @endcode
 
     @throw ML-ONNX-ERROR if the model is not loaded
-    @throw ML-ONNX-INFERENCE-ERROR if inference fails
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or output names are invalid
 */
-list<hash<auto>> OnnxModel::runBatch(list<auto> batch) {
-    return model->runBatch(batch, xsink);
+list<hash<auto>> OnnxModel::runBatch(list<auto> batch, *list<string> output_names) {
+    return model->runBatch(batch, output_names, xsink);
 }
 
 //! Returns model metadata
@@ -305,6 +634,284 @@ printf("Configured provider: %s\n", provider);
     @endcode
 
 */
-string OnnxModel::getProviderInfo() [flags=CONSTANT] {
+string OnnxModel::getProviderInfo() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(model->getActiveProvider());
+}
+
+//! Returns providers available in the linked ONNX Runtime build
+/** @return a list of canonical ONNX Runtime execution provider names
+
+    @par Example:
+    @code{.py}
+list<string> providers = model.getProviders();
+printf("Available providers: %y\n", providers);
+    @endcode
+*/
+list<string> OnnxModel::getProviders() [flags=RET_VALUE_ONLY] {
+    return model->getProviders(xsink);
+}
+
+//! Returns known provider option metadata
+/** @return a hash keyed by canonical provider name with aliases, availability,
+    and known option descriptions
+
+    @par Example:
+    @code{.py}
+hash<auto> options = model.getProviderOptions();
+printf("CUDA options: %y\n", options.CUDAExecutionProvider.known_options);
+    @endcode
+*/
+hash<auto> OnnxModel::getProviderOptions() [flags=RET_VALUE_ONLY] {
+    return model->getProviderOptions(xsink);
+}
+
+//! Returns normalized provider names requested by the session config
+/** @return the normalized explicit provider list; empty when providers were not
+    supplied or when providers: () requested CPU-only execution
+*/
+list<string> OnnxModel::getRequestedProviders() [flags=RET_VALUE_ONLY] {
+    return model->getRequestedProviders(xsink);
+}
+
+//! Returns structured provider diagnostics for this session
+/** @return a list of @ref OnnxProviderDiagnostic hashes
+
+    @par Example:
+    @code{.py}
+for (hash<OnnxProviderDiagnostic> diag in model.getProviderDiagnostics()) {
+    printf("%s: available=%y appended=%y error=%y\n",
+        diag.name, diag.available, diag.appended, diag.error);
+}
+    @endcode
+*/
+list<hash<OnnxProviderDiagnostic>> OnnxModel::getProviderDiagnostics() [flags=RET_VALUE_ONLY] {
+    return model->getProviderDiagnostics(xsink);
+}
+
+//! Returns the effective provider report for this session
+/** @return a hash containing the active provider, available providers,
+    requested providers, provider diagnostics, and fallback policy
+
+    @par Example:
+    @code{.py}
+hash<auto> report = model.getEffectiveProviderReport();
+assertEq(False, report.cpu_fallback_used);
+printf("Active provider: %s\n", report.active_provider);
+    @endcode
+*/
+hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
+    return model->getEffectiveProviderReport(xsink);
+}
+
+//! Bounded pool of immutable ONNX Runtime sessions
+/** OnnxSessionPool keeps multiple @ref OnnxModel sessions ready for concurrent
+    inference. It is intended for service workloads where requests arrive from
+    several threads and each request should acquire an immutable session with
+    bounded queueing instead of sharing one session object directly.
+
+    Pool options:
+    - \c max_sessions: number of ONNX sessions to create; default \c 1
+    - \c max_concurrent_runs: upper bound for simultaneously acquired sessions;
+      default equals \c max_sessions
+    - \c queue_depth: maximum callers allowed to wait for a session; default \c 64
+    - \c timeout_ms: maximum time to wait for a session; \c 0 means wait without
+      a fixed deadline while still checking cancellation
+    - \c dynamic_batch_size: maximum chunk size used by runBatch(); \c 0 keeps
+      the caller's batch intact
+    - \c dynamic_batch_wait_ms: maximum time runAsync() waits for other callers
+      so requests can be coalesced into one ordered batch; \c 0 disables
+      cross-caller coalescing
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionPool pool("/models/customer-score.onnx",
+    <ML::OnnxSessionConfig>{"providers": ()},
+    {"max_sessions": 4, "queue_depth": 64, "timeout_ms": 250});
+
+hash<auto> out = pool.run({"X": ((42.0,),)});
+hash<auto> stats = pool.getPoolStats();
+    @endcode
+*/
+qclass OnnxSessionPool [arg=QoreOnnxSessionPool* pool; ns=Qore::ML; flags=final; dom=FILESYSTEM];
+
+//! Creates an ONNX session pool from a model file
+/** @param model_path path to the ONNX or ORT artifact
+    @param session_config optional @ref OnnxSessionConfig hash applied to every
+        session
+    @param pool_options optional pool sizing and queueing options
+
+    @throw ML-ONNX-POOL-ERROR if pool options are invalid
+    @throw ML-ONNX-ERROR if any session cannot be created
+*/
+OnnxSessionPool::constructor(string model_path, *hash<OnnxSessionConfig> session_config,
+        *hash<auto> pool_options) [flags=NAMED_ARGS] {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxSessionPool> holder(
+        new QoreOnnxSessionPool(model_path->c_str(), session_config, pool_options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXSESSIONPOOL, holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before creating OnnxSessionPool");
+#endif
+}
+
+//! Creates an ONNX session pool from in-memory model bytes
+/** @param model_data ONNX or ORT artifact bytes
+    @param session_config optional @ref OnnxSessionConfig hash applied to every
+        session
+    @param pool_options optional pool sizing and queueing options
+*/
+OnnxSessionPool::constructor(binary model_data, *hash<OnnxSessionConfig> session_config,
+        *hash<auto> pool_options) [flags=NAMED_ARGS] {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxSessionPool> holder(new QoreOnnxSessionPool(
+        model_data->getPtr(), model_data->size(), session_config, pool_options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXSESSIONPOOL, holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before creating OnnxSessionPool");
+#endif
+}
+
+//! Creates a copy of the OnnxSessionPool
+/** @throw COPY-ERROR OnnxSessionPool objects cannot be copied
+*/
+OnnxSessionPool::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxSessionPool objects cannot be copied");
+}
+
+//! Runs inference with named input tensors through an acquired session
+/** @param inputs hash where keys are input tensor names
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
+    @return output hash in the same format as @ref OnnxModel::run()
+*/
+hash<auto> OnnxSessionPool::run(hash<auto> inputs, *list<string> output_names) {
+    return pool->run(inputs, output_names, xsink);
+}
+
+//! Submits inference with named input tensors and returns a Future
+/** @param inputs hash where keys are input tensor names
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
+
+    @return a \c Future resolving to the output hash
+        in the same format as @ref run()
+
+    If \c dynamic_batch_size and \c dynamic_batch_wait_ms are both configured,
+    concurrent runAsync() callers are coalesced up to the configured batch size
+    or wait deadline. Each Future still resolves to the result for its own
+    request, and result order is preserved inside each coalesced batch. Calls
+    with \c output_names are batched only with requests using the same selected
+    output list, so requests with different output sets are never mixed.
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionPool pool("/models/customer-score.onnx",
+    <ML::OnnxSessionConfig>{"providers": ()},
+    {"max_sessions": 2, "dynamic_batch_size": 8, "dynamic_batch_wait_ms": 2});
+
+    Future<hash<auto>> f = pool.runAsync({"X": ((42.0,),)}, ("score",));
+hash<auto> out = f.get(5s);
+    @endcode
+
+    @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
+    @throw ML-ONNX-POOL-BACKPRESSURE if the async coalescing queue is full
+*/
+Future<hash<auto>> OnnxSessionPool::runAsync(hash<auto> inputs, *list<string> output_names) {
+    return pool->runAsync(inputs, output_names, getProgram(), xsink);
+}
+
+//! Runs inference and returns outputs as @ref Tensor objects
+/** @param inputs hash where values are @ref Tensor objects or tensor-compatible
+        data
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
+    @return output hash where each value is a @ref Tensor
+*/
+hash<auto> OnnxSessionPool::runTensors(hash<auto> inputs, *list<string> output_names) {
+    return pool->runTensors(inputs, output_names, xsink);
+}
+
+//! Submits tensor-preserving inference and returns a Future
+/** @param inputs hash where values are @ref Tensor objects or tensor-compatible
+        data
+    @param output_names optional output tensor names to materialize; when omitted,
+        all model outputs are returned
+
+    @return a \c Future resolving to an output hash
+        where each value is a @ref Tensor
+
+    @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
+*/
+Future<hash<auto>> OnnxSessionPool::runTensorsAsync(hash<auto> inputs, *list<string> output_names) {
+    return pool->runTensorsAsync(inputs, output_names, getProgram(), xsink);
+}
+
+//! Runs a batch through the pool while preserving result order
+/** If \c dynamic_batch_size is configured, the input list is processed in
+    stable chunks no larger than that size. The returned list order always
+    matches the input order.
+    @param batch list of input hashes in the same format accepted by runBatch()
+    @param output_names optional output tensor names to materialize for each
+        batch element; when omitted, all model outputs are returned.
+*/
+list<hash<auto>> OnnxSessionPool::runBatch(list<auto> batch, *list<string> output_names) {
+    return pool->runBatch(batch, output_names, xsink);
+}
+
+//! Submits batch inference and returns a Future
+/** @param batch list of input hashes in the same format accepted by runBatch()
+    @param output_names optional output tensor names to materialize for each
+        batch element; when omitted, all model outputs are returned
+
+    @return a \c Future resolving to a list of output
+        hashes in input order
+
+    @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
+*/
+Future<list<hash<auto>>> OnnxSessionPool::runBatchAsync(list<auto> batch, *list<string> output_names) {
+    return pool->runBatchAsync(batch, output_names, getProgram(), xsink);
+}
+
+//! Returns current pool counters and configuration
+/** @return hash with configured limits, active/waiting counts, run counters,
+    timeout/rejection counters, and dynamic batching settings
+*/
+hash<auto> OnnxSessionPool::getPoolStats() [flags=RET_VALUE_ONLY] {
+    return pool->getPoolStats(xsink);
+}
+
+//! Resets pool run counters without changing configured limits
+/** Does not change configured limits or currently active/waiting callers.
+*/
+nothing OnnxSessionPool::resetPoolStats() {
+    pool->resetPoolStats();
+}
+
+//! Returns model metadata from an acquired session
+/** @return model metadata in the same format as @ref OnnxModel::getModelInfo()
+*/
+hash<OnnxModelInfo> OnnxSessionPool::getModelInfo() {
+    return pool->getModelInfo(xsink);
+}
+
+//! Returns input tensor metadata from an acquired session
+/** @return list of input tensor metadata
+*/
+list<hash<OnnxTensorInfo>> OnnxSessionPool::getInputInfo() {
+    return pool->getInputInfo(xsink);
+}
+
+//! Returns output tensor metadata from an acquired session
+/** @return list of output tensor metadata
+*/
+list<hash<OnnxTensorInfo>> OnnxSessionPool::getOutputInfo() {
+    return pool->getOutputInfo(xsink);
 }

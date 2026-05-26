@@ -135,6 +135,7 @@ enum ASTParseOptionKind {
     APOK_ALLOW_RETURNS,
     APOK_STRICT_TYPES,
     APOK_LOOSE_TYPES,
+    APOK_FP_FAST_MATH,
 
     // TODO
     APOK_IFDEF,

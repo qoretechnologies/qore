@@ -12,7 +12,10 @@
 #include "utils/qore_helpers.h"
 
 #include <algorithm>
+#include <limits>
 #include <mutex>
+
+extern const TypedHashDecl* hashdeclTokenizerModelInputBatch;
 
 namespace QoreTokenizer {
 
@@ -840,6 +843,426 @@ QoreListNode* QoreHFTokenizer::encodeBatch(const QoreListNode* texts,
     }
 
     return results.release();
+}
+
+int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const QoreHashNode* options,
+        const QoreStringNode* text_pair_override, ModelInputEncoding& out, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "encoding model input")) {
+        return -1;
+    }
+    if (!model) {
+        xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
+        return -1;
+    }
+
+    if (options && options->getKeyValue("return_overflowing_tokens").getAsBool()) {
+        xsink->raiseException("TOKENIZER-ERROR",
+            "encodeForModel() and encodeBatchForModel() return rectangular model inputs and do not support "
+            "return_overflowing_tokens; use encodeAdvanced() for sliding-window token chunks");
+        return -1;
+    }
+
+    std::string text_pair = text_pair_override
+        ? text_pair_override->c_str()
+        : (options ? safeGetStdString(options->getKeyValue("text_pair")) : "");
+    int max_length = options ? static_cast<int>(options->getKeyValue("max_length").getAsBigInt()) : 0;
+    std::string truncation = options ? safeGetStringKey(options, "truncation") : "";
+    std::string padding = options ? safeGetStringKey(options, "padding") : "";
+    bool add_special = options ? options->getKeyValue("add_special_tokens").getAsBool() : true;
+    if (options && options->getKeyValue("add_special_tokens").isNullOrNothing()) {
+        add_special = true;
+    }
+    int override_pad_id = options ? static_cast<int>(options->getKeyValue("pad_token_id").getAsBigInt()) : -1;
+    if (options && options->getKeyValue("pad_token_id").isNullOrNothing()) {
+        override_pad_id = -1;
+    }
+    bool is_pretokenized = options ? options->getKeyValue("is_pretokenized").getAsBool() : false;
+
+    InternalEncoding enc_a;
+    if (is_pretokenized) {
+        const QoreListNode* words_list = options ? safeGetList(options->getKeyValue("words")) : nullptr;
+        std::vector<std::string> words;
+        if (words_list) {
+            ConstListIterator wli(words_list);
+            size_t count = 0;
+            while (wli.next()) {
+                if (count && !(count % 100) && qore_check_cancel(xsink, "encoding pre-tokenized words")) {
+                    return -1;
+                }
+                std::string w = safeGetStdString(wli.getValue());
+                if (!w.empty()) {
+                    words.push_back(std::move(w));
+                }
+                ++count;
+            }
+        } else {
+            std::string text_str = text ? text->c_str() : "";
+            std::string word;
+            for (size_t i = 0; i < text_str.size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "splitting pre-tokenized text")) {
+                    return -1;
+                }
+                char c = text_str[i];
+                if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+                    if (!word.empty()) {
+                        words.push_back(word);
+                        word.clear();
+                    }
+                } else {
+                    word += c;
+                }
+            }
+            if (!word.empty()) {
+                words.push_back(word);
+            }
+        }
+        enc_a = encodePreTokenizedWords(words);
+    } else {
+        enc_a = encodeText(text ? text->c_str() : "");
+    }
+
+    InternalEncoding enc_b;
+    bool has_pair = false;
+    if (!text_pair.empty()) {
+        if (is_pretokenized) {
+            std::vector<std::string> pair_words;
+            std::string word;
+            for (size_t i = 0; i < text_pair.size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "splitting pre-tokenized text pair")) {
+                    return -1;
+                }
+                char c = text_pair[i];
+                if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+                    if (!word.empty()) {
+                        pair_words.push_back(word);
+                        word.clear();
+                    }
+                } else {
+                    word += c;
+                }
+            }
+            if (!word.empty()) {
+                pair_words.push_back(word);
+            }
+            enc_b = encodePreTokenizedWords(pair_words);
+        } else {
+            enc_b = encodeText(text_pair);
+        }
+        has_pair = true;
+    }
+
+    if (max_length > 0 && !truncation.empty()) {
+        int num_special = (post_processor && add_special) ? post_processor->numAddedTokens(has_pair) : 0;
+        int available = max_length - num_special;
+        if (available < 0) {
+            available = 0;
+        }
+
+        int total = static_cast<int>(enc_a.ids.size() + enc_b.ids.size());
+        if (total > available) {
+            if (truncation == "only_first" || !has_pair) {
+                int keep_a = available - static_cast<int>(enc_b.ids.size());
+                if (keep_a < 0) {
+                    keep_a = 0;
+                }
+                enc_a.ids.resize(keep_a);
+                enc_a.tokens.resize(keep_a);
+                enc_a.offsets.resize(keep_a);
+                enc_a.word_ids.resize(keep_a);
+            } else if (truncation == "only_second" && has_pair) {
+                int keep_b = available - static_cast<int>(enc_a.ids.size());
+                if (keep_b < 0) {
+                    keep_b = 0;
+                }
+                enc_b.ids.resize(keep_b);
+                enc_b.tokens.resize(keep_b);
+                enc_b.offsets.resize(keep_b);
+                enc_b.word_ids.resize(keep_b);
+            } else {
+                size_t trim_count = 0;
+                while (static_cast<int>(enc_a.ids.size() + enc_b.ids.size()) > available) {
+                    if (trim_count && !(trim_count % 100) && qore_check_cancel(xsink, "truncating model input")) {
+                        return -1;
+                    }
+                    if (enc_a.ids.size() >= enc_b.ids.size() && !enc_a.ids.empty()) {
+                        enc_a.ids.pop_back();
+                        enc_a.tokens.pop_back();
+                        enc_a.offsets.pop_back();
+                        enc_a.word_ids.pop_back();
+                    } else if (!enc_b.ids.empty()) {
+                        enc_b.ids.pop_back();
+                        enc_b.tokens.pop_back();
+                        enc_b.offsets.pop_back();
+                        enc_b.word_ids.pop_back();
+                    } else {
+                        break;
+                    }
+                    ++trim_count;
+                }
+            }
+        }
+    }
+
+    EncodingResult post_result;
+    if (post_processor && add_special) {
+        post_result = post_processor->processWithOffsets(
+            enc_a.ids,
+            has_pair ? enc_b.ids : std::vector<int>(),
+            enc_a.tokens,
+            has_pair ? enc_b.tokens : std::vector<std::string>(),
+            enc_a.offsets,
+            has_pair ? enc_b.offsets : std::vector<std::pair<size_t, size_t>>(),
+            enc_a.word_ids,
+            has_pair ? enc_b.word_ids : std::vector<int>(),
+            true);
+    } else {
+        post_result.ids = std::move(enc_a.ids);
+        post_result.type_ids.resize(post_result.ids.size(), 0);
+        if (has_pair) {
+            post_result.ids.insert(post_result.ids.end(), enc_b.ids.begin(), enc_b.ids.end());
+            post_result.type_ids.resize(post_result.ids.size(), 0);
+        }
+    }
+
+    int effective_pad = override_pad_id >= 0 ? override_pad_id : pad_token_id;
+    if (padding == "max_length" && max_length > 0
+            && static_cast<int>(post_result.ids.size()) < max_length) {
+        if (effective_pad < 0) {
+            xsink->raiseException("TOKENIZER-ERROR",
+                "padding requested but no pad_token_id is available; pass pad_token_id explicitly");
+            return -1;
+        }
+        out.sequence_length = post_result.ids.size();
+        size_t pad_count = 0;
+        while (static_cast<int>(post_result.ids.size()) < max_length) {
+            if (pad_count && !(pad_count % 100) && qore_check_cancel(xsink, "padding model input")) {
+                return -1;
+            }
+            post_result.ids.push_back(effective_pad);
+            post_result.type_ids.push_back(0);
+            ++pad_count;
+        }
+    } else {
+        out.sequence_length = post_result.ids.size();
+    }
+
+    out.ids = std::move(post_result.ids);
+    out.token_type_ids = std::move(post_result.type_ids);
+    if (out.token_type_ids.size() < out.ids.size()) {
+        out.token_type_ids.resize(out.ids.size(), 0);
+    }
+
+    out.attention_mask.assign(out.ids.size(), 1);
+    if (padding == "max_length" && max_length > 0 && effective_pad >= 0) {
+        size_t pad_scan_count = 0;
+        for (int i = static_cast<int>(out.ids.size()) - 1; i >= 0; --i) {
+            if (pad_scan_count && !(pad_scan_count % 100) && qore_check_cancel(xsink, "building model attention mask")) {
+                return -1;
+            }
+            if (out.ids[static_cast<size_t>(i)] == effective_pad) {
+                out.attention_mask[static_cast<size_t>(i)] = 0;
+            } else {
+                break;
+            }
+            ++pad_scan_count;
+        }
+    }
+    return 0;
+}
+
+static QoreListNode* makeModelInputShapeList(size_t rows, size_t width, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> shape(new QoreListNode(bigIntTypeInfo), xsink);
+    shape->push(static_cast<int64>(rows), xsink);
+    shape->push(static_cast<int64>(width), xsink);
+    return shape.release();
+}
+
+static int getModelInputPadId(const QoreHFTokenizer& tok, const QoreHashNode* options) {
+    if (options) {
+        QoreValue pid = options->getKeyValue("pad_token_id");
+        if (!pid.isNullOrNothing()) {
+            return static_cast<int>(pid.getAsBigInt());
+        }
+    }
+    return tok.getPadTokenId();
+}
+
+QoreHashNode* QoreHFTokenizer::encodeBatchForModelIntern(const QoreListNode* texts,
+        const QoreListNode* text_pairs, const QoreHashNode* options, ExceptionSink* xsink) const {
+    if (!texts) {
+        xsink->raiseException("TOKENIZER-ERROR", "texts argument is required");
+        return nullptr;
+    }
+    size_t rows = texts->size();
+    if (text_pairs && text_pairs->size() != rows) {
+        xsink->raiseException("TOKENIZER-ERROR",
+            "text_pairs size %zu does not match texts size %zu", text_pairs->size(), rows);
+        return nullptr;
+    }
+    if (rows > static_cast<size_t>(std::numeric_limits<int64>::max())) {
+        xsink->raiseException("TOKENIZER-ERROR", "batch size exceeds int64 limits");
+        return nullptr;
+    }
+
+    std::vector<ModelInputEncoding> encodings;
+    encodings.reserve(rows);
+    size_t max_width = 0;
+    bool variable_width = false;
+    ConstListIterator li(texts);
+    size_t row = 0;
+    while (li.next()) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "batch model tokenization")) {
+            return nullptr;
+        }
+        QoreStringNodeValueHelper text(li.getValue());
+        QoreStringNodeValueHelper pair(text_pairs ? text_pairs->retrieveEntry(row) : QoreValue());
+        ModelInputEncoding enc;
+        if (encodeForModelIntern(*text, options, text_pairs ? *pair : nullptr, enc, xsink)) {
+            return nullptr;
+        }
+        if (!encodings.empty() && enc.ids.size() != encodings.front().ids.size()) {
+            variable_width = true;
+        }
+        if (enc.ids.size() > max_width) {
+            max_width = enc.ids.size();
+        }
+        encodings.push_back(std::move(enc));
+        ++row;
+    }
+
+    std::string padding = options ? safeGetStringKey(options, "padding") : "";
+    int max_length = options ? static_cast<int>(options->getKeyValue("max_length").getAsBigInt()) : 0;
+    if (padding == "max_length" && max_length > 0) {
+        max_width = static_cast<size_t>(max_length);
+    } else if ((padding == "false" || padding == "False" || padding == "none") && variable_width) {
+        xsink->raiseException("TOKENIZER-ERROR",
+            "encodeBatchForModel() requires rectangular tensors; remove padding=%s or use "
+            "padding=\"batch_longest\"/\"max_length\" for variable-length inputs", padding.c_str());
+        return nullptr;
+    }
+
+    if (max_width > static_cast<size_t>(std::numeric_limits<int64>::max())) {
+        xsink->raiseException("TOKENIZER-ERROR", "encoded sequence length exceeds int64 limits");
+        return nullptr;
+    }
+    if (rows && max_width > std::numeric_limits<size_t>::max() / rows) {
+        xsink->raiseException("TOKENIZER-ERROR", "encoded tensor element count overflows size_t");
+        return nullptr;
+    }
+
+    int pad_id = getModelInputPadId(*this, options);
+    bool needs_padding = false;
+    size_t scan_row = 0;
+    for (const auto& enc : encodings) {
+        if (scan_row && !(scan_row % 100) && qore_check_cancel(xsink, "checking model input padding")) {
+            return nullptr;
+        }
+        if (enc.ids.size() < max_width) {
+            needs_padding = true;
+            break;
+        }
+        ++scan_row;
+    }
+    if (needs_padding && pad_id < 0) {
+        xsink->raiseException("TOKENIZER-ERROR",
+            "model-input batch requires padding to %zu tokens but no pad_token_id is available; "
+            "pass pad_token_id explicitly", max_width);
+        return nullptr;
+    }
+
+    size_t elements = rows * max_width;
+    ReferenceHolder<QoreBufferNode> input_ids(
+        new QoreBufferNode(QoreBufferElementType::Int64, false, elements), xsink);
+    ReferenceHolder<QoreBufferNode> attention_mask(
+        new QoreBufferNode(QoreBufferElementType::Int64, false, elements), xsink);
+    ReferenceHolder<QoreBufferNode> token_type_ids(
+        new QoreBufferNode(QoreBufferElementType::Int64, false, elements), xsink);
+    ReferenceHolder<QoreBufferNode> sequence_lengths(
+        new QoreBufferNode(QoreBufferElementType::Int64, false, rows), xsink);
+    int64* ids_data = static_cast<int64*>(input_ids->getRawData());
+    int64* mask_data = static_cast<int64*>(attention_mask->getRawData());
+    int64* type_data = static_cast<int64*>(token_type_ids->getRawData());
+    int64* len_data = static_cast<int64*>(sequence_lengths->getRawData());
+
+    for (size_t i = 0; i < rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "packing model token buffers")) {
+            return nullptr;
+        }
+        const auto& enc = encodings[i];
+        len_data[i] = static_cast<int64>(enc.sequence_length);
+        size_t offset = i * max_width;
+        for (size_t j = 0; j < max_width; ++j) {
+            if (j && !(j % 100) && qore_check_cancel(xsink, "packing model token row")) {
+                return nullptr;
+            }
+            size_t pos = offset + j;
+            if (j < enc.ids.size()) {
+                ids_data[pos] = enc.ids[j];
+                mask_data[pos] = j < enc.attention_mask.size() ? enc.attention_mask[j] : 1;
+                type_data[pos] = j < enc.token_type_ids.size() ? enc.token_type_ids[j] : 0;
+            } else {
+                ids_data[pos] = pad_id;
+                mask_data[pos] = 0;
+                type_data[pos] = 0;
+            }
+        }
+    }
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(hashdeclTokenizerModelInputBatch, xsink), xsink);
+    result->setKeyValue("input_ids", input_ids.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    result->setKeyValue("attention_mask", attention_mask.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    result->setKeyValue("token_type_ids", token_type_ids.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    result->setKeyValue("sequence_lengths", sequence_lengths.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    result->setKeyValue("shape", makeModelInputShapeList(rows, max_width, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    result->setKeyValue("rows", static_cast<int64>(rows), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    result->setKeyValue("columns", static_cast<int64>(max_width), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    result->setKeyValue("dtype", new QoreStringNode("int64"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return result.release();
+}
+
+QoreHashNode* QoreHFTokenizer::encodeForModel(const QoreStringNode* text,
+        const QoreHashNode* options, ExceptionSink* xsink) {
+    std::shared_lock<std::shared_mutex> lock(rw_mutex);
+
+    ReferenceHolder<QoreListNode> texts(new QoreListNode(stringTypeInfo), xsink);
+    texts->push(text ? text->refSelf() : new QoreStringNode(""), xsink);
+    return encodeBatchForModelIntern(*texts, nullptr, options, xsink);
+}
+
+QoreHashNode* QoreHFTokenizer::encodeBatchForModel(const QoreListNode* texts,
+        const QoreHashNode* options, ExceptionSink* xsink) {
+    std::shared_lock<std::shared_mutex> lock(rw_mutex);
+    return encodeBatchForModelIntern(texts, nullptr, options, xsink);
+}
+
+QoreHashNode* QoreHFTokenizer::encodeBatchPairsForModel(const QoreListNode* texts,
+        const QoreListNode* text_pairs, const QoreHashNode* options, ExceptionSink* xsink) {
+    std::shared_lock<std::shared_mutex> lock(rw_mutex);
+    return encodeBatchForModelIntern(texts, text_pairs, options, xsink);
 }
 
 QoreHashNode* QoreHFTokenizer::buildEncodingHash(const EncodingResult& post_result,

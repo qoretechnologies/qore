@@ -1,0 +1,51 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlEmbedTextBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlEmbedTextBufferColumns {
+    constructor() {
+        string model_path = OnnxBench::tokenEmbeddingModelPath();
+        if (!OnnxBench::canRunTextOnnx(model_path)) {
+            printf("dataproviderml_embed_text_buffercolumns: skipped (ONNX text fixtures not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_embed_text_buffercolumns");
+        r.iterations = 4;
+        r.warmup = 1;
+
+        int rows = OnnxBench::textRows();
+        ColumnarResult columns;
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 128,
+            "embedding_mode": "onnx",
+            "embedding_model_path": model_path,
+            "tokenizer_config_path": OnnxBench::tokenizerPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_tokens": 16,
+        });
+
+        r.setup = sub () {
+            columns = ColumnarResult::fromColumnHash(OnnxBench::makeTextColumnHash(rows));
+            r.bytes_processed = OnnxBench::approxTextBytes(rows);
+        };
+
+        r.measure = sub () {
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            OnnxBench::verifyEmbedColumns("dataproviderml_embed_text_buffercolumns", result, rows);
+        };
+
+        exit(r.run());
+    }
+}

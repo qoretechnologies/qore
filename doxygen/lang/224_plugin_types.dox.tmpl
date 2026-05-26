@@ -1,0 +1,639 @@
+/** @page plugin_types Plugin Types
+
+    @section plugin_types_overview Overview
+
+    Plugin types are an experimental C ABI for binary modules that need to
+    register dense, typed, operator-bearing runtime values with libqore. The
+    first shipped pieces are the stable registration and validation ABI,
+    operation metadata, plugin-dispatch IR references, QORD helper-reference
+    metadata, runtime helper dispatch, verifier diagnostics, and reflection.
+
+    The protocol is intended for module authors writing C++ modules, not for
+    ordinary Qore source modules. Qore code observes registered plugin types
+    through @ref Qore::Reflection::PluginRegistry "PluginRegistry" and through
+    operation behavior exposed by the registering module.
+
+    The current implementation is deliberately conservative:
+    - registrations are process-global after a module-init transaction commits;
+    - operation dispatch goes through registered runtime helpers;
+    - QORD stores plugin module imports, operation metadata, and helper refs for
+      plugin-dispatch IR references and serialized plugin value instances;
+    - dense-buffer plugin dispatch accepts Qore \c buffer<T> values and passes
+      validated raw frames to \c DenseBufferUnary and \c DenseBufferBinary
+      helpers.
+
+    @section plugin_types_operator_dispatch Operator Dispatch
+
+    Qore source syntax dispatches to descriptor-registered plugin operations
+    only for the operators that the runtime explicitly recognizes. In the
+    current implementation this includes comparison operations (\c ==, \c !=,
+    \c <, \c <=, \c >, \c >=), subscript and range subscript (\c [], \c [..]),
+    and the bitwise operator family (\c &, \c |, \c ^, \c ~). Modules register
+    these with the canonical operation names \c eq, \c ne, \c lt, \c le, \c gt,
+    \c ge, \c subscript, \c slice, \c bit_and, \c bit_or, \c bit_xor, and
+    \c bit_not.
+
+    @code{.py}
+%requires dataframe
+
+DataFrame df((
+    {"name": "Alice", "status": "active", "score": 95.5},
+    {"name": "Bob", "status": "inactive", "score": 88.0},
+    {"name": "Carol", "status": "active", "score": 92.0},
+));
+
+RowMask active = df.column("status") == "active";
+RowMask high_score = df.column("score") >= 90.0;
+DataFrame selected = df.filter(active & high_score);
+    @endcode
+
+    The operation name only selects the dispatch family and signature shape.
+    Optimizer properties such as purity, commutativity, associativity, and
+    floating-point reassociation remain per-operation metadata in
+    \c QorePluginOpcodeInfoExtended.
+
+    @section plugin_types_registration Registering A Plugin Type
+
+    A binary module registers one descriptor table from its \c qore_module_init
+    callback. The module receives a runtime-owned plugin module handle in
+    \c QoreModuleInitContext::plugin_module_handle; copy that handle into a
+    \c QorePluginRegistrationContextV1 and call
+    \c qore_register_plugin_types_v1().
+
+    @code{.cpp}
+#include <qore/Qore.h>
+#include <qore/QorePluginType.h>
+#include <cstring>
+
+static void sample_incref(uint64_t) noexcept {}
+static void sample_decref(uint64_t) noexcept {}
+static uint64_t sample_clone(uint64_t value_bits, ExceptionSink*) { return value_bits; }
+static bool sample_equal(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink*) { return lhs_bits == rhs_bits; }
+static int64_t sample_hash(uint64_t value_bits, ExceptionSink*) { return static_cast<int64_t>(value_bits); }
+static void sample_cleanup(uint64_t) noexcept {}
+
+static int sample_serialize(uint64_t value_bits, QorePluginByteWriteCallback write,
+        void* write_data, ExceptionSink* xsink) {
+    return write(&value_bits, sizeof(value_bits), write_data, xsink);
+}
+
+static uint64_t sample_deserialize(QorePluginByteReadCallback read,
+        uint32_t payload_len, void* read_data, ExceptionSink* xsink) {
+    if (payload_len != sizeof(uint64_t)) {
+        xsink->raiseException("SAMPLE-PLUGIN-ERROR", "invalid payload length");
+        return 0;
+    }
+    uint64_t value_bits = 0;
+    if (read(&value_bits, sizeof(value_bits), read_data, xsink)) {
+        return 0;
+    }
+    return value_bits;
+}
+
+static uint64_t sample_add(uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink*) {
+    QoreValue lhs;
+    QoreValue rhs;
+    std::memcpy(&lhs, &lhs_bits, sizeof(lhs));
+    std::memcpy(&rhs, &rhs_bits, sizeof(rhs));
+
+    QoreValue result(lhs.getAsBigInt() + rhs.getAsBigInt());
+    uint64_t result_bits = 0;
+    std::memcpy(&result_bits, &result, sizeof(result_bits));
+    return result_bits;
+}
+
+static QorePluginValueOps sample_value_ops{
+    sample_incref, sample_decref, sample_clone, sample_equal,
+    sample_hash, sample_cleanup,
+};
+
+static QorePluginTypeDescriptor sample_types[] = {
+    {
+        0, "SampleValue", autoTypeInfo, sample_value_ops,
+        sample_serialize, sample_deserialize, 1, 0,
+    },
+};
+
+static QorePluginOperation sample_ops[] = {
+    {
+        0,
+        "add",
+        {
+            2, autoTypeInfo, autoTypeInfo, autoTypeInfo,
+            false, false, false,
+            QorePluginValueAccess::ReadOnly,
+            QorePluginResultAlias::FreshNoAliasInputs,
+            QorePluginHelperAbi::BinaryValue,
+        },
+        {},
+        reinterpret_cast<void (*)()>(sample_add),
+        nullptr,
+        nullptr,
+        0,
+        0,
+        nullptr,
+        0,
+    },
+};
+
+static QorePluginTypeRegistration sample_registration{
+    "sample-plugin",
+    QORE_PLUGIN_ABI_VERSION_V1,
+    "1.0.0",
+    sample_types,
+    1,
+    sample_ops,
+    1,
+    nullptr,
+    0,
+};
+
+extern "C" void qore_module_init(QoreModuleInitContext& module_ctx,
+        ExceptionSink& xsink) {
+    QorePluginRegistrationContextV1 plugin_ctx{
+        .struct_size   = sizeof(plugin_ctx),
+        .flags         = 0,
+        .module_path   = module_ctx.path.c_str(),
+        .module_handle = module_ctx.plugin_module_handle,
+    };
+
+    if (qore_register_plugin_types_v1(&plugin_ctx, &sample_registration, &xsink)) {
+        return;
+    }
+}
+    @endcode
+
+    The v1 registration context is an exact-size ABI contract. Set
+    \c struct_size to \c sizeof(plugin_ctx), set \c flags to 0, pass the module
+    path received by module init, and pass the live module handle from the same
+    module-init call. A null, wrong-size, stale, or cross-module handle is
+    rejected before descriptor validation.
+
+    @section plugin_types_validation Dry-Run Validation
+
+    Use \c qore_validate_plugin_types_v1() in module self-tests and tooling.
+    The validation context is size-prefixed so future optional fields can be
+    added without changing the validator symbol. Callers compiled against the
+    current header should set \c struct_size to \c sizeof(ctx) and \c flags to
+    \c QORE_PLUGIN_VALIDATE_NO_FLAGS.
+
+    @code{.cpp}
+QorePluginValidationContext ctx{};
+ctx.struct_size = sizeof(ctx);
+ctx.flags = QORE_PLUGIN_VALIDATE_NO_FLAGS;
+
+ExceptionSink xsink;
+qore_validate_plugin_types_v1(&sample_registration, &ctx, true, &xsink);
+    @endcode
+
+    In collect-all mode (\c collect_all == \c true), the validator reports all
+    descriptor-local violations it can find. Contextual checks that need a live
+    module handle, such as helper-symbol lookup, are performed only when
+    \c ctx.module_handle is the current module-init handle for this thread.
+
+    @section plugin_types_authoring_tools Authoring Tools
+
+    The source tree includes a build-tree reference module and an advisory
+    linter for module authors:
+
+    @code
+cmake --build build --target sample-buffer-plugin
+QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
+    ./build/qore examples/plugins/qore-plugin-lint sample-buffer
+    @endcode
+
+    \c examples/plugins/sample-buffer registers one sample type, a scalar
+    \c add operation, and a \c DenseBufferBinary \c dense_add_i64 helper with
+    cooperative cancellation. It demonstrates descriptor construction,
+    \c QoreModuleInitContext::plugin_module_handle usage, lifecycle hooks,
+    serializer callbacks, runtime-helper symbols, operation metadata, and a
+    parse-lowering hook that currently returns \c NotApplicable.
+
+    \c examples/plugins/qore-plugin-lint loads a built module, reads committed
+    descriptors through \c PluginRegistry, and reports hard descriptor errors
+    and advisory warnings. Use the C dry-run validator shown above for
+    module-local tests that can inspect descriptor tables before module init
+    commits them.
+
+    @section plugin_types_operation_metadata Operation Metadata
+
+    \c QorePluginOpcodeInfoExtended is a declarative contract between the
+    module and libqore. Zero-initialize it, then set every property that
+    accurately describes the helper for all accepted operands. Unset boolean
+    fields are \c false, so do not leave a field unset unless \c false is the
+    correct promise for that operation.
+
+    The most important optimization fields are:
+    - \c is_pure_modulo_xsink: the operation only reports errors through the
+      exception sink and has no externally visible side effects.
+    - \c is_commutative and \c is_associative: operands can be reordered or
+      regrouped under the operation's mathematical semantics.
+    - \c can_vectorize and \c is_simd_friendly: dense helper calls can be
+      batched or lowered to native vector code.
+    - \c fp_reassociation_allowed: the operation explicitly permits
+      IEEE-unsafe floating-point reassociation.
+
+    Floating-point reassociation has a two-part gate. The registered operation
+    must set \c fp_reassociation_allowed, and the current Program must enable
+    @ref fp-fast-math "%fp-fast-math". Without both, libqore must preserve
+    source evaluation order for floating-point plugin operations even when
+    \c is_associative is set. This prevents ordinary metadata such as
+    \c is_associative from silently enabling rewrites that can change NaN,
+    infinity, signed-zero, or rounding behavior.
+
+    @section plugin_types_dense_buffers Dense-Buffer Helpers
+
+    Dense-buffer helpers are for numeric kernels that already operate on
+    homogeneous \c buffer<T> storage. A \c DenseBufferUnary helper receives an
+    output frame plus one input frame; a \c DenseBufferBinary helper receives an
+    output frame plus two input frames. The IR opcodes
+    \c PluginDenseBufferUnary and \c PluginDenseBufferBinary evaluate Qore
+    buffer operands, validate them, and then call the registered helper with
+    raw pointers, element counts, and stride 1.
+
+    Runtime validation rejects:
+    - non-buffer arguments;
+    - nullable element buffers such as \c buffer<*int64>, because the v1 helper
+      ABI does not carry a validity bitmap;
+    - \c buffer<bool>, because it is bit-packed rather than byte-addressable;
+    - \c buffer<string>, because it is variable-width offset storage rather
+      than a fixed-width numeric frame;
+    - mixed element storage between the result and input buffers;
+    - result/input aliasing, because the v1 helper ABI exposes distinct output
+      and input frames.
+    - writable external-host or external-device buffers, because the helper ABI
+      exposes raw mutable pointers and Qore must detach immutable provider-owned
+      storage before mutation.
+
+    Read-only dense-buffer helper inputs materialize device-backed buffers to
+    host memory through the provider's copy callback before the helper receives
+    a raw pointer. Writable helper arguments must already be owned host buffers;
+    Qore code can call \c clone() to force an owned mutable copy.
+
+    These checks fail before the module helper sees any raw pointer and include
+    the module name, operation name, field name, expected type, actual type,
+    subreason, and design-section reference in the diagnostic text.
+
+    @section plugin_types_dataframe_dense DataFrame And Dense Data Pipelines
+
+    The dataframe module is the first production consumer of the dense-data
+    pieces exposed by this release. DataFrame columns can be constructed from
+    \c buffer<T> values, exported to
+    @ref Qore::SQL::ColumnarResult "ColumnarResult", imported back from
+    ColumnarResult, and passed through DataProvider pipelines as
+    \c DataProviderShape::BufferColumns. This lets SQL, DataFrame, and
+    DataProvider code share primitive numeric, boolean, and string columns without
+    converting every cell to a row hash. String columns can also use
+    \c buffer<string> or \c buffer<*string> in ColumnarResult and DataFrame
+    data paths; \c buffer<decimal128> preserves fixed-scale decimal columns.
+    Date, timestamp, and duration columns use \c buffer<int64> microsecond
+    storage when ColumnarResult schema metadata marks them as temporal. Nested
+    arrays and structs use recursive ColumnarResult schema metadata and
+    list/hash values; dense-buffer plugin helpers remain numeric-only in the v1
+    ABI.
+
+    @code{.py}
+%requires dataframe
+
+DataFrame df({
+    "id": new buffer<int64>((1, 2, 3, 4)),
+    "score": new buffer<float64>((95.0, 88.0, 92.0, 75.0)),
+    "active": new buffer<bool>((True, False, True, True)),
+    "name": new buffer<*string>(("Alice", "Bob", NOTHING, "Dave")),
+});
+
+ColumnarResult columns = df.toColumnarResult();
+ColumnarResult completed = ColumnarResult::fromColumnHash({
+    "completed_at": (2026-01-01T00:00:00Z, NOTHING, 2026-01-02T00:00:00Z),
+}, {
+    "completed_at": {"kind": "timestamp", "buffer_type": "int64", "nullable": True},
+});
+buffer<bool> selected = columns.combineMasks(
+    columns.getColumn("score") >= 90.0,
+    columns.getColumn("active") == True,
+    "&&");
+DataFrame filtered = DataFrame::fromColumnarResult(columns.filter(selected));
+ColumnarResult incomplete = completed.filter(completed.nullMask("completed_at"));
+ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
+    @endcode
+
+    DataProvider filter processors compile supported DPQL/DataProvider
+    expressions over ColumnarResult blocks to dense boolean masks. Supported
+    compiled predicates include \c &&, \c ||, \c !, scalar comparison
+    operators, computed scalar comparisons over top-level fields,
+    expression-to-expression comparisons such as \c @score \c >= \c @target
+    or \c @amount \c + \c @tax \c >= \c @limit, truthy field checks,
+    \c between, \c inRange, \c in, and \c not \c in over dense buffer
+    columns, temporal comparisons against DPQL date literals, \c isNull and
+    \c isNotNull checks, case-sensitive string predicates, and BufferColumns
+    \c like, \c =~, and \c !~ predicates. Unsupported expressions fall back
+    to the normal row semantics:
+
+    @code{.py}
+%requires DataProviderDataFrame
+
+hash<DataProviderExpression> expr = DataProvider::parseDpqlExpression(
+    "@score >= 90.0 && @active == true");
+
+QoreFilterRecordsProcessor filter({"where_cond": expr});
+ColumnarResult filtered_columns = filter.processRecordsShape(
+    columns, DataProviderShape::BufferColumns);
+    @endcode
+
+    Shape-aware analytics processors use the same columnar path. For top-level
+    configured fields, running analytics, correlation, and cross-correlation
+    processors read only the selected DataFrame or ColumnarResult columns and
+    keep rectangular event output in the negotiated shape.
+
+    This is not a promise that every DataFrame operation is zero-copy. Existing
+    DataFrame kernels still keep their vector-oriented internal representation
+    for joins, groupby, windows, and ML conversion. Dense source buffers are
+    preserved for columnar export and direct dense column access. Row filtering
+    preserves primitive dense columns by creating filtered dense buffers, and
+    contiguous slicing preserves them with zero-copy buffer views. Ordering,
+    aggregation, and reshaping can allocate new storage.
+
+    The goal of these plugin-type and dense-buffer paths is to make typed
+    columnar data a first-class runtime representation instead of a convention
+    layered on top of row hashes. DataFrame, DBI, and DataProvider components
+    can then choose a dense representation for operations that benefit from it
+    and fall back to normal row semantics only when an operation requires
+    dynamic row behavior. In the dataframe benchmark suite, the covered
+    columnar construction, filtering, aggregation, join, SQL read/write, and
+    DataProvider pipeline cases outperform equivalent pandas operations when
+    native columnar DBI support is available for SQL reads.
+
+    Native modules that already speak Apache Arrow can interoperate with these
+    dense column blocks through libqore's Arrow C Data Interface wrappers.  The
+    feature macro \c QORE_HAVE_ARROW_C_DATA_INTEROP means
+    \c qore_columnar_result_export_arrow_c_data() and
+    \c qore_columnar_result_import_arrow_c_data() are available.  Fixed-width
+    primitive, boolean, and \c decimal128 top-level arrays can be zero-copy,
+    including sliced record batches with non-zero top-level offsets.  Builds
+    with \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS also map microsecond
+    timestamp and duration arrays directly to \c buffer<int64> while preserving
+    temporal Arrow schema.  Strings, binary values, lists, fixed-size lists,
+    structs, maps, and dictionary-encoded Arrow arrays preserve schema and
+    values through owned Arrow-compatible buffers or Qore containers.  This is
+    the preferred ABI for
+    binary modules that need columnar interchange but should not link directly
+    against Arrow C++.
+
+    @section plugin_types_lowering Lowering Pattern Hooks
+
+    Operations can register an optional \c QorePluginLoweringCallback in
+    \c QorePluginOperation::lowering_pattern. During IR lowering, libqore
+    snapshots matching callbacks from active plugin modules, releases the
+    plugin-registry lock, and calls them before the built-in expression
+    handlers. This lets a plugin recognize typed AST patterns and emit
+    \c PluginUnary, \c PluginBinary, \c PluginCall, \c PluginConstruct, or
+    dense-buffer plugin dispatch IR instead of falling back to generic
+    \c any semantics.
+
+    The callback returns:
+    - \c QorePluginLoweringResult::Lowered after it emits IR and sets the result
+      with \c QoreIRLoweringContext::setResult() or emits a result-producing
+      instruction as the final instruction in the active block;
+    - \c QorePluginLoweringResult::NotApplicable when the AST node is outside
+      its claimed coverage;
+    - \c QorePluginLoweringResult::Erroneous after reporting a hard lowering
+      diagnostic with \c QoreIRLoweringContext::setError().
+
+    \c QorePluginOperation::lowering_claimed_node_kinds is a bitmap of
+    \c NT_* AST node kinds that the callback promises to handle. Returning
+    \c NotApplicable for a claimed node kind is a protocol violation and fails
+    lowering with \c PLUGIN-LOWERING-CLAIM-VIOLATED. A zero bitmap is treated
+    as an unclaimed generic matcher: it may inspect a node and return
+    \c NotApplicable without violating the claim contract.
+
+    The core parser/runtime also resolves matching comparison, \c subscript,
+    and variadic receiver-call plugin operations for native syntax where
+    supported by the operation descriptor. For example, the dataframe module
+    registers \c subscript operations so \c df["name"] and \c df[0..9] work in
+    normal AST execution as well as in IR/JIT execution, and it registers
+    comparison operations so expressions such as
+    \c df.column("score") >= 90.0 return a dataframe row-mask object instead
+    of a boolean. Descriptor-based lowering requires exact parse-time operand
+    types; broad \c auto descriptors are intentionally not selected for typed
+    lowering to avoid hijacking ordinary scalar/list operations. Runtime
+    dispatch still checks object/plugin values against the active Program's
+    registered descriptors.
+
+    @section plugin_types_llvm Optional LLVM Codegen Extension
+
+    The stable plugin ABI always supports runtime-helper dispatch. Modules that
+    need inline native codegen can additionally include
+    \c <qore/QorePluginLLVM.h> and attach a
+    \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension to an operation:
+
+    @code{.cpp}
+static llvm::Value* sample_codegen(QorePluginLLVMCodegenContext* ctx) {
+    llvm::Value* lhs = ctx->boxed_operands[0];
+    llvm::Value* rhs = ctx->boxed_operands[1];
+    // Emit native IR and return i64 QoreValue bits.
+    return emit_sample_add(ctx->builder, lhs, rhs, ctx->qore_value_type);
+}
+
+static QorePluginLLVMExtension sample_llvm{
+    sizeof(QorePluginLLVMExtension),
+    QORE_PLUGIN_LLVM_EXTENSION_ABI_VERSION,
+    QORE_PLUGIN_LLVM_CURRENT_MAJOR,
+    sample_codegen,
+};
+
+static QorePluginExtension sample_extensions[]{
+    { QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID, &sample_llvm, false },
+};
+    @endcode
+
+    \c QorePluginLLVM.h intentionally includes LLVM headers and is not included
+    by \c QorePluginType.h. Modules that do not opt into LLVM codegen remain on
+    the plain-C runtime-helper ABI. At registration time libqore validates the
+    extension struct size, extension ABI version, LLVM major version, and
+    callback pointer. Optional extensions with an incompatible LLVM major are
+    ignored and the operation uses the runtime helper. Required incompatible
+    LLVM extensions are rejected with \c PLUGIN-EXTENSION-ABI-MISMATCH.
+
+    When a valid callback is registered, \c QoreIRToLLVM calls it before the
+    runtime-helper fallback. The callback receives already boxed operand values,
+    the current \c llvm::IRBuilder, \c llvm::Module, \c llvm::Function, the
+    operation signature, and the current exception-sink LLVM value. The callback
+    must return an \c i64 containing QoreValue bits; returning \c nullptr is a
+    codegen error. Codegen that may raise through the exception sink is followed
+    by the same exception check used by runtime-helper dispatch.
+
+    \c QorePluginLLVMCodegenContext also carries the registered operation
+    metadata in \c operation_info and the already-gated
+    \c fp_reassociation_enabled decision. A callback must only emit
+    IEEE-unsafe reassociation, contraction, or vector-reduction code when
+    \c fp_reassociation_enabled is \c true; this means both the operation
+    descriptor set \c fp_reassociation_allowed and the active Program enabled
+    @ref fp-fast-math "%fp-fast-math". Callbacks compiled against newer headers
+    should still check \c struct_size before reading newly added fields when
+    they need to support older libqore builds.
+
+    The builtin \c dataframe module uses this extension for the hot plugin
+    operators that back column, row, and row-mask subscripts,
+    \c DataFrame::ColumnRef comparisons, and \c DataFrame::RowMask boolean-mask
+    composition. Those operators still keep the same runtime-helper fallback,
+    but JIT/AOT-generated code can call the module helper directly without a
+    registry dispatch on each operation.
+
+    @section plugin_types_values Plugin Value Instances
+
+    Registered plugin types can wrap module-defined value bits in a first-class
+    Qore value node with \c qore_plugin_make_value_v1(). The v1 constructor
+    takes the provider module name, local type id, opaque 64-bit value bits, and
+    create flags:
+
+    @code{.cpp}
+AbstractQoreNode* node = qore_plugin_make_value_v1(
+    "sample-plugin",
+    0,
+    native_value_bits,
+    QORE_PLUGIN_VALUE_ADOPT,
+    xsink);
+    @endcode
+
+    Use \c QORE_PLUGIN_VALUE_ADOPT when the new Qore node owns one reference to
+    the native value. Use \c QORE_PLUGIN_VALUE_BORROWED when the value remains
+    owned elsewhere; libqore calls the registered \c incref callback before the
+    node is returned. When the node is released, libqore calls the registered
+    \c decref callback. Equality uses the registered \c equal callback.
+
+    Module code can recover the provider identity and opaque value bits with
+    \c qore_plugin_get_value_bits_v1():
+
+    @code{.cpp}
+const char* module_name = nullptr;
+uint16_t local_type_id = 0;
+uint64_t value_bits = 0;
+if (!qore_plugin_get_value_bits_v1(node, &module_name, &local_type_id,
+        &value_bits, xsink)) {
+    // value_bits belongs to module_name:local_type_id
+}
+    @endcode
+
+    QORD constants encode plugin value nodes with \c VT_PLUGIN_INSTANCE:
+    provider import index, local type id, serializer format version, a reserved
+    zero field, and the serializer payload. On load, the provider module must
+    already be registered; the loader validates the import metadata and calls
+    the registered deserializer. The regular \c Serializable data path uses the
+    same serializer and deserializer callbacks and records the provider module
+    as a dependency; if the plugin module is already registered in the process,
+    deserialization does not try to load it again.
+
+    @section plugin_types_reflection Reflection
+
+    Qore code can inspect committed descriptors with
+    @ref Qore::Reflection::PluginRegistry "Qore::Reflection::PluginRegistry".
+
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+%requires reflection
+
+PluginRegistry registry = PluginRegistry::getProcessRegistry();
+foreach string module_name in (registry.getProcessModules()) {
+    printf("plugin module: %s\n", module_name);
+    foreach hash<auto> op in (registry.getOperations(module_name)) {
+        printf("  %s(%s, %s) -> %s helper=%s\n",
+            op.operation_name,
+            op.primary_type,
+            op.secondary_type,
+            op.return_type,
+            op.helper_abi);
+        if (op.fp_reassociation_allowed) {
+            printf("    permits FP reassociation when %%fp-fast-math is enabled\n");
+        }
+    }
+}
+    @endcode
+
+    \c PluginRegistry::get() returns a Program-bound view for the current
+    Program, and \c PluginRegistry::get(pgm) returns a Program-bound view for
+    an explicit Program. Program-bound methods raise
+    \c PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE when called on the process-global
+    view:
+
+    @code{.py}
+PluginRegistry registry = PluginRegistry::get();
+*hash<auto> op = registry.resolveOperation(IntType, IntType, "add");
+    if (exists op) {
+        printf("selected %s::%s global=%d\n",
+            op.module_name, op.operation_name, op.global_id);
+    }
+
+foreach hash<auto> site in (registry.getRecentFallbackSites()) {
+    printf("%s:%d %s fallback: %s\n",
+        site.file, site.line, site.operation_name, site.reason);
+}
+registry.clearFallbackSites();
+    @endcode
+
+    \c resolveOperation() returns \c NOTHING when no committed operation
+    matches the operand types, operation name, and Program-local active module
+    set. \c getTypes() and \c getOperations() return descriptors for process
+    modules on the process-global view and filter to active modules on
+    Program-bound views. Fallback-site recording uses a per-Program rolling
+    buffer sized by \c QORE_PLUGIN_FALLBACK_BUFFER.
+
+    @section plugin_types_qord QORD Metadata
+
+    Plugin-dispatch IR references are persisted with three QORD sections:
+    - \c PLUGIN_IMPORTS records the provider module name, plugin ABI version,
+      operation-set version, and required local ids.
+    - \c PLUGIN_TYPE_REGISTRY records type and operation metadata used to check
+      that the live process registry matches the compiled artifact.
+    - \c PLUGIN_HELPER_REFS records helper slots and canonical operation
+      signature hashes.
+
+    A QORD load fails loudly if a referenced module is not loaded, a canonical
+    signature version is unsupported, a helper reference is malformed, or a
+    recorded signature hash does not match the live descriptor. The loader does
+    not auto-load modules; load the module through the normal module loader and
+    retry the QORD load.
+
+    @section plugin_types_tracing Diagnostics And Tracing
+
+    Plugin diagnostics use stable error codes and stable \c subreason strings.
+    Error text includes the module or runtime context, field, expected value,
+    actual value, subreason, and the design section reference where applicable.
+
+    Trace environment variables:
+    - \c QORE_PLUGIN_REGISTER_TRACE logs registration validation and commit.
+    - \c QORE_PLUGIN_DISPATCH_TRACE logs runtime helper dispatch.
+    - \c QORE_PLUGIN_VERIFY=1 enables release-build runtime verifier checks.
+    - \c QORE_PLUGIN_VERIFY_TRACE logs verifier decisions.
+    - \c QORE_PLUGIN_QORD_TRACE logs QORD plugin section writer/loader
+      decisions.
+    - \c QORE_PLUGIN_CROSS_TYPE_TRACE logs
+      \c PluginRegistry::resolveOperation() resolution decisions and future
+      cross-type operator selection decisions.
+    - \c QORE_PLUGIN_FALLBACK_BUFFER sets each Program's rolling
+      fallback-site buffer capacity; unset defaults to 1024, 0 disables
+      recording, invalid values fall back to 1024, and values above 65536 are
+      capped.
+
+    @code
+QORE_PLUGIN_CROSS_TYPE_TRACE=1 qore my-script.q
+    @endcode
+
+    @section plugin_types_limitations Current Limitations
+
+    The following pieces are intentionally not part of the current shipped
+    surface:
+    - plugin-type profile-guided specialization is not yet exposed as a
+      user-visible control;
+    - lazy expression fusion and cross-stage DataProvider fusion are still
+      conservative and only use explicitly implemented module paths;
+    - \c %fp-fast-math and \c fp_reassociation_allowed expose the safety gate
+      for FP reassociation, but optimizer passes must still opt into concrete
+      rewrites one by one.
+
+    @see
+    - @ref Qore::Reflection::PluginRegistry
+    - @ref buffer
+    - @ref release_notes
+*/

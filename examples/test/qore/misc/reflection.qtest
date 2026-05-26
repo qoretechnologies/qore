@@ -130,6 +130,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("issue 3035", \issue3035Test());
         addTestCase("reflection tests", \reflectionTests());
         addTestCase("named-call reflection tests", \namedCallReflectionTests());
+        addTestCase("plugin registry reflection tests", \pluginRegistryReflectionTests());
         addTestCase("sandbox tests", \sandboxTests());
         addTestCase("pseudo-class tests", \pseudoClassTests());
         addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
@@ -140,6 +141,46 @@ class ReflectionTest inherits QUnit::Test {
 
     nsPathTest() {
         assertEq("Qore::Reflection::AbstractVariant", Class::forName("AbstractVariant").getPathName());
+    }
+
+    pluginRegistryReflectionTests() {
+        PluginRegistry process_registry = PluginRegistry::getProcessRegistry();
+        list<string> process_modules = process_registry.getProcessModules();
+
+        PluginRegistry program_registry = PluginRegistry::get();
+        list<string> active_modules = program_registry.getActiveModules();
+        foreach string mod_name in (active_modules) {
+            bool found = False;
+            foreach string process_mod_name in (process_modules) {
+                if (process_mod_name == mod_name) {
+                    found = True;
+                    break;
+                }
+            }
+            assertTrue(found);
+        }
+
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.getActiveModules();
+        });
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.resolveOperation(IntType, IntType, "add");
+        });
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.getRecentFallbackSites();
+        });
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.clearFallbackSites();
+        });
+        assertEq(NOTHING, program_registry.resolveOperation(IntType, IntType, "missing-plugin-registry-test-op"));
+        assertEq((), program_registry.getRecentFallbackSites());
+        program_registry.clearFallbackSites();
+        assertThrows("PLUGIN-REGISTRY-MODULE-NOT-LOADED", sub() {
+            process_registry.getTypes("missing-plugin-registry-test-module");
+        });
+        assertThrows("PLUGIN-REGISTRY-MODULE-NOT-LOADED", sub() {
+            process_registry.getOperations("missing-plugin-registry-test-module");
+        });
     }
 
     assertNamedCallableVariantCount(string name, auto params, int expected_count = 1) {
@@ -1855,8 +1896,39 @@ class ReflectionTest inherits QUnit::Test {
         {
             Type type("hash<auto>");
             assertEq("hash<auto>", type.getName());
+            assertEq("hash<auto>", type.getPathName());
             type = new Type("*hash<auto>");
             assertEq("*hash<auto>", type.getName());
+            assertEq("*hash<auto>", type.getPathName());
+        }
+        {
+            Type type("buffer<int64>");
+            assertEq("buffer<int64>", type.getName());
+            assertEq("buffer<int64>", type.getPathName());
+
+            type = new Type("buffer<*int64>");
+            assertEq("buffer<*int64>", type.getName());
+            assertEq("buffer<*int64>", type.getPathName());
+
+            type = new Type("*buffer<int64>");
+            assertEq("*buffer<int64>", type.getName());
+            assertEq("*buffer<int64>", type.getPathName());
+
+            type = new Type("hash<string, buffer<int64>>");
+            assertEq("hash<string, buffer<int64>>", type.getName());
+            assertEq("hash<string, buffer<int64>>", type.getPathName());
+        }
+        {
+            Type type("object<Qore::Thread::Mutex>");
+            assertEq("object<Mutex>", type.getName());
+            assertEq("object<::Qore::Thread::Mutex>", type.getPathName());
+            type = Serializable::deserialize(type.serialize());
+            assertEq("object<Mutex>", type.getName());
+            assertEq("object<::Qore::Thread::Mutex>", type.getPathName());
+
+            type = new Type("list<object<Qore::Thread::Mutex>>");
+            assertEq("list<object<Mutex>>", type.getName());
+            assertEq("list<object<::Qore::Thread::Mutex>>", type.getPathName());
         }
 
         assertTrue(StringType.isAssignableFrom(StringOrNothingType));
@@ -1874,6 +1946,7 @@ class ReflectionTest inherits QUnit::Test {
         {
             Type t("hash<StatInfo>");
             assertEq("hash<StatInfo>", t.getName());
+            assertEq("hash<::Qore::StatInfo>", t.getPathName());
             assertTrue(t.isTypedHash());
             assertEq("StatInfo", t.getTypedHash().getName());
             assertNothing(StringType.getElementType());
@@ -2232,6 +2305,7 @@ class ReflectionTest inherits QUnit::Test {
         Type queue_int("Queue<int>");
         assertTrue(queue_int.isParameterized());
         assertEq("object<Queue<int>>", queue_int.getName());
+        assertEq("object<::Qore::Thread::Queue<int>>", queue_int.getPathName());
         list<Type> queue_args = queue_int.getTypeArguments();
         assertEq(1, queue_args.size());
         assertTrue(IntType.isEqual(queue_args[0]));
@@ -2239,10 +2313,13 @@ class ReflectionTest inherits QUnit::Test {
         Type future_queue("Future<Queue<int>>");
         assertTrue(future_queue.isParameterized());
         assertEq("object<Future<object<Queue<int>>>>", future_queue.getName());
+        assertEq("object<::Qore::Thread::Future<object<::Qore::Thread::Queue<int>>>>",
+            future_queue.getPathName());
         list<Type> future_args = future_queue.getTypeArguments();
         assertEq(1, future_args.size());
         assertTrue(future_args[0].isParameterized());
         assertEq("object<Queue<int>>", future_args[0].getName());
+        assertEq("object<::Qore::Thread::Queue<int>>", future_args[0].getPathName());
         assertTrue(IntType.isEqual(future_args[0].getTypeArguments()[0]));
 
         Type abstract_iterator_int("AbstractIterator<int>");

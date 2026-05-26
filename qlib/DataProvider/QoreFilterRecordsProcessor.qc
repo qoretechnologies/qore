@@ -47,10 +47,16 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
                 "display_name": "Filter Expression",
                 "short_desc": "A structured filter expression",
                 "desc": "A structured filter expression (`hash<DataProviderExpression>`) built by "
-                    "the expression builder",
-                "type": AbstractDataProviderTypeMap."*hash",
-                "required": True,
+                    "the expression builder, or a DPQL string for text-based configuration",
+                "type": (AbstractDataProviderTypeMap."*hash", AbstractDataProviderTypeMap."*string"),
                 "server_expression_handling": True,
+            },
+            "dpql_where": <DataProviderOptionInfo>{
+                "display_name": "DPQL Filter",
+                "short_desc": "A DPQL string filter expression",
+                "desc": "A DPQL string expression to parse and use as the filter condition; for example "
+                    "`@status == \"active\" && @score >= 90`",
+                "type": AbstractDataProviderTypeMap."*string",
             },
         };
     }
@@ -66,10 +72,16 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
 
     #! Creates the object with the given options
     constructor(hash<auto> options) {
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options, "where_cond|dpql_where");
+        if (exists copts.where_cond && exists copts.dpql_where) {
+            throw "CONSTRUCTOR-ERROR", "provide either `where_cond` or `dpql_where`, not both";
+        }
         if (copts.where_cond) {
-            where_expr = AbstractDataProvider::prepareExpression(
-                DataProvider::deserializeExpressionFromJson(copts.where_cond));
+            where_expr = AbstractDataProvider::prepareExpression(copts.where_cond.typeCode() == NT_STRING
+                ? DataProvider::parseDpqlExpression(copts.where_cond)
+                : DataProvider::deserializeExpressionFromJson(copts.where_cond));
+        } else if (copts.dpql_where) {
+            where_expr = AbstractDataProvider::prepareExpression(DataProvider::parseDpqlExpression(copts.dpql_where));
         }
     }
 
@@ -80,7 +92,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Filters records based on a `where_cond` expression; "
+        return "Filters records based on a `where_cond` or `dpql_where` expression; "
             "records matching the condition are passed through, non-matching records are dropped";
     }
 
@@ -143,6 +155,38 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         return AbstractDataProvider::evalGenericExpression(record, where_expr) ? record : NOTHING;
     }
 
+    #! Processes data in an explicitly negotiated shape
+    /** @param records the input data
+        @param shape the input shape
+
+        @return filtered data in the same shape when possible
+
+        @since DataProvider 3.5
+    */
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        if (!where_expr) {
+            return records;
+        }
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                return filterDataFrame(records);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return filterBufferColumns(records);
+                }
+                if (AbstractDataProcessor::isHashOfBuffers(records)) {
+                    auto df = AbstractDataProcessor::getDataFrameClass().newObject(records);
+                    return filterBufferColumns(df.toColumnarResult());
+                }
+                return filterBulk(records);
+            case DataProviderShape::HashOfLists:
+                return filterBulk(records);
+            case DataProviderShape::RowRecords:
+                return AbstractDataProvider::evalGenericExpression(records, where_expr) ? records : NOTHING;
+        }
+        return processRecordImpl(records);
+    }
+
     #! Filters bulk data (hash-of-lists) by evaluating the expression on each record
     /** @param records the bulk data to filter
         @return filtered hash-of-lists with only matching records, or @ref nothing if no records match
@@ -180,11 +224,42 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         return result;
     }
 
+    #! Filters a DataFrame block
+    /** @param df the DataFrame block
+
+        @return a filtered DataFrame block
+
+        @since DataProvider 3.5
+    */
+    private auto filterDataFrame(auto df) {
+        return ColumnarExpressionFilter::filterDataFrame(df, where_expr);
+    }
+
+    #! Filters a ColumnarResult block with a compiled buffer mask when possible
+    private auto filterBufferColumns(auto records) {
+        return ColumnarExpressionFilter::filterBufferColumns(records, where_expr);
+    }
+
     #! Returns @ref True — this processor supports bulk (hash-of-lists) data
     /** @since DataProvider 3.3
     */
     private bool supportsBulkApiImpl() {
         return True;
+    }
+
+    #! Returns supported input shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
     }
 
     #! Returns the input type as the output type (filter does not change record structure)

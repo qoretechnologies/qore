@@ -119,6 +119,8 @@ public:
                 return stringTypeInfo;
             case NT_BINARY:
                 return binaryTypeInfo;
+            case NT_BUFFER:
+                return seq->get<const QoreBufferNode>()->getElementTypeInfo();
         }
         return nothingTypeInfo;
     }

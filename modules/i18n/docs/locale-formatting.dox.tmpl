@@ -57,6 +57,42 @@ assertLt(0, I18n::compare_strings("a", "b", "en-US"));
 binary key = I18n::get_sort_key("file-001", "en-US-u-kn-true");
     @endcode
 
+    @section i18nstringpredicates Locale-Sensitive String Predicates
+
+    \c I18n::string_predicate() evaluates substring and equality checks with ICU collation instead of ASCII or
+    process-locale case folding.  This matters for languages such as Turkish, where dotted and dotless I are
+    distinct, and for accent-sensitive searches where primary/secondary collation strength changes the result.
+
+    @code{.py}
+%requires i18n
+
+assertTrue(I18n::string_predicate("\u0130stanbul", "starts-with", "i", "tr-TR"));
+assertFalse(I18n::string_predicate("Istanbul", "starts-with", "i", "tr-TR"));
+
+assertTrue(I18n::string_predicate("R\u00e9sum\u00e9", "contains", "resume", "en-US",
+    {"strength": "primary"}));
+assertFalse(I18n::string_predicate("R\u00e9sum\u00e9", "contains", "resume", "en-US",
+    {"strength": "secondary"}));
+    @endcode
+
+    Supported operators are \c "contains", \c "starts-with", \c "ends-with", and \c "equals".  Options are:
+    - \c strength: \c "primary", \c "secondary" (the default), \c "tertiary", \c "quaternary", or \c "identical"
+    - \c normalization: bool; defaults to @ref True for canonical-equivalence matching
+    - \c case_level: bool; defaults to @ref False
+
+    \c I18n::string_predicate_mask() evaluates the same predicate for each value in a list or \c buffer<T> and
+    returns a dense \c buffer<bool> mask for columnar filtering:
+
+    @code{.py}
+list<string> cities = ("\u0130stanbul", "Istanbul", "Ankara");
+buffer<bool> selected = I18n::string_predicate_mask(cities, "starts-with", "i", "tr-TR");
+assertEq((True, False, False), selected.toList());
+    @endcode
+
+    @note
+    These APIs are explicit-locale APIs.  They do not read the thread-local locale implicitly; pass the locale string
+    that defines the requested comparison semantics.
+
     @section i18nversions Backend Versions
 
     The module exposes ICU and CLDR data versions so deployments can report the locale-data backend in diagnostics:

@@ -171,8 +171,12 @@ $function$
       with automatic deduplication of duplicate primary key values within batches
     - added \c PgsqlTable::copyInsert() method for maximum-throughput bulk inserts using the PostgreSQL
       COPY protocol
+    - added a \c PgsqlTable::bulkInsert() override using the PostgreSQL COPY protocol for pure
+      hash-of-lists input without insert options
     - added \c PgsqlTable::doReturningImpl() override that correctly returns all rows for bulk RETURNING
       results (base class only returns the first row)
+    - fixed \c PgsqlTable handling of session temporary tables so unqualified table names and the
+      \c pg_temp schema alias resolve to the backend's active temporary schema
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -2482,8 +2486,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     #! Creates the object from the arguments
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
+        bool explicit_schema = (nname =~ x/^(\w+)\.\w+/)[0] ? True : False;
+
         # see if there is a schema in the name
         parse_schema_name(nname, \schema, \name);
+
+        resolveTemporaryTableSchema(!explicit_schema);
 
         # get table info
         *hash<auto> row = ds.selectRow("select * from pg_tables where schemaname = %v and tablename = %v", schema, name);
@@ -3025,6 +3033,46 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return ds.exec(sql, data);
     }
 
+    #! Inserts a hash-of-lists row batch using the PostgreSQL COPY protocol when possible
+    /** @param data a hash of column name to list of values; each list must have the same number of elements
+        @param opt optional insert options; if any options are passed, this method falls back to the generic
+        AbstractTable::bulkInsert() implementation
+
+        @return the number of rows inserted
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    int bulkInsert(hash<auto> data, *hash<auto> opt) {
+        if (!opt || !opt.size()) {
+            int rows = getCopyInsertRowCount(data);
+            if (rows == 0) {
+                return 0;
+            }
+            if (rows > 0) {
+                return copyInsert(data);
+            }
+        }
+
+        return AbstractTable::bulkInsert(data, opt);
+    }
+
+    private int getCopyInsertRowCount(hash<auto> data) {
+        int rows = -1;
+        foreach hash<auto> row in (data.pairIterator()) {
+            if (row.value.typeCode() != NT_LIST) {
+                return -1;
+            }
+            int size = row.value.size();
+            if (rows == -1) {
+                rows = size;
+            } else if (rows != size) {
+                throw "BULK-INSERT-ERROR", sprintf("%s column %y has %d values, expected %d",
+                    getDesc(), row.key, size, rows);
+            }
+        }
+        return rows == -1 ? 0 : rows;
+    }
+
     #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
     string getColumnSqlName(string col) {
         return PgsqlDatabase::PgsqlReservedWords{col.lwr()} ? ("\"" + col + "\"") : col;
@@ -3230,9 +3278,35 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private bool checkExistenceImpl() {
         *hash<auto> qh = ds.selectRow("select * from pg_catalog.pg_statio_all_tables where schemaname = %v and "
             "relname = %v", schema, name);
-        if (qh)
+        if (qh) {
             return inDb = True;
+        }
+        if (resolveTemporaryTableSchema(True)) {
+            qh = ds.selectRow("select * from pg_catalog.pg_statio_all_tables where schemaname = %v and "
+                "relname = %v", schema, name);
+            if (qh) {
+                return inDb = True;
+            }
+        }
         return False;
+    }
+
+    private bool resolveTemporaryTableSchema(bool allow_unqualified) {
+        if (schema != "pg_temp" && !(allow_unqualified && schema == "public")) {
+            return False;
+        }
+
+        *hash<auto> row = ds.selectRow(
+            "select n.nspname schemaname from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "where c.relname = %v and c.relkind in ('r', 'p') "
+            "and c.relnamespace = pg_catalog.pg_my_temp_schema()", name);
+        if (!row) {
+            return False;
+        }
+
+        schema = row.schemaname;
+        return True;
     }
 
     private Columns describeImpl() {

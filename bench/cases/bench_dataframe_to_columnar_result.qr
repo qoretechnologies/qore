@@ -1,0 +1,38 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameToColumnarResult
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameToColumnarResult {
+    constructor() {
+        Bench::BenchRunner r("dataframe_to_columnar_result");
+        r.iterations = 12;
+        r.warmup = 3;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeBufferFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            ColumnarResult result = df.toColumnarResult();
+            DataFrameBench::verifyColumnarRows("dataframe_to_columnar_result", result, rows);
+            if (result.getColumn("id").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "dataframe_to_columnar_result lost dense id storage";
+            }
+        };
+
+        exit(r.run());
+    }
+}

@@ -5297,7 +5297,7 @@ int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink) {
 }
 
 void QoreSocketObject::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink) {
-    if (qore_on_async_io_thread()) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
         setAlpnProtocolsForAsyncPoll(protocols, xsink);
         return;
     }
@@ -6013,6 +6013,18 @@ bool QoreSocketObject::pendingHttpChunkedBody() const {
 }
 
 void QoreSocketObject::setSslVerifyMode(int mode) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        ExceptionSink xsink;
+        AutoLocker al(priv->m);
+        if (!priv->checkValid(&xsink)) {
+            qore_socket_private::get(*priv->socket)->setSslVerifyMode(mode);
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+        return;
+    }
+
     ExceptionSink xsink;
     qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetSslVerifyMode, mode), "setSslVerifyMode", "done", &xsink);
@@ -6034,6 +6046,18 @@ int QoreSocketObject::getSslVerifyMode() const {
 }
 
 void QoreSocketObject::acceptAllCertificates(bool accept_all) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        ExceptionSink xsink;
+        AutoLocker al(priv->m);
+        if (!priv->checkValid(&xsink)) {
+            qore_socket_private::get(*priv->socket)->acceptAllCertificates(accept_all);
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+        return;
+    }
+
     ExceptionSink xsink;
     qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetAcceptAllCertificates, accept_all), "acceptAllCertificates",

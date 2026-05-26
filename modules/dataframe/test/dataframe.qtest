@@ -7,18 +7,60 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
+
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/DataProvider
 
 %try-module dataframe
 %define NoDataFrame
 %endtry
 
-%try-module DataProviderDataFrame
+%try-module ../../../qlib/DataProviderDataFrame
 %define NoDataProviderDataFrame
 %endtry
 
 %exec-class DataFrameTest
+
+class MockDataFrameDatasource {
+    private {
+        bool native_columnar;
+        int select_calls;
+        int select_columnar_calls;
+    }
+
+    constructor(bool native_columnar) {
+        self.native_columnar = native_columnar;
+        select_calls = 0;
+        select_columnar_calls = 0;
+    }
+
+    int getCapabilities() {
+        return native_columnar ? DBI_CAP_HAS_COLUMNAR_SELECT : 0;
+    }
+
+    auto select(string sql, ...) {
+        ++select_calls;
+        return {"id": (1, 2), "name": ("Ada", "Bo")};
+    }
+
+    auto selectColumnar(string sql, ...) {
+        ++select_columnar_calls;
+        return ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "name": ("Ada", "Bo"),
+        });
+    }
+
+    int selectCalls() {
+        return select_calls;
+    }
+
+    int selectColumnarCalls() {
+        return select_columnar_calls;
+    }
+}
 
 class DataFrameTest inherits QUnit::Test {
     constructor() : Test("DataFrameTest", "1.0") {
@@ -27,6 +69,8 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("typeInferenceTest", \typeInferenceTest());
         addTestCase("metadataTest", \metadataTest());
         addTestCase("accessTest", \accessTest());
+        addTestCase("pluginOperatorTest", \pluginOperatorTest());
+        addTestCase("denseBufferColumnTest", \denseBufferColumnTest());
         addTestCase("roundTripTest", \roundTripTest());
         addTestCase("mutationTest", \mutationTest());
         addTestCase("describeTest", \describeTest());
@@ -36,14 +80,23 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("selectTest", \selectTest());
         addTestCase("filterTest", \filterTest());
         addTestCase("sortByTest", \sortByTest());
+        addTestCase("horizontalConcatTest", \horizontalConcatTest());
+        addTestCase("takeRowsTest", \takeRowsTest());
+        addTestCase("columnarResultFilterTest", \columnarResultFilterTest());
         addTestCase("fillnaDropnaTest", \fillnaDropnaTest());
+        addTestCase("valueCountsTest", \valueCountsTest());
         addTestCase("csvReadTest", \csvReadTest());
         addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
+        addTestCase("dbQueryDispatchTest", \dbQueryDispatchTest());
         addTestCase("dbQueryTest", \dbQueryTest());
         addTestCase("mlIntegrationTest", \mlIntegrationTest());
         addTestCase("parquetTest", \parquetTest());
+        addTestCase("arrowIpcTest", \arrowIpcTest());
         addTestCase("dataProviderTest", \dataProviderTest());
+        addTestCase("dataProviderPipelineShapeTest", \dataProviderPipelineShapeTest());
+        addTestCase("dataProviderDpqlShapeTest", \dataProviderDpqlShapeTest());
+        addTestCase("bufferColumnsPipelineShapeTest", \bufferColumnsPipelineShapeTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
@@ -95,6 +148,16 @@ sub typed_dataframe_api() {
     DataFrame::DataFrame filled = df.fillna(0);
     DataFrame::DataFrame clean = df.dropna();
     DataFrame::DataFrame with_col = df.withColumn(\"b\", (3, 4));
+    buffer<int64> dense = df.getColumnBuffer(\"a\");
+    auto columnar = df.toColumnarResult();
+    DataFrame::DataFrame from_columnar = DataFrame::DataFrame::fromColumnarResult(columnar);
+    DataFrame::DataFrame concatenated = DataFrame::DataFrame::concat((df, from_columnar));
+    DataFrame::RowMask positive = df.column(\"a\") > 0;
+    DataFrame::RowMask selected_mask = positive & (df.column(\"a\") != 2);
+    DataFrame::RowMask either_mask = selected_mask | (df.column(\"a\") == 2);
+    DataFrame::RowMask changed_mask = either_mask ^ selected_mask;
+    DataFrame::RowMask inverted_mask = ~changed_mask;
+    DataFrame::DataFrame masked = df.filter(inverted_mask);
     DataFrame::GroupedDataFrame grouped = df.groupBy((\"a\",));
     DataFrame::DataFrame counts = grouped.count();
     list<hash<DataFrame::ColumnStats>> stats = df.describe();
@@ -178,6 +241,128 @@ sub invalid_dataframe_api() {
         hash<auto> row = df.getRow(1);
         assertEq(20, row.a, "getRow a");
         assertEq("y", row.b, "getRow b");
+    }
+
+    pluginOperatorTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"id": 1, "name": "Alice", "score": 95.5},
+             {"id": 2, "name": "Bob",   "score": 88.0},
+             {"id": 3, "name": "Carol", "score": 92.0},
+             {"id": 4, "name": "Dave",  "score": 79.0}));
+
+        assertEq((1, 2, 3, 4), df["id"], "string subscript returns a column");
+        hash<auto> row = df[2];
+        assertEq("Carol", row.name, "integer subscript returns a row");
+        assertEq(92.0, row.score, "integer subscript preserves row values");
+
+        DataFrame::DataFrame middle = df[1..2];
+        assertEq(2, middle.numRows(), "range subscript returns a DataFrame");
+        assertEq(("Bob", "Carol"), middle["name"], "range subscript keeps inclusive order");
+
+        DataFrame::DataFrame reverse = df[2..1];
+        assertEq(("Carol", "Bob"), reverse["name"], "reverse range subscript is supported");
+
+        assertEq(("Alice", "Bob"), df[..1]["name"], "open-start range subscript is supported");
+        assertEq(("Carol", "Dave"), df[2..]["name"], "open-end range subscript is supported");
+        assertEq(0, df[99..100].numRows(), "range subscript outside row bounds is empty");
+
+        DataFrame::ColumnRef score = df.column("score");
+        assertEq("score", score.name(), "column() returns a named ColumnRef");
+        assertEq((95.5, 88.0, 92.0, 79.0), score.values(), "ColumnRef values() returns the source column");
+
+        DataFrame::RowMask high_scores = score >= 90.0;
+        assertEq((True, False, True, False), high_scores.toList(), "ColumnRef comparison returns a RowMask");
+        assertEq(4, high_scores.size(), "RowMask size tracks DataFrame rows");
+        assertEq(2, high_scores.count(), "RowMask count tracks selected rows");
+        assertEq(("Alice", "Carol"), df[high_scores]["name"], "RowMask subscript filters rows");
+
+        DataFrame::DataFrame bob = df.filter(df.column("name") == "Bob");
+        assertEq((2,), bob["id"], "filter(RowMask) accepts equality predicates");
+
+        DataFrame::RowMask not_bob = df.column("name") != "Bob";
+        assertEq((True, False, True, True), not_bob.toList(), "not-equals predicates are supported");
+
+        DataFrame::RowMask current = df.column("id") <= 3;
+        DataFrame::RowMask high_and_current = high_scores & current;
+        assertEq((True, False, True, False), high_and_current.toList(), "RowMask & intersects predicates");
+        assertEq(("Alice", "Carol"), df[high_and_current]["name"], "RowMask & filters once with a composite mask");
+
+        DataFrame::RowMask low_scores = score < 90.0;
+        DataFrame::RowMask low_or_carol = low_scores | (df.column("name") == "Carol");
+        assertEq((False, True, True, True), low_or_carol.toList(), "RowMask | unions predicates");
+
+        DataFrame::RowMask high_xor_carol = high_scores ^ (df.column("name") == "Carol");
+        assertEq((True, False, False, False), high_xor_carol.toList(), "RowMask ^ selects exactly one predicate");
+
+        DataFrame::RowMask not_high = ~high_scores;
+        assertEq((False, True, False, True), not_high.toList(), "RowMask ~ inverts predicates");
+        DataFrame::RowMask explicit_mask((True, False, True, False));
+        assertEq(("Alice", "Carol"), df[explicit_mask]["name"],
+            "RowMask constructor accepts explicit boolean masks");
+
+        assertEq(high_and_current.toList(), high_scores.intersect(current).toList(),
+            "RowMask intersect() matches &");
+        assertEq(low_or_carol.toList(), low_scores.unionWith(df.column("name") == "Carol").toList(),
+            "RowMask unionWith() matches |");
+        assertEq(high_xor_carol.toList(), high_scores.symmetricDifference(df.column("name") == "Carol").toList(),
+            "RowMask symmetricDifference() matches ^");
+        assertEq(not_high.toList(), high_scores.invert().toList(), "RowMask invert() matches ~");
+
+        DataFrame::DataFrame short_df(({"id": 1}, {"id": 2}));
+        assertThrows("DATAFRAME-ROWMASK-ERROR", \high_scores.intersect(), (short_df.column("id") > 0,),
+            "mismatched RowMask lengths are rejected");
+
+        DataFrame::DataFrame missing(
+            ({"id": 1, "value": 10},
+             {"id": 2, "value": NOTHING},
+             {"id": 3, "value": 20}));
+        assertEq((2,), missing[missing.column("value") == NOTHING]["id"], "NOTHING equality matches null rows");
+        assertEq((1, 3), missing[missing.column("value") != NOTHING]["id"], "NOTHING inequality excludes null rows");
+    }
+
+    denseBufferColumnTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        buffer<int64> ids = new buffer<int64>((1001, 1002, 1003));
+        buffer<float64> scores = new buffer<float64>((95.5, 88.0, 92.0));
+        buffer<*string> names = new buffer<*string>(("Alice", "Bob", "Carol"));
+        DataFrame::DataFrame df({"id": ids, "score": scores, "name": names});
+
+        assertEq((1001, 1002, 1003), df.getColumn("id"), "buffer constructor preserves column values");
+        assertEq((1001, 1002, 1003), df.getColumnBuffer("id").toList(),
+            "getColumnBuffer returns dense integer values");
+        assertEq((95.5, 88.0, 92.0), df.getColumnBuffer("score").toList(),
+            "getColumnBuffer returns dense float values");
+        assertEq(("Alice", "Bob", "Carol"), df.getColumnBuffer("name").toList(),
+            "getColumnBuffer returns dense string values");
+        assertEq(("Bob", "Carol"), names.view(start: 1, count: 2).toList(),
+            "buffer<string> views preserve offsets");
+        names[1] = "Bobby";
+        assertEq(("Alice", "Bob", "Carol"), df.getColumnBuffer("name").toList(),
+            "buffer-backed string DataFrame columns follow buffer copy-on-write semantics");
+        ids[0] = 9999;
+        assertEq((1001, 1002, 1003), df.getColumnBuffer("id").toList(),
+            "buffer-backed DataFrame columns follow buffer copy-on-write semantics");
+        DataFrame::DataFrame filtered_df = df.filter(df.column("id").compare(">=", 1002));
+        assertEq((1002, 1003), filtered_df.getColumnBuffer("id").toList(),
+            "filtered buffer-backed DataFrame columns remain dense");
+
+        auto result = df.toColumnarResult();
+        assertEq("ColumnarResult", result.className(), "toColumnarResult returns a ColumnarResult");
+        assertEq((1001, 1002, 1003), result.getColumn("id").toList(),
+            "ColumnarResult preserves dense integer column");
+        assertEq(("Alice", "Bob", "Carol"), result.getColumn("name").toList(),
+            "ColumnarResult preserves dense string column");
+
+        DataFrame::DataFrame roundtrip = DataFrame::DataFrame::fromColumnarResult(result);
+        assertEq((1001, 1002, 1003), roundtrip.getColumnBuffer("id").toList(),
+            "fromColumnarResult preserves dense columns");
+        assertEq(("Alice", "Bob", "Carol"), roundtrip.getColumnBuffer("name").toList(),
+            "fromColumnarResult preserves dense string columns");
     }
 
     roundTripTest() {
@@ -283,6 +468,12 @@ sub invalid_dataframe_api() {
         # Default head/tail (5 rows, but only 5 available)
         auto h5 = df.head();
         assertEq(5, h5.numRows(), "head() default 5");
+
+        DataFrame::DataFrame dense_df({"v": new buffer<int64>((1, 2, 3, 4, 5))});
+        assertEq((1, 2), dense_df.head(2).getColumnBuffer("v").toList(),
+            "head() preserves dense buffer-backed columns");
+        assertEq((2, 3, 4), dense_df.slice(1, 4).getColumnBuffer("v").toList(),
+            "slice() preserves dense buffer-backed columns");
     }
 
     nullHandlingTest() {
@@ -353,6 +544,13 @@ sub invalid_dataframe_api() {
         # "Carol" and "Dave" contain lowercase 'a'
         assertEq(2, has_a.numRows(), "filter contains");
 
+        auto selected_names = df.filter("name", "in", ("Alice", "Dave"));
+        assertEq((30, 28), selected_names.getColumn("age"),
+            "filter in selects string list values");
+        auto excluded_ages = df.filter("age", "not_in", (25, 35));
+        assertEq(("Alice", "Dave"), excluded_ages.getColumn("name"),
+            "filter not_in excludes numeric list values");
+
         # No matches
         auto none = df.filter("age", ">", 100);
         assertEq(0, none.numRows(), "filter no matches");
@@ -366,6 +564,11 @@ sub invalid_dataframe_api() {
         assertEq(1, nulls.numRows(), "filter is_null");
         auto non_nulls = df2.filter("a", "not_null", 0);
         assertEq(2, non_nulls.numRows(), "filter not_null");
+        auto in_nulls = df2.filter("a", "in", (NOTHING, 3));
+        assertEq((NOTHING, 3), in_nulls.getColumn("a"),
+            "filter in can match null and scalar list values");
+        assertThrows("DATAFRAME-FILTER-ERROR", \df.filter(), ("age", "in", 30),
+            "filter in requires a list value");
     }
 
     sortByTest() {
@@ -392,6 +595,113 @@ sub invalid_dataframe_api() {
         assertEq(("Alice", "Bob", "Carol"), alpha.getColumn("name"), "sort string");
     }
 
+    horizontalConcatTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame left({"id": new buffer<int64>((1, 2, 3)), "name": ("Ada", "Bo", "Cy")});
+        DataFrame::DataFrame right({"score": new buffer<float64>((90.0, 80.0, 70.0)), "active": (True, False, True)});
+
+        DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), 1);
+        assertEq(3, combined.numRows(), "horizontal concat preserves row count");
+        assertEq(("id", "name", "score", "active"), combined.columnNames(),
+            "horizontal concat preserves column order");
+        assertEq((1, 2, 3), combined.getColumnBuffer("id").toList(),
+            "horizontal concat preserves dense left columns");
+        assertEq((90.0, 80.0, 70.0), combined.getColumnBuffer("score").toList(),
+            "horizontal concat preserves dense right columns");
+
+        DataFrame::DataFrame short({"other": (1, 2)});
+        assertThrows("DATAFRAME-ERROR", sub () {
+            auto ignored = DataFrame::DataFrame::concat((left, short), 1);
+        }, NOTHING,
+            "horizontal concat rejects row-count mismatch");
+
+        DataFrame::DataFrame duplicate({"id": (4, 5, 6)});
+        assertThrows("DATAFRAME-COLUMN-ERROR", sub () {
+            auto ignored = DataFrame::DataFrame::concat((left, duplicate), 1);
+        }, NOTHING,
+            "horizontal concat rejects duplicate column names");
+    }
+
+    columnarResultFilterTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "segment": new buffer<int64>((1, 1, 2, 2)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+            "code": ("A1", "B2", "C1", "D4"),
+        });
+
+        auto result = df.toColumnarResult();
+        auto filtered = result.filter(result.getColumn("amount") >= 125.0);
+        assertEq((2, 3, 4), filtered.getColumn("id").toList(),
+            "ColumnarResult::filter accepts dense boolean masks");
+        assertEq(("Bob", "Carol", "Dave"), filtered.getColumn("name").toList(),
+            "ColumnarResult::filter preserves dense string columns");
+
+        auto amount_mask = result.getColumn("amount") >= 125.0;
+        auto not_carol = result.getColumn("id") != 3;
+        auto combined = result.combineMasks(amount_mask, not_carol, "&&");
+        assertEq("buffer<bool>", combined.fullType(), "ColumnarResult::combineMasks returns a dense mask");
+        assertEq((2, 4), result.filter(combined).getColumn("id").toList(),
+            "ColumnarResult::combineMasks intersects dense masks");
+        assertEq((1,), result.filter(result.invertMask(amount_mask)).getColumn("id").toList(),
+            "ColumnarResult::invertMask inverts dense masks");
+
+        DataFrame::DataFrame nullable_df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "optional_id": new buffer<*int64>((10, NOTHING, 30, NOTHING)),
+        });
+        auto nullable_result = nullable_df.toColumnarResult();
+        assertEq((2, 4), nullable_result.filter(nullable_result.nullMask("optional_id")).getColumn("id").toList(),
+            "ColumnarResult::nullMask selects null dense-buffer rows");
+        assertEq((1, 3), nullable_result.filter(nullable_result.nullMask("optional_id", True)).getColumn("id").toList(),
+            "ColumnarResult::nullMask can select non-null dense-buffer rows");
+        assertEq((1, 3, 4), result.filter(result.stringPredicateMask("name", "contains", "a", True)).getColumn("id").toList(),
+            "ColumnarResult::stringPredicateMask selects matching string rows");
+        assertEq((1, 3), result.filter(result.stringPredicateMask("code", "contains", 1)).getColumn("id").toList(),
+            "ColumnarResult::stringPredicateMask converts predicate values with softstring rules");
+
+        assertThrows("COLUMNAR-RESULT-ERROR", \result.filter(), (new buffer<int64>((1, 0, 1, 0)),),
+            "ColumnarResult::filter rejects non-boolean buffers as masks");
+    }
+
+    takeRowsTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+        });
+
+        DataFrame::DataFrame ranked = df.takeRows((3, 0, 2, 2));
+        assertEq((4, 1, 3, 3), ranked.getColumnBuffer("id").toList(),
+            "DataFrame::takeRows preserves requested row order and duplicates");
+        assertEq("buffer<float64>", ranked.getColumnBuffer("amount").fullType(),
+            "DataFrame::takeRows preserves dense buffer columns");
+        assertEq(("Dave", "Alice", "Carol", "Carol"), ranked.getColumn("name"));
+
+        ColumnarResult columns = df.toColumnarResult();
+        ColumnarResult selected = columns.take((2, 0));
+        assertEq((3, 1), selected.getColumn("id").toList(),
+            "ColumnarResult::take preserves requested row order");
+        assertEq("buffer<int64>", selected.getColumn("id").fullType(),
+            "ColumnarResult::take preserves dense integer buffers");
+        assertEq(("Carol", "Alice"), selected.getColumn("name").toList(),
+            "ColumnarResult::take preserves string columns");
+
+        assertThrows("DATAFRAME-RANGE-ERROR", \df.takeRows(), ((4,),),
+            "DataFrame::takeRows rejects out-of-range rows");
+        assertThrows("COLUMNAR-RESULT-ERROR", \columns.take(), ((-1,),),
+            "ColumnarResult::take rejects negative rows");
+    }
+
     fillnaDropnaTest() {
 %ifdef NoDataFrame
         testSkip("dataframe module not available");
@@ -412,6 +722,49 @@ sub invalid_dataframe_api() {
         assertEq(1, dropped.numRows(), "dropna keeps only complete rows");
         assertEq(1, dropped.getColumn("a")[0], "dropna correct row");
         assertEq("x", dropped.getColumn("b")[0], "dropna correct row value");
+    }
+
+    valueCountsTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df({
+            "region": ("north", "south", "north", "west", "south", "south", NOTHING),
+            "score": (10.0, 20.0, 10.0, 30.0, 20.0, 20.0, NOTHING),
+            "flag": (True, False, True, True, False, False, NOTHING),
+        });
+
+        DataFrame::DataFrame counts = df.valueCounts("region");
+        assertEq(("north", "south", "west"), counts.getColumn("region"),
+            "valueCounts excludes nulls by default");
+        assertEq((2, 3, 1), counts.getColumn("count"),
+            "valueCounts preserves first-seen order by default");
+
+        DataFrame::DataFrame sorted_counts = df.valueCounts("region", sort_desc: True);
+        assertEq(("south", "north", "west"), sorted_counts.getColumn("region"),
+            "valueCounts can sort by descending count");
+        assertEq((3, 2, 1), sorted_counts.getColumn("count"),
+            "valueCounts sorted counts are correct");
+
+        DataFrame::DataFrame with_null = df.valueCounts("region", dropna: False, count_name: "n");
+        assertEq(4, with_null.numRows(), "valueCounts can include nulls");
+        assertEq((2, 3, 1, 1), with_null.getColumn("n"),
+            "valueCounts counts null values when requested");
+
+        assertEq(3, df.nunique("region"), "nunique excludes nulls by default");
+        assertEq(4, df.nunique("region", dropna: False), "nunique can include nulls");
+        assertEq(3, df.nunique("score"), "nunique handles numeric columns");
+        assertEq(2, df.nunique("flag"), "nunique handles bool columns");
+        DataFrame::DataFrame flag_counts = df.valueCounts("flag");
+        assertEq((True, False), flag_counts.getColumn("flag"),
+            "valueCounts preserves first-seen order for bool columns");
+
+        DataFrame::DataFrame count_name_df({"count": ("a", "a", "b")});
+        DataFrame::DataFrame count_name_counts = count_name_df.valueCounts("count");
+        assertEq(("count", "value_count"), count_name_counts.columnNames(),
+            "valueCounts avoids duplicate default count column names");
+        assertEq((2, 1), count_name_counts.getColumn("value_count"),
+            "valueCounts duplicate-name fallback counts correctly");
     }
 
     errorCasesTest() {
@@ -724,9 +1077,1191 @@ sub invalid_dataframe_api() {
         }
         assertEq(2, count, "comparison filter returns 2 records");
 
+        assertTrue(prov.supportsSearchExpressions(), "DataFrame provider supports DPQL search expressions");
+
+        # Search with a DPQL expression string
+        auto dpql_it = prov.searchRecords('@score >= 90 && @age >= 30');
+        list<string> dpql_names();
+        while (dpql_it.next()) {
+            push dpql_names, dpql_it.getValue().name;
+        }
+        assertEq(("Alice", "Carol"), dpql_names, "DataFrame provider filters row search with DPQL");
+
+        # Bulk DPQL searches preserve DataFrameBlock shape
+        AbstractDataProviderBulkRecordInterface dpql_bulk = prov.searchRecordsBulk(10, '@score >= 90');
+        assertEq(DataProviderShape::DataFrameBlock, dpql_bulk.getValueShape(),
+            "DataFrame provider DPQL bulk search advertises DataFrameBlock shape");
+        DataFrame::DataFrame dpql_block = dpql_bulk.getShapedValue();
+        assertEq(("Alice", "Carol"), dpql_block.getColumn("name"),
+            "DataFrame provider DPQL bulk search filters DataFrame blocks");
+        assertNothing(dpql_bulk.getShapedValue(), "DataFrame provider DPQL bulk search ends after matching block");
+
         # Get DataFrame back from provider
         DataFrame::DataFrame df2 = prov.getDataFrame();
         assertEq(3, df2.numRows(), "getDataFrame preserves rows");
+    }
+
+    dataProviderPipelineShapeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "status": "active", "amount": 90},
+             {"name": "Bob", "status": "inactive", "amount": 220},
+             {"name": "Carol", "status": "active", "amount": 180},
+             {"name": "Dave", "status": "active", "amount": 125}));
+
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(df),
+            "DataFrame values are detected as DataFrameBlock shape");
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(df, DataProviderShape::DataFrameBlock),
+            "DataFrameBlock record count uses DataFrame rows");
+
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+                },
+                <DataProviderExpression>{
+                    "exp": ">",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 100),
+                },
+            ),
+        };
+
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+        assertTrue(proc.supportsInputShape(DataProviderShape::DataFrameBlock),
+            "filter processor supports DataFrameBlock input");
+
+        DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(2, filtered.numRows(), "DataFrameBlock filter keeps matching rows");
+        assertEq(("Carol", "Dave"), filtered.getColumn("name"), "DataFrameBlock filter preserves row order");
+
+        hash<DataProviderExpression> parsed_expr = DataProvider::parseDpqlExpression(
+            '@status == "active" && @amount > 100');
+        QoreFilterRecordsProcessor parsed_proc({"where_cond": parsed_expr});
+        DataFrame::DataFrame parsed_filtered = parsed_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), parsed_filtered.getColumn("name"),
+            "DataFrameBlock filter accepts parsed DPQL expressions");
+
+        QoreFilterRecordsProcessor dpql_proc({
+            "dpql_where": '@status in ("active", "pending") && @amount between 100 and 200',
+        });
+        DataFrame::DataFrame dpql_filtered = dpql_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), dpql_filtered.getColumn("name"),
+            "DataFrameBlock filter parses DPQL strings directly");
+
+        QoreFilterRecordsProcessor where_string_proc({
+            "where_cond": '@status == "active" && @amount > 100',
+        });
+        DataFrame::DataFrame where_string_filtered = where_string_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), where_string_filtered.getColumn("name"),
+            "DataFrameBlock filter accepts DPQL strings in where_cond");
+
+        QoreFilterRecordsProcessor contains_proc({
+            "dpql_where": 'contains(@name, "a") && @status == "active"',
+        });
+        DataFrame::DataFrame contains_filtered = contains_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), contains_filtered.getColumn("name"),
+            "DataFrameBlock filter applies DPQL string operators");
+
+        QoreFilterRecordsProcessor icase_string_proc({
+            "dpql_where": 'contains(@name, "AL", true) || @name like "D%"',
+        });
+        DataFrame::DataFrame icase_string_filtered = icase_string_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Dave"), icase_string_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports case-insensitive strings and LIKE masks");
+
+        QoreFilterRecordsProcessor regex_proc({
+            "dpql_where": '@name !~ /^(A|B)/',
+        });
+        DataFrame::DataFrame regex_filtered = regex_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), regex_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports regex masks");
+
+        QoreFilterRecordsProcessor string_or_proc({
+            "dpql_where": 'contains(@name, "a") || @amount > 200',
+        });
+        DataFrame::DataFrame string_or_filtered = string_or_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Bob", "Carol", "Dave"), string_or_filtered.getColumn("name"),
+            "DataFrameBlock vectorized string predicates compose with OR masks");
+
+        QoreFilterRecordsProcessor string_not_proc({
+            "dpql_where": '!contains(@name, "a")',
+        });
+        DataFrame::DataFrame string_not_filtered = string_not_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Bob"), string_not_filtered.getColumn("name"),
+            "DataFrameBlock vectorized string predicates compose with NOT masks");
+
+        QoreFilterRecordsProcessor contains_any_proc({
+            "dpql_where": 'containsAny(@name, "li", "av")',
+        });
+        DataFrame::DataFrame contains_any_filtered = contains_any_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Dave"), contains_any_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports containsAny string masks");
+
+        DataFrame::DataFrame nested_df(
+            ({"name": "Alice", "amount": 90, "tags": ("vip", "active"), "scores": (95, 91),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"name": "Bob", "amount": 220, "tags": ("trial",), "scores": (88, 84),
+                "payload": {"region": "US", "tier": "silver"}},
+             {"name": "Carol", "amount": 180, "tags": ("vip", "closed"), "scores": (92, 90),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"name": "Dave", "amount": 125, "tags": ("standard",), "scores": (85, 86),
+                "payload": {"region": "APAC", "tier": "bronze"}}));
+
+        QoreFilterRecordsProcessor list_contains_proc({
+            "dpql_where": 'listContains(@tags, "vip")',
+        });
+        DataFrame::DataFrame list_contains_filtered = list_contains_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), list_contains_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports listContains predicates");
+
+        QoreFilterRecordsProcessor list_contains_any_proc({
+            "dpql_where": 'listContainsAny(@tags, "trial", "standard")',
+        });
+        DataFrame::DataFrame list_contains_any_filtered = list_contains_any_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Bob", "Dave"), list_contains_any_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports listContainsAny predicates");
+
+        QoreFilterRecordsProcessor index_proc({
+            "dpql_where": '@scores[0] >= 90',
+        });
+        DataFrame::DataFrame index_filtered = index_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), index_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports list index accessors");
+
+        hash<DataProviderExpression> slice_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_FUNC_SLICE,
+                    "args": (
+                        <DataProviderFieldReference>{"field": "scores"},
+                        <DataProviderRangeSpec>{"start": 0, "end": 1}
+                    ),
+                },
+                (95, 91)
+            ),
+        };
+        QoreFilterRecordsProcessor slice_proc({"where_cond": slice_expr});
+        DataFrame::DataFrame slice_filtered = slice_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice",), slice_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports list slice accessors");
+
+        QoreFilterRecordsProcessor key_proc({
+            "dpql_where": '@payload{region} == "EU"',
+        });
+        DataFrame::DataFrame key_filtered = key_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), key_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports hash key accessors");
+
+        hash<DataProviderExpression> ternary_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_OP_TERNARY,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_GE,
+                            "args": (<DataProviderFieldReference>{"field": "amount"}, 150),
+                        },
+                        "large",
+                        "small"
+                    ),
+                },
+                "large"
+            ),
+        };
+        QoreFilterRecordsProcessor ternary_proc({"where_cond": ternary_expr});
+        DataFrame::DataFrame ternary_filtered = ternary_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Bob", "Carol"), ternary_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports ternary computed values");
+
+        hash<DataProviderExpression> between_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_BETWEEN,
+            "args": (<DataProviderFieldReference>{"field": "amount"}, 100, 200),
+        };
+        QoreFilterRecordsProcessor between_proc({"where_cond": between_expr});
+        DataFrame::DataFrame between_filtered = between_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), between_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports between masks");
+
+        hash<DataProviderExpression> in_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+        };
+        QoreFilterRecordsProcessor in_proc({"where_cond": in_expr});
+        DataFrame::DataFrame in_filtered = in_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol", "Dave"), in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports in masks");
+
+        hash<DataProviderExpression> list_in_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, ("active", "pending")),
+        };
+        QoreFilterRecordsProcessor list_in_proc({"where_cond": list_in_expr});
+        DataFrame::DataFrame list_in_filtered = list_in_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol", "Dave"), list_in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports list-valued in masks");
+
+        hash<DataProviderExpression> not_in_expr = <DataProviderExpression>{
+            "exp": DP_OP_NOT_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, "inactive"),
+        };
+        QoreFilterRecordsProcessor not_in_proc({"where_cond": not_in_expr});
+        DataFrame::DataFrame not_in_filtered = not_in_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol", "Dave"), not_in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports not-in masks");
+
+        QoreFilterRecordsProcessor computed_between_proc({
+            "dpql_where": '@amount + 10 between 130 and 200',
+        });
+        DataFrame::DataFrame computed_between_filtered = computed_between_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), computed_between_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports computed between masks");
+
+        hash<DataProviderExpression> computed_in_strict_expr = <DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_IN,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_TO_LOWER,
+                            "args": (<DataProviderFieldReference>{"field": "status"},),
+                        },
+                        "active"
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_OP_ABSOLUTE_NE,
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 90),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor computed_in_proc({"where_cond": computed_in_strict_expr});
+        DataFrame::DataFrame computed_in_filtered = computed_in_proc.processRecordsShape(df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Carol", "Dave"), computed_in_filtered.getColumn("name"),
+            "DataFrameBlock vectorized filter supports computed in and structured strict inequality masks");
+
+        hash<DataProviderExpression> fallback_expr = <DataProviderExpression>{
+            "exp": "||",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "inactive"),
+                },
+                <DataProviderExpression>{
+                    "exp": "<",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 100),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor fallback_proc({"where_cond": fallback_expr});
+        DataFrame::DataFrame fallback_filtered = fallback_proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(2, fallback_filtered.numRows(), "DataFrameBlock filter fallback keeps matching rows");
+        assertEq(("Alice", "Bob"), fallback_filtered.getColumn("name"),
+            "DataFrameBlock filter fallback preserves runtime DataFrame class");
+
+        QoreGroupByProcessor grouper({
+            "group_by": "status",
+            "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
+        });
+        assertTrue(grouper.supportsInputShape(DataProviderShape::DataFrameBlock),
+            "group-by processor supports DataFrameBlock input");
+        assertNothing(grouper.processRecordsShape(df, DataProviderShape::DataFrameBlock),
+            "DataFrameBlock group-by accumulates without immediate output");
+        *list<auto> grouped_blocks = grouper.flushAndCollect();
+        assertEq(1, grouped_blocks.size(), "DataFrameBlock group-by flush emits one shaped block");
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(grouped_blocks[0]),
+            "DataFrameBlock group-by preserves DataFrame shape on pipeline flush");
+        auto grouped_df = grouped_blocks[0].sortBy(("status",));
+        assertEq(("active", "inactive"), grouped_df.getColumn("status"),
+            "DataFrameBlock group-by keeps group fields");
+        assertEq((3, 1), grouped_df.getColumn("orders"), "DataFrameBlock group-by counts records");
+        assertEq((395.0, 220.0), grouped_df.getColumn("total"), "DataFrameBlock group-by computes sums");
+        assertFloatEq(395.0 / 3.0, grouped_df.getColumn("avg_amount")[0], 1e-10,
+            "DataFrameBlock group-by computes averages with native DataFrame mean");
+        assertFloatEq(220.0, grouped_df.getColumn("avg_amount")[1], 1e-10,
+            "DataFrameBlock group-by computes averages with native DataFrame mean");
+
+        QoreGroupByProcessor multi_grouper({
+            "group_by": "status",
+            "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
+        });
+        DataFrame::DataFrame first_group_block({
+            "status": ("active", "inactive"),
+            "amount": (90.0, 220.0),
+        });
+        DataFrame::DataFrame second_group_block({
+            "status": ("active", "active"),
+            "amount": (125.0, 180.0),
+        });
+        assertNothing(multi_grouper.processRecordsShape(first_group_block, DataProviderShape::DataFrameBlock),
+            "first native-compatible DataFrameBlock group-by block is deferred");
+        assertNothing(multi_grouper.processRecordsShape(second_group_block, DataProviderShape::DataFrameBlock),
+            "second native-compatible DataFrameBlock group-by block deopts without losing the first block");
+        *list<auto> multi_grouped_blocks = multi_grouper.flushAndCollect();
+        assertEq(1, multi_grouped_blocks.size(), "multi-block DataFrameBlock group-by flush emits one block");
+        auto multi_grouped_df = multi_grouped_blocks[0].sortBy(("status",));
+        assertEq(("active", "inactive"), multi_grouped_df.getColumn("status"),
+            "multi-block DataFrameBlock group-by keeps group fields");
+        assertEq((3, 1), multi_grouped_df.getColumn("orders"),
+            "multi-block DataFrameBlock group-by counts records from all blocks");
+        assertEq((395.0, 220.0), multi_grouped_df.getColumn("total"),
+            "multi-block DataFrameBlock group-by sums records from all blocks");
+        assertFloatEq(395.0 / 3.0, multi_grouped_df.getColumn("avg_amount")[0], 1e-10,
+            "multi-block DataFrameBlock group-by averages records from all blocks");
+
+        DataFrame::DataFrame corr_df({
+            "id": new buffer<int64>((1, 2, 3)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0)),
+        });
+        QoreCorrelationProcessor df_corr_flush({"fields": "id,amount", "window_size": 10});
+        assertNothing(df_corr_flush.processRecordsShape(corr_df, DataProviderShape::DataFrameBlock),
+            "DataFrameBlock correlation buffers partial windows");
+        *list<auto> df_corr_flush_blocks = df_corr_flush.flushAndCollect();
+        assertEq(1, df_corr_flush_blocks.size(), "DataFrameBlock correlation flush emits one shaped block");
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(df_corr_flush_blocks[0]),
+            "DataFrameBlock correlation flush preserves DataFrame shape");
+        assertEq(("correlation",), df_corr_flush_blocks[0].getColumn("event_type"),
+            "DataFrameBlock correlation flush emits event values");
+
+        list<auto> callback_rows;
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "dataframe-shape-pipeline-test",
+            "output_callback": sub (auto row) {
+                push callback_rows, row;
+            },
+        });
+        pipe.append(proc);
+        pipe.submit(df);
+        pipe.waitDone();
+
+        assertEq(2, callback_rows.size(), "pipeline callback emits DataFrame rows");
+        assertEq("Carol", callback_rows[0].name, "pipeline preserves first matching DataFrame row");
+        assertEq("Dave", callback_rows[1].name, "pipeline preserves second matching DataFrame row");
+        assertEq(4, pipe.getInfo().record_count, "pipeline counts DataFrame input rows");
+        assertTrue(pipe.getInfo().bulk, "DataFrame input keeps pipeline in bulk mode");
+
+        list<auto> grouped_callback_rows;
+        DataProviderPipeline grouped_pipe(<PipelineOptionInfo>{
+            "name": "dataframe-shape-filter-group-test",
+            "output_callback": sub (auto row) {
+                push grouped_callback_rows, row;
+            },
+        });
+        grouped_pipe.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+        grouped_pipe.append(new QoreGroupByProcessor({
+            "group_by": "status",
+            "aggregates": "orders=count(),total=sum(amount)",
+        }));
+        grouped_pipe.submit(df);
+        grouped_pipe.waitDone();
+
+        assertEq(1, grouped_callback_rows.size(), "filter -> group-by pipeline emits one aggregate row");
+        assertEq("active", grouped_callback_rows[0].status, "filter -> group-by preserves group value");
+        assertEq(2, grouped_callback_rows[0].orders, "filter -> group-by counts filtered rows");
+        assertEq(305.0, grouped_callback_rows[0].total, "filter -> group-by sums filtered rows");
+        assertEq(4, grouped_pipe.getInfo().record_count,
+            "filter -> group-by pipeline counts DataFrame input rows");
+        assertTrue(grouped_pipe.getInfo().bulk, "filter -> group-by pipeline stays in bulk mode");
+
+        DataProviderDataFrame::DataFrameDataProvider prov(df);
+        assertEqSoft((DataProviderShape::DataFrameBlock, DataProviderShape::HashOfLists), prov.getBulkReadShapes(),
+            "DataFrame provider advertises native DataFrame bulk read support");
+        assertTrue(prov.supportsBulkReadShape(DataProviderShape::DataFrameBlock),
+            "DataFrame provider reports DataFrameBlock bulk read support");
+        assertTrue(prov.supportsBulkReadShape(DataProviderShape::HashOfLists),
+            "DataFrame provider keeps hash-of-lists compatibility support");
+
+        AbstractDataProviderBulkRecordInterface shaped_bulk = prov.searchRecordsBulk(3);
+        assertEq(DataProviderShape::DataFrameBlock, shaped_bulk.getValueShape(),
+            "DataFrame provider bulk iterator advertises DataFrameBlock shape");
+        *auto shaped_block = shaped_bulk.getShapedValue();
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(shaped_block),
+            "DataFrame provider shaped bulk iterator returns a DataFrame block");
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(shaped_block, DataProviderShape::DataFrameBlock),
+            "DataFrame provider shaped bulk block preserves row count");
+        assertEq(("Alice", "Bob", "Carol"), shaped_block.toColumnHash().name,
+            "DataFrame provider shaped bulk block preserves values");
+
+        AbstractDataProviderBulkRecordInterface bulk = prov.searchRecordsBulk(2);
+        assertEq({"name": ("Alice", "Bob"), "status": ("active", "inactive"), "amount": (90, 220)},
+            bulk.getValue(), "DataFrame provider returns first bulk block");
+        assertEq({"name": ("Carol", "Dave"), "status": ("active", "active"), "amount": (180, 125)},
+            bulk.getValue(), "DataFrame provider returns second bulk block");
+        assertNothing(bulk.getValue(), "DataFrame provider bulk iterator ends after all rows");
+        assertEq(4, bulk.getRecordCount(), "DataFrame provider bulk iterator counts rows");
+
+        AbstractDataProviderBulkRecordInterface active_bulk = prov.searchRecordsBulk(10, {"status": "active"});
+        assertEq({"name": ("Alice", "Carol", "Dave"), "status": ("active", "active", "active"),
+            "amount": (90, 180, 125)}, active_bulk.getValue(), "DataFrame provider filters bulk blocks");
+        assertNothing(active_bulk.getValue(), "filtered DataFrame bulk iterator ends after matching rows");
+    }
+
+    dataProviderDpqlShapeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "status": ("active", "inactive", "active", "active"),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "target": new buffer<float64>((100.0, 200.0, 185.0, 120.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+        });
+        auto columns = df.toColumnarResult();
+
+        QoreFilterRecordsProcessor columns_proc({
+            "dpql_where": '@amount >= 125.0 && @id != 2',
+        });
+        auto filtered = columns_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(filtered),
+            "DPQL BufferColumns filter preserves BufferColumns shape");
+        assertEq((3, 4), filtered.getColumn("id").toList(),
+            "DPQL BufferColumns filter uses dense numeric masks");
+
+        QoreFilterRecordsProcessor string_proc({
+            "dpql_where": 'contains(@name, "a") && @id > 1',
+        });
+        auto string_filtered = string_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(string_filtered),
+            "DPQL BufferColumns string fallback preserves BufferColumns shape");
+        assertEq((3, 4), string_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns string fallback keeps matching rows");
+
+        QoreFilterRecordsProcessor string_mask_proc({
+            "dpql_where": 'startsWith(@name, "D") || @amount > 200',
+        });
+        auto string_mask_filtered = string_mask_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((2, 4), string_mask_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns string predicates build dense masks");
+
+        QoreFilterRecordsProcessor contains_any_proc({
+            "dpql_where": 'containsAny(@name, "li", "av")',
+        });
+        auto contains_any_filtered = contains_any_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((1, 4), contains_any_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns containsAny predicates build dense masks");
+
+        QoreFilterRecordsProcessor like_proc({
+            "dpql_where": '@name like "%a%" && @id > 1',
+        });
+        auto like_filtered = like_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((3, 4), like_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns LIKE predicates build dense masks");
+
+        QoreFilterRecordsProcessor regex_proc({
+            "dpql_where": '@name =~ /^(A|D)/',
+        });
+        auto regex_filtered = regex_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((1, 4), regex_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns regex predicates build dense masks");
+
+        QoreFilterRecordsProcessor field_cmp_proc({
+            "dpql_where": '@amount >= @target',
+        });
+        auto field_cmp_filtered = field_cmp_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((2, 4), field_cmp_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns field comparisons build dense masks");
+
+        QoreFilterRecordsProcessor computed_cmp_proc({
+            "dpql_where": '@amount + @id >= @target',
+        });
+        auto computed_cmp_filtered = computed_cmp_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 4), computed_cmp_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns expression comparisons build dense masks");
+
+        QoreFilterRecordsProcessor computed_between_proc({
+            "dpql_where": '@amount + @id between 126.0 and 185.0',
+        });
+        auto computed_between_filtered = computed_between_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns);
+        assertEq((3, 4), computed_between_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns computed between expressions build dense masks");
+
+        hash<DataProviderExpression> computed_in_strict_expr = <DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_IN,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_TO_LOWER,
+                            "args": (<DataProviderFieldReference>{"field": "status"},),
+                        },
+                        "active"
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_OP_ABSOLUTE_NE,
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 90.0),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor computed_in_proc({"where_cond": computed_in_strict_expr});
+        auto computed_in_filtered = computed_in_proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq((3, 4), computed_in_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns computed in expressions and structured strict inequality build dense masks");
+
+        DataFrame::DataFrame nested_filter_df(
+            ({"id": 1, "name": "Alice", "amount": 90.0, "tags": ("vip", "active"), "scores": (95, 91),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"id": 2, "name": "Bob", "amount": 220.0, "tags": ("trial",), "scores": (88, 84),
+                "payload": {"region": "US", "tier": "silver"}},
+             {"id": 3, "name": "Carol", "amount": 180.0, "tags": ("vip", "closed"), "scores": (92, 90),
+                "payload": {"region": "EU", "tier": "gold"}},
+             {"id": 4, "name": "Dave", "amount": 125.0, "tags": ("standard",), "scores": (85, 86),
+                "payload": {"region": "APAC", "tier": "bronze"}}));
+        auto nested_filter_columns = nested_filter_df.toColumnarResult();
+
+        QoreFilterRecordsProcessor nested_list_proc({
+            "dpql_where": 'listContains(@tags, "vip") || listContainsAny(@tags, "trial")',
+        });
+        auto nested_list_filtered = nested_list_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((1, 2, 3), nested_list_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns list membership predicates build dense masks");
+
+        QoreFilterRecordsProcessor nested_accessor_proc({
+            "dpql_where": '@payload{region} == "EU" && @scores[0] >= 90',
+        });
+        auto nested_accessor_filtered = nested_accessor_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((1, 3), nested_accessor_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns nested accessors build dense masks");
+
+        hash<DataProviderExpression> ternary_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_OP_TERNARY,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_GE,
+                            "args": (<DataProviderFieldReference>{"field": "amount"}, 150.0),
+                        },
+                        "large",
+                        "small"
+                    ),
+                },
+                "large"
+            ),
+        };
+        QoreFilterRecordsProcessor ternary_proc({"where_cond": ternary_expr});
+        auto ternary_filtered = ternary_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 3), ternary_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns ternary expressions build dense masks");
+
+        date ts1 = date("2026-01-01T00:00:00Z");
+        date ts2 = date("2026-01-02T00:00:00Z");
+        date ts3 = date("2026-01-03T00:00:00Z");
+        date ts4 = date("2026-01-04T00:00:00Z");
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "created_at": (ts1, ts2, ts3, ts4),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": False},
+        });
+        QoreFilterRecordsProcessor temporal_proc({
+            "dpql_where": '@created_at >= 2026-01-02T00:00:00Z && @created_at < 2026-01-04T00:00:00Z',
+        });
+        auto temporal_filtered = temporal_proc.processRecordsShape(temporal_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 3), temporal_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns timestamp predicates build dense temporal masks");
+
+        QoreFilterRecordsProcessor temporal_range_proc({
+            "dpql_where": 'inRange(@created_at, 2026-01-02T00:00:00Z, 2026-01-04T00:00:00Z)',
+        });
+        auto temporal_range_filtered = temporal_range_proc.processRecordsShape(temporal_columns,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 3), temporal_range_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns timestamp inRange predicates normalize dense temporal masks");
+
+        hash<auto> raw_buffers = {
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "target": new buffer<float64>((100.0, 200.0, 185.0, 120.0)),
+            "active": new buffer<bool>((True, False, True, True)),
+        };
+        QoreFilterRecordsProcessor raw_proc({
+            "dpql_where": '@active == true && @amount >= 125.0',
+        });
+        auto raw_filtered = raw_proc.processRecordsShape(raw_buffers, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(raw_filtered),
+            "DPQL hash-of-buffers filter returns BufferColumns shape");
+        assertEq((3, 4), raw_filtered.getColumn("id").toList(),
+            "DPQL hash-of-buffers filter keeps matching rows");
+
+        QoreFilterRecordsProcessor raw_field_cmp_proc({
+            "dpql_where": '@amount >= @target',
+        });
+        auto raw_field_cmp_filtered = raw_field_cmp_proc.processRecordsShape(raw_buffers,
+            DataProviderShape::BufferColumns);
+        assertEq((2, 4), raw_field_cmp_filtered.getColumn("id").toList(),
+            "DPQL hash-of-buffers field comparisons build dense masks");
+    }
+
+    bufferColumnsPipelineShapeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "segment": new buffer<int64>((1, 1, 2, 2)),
+            "optional_id": new buffer<*int64>((10, NOTHING, 30, NOTHING)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "name": ("Alice", "Bob", "Carol", "Dave"),
+        });
+        auto columns = df.toColumnarResult();
+
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(columns),
+            "ColumnarResult values are detected as BufferColumns shape");
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(columns, DataProviderShape::BufferColumns),
+            "BufferColumns record count uses ColumnarResult rows");
+        assertEq((2, 3), columns.slice(offset: 1, count: 2).getColumn("id").toList(),
+            "ColumnarResult::slice preserves dense contiguous row ranges");
+        ColumnarResult projected_columns = ColumnarResult::fromColumnHash({
+            "id": columns.getColumn("id"),
+            "amount": columns.getColumn("amount"),
+        });
+        assertEq(("id", "amount"), projected_columns.columnNames(),
+            "ColumnarResult::fromColumnHash builds projected columnar blocks");
+        assertEq((1, 2, 3, 4), projected_columns.getColumn("id").toList(),
+            "ColumnarResult::fromColumnHash preserves dense buffers");
+        ColumnarResult row_columns = ColumnarResult::fromRows(({"id": 1, "amount": 90.0},
+            {"id": 2, "amount": 220.0}));
+        assertEq((1, 2), row_columns.getColumn("id").toList(),
+            "ColumnarResult::fromRows builds compatibility columnar blocks");
+        ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
+            "total": (12.34n, NOTHING),
+        }, {
+            "total": {"native_type": "decimal(18, 2)", "nullable": True},
+        });
+        list<hash<auto>> decimal_schema = decimal_columns.schemaV2();
+        assertEq("decimal128", decimal_schema[0].kind,
+            "ColumnarResult::schemaV2 preserves decimal logical type");
+        assertEq("buffer<*decimal128>", decimal_columns.getColumn("total").fullType(),
+            "ColumnarResult stores decimal logical columns as dense decimal buffers");
+        assertEq(18, decimal_schema[0].precision,
+            "ColumnarResult::schemaV2 preserves decimal precision");
+        assertEq(2, decimal_schema[0].scale,
+            "ColumnarResult::schemaV2 preserves decimal scale");
+        DataFrame::DataFrame decimal_df = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
+        assertEq("auto", decimal_df.dtypes()[0],
+            "DataFrame preserves decimal columns as lossless auto values");
+        assertEq((12.34n, NOTHING), decimal_df.getColumn("total"),
+            "DataFrame preserves decimal Qore number values");
+        assertEq("buffer<*decimal128>", decimal_df.getColumnBuffer("total").fullType(),
+            "DataFrame preserves packed decimal buffers");
+        ColumnarResult decimal_roundtrip = decimal_df.toColumnarResult();
+        list<hash<auto>> decimal_roundtrip_schema = decimal_roundtrip.schemaV2();
+        assertEq("decimal128", decimal_roundtrip_schema[0].kind,
+            "DataFrame ColumnarResult round-trip preserves decimal logical type");
+        assertEq("buffer<*decimal128>", decimal_roundtrip.getColumn("total").fullType(),
+            "DataFrame ColumnarResult round-trip preserves packed decimal buffers");
+        assertEq(18, decimal_roundtrip_schema[0].precision,
+            "DataFrame ColumnarResult round-trip preserves decimal precision");
+        assertEq(2, decimal_roundtrip_schema[0].scale,
+            "DataFrame ColumnarResult round-trip preserves decimal scale");
+
+        date ts0 = 1969-12-31T23:59:59.123456Z;
+        date ts1 = 2026-01-01T00:00:00.123456Z;
+        date ts3 = 2026-01-03T12:30:00.654321Z;
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "created_at": (ts0, ts1, NOTHING, ts3),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": True},
+        });
+        list<hash<auto>> temporal_schema = temporal_columns.schemaV2();
+        assertEq("timestamp", temporal_schema[0].kind,
+            "ColumnarResult::schemaV2 preserves timestamp logical type");
+        assertEq("buffer<*int64>", temporal_columns.getColumn("created_at").fullType(),
+            "ColumnarResult stores timestamp columns as dense microsecond buffers");
+        assertEq(get_epoch_microseconds(ts0), temporal_columns.getColumn("created_at")[0],
+            "dense timestamp buffer stores pre-epoch UTC epoch microseconds");
+        assertEq(get_epoch_microseconds(ts1), temporal_columns.getColumn("created_at")[1],
+            "dense timestamp buffer stores UTC epoch microseconds");
+        assertEq(get_epoch_microseconds(ts0), get_epoch_microseconds(temporal_columns.toRows()[0].created_at),
+            "ColumnarResult row materialization restores pre-epoch timestamp date values");
+        assertEq(get_epoch_microseconds(ts3), get_epoch_microseconds(temporal_columns.toRows()[3].created_at),
+            "ColumnarResult row materialization restores timestamp date values");
+        DataFrame::DataFrame temporal_df = DataFrame::DataFrame::fromColumnarResult(temporal_columns);
+        assertEq("date", temporal_df.dtypes()[0],
+            "DataFrame consumes dense timestamp columns as date columns");
+        assertEq(get_epoch_microseconds(ts0), get_epoch_microseconds(temporal_df.getColumn("created_at")[0]),
+            "DataFrame date column preserves pre-epoch dense timestamp values");
+        assertEq(get_epoch_microseconds(ts3), get_epoch_microseconds(temporal_df.getColumn("created_at")[3]),
+            "DataFrame date column preserves dense timestamp values");
+        ColumnarResult temporal_roundtrip = temporal_df.toColumnarResult();
+        assertEq("timestamp", temporal_roundtrip.schemaV2()[0].kind,
+            "DataFrame ColumnarResult round-trip preserves timestamp logical type");
+        assertEq("buffer<*int64>", temporal_roundtrip.getColumn("created_at").fullType(),
+            "DataFrame ColumnarResult round-trip preserves packed timestamp buffer");
+
+        date dur0 = 5s + microseconds(123);
+        date dur2 = 1m + 2s + microseconds(456789);
+        ColumnarResult duration_columns = ColumnarResult::fromColumnHash({
+            "elapsed": (dur0, NOTHING, dur2),
+        }, {
+            "elapsed": {"native_type": "interval", "nullable": True},
+        });
+        assertEq("duration", duration_columns.schemaV2()[0].kind,
+            "ColumnarResult::schemaV2 preserves duration logical type");
+        assertEq("buffer<*int64>", duration_columns.getColumn("elapsed").fullType(),
+            "ColumnarResult stores duration columns as dense microsecond buffers");
+        assertEq(get_duration_microseconds(dur0), duration_columns.getColumn("elapsed")[0],
+            "dense duration buffer stores relative microseconds");
+        assertEq(get_duration_microseconds(dur2), duration_columns.getColumn("elapsed")[2],
+            "dense duration buffer preserves larger relative microsecond values");
+        assertEq(get_duration_microseconds(dur0), get_duration_microseconds(duration_columns.toRows()[0].elapsed),
+            "ColumnarResult row materialization restores duration date values");
+        DataFrame::DataFrame duration_df = DataFrame::DataFrame::fromColumnarResult(duration_columns);
+        assertEq("date", duration_df.dtypes()[0],
+            "DataFrame consumes dense duration columns as date columns");
+        assertEq(get_duration_microseconds(dur0), get_duration_microseconds(duration_df.getColumn("elapsed")[0]),
+            "DataFrame date column preserves dense duration values");
+        ColumnarResult duration_roundtrip = duration_df.toColumnarResult();
+        assertEq("duration", duration_roundtrip.schemaV2()[0].kind,
+            "DataFrame ColumnarResult round-trip preserves duration logical type");
+        assertEq("buffer<*int64>", duration_roundtrip.getColumn("elapsed").fullType(),
+            "DataFrame ColumnarResult round-trip preserves packed duration buffer");
+        DataFrame::DataFrame converted_temporal_df = AbstractDataProcessor::convertShape(temporal_columns,
+            DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0];
+        assertEq("timestamp", converted_temporal_df.toColumnarResult().schemaV2()[0].kind,
+            "BufferColumns to DataFrameBlock conversion preserves ColumnarResult timestamp schema");
+        DataFrame::DataFrame converted_duration_df = AbstractDataProcessor::convertShape(duration_columns,
+            DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0];
+        assertEq("duration", converted_duration_df.toColumnarResult().schemaV2()[0].kind,
+            "BufferColumns to DataFrameBlock conversion preserves ColumnarResult duration schema");
+
+        ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
+            "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
+        }, {
+            "customer": {"schema": {
+                "kind": "struct",
+                "nullable": False,
+                "children": (
+                    {"name": "id", "kind": "int", "nullable": False},
+                    {"name": "name", "kind": "string", "nullable": True}
+                ),
+            }},
+        });
+        list<hash<auto>> nested_schema = nested_columns.slice(offset: 0, count: 1).schemaV2();
+        assertEq("struct", nested_schema[0].kind,
+            "ColumnarResult::schemaV2 preserves nested logical type");
+        assertEq("id", nested_schema[0].children[0].name,
+            "ColumnarResult::schemaV2 preserves nested child names");
+        DataFrame::DataFrame nested_df = DataFrame::DataFrame::fromColumnarResult(nested_columns);
+        assertEq("auto", nested_df.dtypes()[0],
+            "DataFrame preserves nested columns as lossless auto values");
+        assertEq(1, nested_df.getColumn("customer")[0].id,
+            "DataFrame preserves nested hash values");
+        ColumnarResult nested_roundtrip = nested_df.toColumnarResult();
+        list<hash<auto>> nested_roundtrip_schema = nested_roundtrip.schemaV2();
+        assertEq("struct", nested_roundtrip_schema[0].kind,
+            "DataFrame ColumnarResult round-trip preserves nested logical type");
+        assertEq("name", nested_roundtrip_schema[0].children[1].name,
+            "DataFrame ColumnarResult round-trip preserves nested child metadata");
+
+        ColumnarResult list_columns = ColumnarResult::fromColumnHash({
+            "items": ((1, 2), (3, 4, 5), NOTHING),
+        }, {
+            "items": {"schema": {
+                "kind": "list",
+                "nullable": True,
+                "children": ({"name": "item", "kind": "int", "nullable": False},),
+            }},
+        });
+        DataFrame::DataFrame list_df = DataFrame::DataFrame::fromColumnarResult(list_columns);
+        assertEq((1, 2), list_df.getColumn("items")[0],
+            "DataFrame preserves nested list values");
+        list<hash<auto>> list_roundtrip_schema = list_df.toColumnarResult().schemaV2();
+        assertEq("list", list_roundtrip_schema[0].kind,
+            "DataFrame ColumnarResult round-trip preserves nested list metadata");
+
+        hash<auto> raw_buffers = {
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "segment": new buffer<int64>((1, 1, 2, 2)),
+            "optional_id": new buffer<*int64>((10, NOTHING, 30, NOTHING)),
+            "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
+            "active": new buffer<bool>((True, False, True, True)),
+        };
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(raw_buffers),
+            "hashes of typed buffers are detected as BufferColumns shape");
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(raw_buffers, DataProviderShape::BufferColumns),
+            "BufferColumns record count supports hash-of-buffers blocks");
+        list<auto> raw_rows = AbstractDataProcessor::convertShape(
+            raw_buffers, DataProviderShape::BufferColumns, DataProviderShape::RowRecords);
+        assertEq(4, raw_rows.size(), "hash-of-buffers conversion emits row records");
+        assertEq(220.0, raw_rows[1].amount, "hash-of-buffers conversion preserves dense values");
+
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": ">=",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 125.0),
+                },
+                <DataProviderExpression>{
+                    "exp": "!=",
+                    "args": (<DataProviderFieldReference>{"field": "id"}, 2),
+                },
+            ),
+        };
+
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+        assertTrue(proc.supportsInputShape(DataProviderShape::BufferColumns),
+            "filter processor supports BufferColumns input");
+
+        auto filtered = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(filtered),
+            "BufferColumns filter preserves BufferColumns shape");
+        assertEq((3, 4), filtered.getColumn("id").toList(),
+            "BufferColumns vectorized filter keeps matching dense rows");
+        assertEq(("Carol", "Dave"), filtered.getColumn("name").toList(),
+            "BufferColumns vectorized filter preserves dense string columns");
+
+        auto raw_filtered = proc.processRecordsShape(raw_buffers, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(raw_filtered),
+            "hash-of-buffers filter returns BufferColumns shape");
+        assertEq((3, 4), raw_filtered.getColumn("id").toList(),
+            "hash-of-buffers filter uses dense BufferColumns path");
+
+        hash<DataProviderExpression> null_expr = <DataProviderExpression>{
+            "exp": DP_OP_IS_NULL,
+            "args": (<DataProviderFieldReference>{"field": "optional_id"},),
+        };
+        QoreFilterRecordsProcessor null_proc({"where_cond": null_expr});
+        assertEq((2, 4), null_proc.processRecordsShape(columns, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports isNull masks");
+
+        hash<DataProviderExpression> not_null_expr = <DataProviderExpression>{
+            "exp": DP_OP_IS_NOT_NULL,
+            "args": (<DataProviderFieldReference>{"field": "optional_id"},),
+        };
+        QoreFilterRecordsProcessor not_null_proc({"where_cond": not_null_expr});
+        assertEq((1, 3), not_null_proc.processRecordsShape(raw_buffers, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "hash-of-buffers vectorized filter supports isNotNull masks");
+
+        QoreGroupByProcessor grouper({
+            "group_by": "segment",
+            "aggregates": "orders=count(),total=sum(amount),first_name=first(name)",
+        });
+        assertTrue(grouper.supportsInputShape(DataProviderShape::BufferColumns),
+            "group-by processor supports BufferColumns input");
+        *auto group_result = grouper.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertNothing(group_result, "BufferColumns group-by accumulates without immediate output");
+        list<auto> grouped_blocks;
+        grouper.flush(sub (auto block) {
+            push grouped_blocks, block;
+        });
+        assertEq(1, grouped_blocks.size(), "BufferColumns group-by flush emits one block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(grouped_blocks[0]),
+            "BufferColumns group-by preserves BufferColumns shape");
+        DataFrame::DataFrame grouped_df = AbstractDataProcessor::convertShape(
+            grouped_blocks[0], DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0].sortBy(("segment",));
+        assertEq((1, 2), grouped_df.getColumnBuffer("segment").toList(),
+            "BufferColumns group-by keeps dense group keys");
+        assertEq((2, 2), grouped_df.getColumnBuffer("orders").toList(),
+            "BufferColumns group-by computes dense counts");
+        assertEq((310.0, 305.0), grouped_df.getColumnBuffer("total").toList(),
+            "BufferColumns group-by computes dense sums");
+        assertEq(("Alice", "Carol"), grouped_df.getColumn("first_name"),
+            "BufferColumns group-by reads list columns without row materialization");
+
+        QoreSelectFieldsProcessor selector({"fields": ("customer=name", "id", "amount")});
+        auto selected_columns = selector.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(selected_columns),
+            "select-fields processor preserves ColumnarResult BufferColumns shape");
+        assertEq(("customer", "id", "amount"), selected_columns.columnNames(),
+            "select-fields processor applies column renames");
+        assertEq((1, 2, 3, 4), selected_columns.getColumn("id").toList(),
+            "select-fields processor keeps dense selected columns");
+
+        QoreRemoveFieldsProcessor remover({"fields": ("optional_id", "name")});
+        auto removed_columns = remover.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(("id", "segment", "amount"), removed_columns.columnNames(),
+            "remove-fields processor removes ColumnarResult columns without row materialization");
+        assertEq((90.0, 220.0, 180.0, 125.0), removed_columns.getColumn("amount").toList(),
+            "remove-fields processor keeps dense retained columns");
+
+        QoreRecordLimitProcessor limiter({"limit": 2});
+        auto limited_columns = limiter.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(limited_columns),
+            "record-limit processor preserves ColumnarResult BufferColumns shape");
+        assertEq((1, 2), limited_columns.getColumn("id").toList(),
+            "record-limit processor slices ColumnarResult rows directly");
+
+        QoreSetFieldsProcessor setter({"fields": {"source": "crm"}});
+        auto set_columns = setter.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(set_columns),
+            "set-fields processor preserves ColumnarResult BufferColumns shape");
+        assertEq(("crm", "crm", "crm", "crm"), set_columns.getColumn("source").toList(),
+            "set-fields processor adds per-row constant columns without row materialization");
+        assertEq((1, 2, 3, 4), set_columns.getColumn("id").toList(),
+            "set-fields processor keeps existing dense columns");
+
+        QoreSearchReplaceProcessor replacer({"field": "name", "search": "a", "replace": "A", "is_regex": False});
+        auto replaced_columns = replacer.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(replaced_columns),
+            "search-replace processor preserves ColumnarResult BufferColumns shape");
+        assertEq(("Alice", "Bob", "CArol", "DAve"), replaced_columns.getColumn("name").toList(),
+            "search-replace processor updates dense string columns without row materialization");
+        assertEq((1, 2, 3, 4), replaced_columns.getColumn("id").toList(),
+            "search-replace processor keeps existing dense columns");
+
+        QoreRunningStatsProcessor stats({"fields": "amount", "window_size": 2});
+        assertTrue(stats.supportsInputShape(DataProviderShape::BufferColumns),
+            "analytics processors advertise BufferColumns input");
+        auto stats_block = stats.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(stats_block),
+            "analytics processors emit BufferColumns events from BufferColumns input");
+        assertEq(("statistics", "statistics"), stats_block.getColumn("event_type").toList(),
+            "analytics processors evaluate dense column values");
+        assertEq((155.0, 152.5), stats_block.getColumn("avg").toList(),
+            "analytics processors compute windows from BufferColumns input");
+
+        QoreRunningStatsProcessor df_stats({"fields": "amount", "window_size": 4});
+        assertTrue(df_stats.supportsInputShape(DataProviderShape::DataFrameBlock),
+            "analytics processors advertise DataFrameBlock input");
+        auto df_stats_block = df_stats.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(df_stats_block),
+            "analytics processors emit DataFrameBlock events from DataFrameBlock input");
+        assertEq((153.75,), df_stats_block.getColumn("avg"),
+            "analytics processors compute windows from DataFrameBlock input");
+
+        QoreMovingAverageProcessor moving_avg({"fields": "amount", "window_size": 2});
+        auto moving_block = moving_avg.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(moving_block),
+            "moving-average processor emits BufferColumns events from BufferColumns input");
+        assertEq(("moving-average", "moving-average", "moving-average", "moving-average"),
+            moving_block.getColumn("event_type").toList(),
+            "moving-average processor preserves one event per dense input row");
+        assertEq((90.0, 155.0, 200.0, 152.5), moving_block.getColumn("sma").toList(),
+            "moving-average processor computes dense sliding windows");
+
+        QoreTrendAnalysisProcessor trend({"fields": "amount", "window_size": 4});
+        auto trend_block = trend.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(trend_block),
+            "trend-analysis processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq(("trend",), trend_block.getColumn("event_type"),
+            "trend-analysis processor emits shaped window events");
+
+        QoreAnomalyDetectionProcessor anomaly({"fields": "amount", "window_size": 2, "threshold": 1.0});
+        auto anomaly_block = anomaly.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(anomaly_block),
+            "anomaly-detection processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq(("anomaly", "anomaly", "anomaly", "anomaly"), anomaly_block.getColumn("event_type"),
+            "anomaly-detection processor preserves one event per dense input row");
+
+        QorePercentileProcessor percentile({"fields": "amount", "window_size": 4, "percentiles": "50"});
+        auto percentile_block = percentile.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(percentile_block),
+            "percentile processor emits BufferColumns events from BufferColumns input");
+        assertEq(152.5, percentile_block.getColumn("percentiles")[0].p50,
+            "percentile processor computes window percentiles from dense columns");
+
+        QoreHistogramProcessor histogram({"fields": "amount", "window_size": 4, "n_bins": 2});
+        auto histogram_block = histogram.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(histogram_block),
+            "histogram processor emits BufferColumns events from BufferColumns input");
+        assertEq("histogram", histogram_block.getColumn("event_type")[0],
+            "histogram processor emits shaped distribution events");
+
+        QoreRateOfChangeProcessor rate({"fields": "amount", "window_size": 2, "smoothing": False});
+        auto rate_block = rate.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(rate_block),
+            "rate-of-change processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq((0.0, 130.0, -40.0, -55.0), rate_block.getColumn("rate_of_change"),
+            "rate-of-change processor computes dense row-to-row rates");
+
+        QoreEWMAControlChartProcessor ewma({"fields": "amount", "window_size": 2});
+        auto ewma_block = ewma.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(ewma_block),
+            "EWMA control chart processor emits BufferColumns events from BufferColumns input");
+        assertEq(("ewma-control-chart", "ewma-control-chart", "ewma-control-chart", "ewma-control-chart"),
+            ewma_block.getColumn("event_type").toList(),
+            "EWMA control chart processor preserves one event per dense input row");
+
+        QoreSeasonalityDetectionProcessor seasonality({"fields": "amount", "window_size": 4,
+            "max_period": 1, "min_correlation": 0.0});
+        auto seasonality_block = seasonality.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(seasonality_block),
+            "seasonality-detection processor emits DataFrameBlock events from DataFrameBlock input");
+        assertEq(("seasonality-detection",), seasonality_block.getColumn("event_type"),
+            "seasonality-detection processor emits shaped window events");
+
+        QoreRunningStatsProcessor stats_flush({"fields": "amount", "window_size": 10});
+        assertNothing(stats_flush.processRecordsShape(columns, DataProviderShape::BufferColumns),
+            "BufferColumns analytics buffers partial windows");
+        *list<auto> stats_flush_blocks = stats_flush.flushAndCollect();
+        assertEq(1, stats_flush_blocks.size(), "BufferColumns analytics flush emits one shaped block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(stats_flush_blocks[0]),
+            "BufferColumns analytics flush preserves BufferColumns shape");
+        assertEq(("statistics",), stats_flush_blocks[0].getColumn("event_type").toList(),
+            "BufferColumns analytics flush emits event values");
+
+        QoreCorrelationProcessor corr({"fields": "id,amount", "window_size": 4});
+        assertTrue(corr.supportsInputShape(DataProviderShape::BufferColumns),
+            "correlation processor advertises BufferColumns input");
+        auto corr_block = corr.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(corr_block),
+            "correlation processor emits BufferColumns events from BufferColumns input");
+        assertEq(("correlation",), corr_block.getColumn("event_type").toList(),
+            "correlation processor evaluates dense column values");
+        assertEq((4,), corr_block.getColumn("count").toList(),
+            "correlation processor counts BufferColumns rows");
+
+        QoreCorrelationProcessor corr_flush({"fields": "id,amount", "window_size": 10});
+        assertNothing(corr_flush.processRecordsShape(columns, DataProviderShape::BufferColumns),
+            "BufferColumns correlation buffers partial windows");
+        *list<auto> corr_flush_blocks = corr_flush.flushAndCollect();
+        assertEq(1, corr_flush_blocks.size(), "BufferColumns correlation flush emits one shaped block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(corr_flush_blocks[0]),
+            "BufferColumns correlation flush preserves BufferColumns shape");
+        assertEq(("correlation",), corr_flush_blocks[0].getColumn("event_type").toList(),
+            "BufferColumns correlation flush emits event values");
+
+        QoreCrossCorrelationProcessor xcorr({"field_x": "id", "field_y": "amount", "window_size": 4,
+            "max_lag": 1});
+        assertTrue(xcorr.supportsInputShape(DataProviderShape::BufferColumns),
+            "cross-correlation processor advertises BufferColumns input");
+        auto xcorr_block = xcorr.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(xcorr_block),
+            "cross-correlation processor emits BufferColumns events from BufferColumns input");
+        assertEq(("cross-correlation",), xcorr_block.getColumn("event_type").toList(),
+            "cross-correlation processor evaluates dense column values");
+        assertEq((4,), xcorr_block.getColumn("count").toList(),
+            "cross-correlation processor counts BufferColumns rows");
+
+        QoreCrossCorrelationProcessor xcorr_flush({"field_x": "id", "field_y": "amount", "window_size": 10,
+            "max_lag": 1});
+        assertNothing(xcorr_flush.processRecordsShape(columns, DataProviderShape::BufferColumns),
+            "BufferColumns cross-correlation buffers partial windows");
+        *list<auto> xcorr_flush_blocks = xcorr_flush.flushAndCollect();
+        assertEq(1, xcorr_flush_blocks.size(), "BufferColumns cross-correlation flush emits one shaped block");
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(xcorr_flush_blocks[0]),
+            "BufferColumns cross-correlation flush preserves BufferColumns shape");
+        assertEq(("cross-correlation",), xcorr_flush_blocks[0].getColumn("event_type").toList(),
+            "BufferColumns cross-correlation flush emits event values");
+
+        hash<DataProviderExpression> or_expr = <DataProviderExpression>{
+            "exp": "||",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "id"}, 1),
+                },
+                <DataProviderExpression>{
+                    "exp": ">=",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 220.0),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor or_proc({"where_cond": or_expr});
+        assertEq((1, 2), or_proc.processRecordsShape(columns, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports OR masks");
+
+        hash<DataProviderExpression> not_expr = <DataProviderExpression>{
+            "exp": "!",
+            "args": (<DataProviderExpression>{
+                "exp": "<",
+                "args": (<DataProviderFieldReference>{"field": "amount"}, 125.0),
+            },),
+        };
+        QoreFilterRecordsProcessor not_proc({"where_cond": not_expr});
+        assertEq((2, 3, 4), not_proc.processRecordsShape(columns, DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports NOT masks");
+
+        hash<DataProviderExpression> between_columns_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_BETWEEN,
+            "args": (<DataProviderFieldReference>{"field": "amount"}, 120.0, 200.0),
+        };
+        QoreFilterRecordsProcessor between_columns_proc({"where_cond": between_columns_expr});
+        assertEq((3, 4), between_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports between masks");
+
+        hash<DataProviderExpression> in_columns_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, 1, 4),
+        };
+        QoreFilterRecordsProcessor in_columns_proc({"where_cond": in_columns_expr});
+        assertEq((1, 4), in_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports in masks");
+
+        hash<DataProviderExpression> list_in_columns_expr = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, (1, 4)),
+        };
+        QoreFilterRecordsProcessor list_in_columns_proc({"where_cond": list_in_columns_expr});
+        assertEq((1, 4), list_in_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports list-valued in masks");
+
+        hash<DataProviderExpression> not_in_columns_expr = <DataProviderExpression>{
+            "exp": DP_OP_NOT_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, 1, 4),
+        };
+        QoreFilterRecordsProcessor not_in_columns_proc({"where_cond": not_in_columns_expr});
+        assertEq((2, 3), not_in_columns_proc.processRecordsShape(columns,
+            DataProviderShape::BufferColumns).getColumn("id").toList(),
+            "BufferColumns vectorized filter supports not-in masks");
+
+        DataFrame::DataFrame filtered_df = AbstractDataProcessor::convertShape(
+            filtered, DataProviderShape::BufferColumns, DataProviderShape::DataFrameBlock)[0];
+        assertEq((3, 4), filtered_df.getColumnBuffer("id").toList(),
+            "BufferColumns -> DataFrameBlock preserves dense columns");
+
+        list<auto> callback_rows;
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "buffer-columns-shape-pipeline-test",
+            "output_callback": sub (auto row) {
+                push callback_rows, row;
+            },
+        });
+        pipe.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+        pipe.submit(columns);
+        pipe.waitDone();
+
+        assertEq(2, callback_rows.size(), "pipeline callback emits BufferColumns rows");
+        assertEq("Carol", callback_rows[0].name, "BufferColumns pipeline preserves first row");
+        assertEq("Dave", callback_rows[1].name, "BufferColumns pipeline preserves second row");
+        assertTrue(pipe.getInfo().bulk, "BufferColumns input keeps pipeline in bulk mode");
     }
 
     parquetTest() {
@@ -744,15 +2279,14 @@ sub invalid_dataframe_api() {
             unlink(tmp_path);
         }
 
-        # Write — may throw MISSING-FEATURE-ERROR if Arrow not available
-        try {
-            df.writeParquet(tmp_path);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "MISSING-FEATURE-ERROR") {
-                testSkip("Apache Arrow not available");
-            }
-            rethrow;
-        }
+        df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 2,
+            "use_dictionary": False,
+            "write_statistics": True,
+            "write_page_index": True,
+            "store_schema": True,
+        });
 
         # Read back
         auto df2 = DataFrame::DataFrame::readParquet(tmp_path);
@@ -761,6 +2295,10 @@ sub invalid_dataframe_api() {
 
         # Verify values
         assertEq((1, 2, 3), df2.getColumn("id"), "Parquet int column");
+        assertEq("buffer<*int64>", df2.getColumnBuffer("id").fullType(),
+            "Parquet nullable Arrow int column is preserved as a dense buffer");
+        assertEq((1, 2, 3), df2.getColumnBuffer("id").toList(),
+            "Parquet dense int column preserves values");
         assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
             "Parquet string column");
 
@@ -769,6 +2307,472 @@ sub invalid_dataframe_api() {
         assertEq(95.5, scores[0], "Parquet float value");
         assertEq(88.0, scores[1], "Parquet float value 2");
         assertEq(NOTHING, scores[2], "Parquet null preserved");
+        ColumnarResult columns = df2.toColumnarResult();
+        assertEq("buffer<*int64>", columns.getColumn("id").fullType(),
+            "Parquet DataFrame toColumnarResult keeps dense Arrow int storage");
+        list<hash<auto>> schema = columns.schemaV2();
+        assertTrue(schema[0].nullable,
+            "Parquet nullable Arrow schema metadata is preserved in ColumnarResult");
+
+        DataFrame::DataFrame projected = DataFrame::DataFrame::readParquet(tmp_path, <DataFrame::ParquetReadOptions>{
+            "columns": ("name", "id"),
+            "batch_size": 1,
+            "use_threads": True,
+        });
+        assertEq(("name", "id"), projected.columnNames(),
+            "Parquet read column projection preserves requested top-level column order");
+        assertEq(("Alice", "Bob", "Carol"), projected.getColumn("name"),
+            "Parquet projected string column preserves values");
+        assertEq((1, 2, 3), projected.getColumn("id"),
+            "Parquet projected int column preserves values");
+
+        DataFrame::DataFrame last_group = DataFrame::DataFrame::readParquet(tmp_path, <DataFrame::ParquetReadOptions>{
+            "columns": ("id", "score"),
+            "row_groups": (1,),
+        });
+        assertEq(1, last_group.numRows(), "Parquet row group selection returns selected rows");
+        assertEq(2, last_group.numCols(), "Parquet row group selection preserves projected columns");
+        assertEq((3,), last_group.getColumn("id"), "Parquet row group selection preserves row values");
+
+        DataFrame::DataFrame filtered_projection = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "columns": ("name",),
+                "filters": ({
+                    "column": "id",
+                    "op": ">=",
+                    "value": 2,
+                }, {
+                    "column": "score",
+                    "op": "not_null",
+                }),
+            });
+        assertEq(("name",), filtered_projection.columnNames(),
+            "Parquet filtered projection removes filter-only columns");
+        assertEq(("Bob",), filtered_projection.getColumn("name"),
+            "Parquet read filters are applied exactly after row-group pruning");
+
+        DataFrame::DataFrame string_filtered = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "name",
+                    "op": "contains",
+                    "value": "o",
+                },),
+                "use_statistics": False,
+            });
+        assertEq((2, 3), string_filtered.getColumn("id"),
+            "Parquet read filters support exact string predicate fallback");
+
+        DataFrame::DataFrame list_filtered = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "id",
+                    "op": "in",
+                    "value": (1, 3),
+                },),
+            });
+        assertEq(("Alice", "Carol"), list_filtered.getColumn("name"),
+            "Parquet read filters support in-list values with statistics pruning");
+        DataFrame::DataFrame list_excluded = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "name",
+                    "op": "not_in",
+                    "value": ("Bob",),
+                },),
+            });
+        assertEq((1, 3), list_excluded.getColumn("id"),
+            "Parquet read filters support not_in list values with exact filtering");
+
+        DataFrame::DataFrame no_matches = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "id",
+                    "op": ">",
+                    "value": 100,
+                },),
+            });
+        assertEq(0, no_matches.numRows(),
+            "Parquet statistics pruning with exact filtering returns empty DataFrames correctly");
+
+        ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
+            "total": (12.34n, NOTHING),
+        }, {
+            "total": {"native_type": "decimal(18, 2)", "nullable": True},
+        });
+        DataFrame::DataFrame decimal_df = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
+        decimal_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 1,
+            "write_statistics": True,
+        });
+        DataFrame::DataFrame decimal_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((12.34n, NOTHING), decimal_parquet_df.getColumn("total"),
+            "Parquet preserves decimal Qore number values");
+        assertEq("buffer<*decimal128>", decimal_parquet_df.getColumnBuffer("total").fullType(),
+            "Parquet preserves decimal columns as dense buffers");
+        list<hash<auto>> decimal_parquet_schema = decimal_parquet_df.toColumnarResult().schemaV2();
+        assertEq("decimal128", decimal_parquet_schema[0].kind,
+            "Parquet preserves decimal logical type");
+        assertEq(18, decimal_parquet_schema[0].precision,
+            "Parquet preserves decimal precision");
+        assertEq(2, decimal_parquet_schema[0].scale,
+            "Parquet preserves decimal scale");
+        DataFrame::DataFrame decimal_filtered = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "total",
+                    "op": "==",
+                    "value": 12.34n,
+                },),
+            });
+        assertEq((12.34n,), decimal_filtered.getColumn("total"),
+            "Parquet decimal filters use statistics safely and exact decimal filtering");
+
+        date parquet_ts0 = 1969-12-31T23:59:59.123456Z;
+        date parquet_ts2 = 2026-01-03T12:30:00.654321Z;
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "created_at": (parquet_ts0, NOTHING, parquet_ts2),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": True},
+        });
+        DataFrame::DataFrame temporal_df = DataFrame::DataFrame::fromColumnarResult(temporal_columns);
+        temporal_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 1,
+            "write_statistics": True,
+        });
+        DataFrame::DataFrame temporal_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(get_epoch_microseconds(parquet_ts0),
+            get_epoch_microseconds(temporal_parquet_df.getColumn("created_at")[0]),
+            "Parquet preserves dense timestamp values");
+        assertEq(NOTHING, temporal_parquet_df.getColumn("created_at")[1],
+            "Parquet preserves dense timestamp null values");
+        assertEq(get_epoch_microseconds(parquet_ts2),
+            get_epoch_microseconds(temporal_parquet_df.getColumn("created_at")[2]),
+            "Parquet preserves later dense timestamp values");
+        assertEq("buffer<*int64>", temporal_parquet_df.getColumnBuffer("created_at").fullType(),
+            "Parquet preserves timestamp columns as dense microsecond buffers");
+        list<hash<auto>> temporal_parquet_schema = temporal_parquet_df.toColumnarResult().schemaV2();
+        assertEq("timestamp", temporal_parquet_schema[0].kind,
+            "Parquet preserves timestamp logical type");
+        assertEq("int64", temporal_parquet_schema[0].buffer_type,
+            "Parquet schema metadata preserves timestamp dense storage");
+        assertEq("us", temporal_parquet_schema[0].time_unit,
+            "Parquet schema metadata preserves timestamp microsecond units");
+        DataFrame::DataFrame temporal_eq = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "created_at",
+                    "op": "==",
+                    "value": parquet_ts2,
+                },),
+            });
+        assertEq(1, temporal_eq.numRows(),
+            "Parquet timestamp equality filters use logical microsecond statistics safely");
+        assertEq(get_epoch_microseconds(parquet_ts2),
+            get_epoch_microseconds(temporal_eq.getColumn("created_at")[0]),
+            "Parquet timestamp equality filter preserves the matching timestamp");
+        DataFrame::DataFrame temporal_lt = DataFrame::DataFrame::readParquet(tmp_path,
+            <DataFrame::ParquetReadOptions>{
+                "filters": ({
+                    "column": "created_at",
+                    "op": "<",
+                    "value": 2026-01-04T00:00:00Z,
+                },),
+            });
+        assertEq(2, temporal_lt.numRows(),
+            "Parquet timestamp range filters compare dates in logical storage units");
+
+        DataFrame::DataFrame null_dense_df({
+            "id": new buffer<*int64>((NOTHING, 2, NOTHING, 4)),
+            "flag": new buffer<*bool>((True, NOTHING, False, NOTHING)),
+            "name": new buffer<*string>((NOTHING, "Ada", "Bo", NOTHING)),
+            "amount": new buffer<*decimal128>((NOTHING, 12.50n, -3.25n, NOTHING)),
+        });
+        null_dense_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+            "row_group_size": 2,
+        });
+        DataFrame::DataFrame null_dense_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((NOTHING, 2, NOTHING, 4), null_dense_parquet_df.getColumn("id"),
+            "Parquet preserves null-heavy nullable int values");
+        assertEq("buffer<*int64>", null_dense_parquet_df.getColumnBuffer("id").fullType(),
+            "Parquet preserves null-heavy nullable int dense storage");
+        assertEq((True, NOTHING, False, NOTHING), null_dense_parquet_df.getColumn("flag"),
+            "Parquet preserves null-heavy nullable bool values");
+        assertEq("buffer<*bool>", null_dense_parquet_df.getColumnBuffer("flag").fullType(),
+            "Parquet preserves null-heavy nullable bool dense storage");
+        assertEq((NOTHING, "Ada", "Bo", NOTHING), null_dense_parquet_df.getColumn("name"),
+            "Parquet preserves null-heavy nullable string values");
+        assertEq("buffer<*string>", null_dense_parquet_df.getColumnBuffer("name").fullType(),
+            "Parquet preserves null-heavy nullable string dense storage");
+        assertEq((NOTHING, 12.50n, -3.25n, NOTHING), null_dense_parquet_df.getColumn("amount"),
+            "Parquet preserves null-heavy nullable decimal values");
+        assertEq("buffer<*decimal128>", null_dense_parquet_df.getColumnBuffer("amount").fullType(),
+            "Parquet preserves null-heavy nullable decimal dense storage");
+
+        DataFrame::DataFrame sliced_null_dense_df = null_dense_df.slice(1, 4);
+        sliced_null_dense_df.writeParquet(tmp_path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none",
+        });
+        DataFrame::DataFrame sliced_null_dense_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((2, NOTHING, 4), sliced_null_dense_parquet_df.getColumn("id"),
+            "Parquet preserves sliced nullable int dense buffers with bitmap offsets");
+        assertEq((NOTHING, False, NOTHING), sliced_null_dense_parquet_df.getColumn("flag"),
+            "Parquet preserves sliced nullable bool dense buffers with bitmap offsets");
+        assertEq((12.50n, -3.25n, NOTHING), sliced_null_dense_parquet_df.getColumn("amount"),
+            "Parquet preserves sliced nullable decimal dense buffers with bitmap offsets");
+
+        ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
+            "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
+        }, {
+            "customer": {"schema": {
+                "kind": "struct",
+                "nullable": False,
+                "children": (
+                    {"name": "id", "kind": "int", "nullable": False},
+                    {"name": "name", "kind": "string", "nullable": True}
+                ),
+            }},
+        });
+        DataFrame::DataFrame nested_df = DataFrame::DataFrame::fromColumnarResult(nested_columns);
+        nested_df.writeParquet(tmp_path);
+        DataFrame::DataFrame nested_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(1, nested_parquet_df.getColumn("customer")[0].id,
+            "Parquet preserves nested struct values");
+        list<hash<auto>> nested_parquet_schema = nested_parquet_df.toColumnarResult().schemaV2();
+        assertEq("struct", nested_parquet_schema[0].kind,
+            "Parquet preserves nested logical type");
+        assertEq("name", nested_parquet_schema[0].children[1].name,
+            "Parquet preserves nested child metadata");
+        DataFrame::DataFrame nested_parquet_slice = nested_parquet_df.slice(1, 2);
+        nested_parquet_slice.writeParquet(tmp_path);
+        DataFrame::DataFrame nested_parquet_slice_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(2, nested_parquet_slice_df.getColumn("customer")[0].id,
+            "Parquet preserves sliced nested struct values through Arrow storage");
+        assertEq(NOTHING, nested_parquet_slice_df.getColumn("customer")[0].name,
+            "Parquet preserves sliced nested struct null child values");
+
+        ColumnarResult list_columns = ColumnarResult::fromColumnHash({
+            "items": ((1, 2), (3, 4, 5), NOTHING),
+        }, {
+            "items": {"schema": {
+                "kind": "list",
+                "nullable": True,
+                "children": ({"name": "item", "kind": "int", "nullable": False},),
+            }},
+        });
+        DataFrame::DataFrame list_df = DataFrame::DataFrame::fromColumnarResult(list_columns);
+        list_df.writeParquet(tmp_path);
+        DataFrame::DataFrame list_parquet_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((3, 4, 5), list_parquet_df.getColumn("items")[1],
+            "Parquet preserves nested list values");
+        list<hash<auto>> list_parquet_schema = list_parquet_df.toColumnarResult().schemaV2();
+        assertEq("list", list_parquet_schema[0].kind,
+            "Parquet preserves nested list metadata");
+        DataFrame::DataFrame list_parquet_slice = list_parquet_df.slice(1, 3);
+        list_parquet_slice.writeParquet(tmp_path);
+        DataFrame::DataFrame list_parquet_slice_df = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq((3, 4, 5), list_parquet_slice_df.getColumn("items")[0],
+            "Parquet preserves sliced nested list values through Arrow storage");
+        assertEq(NOTHING, list_parquet_slice_df.getColumn("items")[1],
+            "Parquet preserves sliced nested list null values");
+    }
+
+    arrowIpcTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"id": 1, "name": "Alice", "score": 95.5, "active": True},
+             {"id": 2, "name": "Bob",   "score": 88.0, "active": False},
+             {"id": 3, "name": "Carol", "score": NOTHING, "active": True}));
+
+        binary payload = df.toArrowIpc();
+        assertTrue(payload.size() > 0, "Arrow IPC export returns non-empty binary");
+
+        auto df2 = DataFrame::DataFrame::fromArrowIpc(payload);
+        assertEq(3, df2.numRows(), "Arrow IPC round-trip rows");
+        assertEq(4, df2.numCols(), "Arrow IPC round-trip cols");
+        assertEq((1, 2, 3), df2.getColumn("id"), "Arrow IPC int column");
+        assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
+            "Arrow IPC string column");
+        assertEq((True, False, True), df2.getColumn("active"),
+            "Arrow IPC bool column");
+
+        list<auto> scores = df2.getColumn("score");
+        assertEq(95.5, scores[0], "Arrow IPC float value");
+        assertEq(88.0, scores[1], "Arrow IPC float value 2");
+        assertEq(NOTHING, scores[2], "Arrow IPC null preserved");
+
+        assertEq("buffer<*int64>", df2.getColumnBuffer("id").fullType(),
+            "Arrow IPC fixed-width int column is preserved as a dense buffer");
+        ColumnarResult columns = df2.toColumnarResult();
+        assertEq("buffer<*int64>", columns.getColumn("id").fullType(),
+            "Arrow IPC DataFrame toColumnarResult keeps dense Arrow int storage");
+        list<hash<auto>> schema = columns.schemaV2();
+        assertEq("id", schema[0].name, "Arrow IPC schema keeps first column name");
+        assertEq("int64", schema[0].buffer_type,
+            "Arrow IPC schema metadata preserves dense int storage");
+        assertTrue(schema[0].nullable,
+            "Arrow IPC nullable Arrow schema metadata is preserved in ColumnarResult");
+
+        ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({
+            "total": (12.34n, NOTHING),
+        }, {
+            "total": {"native_type": "decimal(18, 2)", "nullable": True},
+        });
+        DataFrame::DataFrame decimal_df = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
+        DataFrame::DataFrame decimal_ipc_df = DataFrame::DataFrame::fromArrowIpc(decimal_df.toArrowIpc());
+        assertEq((12.34n, NOTHING), decimal_ipc_df.getColumn("total"),
+            "Arrow IPC preserves decimal Qore number values");
+        assertEq("buffer<*decimal128>", decimal_ipc_df.getColumnBuffer("total").fullType(),
+            "Arrow IPC preserves decimal columns as dense buffers");
+        list<hash<auto>> decimal_ipc_schema = decimal_ipc_df.toColumnarResult().schemaV2();
+        assertEq("decimal128", decimal_ipc_schema[0].kind,
+            "Arrow IPC preserves decimal logical type");
+        assertEq(18, decimal_ipc_schema[0].precision,
+            "Arrow IPC preserves decimal precision");
+        assertEq(2, decimal_ipc_schema[0].scale,
+            "Arrow IPC preserves decimal scale");
+
+        date ipc_ts0 = 1969-12-31T23:59:59.123456Z;
+        date ipc_ts2 = 2026-01-03T12:30:00.654321Z;
+        ColumnarResult temporal_columns = ColumnarResult::fromColumnHash({
+            "created_at": (ipc_ts0, NOTHING, ipc_ts2),
+        }, {
+            "created_at": {"native_type": "timestamp with time zone", "nullable": True},
+        });
+        DataFrame::DataFrame temporal_df = DataFrame::DataFrame::fromColumnarResult(temporal_columns);
+        DataFrame::DataFrame temporal_ipc_df = DataFrame::DataFrame::fromArrowIpc(temporal_df.toArrowIpc());
+        assertEq(get_epoch_microseconds(ipc_ts0), get_epoch_microseconds(temporal_ipc_df.getColumn("created_at")[0]),
+            "Arrow IPC preserves dense timestamp values");
+        assertEq(NOTHING, temporal_ipc_df.getColumn("created_at")[1],
+            "Arrow IPC preserves dense timestamp null values");
+        assertEq(get_epoch_microseconds(ipc_ts2), get_epoch_microseconds(temporal_ipc_df.getColumn("created_at")[2]),
+            "Arrow IPC preserves later dense timestamp values");
+        assertEq("buffer<*int64>", temporal_ipc_df.getColumnBuffer("created_at").fullType(),
+            "Arrow IPC preserves timestamp columns as dense microsecond buffers");
+        list<hash<auto>> temporal_ipc_schema = temporal_ipc_df.toColumnarResult().schemaV2();
+        assertEq("timestamp", temporal_ipc_schema[0].kind,
+            "Arrow IPC preserves timestamp logical type");
+        assertEq("int64", temporal_ipc_schema[0].buffer_type,
+            "Arrow IPC schema metadata preserves timestamp dense storage");
+        assertEq("us", temporal_ipc_schema[0].time_unit,
+            "Arrow IPC schema metadata preserves timestamp microsecond units");
+
+        date ipc_dur0 = 5s + microseconds(123);
+        date ipc_dur2 = 1m + 2s + microseconds(456789);
+        ColumnarResult duration_columns = ColumnarResult::fromColumnHash({
+            "elapsed": (ipc_dur0, NOTHING, ipc_dur2),
+        }, {
+            "elapsed": {"native_type": "interval", "nullable": True},
+        });
+        DataFrame::DataFrame duration_df = DataFrame::DataFrame::fromColumnarResult(duration_columns);
+        DataFrame::DataFrame duration_ipc_df = DataFrame::DataFrame::fromArrowIpc(duration_df.toArrowIpc());
+        assertEq(get_duration_microseconds(ipc_dur0), get_duration_microseconds(duration_ipc_df.getColumn("elapsed")[0]),
+            "Arrow IPC preserves dense duration values");
+        assertEq(NOTHING, duration_ipc_df.getColumn("elapsed")[1],
+            "Arrow IPC preserves dense duration null values");
+        assertEq(get_duration_microseconds(ipc_dur2), get_duration_microseconds(duration_ipc_df.getColumn("elapsed")[2]),
+            "Arrow IPC preserves later dense duration values");
+        assertEq("buffer<*int64>", duration_ipc_df.getColumnBuffer("elapsed").fullType(),
+            "Arrow IPC preserves duration columns as dense microsecond buffers");
+        list<hash<auto>> duration_ipc_schema = duration_ipc_df.toColumnarResult().schemaV2();
+        assertEq("duration", duration_ipc_schema[0].kind,
+            "Arrow IPC preserves duration logical type");
+        assertEq("int64", duration_ipc_schema[0].buffer_type,
+            "Arrow IPC schema metadata preserves duration dense storage");
+        assertEq("us", duration_ipc_schema[0].time_unit,
+            "Arrow IPC schema metadata preserves duration microsecond units");
+
+        DataFrame::DataFrame null_dense_df({
+            "id": new buffer<*int64>((NOTHING, 2, NOTHING, 4)),
+            "flag": new buffer<*bool>((True, NOTHING, False, NOTHING)),
+            "name": new buffer<*string>((NOTHING, "Ada", "Bo", NOTHING)),
+            "amount": new buffer<*decimal128>((NOTHING, 12.50n, -3.25n, NOTHING)),
+        });
+        DataFrame::DataFrame null_dense_ipc_df = DataFrame::DataFrame::fromArrowIpc(null_dense_df.toArrowIpc());
+        assertEq((NOTHING, 2, NOTHING, 4), null_dense_ipc_df.getColumn("id"),
+            "Arrow IPC preserves null-heavy nullable int values");
+        assertEq("buffer<*int64>", null_dense_ipc_df.getColumnBuffer("id").fullType(),
+            "Arrow IPC preserves null-heavy nullable int dense storage");
+        assertEq((True, NOTHING, False, NOTHING), null_dense_ipc_df.getColumn("flag"),
+            "Arrow IPC preserves null-heavy nullable bool values");
+        assertEq("buffer<*bool>", null_dense_ipc_df.getColumnBuffer("flag").fullType(),
+            "Arrow IPC preserves null-heavy nullable bool dense storage");
+        assertEq((NOTHING, "Ada", "Bo", NOTHING), null_dense_ipc_df.getColumn("name"),
+            "Arrow IPC preserves null-heavy nullable string values");
+        assertEq("buffer<*string>", null_dense_ipc_df.getColumnBuffer("name").fullType(),
+            "Arrow IPC preserves null-heavy nullable string dense storage");
+        assertEq((NOTHING, 12.50n, -3.25n, NOTHING), null_dense_ipc_df.getColumn("amount"),
+            "Arrow IPC preserves null-heavy nullable decimal values");
+        assertEq("buffer<*decimal128>", null_dense_ipc_df.getColumnBuffer("amount").fullType(),
+            "Arrow IPC preserves null-heavy nullable decimal dense storage");
+
+        DataFrame::DataFrame sliced_null_dense_ipc_df = DataFrame::DataFrame::fromArrowIpc(
+            null_dense_df.slice(1, 4).toArrowIpc());
+        assertEq((2, NOTHING, 4), sliced_null_dense_ipc_df.getColumn("id"),
+            "Arrow IPC preserves sliced nullable int dense buffers with bitmap offsets");
+        assertEq((NOTHING, False, NOTHING), sliced_null_dense_ipc_df.getColumn("flag"),
+            "Arrow IPC preserves sliced nullable bool dense buffers with bitmap offsets");
+        assertEq((12.50n, -3.25n, NOTHING), sliced_null_dense_ipc_df.getColumn("amount"),
+            "Arrow IPC preserves sliced nullable decimal dense buffers with bitmap offsets");
+
+        ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
+            "customer": ({"id": 1, "name": "Ada"}, {"id": 2, "name": NOTHING}),
+        }, {
+            "customer": {"schema": {
+                "kind": "struct",
+                "nullable": False,
+                "children": (
+                    {"name": "id", "kind": "int", "nullable": False},
+                    {"name": "name", "kind": "string", "nullable": True}
+                ),
+            }},
+        });
+        DataFrame::DataFrame nested_df = DataFrame::DataFrame::fromColumnarResult(nested_columns);
+        DataFrame::DataFrame nested_ipc_df = DataFrame::DataFrame::fromArrowIpc(nested_df.toArrowIpc());
+        assertEq(1, nested_ipc_df.getColumn("customer")[0].id,
+            "Arrow IPC preserves nested struct values");
+        list<hash<auto>> nested_ipc_schema = nested_ipc_df.toColumnarResult().schemaV2();
+        assertEq("struct", nested_ipc_schema[0].kind,
+            "Arrow IPC preserves nested logical type");
+        assertEq("name", nested_ipc_schema[0].children[1].name,
+            "Arrow IPC preserves nested child metadata");
+        DataFrame::DataFrame nested_ipc_slice_df = DataFrame::DataFrame::fromArrowIpc(
+            nested_ipc_df.slice(1, 2).toArrowIpc());
+        assertEq(2, nested_ipc_slice_df.getColumn("customer")[0].id,
+            "Arrow IPC preserves sliced nested struct values through Arrow storage");
+        assertEq(NOTHING, nested_ipc_slice_df.getColumn("customer")[0].name,
+            "Arrow IPC preserves sliced nested struct null child values");
+
+        ColumnarResult list_columns = ColumnarResult::fromColumnHash({
+            "items": ((1, 2), (3, 4, 5), NOTHING),
+        }, {
+            "items": {"schema": {
+                "kind": "list",
+                "nullable": True,
+                "children": ({"name": "item", "kind": "int", "nullable": False},),
+            }},
+        });
+        DataFrame::DataFrame list_df = DataFrame::DataFrame::fromColumnarResult(list_columns);
+        DataFrame::DataFrame list_ipc_df = DataFrame::DataFrame::fromArrowIpc(list_df.toArrowIpc());
+        assertEq((1, 2), list_ipc_df.getColumn("items")[0],
+            "Arrow IPC preserves nested list values");
+        list<hash<auto>> list_ipc_schema = list_ipc_df.toColumnarResult().schemaV2();
+        assertEq("list", list_ipc_schema[0].kind,
+            "Arrow IPC preserves nested list metadata");
+        DataFrame::DataFrame list_ipc_slice_df = DataFrame::DataFrame::fromArrowIpc(
+            list_ipc_df.slice(1, 3).toArrowIpc());
+        assertEq((3, 4, 5), list_ipc_slice_df.getColumn("items")[0],
+            "Arrow IPC preserves sliced nested list values through Arrow storage");
+        assertEq(NOTHING, list_ipc_slice_df.getColumn("items")[1],
+            "Arrow IPC preserves sliced nested list null values");
+
+        assertThrows("DATAFRAME-IO-ERROR", \DataFrame::DataFrame::fromArrowIpc(), (binary("not an arrow stream"),),
+            "Arrow IPC import rejects invalid payloads with DataFrame I/O diagnostics");
     }
 
     mlIntegrationTest() {
@@ -864,6 +2868,26 @@ sub invalid_dataframe_api() {
         assertEq(3, df2.numRows(), "toTable round-trip rows");
         assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
             "toTable round-trip names");
+    }
+
+    dbQueryDispatchTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        MockDataFrameDatasource fallback(False);
+        DataFrame::DataFrame fallback_df = DataFrame::DataFrame::fromQuery(fallback, "select test");
+        assertEq(1, fallback.selectCalls(), "fromQuery uses select() when native columnar support is absent");
+        assertEq(0, fallback.selectColumnarCalls(),
+            "fromQuery avoids selectColumnar() compatibility fallback when native columnar support is absent");
+        assertEq(("Ada", "Bo"), fallback_df.getColumn("name"), "fromQuery select() fallback returns rows");
+
+        MockDataFrameDatasource native(True);
+        DataFrame::DataFrame native_df = DataFrame::DataFrame::fromQuery(native, "select test");
+        assertEq(0, native.selectCalls(), "fromQuery avoids select() when native columnar support is present");
+        assertEq(1, native.selectColumnarCalls(),
+            "fromQuery uses selectColumnar() when native columnar support is present");
+        assertEq((1, 2), native_df.getColumnBuffer("id").toList(),
+            "fromQuery preserves dense native columnar columns");
     }
 
     csvMissingValuesTest() {

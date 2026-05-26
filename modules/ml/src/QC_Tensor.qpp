@@ -1,0 +1,1312 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Tensor.qpp
+
+    Qore ml module - Tensor class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+
+#include "QC_Tensor.h"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <utility>
+#include <vector>
+
+static int64_t qore_tensor_normalize_axis(const QoreTensor* tensor, int64_t axis, const char* method,
+        ExceptionSink* xsink) {
+    int64_t rank = tensor->getRank();
+    if (!rank) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "%s requires tensor rank >= 1", method);
+        return -1;
+    }
+    if (axis < 0) {
+        axis += rank;
+    }
+    if (axis < 0 || axis >= rank) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "%s axis " QLLD " is outside tensor rank " QLLD, method, axis, rank);
+        return -1;
+    }
+    return axis;
+}
+
+static int64_t qore_tensor_normalize_insert_axis(const QoreTensor* tensor, int64_t axis, const char* method,
+        ExceptionSink* xsink) {
+    int64_t rank = tensor->getRank();
+    if (axis < 0) {
+        axis += rank + 1;
+    }
+    if (axis < 0 || axis > rank) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "%s axis " QLLD " is outside insert range [0, " QLLD "]", method, axis, rank);
+        return -1;
+    }
+    return axis;
+}
+
+static QoreHashNode* qore_tensor_device_info_hash(const QoreBufferNode* buffer, ExceptionSink* xsink) {
+    const QoreBufferDeviceInfo* info = buffer->getDeviceInfo();
+    if (!info) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("kind", new QoreStringNode(qore_buffer_device_kind_name(info->kind)), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("device_id", info->device_id, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("name", new QoreStringNode(info->name), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("host_storage", buffer->hasHostStorage(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("device_storage", buffer->hasExternalDeviceStorage(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return rv.release();
+}
+
+static int64_t qore_tensor_shape_product(const std::vector<int64_t>& shape, size_t begin, size_t end,
+        const char* method, ExceptionSink* xsink) {
+    int64_t count = 1;
+    for (size_t i = begin; i < end; ++i) {
+        if (i != begin && !((i - begin) % 100) && qore_check_cancel(xsink, method)) {
+            return -1;
+        }
+        int64_t dim = shape[i];
+        if (dim && count > std::numeric_limits<int64_t>::max() / dim) {
+            xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "%s tensor element count overflows int64", method);
+            return -1;
+        }
+        count *= dim;
+    }
+    return count;
+}
+
+static double qore_tensor_stable_sigmoid(double x) {
+    if (x >= 0.0) {
+        return 1.0 / (1.0 + std::exp(-x));
+    }
+    double z = std::exp(x);
+    return z / (1.0 + z);
+}
+
+static int qore_tensor_require_float(const QoreTensor* tensor, const char* method, ExceptionSink* xsink) {
+    QoreBufferElementType type = tensor->getElementType();
+    if (type != QoreBufferElementType::Float32 && type != QoreBufferElementType::Float64) {
+        xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+            "%s requires a float32 or float64 tensor; got '%s'",
+            method, qore_buffer_element_type_name(type));
+        return -1;
+    }
+    if (tensor->getBuffer()->hasNullableElements()) {
+        xsink->raiseException("ML-TENSOR-ERROR",
+            "%s does not support nullable tensor buffers", method);
+        return -1;
+    }
+    if (tensor->getBuffer()->ensureHostStorage(xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
+template <typename T, typename F>
+static QoreTensor* qore_tensor_unary_float_op(const QoreTensor* tensor, F op, const char* cancel_msg,
+        ExceptionSink* xsink) {
+    const QoreBufferNode* input = tensor->getBuffer();
+    size_t count = input->size();
+    ReferenceHolder<QoreBufferNode> output(new QoreBufferNode(tensor->getElementType(), false, count), xsink);
+    const T* src = static_cast<const T*>(input->getRawData());
+    T* dst = static_cast<T*>((*output)->getRawData());
+    for (size_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, cancel_msg)) {
+            return nullptr;
+        }
+        dst[i] = static_cast<T>(op(static_cast<double>(src[i])));
+    }
+    return new QoreTensor(output.release(), tensor->getShape());
+}
+
+template <typename T>
+static QoreTensor* qore_tensor_softmax_typed(const QoreTensor* tensor, int64_t axis, ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    int64_t outer_i64 = qore_tensor_shape_product(shape, 0, static_cast<size_t>(axis),
+        "softmax() outer shape", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    int64_t inner_i64 = qore_tensor_shape_product(shape, static_cast<size_t>(axis) + 1, shape.size(),
+        "softmax() inner shape", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    int64_t axis_dim_i64 = shape[static_cast<size_t>(axis)];
+    if (!axis_dim_i64) {
+        return new QoreTensor(tensor->getBuffer(), shape);
+    }
+
+    size_t outer = static_cast<size_t>(outer_i64);
+    size_t inner = static_cast<size_t>(inner_i64);
+    size_t axis_dim = static_cast<size_t>(axis_dim_i64);
+    size_t count = tensor->getBuffer()->size();
+    ReferenceHolder<QoreBufferNode> output(new QoreBufferNode(tensor->getElementType(), false, count), xsink);
+    const T* src = static_cast<const T*>(tensor->getBuffer()->getRawData());
+    T* dst = static_cast<T*>((*output)->getRawData());
+
+    size_t checks = 0;
+    size_t element_checks = 0;
+    for (size_t o = 0; o < outer; ++o) {
+        for (size_t i = 0; i < inner; ++i) {
+            if (checks && !(checks % 100) && qore_check_cancel(xsink, "computing tensor softmax")) {
+                return nullptr;
+            }
+            ++checks;
+            size_t base = (o * axis_dim * inner) + i;
+            double max_value = static_cast<double>(src[base]);
+            for (size_t a = 1; a < axis_dim; ++a) {
+                if (++element_checks && !(element_checks % 100)
+                        && qore_check_cancel(xsink, "computing tensor softmax")) {
+                    return nullptr;
+                }
+                max_value = std::max(max_value, static_cast<double>(src[base + (a * inner)]));
+            }
+            double sum = 0.0;
+            for (size_t a = 0; a < axis_dim; ++a) {
+                if (++element_checks && !(element_checks % 100)
+                        && qore_check_cancel(xsink, "computing tensor softmax")) {
+                    return nullptr;
+                }
+                double e = std::exp(static_cast<double>(src[base + (a * inner)]) - max_value);
+                sum += e;
+                dst[base + (a * inner)] = static_cast<T>(e);
+            }
+            if (sum > 0.0) {
+                for (size_t a = 0; a < axis_dim; ++a) {
+                    if (++element_checks && !(element_checks % 100)
+                            && qore_check_cancel(xsink, "computing tensor softmax")) {
+                        return nullptr;
+                    }
+                    size_t idx = base + (a * inner);
+                    dst[idx] = static_cast<T>(static_cast<double>(dst[idx]) / sum);
+                }
+            }
+        }
+    }
+    return new QoreTensor(output.release(), shape);
+}
+
+template <typename T>
+static int qore_tensor_argmax_typed(const QoreTensor* tensor, int64_t axis, QoreBufferNode& output,
+        ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    int64_t outer_i64 = qore_tensor_shape_product(shape, 0, static_cast<size_t>(axis),
+        "argmax() outer shape", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    int64_t inner_i64 = qore_tensor_shape_product(shape, static_cast<size_t>(axis) + 1, shape.size(),
+        "argmax() inner shape", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    size_t outer = static_cast<size_t>(outer_i64);
+    size_t inner = static_cast<size_t>(inner_i64);
+    size_t axis_dim = static_cast<size_t>(shape[static_cast<size_t>(axis)]);
+    const T* src = static_cast<const T*>(tensor->getBuffer()->getRawData());
+    int64_t* dst = static_cast<int64_t*>(output.getRawData());
+
+    size_t out = 0;
+    size_t element_checks = 0;
+    for (size_t o = 0; o < outer; ++o) {
+        for (size_t i = 0; i < inner; ++i) {
+            if (out && !(out % 100) && qore_check_cancel(xsink, "computing tensor argmax")) {
+                return -1;
+            }
+            size_t base = (o * axis_dim * inner) + i;
+            size_t best = 0;
+            T best_value = src[base];
+            for (size_t a = 1; a < axis_dim; ++a) {
+                if (++element_checks && !(element_checks % 100)
+                        && qore_check_cancel(xsink, "computing tensor argmax")) {
+                    return -1;
+                }
+                T value = src[base + (a * inner)];
+                if (value > best_value) {
+                    best_value = value;
+                    best = a;
+                }
+            }
+            dst[out++] = static_cast<int64_t>(best);
+        }
+    }
+    return 0;
+}
+
+template <typename T>
+static int qore_tensor_topk_typed(const QoreTensor* tensor, int64_t axis, int64_t k, QoreBufferNode& values,
+        QoreBufferNode& indices, ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    int64_t outer_i64 = qore_tensor_shape_product(shape, 0, static_cast<size_t>(axis),
+        "topK() outer shape", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    int64_t inner_i64 = qore_tensor_shape_product(shape, static_cast<size_t>(axis) + 1, shape.size(),
+        "topK() inner shape", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    size_t outer = static_cast<size_t>(outer_i64);
+    size_t inner = static_cast<size_t>(inner_i64);
+    size_t axis_dim = static_cast<size_t>(shape[static_cast<size_t>(axis)]);
+    size_t out_k = static_cast<size_t>(k);
+    const T* src = static_cast<const T*>(tensor->getBuffer()->getRawData());
+    T* value_dst = static_cast<T*>(values.getRawData());
+    int64_t* index_dst = static_cast<int64_t*>(indices.getRawData());
+    std::vector<std::pair<T, int64_t>> candidates;
+    candidates.reserve(axis_dim);
+
+    size_t out = 0;
+    size_t element_checks = 0;
+    for (size_t o = 0; o < outer; ++o) {
+        for (size_t i = 0; i < inner; ++i) {
+            if (out && !(out % 100) && qore_check_cancel(xsink, "computing tensor topK")) {
+                return -1;
+            }
+            candidates.clear();
+            size_t base = (o * axis_dim * inner) + i;
+            for (size_t a = 0; a < axis_dim; ++a) {
+                if (++element_checks && !(element_checks % 100)
+                        && qore_check_cancel(xsink, "computing tensor topK")) {
+                    return -1;
+                }
+                candidates.emplace_back(src[base + (a * inner)], static_cast<int64_t>(a));
+            }
+            std::partial_sort(candidates.begin(), candidates.begin() + out_k, candidates.end(),
+                [](const auto& a, const auto& b) {
+                    if (a.first == b.first) {
+                        return a.second < b.second;
+                    }
+                    return a.first > b.first;
+            });
+            for (size_t r = 0; r < out_k; ++r) {
+                if (++element_checks && !(element_checks % 100)
+                        && qore_check_cancel(xsink, "computing tensor topK")) {
+                    return -1;
+                }
+                value_dst[out] = candidates[r].first;
+                index_dst[out] = candidates[r].second;
+                ++out;
+            }
+        }
+    }
+    return 0;
+}
+
+static double qore_tensor_mask_value(const QoreBufferNode* mask, size_t idx, ExceptionSink* xsink) {
+    switch (mask->getElementType()) {
+        case QoreBufferElementType::Float32:
+            return static_cast<const float*>(mask->getRawData())[idx];
+        case QoreBufferElementType::Float64:
+            return static_cast<const double*>(mask->getRawData())[idx];
+        case QoreBufferElementType::Int8:
+            return static_cast<const int8_t*>(mask->getRawData())[idx];
+        case QoreBufferElementType::Int16:
+            return static_cast<const int16_t*>(mask->getRawData())[idx];
+        case QoreBufferElementType::Int32:
+            return static_cast<const int32_t*>(mask->getRawData())[idx];
+        case QoreBufferElementType::Int64:
+            return static_cast<const int64_t*>(mask->getRawData())[idx];
+        case QoreBufferElementType::Bool:
+            return mask->getReferencedEntry(idx, xsink).getAsBool() ? 1.0 : 0.0;
+        default:
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "attention mask tensor dtype '%s' is not numeric or bool",
+                qore_buffer_element_type_name(mask->getElementType()));
+            return 0.0;
+    }
+}
+
+template <typename T>
+static QoreTensor* qore_tensor_pool_embeddings_typed(const QoreTensor* embeddings, const QoreTensor* mask,
+        const char* strategy, ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = embeddings->getShape();
+    size_t rows = static_cast<size_t>(shape[0]);
+    size_t tokens = static_cast<size_t>(shape[1]);
+    size_t dim = static_cast<size_t>(shape[2]);
+    ReferenceHolder<QoreBufferNode> output(new QoreBufferNode(embeddings->getElementType(), false, rows * dim),
+        xsink);
+    const T* src = static_cast<const T*>(embeddings->getBuffer()->getRawData());
+    T* dst = static_cast<T*>((*output)->getRawData());
+    const QoreBufferNode* mask_buffer = mask->getBuffer();
+
+    bool use_cls = !strcmp(strategy, "cls");
+    bool use_max = !strcmp(strategy, "max");
+    bool use_mean = !strcmp(strategy, "mean");
+    if (!use_cls && !use_max && !use_mean) {
+        xsink->raiseException("ML-TENSOR-ERROR",
+            "poolTokenEmbeddings() strategy must be \"mean\", \"max\", or \"cls\"; got \"%s\"", strategy);
+        return nullptr;
+    }
+
+    size_t checks = 0;
+    size_t dim_checks = 0;
+    for (size_t row = 0; row < rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "pooling token embeddings")) {
+            return nullptr;
+        }
+        size_t row_out = row * dim;
+        if (use_cls) {
+            size_t row_in = row * tokens * dim;
+            for (size_t d = 0; d < dim; ++d) {
+                if (++dim_checks && !(dim_checks % 100)
+                        && qore_check_cancel(xsink, "pooling token embeddings")) {
+                    return nullptr;
+                }
+                dst[row_out + d] = tokens ? src[row_in + d] : static_cast<T>(0);
+            }
+            continue;
+        }
+        for (size_t d = 0; d < dim; ++d) {
+            if (++dim_checks && !(dim_checks % 100)
+                    && qore_check_cancel(xsink, "pooling token embeddings")) {
+                return nullptr;
+            }
+            dst[row_out + d] = use_max ? -std::numeric_limits<T>::infinity() : static_cast<T>(0);
+        }
+        double selected = 0.0;
+        for (size_t tok = 0; tok < tokens; ++tok) {
+            if (checks && !(checks % 100) && qore_check_cancel(xsink, "pooling token embedding row")) {
+                return nullptr;
+            }
+            ++checks;
+            double m = qore_tensor_mask_value(mask_buffer, row * tokens + tok, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (!m) {
+                continue;
+            }
+            ++selected;
+            size_t row_in = ((row * tokens) + tok) * dim;
+            for (size_t d = 0; d < dim; ++d) {
+                if (++dim_checks && !(dim_checks % 100)
+                        && qore_check_cancel(xsink, "pooling token embeddings")) {
+                    return nullptr;
+                }
+                if (use_max) {
+                    dst[row_out + d] = std::max(dst[row_out + d], src[row_in + d]);
+                } else {
+                    dst[row_out + d] = static_cast<T>(static_cast<double>(dst[row_out + d])
+                        + static_cast<double>(src[row_in + d]));
+                }
+            }
+        }
+        if (use_mean && selected > 0.0) {
+            for (size_t d = 0; d < dim; ++d) {
+                if (++dim_checks && !(dim_checks % 100)
+                        && qore_check_cancel(xsink, "pooling token embeddings")) {
+                    return nullptr;
+                }
+                dst[row_out + d] = static_cast<T>(static_cast<double>(dst[row_out + d]) / selected);
+            }
+        } else if (use_max && !selected) {
+            for (size_t d = 0; d < dim; ++d) {
+                if (++dim_checks && !(dim_checks % 100)
+                        && qore_check_cancel(xsink, "pooling token embeddings")) {
+                    return nullptr;
+                }
+                dst[row_out + d] = static_cast<T>(0);
+            }
+        }
+    }
+    return new QoreTensor(output.release(), {
+        static_cast<int64_t>(rows),
+        static_cast<int64_t>(dim),
+    });
+}
+
+template <typename T>
+static QoreTensor* qore_tensor_l2_normalize_rows_typed(const QoreTensor* tensor, ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    int64_t rows_i64 = shape.empty() ? 1 : shape[0];
+    int64_t width_i64 = shape.empty()
+        ? 1
+        : qore_tensor_shape_product(shape, 1, shape.size(), "l2NormalizeRows() row width", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    size_t rows = static_cast<size_t>(rows_i64);
+    size_t width = static_cast<size_t>(width_i64);
+    ReferenceHolder<QoreBufferNode> output(new QoreBufferNode(tensor->getElementType(), false,
+        tensor->getBuffer()->size()), xsink);
+    const T* src = static_cast<const T*>(tensor->getBuffer()->getRawData());
+    T* dst = static_cast<T*>((*output)->getRawData());
+
+    size_t element_checks = 0;
+    for (size_t row = 0; row < rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "normalizing tensor rows")) {
+            return nullptr;
+        }
+        size_t offset = row * width;
+        double norm2 = 0.0;
+        for (size_t i = 0; i < width; ++i) {
+            if (++element_checks && !(element_checks % 100)
+                    && qore_check_cancel(xsink, "normalizing tensor rows")) {
+                return nullptr;
+            }
+            double v = static_cast<double>(src[offset + i]);
+            norm2 += v * v;
+        }
+        double norm = std::sqrt(norm2);
+        if (norm > 0.0) {
+            for (size_t i = 0; i < width; ++i) {
+                if (++element_checks && !(element_checks % 100)
+                        && qore_check_cancel(xsink, "normalizing tensor rows")) {
+                    return nullptr;
+                }
+                dst[offset + i] = static_cast<T>(static_cast<double>(src[offset + i]) / norm);
+            }
+        } else {
+            for (size_t i = 0; i < width; ++i) {
+                if (++element_checks && !(element_checks % 100)
+                        && qore_check_cancel(xsink, "normalizing tensor rows")) {
+                    return nullptr;
+                }
+                dst[offset + i] = src[offset + i];
+            }
+        }
+    }
+    return new QoreTensor(output.release(), shape);
+}
+
+template <typename T>
+static int qore_tensor_fill_column_buffer(const QoreTensor* tensor, size_t column, QoreBufferNode& output,
+        ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    size_t rows = static_cast<size_t>(shape[0]);
+    size_t width = shape.size() == 1 ? 1 : static_cast<size_t>(shape[1]);
+    const T* src = static_cast<const T*>(tensor->getBuffer()->getRawData());
+    T* dst = static_cast<T*>(output.getRawData());
+    for (size_t row = 0; row < rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "splitting tensor columns")) {
+            return -1;
+        }
+        dst[row] = src[(row * width) + column];
+    }
+    return 0;
+}
+
+static int qore_tensor_fill_bool_column_buffer(const QoreTensor* tensor, size_t column, QoreBufferNode& output,
+        ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    size_t rows = static_cast<size_t>(shape[0]);
+    size_t width = shape.size() == 1 ? 1 : static_cast<size_t>(shape[1]);
+    const QoreBufferNode* input = tensor->getBuffer();
+    for (size_t row = 0; row < rows; ++row) {
+        if (row && !(row % 100) && qore_check_cancel(xsink, "splitting bool tensor columns")) {
+            return -1;
+        }
+        if (output.setEntry(row, input->getReferencedEntry((row * width) + column, xsink), xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static QoreListNode* qore_tensor_to_column_buffers(const QoreTensor* tensor, ExceptionSink* xsink) {
+    const std::vector<int64_t>& shape = tensor->getShape();
+    if (shape.size() != 1 && shape.size() != 2) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "toColumnBuffers() requires a rank-1 or rank-2 tensor; got rank %zu", shape.size());
+        return nullptr;
+    }
+    if (tensor->getBuffer()->hasNullableElements()) {
+        xsink->raiseException("ML-TENSOR-ERROR",
+            "toColumnBuffers() does not support nullable tensor buffers");
+        return nullptr;
+    }
+    if (tensor->getBuffer()->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    size_t rows = static_cast<size_t>(shape[0]);
+    size_t columns = shape.size() == 1 ? 1 : static_cast<size_t>(shape[1]);
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t column = 0; column < columns; ++column) {
+        if (column && !(column % 100) && qore_check_cancel(xsink, "building tensor column buffers")) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(tensor->getElementType(), false, rows), xsink);
+        int rc = 0;
+        switch (tensor->getElementType()) {
+            case QoreBufferElementType::Float32:
+                rc = qore_tensor_fill_column_buffer<float>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Float64:
+                rc = qore_tensor_fill_column_buffer<double>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int8:
+                rc = qore_tensor_fill_column_buffer<int8_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int16:
+                rc = qore_tensor_fill_column_buffer<int16_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int32:
+                rc = qore_tensor_fill_column_buffer<int32_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Int64:
+                rc = qore_tensor_fill_column_buffer<int64_t>(tensor, column, **buffer, xsink);
+                break;
+            case QoreBufferElementType::Bool:
+                rc = qore_tensor_fill_bool_column_buffer(tensor, column, **buffer, xsink);
+                break;
+            default:
+                xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                    "toColumnBuffers() does not support tensor dtype '%s'",
+                    qore_buffer_element_type_name(tensor->getElementType()));
+                return nullptr;
+        }
+        if (rc || *xsink) {
+            return nullptr;
+        }
+        rv->push(buffer.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+//! Dense tensor value for ML model inference
+/** A Tensor stores model input or output data as a dense \c buffer<T> plus
+    explicit shape metadata. It is the bridge between Qore's columnar dense
+    buffers and model runtimes such as ONNX Runtime.
+
+    Tensor values do not allow nullable buffer elements because model tensors do
+    not carry per-element \c NOTHING values. Impute or filter missing values
+    before creating a Tensor.
+
+    @par Example:
+    @code{.py}
+ML::Tensor input(data: ((1.0, 2.0), (3.0, 4.0)), dtype: "float32");
+assertEq((2, 2), input.getShape());
+hash<auto> outputs = model.runTensors({"X": input});
+    @endcode
+*/
+qclass Tensor [arg=QoreTensor* tensor; ns=Qore::ML; flags=final];
+
+//! Creates a Tensor from a list, nested list, scalar, or dense buffer
+/** @param data source data; accepts numeric/bool/string values, nested lists, or a
+    non-nullable \c buffer<T>
+    @param shape optional tensor shape; inferred from nested lists and defaults
+    to a one-dimensional shape for buffers
+    @param dtype optional buffer element type; expected values are \c int8,
+    \c int16, \c int32, \c int64, \c float32, \c float64, \c bool, or \c string
+    @param zero_copy when True and \a data is a \c buffer<T>, the Tensor keeps a
+    shared reference to the source buffer instead of copying it; later writes to
+    ordinary Qore-owned buffers still detach through buffer copy-on-write
+
+    When \c data is a buffer and \c dtype is supplied, the dtype must match the
+    buffer element type. Use the buffer constructor first when a dtype conversion
+    is required.  The default copy behavior isolates the Tensor from later source
+    buffer writes immediately; set \c zero_copy when avoiding the construction
+    copy matters and normal buffer copy-on-write isolation is acceptable.
+
+    @throw ML-TENSOR-ERROR if the source contains null values or unsupported data
+    @throw ML-TENSOR-SHAPE-ERROR if the shape is invalid or does not match the
+    source element count
+    @throw ML-TENSOR-DTYPE-ERROR if dtype is invalid or incompatible
+*/
+Tensor::constructor(auto data, *list<int> shape, *string dtype, bool zero_copy = False) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, dtype, zero_copy, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_TENSOR, holder.release());
+}
+
+//! Creates a copy of the Tensor
+/** @throw COPY-ERROR Tensor objects cannot be copied implicitly
+*/
+Tensor::copy() {
+    xsink->raiseException("COPY-ERROR", "Tensor objects cannot be copied implicitly");
+}
+
+//! Creates a Tensor from a dense buffer
+/** @param data non-nullable dense buffer
+    @param shape tensor shape
+    @param zero_copy when True, keep a shared reference to \a data instead of
+        copying its storage; later writes to ordinary Qore-owned buffers still
+        detach through buffer copy-on-write
+    @return a Tensor wrapping the buffer data with the given shape
+*/
+static Tensor Tensor::fromBuffer(auto data, list<int> shape, bool zero_copy = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, nullptr, zero_copy, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Creates a row-major two-dimensional Tensor from dense column buffers
+/** @param columns list of equal-length non-nullable dense buffers
+    @param dtype optional tensor dtype; when omitted, the first column's buffer
+        type is used and all columns must have the same type
+
+    @return a Tensor with shape \c (rows, columns)
+
+    This method is optimized for DataFrame and DataProvider columnar pipelines
+    that need to feed multi-feature ONNX models. It packs column buffers into
+    the row-major layout expected by ONNX Runtime without first materializing
+    row hashes or nested Qore lists.
+
+    @throw ML-TENSOR-ERROR if a column is not a dense buffer or contains nulls
+    @throw ML-TENSOR-SHAPE-ERROR if columns have different lengths
+    @throw ML-TENSOR-DTYPE-ERROR if column dtypes are unsupported or inconsistent
+*/
+static Tensor Tensor::fromColumns(list<auto> columns, *string dtype) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromColumns(columns, dtype, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Concatenates row-major Tensors along the first dimension
+/** @param tensors list of tensors with the same dtype, rank, and all dimensions
+        after the first dimension equal
+
+    @return a Tensor with all rows from \a tensors appended in list order
+
+    This method is intended for building ONNX mini-batches from already-dense
+    tensor batches without converting through nested Qore lists.
+
+    @throw ML-TENSOR-ERROR if \a tensors is empty or contains non-Tensor values
+    @throw ML-TENSOR-SHAPE-ERROR if ranks or trailing dimensions differ
+    @throw ML-TENSOR-DTYPE-ERROR if tensor dtypes differ
+*/
+static Tensor Tensor::concatRows(list<Tensor> tensors) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::concatRows(tensors, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Creates a Tensor view with a different shape
+/** @param shape new tensor shape; the element count must match the current tensor
+
+    @return a Tensor that shares the same dense backing buffer
+
+    @throw ML-TENSOR-SHAPE-ERROR if \a shape does not match the element count
+*/
+Tensor Tensor::reshape(list<int> shape) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(tensor->reshape(shape, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Creates a rank-1 Tensor view over the same backing buffer
+/** @return a Tensor with shape \c (size(),) sharing the same dense backing
+        buffer
+
+    This is useful when feeding runtimes or postprocessing code that expects a
+    flat vector while preserving zero-copy semantics for the tensor data.
+
+    @par Example
+    @code{.q}
+ML::Tensor scores(data: ((0.1, 0.9), (0.8, 0.2)), dtype: "float32");
+ML::Tensor flat = scores.flatten();
+assertEq((4,), flat.getShape());
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::flatten() [flags=RET_VALUE_ONLY] {
+    if (tensor->getElementCount() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "flatten() tensor element count overflows int64");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(),
+        {static_cast<int64_t>(tensor->getElementCount())}), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Removes all dimensions of size 1 from the tensor shape
+/** @return a Tensor view sharing the same backing buffer, with singleton
+        dimensions removed
+
+    If all dimensions are singleton dimensions, the result is a scalar tensor
+    with rank 0 and one element.
+
+    @par Example
+    @code{.q}
+ML::Tensor batch(data: new buffer<float32>((1.0f, 2.0f, 3.0f, 4.0f)), shape: (1, 4, 1));
+assertEq((4,), batch.squeeze().getShape());
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::squeeze() [flags=RET_VALUE_ONLY] {
+    std::vector<int64_t> n_shape;
+    const std::vector<int64_t>& old_shape = tensor->getShape();
+    n_shape.reserve(old_shape.size());
+    for (size_t i = 0; i < old_shape.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "squeezing tensor shape")) {
+            return QoreValue();
+        }
+        if (old_shape[i] != 1) {
+            n_shape.push_back(old_shape[i]);
+        }
+    }
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(), std::move(n_shape)), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Inserts a dimension of size 1 into the tensor shape
+/** @param axis insertion point; negative values count from the end plus one, so
+        \c -1 appends a trailing dimension
+    @return a Tensor view sharing the same backing buffer
+
+    @throw ML-TENSOR-SHAPE-ERROR if \a axis is outside the valid insert range
+
+    @par Example
+    @code{.q}
+ML::Tensor input(data: (1.0, 2.0, 3.0), dtype: "float32");
+ML::Tensor batch = input.unsqueeze(0);
+assertEq((1, 3), batch.getShape());
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::unsqueeze(int axis) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    int64_t resolved_axis = qore_tensor_normalize_insert_axis(tensor, axis, "unsqueeze()", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::vector<int64_t> n_shape = tensor->getShape();
+    n_shape.insert(n_shape.begin() + static_cast<std::vector<int64_t>::difference_type>(resolved_axis), 1);
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(), std::move(n_shape)), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Returns a contiguous slice of rows along the first dimension
+/** @param offset first row to include
+    @param count number of rows to include
+    @param zero_copy when True, return a view over the existing backing buffer;
+        when False, copy the selected row range into a new buffer
+
+    @return a Tensor with the same rank and trailing dimensions and \a count
+        rows in the first dimension
+
+    @throw ML-TENSOR-SHAPE-ERROR if the tensor is scalar or the requested range
+        is outside the tensor's first dimension
+*/
+Tensor Tensor::sliceRows(int offset, int count, bool zero_copy = True) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(tensor->sliceRows(offset, count, zero_copy, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Applies a numerically stable sigmoid to every tensor element
+/** @return a Tensor with the same shape and dtype
+
+    This method is intended for ONNX postprocessing, for example converting
+    binary classifier logits to probabilities without first converting the
+    tensor to nested Qore lists.
+
+    @throw ML-TENSOR-DTYPE-ERROR if the tensor is not \c float32 or \c float64
+
+    @since ml 1.1
+*/
+Tensor Tensor::sigmoid() [flags=RET_VALUE_ONLY] {
+    if (qore_tensor_require_float(tensor, "sigmoid()", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(xsink);
+    switch (tensor->getElementType()) {
+        case QoreBufferElementType::Float32:
+            holder = qore_tensor_unary_float_op<float>(tensor, qore_tensor_stable_sigmoid,
+                "computing tensor sigmoid", xsink);
+            break;
+        case QoreBufferElementType::Float64:
+            holder = qore_tensor_unary_float_op<double>(tensor, qore_tensor_stable_sigmoid,
+                "computing tensor sigmoid", xsink);
+            break;
+        default:
+            assert(false);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Applies softmax along a tensor axis
+/** @param axis tensor axis to normalize; negative values count from the end
+        (default \c -1, the last axis)
+    @return a Tensor with the same shape and dtype
+
+    @throw ML-TENSOR-DTYPE-ERROR if the tensor is not \c float32 or \c float64
+    @throw ML-TENSOR-SHAPE-ERROR if \a axis is invalid
+
+    @since ml 1.1
+*/
+Tensor Tensor::softmax(int axis = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (qore_tensor_require_float(tensor, "softmax()", xsink)) {
+        return QoreValue();
+    }
+    int64_t resolved_axis = qore_tensor_normalize_axis(tensor, axis, "softmax()", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(xsink);
+    switch (tensor->getElementType()) {
+        case QoreBufferElementType::Float32:
+            holder = qore_tensor_softmax_typed<float>(tensor, resolved_axis, xsink);
+            break;
+        case QoreBufferElementType::Float64:
+            holder = qore_tensor_softmax_typed<double>(tensor, resolved_axis, xsink);
+            break;
+        default:
+            assert(false);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Returns indices of maximum values along a tensor axis
+/** @param axis tensor axis to reduce; negative values count from the end
+        (default \c -1, the last axis)
+    @return an \c int64 Tensor with \a axis removed from the shape
+
+    @throw ML-TENSOR-SHAPE-ERROR if \a axis is invalid or zero-length
+    @throw ML-TENSOR-DTYPE-ERROR if the tensor dtype is unsupported
+
+    @since ml 1.1
+*/
+Tensor Tensor::argmax(int axis = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    int64_t resolved_axis = qore_tensor_normalize_axis(tensor, axis, "argmax()", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    const std::vector<int64_t>& shape = tensor->getShape();
+    if (!shape[static_cast<size_t>(resolved_axis)]) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "argmax() cannot reduce a zero-length axis");
+        return QoreValue();
+    }
+    if (tensor->getBuffer()->hasNullableElements() || tensor->getBuffer()->ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
+    std::vector<int64_t> out_shape;
+    out_shape.reserve(shape.size() - 1);
+    for (size_t i = 0; i < shape.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building argmax() output shape")) {
+            return QoreValue();
+        }
+        if (i != static_cast<size_t>(resolved_axis)) {
+            out_shape.push_back(shape[i]);
+        }
+    }
+    int64_t out_count_i64 = qore_tensor_shape_product(out_shape, 0, out_shape.size(),
+        "argmax() output shape", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreBufferNode> output(new QoreBufferNode(QoreBufferElementType::Int64, false,
+        static_cast<size_t>(out_count_i64)), xsink);
+    int rc = 0;
+    switch (tensor->getElementType()) {
+        case QoreBufferElementType::Float32:
+            rc = qore_tensor_argmax_typed<float>(tensor, resolved_axis, **output, xsink);
+            break;
+        case QoreBufferElementType::Float64:
+            rc = qore_tensor_argmax_typed<double>(tensor, resolved_axis, **output, xsink);
+            break;
+        case QoreBufferElementType::Int8:
+            rc = qore_tensor_argmax_typed<int8_t>(tensor, resolved_axis, **output, xsink);
+            break;
+        case QoreBufferElementType::Int16:
+            rc = qore_tensor_argmax_typed<int16_t>(tensor, resolved_axis, **output, xsink);
+            break;
+        case QoreBufferElementType::Int32:
+            rc = qore_tensor_argmax_typed<int32_t>(tensor, resolved_axis, **output, xsink);
+            break;
+        case QoreBufferElementType::Int64:
+            rc = qore_tensor_argmax_typed<int64_t>(tensor, resolved_axis, **output, xsink);
+            break;
+        default:
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "argmax() does not support tensor dtype '%s'",
+                qore_buffer_element_type_name(tensor->getElementType()));
+            return QoreValue();
+    }
+    if (rc || *xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(output.release(), std::move(out_shape)), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Returns the top-k values and indices along a tensor axis
+/** @param k number of values to return per slice
+    @param axis tensor axis to reduce; negative values count from the end
+        (default \c -1, the last axis)
+    @return a hash with \c values and \c indices Tensor values
+
+    \c values has the same dtype as the source tensor. \c indices is an
+    \c int64 Tensor containing source-axis indices. Both tensors have the
+    source shape with the selected axis replaced by \a k.
+
+    @throw ML-TENSOR-SHAPE-ERROR if \a axis or \a k is invalid
+    @throw ML-TENSOR-DTYPE-ERROR if the tensor dtype is unsupported
+
+    @since ml 1.1
+*/
+hash<auto> Tensor::topK(int k, int axis = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    int64_t resolved_axis = qore_tensor_normalize_axis(tensor, axis, "topK()", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    const std::vector<int64_t>& shape = tensor->getShape();
+    int64_t axis_dim = shape[static_cast<size_t>(resolved_axis)];
+    if (k <= 0 || k > axis_dim) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "topK() k must be between 1 and axis length " QLLD "; got %d", axis_dim, k);
+        return QoreValue();
+    }
+    if (tensor->getBuffer()->hasNullableElements() || tensor->getBuffer()->ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
+    std::vector<int64_t> out_shape = shape;
+    out_shape[static_cast<size_t>(resolved_axis)] = k;
+    int64_t out_count_i64 = qore_tensor_shape_product(out_shape, 0, out_shape.size(),
+        "topK() output shape", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    size_t out_count = static_cast<size_t>(out_count_i64);
+    ReferenceHolder<QoreBufferNode> values(new QoreBufferNode(tensor->getElementType(), false, out_count), xsink);
+    ReferenceHolder<QoreBufferNode> indices(new QoreBufferNode(QoreBufferElementType::Int64, false, out_count),
+        xsink);
+    int rc = 0;
+    switch (tensor->getElementType()) {
+        case QoreBufferElementType::Float32:
+            rc = qore_tensor_topk_typed<float>(tensor, resolved_axis, k, **values, **indices, xsink);
+            break;
+        case QoreBufferElementType::Float64:
+            rc = qore_tensor_topk_typed<double>(tensor, resolved_axis, k, **values, **indices, xsink);
+            break;
+        case QoreBufferElementType::Int8:
+            rc = qore_tensor_topk_typed<int8_t>(tensor, resolved_axis, k, **values, **indices, xsink);
+            break;
+        case QoreBufferElementType::Int16:
+            rc = qore_tensor_topk_typed<int16_t>(tensor, resolved_axis, k, **values, **indices, xsink);
+            break;
+        case QoreBufferElementType::Int32:
+            rc = qore_tensor_topk_typed<int32_t>(tensor, resolved_axis, k, **values, **indices, xsink);
+            break;
+        case QoreBufferElementType::Int64:
+            rc = qore_tensor_topk_typed<int64_t>(tensor, resolved_axis, k, **values, **indices, xsink);
+            break;
+        default:
+            xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
+                "topK() does not support tensor dtype '%s'",
+                qore_buffer_element_type_name(tensor->getElementType()));
+            return QoreValue();
+    }
+    if (rc || *xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreTensor> values_tensor(new QoreTensor(values.release(), out_shape), xsink);
+    ReferenceHolder<QoreObject> values_obj(qore_ml_tensor_to_object(values_tensor.release(), getProgram(), xsink),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    result->setKeyValue("values", values_obj.release(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreTensor> indices_tensor(new QoreTensor(indices.release(), out_shape), xsink);
+    ReferenceHolder<QoreObject> indices_obj(qore_ml_tensor_to_object(indices_tensor.release(), getProgram(),
+        xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    result->setKeyValue("indices", indices_obj.release(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return result.release();
+}
+
+//! Pools transformer token embeddings using an attention mask
+/** @param attention_mask Tensor with shape \c (batch, tokens)
+    @param strategy pooling strategy: \c "mean", \c "max", or \c "cls"
+    @return a Tensor with shape \c (batch, embedding_dim)
+
+    The receiver must have shape \c (batch, tokens, embedding_dim). This method
+    avoids converting full hidden-state tensors to nested Qore lists when
+    producing sentence embeddings from ONNX transformer outputs.
+
+    @throw ML-TENSOR-SHAPE-ERROR if shapes are incompatible
+    @throw ML-TENSOR-DTYPE-ERROR if the embedding tensor is not floating point
+
+    @since ml 1.1
+*/
+Tensor Tensor::poolTokenEmbeddings(Tensor[QoreTensor] attention_mask, string strategy = "mean")
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (qore_tensor_require_float(tensor, "poolTokenEmbeddings()", xsink)) {
+        return QoreValue();
+    }
+    const std::vector<int64_t>& shape = tensor->getShape();
+    const std::vector<int64_t>& mask_shape = attention_mask->getShape();
+    if (shape.size() != 3) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "poolTokenEmbeddings() receiver must have rank 3 (batch, tokens, dim); got rank %zu",
+            shape.size());
+        return QoreValue();
+    }
+    if (mask_shape.size() != 2 || mask_shape[0] != shape[0] || mask_shape[1] != shape[1]) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "poolTokenEmbeddings() attention mask shape must be (" QLLD ", " QLLD "); got rank %zu",
+            shape[0], shape[1], mask_shape.size());
+        return QoreValue();
+    }
+    if (attention_mask->getBuffer()->hasNullableElements()
+            || attention_mask->getBuffer()->ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreTensor> holder(xsink);
+    switch (tensor->getElementType()) {
+        case QoreBufferElementType::Float32:
+            holder = qore_tensor_pool_embeddings_typed<float>(tensor, *attention_mask, strategy->c_str(), xsink);
+            break;
+        case QoreBufferElementType::Float64:
+            holder = qore_tensor_pool_embeddings_typed<double>(tensor, *attention_mask, strategy->c_str(), xsink);
+            break;
+        default:
+            assert(false);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! L2-normalizes each row of a tensor
+/** @return a Tensor with the same shape and dtype
+
+    Rank-1 tensors are treated as one row. Rank-2 and higher tensors are
+    normalized along all dimensions after the first dimension.
+
+    @throw ML-TENSOR-DTYPE-ERROR if the tensor is not \c float32 or \c float64
+
+    @since ml 1.1
+*/
+Tensor Tensor::l2NormalizeRows() [flags=RET_VALUE_ONLY] {
+    if (qore_tensor_require_float(tensor, "l2NormalizeRows()", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(xsink);
+    switch (tensor->getElementType()) {
+        case QoreBufferElementType::Float32:
+            holder = qore_tensor_l2_normalize_rows_typed<float>(tensor, xsink);
+            break;
+        case QoreBufferElementType::Float64:
+            holder = qore_tensor_l2_normalize_rows_typed<double>(tensor, xsink);
+            break;
+        default:
+            assert(false);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Splits a rank-1 or rank-2 tensor into dense column buffers
+/** @return a list of \c buffer<T> values, one for each logical column
+
+    Rank-1 tensors return one buffer with the tensor data. Rank-2 tensors are
+    interpreted as row-major \c (rows, columns) matrices and return one
+    contiguous buffer per column. This method is intended for DataFrame and
+    DataProvider columnar output paths that need flat dense columns without
+    first materializing nested row lists.
+
+    @par Example
+    @code{.q}
+    ML::Tensor logits = new ML::Tensor(new buffer<float32>((0.2f, 0.8f, 0.4f, 0.6f)), (2, 2));
+    list<auto> columns = logits.toColumnBuffers();
+    # columns[0] contains (0.2f, 0.4f), columns[1] contains (0.8f, 0.6f)
+    @endcode
+
+    @throw ML-TENSOR-SHAPE-ERROR if the tensor rank is not 1 or 2
+    @throw ML-TENSOR-ERROR if the tensor buffer is nullable
+    @throw ML-TENSOR-DTYPE-ERROR if the tensor dtype is unsupported
+
+    @since ml 1.1
+*/
+list<auto> Tensor::toColumnBuffers() [flags=RET_VALUE_ONLY] {
+    return qore_tensor_to_column_buffers(tensor, xsink);
+}
+
+//! Returns the tensor dtype
+/** @return dtype name such as \c float32, \c float64, \c int64, or \c bool
+*/
+string Tensor::getDtype() [flags=CONSTANT] {
+    return new QoreStringNode(qore_buffer_element_type_name(tensor->getElementType()));
+}
+
+//! Returns the tensor shape
+/** @return list of dimension sizes
+*/
+list<int> Tensor::getShape() [flags=CONSTANT] {
+    return tensor->getShapeList(xsink);
+}
+
+//! Returns the number of tensor dimensions
+/** @return tensor rank
+*/
+int Tensor::rank() [flags=CONSTANT] {
+    return tensor->getRank();
+}
+
+//! Returns the number of elements in the tensor
+/** @return element count
+*/
+int Tensor::size() [flags=CONSTANT] {
+    return static_cast<int64_t>(tensor->getElementCount());
+}
+
+//! Returns the dense backing buffer
+/** @return a \c buffer<T> containing the flat tensor data
+*/
+auto Tensor::getBuffer() [flags=RET_VALUE_ONLY] {
+    return tensor->refBuffer();
+}
+
+//! Returns @ref True if the tensor backing buffer has external device storage
+/** @return @ref True when the Tensor wraps accelerator or provider-owned
+        device memory
+
+    @par Example
+    @code{.q}
+if (output.deviceStorage()) {
+    output = output.materialize();
+}
+    @endcode
+
+    @since ml 1.2
+*/
+bool Tensor::deviceStorage() [flags=CONSTANT] {
+    return tensor->getBuffer()->hasExternalDeviceStorage();
+}
+
+//! Returns @ref True if the tensor backing buffer has host storage available
+/** @return @ref True when tensor data can be read from host memory without a
+        device-to-host transfer
+
+    @par Example
+    @code{.q}
+if (!output.hostStorage()) {
+    output = output.materialize();
+}
+    @endcode
+
+    @since ml 1.2
+*/
+bool Tensor::hostStorage() [flags=CONSTANT] {
+    return tensor->getBuffer()->hasHostStorage();
+}
+
+//! Returns metadata for tensor device storage
+/** @return device metadata for device-backed tensors, or @ref NOTHING for
+        ordinary host tensors
+
+    @par Example
+    @code{.q}
+hash<auto> info = output.deviceInfo();
+if (info) {
+    printf("provider output is on %s device %d\n", info.kind, info.device_id);
+}
+    @endcode
+
+    @since ml 1.2
+*/
+*hash<auto> Tensor::deviceInfo() [flags=RET_VALUE_ONLY] {
+    return qore_tensor_device_info_hash(tensor->getBuffer(), xsink);
+}
+
+//! Materializes tensor device storage into host memory
+/** @return a Tensor with the same shape and backing buffer after host storage
+        is available
+
+    @throw BUFFER-DEVICE-STORAGE-ERROR if device storage cannot be copied to
+        host memory
+
+    @par Example
+    @code{.q}
+ML::Tensor readable = output.materialize();
+list<auto> values = readable.toList();
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::materialize() {
+    if (tensor->getMutableBuffer()->ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(), tensor->getShape()), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Converts the tensor to nested Qore lists using its shape
+/** @return nested list representation of the tensor data
+*/
+auto Tensor::toList() [flags=RET_VALUE_ONLY] {
+    return tensor->toList(xsink);
+}

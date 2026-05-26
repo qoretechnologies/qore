@@ -2730,6 +2730,11 @@ string sql = table.getDropTriggerSql("trig_mytable");
 
             # get native type description
             th = otm{opt.native_type};
+            if (!th) {
+                throw "COLUMN-ERROR", sprintf("%s column %y: native type %y mapped from qore type %y is not "
+                    "registered in the native type map (valid values: %y)", getDesc(), cname, opt.native_type,
+                    opt.qore_type, otm.keys());
+            }
 
             # reset qore type from native type
             opt.qore_type = th.qore;
@@ -2960,6 +2965,41 @@ table.insert(row);
     */
     *hash<auto> insert(hash<auto> row, reference<string> sql, hash<auto> opt) {
         return insertIntern(row, \sql, opt);
+    }
+
+    #! Inserts a row or a hash-of-lists row batch without transaction management
+    /** This method is a generic bulk insert hook. The default implementation delegates to
+        @ref SqlUtil::AbstractTable::insert() so all drivers support it; driver-specific
+        subclasses can override it with higher-throughput implementations.
+
+        @param data a hash representing one row or a row batch; for a row batch, hash values are lists
+        where each list entry provides one row value for the corresponding column
+        @param opt optional insert options; see @ref AbstractTable::InsertOptions for more info
+
+        @return the number of rows inserted
+
+        @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
+
+        @since SqlUtil 2.3.0
+    */
+    int bulkInsert(hash<auto> data, *hash<auto> opt) {
+        int rows = 1;
+        foreach auto val in (data.iterator()) {
+            if (val.typeCode() == NT_LIST) {
+                rows = val.size();
+                break;
+            }
+        }
+        if (!rows) {
+            return 0;
+        }
+
+        if (opt) {
+            insert(data, opt);
+        } else {
+            insert(data);
+        }
+        return rows;
     }
 
     #! Inserts a row and returns the result and also the SQL used
@@ -3541,10 +3581,10 @@ upsert(row_hash);
         @see getBulkUpsertClosure()
     */
     code<int(hash<auto>, hash<auto>)> getBulkUpdateClosure(hash<auto> example_set, hash<auto> example_cond) {
-        # execute the first row to generate and prepare the SQL
-        *AbstractSQLStatement stmt;
-        bool first = True;
         return int sub (hash<auto> set_data, hash<auto> cond_data) {
+            # execute the first row to generate and prepare the SQL
+            *AbstractSQLStatement stmt;
+            bool first = True;
             int uc = 0;
             if (set_data.firstValue().typeCode() == NT_LIST) {
                 # hash-of-lists: iterate over rows

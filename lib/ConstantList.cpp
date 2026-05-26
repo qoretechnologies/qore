@@ -38,6 +38,8 @@
 #include <cstdlib>
 #include <cstring>
 
+static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
+
 #ifdef DEBUG
 const char* ClassNs::getName() const {
    return isNs() ? getNs()->name.c_str() : getClass()->name.c_str();
@@ -157,6 +159,24 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
         fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue done ce=%p name=%s pending=%d has=%d saved=%d\n",
             (void*)this, name.c_str(), (int)aot_shell_pending, (int)hasValue(), (int)saved_val.hasNode());
     }
+}
+
+void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
+    bool changed = false;
+    QoreValue resolved = resolveRtConstRefDeep(val, xsink, changed);
+    if (xsink && *xsink) {
+        resolved.discard(nullptr);
+        return;
+    }
+    if (!changed) {
+        resolved.discard(nullptr);
+        return;
+    }
+
+    val.discard(xsink);
+    val = resolved;
+    saved_val.discard(xsink);
+    saved_val = resolved.refSelf();
 }
 
 void ConstantEntry::makeExternalStubDeclaration() {
@@ -386,11 +406,11 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
                 if (!rv) {
                     rv = h->realCopy();
                 }
-                rv->setKeyValue(hi.getKey(), v, xsink);
-                if (*xsink) {
-                    resolved.discard(nullptr);
-                    return QoreValue();
-                }
+                // This is not a source-level assignment; it is materializing a
+                // serialized constant-reference graph.  Preserve the resolved
+                // value exactly, including complex container metadata, instead
+                // of applying hash assignment's plain-hash type stripping.
+                qore_hash_private::get(**rv)->setKeyValueIntern(hi.getKey(), v);
             } else {
                 v.discard(nullptr);
             }

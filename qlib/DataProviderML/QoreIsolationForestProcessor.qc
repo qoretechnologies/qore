@@ -29,7 +29,7 @@ public namespace DataProviderML {
     score each record for anomalousness when the window is full or on flush.
 
 */
-public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreIsolationForestProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -238,9 +238,9 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

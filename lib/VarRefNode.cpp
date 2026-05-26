@@ -538,8 +538,7 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
     // NOTE: VRN_OBJECT is handled separately by the NewObject IR opcode, which calls
     // qore_class_private::execConstructor() directly. This method only handles the
     // non-object typed container construction cases.
-    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(typeInfo,
-        qore_get_current_receiver_type_info());
+    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params_if_needed(typeInfo);
     switch (vrn_type) {
         case VRN_HASHDECL:
             return typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
@@ -565,8 +564,7 @@ QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink)
 QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     ReferenceHolder<> value(xsink);
 
-    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params(typeInfo,
-        qore_get_current_receiver_type_info());
+    const QoreTypeInfo* runtime_type_info = qore_substitute_type_params_if_needed(typeInfo);
     switch (vrn_type) {
         case VRN_OBJECT: {
             assert(QoreTypeInfo::getUniqueReturnClass(runtime_type_info));

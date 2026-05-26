@@ -281,6 +281,8 @@ class AOTSmokeTest inherits QUnit::Test {
         # Map optimization opcodes
         addTestCase("AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
         addTestCase("AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
+        addTestCase("AOT direct-index map-select implicit arg cleanup",
+            \testAOTDirectIndexMapSelectImplicitArgCleanup());
         # AOT Binary Format v1 tests
         addTestCase("AOT v1 version field", \testVersionField());
         addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
@@ -8268,6 +8270,22 @@ printf(\"%d\\n\", pos.size());
         aot_out = compileAndRun(code);
         interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT select on typed int list");
+    }
+
+    testAOTDirectIndexMapSelectImplicitArgCleanup() {
+        # Regression: the direct-index map-select lowering must pop implicit
+        # argument state on both predicate-true and predicate-false paths.
+        string code = "%modern
+hash<auto> row = (\"a\": 1, \"b\": 2, \"c\": 3);
+hash<auto> cols = (\"a\": True);
+*hash<auto> suh;
+list updc = ();
+map updc += $1, keys row, !cols.hasKey($1) && !suh.$1;
+printf(\"%y\\n\", updc);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map-select false predicate restores implicit args");
     }
 
     testCompileV1Binary() {

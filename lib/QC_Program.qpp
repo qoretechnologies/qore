@@ -936,7 +936,7 @@ const PO_NO_ENUM = PO_NO_ENUM;
     - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
     - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
     - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation (default; starts with AST, promotes hot code to IR/JIT)
+    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
 
     @see Program::setExecMode()
     @see Program::getExecMode()
@@ -950,7 +950,7 @@ enum Qore::ExecMode : int {
     EM_IR = QEM_IR,
     //! JIT execution mode - compile to native code via LLVM; fastest execution but has compilation overhead
     EM_JIT = QEM_JIT,
-    //! Tiered execution mode (default) - adaptive compilation; auto-promotes hot functions from AST to IR to JIT
+    //! Tiered execution mode - adaptive compilation; auto-promotes hot functions from AST to IR to JIT
     EM_TIERED = QEM_TIERED,
 };
 
@@ -2209,7 +2209,7 @@ if (sm) {
     - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
     - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
     - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation (default; starts with AST, promotes hot code to IR/JIT)
+    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
 
     @param mode The execution mode to set
 

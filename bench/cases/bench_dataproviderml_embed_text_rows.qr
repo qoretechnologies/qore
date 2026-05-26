@@ -1,0 +1,58 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlEmbedTextRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlEmbedTextRows {
+    constructor() {
+        string model_path = OnnxBench::tokenEmbeddingModelPath();
+        if (!OnnxBench::canRunTextOnnx(model_path)) {
+            printf("dataproviderml_embed_text_rows: skipped (ONNX text fixtures not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_embed_text_rows");
+        r.iterations = 4;
+        r.warmup = 1;
+
+        int rows = OnnxBench::textRows();
+        list<hash<auto>> records;
+        DataProviderML::QoreEmbedTextProcessor proc({
+            "text_field": "body",
+            "window_size": 128,
+            "embedding_mode": "onnx",
+            "embedding_model_path": model_path,
+            "tokenizer_config_path": OnnxBench::tokenizerPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_tokens": 16,
+        });
+
+        r.setup = sub () {
+            records = OnnxBench::makeTextRecords(rows);
+            r.bytes_processed = OnnxBench::approxTextBytes(rows);
+        };
+
+        r.measure = sub () {
+            list<auto> results;
+            foreach hash<auto> rec in (records) {
+                OnnxBench::collectResult(\results, proc.processRecord(rec));
+            }
+            *list<auto> flushed = proc.flushAndCollect();
+            if (flushed) {
+                results += flushed;
+            }
+            OnnxBench::verifyEmbedRows("dataproviderml_embed_text_rows", results, rows);
+        };
+
+        exit(r.run());
+    }
+}

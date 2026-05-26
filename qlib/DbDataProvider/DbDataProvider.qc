@@ -35,6 +35,7 @@ public class DbDataProvider inherits DbDataProviderBase {
             "type": "DbDataProvider",
             "supports_read": True,
             "supports_bulk_read": True,
+            "bulk_read_shapes": (DataProviderShape::BufferColumns, DataProviderShape::HashOfLists),
             "supports_children": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,

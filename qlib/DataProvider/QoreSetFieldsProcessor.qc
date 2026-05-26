@@ -93,6 +93,54 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
         return record + fields;
     }
 
+    #! Applies configured constant fields to a column block
+    private hash<auto> setColumnBlockFields(hash<auto> records, int record_count) {
+        hash<auto> result = records + {};
+        foreach hash<auto> i in (fields.pairIterator()) {
+            result{i.key} = AbstractDataProcessor::repeatValue(i.value, record_count);
+        }
+        return result;
+    }
+
+    #! Applies configured constant fields to a DataFrame without copying existing columns
+    private auto setDataFrameFields(auto records) {
+        auto result = records;
+        int record_count = records.numRows();
+        foreach hash<auto> i in (fields.pairIterator()) {
+            result = result.withColumn(i.key, AbstractDataProcessor::repeatValue(i.value, record_count));
+        }
+        return result;
+    }
+
+    #! Processes an explicitly-shaped block without row materialization
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR", "QoreSetFieldsProcessor: not configured; provide 'fields' option";
+        }
+
+        int record_count = AbstractDataProcessor::shapeRecordCount(records, shape);
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+            case DataProviderShape::HashOfLists:
+                return setColumnBlockFields(records, record_count);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return ColumnarResult::fromColumnHash(setColumnBlockFields(records.toColumnHash(), record_count));
+                }
+                return setColumnBlockFields(records, record_count);
+            case DataProviderShape::DataFrameBlock:
+                return setDataFrameFields(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Processes hash-of-lists blocks without row materialization
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        return processRecordsShapeImpl(records, DataProviderShape::HashOfLists);
+    }
+
     #! Computes the output type based on the input type and the configured fields to set
     /** @param input_type the output type from the preceding pipeline state
 
@@ -121,14 +169,25 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
         return rv.getFields() ? rv : NOTHING;
     }
 
-    #! Indicates that this processor does not support the bulk API
+    #! Indicates that this processor supports the bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_TRANSFORM;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
     }
 }
 }

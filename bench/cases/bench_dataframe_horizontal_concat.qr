@@ -1,0 +1,51 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameHorizontalConcat
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameHorizontalConcat {
+    constructor() {
+        Bench::BenchRunner r("dataframe_horizontal_concat");
+        r.iterations = 12;
+        r.warmup = 3;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame left;
+        DataFrame::DataFrame right;
+
+        r.setup = sub () {
+            hash<auto> left_cols = DataFrameBench::makeBufferColumns(rows);
+            buffer<int64> customer_segment_ids = buffer<int64>::sized(rows);
+            buffer<float64> customer_weights = buffer<float64>::sized(rows);
+            hash<auto> right_cols = {
+                "customer_segment_id": customer_segment_ids,
+                "customer_weight": customer_weights,
+            };
+            for (int i = 0; i < rows; ++i) {
+                customer_segment_ids[i] = i % 3;
+                customer_weights[i] = float(100 + (i % 25)) / 100.0;
+            }
+            left = new DataFrame::DataFrame(left_cols);
+            right = new DataFrame::DataFrame(right_cols);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), 1);
+            DataFrameBench::verifyRows("dataframe_horizontal_concat", combined, rows);
+            if (combined.numCols() != left.numCols() + right.numCols()) {
+                throw "BENCHMARK-ERROR", "dataframe_horizontal_concat lost columns";
+            }
+        };
+
+        exit(r.run());
+    }
+}

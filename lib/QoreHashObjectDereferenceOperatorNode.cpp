@@ -133,7 +133,7 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
                             parse_context.typeInfo, parse_context.pflag) && !err) {
                             err = -1;
                         }
-                        parse_context.typeInfo = qore_substitute_type_params(parse_context.typeInfo, lti);
+                        parse_context.typeInfo = qore_substitute_type_params_if_needed(parse_context.typeInfo, lti);
                         if (!only_hashdecl && QoreTypeInfo::hasType(parse_context.typeInfo)) {
                             parse_context.typeInfo = get_or_nothing_type_check(parse_context.typeInfo);
                         }
@@ -150,7 +150,7 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
                                     && !err) {
                                     err = -1;
                                 }
-                                mti = qore_substitute_type_params(mti, lti);
+                                mti = qore_substitute_type_params_if_needed(mti, lti);
                             }
                         }
                         // issue #3882: taking a slice of a hashdecl returns a hashdecl

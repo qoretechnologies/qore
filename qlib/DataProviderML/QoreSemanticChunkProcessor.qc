@@ -45,7 +45,7 @@ QoreSemanticChunkProcessor proc({
     @endcode
 
 */
-public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -71,9 +71,10 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
                 "display_name": "Tokenizer Config Path",
                 "short_desc": "Path to HuggingFace tokenizer.json",
                 "desc": "Filesystem path to a HuggingFace `tokenizer.json` file used for "
-                    "token counting and sentence segmentation.",
+                    "token counting and sentence segmentation. Provide either this option "
+                    "or `registry_model_name` to load the tokenizer from QoreModelRegistry.",
                 "type": AbstractDataProviderTypeMap."string",
-                "required": True,
+                "required": False,
             },
             "chunk_size": <DataProviderOptionInfo>{
                 "display_name": "Chunk Size",
@@ -157,11 +158,39 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
                 "display_name": "Embedding ONNX Model Path",
                 "short_desc": "Path to the ONNX embedding model",
                 "desc": "Filesystem path to the ONNX embedding model file. "
-                    "Required for `onnx` mode.",
+                    "Required for `onnx` mode unless `registry_model_name` is provided.",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": False,
             },
-        };
+            "registry_model_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Name",
+                "short_desc": "Registry package containing embedding artifacts",
+                "desc": "QoreModelRegistry model/package name containing `tokenizer.json` "
+                    "and, for ONNX embedding mode, an ONNX embedding model artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_version": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Version",
+                "short_desc": "Registry model version or latest",
+                "desc": "Optional registry model version ID. Omit or use `latest` to load "
+                    "the most recent package version.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry ONNX Artifact",
+                "short_desc": "Named ONNX artifact in the package",
+                "desc": "Optional named ONNX artifact. Defaults to the package execution "
+                    "entry artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Tokenizer Artifact",
+                "short_desc": "Named tokenizer.json artifact in the package",
+                "desc": "Optional tokenizer artifact name. Defaults to the package manifest's "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
     private {
@@ -187,12 +216,28 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
             throw "CONSTRUCTOR-ERROR", "text_field option is required";
         }
 
-        if (!copts.tokenizer_config_path.val()) {
-            throw "CONSTRUCTOR-ERROR", "tokenizer_config_path option is required";
+        if (!copts.tokenizer_config_path.val() && !copts.registry_model_name.val()) {
+            throw "CONSTRUCTOR-ERROR",
+                "tokenizer_config_path option is required unless registry_model_name is provided";
         }
 %ifndef NoJson
-        hash<auto> tok_config =
-            parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+        hash<auto> tok_config;
+        *hash<auto> tok_runtime_config;
+        *QoreModelRegistry::ModelRegistry registry;
+        hash<QoreModelRegistry::ModelVersionInfo> manifest;
+        if (copts.registry_model_name.val()) {
+            registry = new QoreModelRegistry::ModelRegistry(
+                AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts));
+            manifest = registry.getVersionManifest(copts.registry_model_name,
+                copts.registry_model_version);
+            hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                copts.registry_model_name, manifest.version_id,
+                copts.registry_tokenizer_artifact_name);
+            tok_config = tokenizer_package.tokenizer_json;
+            tok_runtime_config = tokenizer_package.tokenizer_config;
+        } else {
+            tok_config = parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+        }
 %else
         throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
         hash<auto> tok_config = {};
@@ -219,12 +264,22 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
             emb_config.model = copts.embedding_model;
             emb_config.api_key = copts.embedding_api_key;
         } else if (emb_mode == "onnx") {
-            if (!copts.embedding_model_path.val()) {
+            if (copts.registry_model_name.val()) {
+                string artifact_name = copts.registry_model_artifact_name
+                    ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
+                    ?? "model";
+                emb_config.model_data = registry.loadNamedArtifact(copts.registry_model_name,
+                    manifest.version_id, artifact_name);
+                emb_config.tokenizer_config = tok_config;
+                emb_config.tokenizer_runtime_config = tok_runtime_config;
+            } else if (!copts.embedding_model_path.val()) {
                 throw "CONSTRUCTOR-ERROR",
-                    "embedding_model_path is required for ONNX embedding mode";
+                    "embedding_model_path is required for ONNX embedding mode unless "
+                    "registry_model_name is provided";
+            } else {
+                emb_config.model_path = copts.embedding_model_path;
+                emb_config.tokenizer_config = tok_config;
             }
-            emb_config.model_path = copts.embedding_model_path;
-            emb_config.tokenizer_config = tok_config;
         }
 
         # Build semantic chunker — constructor creates EmbeddingModel from config
@@ -233,6 +288,7 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
             "chunk_overlap": copts.chunk_overlap ?? 50,
             "similarity_threshold": copts.similarity_threshold ?? 0.5,
             "segment_size": copts.segment_size ?? 3,
+            "tokenizer_runtime_config": tok_runtime_config,
         });
 
         configured = True;
@@ -288,9 +344,9 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
         return results;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

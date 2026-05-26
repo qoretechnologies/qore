@@ -15,7 +15,7 @@ and [`design/qore-ir-spec.md`](../design/qore-ir-spec.md) for the substrate
 this proposal builds on.
 
 **Companion designs:**
-- [`plugin-types-and-dense-data.md`](plugin-types-and-dense-data.md) — dense
+- [`plugin-types-and-dense-data.md`](../design/plugin-types-and-dense-data.md) — dense
   homogeneous typed arrays (`buffer<T>`) registered through a public
   plugin-type protocol. **Complementary, not overlapping**: `buffer<T>`
   expresses *N elements of one primitive type* (NumPy-style); `bindecl`
@@ -146,8 +146,8 @@ cheaper at the same time:
   read is, conceptually, a much narrower operation than a generic
   `LoadHashKey`.
 
-The companion plugin-type protocol proposal
-(`plugin-types-and-dense-data.md`) makes the case at length that the
+The companion plugin-type protocol implementation record
+(`../design/plugin-types-and-dense-data.md`) makes the case at length that the
 substrate is ready for typed dense data; `bindecl` reuses that argument
 in a different shape — heterogeneous records instead of homogeneous
 columns.
@@ -1470,7 +1470,7 @@ plumbing — and the `linux-syscall` submodule both belong in their
 own design-pending file.
 
 This estimate is independent of, and complementary to,
-[`plugin-types-and-dense-data.md`](plugin-types-and-dense-data.md).
+[`plugin-types-and-dense-data.md`](../design/plugin-types-and-dense-data.md).
 
 The estimate is lower than the broader draft because v1 now excludes
 variable-length tails and the full FFI module. It is still above the
@@ -1616,7 +1616,7 @@ Constraints:
 
 ## 13. References
 
-- [`plugin-types-and-dense-data.md`](plugin-types-and-dense-data.md) —
+- [`plugin-types-and-dense-data.md`](../design/plugin-types-and-dense-data.md) —
   the dense-buffer plugin-type proposal whose substrate this design
   reuses
 - [`design/hashdecls-cpp.md`](../design/hashdecls-cpp.md) — symmetric

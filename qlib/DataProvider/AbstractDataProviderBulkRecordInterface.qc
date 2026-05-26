@@ -113,9 +113,8 @@ public class AbstractDataProviderBulkRecordInterface {
         return record_count;
     }
 
-    #! Returns a hash of lists (or constant values) or no value if no more data is available
-    /** @return a hash of lists (or constant values) according to the block size or @ref nothing if no more data is
-        available
+    #! Returns data in the iterator's native pipeline shape or no value if no more data is available
+    /** @return a shaped record block according to the block size or @ref nothing if no more data is available
 
         @throw NO-DATA no data available to return and \c requires_result is set
         @throw MAX-RECORDS-EXCEEDED the maximum number of records has been exceeded as set by \c max_records
@@ -124,19 +123,21 @@ public class AbstractDataProviderBulkRecordInterface {
         - This call moves the internal record pointer forward, therefore multiple calls of this methods will
           return different results as long as data is available
         - A short read from getValueImpl() indicates that the final block is being delivered
-        - The first hash key must be assigned to a list and cannot be assigned to a constant value
+        - This method may return a \c HashOfLists block, \c BufferColumns block, or \c DataFrameBlock value
+
+        @since DataProvider 3.5
     */
-    *hash<auto> getValue() {
+    *auto getShapedValue() {
         if (!valid) {
             return;
         }
-        *hash<auto> rv = getValueImpl();
-        int size = rv.firstValue().lsize();
+        *auto rv = getShapedValueImpl();
+        DataProviderShape shape = AbstractDataProcessor::detectShape(rv);
+        int size = exists rv ? AbstractDataProcessor::shapeRecordCount(rv, shape) : 0;
         if (size) {
             if (limit && ((record_count + size) > limit)) {
                 size = limit - record_count;
-                # truncate all lists to the new size
-                map (extract rv{$1.key}, size), rv.pairIterator(), ($1.value.typeCode() == NT_LIST);
+                rv = truncateShapedValue(rv, shape, size);
             }
             record_count += size;
             if ((max_records > 0) && (record_count > max_records)) {
@@ -156,6 +157,55 @@ public class AbstractDataProviderBulkRecordInterface {
         return rv;
     }
 
+    #! Returns a hash of lists (or constant values) or no value if no more data is available
+    /** @return a hash of lists (or constant values) according to the block size or @ref nothing if no more data is
+        available
+
+        @throw NO-DATA no data available to return and \c requires_result is set
+        @throw MAX-RECORDS-EXCEEDED the maximum number of records has been exceeded as set by \c max_records
+
+        @note
+        - This is the compatibility accessor.  Use getShapedValue() when a consumer can preserve pipeline shapes
+          such as \c BufferColumns or \c DataFrameBlock.
+        - This call moves the internal record pointer forward, therefore multiple calls of this methods will
+          return different results as long as data is available
+        - A short read from getValueImpl() indicates that the final block is being delivered
+        - The first hash key must be assigned to a list and cannot be assigned to a constant value
+    */
+    *hash<auto> getValue() {
+        *auto rv = getShapedValue();
+        if (!exists rv) {
+            return;
+        }
+
+        DataProviderShape shape = AbstractDataProcessor::detectShape(rv);
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+                return rv;
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(rv)) {
+                    return AbstractDataProcessor::bufferColumnsToHashList(rv.toColumnHash());
+                }
+                return AbstractDataProcessor::bufferColumnsToHashList(rv);
+            case DataProviderShape::DataFrameBlock:
+                return AbstractDataProcessor::bufferColumnsToHashList(rv.toColumnHash());
+            case DataProviderShape::RowRecords:
+                if (rv.typeCode() == NT_LIST) {
+                    return AbstractDataProcessor::recordsToHashList(rv);
+                }
+                return AbstractDataProcessor::recordsToHashList((rv,));
+        }
+    }
+
+    #! Returns the native pipeline shape produced by getShapedValue()
+    /** @return the native pipeline shape produced by getShapedValue()
+
+        @since DataProvider 3.5
+    */
+    DataProviderShape getValueShape() {
+        return getValueShapeImpl();
+    }
+
     #! Returns a standard record iterator for this bulk iterator
     /** @return a standard record iterator for this bulk iterator
     */
@@ -172,6 +222,42 @@ public class AbstractDataProviderBulkRecordInterface {
     #! Called when the iterator is marked as invalid
     private markInvalid() {
         valid = False;
+    }
+
+    #! Returns a shaped block truncated to the given row count
+    private auto truncateShapedValue(auto rv, DataProviderShape shape, int size) {
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+                return AbstractDataProcessor::sliceColumnBlock(rv, 0, size);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(rv)) {
+                    return rv.slice(offset: 0, count: size);
+                }
+                return AbstractDataProcessor::sliceColumnBlock(rv, 0, size);
+            case DataProviderShape::DataFrameBlock:
+                return rv.slice(0, size);
+            case DataProviderShape::RowRecords:
+                if (rv.typeCode() == NT_LIST) {
+                    return size ? rv[0..(size - 1)] : ();
+                }
+                return size ? rv : NOTHING;
+        }
+        return rv;
+    }
+
+    #! Returns the native pipeline shape produced by getShapedValueImpl()
+    /** This base class method returns @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists"; reimplement
+        in subclasses to advertise a more specific native bulk shape.
+    */
+    private DataProviderShape getValueShapeImpl() {
+        return DataProviderShape::HashOfLists;
+    }
+
+    #! Returns a shaped record block in the iterator's native pipeline shape
+    /** This base class method bridges to getValueImpl() for compatibility.
+    */
+    private *auto getShapedValueImpl() {
+        return getValueImpl();
     }
 
     #! Returns a hash of lists (or constant values) according to the block size

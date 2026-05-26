@@ -103,6 +103,7 @@ class QoreAnalyticsProcessorsTest inherits QUnit::Test {
         addTestCase("group-by - capabilities", \groupByCapabilities());
         addTestCase("group-by - named output columns", \groupByNamedOutputColumns());
         addTestCase("group-by - avg with no numeric values", \groupByAvgNoValues());
+        addTestCase("group-by - bulk hash-of-lists shape", \groupByBulkHashOfLists());
 
         # Integration tests
         addTestCase("integration - pipeline with analytics", \integrationPipeline());
@@ -742,6 +743,53 @@ class QoreAnalyticsProcessorsTest inherits QUnit::Test {
         *list<auto> results = proc.flushRecords();
         assertEq(1, results.size());
         assertEq(0.0, results[0].a);
+    }
+
+    groupByBulkHashOfLists() {
+        hash<auto> records = {
+            "city": ("NYC", "LA", "NYC", "LA"),
+            "amount": (10, 20, 15, 5),
+        };
+
+        QoreGroupByProcessor proc({"group_by": "city", "aggregates": "orders=count(),total=sum(amount)"});
+        assertTrue(proc.supportsBulkApi(), "group-by advertises bulk support");
+        assertTrue(proc.supportsInputShape(DataProviderShape::HashOfLists),
+            "group-by accepts hash-of-lists input");
+        assertTrue(proc.supportsOutputShape(DataProviderShape::HashOfLists),
+            "group-by can preserve hash-of-lists output on pipeline flush");
+        assertNothing(proc.processRecordsShape(records, DataProviderShape::HashOfLists),
+            "group-by accumulates bulk input without immediate output");
+
+        *list<auto> direct_rows = proc.flushRecords();
+        assertEq(2, direct_rows.size(), "direct flush still returns row records for compatibility");
+
+        hash<string, hash<auto>> by_city;
+        foreach auto row in (direct_rows) {
+            by_city{row.city} = row;
+        }
+        assertEq(2, by_city.NYC.orders);
+        assertEq(25.0, by_city.NYC.total);
+        assertEq(2, by_city.LA.orders);
+        assertEq(25.0, by_city.LA.total);
+
+        QoreGroupByProcessor shaped_proc({"group_by": "city", "aggregates": "orders=count(),total=sum(amount)"});
+        assertNothing(shaped_proc.processRecordsBulk(records),
+            "bulk processRecordsBulk() accumulates without immediate output");
+        *list<auto> shaped_output = shaped_proc.flushAndCollect();
+        assertEq(1, shaped_output.size(), "pipeline flush emits one shaped aggregate block");
+        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape(shaped_output[0]),
+            "pipeline flush preserves hash-of-lists shape");
+
+        list<auto> rows = AbstractDataProcessor::hashListToRecords(shaped_output[0]);
+        assertEq(2, rows.size());
+        by_city = {};
+        foreach auto row in (rows) {
+            by_city{row.city} = row;
+        }
+        assertEq(2, by_city.NYC.orders);
+        assertEq(25.0, by_city.NYC.total);
+        assertEq(2, by_city.LA.orders);
+        assertEq(25.0, by_city.LA.total);
     }
 
     # --- Integration Tests ---

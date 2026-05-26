@@ -39,11 +39,7 @@
 %requires(reexport) Logger
 %requires AsyncSocketIo
 %requires HttpClientIo
-
-# Optional AsyncAPI support
-%try-module AsyncApi >= 1.0
-%define NoAsyncApi
-%endtry
+%requires AsyncApi >= 1.0
 
 %try-module yaml >= 0.7.3
 %define NoYaml
@@ -249,6 +245,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_4 v2.4
+    - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketClient
+      metadata always resolves the typed AsyncAPI validator members and methods
     - added async I/O support using the global @ref AsyncSocketIo::AsyncSocketIoController for scalable,
       non-blocking WebSocket client connections; enabled by default for HTTP/1.1 connections
       - added the \c async_io constructor option (default @ref True); the option is retained for compatibility,

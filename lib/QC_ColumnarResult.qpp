@@ -1,0 +1,356 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_ColumnarResult.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+*/
+
+#include <qore/QoreColumnarResult.h>
+
+//! Dense column-oriented SQL result set
+/** Represents a SQL result set as ordered typed columns. Primitive numeric and
+    boolean columns can use dense \c buffer<T> storage; other columns use typed
+    lists or generic lists as needed.
+
+    Columnar results are normally returned by Datasource::selectColumnar(),
+    DatasourcePool::selectColumnar(), and SQLStatement::fetchColumnar().
+
+    @par Example: loading a query result by column
+    @code{.py}
+Datasource ds("pgsql:user/pass@orders%dbhost");
+ColumnarResult result = ds.selectColumnar(
+    "select order_id, customer_name, total from orders where status = %v order by order_id",
+    "open");
+
+buffer<int64> order_ids = result.getColumn("order_id");
+list<*string> customers = result.getColumn("customer_name");
+list<*number> totals = result.getColumn("total");
+
+printf("loaded %d rows from %d columns\n", result.numRows(), result.numCols());
+    @endcode
+
+    @par Example: fetching a prepared statement in blocks
+    @code{.py}
+SQLStatement stmt(ds);
+stmt.prepare("select order_id, total from orders where created >= %v");
+stmt.exec(2026-01-01);
+
+while (True) {
+    ColumnarResult block = stmt.fetchColumnar(rows: 10000);
+    if (!block.numRows()) {
+        break;
+    }
+    buffer<int64> order_ids = block.getColumn("order_id");
+    list<*number> totals = block.getColumn("total");
+    processOrderTotals(order_ids, totals);
+}
+    @endcode
+
+    @par Example: building a DataFrame
+    @code{.py}
+DataFrame::DataFrame df = DataFrame::DataFrame::fromQuery(ds,
+    "select order_id, customer_name, total from orders where status = %v",
+    ("open",));
+    @endcode
+
+    DataFrame::fromQuery() uses Datasource::selectColumnar() when available. DBI drivers that do not yet provide a
+    native columnar implementation still work through libqore's compatibility fallback, which converts the existing
+    column-hash result to a ColumnarResult.
+
+    @since %Qore 2.3
+*/
+qclass ColumnarResult [arg=QoreColumnarResult* result; ns=Qore::SQL; flags=final];
+
+//! ColumnarResult objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+ColumnarResult::copy() {
+    xsink->raiseException("COPY-ERROR", "ColumnarResult objects cannot be copied");
+}
+
+//! Creates a ColumnarResult from a hash of column containers
+/** @param columns hash keyed by column name, where each value is a list or a typed buffer
+    @param desc optional schema metadata keyed by column name; when present, each column
+        descriptor can contain \c native_type, \c type, \c nullable, and \c maxsize
+
+    @return a new ColumnarResult
+
+    Dense buffer columns are referenced directly, so callers can build projected
+    or augmented column blocks without boxing dense values through row records.
+
+    @par Example: building a projected dense block
+    @code{.py}
+hash<auto> columns = result.toColumnHash();
+ColumnarResult compact = ColumnarResult::fromColumnHash({
+    "id": columns.id,
+    "total": columns.total,
+});
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if a column value is not a list or buffer, or
+        if column lengths differ
+*/
+static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<auto> desc)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_columnar_result_to_object(QoreColumnarResult::fromColumnHash(columns, desc, xsink), xsink);
+}
+
+//! Creates a ColumnarResult from row hashes
+/** @param rows list of row hashes
+    @param desc optional schema metadata keyed by column name
+
+    @return a new ColumnarResult
+
+    This is a compatibility constructor for row-oriented data. Prefer
+    fromColumnHash() when column containers are already available.
+
+    @throw COLUMNAR-RESULT-ERROR if row values are not hashes or cannot be
+        converted to columns
+*/
+static ColumnarResult ColumnarResult::fromRows(list<hash<auto>> rows, *hash<auto> desc)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_columnar_result_to_object(QoreColumnarResult::fromRows(rows, desc, xsink), xsink);
+}
+
+//! Returns the number of rows in the result
+/** @return row count
+*/
+int ColumnarResult::numRows() [flags=CONSTANT] {
+    return result->numRows();
+}
+
+//! Returns the number of columns in the result
+/** @return column count
+*/
+int ColumnarResult::numCols() [flags=CONSTANT] {
+    return result->numColumns();
+}
+
+//! Returns the column names in result order
+/** @return ordered list of column names
+*/
+list<string> ColumnarResult::columnNames() [flags=RET_VALUE_ONLY] {
+    return result->getColumnNames(xsink);
+}
+
+//! Returns result schema metadata in result order
+/** Each schema hash contains:
+    - \c name: column name
+    - \c type: columnar storage type name
+    - \c nullable: True if the column can contain null values
+    - \c buffer_type: dense buffer element type, when dense buffer storage is used
+    - \c native_type: database-native type name, when available
+    - \c schema: recursive schema metadata with Arrow/Parquet-style logical type details
+
+    @return ordered list of schema hashes
+
+    @par Example:
+    @code{.py}
+foreach hash<auto> column in (result.schema()) {
+    printf("%s: %s%s\n", column.name, column.type, column.nullable ? " nullable" : "");
+}
+    @endcode
+*/
+list<hash<auto>> ColumnarResult::schema() [flags=RET_VALUE_ONLY] {
+    return result->getSchema(xsink);
+}
+
+//! Returns recursive schema metadata in result order
+/** Each returned hash describes one top-level column and can contain:
+    - \c name: column name
+    - \c kind: logical kind such as \c int, \c string, \c decimal128, \c list,
+      \c struct, or \c timestamp
+    - \c type: compatibility storage type name
+    - \c nullable: True if the value can be null
+    - \c buffer_type: dense buffer element type, when dense buffer storage is used
+    - \c native_type: database, Arrow, Parquet, or driver-native type name
+    - \c precision and \c scale for decimal values
+    - \c time_unit and \c timezone for timestamp values
+    - \c fixed_size for fixed-size list or binary values
+    - \c children for nested list, struct, map, or dictionary values
+
+    The current implementation preserves this metadata for construction,
+    filtering, slicing, and API round trips. Nested and decimal values are still
+    materialized through the existing column containers until the dense nested
+    and decimal storage phases land.
+
+    @return ordered list of recursive schema hashes
+
+    @par Example:
+    @code{.py}
+foreach hash<auto> column in (result.schemaV2()) {
+    printf("%s: %s\n", column.name, column.kind);
+}
+    @endcode
+*/
+list<hash<auto>> ColumnarResult::schemaV2() [flags=RET_VALUE_ONLY] {
+    return result->getSchemaV2(xsink);
+}
+
+//! Returns a column container by name
+/** Primitive columns may be returned as \c buffer<T> values. Other columns are
+    returned as lists.
+
+    @param name column name
+    @return referenced column container
+
+    @throw COLUMNAR-RESULT-ERROR if the column does not exist
+*/
+auto ColumnarResult::getColumn(string name) [flags=RET_VALUE_ONLY] {
+    return result->getColumnValue(name->c_str(), xsink);
+}
+
+//! Returns a hash of column containers
+/** @return hash keyed by column name
+
+    @par Example:
+    @code{.py}
+hash<auto> columns = result.toColumnHash();
+buffer<int64> ids = columns.id;
+    @endcode
+*/
+hash<auto> ColumnarResult::toColumnHash() [flags=RET_VALUE_ONLY] {
+    return result->toColumnHash(xsink);
+}
+
+//! Materializes the result as a list of row hashes
+/** This conversion boxes values per cell and is intended for compatibility
+    paths, diagnostics, and APIs that require row-oriented data.
+
+    @return list of row hashes
+*/
+list<hash<auto>> ColumnarResult::toRows() [flags=RET_VALUE_ONLY] {
+    return result->toRows(xsink);
+}
+
+//! Returns a new ColumnarResult selected by a boolean row mask
+/** @param mask a \c list<bool> or \c buffer<bool> with one entry per row
+
+    @return a new ColumnarResult with only rows whose mask entry is @ref True
+
+    @par Example:
+    @code{.py}
+ColumnarResult active = result.filter(result.getColumn("status_id") == 1);
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if the mask type or length is invalid
+*/
+ColumnarResult ColumnarResult::filter(auto mask) [flags=RET_VALUE_ONLY] {
+    return qore_columnar_result_to_object(result->filter(mask, xsink), xsink);
+}
+
+//! Returns rows selected by explicit zero-based indices in the given order
+/** @param indices row indices to return; duplicate indices are allowed
+
+    @return a new ColumnarResult with rows selected in \a indices order
+
+    Dense buffer columns are preserved as dense buffers. Use this when a
+    ranked or sampled output must keep a specific row order that cannot be
+    represented by a boolean mask.
+
+    @par Example:
+    @code{.py}
+    ColumnarResult top_rows = result.take((4, 0, 2));
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if any row index is outside the result row range
+
+    @since %Qore 2.3
+*/
+ColumnarResult ColumnarResult::take(list<int> indices) [flags=RET_VALUE_ONLY] {
+    return qore_columnar_result_to_object(result->take(indices, xsink), xsink);
+}
+
+//! Returns a contiguous row slice as a new ColumnarResult
+/** @param offset zero-based first row
+    @param count number of rows to include
+
+    @return a new ColumnarResult with the requested row range
+
+    Dense buffer columns are preserved as zero-copy views.
+
+    @par Example:
+    @code{.py}
+ColumnarResult first_batch = result.slice(offset: 0, count: 1000);
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if the requested range is invalid
+*/
+ColumnarResult ColumnarResult::slice(int offset, int count) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (offset < 0 || count < 0) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR",
+            "slice offset " QLLD " and count " QLLD " must be non-negative", offset, count);
+        return QoreValue();
+    }
+    return qore_columnar_result_to_object(result->slice(static_cast<size_t>(offset), static_cast<size_t>(count),
+        xsink), xsink);
+}
+
+//! Combines two boolean row masks and returns a dense boolean mask
+/** @param lhs first \c list<bool> or \c buffer<bool> mask
+    @param rhs second \c list<bool> or \c buffer<bool> mask
+    @param op \c "&&" for intersection or \c "||" for union
+
+    @return a \c buffer<bool> row mask
+
+    @par Example:
+    @code{.py}
+buffer<bool> active = result.getColumn("status_id") == 1;
+buffer<bool> large = result.getColumn("amount") >= 1000.0;
+ColumnarResult selected = result.filter(result.combineMasks(active, large, "&&"));
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if either mask type or length is invalid
+*/
+auto ColumnarResult::combineMasks(auto lhs, auto rhs, string op) [flags=RET_VALUE_ONLY] {
+    return QoreColumnarResult::combineMasks(lhs, rhs, op->c_str(), xsink);
+}
+
+//! Inverts a boolean row mask and returns a dense boolean mask
+/** @param mask a \c list<bool> or \c buffer<bool> row mask
+
+    @return a \c buffer<bool> row mask with each element inverted
+
+    @throw COLUMNAR-RESULT-ERROR if the mask type is invalid
+*/
+auto ColumnarResult::invertMask(auto mask) [flags=RET_VALUE_ONLY] {
+    return QoreColumnarResult::invertMask(mask, xsink);
+}
+
+//! Returns a dense boolean mask for null or non-null values in a column
+/** @param name column name
+    @param invert when @ref True, selects non-null values instead of null values
+
+    @return a \c buffer<bool> row mask
+
+    @par Example:
+    @code{.py}
+ColumnarResult incomplete = result.filter(result.nullMask("completed_at"));
+ColumnarResult complete = result.filter(result.nullMask("completed_at", True));
+    @endcode
+
+    @throw COLUMNAR-RESULT-ERROR if the column does not exist
+*/
+auto ColumnarResult::nullMask(string name, *bool invert) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return result->nullMask(name->c_str(), invert ? static_cast<bool>(invert) : false, xsink);
+}
+
+//! Returns a dense boolean mask for a string predicate
+/** @param name column name
+    @param op predicate name: \c contains, \c starts-with, or \c ends-with
+    @param value predicate value; non-string values are converted with @ref softstring_type "softstring" rules
+    @param ignore_case when @ref True, compares uppercase forms of both strings
+
+    @return a \c buffer<bool> row mask
+
+    @throw COLUMNAR-RESULT-ERROR if the column does not exist or the predicate is not supported
+
+    @since %Qore 2.3
+*/
+auto ColumnarResult::stringPredicateMask(string name, string op, softstring value, *bool ignore_case)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return result->stringPredicateMask(name->c_str(), op->c_str(), value,
+        ignore_case ? static_cast<bool>(ignore_case) : false, xsink);
+}

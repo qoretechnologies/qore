@@ -28,6 +28,7 @@
 #include "i18n-module.h"
 
 #include "qore/QoreSandboxManager.h"
+#include "qore/QoreBufferNode.h"
 #include "qore/SystemEnvironment.h"
 #include "qore/intern/QoreTimeZoneManager.h"
 
@@ -41,6 +42,8 @@
 #include <unicode/parsepos.h>
 #include <unicode/plurrule.h>
 #include <unicode/stringpiece.h>
+#include <unicode/stsearch.h>
+#include <unicode/tblcoll.h>
 #include <unicode/timezone.h>
 #include <unicode/uchar.h>
 #include <unicode/ulocdata.h>
@@ -48,6 +51,7 @@
 #include <unicode/uversion.h>
 
 #include <algorithm>
+#include <cassert>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -1381,6 +1385,287 @@ static icu::UnicodeString i18n_utf8_to_unicode_string(const std::string& value) 
     return icu::UnicodeString::fromUTF8(icu::StringPiece(value));
 }
 
+static bool i18n_get_string_option(const QoreHashNode* opts, const char* key, std::string& out,
+        ExceptionSink* xsink, const char* context) {
+    QoreValue value = opts ? opts->getKeyValue(key) : QoreValue();
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (!i18n_qore_value_to_utf8_string(value, out, xsink, key)) {
+        if (*xsink) {
+            return false;
+        }
+        xsink->raiseException("I18N-%s-ERROR", "%s option '%s' must be a string", context, context, key);
+        return false;
+    }
+    return true;
+}
+
+static bool i18n_get_bool_option(const QoreHashNode* opts, const char* key, bool& out,
+        ExceptionSink* xsink, const char* context) {
+    QoreValue value = opts ? opts->getKeyValue(key) : QoreValue();
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (value.getType() != NT_BOOLEAN) {
+        xsink->raiseException("I18N-%s-ERROR", "%s option '%s' must be a bool; got type '%s'",
+            context, context, key, value.getTypeName());
+        return false;
+    }
+    out = value.getAsBool();
+    return true;
+}
+
+static bool i18n_set_collator_strength(icu::Collator& collator, const std::string& strength,
+        ExceptionSink* xsink) {
+    if (strength == "primary") {
+        collator.setStrength(icu::Collator::PRIMARY);
+    } else if (strength == "secondary") {
+        collator.setStrength(icu::Collator::SECONDARY);
+    } else if (strength == "tertiary") {
+        collator.setStrength(icu::Collator::TERTIARY);
+    } else if (strength == "quaternary") {
+        collator.setStrength(icu::Collator::QUATERNARY);
+    } else if (strength == "identical") {
+        collator.setStrength(icu::Collator::IDENTICAL);
+    } else {
+        xsink->raiseException("I18N-STRING-PREDICATE-ERROR",
+            "unsupported collation strength '%s'; expected one of: primary, secondary, tertiary, quaternary, identical",
+            strength.c_str());
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<icu::RuleBasedCollator> i18n_make_rule_based_collator(
+        const QoreStringNode* locale_arg, const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::unique_ptr<icu::Collator> base = i18n_make_collator(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    icu::RuleBasedCollator* raw_collator = dynamic_cast<icu::RuleBasedCollator*>(base.get());
+    if (!raw_collator) {
+        xsink->raiseException("I18N-STRING-PREDICATE-ERROR",
+            "locale-sensitive string predicates require an ICU rule-based collator");
+        return nullptr;
+    }
+    base.release();
+    std::unique_ptr<icu::RuleBasedCollator> collator(raw_collator);
+
+    std::string strength = "secondary";
+    if (!i18n_get_string_option(opts, "strength", strength, xsink, "STRING-PREDICATE")) {
+        return nullptr;
+    }
+    if (!i18n_set_collator_strength(*collator, strength, xsink)) {
+        return nullptr;
+    }
+
+    bool normalization = true;
+    if (!i18n_get_bool_option(opts, "normalization", normalization, xsink, "STRING-PREDICATE")) {
+        return nullptr;
+    }
+    bool case_level = false;
+    if (!i18n_get_bool_option(opts, "case_level", case_level, xsink, "STRING-PREDICATE")) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    collator->setAttribute(UCOL_NORMALIZATION_MODE, normalization ? UCOL_ON : UCOL_OFF, status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot set collator normalization mode: %s",
+            i18n_icu_error_name(status));
+        return nullptr;
+    }
+    status = U_ZERO_ERROR;
+    collator->setAttribute(UCOL_CASE_LEVEL, case_level ? UCOL_ON : UCOL_OFF, status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot set collator case level: %s",
+            i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    return collator;
+}
+
+static bool i18n_normalize_string_predicate_op(const std::string& raw, std::string& op, ExceptionSink* xsink) {
+    op.clear();
+    std::string lower = raw;
+    std::replace(lower.begin(), lower.end(), '_', '-');
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (lower == "contains") {
+        op = "contains";
+    } else if (lower == "starts-with" || lower == "startswith" || lower == "starts-with?") {
+        op = "starts-with";
+    } else if (lower == "ends-with" || lower == "endswith" || lower == "ends-with?") {
+        op = "ends-with";
+    } else if (lower == "==" || lower == "=" || lower == "eq" || lower == "equals") {
+        op = "equals";
+    } else {
+        xsink->raiseException("I18N-STRING-PREDICATE-ERROR",
+            "unsupported string predicate '%s'; expected contains, starts-with, ends-with, or equals",
+            raw.c_str());
+        return false;
+    }
+    return true;
+}
+
+static bool i18n_string_predicate_match(const std::string& value, const std::string& op,
+        const std::string& needle, icu::RuleBasedCollator& collator, ExceptionSink* xsink) {
+    icu::UnicodeString text = i18n_utf8_to_unicode_string(value);
+    icu::UnicodeString pattern = i18n_utf8_to_unicode_string(needle);
+
+    if (op == "equals") {
+        icu::Collator::EComparisonResult result = collator.compare(text, pattern);
+        return result == icu::Collator::EQUAL;
+    }
+
+    if (pattern.isEmpty()) {
+        return true;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::StringSearch search(pattern, text, &collator, nullptr, status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create locale-sensitive string search: %s",
+            i18n_icu_error_name(status));
+        return false;
+    }
+
+    int32_t pos = search.first(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "locale-sensitive string search failed: %s",
+            i18n_icu_error_name(status));
+        return false;
+    }
+    if (pos == USEARCH_DONE) {
+        return false;
+    }
+
+    if (op == "contains") {
+        return true;
+    }
+    if (op == "starts-with") {
+        return pos == 0;
+    }
+
+    assert(op == "ends-with");
+    size_t checked_matches = 0;
+    while (pos != USEARCH_DONE) {
+        if (checked_matches && !(checked_matches % 100)
+                && qore_check_cancel(xsink, "checking locale-sensitive string suffix matches")) {
+            return false;
+        }
+        ++checked_matches;
+        int32_t len = search.getMatchedLength();
+        if (pos + len == text.length()) {
+            return true;
+        }
+        pos = search.next(status);
+        if (U_FAILURE(status)) {
+            xsink->raiseException("I18N-ICU-ERROR", "locale-sensitive string search failed: %s",
+                i18n_icu_error_name(status));
+            return false;
+        }
+    }
+    return false;
+}
+
+static bool i18n_string_predicate_value(QoreValue value, const std::string& op, const std::string& needle,
+        icu::RuleBasedCollator& collator, ExceptionSink* xsink) {
+    if (value.isNullOrNothing()) {
+        return false;
+    }
+
+    QoreStringValueHelper str(value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    return i18n_string_predicate_match(str->c_str(), op, needle, collator, xsink);
+}
+
+static bool i18n_string_predicate_impl(const QoreStringNode* value, const QoreStringNode* op_arg,
+        const QoreStringNode* needle_arg, const QoreStringNode* locale_arg, const QoreHashNode* opts,
+        ExceptionSink* xsink) {
+    std::string value_str = i18n_string_arg_to_utf8(value, xsink, "value");
+    if (*xsink) {
+        return false;
+    }
+    std::string raw_op = i18n_string_arg_to_utf8(op_arg, xsink, "op", 64);
+    if (*xsink) {
+        return false;
+    }
+    std::string op;
+    if (!i18n_normalize_string_predicate_op(raw_op, op, xsink)) {
+        return false;
+    }
+    std::string needle = i18n_string_arg_to_utf8(needle_arg, xsink, "needle");
+    if (*xsink) {
+        return false;
+    }
+    std::unique_ptr<icu::RuleBasedCollator> collator = i18n_make_rule_based_collator(locale_arg, opts, xsink);
+    if (*xsink) {
+        return false;
+    }
+    return i18n_string_predicate_match(value_str, op, needle, *collator, xsink);
+}
+
+static QoreBufferNode* i18n_string_predicate_mask_impl(QoreValue values, const QoreStringNode* op_arg,
+        const QoreStringNode* needle_arg, const QoreStringNode* locale_arg, const QoreHashNode* opts,
+        ExceptionSink* xsink) {
+    int type = values.getType();
+    if (type != NT_LIST && type != NT_BUFFER) {
+        xsink->raiseException("I18N-STRING-PREDICATE-ERROR",
+            "values must be a list or buffer; got type '%s'", values.getTypeName());
+        return nullptr;
+    }
+
+    std::string raw_op = i18n_string_arg_to_utf8(op_arg, xsink, "op", 64);
+    if (*xsink) {
+        return nullptr;
+    }
+    std::string op;
+    if (!i18n_normalize_string_predicate_op(raw_op, op, xsink)) {
+        return nullptr;
+    }
+    std::string needle = i18n_string_arg_to_utf8(needle_arg, xsink, "needle");
+    if (*xsink) {
+        return nullptr;
+    }
+    std::unique_ptr<icu::RuleBasedCollator> collator = i18n_make_rule_based_collator(locale_arg, opts, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    size_t size = type == NT_LIST ? values.get<const QoreListNode>()->size()
+        : values.get<const QoreBufferNode>()->size();
+    ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(QoreBufferElementType::Bool, false, size), xsink);
+    const QoreListNode* list = type == NT_LIST ? values.get<const QoreListNode>() : nullptr;
+    const QoreBufferNode* buffer = type == NT_BUFFER ? values.get<const QoreBufferNode>() : nullptr;
+
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building locale-sensitive string predicate mask")) {
+            return nullptr;
+        }
+        QoreValue value = list ? list->retrieveEntry(i) : buffer->getReferencedEntry(i, xsink);
+        ValueOptionalRefHolder value_holder(value, buffer != nullptr, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        bool match = i18n_string_predicate_value(*value_holder, op, needle, *collator, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->setEntry(i, match, xsink)) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
 static std::string i18n_select_plural_category(QoreValue value, const QoreStringNode* locale_arg,
         const QoreHashNode* opts, ExceptionSink* xsink) {
     I18nDecimalInfo decimal;
@@ -2098,6 +2383,98 @@ int compare_strings(string left, string right, string locale) [flags=RET_VALUE_O
     icu::Collator::EComparisonResult result = collator->compare(i18n_utf8_to_unicode_string(left_str),
         i18n_utf8_to_unicode_string(right_str));
     return result == icu::Collator::LESS ? -1 : result == icu::Collator::GREATER ? 1 : 0;
+}
+
+//! Evaluates a locale-sensitive string predicate using ICU collation rules.
+/** @param value string to test
+    @param op predicate operator: \c "contains", \c "starts-with", \c "ends-with", or \c "equals"
+    @param needle string to search for or compare against
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @return @ref True if \a value matches the predicate under the locale collator
+
+    @throw I18N-STRING-ERROR if either string cannot be converted to UTF-8
+    @throw I18N-STRING-PREDICATE-ERROR if \a op or an option is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
+
+    @par Example:
+    @code{.py}
+bool tr_match = I18n::string_predicate("Istanbul", "starts-with", "i", "tr-TR");
+bool accent_folded = I18n::string_predicate("Resume", "equals", "resume", "en-US", {"strength": "primary"});
+    @endcode
+*/
+bool string_predicate(string value, string op, string needle, string locale) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return i18n_string_predicate_impl(value, op, needle, locale, nullptr, xsink);
+}
+
+//! Evaluates a locale-sensitive string predicate using ICU collation options.
+/** @param value string to test
+    @param op predicate operator: \c "contains", \c "starts-with", \c "ends-with", or \c "equals"
+    @param needle string to search for or compare against
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @param opts optional hash with collation options:
+      - \c strength: \c "primary", \c "secondary", \c "tertiary", \c "quaternary", or \c "identical"
+      - \c normalization: bool enabling canonical normalization; defaults to @ref True
+      - \c case_level: bool enabling ICU case-level comparison; defaults to @ref False
+    @return @ref True if \a value matches the predicate under the locale collator
+
+    @throw I18N-STRING-ERROR if either string cannot be converted to UTF-8
+    @throw I18N-STRING-PREDICATE-ERROR if \a op or an option is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
+
+    @par Example:
+    @code{.py}
+bool accent_insensitive = I18n::string_predicate("Resume", "equals", "resume", "en-US",
+    {"strength": "primary"});
+bool accent_sensitive = I18n::string_predicate("Resume", "equals", "resume", "en-US",
+    {"strength": "secondary"});
+    @endcode
+*/
+bool string_predicate(string value, string op, string needle, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return i18n_string_predicate_impl(value, op, needle, locale, opts, xsink);
+}
+
+//! Evaluates a locale-sensitive string predicate for every value in a list or buffer.
+/** @param values list or buffer of values to test; @ref NOTHING and @ref NULL entries are returned as @ref False
+    @param op predicate operator: \c "contains", \c "starts-with", \c "ends-with", or \c "equals"
+    @param needle string to search for or compare against
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @return a dense \c buffer<bool> mask
+
+    @throw I18N-STRING-PREDICATE-ERROR if \a values, \a op, or an option is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
+
+    @par Example:
+    @code{.py}
+buffer<bool> selected = I18n::string_predicate_mask(names, "contains", "i", "tr-TR");
+    @endcode
+*/
+auto string_predicate_mask(auto values, string op, string needle, string locale) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return i18n_string_predicate_mask_impl(values, op, needle, locale, nullptr, xsink);
+}
+
+//! Evaluates a locale-sensitive string predicate for every value in a list or buffer with collation options.
+/** @param values list or buffer of values to test; @ref NOTHING and @ref NULL entries are returned as @ref False
+    @param op predicate operator: \c "contains", \c "starts-with", \c "ends-with", or \c "equals"
+    @param needle string to search for or compare against
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @param opts optional hash with the same keys accepted by \ref string_predicate()
+    @return a dense \c buffer<bool> mask
+
+    @throw I18N-STRING-PREDICATE-ERROR if \a values, \a op, or an option is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
+
+    @par Example:
+    @code{.py}
+buffer<bool> selected = I18n::string_predicate_mask(names, "equals", "resume", "en-US",
+    {"strength": "primary"});
+    @endcode
+*/
+auto string_predicate_mask(auto values, string op, string needle, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return i18n_string_predicate_mask_impl(values, op, needle, locale, opts, xsink);
 }
 
 //! Returns an ICU sort key for a string and explicit locale.

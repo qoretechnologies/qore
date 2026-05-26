@@ -45,7 +45,7 @@ FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(
         return nullptr;
 
     qore_type_t t = marg->getType();
-    if (t != NT_LIST) {
+    if (t != NT_LIST && t != NT_BUFFER) {
         if (t == NT_OBJECT) {
             AbstractIteratorHelper h(xsink, who, const_cast<QoreObject*>(marg->get<const QoreObject>()), fwd);
             if (*xsink)
@@ -72,6 +72,9 @@ FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(
     }
 
     value_type = FunctionalOperator::list;
+    if (t == NT_BUFFER) {
+        return new QoreFunctionalBufferOperator(fwd, marg.takeReferencedNode<QoreBufferNode>(), xsink);
+    }
     return new QoreFunctionalListOperator(fwd, marg.takeReferencedNode<QoreListNode>(), xsink);
 }
 
@@ -81,6 +84,28 @@ bool QoreFunctionalListOperator::getNextImpl(ValueOptionalRefHolder& val, Except
         return true;
 
     val.setValue(getValue());
+    return false;
+}
+
+bool QoreFunctionalBufferOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
+    if (fwd) {
+        if (pos == b->size()) {
+            return true;
+        }
+        val.setValue(b->getReferencedEntry(pos++, xsink), true);
+        if (*xsink) {
+            return true;
+        }
+        return false;
+    }
+
+    if (!pos) {
+        return true;
+    }
+    val.setValue(b->getReferencedEntry(--pos, xsink), true);
+    if (*xsink) {
+        return true;
+    }
     return false;
 }
 

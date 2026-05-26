@@ -9,8 +9,8 @@ architecture:
    metrics, serialization, and cross-validation
 2. **`DataProviderML` user module** (Qore) — Data pipeline processor wrappers for all
    algorithms plus metric and registry processors
-3. **`QoreModelRegistry` user module** (Qore) — Model versioning, comparison, and
-   deployment management with pluggable backends
+3. **`QoreModelRegistry` user module** (Qore) — Model versioning, package
+   artifact metadata, comparison, and deployment management with pluggable backends
 4. **`tokenizer` binary module** (C++/utf8proc) — HuggingFace-compatible text tokenization
 
 ## Design Principles
@@ -36,7 +36,7 @@ architecture:
 │  registry model processor                                │
 ├──────────────────────────────────────────────────────────┤
 │             QoreModelRegistry (Qore)                     │
-│  Model versioning, comparison, deployment management     │
+│  Model versions + named artifacts + execution metadata   │
 │  Backends: filesystem, database, REST                    │
 ├──────────────────────────────────────────────────────────┤
 │        ml (C++ binary)          tokenizer (C++ binary)   │
@@ -184,6 +184,7 @@ qlib/QoreModelRegistry/
 ├── FilesystemBackend.qc                  # Filesystem storage (default)
 ├── DatabaseBackend.qc                    # SQL database storage with SqlUtil
 ├── RestBackend.qc                        # REST API storage with LRU caching
+├── ModelArtifactInspector.qc             # Safe package/artifact inspection
 ├── ModelRegistryDataProvider.qc          # DataProvider integration
 └── ModelRegistryDataProviderFactory.qc   # Factory
 ```
@@ -194,7 +195,25 @@ qlib/QoreModelRegistry/
 - **Pluggable backends**: Filesystem (default), database (PostgreSQL/MySQL), REST
 - **Version management**: Register, list, load, tag, prune model versions
 - **Model comparison**: Side-by-side metric comparison of model versions
-- **Artifact access**: `loadArtifact()` for raw binary model data
+- **Package artifacts**: named artifacts for ONNX models, HuggingFace
+  `tokenizer.json`, `config.json`, SafeTensors weights, generation config, and
+  related metadata
+- **Safe inspection**: JSON and SafeTensors headers are parsed; PyTorch pickle
+  artifacts are classified as unsafe/source metadata and are never deserialized
+- **Execution metadata**: `loadExecutable()` runs native `.qml` and ONNX packages
+  and reports descriptive errors for metadata-only packages
+- **Artifact access**: `loadArtifact()`, `loadNamedArtifact()`,
+  `loadJsonArtifact()`, and `loadTokenizerConfig()` for raw and parsed artifacts
+
+### Package Safety Contract
+
+Qore can understand PyTorch/HuggingFace package structure without executing
+arbitrary Python or pickle content. The registry records source framework,
+artifact kind, runtime, safety classification, tokenizer metadata, and the
+artifact list. Safe local execution requires either a native Qore `.qml`
+artifact or an ONNX artifact; SafeTensors-only and PyTorch pickle packages stay
+metadata-only until converted to ONNX or connected to an explicit external
+runtime.
 
 ## ONNX Integration
 
@@ -204,6 +223,11 @@ qlib/QoreModelRegistry/
 - Class registration in `ml-module.cpp` with `#ifdef`
 - `ml_get_capabilities().has_onnx` for runtime detection
 - DataProviderML conditionally registers the onnx-model processor
+- `QoreTokenizerUtils::EmbeddingModel` and `CrossEncoderReranker` accept ONNX
+  model bytes as well as filesystem paths, so registry database/REST artifacts
+  can be executed without temporary files
+- DataProviderML text/embedding/reranking processors can load ONNX and tokenizer
+  artifacts from QoreModelRegistry packages
 
 ## Tokenizer Module
 
@@ -219,6 +243,14 @@ tokenization.
   extension via `addTokens()`
 - **Thread-safe**: `std::shared_mutex` for concurrent encode with dynamic vocab extension
 - **Dependency**: utf8proc (external, dynamically linked)
+
+## Protobuf / ONNX Relationship
+
+The `protobuf` module remains the schema and serialization foundation for Qore's
+ONNX tooling. Model package registration does not require protobuf parsing: the
+registry stores and classifies ONNX artifacts as executable binary model files.
+Detailed ONNX graph inspection/export remains in the ONNX/protobuf layers so the
+registry can stay safe, fast, and backend-agnostic.
 
 ## Extension Guide: Adding a New Algorithm
 

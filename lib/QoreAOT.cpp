@@ -558,6 +558,12 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::ContextDestroy:     return QORE_AOT_FEAT_CONTEXT_IR;
         case QoreIROpcode::Backquote:          return QORE_AOT_FEAT_BACKQUOTE;
         case QoreIROpcode::Find:               return QORE_AOT_FEAT_FIND;
+        case QoreIROpcode::PluginUnary:
+        case QoreIROpcode::PluginBinary:
+        case QoreIROpcode::PluginCall:
+        case QoreIROpcode::PluginSubscript:
+        case QoreIROpcode::PluginConstruct:
+            return QORE_AOT_FEAT_PLUGIN_DISPATCH;
         default:                               return 0;
     }
 }
@@ -734,6 +740,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // path, not only the raw parent hashdecl path, so AOT cold-load can rebuild
     // inherited member type substitutions.
     flags |= QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS;
+    // Complex buffer defaults must preserve whether they came from
+    // buffer<T>(), buffer<T>::sized(), or buffer<T>::filled().
+    flags |= QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND;
     return flags;
 }
 
@@ -9921,6 +9930,13 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     recordExprSlot(bits, inst->opcode);
                     break;
                 }
+                case QoreIROpcode::NewComplexBuffer: {
+                    auto* ncbi = static_cast<QoreIRNewComplexBufferInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncbi->expr, sizeof(bits));
+                    recordExprSlot(bits, inst->opcode);
+                    break;
+                }
                 case QoreIROpcode::VrnConstruct: {
                     auto* vrni = static_cast<QoreIRVrnConstructInstruction*>(inst.get());
                     uint64_t bits;
@@ -10345,6 +10361,15 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* ncli = static_cast<QoreIRNewComplexListInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ncli->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexBuffer: {
+                    auto* ncbi = static_cast<QoreIRNewComplexBufferInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncbi->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ++expr_count;
                     }
@@ -10840,6 +10865,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     memcpy(&bits, &ncli->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ncli->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexBuffer: {
+                    auto* ncbi = static_cast<QoreIRNewComplexBufferInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncbi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ncbi->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;
@@ -12368,6 +12403,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::COMPLEX_LIST_NEW;
         id.ref1 = getSlotTypePath(ncl->typeInfo);
         id.child_expr = ncl->args;
+        return id;
+    }
+
+    // NewComplexBufferNode: complex typed buffer construction (new buffer<int64>(...))
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        id.kind = AOTExprKind::COMPLEX_BUFFER_NEW;
+        id.ref1 = getSlotTypePath(ncb->typeInfo);
+        id.flags = static_cast<uint8_t>(ncb->initKind);
+        id.child_expr = ncb->args;
         return id;
     }
 

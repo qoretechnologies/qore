@@ -67,6 +67,14 @@ DLLLOCAL VectorXd qoreListToVector(const QoreListNode* data, ExceptionSink* xsin
 //! Convert an Eigen vector to a Qore list of floats
 DLLLOCAL QoreListNode* eigenVectorToQoreList(const VectorXd& vec);
 
+//! Convert each Eigen matrix column to a dense buffer<float64>
+DLLLOCAL QoreListNode* eigenMatrixColumnsToFloatBuffers(const MatrixXd& matrix, ExceptionSink* xsink,
+    const char* context);
+
+//! Create a dense buffer<float64> filled with one value
+DLLLOCAL QoreBufferNode* qoreFloat64BufferFilled(size_t length, double value, ExceptionSink* xsink,
+    const char* context);
+
 //! Convert an Eigen row from a matrix to a Qore hash using given field names
 DLLLOCAL QoreHashNode* eigenRowToQoreHash(const MatrixXd& matrix, Eigen::Index row,
     const std::vector<std::string>& field_names);

@@ -48,8 +48,16 @@ public hashdecl RerankerConfig {
     *string api_key;
     #! ONNX mode: path to the ONNX cross-encoder model
     *string model_path;
+    #! ONNX mode: in-memory .onnx model data from a registry or database artifact
+    *binary model_data;
     #! ONNX mode: tokenizer config for input preparation
     *hash<auto> tokenizer_config;
+    #! ONNX mode: optional parsed tokenizer_config.json companion settings
+    *hash<auto> tokenizer_runtime_config;
+    #! ONNX mode: optional session configuration for providers, threading, and graph optimization
+    *hash<ML::OnnxSessionConfig> session_config;
+    #! ONNX mode: optional output tensor names to request from ONNX Runtime
+    *list<string> output_names;
     #! Maximum sequence length for query+passage pairs; default 512
     int max_length = 512;
     #! Activation function for ONNX logits: "sigmoid" (default, binary relevance),
@@ -69,7 +77,7 @@ public hashdecl RerankerConfig {
 
     Supports two backends:
     - \b HTTP: Calls a reranker API endpoint that accepts query/passages pairs
-    - \b ONNX: Runs a local ONNX cross-encoder model (not yet implemented)
+    - \b ONNX: Runs a local ONNX cross-encoder model through dense tensor inputs
 
     @par Example: Re-rank retrieval candidates
     @code{.py}
@@ -111,6 +119,10 @@ public class CrossEncoderReranker {
         *ML::OnnxModel onnx_model;
         #! HuggingFace tokenizer for ONNX mode
         *Tokenizer::HFTokenizer onnx_tokenizer;
+        #! Input tensors accepted by the ONNX model
+        hash<string, bool> onnx_input_names = {};
+        #! Optional output tensor names requested from the ONNX model
+        *list<string> output_names;
     }
 
     #! Creates a CrossEncoderReranker with the given configuration
@@ -135,8 +147,9 @@ public class CrossEncoderReranker {
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
-            if (!config.model_path.val()) {
-                throw "RERANKER-CONFIG-ERROR", "model_path is required for ONNX mode";
+            if (!config.model_path.val() && !exists config.model_data) {
+                throw "RERANKER-CONFIG-ERROR",
+                    "model_path or model_data is required for ONNX mode";
             }
             if (!config.tokenizer_config) {
                 throw "RERANKER-CONFIG-ERROR",
@@ -144,8 +157,26 @@ public class CrossEncoderReranker {
             }
             max_length = config.max_length;
             activation = config.activation;
-            onnx_model = new ML::OnnxModel(config.model_path);
+            if (exists config.output_names) {
+                output_names = config.output_names;
+                if (!output_names) {
+                    throw "RERANKER-CONFIG-ERROR",
+                        "output_names must contain at least one ONNX output tensor name; "
+                        "omit output_names to request all model outputs";
+                }
+            }
+            onnx_model = exists config.session_config
+                ? (exists config.model_data
+                    ? new ML::OnnxModel(config.model_data, config.session_config)
+                    : new ML::OnnxModel(config.model_path, config.session_config))
+                : (exists config.model_data
+                    ? new ML::OnnxModel(config.model_data)
+                    : new ML::OnnxModel(config.model_path));
+            onnx_input_names = CrossEncoderReranker::buildOnnxInputNameMap(onnx_model);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
+            if (config.tokenizer_runtime_config) {
+                onnx_tokenizer.loadConfig(config.tokenizer_runtime_config);
+            }
         }
     }
 
@@ -236,108 +267,128 @@ public class CrossEncoderReranker {
         @return list of float relevance scores (0.0 to 1.0)
     */
     private list<float> scoreOnnx(string query, list<string> passages) {
-        # Tokenize all query-passage pairs
-        list<hash<auto>> encodings = ();
-        foreach string passage in (passages) {
-            hash<auto> enc = onnx_tokenizer.encodeAdvanced(query, {
-                "text_pair": passage,
-                "max_length": max_length,
-                "truncation": "longest_first",
-            });
-            push encodings, enc;
-        }
-
-        # Find max sequence length across all pairs for padding
-        int pad_len = 0;
-        foreach hash<auto> enc in (encodings) {
-            if (enc.input_ids.size() > pad_len) {
-                pad_len = enc.input_ids.size();
-            }
-        }
-
         int pad_token_id = onnx_tokenizer.getPadTokenId();
         if (pad_token_id < 0) {
             pad_token_id = 0;
         }
 
-        # Pad all sequences to uniform length and build input tensors
-        list<list<int>> all_input_ids = ();
-        list<list<int>> all_attention_mask = ();
-        list<list<int>> all_token_type_ids = ();
-
-        foreach hash<auto> enc in (encodings) {
-            list<int> ids = enc.input_ids;
-            list<int> mask = enc.attention_mask ?? (map 1, range(ids.size()));
-            list<int> type_ids = enc.token_type_ids ?? (map 0, range(ids.size()));
-
-            int pad_count = pad_len - ids.size();
-            if (pad_count > 0) {
-                ids += (map pad_token_id, range(pad_count));
-                mask += (map 0, range(pad_count));
-                type_ids += (map 0, range(pad_count));
-            }
-
-            push all_input_ids, ids;
-            push all_attention_mask, mask;
-            push all_token_type_ids, type_ids;
-        }
-
-        # Run inference in sub-batches for memory efficiency
+        # Tokenize and run inference in sub-batches for memory efficiency.
         int batch_size = 16;
         list<float> all_scores = ();
 
-        int total = all_input_ids.size();
+        int total = passages.size();
         int offset = 0;
         while (offset < total) {
             int end = min(offset + batch_size, total);
-            list<list<int>> batch_ids = all_input_ids[offset .. end - 1];
-            list<list<int>> batch_mask = all_attention_mask[offset .. end - 1];
-            list<list<int>> batch_types = all_token_type_ids[offset .. end - 1];
+            list<string> batch_passages = passages[offset .. end - 1];
+            list<string> batch_queries = map query, range(batch_passages.size());
 
-            hash<auto> inputs = {
-                "input_ids": batch_ids,
-                "attention_mask": batch_mask,
-                "token_type_ids": batch_types,
-            };
+            hash<Tokenizer::TokenizerModelInputBatch> token_batch = onnx_tokenizer.encodeBatchPairsForModel(
+                batch_queries, batch_passages, {
+                    "max_length": max_length,
+                    "truncation": "longest_first",
+                    "padding": "batch_longest",
+                    "pad_token_id": pad_token_id,
+                });
 
-            hash<auto> result = onnx_model.run(inputs);
+            hash<auto> inputs = makeOnnxTokenTensorInputs(token_batch);
 
-            # Extract logits and apply sigmoid
+            hash<auto> result = onnx_model.runTensors(inputs, output_names);
+
+            # Extract logits and apply the configured activation function.
             # Cross-encoder models typically output logits in a "logits" key
-            # or a single unnamed output; handle both
+            # or a single unnamed output; handle both.
             auto logits = result.logits ?? result{result.firstKey()};
-
-            if (logits.typeCode() == NT_LIST) {
-                foreach auto logit_row in (logits) {
-                    float raw;
-                    if (logit_row.typeCode() == NT_LIST) {
-                        # Shape [batch, 1] or [batch, num_labels]
-                        raw = logit_row[0].toFloat();
-                    } else {
-                        raw = logit_row.toFloat();
-                    }
-                    # Apply configured activation function
-                    switch (activation) {
-                        case "sigmoid":
-                            push all_scores, 1.0 / (1.0 + exp(-raw));
-                            break;
-                        case "none":
-                            push all_scores, raw;
-                            break;
-                        case "softmax":
-                            # For single-output models, softmax degenerates to sigmoid
-                            push all_scores, 1.0 / (1.0 + exp(-raw));
-                            break;
-                        default:
-                            push all_scores, 1.0 / (1.0 + exp(-raw));
-                    }
-                }
+            foreach float score in (scoresFromLogits(logits)) {
+                push all_scores, score;
             }
 
             offset = end;
         }
 
         return all_scores;
+    }
+
+    #! Converts ONNX logits to relevance scores while avoiding nested list materialization where possible
+    private list<float> scoresFromLogits(auto logits) {
+        if (logits instanceof ML::Tensor) {
+            ML::Tensor tensor = cast<ML::Tensor>(logits);
+            list<int> shape = tensor.getShape();
+            bool simple = shape.lsize() == 1 || (shape.lsize() == 2 && shape[1] == 1);
+            if (simple) {
+                list<float> rv = ();
+                auto values = tensor.getBuffer().toList();
+                foreach auto value in (values) {
+                    push rv, applyActivation(value.toFloat());
+                }
+                return rv;
+            }
+            return scoresFromListLogits(tensor.toList());
+        }
+        return scoresFromListLogits(logits);
+    }
+
+    #! Converts row/list logits to relevance scores using the established fallback semantics
+    private list<float> scoresFromListLogits(auto logits) {
+        list<float> rv = ();
+        if (logits.typeCode() == NT_LIST) {
+            foreach auto logit_row in (logits) {
+                float raw;
+                if (logit_row.typeCode() == NT_LIST) {
+                    # Shape [batch, 1] or [batch, num_labels]
+                    raw = logit_row[0].toFloat();
+                } else {
+                    raw = logit_row.toFloat();
+                }
+                push rv, applyActivation(raw);
+            }
+        }
+        return rv;
+    }
+
+    #! Applies the configured scalar activation function
+    private float applyActivation(float raw) {
+        switch (activation) {
+            case "sigmoid":
+                return 1.0 / (1.0 + exp(-raw));
+            case "none":
+                return raw;
+            case "softmax":
+                # For single-output models, softmax degenerates to sigmoid.
+                return 1.0 / (1.0 + exp(-raw));
+            default:
+                return 1.0 / (1.0 + exp(-raw));
+        }
+    }
+
+    #! Builds ONNX Runtime tensor inputs from dense tokenizer buffers
+    private hash<auto> makeOnnxTokenTensorInputs(hash<Tokenizer::TokenizerModelInputBatch> token_batch) {
+        hash<auto> inputs = {};
+
+        if (onnx_input_names.hasKey("input_ids")) {
+            inputs{"input_ids"} = ML::Tensor::fromBuffer(token_batch.input_ids, token_batch.shape, True);
+        }
+        if (onnx_input_names.hasKey("attention_mask")) {
+            inputs{"attention_mask"} = ML::Tensor::fromBuffer(token_batch.attention_mask, token_batch.shape, True);
+        }
+        if (onnx_input_names.hasKey("token_type_ids")) {
+            inputs{"token_type_ids"} = ML::Tensor::fromBuffer(token_batch.token_type_ids, token_batch.shape, True);
+        }
+
+        if (!inputs.hasKey("input_ids")) {
+            throw "RERANKER-ERROR",
+                "ONNX reranker model must expose a standard 'input_ids' tensor input";
+        }
+        return inputs;
+    }
+
+    #! Builds a hash map of declared ONNX model input names
+    private static hash<string, bool> buildOnnxInputNameMap(auto model) {
+        hash<string, bool> rv = {};
+        foreach hash<ML::OnnxTensorInfo> input in (model.getInputInfo()) {
+            rv{input.name} = True;
+        }
+        return rv;
     }
 
     #! Scores via HTTP endpoint

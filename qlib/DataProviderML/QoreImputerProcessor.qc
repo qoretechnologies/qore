@@ -34,7 +34,7 @@ public namespace DataProviderML {
     missing values.
 
 */
-public class QoreImputerProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreImputerProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -274,9 +274,9 @@ public class QoreImputerProcessor inherits DataProvider::AbstractDataProvider {
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

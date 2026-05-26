@@ -349,6 +349,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::NewHashDecl: return "new.hash.decl";
         case QoreIROpcode::NewComplexHash: return "new.complex.hash";
         case QoreIROpcode::NewComplexList: return "new.complex.list";
+        case QoreIROpcode::NewComplexBuffer: return "new.complex.buffer";
         case QoreIROpcode::VrnConstruct: return "vrn.construct";
         case QoreIROpcode::NewHashDeclFromHash: return "new.hash.decl.from.hash";
         case QoreIROpcode::HashSetKeyValue: return "hash.set.key.value";
@@ -414,6 +415,13 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::Sprintf: return "sprintf";
         case QoreIROpcode::DebugBlock: return "debug.block";
         case QoreIROpcode::CheckException: return "check.exception";
+        case QoreIROpcode::PluginUnary: return "plugin.unary";
+        case QoreIROpcode::PluginBinary: return "plugin.binary";
+        case QoreIROpcode::PluginCall: return "plugin.call";
+        case QoreIROpcode::PluginSubscript: return "plugin.subscript";
+        case QoreIROpcode::PluginConstruct: return "plugin.construct";
+        case QoreIROpcode::PluginDenseBufferUnary: return "plugin.dense.buffer.unary";
+        case QoreIROpcode::PluginDenseBufferBinary: return "plugin.dense.buffer.binary";
     }
     return "unknown";
 }
@@ -556,6 +564,21 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 out << " <complex-hash>";
             } else if (inst->opcode == QoreIROpcode::NewComplexList) {
                 out << " <complex-list>";
+            } else if (inst->opcode == QoreIROpcode::NewComplexBuffer) {
+                out << " <complex-buffer>";
+            } else if (auto* plugin_inst = dynamic_cast<const QoreIRPluginInstruction*>(inst.get())) {
+                out << " <plugin";
+                if (plugin_inst->operation.global_operation_id) {
+                    out << " global:" << plugin_inst->operation.global_operation_id;
+                }
+                if (!plugin_inst->operation.module_name.empty()) {
+                    out << " module:" << plugin_inst->operation.module_name
+                        << " local:" << plugin_inst->operation.local_operation_id;
+                }
+                if (plugin_inst->operation.fp_reassociation_enabled) {
+                    out << " fp-fast-math";
+                }
+                out << ">";
             } else if (inst->opcode == QoreIROpcode::VrnConstruct) {
                 out << " <vrn-construct>";
             } else if (inst->opcode == QoreIROpcode::NewHashDeclFromHash) {

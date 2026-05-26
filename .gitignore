@@ -199,5 +199,8 @@ fontconfig/
 /crash-dumps/core.*
 /crash-dumps/backtrace-*.txt
 
+# local benchmark run output
+/bench/*-current.json
+
 # compile_all_modules.sh output
 /qlib-bin/

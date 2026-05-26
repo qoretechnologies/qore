@@ -560,6 +560,112 @@ class TestPipelineDataProvider inherits AbstractDataProvider {
     }
 }
 
+class BufferColumnBulkRecordProvider inherits AbstractDataProviderBulkRecordInterface {
+    private {
+        bool available = True;
+    }
+
+    constructor() : AbstractDataProviderBulkRecordInterface(10) {
+    }
+
+    private DataProviderShape getValueShapeImpl() {
+        return DataProviderShape::BufferColumns;
+    }
+
+    private *auto getShapedValueImpl() {
+        if (!available) {
+            return;
+        }
+        available = False;
+        return {
+            "id": new buffer<int64>((10, 20)),
+            "score": new buffer<float64>((1.5, 2.5)),
+        };
+    }
+
+    private *hash<auto> getValueImpl() {
+        throw "TEST-ERROR", "createRecordsBulk(stream) must consume the shaped bulk API";
+    }
+}
+
+class BulkShapeTestProvider inherits AbstractDataProvider {
+    public {
+        *DataProviderShape last_shape;
+        *auto last_recs;
+        int shape_create_calls = 0;
+        int bulk_create_calls = 0;
+        int shape_upsert_calls = 0;
+        int bulk_upsert_calls = 0;
+    }
+
+    private {
+        *list<DataProviderShape> create_shapes;
+        *list<DataProviderShape> upsert_shapes;
+    }
+
+    constructor(*list<DataProviderShape> create_shapes, *list<DataProviderShape> upsert_shapes) {
+        self.create_shapes = create_shapes;
+        self.upsert_shapes = upsert_shapes;
+    }
+
+    string getName() {
+        return "BulkShapeTestProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        hash<DataProviderInfo> info = <DataProviderInfo>{
+            "name": "bulk-shape-test",
+            "desc": "bulk shape test provider",
+            "type": "bulk-shape-test",
+            "supports_create": True,
+            "supports_bulk_create": True,
+            "supports_upsert": True,
+            "supports_bulk_upsert": True,
+        };
+        if (create_shapes) {
+            info.bulk_create_shapes = create_shapes;
+        }
+        if (upsert_shapes) {
+            info.bulk_upsert_shapes = upsert_shapes;
+        }
+        return info;
+    }
+
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+        last_shape = DataProviderShape::HashOfLists;
+        last_recs = recs;
+        ++bulk_create_calls;
+        return recs;
+    }
+
+    private *hash<auto> createRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        last_shape = shape;
+        last_recs = recs;
+        ++shape_create_calls;
+        return AbstractDataProcessor::bufferColumnsToHashList(recs);
+    }
+
+    private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        return UpsertResultInserted;
+    }
+
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
+        last_shape = DataProviderShape::HashOfLists;
+        last_recs = recs;
+        ++bulk_upsert_calls;
+        return AbstractDataProcessor::repeatValue(UpsertResultInserted,
+            AbstractDataProcessor::shapeRecordCount(recs, DataProviderShape::HashOfLists));
+    }
+
+    private *list<string> upsertRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        last_shape = shape;
+        last_recs = recs;
+        ++shape_upsert_calls;
+        return AbstractDataProcessor::repeatValue(UpsertResultUpdated,
+            AbstractDataProcessor::shapeRecordCount(recs, shape));
+    }
+}
+
 public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
         # Keep this core module test independent of host-specific provider discovery configuration.
@@ -577,6 +683,8 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("filtered hash map type hint test", \filteredHashMapTypeHintTest());
         addTestCase("optional typed hash field test", \optionalTypedHashFieldTest());
         addTestCase("generic record iterator test", \genericRecordIteratorTest());
+        addTestCase("processor shape API test", \processorShapeApiTest());
+        addTestCase("bulk provider shape API test", \bulkProviderShapeApiTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
@@ -600,6 +708,81 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, row.id);
         assertEq("alpha", row.name);
         assertFalse(i.next());
+    }
+
+    processorShapeApiTest() {
+        assertEq(DataProviderShape::RowRecords, AbstractDataProcessor::detectShape({"a": 1}));
+        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape({"a": (1, 2)}));
+        assertEq(2, AbstractDataProcessor::shapeRecordCount({"a": (1, 2)}, DataProviderShape::HashOfLists));
+
+        list<auto> rows = AbstractDataProcessor::convertShape({"a": (1, 2), "b": ("x", "y")},
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+        assertEq(2, rows.size());
+        assertEq({"a": 1, "b": "x"}, rows[0]);
+        assertEq({"a": 2, "b": "y"}, rows[1]);
+
+        hash<auto> columns = AbstractDataProcessor::convertShape({"a": 1, "b": "x"},
+            DataProviderShape::RowRecords, DataProviderShape::HashOfLists)[0];
+        assertEq({"a": (1,), "b": ("x",)}, columns);
+
+        ReturnBasedProcessor proc();
+        assertTrue(proc.supportsInputShape(DataProviderShape::HashOfLists));
+        assertTrue(proc.supportsInputShape(DataProviderShape::RowRecords));
+        assertFalse(proc.supportsInputShape(DataProviderShape::DataFrameBlock));
+    }
+
+    bulkProviderShapeApiTest() {
+        hash<auto> dense_columns = {
+            "id": new buffer<int64>((1, 2)),
+            "score": new buffer<float64>((90.5, 88.0)),
+        };
+
+        BulkShapeTestProvider provider(
+            (DataProviderShape::BufferColumns,),
+            (DataProviderShape::BufferColumns,));
+        assertEqSoft((DataProviderShape::BufferColumns,), provider.getBulkCreateShapes(),
+            "provider advertises native bulk create shapes");
+        assertEqSoft((DataProviderShape::BufferColumns,), provider.getBulkUpsertShapes(),
+            "provider advertises native bulk upsert shapes");
+        assertTrue(provider.supportsBulkCreateShape(DataProviderShape::BufferColumns),
+            "provider reports BufferColumns create support");
+        assertTrue(provider.supportsBulkUpsertShape(DataProviderShape::BufferColumns),
+            "provider reports BufferColumns upsert support");
+        assertFalse(provider.supportsBulkCreateShape(DataProviderShape::DataFrameBlock),
+            "provider does not report unadvertised create shapes");
+
+        assertEq({"id": (1, 2), "score": (90.5, 88.0)}, provider.createRecordsBulk(dense_columns, NOTHING),
+            "advertised BufferColumns bulk create preserves the native shape until provider dispatch");
+        assertEq(DataProviderShape::BufferColumns, provider.last_shape,
+            "BufferColumns create dispatch uses createRecordsShapeImpl()");
+        assertEq(1, provider.shape_create_calls, "BufferColumns create calls shaped provider implementation");
+        assertEq(0, provider.bulk_create_calls, "BufferColumns create does not fall back to hash-of-lists first");
+
+        assertEq((UpsertResultUpdated, UpsertResultUpdated), provider.upsertRecordsBulk(dense_columns, NOTHING),
+            "advertised BufferColumns bulk upsert preserves the native shape until provider dispatch");
+        assertEq(DataProviderShape::BufferColumns, provider.last_shape,
+            "BufferColumns upsert dispatch uses upsertRecordsShapeImpl()");
+        assertEq(1, provider.shape_upsert_calls, "BufferColumns upsert calls shaped provider implementation");
+        assertEq(0, provider.bulk_upsert_calls, "BufferColumns upsert does not fall back to hash-of-lists first");
+
+        BulkShapeTestProvider fallback_provider(NOTHING, NOTHING);
+        assertEqSoft((DataProviderShape::HashOfLists,), fallback_provider.getBulkCreateShapes(),
+            "providers without explicit create shapes default to hash-of-lists compatibility");
+        assertEq({"id": (1, 2), "score": (90.5, 88.0)}, fallback_provider.createRecordsBulk(dense_columns, NOTHING),
+            "unadvertised BufferColumns bulk create falls back automatically to hash-of-lists");
+        assertEq(DataProviderShape::HashOfLists, fallback_provider.last_shape,
+            "fallback create dispatch uses hash-of-lists provider implementation");
+        assertEq(0, fallback_provider.shape_create_calls, "fallback create does not call shaped implementation");
+        assertEq(1, fallback_provider.bulk_create_calls, "fallback create calls bulk hash-of-lists implementation");
+
+        BulkShapeTestProvider stream_provider(
+            (DataProviderShape::BufferColumns,),
+            (DataProviderShape::BufferColumns,));
+        assertEq({"id": (10, 20), "score": (1.5, 2.5)},
+            stream_provider.createRecordsBulk(new BufferColumnBulkRecordProvider(), NOTHING),
+            "stream bulk create consumes getShapedValue() automatically");
+        assertEq(DataProviderShape::BufferColumns, stream_provider.last_shape,
+            "stream bulk create preserves the advertised stream shape");
     }
 
     filteredHashMapTypeHintTest() {

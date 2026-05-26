@@ -69,6 +69,7 @@
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/QoreAOT.h>
+#include <qore/intern/QorePluginRegistry.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/Variable.h>
 #include <qore/intern/AbstractStatement.h>
@@ -166,6 +167,16 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_unary_op", reinterpret_cast<void*>(&qore_rt_unary_op) },
+    { "qore_rt_plugin_unary", reinterpret_cast<void*>(&qore_rt_plugin_unary) },
+    { "qore_rt_plugin_binary", reinterpret_cast<void*>(&qore_rt_plugin_binary) },
+    { "qore_rt_plugin_call", reinterpret_cast<void*>(&qore_rt_plugin_call) },
+    { "qore_rt_plugin_call_args", reinterpret_cast<void*>(&qore_rt_plugin_call_args) },
+    { "qore_rt_plugin_subscript", reinterpret_cast<void*>(&qore_rt_plugin_subscript) },
+    { "qore_rt_plugin_construct", reinterpret_cast<void*>(&qore_rt_plugin_construct) },
+    { "qore_rt_plugin_construct_args", reinterpret_cast<void*>(&qore_rt_plugin_construct_args) },
+    { "qore_rt_plugin_dense_buffer_unary", reinterpret_cast<void*>(&qore_rt_plugin_dense_buffer_unary) },
+    { "qore_rt_plugin_dense_buffer_binary", reinterpret_cast<void*>(&qore_rt_plugin_dense_buffer_binary) },
+    { "qore_rt_guard_plugin_type_profiled", reinterpret_cast<void*>(&qore_rt_guard_plugin_type_profiled) },
     { "qore_rt_expr_op", reinterpret_cast<void*>(&qore_rt_expr_op) },
     { "qore_rt_comparison_op", reinterpret_cast<void*>(&qore_rt_comparison_op) },
     { "qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op) },
@@ -267,6 +278,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_new_hash_decl_from_hash_by_path_cached) },
     { "qore_rt_new_complex_hash_aot", reinterpret_cast<void*>(&qore_rt_new_complex_hash_aot) },
     { "qore_rt_new_complex_list_aot", reinterpret_cast<void*>(&qore_rt_new_complex_list_aot) },
+    { "qore_rt_new_complex_buffer_aot", reinterpret_cast<void*>(&qore_rt_new_complex_buffer_aot) },
     { "qore_rt_lvalue_load_aot", reinterpret_cast<void*>(&qore_rt_lvalue_load_aot) },
     { "qore_rt_lvalue_store_aot", reinterpret_cast<void*>(&qore_rt_lvalue_store_aot) },
     { "qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot) },
@@ -1198,7 +1210,7 @@ static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreV
 
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
-    ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
+    ti = qore_substitute_type_params_if_needed(ti);
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
     qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
@@ -2676,6 +2688,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_aot(QoreAOTContext* ctx, 
     return qore_rt_new_complex_list(node, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer(const NewComplexBufferNode* node, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<NewComplexBufferNode*>(node)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_aot(QoreAOTContext* ctx, int32_t idx,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    QoreValue expr = fromBits(ctx->exprs[idx]);
+    auto* node = dynamic_cast<const NewComplexBufferNode*>(expr.getInternalNode());
+    if (!node) {
+        xsink->raiseException("AOT-ERROR", "invalid expression for complex buffer construction AOT call");
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_buffer(node, xsink);
+}
+
 // --- VarRefNewObjectNode construction helper (non-object types) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct(const VarRefNewObjectNode* vrn, ExceptionSink* xsink) {
@@ -2722,7 +2755,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path(const char
         std::string error;
         QoreAOTTypeResolver resolver(pgm);
         const QoreTypeInfo* ti = resolver.resolve(hd_path, error);
-        ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
+        ti = qore_substitute_type_params_if_needed(ti);
         hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
     }
     if (!hd) {
@@ -2766,7 +2799,7 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
         QoreAOTTypeResolver resolver(pgm);
         const QoreTypeInfo* ti = resolver.resolve(hd_path, error);
         if (ti) {
-            ti = qore_substitute_type_params(ti, receiver_type_info);
+            ti = qore_substitute_type_params_if_needed(ti, receiver_type_info);
             hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
         }
     }
@@ -2944,7 +2977,7 @@ static const QoreTypeInfo* qore_rt_resolve_element_type_path(const char* type_pa
         xsink->raiseException("AOT-TYPE-ERROR",
             "%s cannot resolve list element type '%s': %s", op, type_path, error.c_str());
     }
-    return qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
+    return qore_substitute_type_params_if_needed(ti);
 }
 
 static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path, const char* op,
@@ -2969,12 +3002,12 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path,
         xsink->raiseException("AOT-TYPE-ERROR",
             "%s cannot resolve container type '%s': %s", op, type_path, error.c_str());
     }
-    return qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
+    return qore_substitute_type_params_if_needed(ti);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo,
         uint64_t hash_bits, ExceptionSink* xsink) {
-    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
+    typeInfo = qore_substitute_type_params_if_needed(typeInfo);
     if (!typeInfo) {
         if (xsink) {
             xsink->raiseException("HASH-INIT-ERROR",
@@ -3009,7 +3042,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(co
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo,
         uint64_t value_bits, ExceptionSink* xsink) {
-    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
+    typeInfo = qore_substitute_type_params_if_needed(typeInfo);
     if (!typeInfo) {
         if (xsink) {
             xsink->raiseException("LIST-INIT-ERROR",
@@ -3033,9 +3066,51 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value_by_type_path(c
     return qore_rt_new_complex_list_from_value(typeInfo, value_bits, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    return qore_rt_new_complex_buffer_from_value_kind(typeInfo, value_bits,
+        static_cast<int32_t>(QoreComplexBufferInitKind::Constructor), xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_kind(const QoreTypeInfo* typeInfo,
+        uint64_t value_bits, int32_t init_kind, ExceptionSink* xsink) {
+    typeInfo = qore_substitute_type_params_if_needed(typeInfo);
+    if (!typeInfo) {
+        if (xsink) {
+            xsink->raiseException("BUFFER-INIT-ERROR",
+                "typed buffer initializer is missing target type metadata");
+        }
+        return toBits(QoreValue());
+    }
+
+    QoreValue value = fromBits(value_bits);
+    QoreValue init = value.hasNode() ? value.refSelf() : value;
+    QoreBufferNode* result = qore_new_complex_buffer_from_value(typeInfo, init, xsink,
+        static_cast<QoreComplexBufferInitKind>(init_kind));
+    return toBits(result ? QoreValue(result) : QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_by_type_path(const char* type_path,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(type_path, "NewComplexBuffer", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_buffer_from_value(typeInfo, value_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_kind_by_type_path(const char* type_path,
+        uint64_t value_bits, int32_t init_kind, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(type_path, "NewComplexBuffer", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_buffer_from_value_kind(typeInfo, value_bits, init_kind, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type,
         ExceptionSink* xsink) {
-    element_type = qore_substitute_type_params(element_type, qore_get_current_receiver_type_info());
+    element_type = qore_substitute_type_params_if_needed(element_type);
     QoreListNode* list = new QoreListNode(element_type ? element_type : autoTypeInfo);
     return toBits(QoreValue(list));
 }
@@ -3077,7 +3152,7 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
 
     if (list_val.isNothing()) {
         // Auto-vivify empty list (already has refcount 1 from new)
-        element_type = qore_substitute_type_params(element_type, qore_get_current_receiver_type_info());
+        element_type = qore_substitute_type_params_if_needed(element_type);
         QoreListNode* l = new QoreListNode(element_type ? element_type : autoTypeInfo);
         l->push(push_val.refSelf(), xsink);
         QoreValue result(l);
@@ -3197,7 +3272,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue
 // --- Container construction helpers ---
 
 static const QoreTypeInfo* qore_rt_get_declared_list_value_type(const QoreTypeInfo* typeInfo) {
-    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
+    typeInfo = qore_substitute_type_params_if_needed(typeInfo);
     const QoreTypeInfo* vtype = QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
     if (!vtype) {
         vtype = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
@@ -3206,7 +3281,7 @@ static const QoreTypeInfo* qore_rt_get_declared_list_value_type(const QoreTypeIn
 }
 
 static const QoreTypeInfo* qore_rt_get_declared_hash_value_type(const QoreTypeInfo* typeInfo) {
-    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
+    typeInfo = qore_substitute_type_params_if_needed(typeInfo);
     const QoreTypeInfo* vtype = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
     if (!vtype) {
         vtype = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
@@ -3766,7 +3841,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, con
 
 static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, ExceptionSink* xsink) {
     const QoreTypeInfo* typeInfo = var ? var->getTypeInfoForLValue() : nullptr;
-    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
+    typeInfo = qore_substitute_type_params_if_needed(typeInfo);
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_HASH)) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot convert lvalue declared as %s to a hash",
             QoreTypeInfo::getName(typeInfo));
@@ -4090,6 +4165,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64
             return toBits(QoreValue(static_cast<int64>(
                 static_cast<const unsigned char*>(b->getPtr())[index])));
         }
+    } else if (v.getType() == NT_BUFFER) {
+        const QoreBufferNode* b = v.get<const QoreBufferNode>();
+        if (index >= 0 && static_cast<size_t>(index) < b->size()) {
+            return toBits(b->getReferencedEntry(static_cast<size_t>(index), xsink));
+        }
     }
     // Unsupported container type or index out of bounds: return NOTHING.
     return toBits(QoreValue());
@@ -4314,7 +4394,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list(int64_t capacity, Except
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list_typed(int64_t capacity,
         const QoreTypeInfo* element_type, ExceptionSink* xsink) {
-    element_type = qore_substitute_type_params(element_type, qore_get_current_receiver_type_info());
+    element_type = qore_substitute_type_params_if_needed(element_type);
     QoreListNode* list = new QoreListNode(element_type ? element_type : autoTypeInfo);
     if (capacity > 0) {
         qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
@@ -6345,7 +6425,7 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             // even though the argument itself is already an NT_REFERENCE.
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params(paramTypeInfo, receiver_type_info);
+                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
             }
             if (paramTypeInfo && (QoreTypeInfo::hasType(paramTypeInfo)
                     || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
@@ -6375,7 +6455,7 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             // Apply type filter like the standard path in lib/Function.cpp:404-410
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params(paramTypeInfo, receiver_type_info);
+                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
             }
             if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
@@ -6411,11 +6491,11 @@ static bool qore_rt_method_fast_call_eligible(const AbstractQoreFunctionVariant*
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info) {
     const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-    return receiver_type_info ? qore_substitute_type_params(rt, receiver_type_info) : rt;
+    return receiver_type_info ? qore_substitute_type_params_if_needed(rt, receiver_type_info) : rt;
 }
 
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig) {
-    return qore_rt_get_effective_return_type(sig, qore_get_current_receiver_type_info());
+    return qore_substitute_type_params_if_needed(sig->getReturnTypeInfo());
 }
 
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
@@ -11093,7 +11173,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
         return toBits(QoreValue());
     }
     RuntimeConfig& rc = rc_get_current_ref();
-    object_type_info = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
+    object_type_info = qore_substitute_type_params_if_needed(object_type_info);
     // Pass nullptr (not *arg_list) when nargs=0: buildArgListFromNanBoxed
     // returns null for empty lists and *arg_list on a null holder is UB.
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
@@ -11117,7 +11197,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
         return toBits(QoreValue());
     }
     RuntimeConfig& rc = rc_get_current_ref();
-    object_type_info = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
+    object_type_info = qore_substitute_type_params_if_needed(object_type_info);
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
         nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
 }
@@ -12784,6 +12864,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_list
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_throwing(
+        const NewComplexBufferNode* node, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_hash_from_hash_throwing(
         const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_complex_hash_from_hash(typeInfo, hash_bits, xsink);
@@ -12814,6 +12912,44 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_list
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_list_from_value_by_type_path_throwing(
         const char* type_path, uint64_t value_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_complex_list_from_value_by_type_path(type_path, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_from_value_throwing(
+        const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value(typeInfo, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_from_value_by_type_path_throwing(
+        const char* type_path, uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value_by_type_path(type_path, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_buffer_from_value_kind_throwing(
+        const QoreTypeInfo* typeInfo, uint64_t value_bits, int32_t init_kind, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value_kind(typeInfo, value_bits, init_kind, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_new_complex_buffer_from_value_kind_by_type_path_throwing(const char* type_path, uint64_t value_bits,
+        int32_t init_kind, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_buffer_from_value_kind_by_type_path(type_path, value_bits, init_kind,
+        xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

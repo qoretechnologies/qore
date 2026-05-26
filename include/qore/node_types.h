@@ -90,9 +90,11 @@ const qore_type_t NT_NEW_OBJECT             = 47; //!< type value for NewObjectC
 const qore_type_t NT_WEAKREF_HASH           = 48; //!< type value for WeakHashReferenceNode
 const qore_type_t NT_WEAKREF_LIST           = 49; //!< type value for WeakListReferenceNode
 const qore_type_t NT_ENUM                   = 50; //!< type value for enum values (TAG_ENUM in QoreValue)
+const qore_type_t NT_BUFFER                 = 51; //!< type value for QoreBufferNode
+const qore_type_t NT_PLUGIN_VALUE           = 52; //!< type value for module-defined plugin value nodes
 
 //! number of types implemented in the Qore library
-#define QORE_NUM_TYPES 50
+#define QORE_NUM_TYPES 53
 
 //! number of simple value types (not containers)
 #define NUM_SIMPLE_TYPES 8

@@ -70,6 +70,68 @@ class TestInputProvider inherits AbstractDataProvider {
     }
 }
 
+class TestColumnarBulkRecordInterface inherits AbstractDataProviderBulkRecordInterface {
+    private {
+        int offset;
+    }
+
+    constructor(int block_size) : AbstractDataProviderBulkRecordInterface(block_size) {
+    }
+
+    private *auto getShapedValueImpl() {
+        list<string> values = ("a-0", "a-1", "a-2");
+        if (offset >= values.size()) {
+            return;
+        }
+
+        int size = min(offset ? 1 : 2, values.size() - offset);
+        list<string> block = values[offset..(offset + size - 1)];
+        offset += size;
+        return ColumnarResult::fromColumnHash({"sub-a": block, "sub-b": map $1 + "-b", block});
+    }
+
+    private DataProviderShape getValueShapeImpl() {
+        return DataProviderShape::BufferColumns;
+    }
+
+    private *hash<auto> getValueImpl() {
+        *auto block = getShapedValueImpl();
+        if (!exists block) {
+            return;
+        }
+        return AbstractDataProcessor::convertShape(block, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists)[0];
+    }
+}
+
+class TestColumnarInputProvider inherits AbstractDataProvider {
+    string getName() {
+        return "TestColumnarInputProvider";
+    }
+
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_bulk_read": True,
+            "bulk_read_shapes": (DataProviderShape::BufferColumns, DataProviderShape::HashOfLists),
+            "has_record": True,
+            "expressions": AbstractDataProvider::GenericExpressions,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "sub-a": new QoreDataField("sub-a", "a", AbstractDataProviderType::get("string")),
+            "sub-b": new QoreDataField("sub-b", "b", AbstractDataProviderType::get("string")),
+        };
+    }
+
+    private AbstractDataProviderBulkRecordInterface searchRecordsBulkImpl(int block_size = 1000,
+            *hash<auto> where_cond, *hash<auto> search_options) {
+        return new TestColumnarBulkRecordInterface(2);
+    }
+}
+
 class TestOutputProvider inherits AbstractDataProvider {
     string getName() {
         return "TestOutputProvider";
@@ -522,6 +584,8 @@ public class MapperTest inherits QUnit::Test {
         addTestCase("Test mapAll()", \testMapperMapAll());
         addTestCase("Test mapData()", \testMapperMapData());
         addTestCase("Test mapAuto()", \testMapperMapAuto());
+        addTestCase("Test columnar mapAuto()", \testMapperColumnarMapAuto());
+        addTestCase("Test columnar mapAutoInput()", \testMapperColumnarMapAutoInput());
         addTestCase("Runtime test", \testMapperRuntime());
         addTestCase("Test 'input' option", \testMapperOptionInput());
         addTestCase("Bulk Test", \testMapperBulk());
@@ -1104,6 +1168,78 @@ public class MapperTest inherits QUnit::Test {
             "ctx1": ("11-c1-ctx", "10-c1-ctx", "-c1-ctx"),
             "ctx2": "x",
         }, res);
+    }
+
+    testMapperColumnarMapAuto() {
+        Mapper m(DataMap2, m_opts + {
+            "output": {
+                "int_field": {},
+                "date_field": {
+                    "type": "date",
+                },
+            },
+            "global_type_options": {
+                "date.format": "DD.MM.YYYY",
+            },
+        });
+
+        assertTrue(m.supportsInputShape(DataProviderShape::BufferColumns),
+            "Mapper advertises BufferColumns input support");
+        assertTrue(m.supportsInputShape(DataProviderShape::DataFrameBlock),
+            "Mapper advertises DataFrameBlock input support");
+
+        ColumnarResult input = ColumnarResult::fromColumnHash(MapInput3);
+        auto mapped = m.mapAuto(input);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(mapped),
+            "Mapper preserves ColumnarResult input as BufferColumns output");
+        hash<auto> rows = AbstractDataProcessor::convertShape(mapped, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists)[0];
+        assertEq({
+            "int_field": (11, 10, NOTHING),
+            "date_field": (2019-12-10, 2019-12-11, 2019-12-12),
+        }, rows, "Mapper maps ColumnarResult input without row-materialized input");
+
+        auto buffer_mapped = m.mapAuto({
+            "count": new buffer<int64>((21, 22)),
+            "idate": ("13.12.2019", "14.12.2019"),
+        });
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(buffer_mapped),
+            "Mapper preserves hash-of-buffers input as BufferColumns output");
+        rows = AbstractDataProcessor::convertShape(buffer_mapped, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists)[0];
+        assertEq({
+            "int_field": (21, 22),
+            "date_field": (2019-12-13, 2019-12-14),
+        }, rows, "Mapper maps hash-of-buffers input");
+
+        Mapper disabled(DataMap2, m_opts + {
+            "disable_bulk": True,
+            "output": {
+                "int_field": {},
+                "date_field": {
+                    "type": "date",
+                },
+            },
+            "global_type_options": {
+                "date.format": "DD.MM.YYYY",
+            },
+        });
+        assertEq(MapOutput2, disabled.mapAuto(input),
+            "Mapper honors disable_bulk for ColumnarResult input");
+    }
+
+    testMapperColumnarMapAutoInput() {
+        Mapper m({"out-a": "sub-a", "out-b": "sub-b"}, {
+            "input_provider": new TestColumnarInputProvider(),
+            "input_search_options": {"block_size": 2},
+        });
+        list<hash<auto>> rows = m.mapAutoInput();
+        assertEq(3, rows.size(), "mapAutoInput consumes all shaped bulk blocks");
+        assertEq((
+            {"out-a": "a-0", "out-b": "a-0-b"},
+            {"out-a": "a-1", "out-b": "a-1-b"},
+            {"out-a": "a-2", "out-b": "a-2-b"},
+        ), rows, "mapAutoInput maps BufferColumns input provider data");
     }
 
     testMapperRuntime() {
