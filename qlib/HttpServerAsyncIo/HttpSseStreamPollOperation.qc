@@ -193,7 +193,13 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         while (True) {
             if (pending_data) {
                 *hash<SocketPollInfo> info = continueSend();
-                if (state != STATE_STREAMING) {
+                # Only a terminal state (a failed or aborted send sets
+                # @ref STATE_DISCONNECTED / @ref STATE_ERROR) ends the operation
+                # here.  @ref STATE_DRAINING is still live: we must finish this
+                # send and then keep draining the @ref event_channel so a frame
+                # queued behind the in-flight one (e.g. the SSE "data: [DONE]"
+                # terminator) is delivered before close, not abandoned.
+                if (state != STATE_STREAMING && state != STATE_DRAINING) {
                     return NOTHING;
                 }
                 if (info) {
