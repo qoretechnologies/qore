@@ -306,7 +306,7 @@ private:
     DLLLOCAL QoreValue convertOutputTensor(Ort::Value& tensor, ExceptionSink* xsink);
 
     //! Convert an Ort::Value output tensor to an ML::Tensor object
-    DLLLOCAL QoreValue convertOutputTensorToTensor(Ort::Value& tensor, ExceptionSink* xsink);
+    DLLLOCAL QoreValue convertOutputTensorToTensor(Ort::Value&& tensor, ExceptionSink* xsink);
 
     //! Shared inference implementation
     DLLLOCAL QoreHashNode* runImpl(const QoreHashNode* inputs, bool return_tensors,

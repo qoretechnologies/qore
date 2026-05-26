@@ -2064,6 +2064,15 @@ foreach string module_name in (registry.getProcessModules()) {
         dynamic_batch_wait_ms, and ordered batch chunking with dynamic_batch_size
       - ML::Tensor and OnnxModel::runTensors() provide dense buffer-backed ONNX
         inference with explicit tensor shape metadata
+      - ML::Tensor::fromBuffer() and the ML::Tensor constructor accept
+        \c zero_copy: True for caller-controlled \c buffer<T> inputs, allowing
+        tokenizer, registry, Arrow-compatible, and DataProvider pipelines to
+        build tensor inputs without copying dense buffers while preserving
+        ordinary buffer copy-on-write behavior for later writes
+      - OnnxModel::runTensors() and reusable I/O binding tensor output mode wrap
+        exact CPU ONNX Runtime \c float32, \c float64, \c int8, \c int16,
+        \c int32, and \c int64 outputs as immutable external \c buffer<T>
+        storage instead of copying value buffers
       - OnnxModel::run(), OnnxModel::runTensors(), OnnxModel::runBatch(), and
         synchronous OnnxSessionPool inference methods accept selected ONNX
         output names so multi-output models can avoid materializing unused

@@ -141,9 +141,10 @@ Implementation notes:
 
 ## Phase 3: OrtValue, I/O Binding, and Zero-Copy Execution
 
-Status: completed for raw APIs and DataProviderML/registry stable tensor paths;
-Arrow and provider-owned device binding integration remains deferred to the
-Arrow/device-buffer work.
+Status: completed for raw APIs, DataProviderML/registry stable tensor paths,
+zero-copy `buffer<T>` Tensor construction, and zero-copy exact CPU ONNX tensor
+outputs.  Provider-owned device binding integration remains deferred to the
+device-buffer execution-provider work.
 
 Expose ONNX Runtime binding primitives so Qore can avoid unnecessary host/device
 copies and repeated tensor reconstruction.
@@ -160,16 +161,22 @@ APIs:
 
 Supported bindings:
 
-- `ML::Tensor`: implemented for inputs and fixed-shape numeric preallocated
-  outputs.
+- `ML::Tensor`: implemented for inputs, fixed-shape numeric preallocated
+  outputs, and zero-copy `buffer<T>` construction when callers pass
+  `zero_copy: True`.
 - `buffer<T>`: implemented for inputs when the ONNX element type maps directly
   to the Qore dense buffer type.
 - dataframe dense columns: implemented through DataProviderML dense tensor
   paths with reusable I/O binding for stable shaped windows.
-- Arrow buffers when layout is compatible: deferred to Arrow-backed tensor and
-  dataframe interchange work.
-- provider-owned device buffers: deferred until device buffer ownership and
-  provider memory metadata are exposed in Qore.
+- Arrow-compatible external host buffers when layout is compatible: implemented
+  through `ML::Tensor::fromBuffer(..., zero_copy: True)` and direct
+  `buffer<T>` model inputs.
+- ONNX Runtime CPU outputs: exact `float32`, `float64`, `int8`, `int16`,
+  `int32`, and `int64` tensor outputs are wrapped as immutable external
+  `buffer<T>` storage instead of copied when callers request `ML::Tensor`
+  outputs.
+- provider-owned device buffers: deferred until ONNX Runtime execution-provider
+  device memory can be represented and rebound portably.
 
 Acceptance checks:
 

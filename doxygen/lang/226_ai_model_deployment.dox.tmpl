@@ -306,6 +306,15 @@ QORE_BENCH_ONNX_ROWS=10000 \
     runtime execution.
 
     Current implementation boundaries:
+    - \c ML::Tensor::fromBuffer() copies by default for immediate value
+      isolation; pass \c zero_copy: True to avoid the construction copy when the
+      source \c buffer<T> already has the required dtype and shape.  Later writes
+      to ordinary Qore-owned buffers still detach through buffer copy-on-write;
+    - exact CPU ONNX tensor outputs returned as \c ML::Tensor wrap
+      ONNX Runtime-owned \c float32, \c float64, \c int8, \c int16, \c int32,
+      and \c int64 storage without copying; half, unsigned, string, and bool
+      outputs still use conversion buffers because their Qore storage
+      representation differs;
     - half-precision and unsigned ONNX tensor outputs can be exposed through
       wider Qore buffer types when there is no exact Qore dense buffer element
       type;

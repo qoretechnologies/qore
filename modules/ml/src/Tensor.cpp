@@ -338,7 +338,7 @@ QoreBufferElementType QoreTensor::inferElementType(QoreValue value, ExceptionSin
 }
 
 QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
-        const QoreStringNode* dtype, ExceptionSink* xsink) {
+        const QoreStringNode* dtype, bool zero_copy, ExceptionSink* xsink) {
     std::vector<int64_t> shape;
     if (parseShape(shape_arg, shape, xsink)) {
         return nullptr;
@@ -395,6 +395,9 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
                 "tensor shape expects " QLLD " elements, but source buffer contains %zu",
                 count, source->size());
             return nullptr;
+        }
+        if (zero_copy) {
+            return new QoreTensor(source, std::move(shape));
         }
         buffer_holder = source->copy(xsink);
     } else {

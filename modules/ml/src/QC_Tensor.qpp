@@ -590,18 +590,23 @@ qclass Tensor [arg=QoreTensor* tensor; ns=Qore::ML; flags=final];
     to a one-dimensional shape for buffers
     @param dtype optional buffer element type; expected values are \c int8,
     \c int16, \c int32, \c int64, \c float32, \c float64, \c bool, or \c string
+    @param zero_copy when True and \a data is a \c buffer<T>, the Tensor keeps a
+    shared reference to the source buffer instead of copying it; later writes to
+    ordinary Qore-owned buffers still detach through buffer copy-on-write
 
     When \c data is a buffer and \c dtype is supplied, the dtype must match the
     buffer element type. Use the buffer constructor first when a dtype conversion
-    is required.
+    is required.  The default copy behavior isolates the Tensor from later source
+    buffer writes immediately; set \c zero_copy when avoiding the construction
+    copy matters and normal buffer copy-on-write isolation is acceptable.
 
     @throw ML-TENSOR-ERROR if the source contains null values or unsupported data
     @throw ML-TENSOR-SHAPE-ERROR if the shape is invalid or does not match the
     source element count
     @throw ML-TENSOR-DTYPE-ERROR if dtype is invalid or incompatible
 */
-Tensor::constructor(auto data, *list<int> shape, *string dtype) [flags=NAMED_ARGS] {
-    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, dtype, xsink), xsink);
+Tensor::constructor(auto data, *list<int> shape, *string dtype, bool zero_copy = False) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, dtype, zero_copy, xsink), xsink);
     if (*xsink) {
         return;
     }
@@ -618,10 +623,13 @@ Tensor::copy() {
 //! Creates a Tensor from a dense buffer
 /** @param data non-nullable dense buffer
     @param shape tensor shape
-    @return a Tensor wrapping a copy of the buffer data with the given shape
+    @param zero_copy when True, keep a shared reference to \a data instead of
+        copying its storage; later writes to ordinary Qore-owned buffers still
+        detach through buffer copy-on-write
+    @return a Tensor wrapping the buffer data with the given shape
 */
-static Tensor Tensor::fromBuffer(auto data, list<int> shape) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, nullptr, xsink), xsink);
+static Tensor Tensor::fromBuffer(auto data, list<int> shape, bool zero_copy = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<QoreTensor> holder(QoreTensor::fromValue(data, shape, nullptr, zero_copy, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }

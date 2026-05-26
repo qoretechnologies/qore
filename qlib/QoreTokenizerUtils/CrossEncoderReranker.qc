@@ -366,13 +366,13 @@ public class CrossEncoderReranker {
         hash<auto> inputs = {};
 
         if (onnx_input_names.hasKey("input_ids")) {
-            inputs{"input_ids"} = ML::Tensor::fromBuffer(token_batch.input_ids, token_batch.shape);
+            inputs{"input_ids"} = ML::Tensor::fromBuffer(token_batch.input_ids, token_batch.shape, True);
         }
         if (onnx_input_names.hasKey("attention_mask")) {
-            inputs{"attention_mask"} = ML::Tensor::fromBuffer(token_batch.attention_mask, token_batch.shape);
+            inputs{"attention_mask"} = ML::Tensor::fromBuffer(token_batch.attention_mask, token_batch.shape, True);
         }
         if (onnx_input_names.hasKey("token_type_ids")) {
-            inputs{"token_type_ids"} = ML::Tensor::fromBuffer(token_batch.token_type_ids, token_batch.shape);
+            inputs{"token_type_ids"} = ML::Tensor::fromBuffer(token_batch.token_type_ids, token_batch.shape, True);
         }
 
         if (!inputs.hasKey("input_ids")) {

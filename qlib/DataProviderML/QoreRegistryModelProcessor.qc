@@ -1887,13 +1887,13 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     private static auto makeZeroTensor(string dtype, list<int> shape, string input_name) {
         int count = QoreRegistryModelProcessor::shapeElementCount(shape, input_name);
         switch (dtype) {
-            case "float32": return ML::Tensor::fromBuffer(buffer<float32>::sized(count), shape);
-            case "float64": return ML::Tensor::fromBuffer(buffer<float64>::sized(count), shape);
-            case "int64": return ML::Tensor::fromBuffer(buffer<int64>::sized(count), shape);
-            case "int32": return ML::Tensor::fromBuffer(buffer<int32>::sized(count), shape);
-            case "int16": return ML::Tensor::fromBuffer(buffer<int16>::sized(count), shape);
-            case "int8": return ML::Tensor::fromBuffer(buffer<int8>::sized(count), shape);
-            case "bool": return ML::Tensor::fromBuffer(buffer<bool>::sized(count), shape);
+            case "float32": return ML::Tensor::fromBuffer(buffer<float32>::sized(count), shape, True);
+            case "float64": return ML::Tensor::fromBuffer(buffer<float64>::sized(count), shape, True);
+            case "int64": return ML::Tensor::fromBuffer(buffer<int64>::sized(count), shape, True);
+            case "int32": return ML::Tensor::fromBuffer(buffer<int32>::sized(count), shape, True);
+            case "int16": return ML::Tensor::fromBuffer(buffer<int16>::sized(count), shape, True);
+            case "int8": return ML::Tensor::fromBuffer(buffer<int8>::sized(count), shape, True);
+            case "bool": return ML::Tensor::fromBuffer(buffer<bool>::sized(count), shape, True);
         }
         throw "PROCESSOR-ERROR",
             sprintf("registry-model task 'causal-lm' cannot create an initial KV-cache "
@@ -2196,7 +2196,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 data[offset++] = rows[i][j];
             }
         }
-        return ML::Tensor::fromBuffer(data, (row_count, width));
+        return ML::Tensor::fromBuffer(data, (row_count, width), True);
     }
 
     #! Applies task-aware output metadata for event-mode ONNX registry models

@@ -41,6 +41,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <unordered_set>
 
@@ -107,6 +108,39 @@ QoreBufferElementType onnxTypeToBufferElementType(ONNXTensorElementDataType type
             return QoreBufferElementType::String;
         default:
             return QoreBufferElementType::Invalid;
+    }
+}
+
+bool onnxTypeCanWrapExternalOutput(ONNXTensorElementDataType type) {
+    switch (type) {
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            return true;
+        default:
+            return false;
+    }
+}
+
+const void* getOnnxTensorDataPointer(const Ort::Value& tensor, ONNXTensorElementDataType type) {
+    switch (type) {
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+            return tensor.GetTensorData<float>();
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+            return tensor.GetTensorData<double>();
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+            return tensor.GetTensorData<int8_t>();
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+            return tensor.GetTensorData<int16_t>();
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+            return tensor.GetTensorData<int32_t>();
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            return tensor.GetTensorData<int64_t>();
+        default:
+            return nullptr;
     }
 }
 
@@ -2189,7 +2223,22 @@ static int validateDirectBuffer(const TensorMeta& meta, const QoreBufferNode* bu
         return -1;
     }
     QoreBufferElementType expected = onnxTypeToBufferElementType(meta.element_type);
-    if (expected == QoreBufferElementType::Invalid || buffer->getElementType() != expected) {
+    if (expected == QoreBufferElementType::Invalid) {
+        switch (meta.element_type) {
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+                break;
+            default:
+                xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+                    "input tensor '%s': model expects unsupported ONNX type '%s'",
+                    meta.name.c_str(), onnxElementTypeName(meta.element_type));
+                return -1;
+        }
+    } else if (buffer->getElementType() != expected) {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
             "input tensor '%s': model expects ONNX type '%s', but input buffer has type '%s'",
             meta.name.c_str(), onnxElementTypeName(meta.element_type),
@@ -2247,6 +2296,22 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
         bound->shape = direct_shape;
 
         switch (meta.element_type) {
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+                bound->float16s = std::make_unique<std::vector<Ort::Float16_t>>();
+                if (bufferToFloat16Vector(*direct_buffer, *bound->float16s, xsink)) {
+                    return nullptr;
+                }
+                bound->value = Ort::Value::CreateTensor<Ort::Float16_t>(mem_info,
+                    bound->float16s->data(), bound->float16s->size(), bound->shape.data(), bound->shape.size());
+                return bound;
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+                bound->bfloat16s = std::make_unique<std::vector<Ort::BFloat16_t>>();
+                if (bufferToBFloat16Vector(*direct_buffer, *bound->bfloat16s, xsink)) {
+                    return nullptr;
+                }
+                bound->value = Ort::Value::CreateTensor<Ort::BFloat16_t>(mem_info,
+                    bound->bfloat16s->data(), bound->bfloat16s->size(), bound->shape.data(), bound->shape.size());
+                return bound;
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
                 bound->value = Ort::Value::CreateTensor<float>(mem_info,
                     const_cast<float*>(static_cast<const float*>(direct_buffer->getRawData())),
@@ -2276,6 +2341,42 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
                 bound->value = Ort::Value::CreateTensor<int64_t>(mem_info,
                     const_cast<int64_t*>(static_cast<const int64_t*>(direct_buffer->getRawData())),
                     direct_buffer->size(), bound->shape.data(), bound->shape.size());
+                return bound;
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+                bound->uint8s = std::make_unique<std::vector<uint8_t>>();
+                if (bufferToUnsignedVector(*direct_buffer, *bound->uint8s, std::numeric_limits<uint8_t>::max(),
+                        "uint8", xsink)) {
+                    return nullptr;
+                }
+                bound->value = Ort::Value::CreateTensor<uint8_t>(mem_info,
+                    bound->uint8s->data(), bound->uint8s->size(), bound->shape.data(), bound->shape.size());
+                return bound;
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+                bound->uint16s = std::make_unique<std::vector<uint16_t>>();
+                if (bufferToUnsignedVector(*direct_buffer, *bound->uint16s, std::numeric_limits<uint16_t>::max(),
+                        "uint16", xsink)) {
+                    return nullptr;
+                }
+                bound->value = Ort::Value::CreateTensor<uint16_t>(mem_info,
+                    bound->uint16s->data(), bound->uint16s->size(), bound->shape.data(), bound->shape.size());
+                return bound;
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+                bound->uint32s = std::make_unique<std::vector<uint32_t>>();
+                if (bufferToUnsignedVector(*direct_buffer, *bound->uint32s, std::numeric_limits<uint32_t>::max(),
+                        "uint32", xsink)) {
+                    return nullptr;
+                }
+                bound->value = Ort::Value::CreateTensor<uint32_t>(mem_info,
+                    bound->uint32s->data(), bound->uint32s->size(), bound->shape.data(), bound->shape.size());
+                return bound;
+            case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+                bound->uint64s = std::make_unique<std::vector<uint64_t>>();
+                if (bufferToUnsignedVector(*direct_buffer, *bound->uint64s, std::numeric_limits<uint64_t>::max(),
+                        "uint64", xsink)) {
+                    return nullptr;
+                }
+                bound->value = Ort::Value::CreateTensor<uint64_t>(mem_info,
+                    bound->uint64s->data(), bound->uint64s->size(), bound->shape.data(), bound->shape.size());
                 return bound;
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
                 bound->bool_bytes = std::make_unique<std::vector<uint8_t>>();
@@ -2617,6 +2718,13 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareOutputTensorValue(const
         return nullptr;
     }
 
+    if (buffer->hasExternalStorage() || buffer->hasExternalDeviceStorage()) {
+        xsink->raiseException("ML-ONNX-BINDING-ERROR",
+            "output tensor '%s': preallocated output binding requires a mutable Qore-owned Tensor buffer; "
+            "the supplied Tensor buffer wraps immutable external storage",
+            meta.name.c_str());
+        return nullptr;
+    }
     if (buffer->ensureHostStorage(xsink)) {
         return nullptr;
     }
@@ -2943,7 +3051,7 @@ QoreValue QoreOnnxModel::convertOutputTensor(Ort::Value& tensor, ExceptionSink* 
     }
 }
 
-QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value& tensor, ExceptionSink* xsink) {
+QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value&& tensor, ExceptionSink* xsink) {
     if (!tensor.IsTensor()) {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR", "output is not a tensor");
         return QoreValue();
@@ -2975,6 +3083,25 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value& tensor, Excepti
     int64_t total_elements = tensorShapeElementCount(shape, xsink);
     if (*xsink) {
         return QoreValue();
+    }
+    if (static_cast<uint64_t>(total_elements) > std::numeric_limits<size_t>::max()) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
+            "output tensor element count " QLLD " exceeds this platform's addressable buffer size",
+            total_elements);
+        return QoreValue();
+    }
+
+    if (onnxTypeCanWrapExternalOutput(type)) {
+        std::shared_ptr<Ort::Value> owner = std::make_shared<Ort::Value>(std::move(tensor));
+        const void* data = total_elements ? getOnnxTensorDataPointer(*owner, type) : nullptr;
+        ReferenceHolder<QoreBufferNode> buffer(
+            QoreBufferNode::wrapExternalStorage(buffer_type, false, static_cast<size_t>(total_elements),
+                data, nullptr, owner, 0, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreTensor> qore_tensor(new QoreTensor(buffer.release(), std::move(shape)), xsink);
+        return qore_ml_tensor_to_object(qore_tensor.release(), getProgram(), xsink);
     }
 
     if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
@@ -3345,9 +3472,12 @@ QoreHashNode* QoreOnnxModel::collectBoundOutputs(Ort::IoBinding& binding, bool r
         if (i && !(i % 100) && qore_check_cancel(xsink, "converting bound ONNX outputs")) {
             return nullptr;
         }
-        QoreValue out_val = return_tensors
-            ? convertOutputTensorToTensor(values[i], xsink)
-            : convertOutputTensor(values[i], xsink);
+        QoreValue out_val;
+        if (return_tensors) {
+            out_val = convertOutputTensorToTensor(std::move(values[i]), xsink);
+        } else {
+            out_val = convertOutputTensor(values[i], xsink);
+        }
         if (*xsink) {
             return nullptr;
         }
@@ -4185,9 +4315,12 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
     // Convert outputs to Qore hash (values can be any type: scalars, lists, etc.)
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     for (size_t i = 0; i < output_tensors.size(); ++i) {
-        QoreValue out_val = return_tensors
-            ? convertOutputTensorToTensor(output_tensors[i], xsink)
-            : convertOutputTensor(output_tensors[i], xsink);
+        QoreValue out_val;
+        if (return_tensors) {
+            out_val = convertOutputTensorToTensor(std::move(output_tensors[i]), xsink);
+        } else {
+            out_val = convertOutputTensor(output_tensors[i], xsink);
+        }
         if (*xsink) {
             return nullptr;
         }

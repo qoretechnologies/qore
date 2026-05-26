@@ -53,7 +53,7 @@ public:
 
     //! Creates a tensor from a Qore value and optional shape and dtype metadata.
     DLLLOCAL static QoreTensor* fromValue(QoreValue data, const QoreListNode* shape,
-        const QoreStringNode* dtype, ExceptionSink* xsink);
+        const QoreStringNode* dtype, bool zero_copy, ExceptionSink* xsink);
 
     //! Creates a row-major 2D tensor from dense equal-length column buffers.
     DLLLOCAL static QoreTensor* fromColumns(const QoreListNode* columns, const QoreStringNode* dtype,

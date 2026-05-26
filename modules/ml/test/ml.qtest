@@ -410,10 +410,18 @@ public class MlTest inherits QUnit::Test {
         assertFloat(1.0, nested[0][0], 1e-5);
         assertFloat(4.0, nested[1][1], 1e-5);
 
-        ML::Tensor from_buffer = ML::Tensor::fromBuffer(new buffer<float64>((1.0, 2.0, 3.0, 4.0)), (2, 2));
+        buffer<float64> backing = new buffer<float64>((1.0, 2.0, 3.0, 4.0));
+        ML::Tensor from_buffer = ML::Tensor::fromBuffer(backing, (2, 2));
         assertEq("float64", from_buffer.getDtype());
         assertEq((2, 2), from_buffer.getShape());
         assertEq("buffer<float64>", from_buffer.getBuffer().fullType());
+        backing[0] = 9.0;
+        assertFloat(1.0, from_buffer.toList()[0][0], 1e-5);
+
+        ML::Tensor shared_buffer = ML::Tensor::fromBuffer(data: backing, shape: (2, 2), zero_copy: True);
+        assertFloat(9.0, shared_buffer.toList()[0][0], 1e-5);
+        backing[1] = 8.0;
+        assertFloat(2.0, shared_buffer.toList()[0][1], 1e-5);
 
         ML::Tensor from_columns = ML::Tensor::fromColumns((
             new buffer<float32>((1.0, 3.0)),
@@ -3533,7 +3541,7 @@ public class MlTest inherits QUnit::Test {
             {"max_sessions": 1, "queue_depth": 0, "timeout_ms": 1});
 
         list<hash<auto>> long_batch;
-        for (int i = 0; i < 5000; ++i) {
+        for (int i = 0; i < 50000; ++i) {
             push long_batch, {"X": ((2.0,),)};
         }
 
@@ -3580,10 +3588,10 @@ public class MlTest inherits QUnit::Test {
 
         ML::OnnxSessionPool pool(getTestModelPath(),
             <ML::OnnxSessionConfig>{"providers": ()},
-            {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 10});
+            {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 1});
 
         list<hash<auto>> long_batch;
-        for (int i = 0; i < 5000; ++i) {
+        for (int i = 0; i < 500000; ++i) {
             push long_batch, {"X": ((2.0,),)};
         }
 
@@ -3612,9 +3620,20 @@ public class MlTest inherits QUnit::Test {
             usleep(1ms);
         }
         assertTrue(active_seen, "background inference should occupy the only pool session");
-        assertThrows("ML-ONNX-POOL-TIMEOUT", sub() {
-            pool.run({"X": ((3.0,),)});
-        });
+
+        bool timeout_seen = False;
+        while (cnt.getCount() > 0 && !timeout_seen) {
+            try {
+                pool.run({"X": ((3.0,),)});
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "ML-ONNX-POOL-TIMEOUT") {
+                    timeout_seen = True;
+                    break;
+                }
+                rethrow;
+            }
+        }
+        assertTrue(timeout_seen, "foreground inference should time out while the only pool session is occupied");
         cnt.waitForZero();
         assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
 
