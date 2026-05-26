@@ -503,6 +503,7 @@ public class DataProviderTest inherits QUnit::Test {
     }
 
     factoryMapTest() {
+        assertEq("CdaDataProvider", DataProvider::DataProvider::FactoryMap.cda);
         assertEq("FhirRestDataProvider", DataProvider::DataProvider::FactoryMap.fhirrest);
     }
 

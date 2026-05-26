@@ -110,6 +110,7 @@ public class DataProvider {
             # provided by the jni module
             "camel": "CamelDataProvider",
 
+            "cda": "CdaDataProvider",
             "cdsrest": "CdsRestDataProvider",
             "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
