@@ -142,6 +142,7 @@ public class DataProvider {
             "fixedlengthread": "FixedLengthUtil",
             "fixedlengthwrite": "FixedLengthUtil",
             "hl7v2read": "Hl7v2Util",
+            "hl7v2schema": "Hl7v2Util",
             "hl7v2write": "Hl7v2Util",
             # provided by the jni module
             "flyway": "FlywayDataProvider",

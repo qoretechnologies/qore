@@ -247,4 +247,56 @@ public namespace Hl7v2Util {
 
     #! Singleton write response metadata data type
     public const Hl7v2WriteResultDataType = new Hl7v2WriteResultDataType();
+
+    #! DataProvider metadata for schema provider responses
+    public class Hl7v2SchemaResultDataType inherits HashDataType {
+        private {
+            const Fields = {
+                "version": {
+                    "display_name": "Schema Version",
+                    "short_desc": "HL7 v2 schema version",
+                    "desc": "The HL7 v2 version represented by the generated schema artifact.",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "2.5.1",
+                },
+                "meta": {
+                    "display_name": "Metadata",
+                    "short_desc": "Schema artifact metadata",
+                    "desc": "Metadata about the generated schema source, generator, license, and notes.",
+                    "type": AbstractDataProviderTypeMap."hash",
+                },
+                "counts": {
+                    "display_name": "Counts",
+                    "short_desc": "Schema object counts",
+                    "desc": "Counts for schema objects such as segment and field definitions.",
+                    "type": AbstractDataProviderTypeMap."hash",
+                },
+                "segment_tags": {
+                    "display_name": "Segment Tags",
+                    "short_desc": "Defined segment tags",
+                    "desc": "Sorted list of segment tags defined in the schema.",
+                    "type": AbstractDataProviderTypeMap."list",
+                },
+                "summary_only": {
+                    "display_name": "Summary Only",
+                    "short_desc": "Whether full schema data is omitted",
+                    "desc": "If `True`, the response omits the full schema hash from `schema`.",
+                    "type": AbstractDataProviderTypeMap."bool",
+                },
+                "schema": {
+                    "display_name": "Schema",
+                    "short_desc": "Full schema data",
+                    "desc": "Full generated schema hash when `summary_only` is `False`.",
+                    "type": AbstractDataProviderTypeMap."hash",
+                },
+            };
+        }
+
+        constructor() : HashDataType("Hl7v2SchemaResult") {
+            addQoreFields(Fields);
+        }
+    }
+
+    #! Singleton schema response metadata data type
+    public const Hl7v2SchemaResultDataType = new Hl7v2SchemaResultDataType();
 }

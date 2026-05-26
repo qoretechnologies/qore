@@ -52,6 +52,10 @@ class Hl7v2UtilTest inherits QUnit::Test {
         addTestCase("roundtrip test", \roundtripTest());
         addTestCase("custom delimiter test", \customDelimiterTest());
         addTestCase("writer test", \writerTest());
+        addTestCase("schema registry test", \schemaRegistryTest());
+        addTestCase("schema validation test", \schemaValidationTest());
+        addTestCase("schema generator test", \schemaGeneratorTest());
+        addTestCase("schema data provider test", \schemaDataProviderTest());
         addTestCase("data provider test", \dataProviderTest());
         addTestCase("factory and action catalog test", \factoryAndActionCatalogTest());
         addTestCase("negative test", \negativeTest());
@@ -152,6 +156,157 @@ class Hl7v2UtilTest inherits QUnit::Test {
         assertEq("OBX|1|ST|NOTE||A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G", escaped);
     }
 
+    schemaRegistryTest() {
+        Hl7v2Schema schema = Hl7v2SchemaRegistry::loadFile(schemaPath(), True);
+        assertEq("2.5.1", schema.version);
+        assertEq("2.5.1", schema.meta.version);
+        assertTrue(schema.hasSegment("MSH"));
+        assertTrue(schema.hasSegment("PID"));
+        assertEq(("EVN", "MSH", "OBX", "PID"), schema.getSegmentTags());
+
+        hash<Hl7v2SegmentDef> msh = schema.getSegmentDef("MSH");
+        assertEq("Message Header", msh.name);
+        assertEq(12, msh.fields.size());
+        assertEq("Message Control ID", msh.fields[9].name);
+        assertEq("R", msh.fields[9].usage);
+        assertEq(199, msh.fields[9].max_length);
+    }
+
+    schemaValidationTest() {
+        Hl7v2Schema schema = Hl7v2SchemaRegistry::loadFile(schemaPath(), True);
+        Hl7v2Message valid(Message);
+        assertEq(0, schema.validateMessage(valid.getMessage(), {"allow_unknown_segments": False}).size());
+
+        string missing_required = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "PID|1||||Doe^Jane\r";
+        list<hash<Hl7v2ValidationIssue>> issues = schema.validateMessageText(missing_required);
+        assertTrue(hasIssue(issues, "missing-required-field", "PID-3"));
+
+        string extra_field = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "EVN|A01|202605261201|extra\r";
+        issues = schema.validateMessageText(extra_field);
+        assertTrue(hasIssue(issues, "unexpected-field", "EVN-3"));
+
+        string too_long = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "PID|12345||12345^^^MRN^MR||Doe^Jane\r";
+        issues = schema.validateMessageText(too_long);
+        assertTrue(hasIssue(issues, "field-too-long", "PID-1"));
+
+        string repeated_single = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01~ORM^O01|MSG0001|P|2.5.1\r";
+        issues = schema.validateMessageText(repeated_single);
+        assertTrue(hasIssue(issues, "too-many-repetitions", "MSH-9"));
+
+        string unknown = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "ABC|x\r";
+        assertEq(0, schema.validateMessageText(unknown).size());
+        issues = schema.validateMessageText(unknown, {"allow_unknown_segments": False});
+        assertTrue(hasIssue(issues, "unknown-segment", "ABC"));
+
+        assertThrows("HL7V2-VALIDATION-ERROR", sub () {
+            Hl7v2Base base();
+            schema.assertValidMessage(base.parseMessage(missing_required));
+        });
+    }
+
+    schemaGeneratorTest() {
+        list<hash<auto>> resources = ({
+            "resourceType": "StructureDefinition",
+            "type": "ABC",
+            "title": "ABC (Segment)",
+            "description": "Synthetic Segment",
+            "version": "2.9",
+            "kind": "logical",
+            "derivation": "specialization",
+            "differential": {
+                "element": ({
+                    "id": "ABC",
+                    "path": "ABC",
+                    "definition": "Synthetic Segment",
+                    "min": 1,
+                    "max": "1",
+                }, {
+                    "id": "ABC.id",
+                    "path": "ABC.id",
+                    "definition": "Logical id",
+                    "min": 0,
+                    "max": "1",
+                }, {
+                    "id": "ABC.requiredField",
+                    "path": "ABC.requiredField",
+                    "definition": "**Required Field**",
+                    "min": 1,
+                    "max": "1",
+                    "type": ({"code": "ST"},),
+                    "maxLength": 4,
+                }, {
+                    "id": "ABC.repeatingField",
+                    "path": "ABC.repeatingField",
+                    "definition": "**Repeating Field**",
+                    "min": 0,
+                    "max": "*",
+                    "type": ({"code": "CWE"},),
+                }),
+            },
+        }, {
+            "resourceType": "StructureDefinition",
+            "type": "NOTASEGMENT",
+            "title": "Ignored Logical Type",
+            "version": "2.9",
+        });
+
+        Hl7v2StructureDefinitionSchemaGenerator generator();
+        Hl7v2Schema schema = generator.generateSchema(resources, {"source": "synthetic package", "license": "MIT"});
+        assertEq("2.9", schema.version);
+        assertEq("synthetic package", schema.meta.source);
+        assertEq("MIT", schema.meta.license);
+        assertTrue(schema.hasSegment("ABC"));
+        assertEq(("ABC",), schema.getSegmentTags());
+
+        hash<Hl7v2SegmentDef> abc = schema.getSegmentDef("ABC");
+        assertEq(2, abc.fields.size());
+        assertEq("Required Field", abc.fields[0].name);
+        assertEq("R", abc.fields[0].usage);
+        assertEq(4, abc.fields[0].max_length);
+        assertTrue(abc.fields[1].repeating);
+
+        string serialized = Hl7v2SchemaValueSerializer::serializeSchema(schema);
+        Hl7v2Schema parsed(cast<hash>(Util::parse_to_qore_value(serialized)));
+        assertEq(schema.version, parsed.version);
+        assertEq(schema.getSegmentTags(), parsed.getSegmentTags());
+    }
+
+    schemaDataProviderTest() {
+        Hl7v2SchemaDataProvider provider({"path": schemaPath()});
+        AbstractDataProviderRecordIterator i = provider.searchRecords();
+        assertTrue(i.next());
+        hash<auto> row = i.getValue();
+        assertEq("2.5.1", row.version);
+        assertEq(4, row.counts.segments);
+        assertTrue(row.counts.fields >= 30);
+        assertEq(("EVN", "MSH", "OBX", "PID"), row.segment_tags);
+        assertTrue(row.summary_only);
+        assertNothing(row.schema);
+        assertFalse(i.next());
+
+        Hl7v2SchemaDataProvider full_provider({"path": schemaPath(), "summary_only": False});
+        AbstractDataProviderRecordIterator j = full_provider.searchRecords();
+        assertTrue(j.next());
+        hash<auto> full = j.getValue();
+        assertFalse(full.summary_only);
+        assertTrue(exists full.schema.segments.MSH);
+
+        hash<string, AbstractDataField> record_type = j.getRecordType();
+        assertTrue(exists record_type.version);
+        assertTrue(exists record_type.segment_tags);
+
+        Hl7v2SchemaSummaryDataProvider summary_provider({"path": schemaPath(), "summary_only": False});
+        AbstractDataProviderRecordIterator k = summary_provider.searchRecords();
+        assertTrue(k.next());
+        hash<auto> summary = k.getValue();
+        assertTrue(summary.summary_only);
+        assertNothing(summary.schema);
+    }
+
     dataProviderTest() {
         Hl7v2ReadDataProvider reader({"data": Message});
         AbstractDataProviderRecordIterator i = reader.searchRecords();
@@ -198,6 +353,8 @@ class Hl7v2UtilTest inherits QUnit::Test {
         assertEq("hl7v2read", read_info.name);
         hash<DataProviderFactoryInfo> write_info = DataProvider::getFactoryEx("hl7v2write").getInfo();
         assertEq("hl7v2write", write_info.name);
+        hash<DataProviderFactoryInfo> schema_info = DataProvider::getFactoryEx("hl7v2schema").getInfo();
+        assertEq("hl7v2schema", schema_info.name);
 
         hash<auto> app = DataProviderActionCatalog::getApp(Hl7v2Util::AppName);
         assertEq("HL7 v2 Messages", app.display_name);
@@ -218,11 +375,24 @@ class Hl7v2UtilTest inherits QUnit::Test {
         assertEq("Hl7v2WriteResult", write_action.output_type.getName());
         assertTrue(exists write_action.options.path);
 
+        hash<DataProviderActionInfo> schema_action = DataProviderActionCatalog::getAppActionEx(Hl7v2Util::AppName,
+            "schema");
+        assertEq("Hl7v2SchemaResult", schema_action.output_type.getName());
+        assertTrue(exists schema_action.options.path);
+
+        hash<DataProviderActionInfo> schema_summary_action = DataProviderActionCatalog::getAppActionEx(
+            Hl7v2Util::AppName, "schema-summary");
+        assertEq("Hl7v2SchemaResult", schema_summary_action.output_type.getName());
+        assertTrue(exists schema_summary_action.options.path);
+        assertFalse(exists schema_summary_action.options.summary_only);
+
         list<hash<auto>> actions = DataProviderActionCatalog::getActions(Hl7v2Util::AppName);
         list<string> names = map $1.action, actions;
         assertTrue(inlist("read", names));
         assertTrue(inlist("read-data", names));
         assertTrue(inlist("write", names));
+        assertTrue(inlist("schema", names));
+        assertTrue(inlist("schema-summary", names));
     }
 
     negativeTest() {
@@ -236,6 +406,41 @@ class Hl7v2UtilTest inherits QUnit::Test {
         assertThrows("HL7V2-ADDRESS-ERROR", sub () { (new Hl7v2Message(Message)).getAddress("PID-0"); });
         assertThrows("HL7V2-READ-ERROR", sub () { new Hl7v2ReadDataProvider({}); });
         assertThrows("HL7V2-WRITE-ERROR", sub () { new Hl7v2WriteDataProvider({}); });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () { new Hl7v2Schema(""); });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () { new Hl7v2SchemaDataProvider({}); });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () {
+            new Hl7v2Schema({
+                "version": "2.5.1",
+                "segments": {
+                    "PID": {
+                        "tag": "PID",
+                        "fields": ({"position": 1, "name": "x", "usage": "BAD"},),
+                    },
+                },
+            });
+        });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () {
+            new Hl7v2Schema({
+                "version": "2.5.1",
+                "segments": {
+                    "PID": {
+                        "tag": "PID",
+                        "fields": ({"position": 1, "name": "x", "max_repetitions": "many"},),
+                    },
+                },
+            });
+        });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () {
+            new Hl7v2Schema({
+                "version": "2.5.1",
+                "segments": {
+                    "PID": {
+                        "tag": "PID",
+                        "fields": ({"position": 1, "name": "x", "repeating": "sometimes"},),
+                    },
+                },
+            });
+        });
 
         try {
             base.parseMessage("MSH|^~\\&|A\rOBX|1|ST|NOTE||patient-name secret \\F\r");
@@ -244,5 +449,18 @@ class Hl7v2UtilTest inherits QUnit::Test {
             assertEq("HL7V2-ESCAPE-ERROR", e.err);
             assertFalse(e.desc =~ /patient-name|secret/);
         }
+    }
+
+    private string schemaPath() {
+        return dirname(get_script_path()) + DirSep + "fixtures" + DirSep + "v251-schema.qv";
+    }
+
+    private bool hasIssue(list<hash<Hl7v2ValidationIssue>> issues, string code, string address) {
+        foreach hash<Hl7v2ValidationIssue> issue in (issues) {
+            if (issue.code == code && issue.address == address) {
+                return True;
+            }
+        }
+        return False;
     }
 }

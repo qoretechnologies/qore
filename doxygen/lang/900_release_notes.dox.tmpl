@@ -1891,7 +1891,10 @@ cargo install tree-sitter-cli@0.26.5
       - standard escape handling for message fields, including delimiter escapes and line-break escapes
       - segment-order preserving parser with support for unknown custom `Z` segments
       - address helpers for common values such as `MSH-9`, `PID-3(2).1`, and `OBX-5`
-      - DataProvider integration for reading and writing HL7 v2 message files and inline data
+      - generated schema artifact loader and structure-aware validation for required fields, field counts,
+        repetition bounds, and maximum lengths
+      - HL7 v2+ FHIR `StructureDefinition` schema generator tool for producing Qore value schema artifacts
+      - DataProvider integration for reading, writing, and loading HL7 v2 schema metadata
 
     - @ref mllputilintro "MllpUtil" module
       - new module for sending and receiving MLLP-framed HL7 v2 messages

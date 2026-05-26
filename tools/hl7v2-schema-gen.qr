@@ -1,0 +1,143 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file hl7v2-schema-gen.qr HL7 v2 schema artifact generator
+
+/*  hl7v2-schema-gen.qr Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires Util
+%requires FileLocationHandler
+%requires Hl7v2Util
+
+sub usage(int status = 1) {
+    printf(
+"usage: %s --package-dir DIR --out FILE [options]\n\n"
+"Options:\n"
+"  --version VERSION    override schema version; otherwise inferred from StructureDefinitions\n"
+"  --source TEXT        source package note stored in schema metadata\n"
+"  --license TEXT       source license stored in schema metadata\n"
+"  --note TEXT          implementation note stored in schema metadata\n"
+"  -h,--help            show this help\n",
+        get_script_name());
+    exit(status);
+}
+
+const Opts = (
+    "package_dir": "package-dir,p=s",
+    "out": "out,o=s",
+    "version": "version,V=s",
+    "source": "source,s=s",
+    "license": "license,l=s",
+    "note": "note,n=s",
+    "help": "help,h",
+);
+
+sub process() {
+%ifdef NoJson
+    stderr.printf("json module is required to read FHIR StructureDefinition JSON files\n");
+    exit(2);
+%else
+    GetOpt g(Opts);
+    hash opts = g.parse3(\ARGV);
+    if (opts.help) {
+        usage(0);
+    }
+    if (!opts.package_dir || !opts.out) {
+        usage();
+    }
+
+    string package_dir = normalize_dir(opts.package_dir);
+    if (!is_dir(package_dir)) {
+        throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("package directory does not exist: %y", package_dir);
+    }
+    if (!hasStructureDefinitionFiles(package_dir) && is_dir(package_dir + DirSep + "package")) {
+        package_dir += DirSep + "package";
+    }
+
+    list<hash<auto>> resources = loadStructureDefinitions(package_dir);
+    if (!resources) {
+        throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("no StructureDefinition JSON files found in %y", package_dir);
+    }
+
+    hash<auto> gen_opts = {};
+    if (opts.version) {
+        gen_opts.version = opts.version;
+    }
+    if (opts.source) {
+        gen_opts.source = opts.source;
+    }
+    if (opts.license) {
+        gen_opts.license = opts.license;
+    } else if (is_file(package_dir + DirSep + "package.json")) {
+        hash<auto> package_info = parse_json(ReadOnlyFile::readTextFile(package_dir + DirSep + "package.json"));
+        if (package_info.license) {
+            gen_opts.license = package_info.license;
+        }
+        if (!gen_opts.source) {
+            gen_opts.source = sprintf("%s %s", package_info.name ?? "HL7 v2 package",
+                package_info.version ?? "");
+        }
+    }
+    if (opts.note) {
+        gen_opts.note = opts.note;
+    }
+
+    Hl7v2StructureDefinitionSchemaGenerator generator();
+    Hl7v2Schema schema = generator.generateSchema(resources, gen_opts);
+    string output = Hl7v2SchemaValueSerializer::serializeSchema(schema);
+    FileLocationHandler::writeFileToLocation(opts.out, output);
+    printf("Wrote HL7 v2 schema %s with %d segments to %s\n", schema.version, schema.segments.size(), opts.out);
+%endif
+}
+
+%ifndef NoJson
+bool sub hasStructureDefinitionFiles(string dir) {
+    Dir d();
+    d.chdir(dir);
+    foreach string file in (d.listFiles()) {
+        if (file =~ /^StructureDefinition-.*\.json$/) {
+            return True;
+        }
+    }
+    return False;
+}
+
+list<hash<auto>> sub loadStructureDefinitions(string dir) {
+    Dir d();
+    d.chdir(dir);
+    list<hash<auto>> resources = ();
+    foreach string file in (sort(d.listFiles())) {
+        if (file =~ /^StructureDefinition-.*\.json$/) {
+            push resources, parse_json(ReadOnlyFile::readTextFile(dir + DirSep + file));
+        }
+    }
+    return resources;
+}
+%endif
+
+process();

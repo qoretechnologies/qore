@@ -26,6 +26,7 @@
 
 %requires Util
 %requires(reexport) DataProvider
+%requires(reexport) FileLocationHandler
 
 %modern
 
@@ -38,6 +39,7 @@ module Hl7v2Util {
     init = sub () {
         DataProvider::registerFactory(new Hl7v2ReadDataProviderFactory());
         DataProvider::registerFactory(new Hl7v2WriteDataProviderFactory());
+        DataProvider::registerFactory(new Hl7v2SchemaDataProviderFactory());
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": Hl7v2Util::AppName,
@@ -114,6 +116,51 @@ module Hl7v2Util {
             ),
             "output_type": Hl7v2WriteDataProvider::ResponseType,
         });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "schema",
+            "subtype": "hl7v2schema",
+            "display_name": "Load HL7 v2 Schema",
+            "short_desc": "Load generated HL7 v2 schema metadata",
+            "desc": "Load generated HL7 v2 schema metadata from a Qore value artifact. Use `path` for a "
+                "specific artifact, or `version` with `schema_dir` when schemas are stored by version.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2SchemaDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions - ("path",), {
+                    "loc": "constructor",
+                }
+            ),
+            "output_type": Hl7v2SchemaDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "schema-summary",
+            "subtype": "hl7v2schema",
+            "display_name": "HL7 v2 Schema Summary",
+            "short_desc": "Load a generated HL7 v2 schema summary",
+            "desc": "Load only generated HL7 v2 schema metadata, counts, and segment tags.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2SchemaSummaryDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions - ("path", "summary_only",), {
+                    "loc": "constructor",
+                }
+            ),
+            "output_type": Hl7v2SchemaDataProvider::ResponseType,
+        });
     };
 }
 
@@ -139,6 +186,8 @@ module Hl7v2Util {
       \c "\\R\\", \c "\\T\\", \c "\\E\\", and \c "\\.br\\".
     - Provides address helpers for common expressions such as \c "MSH-9",
       \c "PID-3(2).1", and \c "OBX-5".
+    - Loads generated schema artifacts for structure-aware validation when
+      definition tables are available.
     - Exposes read and write data providers for pipeline integration.
 
     @subsection hl7v2utilexamples Examples
@@ -169,6 +218,39 @@ while (i.next()) {
 }
     @endcode
 
+    Schema-aware validation from a generated artifact:
+
+    @code{.py}
+%requires Hl7v2Util
+
+Hl7v2Schema schema = Hl7v2SchemaRegistry::loadFile("schemas/2.5.1/schema.qv");
+Hl7v2Message h(msg);
+list<hash<Hl7v2ValidationIssue>> issues = schema.validateMessage(h.getMessage(), {
+    "allow_unknown_segments": False,
+});
+
+if (issues) {
+    printf("validation issues: %N\n", issues);
+}
+    @endcode
+
+    Schema provider usage:
+
+    @code{.py}
+%requires Hl7v2Util
+
+Hl7v2SchemaDataProvider schema_provider({"path": "schemas/2.5.1/schema.qv"});
+hash<auto> summary = schema_provider.searchSingle();
+printf("%s defines %d segments\n", summary.version, summary.counts.segments);
+    @endcode
+
+    The module does not require schema artifacts for structure-agnostic parsing
+    and writing. Generated schema files are Qore value artifacts consumed by
+    @ref Hl7v2Util::Hl7v2SchemaRegistry "Hl7v2SchemaRegistry"; use
+    \c tools/hl7v2-schema-gen.qr to generate such artifacts from HL7 v2+
+    FHIR \c StructureDefinition packages when that source is appropriate for
+    your target version and redistribution policy.
+
     @subsection hl7v2utiltrademark Trademark Notice
 
     HL7 is a trademark of Health Level Seven International. This module provides
@@ -180,7 +262,8 @@ while (i.next()) {
     @par Release Notes
 
     - added the initial \c Hl7v2Util module with structure-agnostic HL7 v2
-      parsing, writing, address helpers, and read/write data providers
+      parsing, writing, address helpers, schema loading and validation, and
+      read/write/schema data providers
 */
 
 #! Hl7v2Util module namespace
