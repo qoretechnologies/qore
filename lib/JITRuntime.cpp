@@ -6237,14 +6237,24 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
     // are never accessed by AST callbacks).
     bool has_aot = uvb->hasCachedAOT();
+    bool has_ir = uvb->getCachedIR() != nullptr;
     // AOT lowering syncs non-closure body locals through the runtime local
     // stack for ownership, so the stack slots must exist even when the IR
     // classifier marks every body local IR-only.  The skip optimization only
     // applies to in-process JIT/IR functions whose body locals stay alloca-only.
-    bool skip_body_locals = !has_aot && uvb->areAllBodyLocalsIROnly();
-    const std::vector<LocalVar*>& body_locals = uvb->hasCachedAOT()
+    //
+    // AST-only variants (no AOT and no IR cache) own their own LocalVarList via
+    // the StatementBlock and instantiate it themselves on entry — pre-instantiating
+    // here both has nothing to read from (getASTVisibleBodyLocals() requires
+    // cached_ir to be non-null) and would shadow the statement block's own
+    // instantiation.  Skip body_local pre-instantiation in that case.
+    bool skip_body_locals = (!has_aot && !has_ir)
+        || (!has_aot && uvb->areAllBodyLocalsIROnly());
+    static const std::vector<LocalVar*> empty_body_locals;
+    const std::vector<LocalVar*>& body_locals = has_aot
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
-        : uvb->getASTVisibleBodyLocals();  // IR: use filtered ast_visible_body_locals
+        : (has_ir ? uvb->getASTVisibleBodyLocals()  // IR: use filtered list
+                  : empty_body_locals);            // AST-only: nothing to pre-inst here
     QoreParseOptions po = uvb->getParseOptions(uvb->pgm->getParseOptions());
     if (!skip_body_locals) {
         for (LocalVar* lv : body_locals) {

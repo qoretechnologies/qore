@@ -71,6 +71,24 @@ class FakePgsqlDatasource inherits Qore::SQL::AbstractDatasource {
         return ();
     }
 
+    auto selectTyped(string sql, ...) {
+        push select_log, {"sql": sql, "args": argv};
+        return select_response;
+    }
+
+    auto vselectTyped(string sql, *softlist<auto> arguments) {
+        push select_log, {"sql": sql, "args": arguments ?? ()};
+        return select_response;
+    }
+
+    auto selectRowsTyped(string sql, ...) {
+        return ();
+    }
+
+    auto vselectRowsTyped(string sql, *softlist<auto> arguments) {
+        return ();
+    }
+
     nothing commit() { ++commit_count; }
     nothing rollback() { ++rollback_count; }
     nothing beginTransaction() {}

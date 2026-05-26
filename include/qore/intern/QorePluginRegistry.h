@@ -129,6 +129,10 @@ public:
 
 private:
     QorePluginModuleHandle& handle;
+    // Previous thread-local current_plugin_module_handle; saved on entry,
+    // restored on exit so binary-module init callbacks can recursively load
+    // other binary modules (each push/pops its own scope LIFO).
+    const QorePluginModuleHandle* prev_handle = nullptr;
     bool committed = false;
 };
 

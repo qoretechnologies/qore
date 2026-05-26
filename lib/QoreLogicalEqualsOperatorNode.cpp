@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -188,10 +188,25 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
 
     if (lt == NT_STRING || rt == NT_STRING) {
         QoreStringValueHelper ls(l);
-        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        // Picking the LHS's encoding unconditionally throws ENCODING-CONVERSION-ERROR
+        // for cases like (us-ascii) == (utf-8-with-non-ascii), where the RHS bytes
+        // cannot survive a lossless transcode into US-ASCII.  Pick the more capable
+        // encoding (avoiding US-ASCII when the other side is something else) so the
+        // conversion direction matches QoreString::equalSoft's own internal logic.
+        const QoreEncoding* common = ls->getEncoding();
+        if (common == QCS_USASCII && rt == NT_STRING) {
+            const QoreEncoding* renc = r.get<const QoreStringNode>()->getEncoding();
+            if (renc) {
+                common = renc;
+            }
+        }
+        QoreStringValueHelper rs(r, common, xsink);
         if (*xsink) {
             return false;
         }
+        // ls may now be in a different encoding than common; rs is already common.
+        // equalSoft handles cross-encoding length+memcmp + further USASCII coercion
+        // safely, so just delegate.
         return ls->equalSoft(*rs, xsink);
     }
 

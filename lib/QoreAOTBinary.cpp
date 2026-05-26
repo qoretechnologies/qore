@@ -12635,13 +12635,23 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             if (has_slot_map_section && !is_static && !is_constructor && !is_destructor && !is_copy
                     && !is_abstract) {
-                std::string variant_key = getAOTMethodVariantKey(qc, method_name, false, mvb);
-                if (slot_map_names.find(variant_key) == slot_map_names.end()
-                        && hasInheritedConcreteMethodVariant(qc, method_name, mvb)) {
-                    printd(2, "AOT deser: skipping stale inherited method shell '%s::%s' without native slot '%s'\n",
-                        qc->getName(), method_name ? method_name : "", variant_key.c_str());
-                    delete mvb;
-                    continue;
+                // Empty inherited shells emitted by older qmods carry no body
+                // lines (entry_first_line == 0 && entry_last_line == 0).  A
+                // genuine derived-class override has actual body lines even
+                // when it isn't native-compiled (no slot map entry).  Without
+                // the body-lines guard the old fix dropped real overrides like
+                // QoreFilterRecordsProcessor::processRecordsShapeImpl,
+                // silently falling back to the base class implementation.
+                bool has_body_lines = (entry_first_line != 0) || (entry_last_line != 0);
+                if (!has_body_lines) {
+                    std::string variant_key = getAOTMethodVariantKey(qc, method_name, false, mvb);
+                    if (slot_map_names.find(variant_key) == slot_map_names.end()
+                            && hasInheritedConcreteMethodVariant(qc, method_name, mvb)) {
+                        printd(2, "AOT deser: skipping stale inherited method shell '%s::%s' without native slot '%s'\n",
+                            qc->getName(), method_name ? method_name : "", variant_key.c_str());
+                        delete mvb;
+                        continue;
+                    }
                 }
             }
 

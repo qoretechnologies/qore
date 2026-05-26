@@ -241,7 +241,14 @@ public class DatasourceTest inherits QUnit::Test {
             ?? "oracle:omquser/omquser@xbox";
 
         try {
-            return new Datasource(connstr);
+            Datasource ds(connstr);
+            # Verify the connection actually works before returning — the
+            # constructor only validates the conn-string; CI hosts may not
+            # have the named DB host reachable.  Open() surfaces network
+            # errors as DBI:*:CONNECT-ERROR, which we convert into a clean
+            # testSkip just like the construction-time errors above.
+            ds.open();
+            return ds;
         } catch (hash<ExceptionInfo> ex) {
             testSkip("skipping test: " + ex.err + ": " + ex.desc);
         }

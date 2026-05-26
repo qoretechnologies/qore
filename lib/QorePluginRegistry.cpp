@@ -2026,7 +2026,11 @@ QorePluginModuleHandle::QorePluginModuleHandle(const char* name, const char* pat
 }
 
 QorePluginModuleInitScope::QorePluginModuleInitScope(QorePluginModuleHandle& handle) : handle(handle) {
-    assert(!current_plugin_module_handle);
+    // Binary-module init callbacks can trigger recursive binary-module loads
+    // (e.g. via %requires(reexport) chains or runtime load_module() calls).
+    // Save the outer scope's handle so it can be restored when this scope exits;
+    // C++ stack destruction order naturally enforces LIFO nesting.
+    prev_handle = current_plugin_module_handle;
     handle.active = true;
     handle.committed = false;
     current_plugin_module_handle = &handle;
@@ -2036,9 +2040,8 @@ QorePluginModuleInitScope::~QorePluginModuleInitScope() {
     if (!committed) {
         qore_plugin_rollback_module_init_registration(handle);
     }
-    if (current_plugin_module_handle == &handle) {
-        current_plugin_module_handle = nullptr;
-    }
+    // Restore the outer scope's handle (nullptr if this was the outermost).
+    current_plugin_module_handle = prev_handle;
     handle.active = false;
 }
 

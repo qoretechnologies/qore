@@ -457,10 +457,25 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         string root = get_script_dir() + "/../../../..";
         string qore_bin = root + "/build/qore";
         string cli = root + "/bin/qore-onnx";
+        # qore-onnx requires reflection (and pulls in other binary modules
+        # transitively); list every build/modules/<name> dir so CI runners
+        # that don't have these installed system-wide can still load them.
         string module_path = join(PathSep, (
             root + "/qlib",
             root + "/build/qlib-qmod",
-            root + "/build/modules/ml"
+            root + "/build/modules/astparser",
+            root + "/build/modules/dataframe",
+            root + "/build/modules/i18n",
+            root + "/build/modules/krb5",
+            root + "/build/modules/linenoise",
+            root + "/build/modules/logger_bin",
+            root + "/build/modules/ml",
+            root + "/build/modules/mongodb",
+            root + "/build/modules/ocr",
+            root + "/build/modules/protobuf",
+            root + "/build/modules/reflection",
+            root + "/build/modules/sshutil",
+            root + "/build/modules/tokenizer",
         ));
         string cmd = sprintf("QORE_MODULE_DIR=%s %s %s",
             shellQuote(module_path), shellQuote(qore_bin), shellQuote(cli));

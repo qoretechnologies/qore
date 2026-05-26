@@ -8419,6 +8419,10 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
     std::string read_error;
     if (!readModuleCommands(metadata, metadata_len, commands, read_error)) {
         error = "AOT module-command metadata read error";
+        if (label && *label) {
+            error += " in ";
+            error += label;
+        }
         if (!read_error.empty()) {
             error += ": " + read_error;
         }
@@ -10101,8 +10105,11 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         std::string cmd_error;
         if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
                 static_cast<uint32_t>(metadata_len), label, cmd_error)) {
-            QoreStringNode* err = new QoreStringNode("AOT module-command replay error: ");
-            err->concat(cmd_error.c_str());
+            QoreStringNode* err = new QoreStringNodeMaker(
+                "AOT module-command replay error for module '%s' (%s): %s",
+                mod_name ? mod_name : "<unknown>",
+                (label && *label) ? label : "<unknown path>",
+                cmd_error.c_str());
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -10114,8 +10121,11 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     std::vector<std::string> deps;
     std::string dep_error;
     if (!readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
-        QoreStringNode* err = new QoreStringNode("AOT module dependency read error: ");
-        err->concat(dep_error.c_str());
+        QoreStringNode* err = new QoreStringNodeMaker(
+            "AOT module dependency read error for module '%s' (%s): %s",
+            mod_name ? mod_name : "<unknown>",
+            (label && *label) ? label : "<unknown path>",
+            dep_error.c_str());
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -10919,9 +10929,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     {
         std::string cmd_error;
         if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
-                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
-            QoreStringNode* err = new QoreStringNode("AOT module-command replay error: ");
-            err->concat(cmd_error.c_str());
+                static_cast<uint32_t>(metadata_len), module_context_path, cmd_error)) {
+            QoreStringNode* err = new QoreStringNodeMaker(
+                "AOT module-command replay error for module '%s' (%s): %s",
+                mod_name ? mod_name : "<unknown>",
+                (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
+                cmd_error.c_str());
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -10933,8 +10946,11 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     std::vector<std::string> deps;
     std::string dep_error;
     if (!readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
-        QoreStringNode* err = new QoreStringNode("AOT module dependency read error: ");
-        err->concat(dep_error.c_str());
+        QoreStringNode* err = new QoreStringNodeMaker(
+            "AOT module dependency read error for module '%s' (%s): %s",
+            mod_name ? mod_name : "<unknown>",
+            (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
+            dep_error.c_str());
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
