@@ -1702,11 +1702,21 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             }
         }
 
+        # Force the CPU execution provider so the profile output is the per-operator
+        # event stream that this test exercises.  Hardware-accelerated providers
+        # (CoreMLExecutionProvider on macOS, CUDAExecutionProvider, etc.) fuse the
+        # whole subgraph into a single synthetic node whose name encodes the
+        # provider — e.g. "12345_CoreML_12345_0" — so individual operators like
+        # "Gemm" never appear in the per-event profile summary.  Selecting CPU
+        # here keeps the diagnostics assertion meaningful on every platform; the
+        # hardware-provider integration is covered by separate provider-specific
+        # tests.
         DataProviderML::QoreOnnxModelProcessor proc({
             "model_path": getTestModelPath(),
             "fields": "x",
             "window_size": 3,
             "profile_file_prefix": prefix.path,
+            "execution_providers": "CPUExecutionProvider",
             "include_diagnostics": True,
         });
 
