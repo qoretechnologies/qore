@@ -2207,18 +2207,6 @@ foreach string module_name in (registry.getProcessModules()) {
       - provides AnthropicRestConnection for connection management with \c anthropic:// URL scheme
       - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
 
-    - @ref assemblyaidataproviderintro "AssemblyAiDataProvider" module
-      - new module providing a data provider API for <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text services
-      - exposes a single `transcribe` action that submits an audio URL, polls until the transcript reaches a terminal status, and returns the completed transcript
-      - opt-in analytics: speaker diarization, summarization (3 models / 5 styles), sentiment analysis, entity detection, IAB topic categories, and content-safety classification
-      - action catalog integration with 1 action under the \c assemblyai scheme; registered with the `Speech & Voice` AppGroup
-
-    - @ref assemblyairestclientintro "AssemblyAiRestClient" module
-      - new module providing a REST client for <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text services
-      - supports API key authentication via the bare `Authorization` header (no `Bearer` / `Token` prefix)
-      - drives the async transcription lifecycle (submit → poll → fetch) via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" with an injectable sleeper for deterministic tests
-      - provides AssemblyAiRestConnection for connection management with \c assemblyai:// URL scheme
-
     - @ref apollodataproviderintro "ApolloDataProvider" module
       - new module providing a data provider API for <a href="https://www.apollo.io/">Apollo</a> B2B sales intelligence
       - contact management (create, update, delete, search, get by ID)
@@ -2235,6 +2223,18 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://www.apollo.io/">Apollo</a>'s B2B sales intelligence API
       - supports OAuth2 authentication and API key authentication via x-api-key header
       - provides ApolloRestConnection for connection management with \c apollorest:// URL scheme
+
+    - @ref assemblyaidataproviderintro "AssemblyAiDataProvider" module
+      - new module providing a data provider API for <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text services
+      - exposes a single `transcribe` action that submits an audio URL, polls until the transcript reaches a terminal status, and returns the completed transcript
+      - opt-in analytics: speaker diarization, summarization (3 models / 5 styles), sentiment analysis, entity detection, IAB topic categories, and content-safety classification
+      - action catalog integration with 1 action under the \c assemblyai scheme; registered with the `Speech & Voice` AppGroup
+
+    - @ref assemblyairestclientintro "AssemblyAiRestClient" module
+      - new module providing a REST client for <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text services
+      - supports API key authentication via the bare `Authorization` header (no `Bearer` / `Token` prefix)
+      - drives the async transcription lifecycle (submit → poll → fetch) via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" with an injectable sleeper for deterministic tests
+      - provides AssemblyAiRestConnection for connection management with \c assemblyai:// URL scheme
 
     - @ref asyncapiintro "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
@@ -2831,6 +2831,19 @@ foreach string module_name in (registry.getProcessModules()) {
       - provides GroqRestConnection for connection management with \c groq:// URL scheme
       - distinct from @ref grokrestclientintro "GrokRestClient" (xAI Grok); note the spelling: Groq (LPU inference) vs. Grok (xAI)
 
+    - @ref hl7v2utilintro "Hl7v2Util" module
+      - new module for structure-agnostic parsing and writing of HL7 v2 delimited healthcare messages
+      - delimiter parsing from `MSH-1` and `MSH-2`, including field, repetition, component, escape, and subcomponent separators
+      - standard escape handling for message fields, including delimiter escapes and line-break escapes
+      - segment-order preserving parser with support for unknown custom `Z` segments
+      - address helpers for common values such as `MSH-9`, `PID-3(2).1`, and `OBX-5`
+      - generated schema artifact loader and structure-aware validation for required fields, field counts,
+        repetition bounds, and maximum lengths
+      - local HL7 v2 XML Schema package generator for producing Qore value schema artifacts without bundling
+        official HL7 source artifacts
+      - HL7 v2+ FHIR `StructureDefinition` schema generator tool for producing Qore value schema artifacts
+      - DataProvider integration for reading, writing, and loading HL7 v2 schema metadata
+
     - @ref httpclientiointro "HttpClientIo" module
       - new unified module providing HTTP/2 and HTTP/3 multiplexed client I/O support
       - protocol auto-selection: attempts HTTP/3 first, falls back to HTTP/2 with caching
@@ -3075,6 +3088,13 @@ foreach string module_name in (registry.getProcessModules()) {
       - registered with @ref qorellmutilsintro "QoreLlmUtils" under mode \c mistral
       - provides MistralRestConnection for connection management with \c mistral:// URL scheme
       - OCR is exposed via @ref mistraldataproviderintro "MistralDataProvider" — direct integration with the @ref qoreocrutilsintro "QoreOcrUtils" engine abstraction is planned for a follow-up release
+
+    - @ref mllputilintro "MllpUtil" module
+      - new module for sending and receiving MLLP-framed HL7 v2 messages
+      - strict frame validation for VT/FS/CR delimiters with configurable maximum frame sizes
+      - ACK helpers for building and parsing MSA acknowledgment codes
+      - thread-safe client and deterministic listener APIs for plain TCP and TLS sockets
+      - ConnectionProvider integration with \c mllp:// and \c mllps:// URL schemes
 
     - @ref mongodbdataproviderintro "MongoDbDataProvider" module
       - new module providing a data provider API for <a href="https://www.mongodb.com/">MongoDB</a> servers
@@ -3560,6 +3580,18 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref sshutilintro "sshutil" module
       - new module providing generic SSH client identity, server host-key, and remote host-key trust provider contracts
 
+    - @ref stabilityaidataproviderintro "StabilityAiDataProvider" module
+      - new module providing a data provider API for <a href="https://stability.ai">Stability AI</a> text-to-image generation
+      - exposes one action: `generate-image` — submits a text prompt and returns raw image bytes from one of three model tiers (`ultra` SD3 Ultra, `sd3` Stable Diffusion 3 / 3.5, `core` faster + cheaper with style presets)
+      - configurable `output_format` (PNG / JPEG / WebP), `aspect_ratio` (11 presets), `negative_prompt`, `seed`, and `style_preset` (`core` only)
+      - action catalog integration with 1 action under the \c stability-ai scheme; registered with the `DesignCreative` AppGroup
+
+    - @ref stabilityairestclientintro "StabilityAiRestClient" module
+      - new module providing a REST client for <a href="https://stability.ai">Stability AI</a> v2beta endpoints
+      - supports Bearer-token authentication
+      - registers a `stability-ai` image-generator backend in @ref qoremediautilsintro "QoreMediaUtils" — callable via `MediaProviderRegistry::createImageGenerator()` without an explicit `%requires` for this module
+      - provides StabilityAiRestConnection for connection management with \c stability-ai:// URL scheme
+
     - @ref systemeio_dataproviderintro "SystemeIoDataProvider" module
       - new module providing a data provider API for <a href="https://systeme.io/">Systeme.io</a> all-in-one marketing platform
       - contact management (create, update, delete, list, tag assignment)
@@ -3601,18 +3633,6 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref tallyrestclientintro "TallyRestClient" module
       - new module providing a REST client for <a href="https://tally.so/">Tally.so</a>'s form management API
       - provides TallyRestConnection for connection management with \c tally:// URL scheme
-
-    - @ref stabilityaidataproviderintro "StabilityAiDataProvider" module
-      - new module providing a data provider API for <a href="https://stability.ai">Stability AI</a> text-to-image generation
-      - exposes one action: `generate-image` — submits a text prompt and returns raw image bytes from one of three model tiers (`ultra` SD3 Ultra, `sd3` Stable Diffusion 3 / 3.5, `core` faster + cheaper with style presets)
-      - configurable `output_format` (PNG / JPEG / WebP), `aspect_ratio` (11 presets), `negative_prompt`, `seed`, and `style_preset` (`core` only)
-      - action catalog integration with 1 action under the \c stability-ai scheme; registered with the `DesignCreative` AppGroup
-
-    - @ref stabilityairestclientintro "StabilityAiRestClient" module
-      - new module providing a REST client for <a href="https://stability.ai">Stability AI</a> v2beta endpoints
-      - supports Bearer-token authentication
-      - registers a `stability-ai` image-generator backend in @ref qoremediautilsintro "QoreMediaUtils" — callable via `MediaProviderRegistry::createImageGenerator()` without an explicit `%requires` for this module
-      - provides StabilityAiRestConnection for connection management with \c stability-ai:// URL scheme
 
     - @ref tavilydataproviderintro "TavilyDataProvider" module
       - new module providing a data provider API for <a href="https://www.tavily.com">Tavily</a> agentic web-search services

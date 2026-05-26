@@ -106,6 +106,10 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
 
     @section mimereleasenotes Release Notes
 
+    @subsection mime_1_9 v1.9
+    - added \c "application/fhir+json" to @ref Mime::MimeTypesJson "MimeTypesJson"
+      for HL7 FHIR JSON payloads
+
     @subsection mime_1_8 v1.8
     - added @ref Mime::YamlMimeTypes "YamlMimeTypes" constant: set of all equivalent YAML MIME types
       (\c "text/x-yaml", \c "application/x-yaml", \c "application/yaml", \c "text/yaml") for normalization
@@ -415,6 +419,7 @@ public namespace Mime {
         "application/problem+json": True,               # RFC 7807 Problem Details
         "application/merge-patch+json": True,           # RFC 7396 JSON Merge Patch
         "application/json-patch+json": True,            # RFC 6902 JSON Patch
+        "application/fhir+json": True,                  # HL7 FHIR JSON
         "application/geo+json": True,                   # GeoJSON
         "application/manifest+json": True,              # Web App Manifest
         "application/vnd.contentful.management.v1+json": True, # Contentful CMA

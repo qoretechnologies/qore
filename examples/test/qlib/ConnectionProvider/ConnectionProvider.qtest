@@ -62,6 +62,8 @@ public class ConnectionProviderTest inherits QUnit::Test {
 
     cacheTest() {
         assertGt(0, ConnectionSchemeCache::size());
+        assertEq("FhirRestClient", ConnectionSchemeCache::SchemeMap.fhir);
+        assertEq("FhirRestClient", ConnectionSchemeCache::SchemeMap.fhirs);
     }
 
     indexedSchemeFallbackTest() {

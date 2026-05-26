@@ -191,6 +191,8 @@ public class ConnectionSchemeCache {
             "jotform": "JotformRestClient",
 
             # provided by the json module
+            "fhir": "FhirRestClient",
+            "fhirs": "FhirRestClient",
             "jsonrpc": "JsonRpcClient",
             "jsonrpcs": "JsonRpcClient",
             "mcp": "McpClient",
@@ -214,6 +216,8 @@ public class ConnectionSchemeCache {
             "memcacheds": "MemcachedDataProvider",
             "milvus": "MilvusRestClient",
             "mistral": "MistralRestClient",
+            "mllp": "MllpUtil",
+            "mllps": "MllpUtil",
             "mongodb": "MongoDbDataProvider",
 
             # provided by the jni module

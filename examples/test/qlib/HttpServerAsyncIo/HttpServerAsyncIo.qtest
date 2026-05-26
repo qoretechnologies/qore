@@ -218,7 +218,99 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("stop with in-flight handlers", \stopWithInFlightHandlersTest());
         addTestCase("stop during SSL handshake", \stopDuringSslHandshakeTest());
         addTestCase("POST Content-Length body pre-read", \postBodyReadTest());
+        addTestCase("SSE close drains queued final frame after partial send",
+            \sseCloseDrainsQueuedFinalFrameTest());
         set_return_value(main());
+    }
+
+    #! Regression: an SSE frame queued behind an in-flight (partially-sent) frame
+    #! must still be delivered when the producer signals end-of-stream via close().
+    /** HttpSseStreamPollOperation::continuePoll() returned NOTHING as soon as the
+        state was STATE_DRAINING after a send completed, abandoning any events still
+        queued in the event_channel — including the OpenAI-compatible
+        "data: [DONE]" terminator.  The async controller treats a NOTHING return as
+        end-of-operation and disconnects, so the queued terminator was silently
+        dropped.  This intermittently truncated AI gateway streaming responses
+        (the client saw content chunks but never the [DONE] terminator) whenever
+        close() landed while a prior chunk was still in pending_data.
+    */
+    sseCloseDrainsQueuedFinalFrameTest() {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+
+        Socket accepted = server.accept(5s);
+        on_exit {
+            try { accepted.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { client.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { server.close(); } catch (hash<ExceptionInfo> ex) {}
+        }
+
+        HttpServerAsyncIo::HttpSseStreamPollOperation op(accepted);
+        # disable the heartbeat so the only frames on the wire are the ones we queue
+        op.setHeartbeat(0);
+
+        # A frame far larger than any socket send/receive buffer: with the client
+        # not yet reading, the first continuePoll() can only send part of it, so it
+        # stays in pending_data — the precondition for the close() race.
+        string big = "data: " + strmul("x", 16 * 1024 * 1024) + "\n\n";
+        op.queueRawString(big);
+
+        # Start the send; it cannot complete (the client is not reading), so the op
+        # must ask to wait for writability rather than report completion.
+        *hash<auto> info = op.continuePoll();
+        assertTrue(exists info, "first continuePoll() must wait for writability (partial send)");
+        assertEq("streaming", op.getState());
+
+        # Queue the terminator behind the in-flight frame, then signal end-of-stream.
+        op.queueRawString("data: [DONE]\n\n");
+        op.close();
+        assertEq("draining", op.getState());
+
+        # Drive the op exactly as the async controller does: a NOTHING return means
+        # "operation complete" (the controller then disconnects), a hash means
+        # "keep waiting".  Reading on the client frees socket buffer space so the
+        # send can progress.
+        string received = "";
+        int guard = 0;
+        while (True) {
+            try {
+                received += client.recv(0, 2s);
+            } catch (hash<ExceptionInfo> ex) {
+                # nothing available yet — fall through to poll the op again
+            }
+            *hash<auto> pi = op.continuePoll();
+            if (!pi) {
+                break;
+            }
+            if (++guard > 100000) {
+                throw "TEST-GUARD", "SSE drain did not complete within the iteration budget";
+            }
+        }
+
+        # Collect whatever is still buffered after the op completed; closing the
+        # server side (as the controller's disconnect handler would) lets the
+        # client read the remainder and then see EOF.
+        try { accepted.close(); } catch (hash<ExceptionInfo> ex) {}
+        while (True) {
+            try {
+                string rest = client.recv(0, 2s);
+                if (!rest.val()) {
+                    break;
+                }
+                received += rest;
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+        }
+
+        assertTrue(received =~ /data:\s*\[DONE\]/,
+            "the [DONE] terminator queued behind an in-flight frame must be delivered, "
+            "not abandoned when close() is signalled mid-send");
     }
 
     constantsTest() {

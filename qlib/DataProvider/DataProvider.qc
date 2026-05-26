@@ -110,6 +110,7 @@ public class DataProvider {
             # provided by the jni module
             "camel": "CamelDataProvider",
 
+            "cda": "CdaDataProvider",
             "cdsrest": "CdsRestDataProvider",
             "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
@@ -141,6 +142,9 @@ public class DataProvider {
             "filepoller": "FilePoller",
             "fixedlengthread": "FixedLengthUtil",
             "fixedlengthwrite": "FixedLengthUtil",
+            "hl7v2read": "Hl7v2Util",
+            "hl7v2schema": "Hl7v2Util",
+            "hl7v2write": "Hl7v2Util",
             # provided by the jni module
             "flyway": "FlywayDataProvider",
 
@@ -182,6 +186,7 @@ public class DataProvider {
             "jotform": "JotformDataProvider",
 
             # provided by the json module
+            "fhirrest": "FhirRestDataProvider",
             "jsonread": "JsonFileDataProvider",
             "jsonwrite": "JsonFileDataProvider",
 

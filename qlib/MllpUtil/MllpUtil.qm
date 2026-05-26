@@ -1,0 +1,170 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file MllpUtil.qm Qore user module for MLLP-framed HL7 v2 messages
+
+/*  MllpUtil.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%requires Hl7v2Util
+%requires(reexport) ConnectionProvider >= 1.4
+
+%modern
+
+module MllpUtil {
+    version = "1.0";
+    desc = "user module for sending and receiving MLLP-framed HL7 v2 messages";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("mllp", MllpConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("mllps", MllpConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage MllpUtil Module
+
+    @tableofcontents
+
+    @section mllputilintro MllpUtil Module Introduction
+
+    The %MllpUtil module provides Minimal Lower Layer Protocol (MLLP)
+    framing, client, and listener support for HL7 v2 message exchange.
+
+    To use this module, use \c "%requires MllpUtil" in your code.
+
+    All public symbols are defined in the MllpUtil namespace.
+
+    @subsection mllputilfeatures Key Features
+
+    - Adds and validates MLLP frame delimiters: VT (0x0b), FS (0x1c), CR (0x0d).
+    - Reads framed messages from Qore \c Socket objects with configurable timeouts
+      and maximum frame sizes.
+    - Sends framed HL7 v2 text over plain TCP or TLS sockets.
+    - Builds and parses standard HL7 v2 ACK messages with application and commit
+      acknowledgment codes.
+    - Provides a thread-safe \c MllpClient and a deterministic \c MllpListener
+      for inbound feeds.
+    - Registers \c mllp:// and \c mllps:// connection schemes through the
+      \c ConnectionProvider module.
+
+    @subsection mllputilexamples Examples
+
+    Sending a message and reading an ACK:
+
+    @code{.py}
+%requires MllpUtil
+
+string msg = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+    "PID|1||12345^^^MRN^MR||Doe^Jane\r";
+
+MllpClient client({"host": "127.0.0.1", "port": 2575});
+hash<MllpAckInfo> ack = client.sendAndReceiveAck(msg);
+printf("ACK code: %s\n", ack.acknowledgment_code);
+    @endcode
+
+    Receiving messages and returning ACKs:
+
+    @code{.py}
+%requires MllpUtil
+
+MllpListener listener("127.0.0.1:2575");
+listener.start(*string sub (string msg) {
+    return MllpUtil::mllp_build_ack(msg);
+});
+
+# ...
+listener.stop();
+    @endcode
+
+    TLS listener setup:
+
+    @code{.py}
+%requires MllpUtil
+
+MllpListener listener("0.0.0.0:2576", {
+    "tls": True,
+    "cert": File::readTextFile("server.crt"),
+    "key": File::readTextFile("server.key"),
+});
+listener.start(*string sub (string msg) {
+    return MllpUtil::mllp_build_ack(msg);
+});
+    @endcode
+
+    @since 2.0
+
+    @par Release Notes
+
+    - added the initial \c MllpUtil module with MLLP framing, ACK helpers,
+      client/listener APIs, TLS support, and \c mllp:// / \c mllps:// connection
+      schemes
+*/
+
+#! MllpUtil module namespace
+public namespace MllpUtil {
+    #! MLLP start block byte (VT, 0x0b)
+    public const MllpStartBlock = 0x0b;
+
+    #! MLLP end block byte (FS, 0x1c)
+    public const MllpEndBlock = 0x1c;
+
+    #! MLLP frame terminator byte (CR, 0x0d)
+    public const MllpCarriageReturn = 0x0d;
+
+    #! Default MLLP port
+    public const DefaultMllpPort = 2575;
+
+    #! Default connect and I/O timeout
+    public const DefaultTimeout = 30s;
+
+    #! Default listener shutdown timeout
+    public const DefaultCloseTimeout = 10s;
+
+    #! Default maximum inbound frame size in bytes
+    public const DefaultMaxFrameSize = 16 * 1024 * 1024;
+
+    #! HL7 v2 ACK code values commonly carried in MSA-1
+    public enum MllpAckCode : string {
+        #! Application accept
+        ApplicationAccept = "AA",
+        #! Application error
+        ApplicationError = "AE",
+        #! Application reject
+        ApplicationReject = "AR",
+        #! Commit accept
+        CommitAccept = "CA",
+        #! Commit error
+        CommitError = "CE",
+        #! Commit reject
+        CommitReject = "CR",
+    }
+
+    #! Parsed HL7 v2 ACK data
+    public hashdecl MllpAckInfo {
+        string acknowledgment_code;
+        *string message_control_id;
+        *string text_message;
+        bool accepted;
+        string raw_message;
+    }
+}

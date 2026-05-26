@@ -1,0 +1,639 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  hl7v2util.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
+%try-module zip
+%define NoZip
+%endtry
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/Hl7v2Util
+
+%exec-class Hl7v2UtilTest
+
+class Hl7v2UtilTest inherits QUnit::Test {
+    private {
+        const Message = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "EVN|A01|202605261201\r"
+            "PID|1||12345^^^MRN^MR~98765^^^SSN^SS||Doe^Jane^A||19800101|F|||123 Main^^Metropolis^NY^10001\r"
+            "OBX|1|ST|NOTE||Line\\.br\\break and value \\F\\ separator\r"
+            "ZPI|custom|segment\r";
+
+        const CustomDelimiterMessage = "MSH*;!%$*SRC*FAC*DST*FAC*202605261200**ADT;A01*MSG0002*P*2.5.1\r"
+            "PID*1**12345;;;MRN;MR**Doe;Jane\r";
+
+        const SyntheticSegmentsXsd =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n"
+            "  <xs:element name=\"MSH\" type=\"MSH.CONTENT\">\n"
+            "    <xs:annotation><xs:documentation>Message Header</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:complexType name=\"MSH.CONTENT\">\n"
+            "    <xs:sequence>\n"
+            "      <xs:element ref=\"MSH.1\" minOccurs=\"1\" maxOccurs=\"1\"/>\n"
+            "      <xs:element ref=\"MSH.9\" minOccurs=\"1\" maxOccurs=\"1\"/>\n"
+            "      <xs:element ref=\"MSH.10\" minOccurs=\"1\" maxOccurs=\"1\"/>\n"
+            "    </xs:sequence>\n"
+            "  </xs:complexType>\n"
+            "  <xs:element name=\"PID\">\n"
+            "    <xs:annotation><xs:documentation>Patient Identification</xs:documentation></xs:annotation>\n"
+            "    <xs:complexType>\n"
+            "      <xs:sequence>\n"
+            "        <xs:element ref=\"PID.1\" minOccurs=\"0\" maxOccurs=\"1\"/>\n"
+            "        <xs:element ref=\"PID.3\" minOccurs=\"1\" maxOccurs=\"unbounded\"/>\n"
+            "        <xs:element ref=\"PID.5\" minOccurs=\"1\" maxOccurs=\"unbounded\"/>\n"
+            "      </xs:sequence>\n"
+            "    </xs:complexType>\n"
+            "  </xs:element>\n"
+            "</xs:schema>\n";
+
+        const SyntheticFieldsXsd =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n"
+            "  <xs:simpleType name=\"ST.1\">\n"
+            "    <xs:restriction base=\"ST\"><xs:maxLength value=\"1\"/></xs:restriction>\n"
+            "  </xs:simpleType>\n"
+            "  <xs:simpleType name=\"ST.199\">\n"
+            "    <xs:restriction base=\"ST\"><xs:maxLength value=\"199\"/></xs:restriction>\n"
+            "  </xs:simpleType>\n"
+            "  <xs:element name=\"MSH.1\" type=\"ST.1\">\n"
+            "    <xs:annotation><xs:documentation>Field Separator</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"MSH.9\" type=\"MSG\">\n"
+            "    <xs:annotation><xs:documentation>Message Type</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"MSH.10\" type=\"ST.199\">\n"
+            "    <xs:annotation><xs:documentation>Message Control ID</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"PID.1\" type=\"SI\">\n"
+            "    <xs:annotation><xs:documentation>Set ID - PID</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"PID.3\" type=\"CX\">\n"
+            "    <xs:annotation><xs:documentation>Patient Identifier List</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"PID.5\" type=\"XPN\">\n"
+            "    <xs:annotation><xs:documentation>Patient Name</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "</xs:schema>\n";
+    }
+
+    constructor() : QUnit::Test("Hl7v2Util test", "1.0") {
+        addTestCase("delimiter test", \delimiterTest());
+        addTestCase("message parse test", \messageParseTest());
+        addTestCase("address test", \addressTest());
+        addTestCase("escape test", \escapeTest());
+        addTestCase("roundtrip test", \roundtripTest());
+        addTestCase("custom delimiter test", \customDelimiterTest());
+        addTestCase("writer test", \writerTest());
+        addTestCase("schema registry test", \schemaRegistryTest());
+        addTestCase("schema validation test", \schemaValidationTest());
+        addTestCase("schema generator test", \schemaGeneratorTest());
+        addTestCase("XML schema generator test", \xmlSchemaGeneratorTest());
+        addTestCase("XML schema zip generator test", \xmlSchemaZipGeneratorTest());
+        addTestCase("official local schema zip gate test", \officialLocalSchemaZipGateTest());
+        addTestCase("schema data provider test", \schemaDataProviderTest());
+        addTestCase("data provider test", \dataProviderTest());
+        addTestCase("factory and action catalog test", \factoryAndActionCatalogTest());
+        addTestCase("negative test", \negativeTest());
+
+        set_return_value(main());
+    }
+
+%ifndef NoZip
+    private createSyntheticSchemaZip(string zip_path) {
+        ZipFile zip(zip_path, "w");
+        zip.addText("xsd/segments.xsd", SyntheticSegmentsXsd);
+        zip.addText("xsd/fields.xsd", SyntheticFieldsXsd);
+    }
+%endif
+
+    delimiterTest() {
+        Hl7v2Delimiters d();
+        assertEq("|", d.getFieldSeparator());
+        assertEq("^", d.getComponentSeparator());
+        assertEq("~", d.getRepetitionSeparator());
+        assertEq("\\", d.getEscapeCharacter());
+        assertEq("&", d.getSubcomponentSeparator());
+        assertEq("^~\\&", d.getEncodingCharacters());
+
+        Hl7v2Delimiters custom("MSH*;!%$*SRC");
+        assertEq("*", custom.getFieldSeparator());
+        assertEq(";", custom.getComponentSeparator());
+        assertEq("!", custom.getRepetitionSeparator());
+        assertEq("%", custom.getEscapeCharacter());
+        assertEq("$", custom.getSubcomponentSeparator());
+        assertEq(";!%$", custom.getEncodingCharacters());
+    }
+
+    messageParseTest() {
+        Hl7v2Base base();
+        hash<Hl7v2MessageInfo> msg = base.parseMessage(Message);
+        assertEq("|", msg.delimiters.field_separator);
+        assertEq(5, msg.segments.size());
+        assertEq(("MSH", "EVN", "PID", "OBX", "ZPI"), map $1.tag, msg.segments);
+
+        hash<Hl7v2Segment> msh = msg.segments[0];
+        assertEq("MSH", msh.tag);
+        assertEq("|", msh.fields[0].raw);
+        assertEq("^~\\&", msh.fields[1].raw);
+        assertEq("ADT^A01", msh.fields[8].raw);
+
+        hash<Hl7v2Segment> pid = msg.segments[2];
+        assertEq("PID", pid.tag);
+        assertEq(2, pid.fields[2].repetitions.size());
+        assertEq("12345", pid.fields[2].repetitions[0][0]);
+        assertEq("98765", pid.fields[2].repetitions[1][0]);
+        assertEq("MRN", pid.fields[2].repetitions[0][3]);
+    }
+
+    addressTest() {
+        Hl7v2Message msg(Message);
+        assertEq("ADT^A01", msg.getAddress("MSH-9"));
+        assertEq("ADT", msg.getAddress("MSH-9.1"));
+        assertEq("A01", msg.getAddress("MSH-9.2"));
+        assertEq("Doe^Jane^A", msg.getAddress("PID-5"));
+        assertEq("Doe", msg.getAddress("PID-5.1"));
+        assertEq("Jane", msg.getAddress("PID-5.2"));
+        assertEq("12345", msg.getAddress("PID-3.1"));
+        assertEq("98765", msg.getAddress("PID-3(2).1"));
+        assertNothing(msg.getAddress("PV1-2"));
+    }
+
+    escapeTest() {
+        Hl7v2Message msg(Message);
+        assertEq("Line\nbreak and value | separator", msg.getAddress("OBX-5"));
+
+        Hl7v2Delimiters d();
+        assertEq("A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G", d.escape("A|B^C~D&E\\F\nG"));
+        assertEq("A|B^C~D&E\\F\nG", d.unescape("A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G"));
+        assertEq("ABC", d.unescape("\\X414243\\"));
+        assertEq("\\Q\\", d.unescape("\\Q\\"));
+    }
+
+    roundtripTest() {
+        Hl7v2Message msg(Message);
+        assertEq(Message, msg.getText());
+    }
+
+    customDelimiterTest() {
+        Hl7v2Message msg(CustomDelimiterMessage);
+        assertEq("ADT;A01", msg.getAddress("MSH-9"));
+        assertEq("ADT", msg.getAddress("MSH-9.1"));
+        assertEq("A01", msg.getAddress("MSH-9.2"));
+        assertEq("Doe", msg.getAddress("PID-5.1"));
+        assertEq("Jane", msg.getAddress("PID-5.2"));
+        assertEq(CustomDelimiterMessage, msg.getText());
+    }
+
+    writerTest() {
+        Hl7v2Base base();
+        string seg = base.formatSegment({
+            "tag": "PID",
+            "fields": ("1", "", ("12345", "", "", "MRN", "MR"), "", ("Doe", "Jane")),
+        });
+        assertEq("PID|1||12345^^^MRN^MR||Doe^Jane", seg);
+
+        string escaped = base.formatSegment({
+            "tag": "OBX",
+            "fields": ("1", "ST", "NOTE", "", "A|B^C~D&E\\F\nG"),
+        });
+        assertEq("OBX|1|ST|NOTE||A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G", escaped);
+    }
+
+    schemaRegistryTest() {
+        Hl7v2Schema schema = Hl7v2SchemaRegistry::loadFile(schemaPath(), True);
+        assertEq("2.5.1", schema.version);
+        assertEq("2.5.1", schema.meta.version);
+        assertTrue(schema.hasSegment("MSH"));
+        assertTrue(schema.hasSegment("PID"));
+        assertEq(("EVN", "MSH", "OBX", "PID"), schema.getSegmentTags());
+
+        hash<Hl7v2SegmentDef> msh = schema.getSegmentDef("MSH");
+        assertEq("Message Header", msh.name);
+        assertEq(12, msh.fields.size());
+        assertEq("Message Control ID", msh.fields[9].name);
+        assertEq("R", msh.fields[9].usage);
+        assertEq(199, msh.fields[9].max_length);
+    }
+
+    schemaValidationTest() {
+        Hl7v2Schema schema = Hl7v2SchemaRegistry::loadFile(schemaPath(), True);
+        Hl7v2Message valid(Message);
+        assertEq(0, schema.validateMessage(valid.getMessage(), {"allow_unknown_segments": False}).size());
+
+        string missing_required = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "PID|1||||Doe^Jane\r";
+        list<hash<Hl7v2ValidationIssue>> issues = schema.validateMessageText(missing_required);
+        assertTrue(hasIssue(issues, "missing-required-field", "PID-3"));
+
+        string extra_field = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "EVN|A01|202605261201|extra\r";
+        issues = schema.validateMessageText(extra_field);
+        assertTrue(hasIssue(issues, "unexpected-field", "EVN-3"));
+
+        string too_long = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "PID|12345||12345^^^MRN^MR||Doe^Jane\r";
+        issues = schema.validateMessageText(too_long);
+        assertTrue(hasIssue(issues, "field-too-long", "PID-1"));
+
+        string repeated_single = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01~ORM^O01|MSG0001|P|2.5.1\r";
+        issues = schema.validateMessageText(repeated_single);
+        assertTrue(hasIssue(issues, "too-many-repetitions", "MSH-9"));
+
+        string unknown = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "ABC|x\r";
+        assertEq(0, schema.validateMessageText(unknown).size());
+        issues = schema.validateMessageText(unknown, {"allow_unknown_segments": False});
+        assertTrue(hasIssue(issues, "unknown-segment", "ABC"));
+
+        assertThrows("HL7V2-VALIDATION-ERROR", sub () {
+            Hl7v2Base base();
+            schema.assertValidMessage(base.parseMessage(missing_required));
+        });
+    }
+
+    schemaGeneratorTest() {
+        list<hash<auto>> resources = ({
+            "resourceType": "StructureDefinition",
+            "type": "ABC",
+            "title": "ABC (Segment)",
+            "description": "Synthetic Segment",
+            "version": "2.9",
+            "kind": "logical",
+            "derivation": "specialization",
+            "differential": {
+                "element": ({
+                    "id": "ABC",
+                    "path": "ABC",
+                    "definition": "Synthetic Segment",
+                    "min": 1,
+                    "max": "1",
+                }, {
+                    "id": "ABC.id",
+                    "path": "ABC.id",
+                    "definition": "Logical id",
+                    "min": 0,
+                    "max": "1",
+                }, {
+                    "id": "ABC.requiredField",
+                    "path": "ABC.requiredField",
+                    "definition": "**Required Field**",
+                    "min": 1,
+                    "max": "1",
+                    "type": ({"code": "ST"},),
+                    "maxLength": 4,
+                }, {
+                    "id": "ABC.repeatingField",
+                    "path": "ABC.repeatingField",
+                    "definition": "**Repeating Field**",
+                    "min": 0,
+                    "max": "*",
+                    "type": ({"code": "CWE"},),
+                }),
+            },
+        }, {
+            "resourceType": "StructureDefinition",
+            "type": "NOTASEGMENT",
+            "title": "Ignored Logical Type",
+            "version": "2.9",
+        });
+
+        Hl7v2StructureDefinitionSchemaGenerator generator();
+        Hl7v2Schema schema = generator.generateSchema(resources, {"source": "synthetic package", "license": "MIT"});
+        assertEq("2.9", schema.version);
+        assertEq("synthetic package", schema.meta.source);
+        assertEq("MIT", schema.meta.license);
+        assertTrue(schema.hasSegment("ABC"));
+        assertEq(("ABC",), schema.getSegmentTags());
+
+        hash<Hl7v2SegmentDef> abc = schema.getSegmentDef("ABC");
+        assertEq(2, abc.fields.size());
+        assertEq("Required Field", abc.fields[0].name);
+        assertEq("R", abc.fields[0].usage);
+        assertEq(4, abc.fields[0].max_length);
+        assertTrue(abc.fields[1].repeating);
+
+        string serialized = Hl7v2SchemaValueSerializer::serializeSchema(schema);
+        Hl7v2Schema parsed(cast<hash>(Util::parse_to_qore_value(serialized)));
+        assertEq(schema.version, parsed.version);
+        assertEq(schema.getSegmentTags(), parsed.getSegmentTags());
+    }
+
+    xmlSchemaGeneratorTest() {
+%ifdef NoXml
+        testSkip("no XML module present");
+%else
+        TmpDir tmp();
+        writeText(tmp.path + "/segments.xsd", SyntheticSegmentsXsd);
+        writeText(tmp.path + "/fields.xsd", SyntheticFieldsXsd);
+
+        Hl7v2XmlSchemaPackageGenerator generator();
+        Hl7v2Schema schema = generator.generateSchemaFromDirectory(tmp.path, {
+            "version": "2.5.1",
+            "source": "synthetic local HL7 v2 XML schema package",
+            "license": "MIT",
+        });
+
+        assertEq("2.5.1", schema.version);
+        assertEq("HL7 v2 XML schema package", schema.meta.generated_from);
+        assertEq("Hl7v2XmlSchemaPackageGenerator", schema.meta.generator);
+        assertTrue(schema.meta.note =~ /local user-supplied/);
+        assertEq(("MSH", "PID"), schema.getSegmentTags());
+
+        hash<Hl7v2SegmentDef> msh = schema.getSegmentDef("MSH");
+        assertEq("Message Header", msh.name);
+        assertEq(3, msh.fields.size());
+        assertEq("Field Separator", msh.fields[0].name);
+        assertEq("ST", msh.fields[0].datatype);
+        assertEq("R", msh.fields[0].usage);
+        assertEq(1, msh.fields[0].max_length);
+        assertEq("Message Type", msh.fields[1].name);
+        assertEq("MSG", msh.fields[1].datatype);
+        assertFalse(msh.fields[1].repeating);
+
+        hash<Hl7v2SegmentDef> pid = schema.getSegmentDef("PID");
+        assertEq("Patient Identification", pid.name);
+        assertEq(3, pid.fields.size());
+        assertEq("Patient Identifier List", pid.fields[1].name);
+        assertEq("CX", pid.fields[1].datatype);
+        assertEq("*", pid.fields[1].max_repetitions);
+        assertTrue(pid.fields[1].repeating);
+        assertEq("Patient Name", pid.fields[2].name);
+        assertEq("XPN", pid.fields[2].datatype);
+
+        string serialized = Hl7v2SchemaValueSerializer::serializeSchema(schema);
+        Hl7v2Schema parsed(cast<hash>(Util::parse_to_qore_value(serialized)));
+        assertEq(schema.version, parsed.version);
+        assertEq(schema.getSegmentTags(), parsed.getSegmentTags());
+%endif
+    }
+
+    xmlSchemaZipGeneratorTest() {
+%ifdef NoXml
+        testSkip("no XML module present");
+%else
+%ifdef NoZip
+        testSkip("no zip module present");
+%else
+        TmpDir tmp();
+        string zip_path = tmp.path + "/synthetic-hl7-v251.zip";
+        createSyntheticSchemaZip(zip_path);
+
+        Hl7v2XmlSchemaPackageGenerator generator();
+        Hl7v2Schema schema = generator.generateSchemaFromZip(zip_path, {"version": "2.5.1"});
+        assertEq(("MSH", "PID"), schema.getSegmentTags());
+        assertEq("Message Header", schema.getSegmentDef("MSH").name);
+        assertEq("Patient Identification", schema.getSegmentDef("PID").name);
+%endif
+%endif
+    }
+
+    officialLocalSchemaZipGateTest() {
+        *string zip_path = ENV.HL7V251_SCHEMA_ZIP;
+        if (!zip_path) {
+            testSkip("HL7V251_SCHEMA_ZIP is not set");
+        }
+%ifdef NoXml
+        testSkip("no XML module present");
+%else
+%ifdef NoZip
+        testSkip("no zip module present");
+%else
+        Hl7v2XmlSchemaPackageGenerator generator();
+        Hl7v2Schema schema = generator.generateSchemaFromZip(zip_path, {
+            "version": "2.5.1",
+            "source": zip_path,
+            "note": "Generated from a local licensed HL7 v2.5.1 XML schema ZIP for manual validation only.",
+        });
+
+        assertEq("2.5.1", schema.version);
+        assertTrue(schema.hasSegment("MSH"));
+        assertTrue(schema.hasSegment("PID"));
+        assertTrue(schema.getSegmentTags().size() > 10);
+%endif
+%endif
+    }
+
+    schemaDataProviderTest() {
+        Hl7v2SchemaDataProvider provider({"path": schemaPath()});
+        AbstractDataProviderRecordIterator i = provider.searchRecords();
+        assertTrue(i.next());
+        hash<auto> row = i.getValue();
+        assertEq("2.5.1", row.version);
+        assertEq(4, row.counts.segments);
+        assertTrue(row.counts.fields >= 30);
+        assertEq(("EVN", "MSH", "OBX", "PID"), row.segment_tags);
+        assertTrue(row.summary_only);
+        assertNothing(row.schema);
+        assertFalse(i.next());
+
+        Hl7v2SchemaDataProvider full_provider({"path": schemaPath(), "summary_only": False});
+        AbstractDataProviderRecordIterator j = full_provider.searchRecords();
+        assertTrue(j.next());
+        hash<auto> full = j.getValue();
+        assertFalse(full.summary_only);
+        assertTrue(exists full.schema.segments.MSH);
+
+        hash<string, AbstractDataField> record_type = j.getRecordType();
+        assertTrue(exists record_type.version);
+        assertTrue(exists record_type.segment_tags);
+
+        Hl7v2SchemaSummaryDataProvider summary_provider({"path": schemaPath(), "summary_only": False});
+        AbstractDataProviderRecordIterator k = summary_provider.searchRecords();
+        assertTrue(k.next());
+        hash<auto> summary = k.getValue();
+        assertTrue(summary.summary_only);
+        assertNothing(summary.schema);
+    }
+
+    dataProviderTest() {
+        Hl7v2ReadDataProvider reader({"data": Message});
+        AbstractDataProviderRecordIterator i = reader.searchRecords();
+        list<string> tags = ();
+        while (i.next()) {
+            push tags, i.getValue().tag;
+        }
+        assertEq(("MSH", "EVN", "PID", "OBX", "ZPI"), tags);
+
+        TmpDir tmp();
+        string path = tmp.path + "/out.hl7";
+        Hl7v2WriteDataProvider writer({"path": path});
+        hash<string, AbstractDataField> create_type = writer.getCreateRecordType();
+        assertTrue(exists create_type.message);
+        assertTrue(exists create_type.segments);
+        assertTrue(exists create_type.tag);
+        assertTrue(exists create_type.fields);
+
+        Hl7v2Message msg(Message);
+        hash<auto> write_result = writer.createRecord({"message": msg.getMessage()});
+        assertEq(path, write_result.path);
+        assertEq(Message.size(), write_result.characters);
+        assertEq(5, write_result.segments);
+        assertEq(Message, ReadOnlyFile::readTextFile(path));
+
+        string custom_path = tmp.path + "/custom.hl7";
+        Hl7v2WriteDataProvider custom_writer({"path": custom_path});
+        Hl7v2Message custom_msg(CustomDelimiterMessage);
+        hash<auto> custom_write_result = custom_writer.createRecord({"message": custom_msg.getMessage()});
+        assertEq(custom_path, custom_write_result.path);
+        assertEq(CustomDelimiterMessage.size(), custom_write_result.characters);
+        assertEq(2, custom_write_result.segments);
+        assertEq(CustomDelimiterMessage, ReadOnlyFile::readTextFile(custom_path));
+
+        Hl7v2ReadDataProvider file_reader({"path": path});
+        AbstractDataProviderRecordIterator j = file_reader.searchRecords({"tag": "PID"});
+        assertTrue(j.next());
+        assertEq("PID", j.getValue().tag);
+        assertFalse(j.next());
+    }
+
+    factoryAndActionCatalogTest() {
+        hash<DataProviderFactoryInfo> read_info = DataProvider::getFactoryEx("hl7v2read").getInfo();
+        assertEq("hl7v2read", read_info.name);
+        hash<DataProviderFactoryInfo> write_info = DataProvider::getFactoryEx("hl7v2write").getInfo();
+        assertEq("hl7v2write", write_info.name);
+        hash<DataProviderFactoryInfo> schema_info = DataProvider::getFactoryEx("hl7v2schema").getInfo();
+        assertEq("hl7v2schema", schema_info.name);
+
+        hash<auto> app = DataProviderActionCatalog::getApp(Hl7v2Util::AppName);
+        assertEq("HL7 v2 Messages", app.display_name);
+        assertTrue(app.desc =~ /Preserve message structure/);
+
+        hash<DataProviderActionInfo> read_action = DataProviderActionCatalog::getAppActionEx(Hl7v2Util::AppName,
+            "read");
+        assertEq("Hl7v2Segment", read_action.output_type.getName());
+        assertTrue(exists read_action.options.path);
+
+        hash<DataProviderActionInfo> read_data_action = DataProviderActionCatalog::getAppActionEx(
+            Hl7v2Util::AppName, "read-data");
+        assertEq("Hl7v2Segment", read_data_action.output_type.getName());
+        assertTrue(exists read_data_action.options.data);
+
+        hash<DataProviderActionInfo> write_action = DataProviderActionCatalog::getAppActionEx(Hl7v2Util::AppName,
+            "write");
+        assertEq("Hl7v2WriteResult", write_action.output_type.getName());
+        assertTrue(exists write_action.options.path);
+
+        hash<DataProviderActionInfo> schema_action = DataProviderActionCatalog::getAppActionEx(Hl7v2Util::AppName,
+            "schema");
+        assertEq("Hl7v2SchemaResult", schema_action.output_type.getName());
+        assertTrue(exists schema_action.options.path);
+
+        hash<DataProviderActionInfo> schema_summary_action = DataProviderActionCatalog::getAppActionEx(
+            Hl7v2Util::AppName, "schema-summary");
+        assertEq("Hl7v2SchemaResult", schema_summary_action.output_type.getName());
+        assertTrue(exists schema_summary_action.options.path);
+        assertFalse(exists schema_summary_action.options.summary_only);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions(Hl7v2Util::AppName);
+        list<string> names = map $1.action, actions;
+        assertTrue(inlist("read", names));
+        assertTrue(inlist("read-data", names));
+        assertTrue(inlist("write", names));
+        assertTrue(inlist("schema", names));
+        assertTrue(inlist("schema-summary", names));
+    }
+
+    negativeTest() {
+        Hl7v2Base base();
+        assertThrows("HL7V2-PARSE-ERROR", sub () { base.parseSegment("PI"); });
+        assertThrows("HL7V2-PARSE-ERROR", sub () { base.parseSegment("piD|1"); });
+        assertThrows("HL7V2-PARSE-ERROR", sub () { base.parseMessage(""); });
+        assertThrows("HL7V2-DELIMITER-ERROR", sub () { new Hl7v2Delimiters("MSH|^~"); });
+        assertThrows("HL7V2-ESCAPE-ERROR", sub () { base.parseMessage("MSH|^~\\&|A\rOBX|1|ST|NOTE||bad \\F\r"); });
+        assertThrows("HL7V2-ADDRESS-ERROR", sub () { Hl7v2Base::parseAddress("PID"); });
+        assertThrows("HL7V2-ADDRESS-ERROR", sub () { (new Hl7v2Message(Message)).getAddress("PID-0"); });
+        assertThrows("HL7V2-READ-ERROR", sub () { new Hl7v2ReadDataProvider({}); });
+        assertThrows("HL7V2-WRITE-ERROR", sub () { new Hl7v2WriteDataProvider({}); });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () { new Hl7v2Schema(""); });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () { new Hl7v2SchemaDataProvider({}); });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () {
+            new Hl7v2Schema({
+                "version": "2.5.1",
+                "segments": {
+                    "PID": {
+                        "tag": "PID",
+                        "fields": ({"position": 1, "name": "x", "usage": "BAD"},),
+                    },
+                },
+            });
+        });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () {
+            new Hl7v2Schema({
+                "version": "2.5.1",
+                "segments": {
+                    "PID": {
+                        "tag": "PID",
+                        "fields": ({"position": 1, "name": "x", "max_repetitions": "many"},),
+                    },
+                },
+            });
+        });
+        assertThrows("HL7V2-SCHEMA-ERROR", sub () {
+            new Hl7v2Schema({
+                "version": "2.5.1",
+                "segments": {
+                    "PID": {
+                        "tag": "PID",
+                        "fields": ({"position": 1, "name": "x", "repeating": "sometimes"},),
+                    },
+                },
+            });
+        });
+
+        try {
+            base.parseMessage("MSH|^~\\&|A\rOBX|1|ST|NOTE||patient-name secret \\F\r");
+            assertTrue(False, "expected HL7V2-ESCAPE-ERROR");
+        } catch (hash<ExceptionInfo> e) {
+            assertEq("HL7V2-ESCAPE-ERROR", e.err);
+            assertFalse(e.desc =~ /patient-name|secret/);
+        }
+    }
+
+    private string schemaPath() {
+        return dirname(get_script_path()) + DirSep + "fixtures" + DirSep + "v251-schema.qv";
+    }
+
+    private writeText(string path, string data) {
+        FileLocationHandler::writeFileToLocation(path, data);
+    }
+
+    private bool hasIssue(list<hash<Hl7v2ValidationIssue>> issues, string code, string address) {
+        foreach hash<Hl7v2ValidationIssue> issue in (issues) {
+            if (issue.code == code && issue.address == address) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+}

@@ -690,6 +690,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
         addTestCase("return-based processor API test", \returnBasedApiTest());
         addTestCase("type cache test", \typeCacheTest());
+        addTestCase("static factory map test", \factoryMapTest());
         addTestCase("test", \dataProviderTest());
 
         # Return for compatibility with test harnesses that check the return value.
@@ -804,6 +805,11 @@ public class DataProviderTest inherits QUnit::Test {
 %ifdef NoYaml
         testSkip("no yaml module");
 %endif
+    }
+
+    factoryMapTest() {
+        assertEq("CdaDataProvider", DataProvider::DataProvider::FactoryMap.cda);
+        assertEq("FhirRestDataProvider", DataProvider::DataProvider::FactoryMap.fhirrest);
     }
 
     expressionTests() {

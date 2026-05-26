@@ -1,0 +1,292 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Hl7v2Util.qm Qore user module for working with HL7 v2 messages
+
+/*  Hl7v2Util.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%requires Util
+%requires(reexport) DataProvider
+%requires(reexport) FileLocationHandler
+
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
+%try-module zip
+%define NoZip
+%endtry
+
+%modern
+
+module Hl7v2Util {
+    version = "1.0";
+    desc = "user module for parsing and writing HL7 v2 messages";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new Hl7v2ReadDataProviderFactory());
+        DataProvider::registerFactory(new Hl7v2WriteDataProviderFactory());
+        DataProvider::registerFactory(new Hl7v2SchemaDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": Hl7v2Util::AppName,
+            "display_name": "HL7 v2 Messages",
+            "short_desc": "Read and write HL7 v2 delimited messages",
+            "desc": "Read and write [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) "
+                "delimited healthcare messages for integration and transformation workflows.\n\n"
+                "**Capabilities**:\n"
+                "- Preserve message structure and custom `Z` segments without requiring a fixed schema\n"
+                "- Read custom delimiters from `MSH` and handle HL7 escape sequences\n"
+                "- Expose one parsed segment per record through the DataProvider API\n"
+                "- Serialize parsed messages or simple segment records back to HL7 v2 text",
+            "logo": Hl7v2Logo,
+            "logo_file_name": "hl7v2-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::DataTransformation,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "read",
+            "subtype": "hl7v2read",
+            "display_name": "Read HL7 v2 Message",
+            "short_desc": "Read HL7 v2 message data from a file",
+            "desc": "Read HL7 v2 message data from a file and return one typed record per segment.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2ReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2ReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+            "output_type": Hl7v2ReadDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "read-data",
+            "subtype": "hl7v2read",
+            "display_name": "Read HL7 v2 Inline Data",
+            "short_desc": "Read HL7 v2 message data from an inline string",
+            "desc": "Read HL7 v2 message data from an inline string and return one typed record per segment.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2ReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2ReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+            "output_type": Hl7v2ReadDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "write",
+            "subtype": "hl7v2write",
+            "display_name": "Write HL7 v2 Message",
+            "short_desc": "Write HL7 v2 message data to a file",
+            "desc": "Write HL7 v2 message data to a file from parsed segments or simple segment records. "
+                "The response includes the output `path`, serialized character count, and segment count.",
+            "action_code": DPAT_CREATE,
+            "cls": "Hl7v2Util::Hl7v2WriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2WriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+            "output_type": Hl7v2WriteDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "schema",
+            "subtype": "hl7v2schema",
+            "display_name": "Load HL7 v2 Schema",
+            "short_desc": "Load generated HL7 v2 schema metadata",
+            "desc": "Load generated HL7 v2 schema metadata from a Qore value artifact. Use `path` for a "
+                "specific artifact, or `version` with `schema_dir` when schemas are stored by version.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2SchemaDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions - ("path",), {
+                    "loc": "constructor",
+                }
+            ),
+            "output_type": Hl7v2SchemaDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Hl7v2Util::AppName,
+            "path": "/",
+            "action": "schema-summary",
+            "subtype": "hl7v2schema",
+            "display_name": "HL7 v2 Schema Summary",
+            "short_desc": "Load a generated HL7 v2 schema summary",
+            "desc": "Load only generated HL7 v2 schema metadata, counts, and segment tags.",
+            "action_code": DPAT_FIND,
+            "cls": "Hl7v2Util::Hl7v2SchemaSummaryDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2SchemaDataProvider::ConstructorOptions - ("path", "summary_only",), {
+                    "loc": "constructor",
+                }
+            ),
+            "output_type": Hl7v2SchemaDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage Hl7v2Util Module
+
+    @tableofcontents
+
+    @section hl7v2utilintro Hl7v2Util Module Introduction
+
+    The %Hl7v2Util module provides structure-agnostic parsing and writing for
+    HL7 v2 delimited healthcare messages.
+
+    To use this module, use \c "%requires Hl7v2Util" in your code.
+
+    All public symbols are defined in the Hl7v2Util namespace.
+
+    @subsection hl7v2utilfeatures Key Features
+
+    - Parses message delimiters from the \c MSH segment.
+    - Preserves segment order, including unknown custom \c Z segments.
+    - Supports field, repetition, component, and subcomponent separators.
+    - Handles standard HL7 escape sequences such as \c "\\F\\", \c "\\S\\",
+      \c "\\R\\", \c "\\T\\", \c "\\E\\", and \c "\\.br\\".
+    - Provides address helpers for common expressions such as \c "MSH-9",
+      \c "PID-3(2).1", and \c "OBX-5".
+    - Loads generated schema artifacts for structure-aware validation when
+      definition tables are available.
+    - Generates schema artifacts from locally supplied HL7 v2 XML schema
+      packages when the XML module is available.
+    - Exposes read and write data providers for pipeline integration.
+
+    @subsection hl7v2utilexamples Examples
+
+    @code{.py}
+%requires Hl7v2Util
+
+string msg = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+    "PID|1||12345^^^MRN^MR||Doe^Jane\r";
+
+Hl7v2Message h(msg);
+printf("Message type: %s\n", h.getAddress("MSH-9"));
+printf("Patient family name: %s\n", h.getAddress("PID-5.1"));
+
+string roundtrip = h.getText();
+    @endcode
+
+    DataProvider usage:
+
+    @code{.py}
+%requires Hl7v2Util
+
+Hl7v2ReadDataProvider reader({"data": msg});
+AbstractDataProviderRecordIterator i = reader.searchRecords();
+while (i.next()) {
+    hash<auto> segment = i.getValue();
+    printf("%03d %s\n", segment.index, segment.tag);
+}
+    @endcode
+
+    Schema-aware validation from a generated artifact:
+
+    @code{.py}
+%requires Hl7v2Util
+
+Hl7v2Schema schema = Hl7v2SchemaRegistry::loadFile("schemas/2.5.1/schema.qv");
+Hl7v2Message h(msg);
+list<hash<Hl7v2ValidationIssue>> issues = schema.validateMessage(h.getMessage(), {
+    "allow_unknown_segments": False,
+});
+
+if (issues) {
+    printf("validation issues: %N\n", issues);
+}
+    @endcode
+
+    Schema provider usage:
+
+    @code{.py}
+%requires Hl7v2Util
+
+Hl7v2SchemaDataProvider schema_provider({"path": "schemas/2.5.1/schema.qv"});
+hash<auto> summary = schema_provider.searchSingle();
+printf("%s defines %d segments\n", summary.version, summary.counts.segments);
+    @endcode
+
+    The module does not require schema artifacts for structure-agnostic parsing
+    and writing. Generated schema files are Qore value artifacts consumed by
+    @ref Hl7v2Util::Hl7v2SchemaRegistry "Hl7v2SchemaRegistry"; use
+    \c tools/hl7v2-schema-gen.qr to generate such artifacts from a locally
+    supplied HL7 v2 XML schema package or, for experimental v2+ inputs, from
+    FHIR \c StructureDefinition packages.
+
+    Official HL7 v2 standard artifacts can have redistribution restrictions.
+    This module therefore does not bundle official HL7 schema packages or
+    generated artifacts derived from them; provide a licensed local copy to the
+    generator when such schema support is required.
+
+    @subsection hl7v2utiltrademark Trademark Notice
+
+    HL7 is a trademark of Health Level Seven International. This module provides
+    an implementation utility for HL7 v2 message syntax and does not imply
+    endorsement by Health Level Seven International.
+
+    @since 2.0
+
+    @par Release Notes
+
+    - added the initial \c Hl7v2Util module with structure-agnostic HL7 v2
+      parsing, writing, address helpers, schema loading and validation, and
+      read/write/schema data providers
+    - added a generator path for locally supplied HL7 v2 XML schema packages
+*/
+
+#! Hl7v2Util module namespace
+public namespace Hl7v2Util {
+    #! DataProvider app name
+    public const AppName = "HL7v2";
+
+    #! HL7 v2 app logo
+    public const Hl7v2Logo = File::readTextFile(get_script_dir() + "/hl7v2-logo.svg");
+}

@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  MllpUtil.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/Hl7v2Util
+%requires ../../../../qlib/MllpUtil
+
+%exec-class MllpUtilTest
+
+class MllpUtilTest inherits QUnit::Test {
+    private {
+        const Message = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r"
+            "PID|1||12345^^^MRN^MR||Doe^Jane\r";
+    }
+
+    constructor() : QUnit::Test("MllpUtil test", "1.0") {
+        addTestCase("framing test", \framingTest());
+        addTestCase("ACK test", \ackTest());
+        addTestCase("socket helper test", \socketHelperTest());
+        addTestCase("client API test", \clientApiTest());
+        addTestCase("listener API test", \listenerApiTest());
+        addTestCase("TLS client test", \tlsClientTest());
+        addTestCase("connection scheme test", \connectionSchemeTest());
+        addTestCase("negative test", \negativeTest());
+
+        set_return_value(main());
+    }
+
+    private framingTest() {
+        binary frame = MllpUtil::mllp_frame(Message);
+        assertEq(MllpUtil::MllpStartBlock, frame[0]);
+        assertEq(MllpUtil::MllpEndBlock, frame[frame.size() - 2]);
+        assertEq(MllpUtil::MllpCarriageReturn, frame[frame.size() - 1]);
+        assertEq(Message, MllpUtil::mllp_extract_payload(frame).toString("UTF-8"));
+        assertEq(Message, MllpUtil::mllp_unframe(frame));
+
+        assertThrows("MLLP-FRAME-ERROR", sub () {
+            MllpUtil::mllp_extract_payload(binary("bad"));
+        });
+        assertThrows("MLLP-FRAME-ERROR", sub () {
+            MllpUtil::mllp_extract_payload(chr(MllpUtil::MllpStartBlock).toBinary() + "A".toBinary()
+                + chr(MllpUtil::MllpEndBlock).toBinary());
+        });
+    }
+
+    private ackTest() {
+        string ack = MllpUtil::mllp_build_ack(Message);
+        hash<MllpUtil::MllpAckInfo> info = MllpUtil::mllp_parse_ack(ack);
+        assertEq("AA", info.acknowledgment_code);
+        assertEq("MSG0001", info.message_control_id);
+        assertTrue(info.accepted);
+
+        string err_ack = MllpUtil::mllp_build_ack(Message, MllpUtil::MllpAckCode::ApplicationError,
+            "validation failed");
+        info = MllpUtil::mllp_parse_ack(err_ack);
+        assertEq("AE", info.acknowledgment_code);
+        assertEq("validation failed", info.text_message);
+        assertFalse(info.accepted);
+
+        assertThrows("MLLP-ACK-ERROR", sub () {
+            MllpUtil::mllp_parse_ack("MSH|^~\\&|A|B|C|D|202605261200||ACK|ACK1|P|2.5.1\r");
+        });
+    }
+
+    private socketHelperTest() {
+        hash<auto> server = startAckServer();
+
+        Socket client();
+        client.connect("127.0.0.1:" + server.port, 5s);
+        on_exit client.close();
+
+        MllpUtil::mllp_send_message(client, Message, 5s);
+        string ack = MllpUtil::mllp_read_message(client, 5s);
+        assertTrue(MllpUtil::mllp_parse_ack(ack).accepted);
+
+        assertEq(Message, server.received.get(5s));
+        assertEq(0, server.done.waitForZero(5s));
+    }
+
+    private clientApiTest() {
+        hash<auto> server = startAckServer();
+
+        MllpUtil::MllpClient client({
+            "host": "127.0.0.1",
+            "port": server.port,
+            "no_connect": True,
+        });
+        assertFalse(client.isConnected());
+        client.connect();
+        assertTrue(client.isConnected());
+
+        hash<MllpUtil::MllpAckInfo> ack = client.sendAndReceiveAck(Message, 5s);
+        assertTrue(ack.accepted);
+        assertEq("MSG0001", ack.message_control_id);
+        client.disconnect();
+        assertFalse(client.isConnected());
+
+        assertEq(Message, server.received.get(5s));
+        assertEq(0, server.done.waitForZero(5s));
+    }
+
+    private listenerApiTest() {
+        Queue received();
+        Queue errors();
+
+        MllpUtil::MllpListener listener("127.0.0.1:0", {
+            "timeout": 5s,
+            "error_handler": sub (hash<ExceptionInfo> ex) {
+                errors.push(ex);
+            },
+        });
+        listener.start(*string sub (string msg) {
+            received.push(msg);
+            return MllpUtil::mllp_build_ack(msg);
+        });
+        on_exit listener.stop(5s);
+
+        MllpUtil::MllpClient client({
+            "host": "127.0.0.1",
+            "port": listener.getPort(),
+            "no_connect": True,
+        });
+        client.connect();
+        hash<MllpUtil::MllpAckInfo> ack = client.sendAndReceiveAck(Message, 5s);
+        client.disconnect();
+
+        assertTrue(ack.accepted);
+        assertEq(Message, received.get(5s));
+        listener.stop(5s);
+        assertFalse(listener.isRunning());
+        assertEq(0, errors.size());
+    }
+
+    private tlsClientTest() {
+        hash<auto> certs;
+        try {
+            certs = generateCerts();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("Cannot generate TLS certificates: " + ex.desc);
+            return;
+        }
+
+        hash<auto> server = startAckServer(True, certs.cert, certs.key);
+        MllpUtil::MllpClient client(sprintf("mllps://127.0.0.1:%d", server.port), False);
+        assertTrue(client.isTls());
+        client.connect();
+        hash<MllpUtil::MllpAckInfo> ack = client.sendAndReceiveAck(Message, 5s);
+        client.disconnect();
+
+        assertTrue(ack.accepted);
+        assertEq(Message, server.received.get(5s));
+        assertEq(0, server.done.waitForZero(5s));
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("mllp");
+        assertEq("MLLP Connection", scheme.display_name);
+        assertTrue(scheme.schemes.mllp);
+        assertTrue(scheme.schemes.mllps);
+        assertEq(scheme, ConnectionSchemeCache::getScheme("mllps"));
+        assertTrue(exists scheme.options.connect_timeout);
+        assertTrue(exists scheme.options.max_frame_size);
+    }
+
+    private negativeTest() {
+        assertThrows("MLLP-URL-ERROR", sub () {
+            MllpUtil::MllpClient client("http://localhost:2575", False);
+        });
+        assertThrows("MLLP-OPTION-ERROR", sub () {
+            MllpUtil::MllpClient client({"host": "127.0.0.1", "port": 0, "no_connect": True});
+        });
+        assertThrows("MLLP-OPTION-ERROR", sub () {
+            MllpUtil::MllpClient client({"host": "", "port": 2575, "no_connect": True});
+        });
+        assertThrows("MLLP-OPTION-ERROR", sub () {
+            MllpUtil::MllpListener listener("", {});
+        });
+        assertThrows("MLLP-OPTION-ERROR", sub () {
+            MllpUtil::MllpListener listener("127.0.0.1:0", {"encoding": ""});
+        });
+        assertThrows("MLLP-NOT-CONNECTED", sub () {
+            MllpUtil::MllpClient client({"host": "127.0.0.1", "port": 2575, "no_connect": True});
+            client.sendMessage(Message, 5s);
+        });
+
+        hash<auto> server = startPayloadServer(MllpUtil::mllp_frame(Message));
+        Socket client();
+        client.connect("127.0.0.1:" + server.port, 5s);
+        on_exit client.close();
+        assertThrows("MLLP-FRAME-TOO-LARGE", sub () {
+            MllpUtil::mllp_read_message(client, 5s, 4);
+        });
+        assertEq(0, server.done.waitForZero(5s));
+    }
+
+    private hash<auto> startAckServer(bool tls = False, *string cert = NOTHING, *string key = NOTHING) {
+        Socket server();
+        if (tls) {
+            server.setCertificate(cert);
+            server.setPrivateKey(key);
+        }
+        if (server.bind("127.0.0.1:0", True)) {
+            throw "SOCKET-BIND-ERROR", strerror();
+        }
+        if (server.listen(1)) {
+            throw "SOCKET-LISTEN-ERROR", strerror();
+        }
+
+        Queue received();
+        Counter done(1);
+        int port = server.getSocketInfo().port;
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket peer = tls ? server.acceptSSL(10s) : server.accept(10s);
+                on_exit peer.close();
+                string msg = MllpUtil::mllp_read_message(peer, 5s);
+                received.push(msg);
+                MllpUtil::mllp_send_message(peer, MllpUtil::mllp_build_ack(msg), 5s);
+            } catch (hash<ExceptionInfo> ex) {
+                received.push(ex);
+            }
+            server.close();
+        }();
+
+        return {
+            "port": port,
+            "received": received,
+            "done": done,
+        };
+    }
+
+    private hash<auto> startPayloadServer(binary payload) {
+        Socket server();
+        if (server.bind("127.0.0.1:0", True)) {
+            throw "SOCKET-BIND-ERROR", strerror();
+        }
+        if (server.listen(1)) {
+            throw "SOCKET-LISTEN-ERROR", strerror();
+        }
+
+        Counter done(1);
+        int port = server.getSocketInfo().port;
+        background sub () {
+            on_exit done.dec();
+            Socket peer = server.accept(10s);
+            on_exit peer.close();
+            peer.send(payload, 5s);
+            server.close();
+        }();
+
+        return {
+            "port": port,
+            "done": done,
+        };
+    }
+
+    private hash<auto> generateCerts() {
+        string tmpdir = tmp_location();
+        string key_file = tmpdir + "/mllp_key_" + getpid() + ".pem";
+        string cert_file = tmpdir + "/mllp_cert_" + getpid() + ".pem";
+
+        on_exit {
+            unlink(key_file);
+            unlink(cert_file);
+        }
+
+        int rc = system("OPENSSL_CONF=/dev/null openssl req -x509 -newkey rsa:2048 -keyout " + key_file
+            + " -out " + cert_file + " -days 1 -nodes -subj '/CN=localhost' 2>/dev/null");
+        if (rc != 0) {
+            throw "CERT-GEN-ERROR", "failed to generate self-signed TLS certificate";
+        }
+
+        return {
+            "cert": ReadOnlyFile::readTextFile(cert_file),
+            "key": ReadOnlyFile::readTextFile(key_file),
+        };
+    }
+}
