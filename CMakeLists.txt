@@ -2390,6 +2390,7 @@ qore_user_module("qlib/QUnit.qm" "Util")
 qore_user_module("qlib/TextWrap.qm" "Util")
 qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 qore_user_module("qlib/Hl7v2Util" "Util;DataProvider" "hl7v2-logo.svg")
+qore_user_module("qlib/MllpUtil" "ConnectionProvider;Hl7v2Util")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")

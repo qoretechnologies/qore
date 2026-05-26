@@ -216,6 +216,8 @@ public class ConnectionSchemeCache {
             "memcacheds": "MemcachedDataProvider",
             "milvus": "MilvusRestClient",
             "mistral": "MistralRestClient",
+            "mllp": "MllpUtil",
+            "mllps": "MllpUtil",
             "mongodb": "MongoDbDataProvider",
 
             # provided by the jni module

@@ -1893,6 +1893,13 @@ cargo install tree-sitter-cli@0.26.5
       - address helpers for common values such as `MSH-9`, `PID-3(2).1`, and `OBX-5`
       - DataProvider integration for reading and writing HL7 v2 message files and inline data
 
+    - @ref mllputilintro "MllpUtil" module
+      - new module for sending and receiving MLLP-framed HL7 v2 messages
+      - strict frame validation for VT/FS/CR delimiters with configurable maximum frame sizes
+      - ACK helpers for building and parsing MSA acknowledgment codes
+      - thread-safe client and deterministic listener APIs for plain TCP and TLS sockets
+      - ConnectionProvider integration with \c mllp:// and \c mllps:// URL schemes
+
     - @ref elasticsearchloggerappenderintro "ElasticSearchLoggerAppender" module
       - new module providing a logger appender that sends log events to <a href="https://www.elastic.co/elasticsearch">ElasticSearch</a> using the Bulk API with
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe
