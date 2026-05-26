@@ -197,6 +197,15 @@ public class OnnxPackageTools {
         *string producer = primary.metadata && primary.metadata.info
             ? primary.metadata.info.producer_name
             : NOTHING;
+        *hash<auto> preprocess = opts.preprocess;
+        *hash<auto> postprocess = opts.postprocess;
+        if (runtime == "onnxruntime") {
+            hash<auto> processing_context = buildProcessingContext(artifacts);
+            preprocess = OnnxProcessingSpecs::normalizePreprocess(opts.preprocess, task, inputs,
+                outputs, processing_context);
+            postprocess = OnnxProcessingSpecs::normalizePostprocess(opts.postprocess, task,
+                inputs, outputs, processing_context);
+        }
         hash<OnnxPackageResult> result = <OnnxPackageResult>{
             "source_path": source_path,
             "output_dir": output_dir,
@@ -213,9 +222,10 @@ public class OnnxPackageTools {
             "outputs": outputs,
             "dynamic_axes": dynamic_axes,
             "external_data": buildExternalDataList(artifacts),
-            "preprocess": opts.preprocess,
-            "postprocess": opts.postprocess,
-            "execution": buildExecutionInfo(runtime, task, primary, inputs, outputs, opts),
+            "preprocess": preprocess,
+            "postprocess": postprocess,
+            "execution": buildExecutionInfo(runtime, task, primary, inputs, outputs, opts,
+                preprocess, postprocess),
             "providers": providers,
             "benchmarks": opts.benchmarks,
             "golden_vectors": opts.golden_vectors,
@@ -572,9 +582,48 @@ public class OnnxPackageTools {
         return rv ? rv : NOTHING;
     }
 
+    private static hash<auto> buildProcessingContext(
+            list<hash<OnnxPackageArtifactInfo>> artifacts) {
+        hash<auto> rv = {};
+        foreach hash<OnnxPackageArtifactInfo> artifact in (artifacts) {
+            switch (artifact.role) {
+                case "tokenizer":
+                    ensureTokenizerContext(\rv);
+                    rv.tokenizer.artifact_name = artifact.name;
+                    break;
+                case "tokenizer_config":
+                    ensureTokenizerContext(\rv);
+                    rv.tokenizer.config_artifact_name = artifact.name;
+                    if (artifact.metadata && artifact.metadata.model_max_length) {
+                        rv.tokenizer.model_max_length = artifact.metadata.model_max_length;
+                    }
+                    break;
+                case "config":
+                    rv.config_artifact_name = artifact.name;
+                    if (artifact.metadata) {
+                        if (artifact.metadata.model_type.val()) {
+                            rv.model_type = artifact.metadata.model_type;
+                        }
+                        if (artifact.metadata.architectures) {
+                            rv.architectures = artifact.metadata.architectures;
+                        }
+                    }
+                    break;
+            }
+        }
+        return rv;
+    }
+
+    private static nothing ensureTokenizerContext(reference<hash<auto>> ctx) {
+        if (!exists ctx.tokenizer || ctx.tokenizer.typeCode() != NT_HASH) {
+            ctx.tokenizer = {};
+        }
+    }
+
     private static hash<auto> buildExecutionInfo(string runtime, string task,
             hash<OnnxPackageArtifactInfo> primary, *list<hash<auto>> inputs,
-            *list<hash<auto>> outputs, hash<OnnxPackageOptions> opts) {
+            *list<hash<auto>> outputs, hash<OnnxPackageOptions> opts,
+            *hash<auto> preprocess, *hash<auto> postprocess) {
         hash<auto> plan = cast<hash<auto>>({
             "type": runtime == "onnxruntime" ? "onnx/" + task : runtime + "/" + task,
             "task": task,
@@ -596,11 +645,13 @@ public class OnnxPackageTools {
             rv.output_schema = {"tensors": outputs};
             rv.plan.output_schema = rv.output_schema;
         }
-        if (opts.preprocess) {
-            rv.preprocess = opts.preprocess;
+        if (preprocess) {
+            rv.preprocess = preprocess;
+            rv.plan.preprocess = preprocess;
         }
-        if (opts.postprocess) {
-            rv.postprocess = opts.postprocess;
+        if (postprocess) {
+            rv.postprocess = postprocess;
+            rv.plan.postprocess = postprocess;
         }
         if (opts.session_config) {
             rv.config = opts.session_config;

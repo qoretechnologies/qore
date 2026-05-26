@@ -140,39 +140,51 @@ public class ModelArtifactInspector {
         }
         string task = inferExecutionTask(plan_task ?? options.task ?? manifest_task,
             artifacts, runtime);
-        *hash<auto> input_schema;
-        *hash<auto> output_schema;
-        if (primary.format == "onnx" && primary.metadata) {
-            if (exists primary.metadata.inputs) {
-                input_schema = {"tensors": primary.metadata.inputs};
-            }
-            if (exists primary.metadata.outputs) {
-                output_schema = {"tensors": primary.metadata.outputs};
-            }
-        }
-        *hash<auto> execution_config = options.execution_config
-            ?? options.session_config
-            ?? (runtime == "onnxruntime" ? options.config : NOTHING);
-        hash<auto> execution_plan =
-            buildExecutionPlan(runtime, task, primary, input_schema, output_schema, option_plan);
-        *hash<auto> preprocess;
-        if (exists options.preprocess) {
-            preprocess = cast<hash<auto>>(options.preprocess);
-        } else if (package_manifest && package_manifest.preprocess) {
-            preprocess = cast<hash<auto>>(package_manifest.preprocess);
-        }
-        *hash<auto> postprocess;
-        if (exists options.postprocess) {
-            postprocess = cast<hash<auto>>(options.postprocess);
-        } else if (package_manifest && package_manifest.postprocess) {
-            postprocess = cast<hash<auto>>(package_manifest.postprocess);
-        }
         *list<hash<auto>> inputs = primary.metadata && exists primary.metadata.inputs
             ? cast<list<hash<auto>>>(primary.metadata.inputs)
             : NOTHING;
         *list<hash<auto>> outputs = primary.metadata && exists primary.metadata.outputs
             ? cast<list<hash<auto>>>(primary.metadata.outputs)
             : NOTHING;
+        *hash<auto> input_schema;
+        *hash<auto> output_schema;
+        if (inputs) {
+            input_schema = {"tensors": inputs};
+        }
+        if (outputs) {
+            output_schema = {"tensors": outputs};
+        }
+        *hash<auto> execution_config = options.execution_config
+            ?? options.session_config
+            ?? (runtime == "onnxruntime" ? options.config : NOTHING);
+        *hash<auto> source_preprocess;
+        if (exists options.preprocess) {
+            source_preprocess = cast<hash<auto>>(options.preprocess);
+        } else if (option_plan && exists option_plan.preprocess) {
+            source_preprocess = cast<hash<auto>>(option_plan.preprocess);
+        } else if (package_manifest && package_manifest.preprocess) {
+            source_preprocess = cast<hash<auto>>(package_manifest.preprocess);
+        }
+        *hash<auto> source_postprocess;
+        if (exists options.postprocess) {
+            source_postprocess = cast<hash<auto>>(options.postprocess);
+        } else if (option_plan && exists option_plan.postprocess) {
+            source_postprocess = cast<hash<auto>>(option_plan.postprocess);
+        } else if (package_manifest && package_manifest.postprocess) {
+            source_postprocess = cast<hash<auto>>(package_manifest.postprocess);
+        }
+        *hash<auto> preprocess = source_preprocess;
+        *hash<auto> postprocess = source_postprocess;
+        if (runtime == "onnxruntime") {
+            hash<auto> processing_context = buildProcessingContext(artifacts, package_manifest);
+            preprocess = QoreOnnxTools::OnnxProcessingSpecs::normalizePreprocess(
+                source_preprocess, task, inputs, outputs, processing_context);
+            postprocess = QoreOnnxTools::OnnxProcessingSpecs::normalizePostprocess(
+                source_postprocess, task, inputs, outputs, processing_context);
+        }
+        hash<auto> execution_plan =
+            buildExecutionPlan(runtime, task, primary, input_schema, output_schema, option_plan,
+                preprocess, postprocess);
         *hash<auto> provider_info = buildProviderInfo(primary, package_manifest);
         *hash<auto> validation = options.validation
             ?? (package_manifest ? package_manifest.validation : NOTHING)
@@ -622,6 +634,52 @@ public class ModelArtifactInspector {
         return rv ? rv : NOTHING;
     }
 
+    private static hash<auto> buildProcessingContext(
+            list<hash<ModelArtifactInfo>> artifacts, *hash<auto> package_manifest) {
+        hash<auto> rv = {};
+        if (package_manifest) {
+            if (package_manifest.tokenizer) {
+                rv.tokenizer = package_manifest.tokenizer;
+            }
+            if (package_manifest.config_artifact_name.val()) {
+                rv.config_artifact_name = package_manifest.config_artifact_name;
+            }
+        }
+        foreach hash<ModelArtifactInfo> artifact in (artifacts) {
+            switch (artifact.role) {
+                case "tokenizer":
+                    ensureTokenizerContext(\rv);
+                    rv.tokenizer.artifact_name = artifact.name;
+                    break;
+                case "tokenizer_config":
+                    ensureTokenizerContext(\rv);
+                    rv.tokenizer.config_artifact_name = artifact.name;
+                    if (artifact.metadata && artifact.metadata.model_max_length) {
+                        rv.tokenizer.model_max_length = artifact.metadata.model_max_length;
+                    }
+                    break;
+                case "config":
+                    rv.config_artifact_name = artifact.name;
+                    if (artifact.metadata) {
+                        if (artifact.metadata.model_type.val()) {
+                            rv.model_type = artifact.metadata.model_type;
+                        }
+                        if (artifact.metadata.architectures) {
+                            rv.architectures = artifact.metadata.architectures;
+                        }
+                    }
+                    break;
+            }
+        }
+        return rv;
+    }
+
+    private static nothing ensureTokenizerContext(reference<hash<auto>> ctx) {
+        if (!exists ctx.tokenizer || ctx.tokenizer.typeCode() != NT_HASH) {
+            ctx.tokenizer = {};
+        }
+    }
+
     private static hash<TokenizerArtifactInfo> buildTokenizerInfo(
             list<hash<ModelArtifactInfo>> artifacts) {
         hash<TokenizerArtifactInfo> info = <TokenizerArtifactInfo>{};
@@ -824,8 +882,9 @@ public class ModelArtifactInspector {
 
     private static hash<auto> buildExecutionPlan(string runtime, string task,
             hash<ModelArtifactInfo> primary, *hash<auto> input_schema,
-            *hash<auto> output_schema, *hash<auto> option_plan) {
-        hash<auto> plan;
+            *hash<auto> output_schema, *hash<auto> option_plan,
+            *hash<auto> preprocess, *hash<auto> postprocess) {
+        hash<auto> plan = {};
         if (option_plan) {
             plan += option_plan;
         }
@@ -843,6 +902,12 @@ public class ModelArtifactInspector {
         }
         if (!exists plan.output_schema && output_schema) {
             plan.output_schema = output_schema;
+        }
+        if (!exists plan.preprocess && preprocess) {
+            plan.preprocess = preprocess;
+        }
+        if (!exists plan.postprocess && postprocess) {
+            plan.postprocess = postprocess;
         }
         return plan;
     }

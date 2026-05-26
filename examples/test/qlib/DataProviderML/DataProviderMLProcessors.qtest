@@ -2987,7 +2987,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "task": "regression",
             "execution_plan": {
                 "type": "onnx/regression",
-                "output_name": "Y",
             },
             "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
         });
@@ -3041,8 +3040,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "task": "sequence-classification",
             "execution_plan": {
                 "type": "onnx/sequence-classification",
-                "label_output": "label",
-                "scores_output": "probabilities",
             },
             "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
         });

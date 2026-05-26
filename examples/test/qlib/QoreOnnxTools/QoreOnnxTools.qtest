@@ -276,7 +276,14 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("regression", manifest.task);
         assertEq(17, manifest.opset);
         assertEq("model.onnx", manifest.execution.entry_artifact);
+        assertEq("onnx-preprocess", manifest.preprocess.kind);
+        assertEq("regression", manifest.preprocess.task);
+        assertEq("feature-matrix", manifest.preprocess.input_mode);
         assertEq("row-major", manifest.preprocess.input_layout);
+        assertEq("onnx-postprocess", manifest.postprocess.kind);
+        assertEq("scalar", manifest.postprocess.output_mode);
+        assertEq("Y", manifest.postprocess.output_field);
+        assertEq("Y", manifest.execution.plan.postprocess.value_output);
         assertEq("Y", manifest.outputs[0].name);
         assertTrue(manifest.validation.valid);
         assertEq(0.0, manifest.benchmarks.baseline.average_ms.toFloat());
@@ -287,6 +294,14 @@ class QoreOnnxToolsTest inherits QUnit::Test {
             QoreOnnxTools::OnnxPackageTools::createPackage(src_dir, default_out_dir);
         assertTrue(is_file(default_result.manifest_path),
             "default package creation should write a manifest");
+        assertEq("onnx-preprocess", default_result.preprocess.kind,
+            "default ONNX packages should expose a generated preprocessing contract");
+        assertEq("onnx-postprocess", default_result.postprocess.kind,
+            "default ONNX packages should expose a generated postprocessing contract");
+        assertEq("raw", default_result.postprocess.output_mode,
+            "plain ONNX packages should default to raw postprocessing");
+        assertEq("raw", default_result.execution.plan.postprocess.output_mode,
+            "execution plans should include generated postprocessing contracts");
     }
 
     qoreOnnxCliSmokeTest() {
@@ -328,6 +343,9 @@ class QoreOnnxToolsTest inherits QUnit::Test {
             "--no-validate", model_path, package_dir));
         assertEq("test_linear.onnx", package.entry_artifact);
         assertEq("regression", package.task);
+        assertEq("onnx-preprocess", package.preprocess.kind);
+        assertEq("scalar", package.postprocess.output_mode);
+        assertEq("Y", package.execution.plan.postprocess.value_output);
         assertTrue(is_file(package.manifest_path));
 
         string calibration_path = dir.path + DirSep + "calibration.json";

@@ -2288,19 +2288,15 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
     private *string getPlannedTaskOutputName(list<string> plan_keys) {
         if (execution_plan) {
-            foreach string key in (plan_keys) {
-                if (execution_plan.hasKey(key) && execution_plan{key}.val()) {
-                    return string(execution_plan{key});
-                }
+            *string planned = getExecutionPlanString(plan_keys, ("output", "postprocess"));
+            if (planned.val()) {
+                return planned;
             }
-            if (exists execution_plan.output && execution_plan.output.typeCode() == NT_HASH) {
-                foreach string key in (plan_keys) {
-                    if (execution_plan.output.hasKey(key) && execution_plan.output{key}.val()) {
-                        return string(execution_plan.output{key});
-                    }
-                }
-                if (execution_plan.output.name.val()) {
-                    return string(execution_plan.output.name);
+            foreach string section in (("output", "postprocess")) {
+                if (exists execution_plan{section}
+                        && execution_plan{section}.typeCode() == NT_HASH
+                        && execution_plan{section}.name.val()) {
+                    return string(execution_plan{section}.name);
                 }
             }
         }
