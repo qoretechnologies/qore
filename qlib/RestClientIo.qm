@@ -4840,6 +4840,18 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # constructor — token refresh is handled by the state machine if needed.
         rcio = cast<RestClientIo>(conn.getAsync(False, {"skip_login": True}));
 
+        # An absolute ping_path (starting with "/") must not inherit the
+        # connection's URL path component, otherwise an `api: v1` style
+        # connection turns ping_path `/get_server_info` into
+        # `/v1/get_server_info` and the ping reliably 404s against backends
+        # that expose health endpoints outside the API namespace
+        # (e.g. SGLang at `/get_server_info`).  Mirrors RestConnection::ping()
+        # which clears the connection path on the sync client before issuing
+        # an absolute ping.
+        if (ping_path && ping_path[0] == "/") {
+            rcio.clearConnectionPath();
+        }
+
         if (schema_validator) {
             rcio.setValidator(schema_validator);
         }
