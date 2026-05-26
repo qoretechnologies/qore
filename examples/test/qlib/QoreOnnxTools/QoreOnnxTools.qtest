@@ -477,6 +477,16 @@ class QoreOnnxToolsTest inherits QUnit::Test {
             root + "/build/modules/sshutil",
             root + "/build/modules/tokenizer",
         ));
+        # Append the parent's QORE_MODULE_DIR so out-of-tree binary modules
+        # the parent runtime can resolve (yaml, json, xml, ...) are also
+        # findable from the subprocess.  Util.qmod has an AOT-serialized
+        # CallDirect to Qore::YAML::parse_yaml (gated by %try-module yaml at
+        # compile time), so the yaml module must be loadable at qmod
+        # deserialization time or the entire Util module-load fails.
+        *string parent_dir = ENV.QORE_MODULE_DIR;
+        if (parent_dir.val()) {
+            module_path += PathSep + parent_dir;
+        }
         string cmd = sprintf("QORE_MODULE_DIR=%s %s %s",
             shellQuote(module_path), shellQuote(qore_bin), shellQuote(cli));
         foreach string arg in (args) {
