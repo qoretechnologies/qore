@@ -17,6 +17,7 @@
 #include <arrow/util/float16.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
+#include <parquet/parquet_version.h>
 #include <parquet/properties.h>
 #include <parquet/statistics.h>
 
@@ -605,9 +606,13 @@ static bool qoreParquetRangeMayMatch(int min_cmp, int max_cmp, const std::string
 }
 
 static bool qoreParquetStatsMinMaxExact(const std::shared_ptr<parquet::Statistics>& stats) {
+#if PARQUET_VERSION_MAJOR >= 23
     std::optional<bool> min_exact = stats->is_min_value_exact();
     std::optional<bool> max_exact = stats->is_max_value_exact();
     return !(min_exact && !*min_exact) && !(max_exact && !*max_exact);
+#else
+    return false;
+#endif
 }
 
 template <typename DType, typename T>
