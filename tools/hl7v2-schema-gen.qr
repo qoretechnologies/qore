@@ -30,25 +30,38 @@
 %define NoJson
 %endtry
 
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
+%try-module zip
+%define NoZip
+%endtry
+
 %requires Util
 %requires FileLocationHandler
 %requires Hl7v2Util
 
 sub usage(int status = 1) {
     printf(
-"usage: %s --package-dir DIR --out FILE [options]\n\n"
+"usage: %s (--xml-schema-dir DIR | --xml-schema-zip FILE | --package-dir DIR) --out FILE [options]\n\n"
 "Options:\n"
-"  --version VERSION    override schema version; otherwise inferred from StructureDefinitions\n"
-"  --source TEXT        source package note stored in schema metadata\n"
-"  --license TEXT       source license stored in schema metadata\n"
-"  --note TEXT          implementation note stored in schema metadata\n"
-"  -h,--help            show this help\n",
+"  --xml-schema-dir DIR   read HL7 v2 XML Schema .xsd files from a local directory\n"
+"  --xml-schema-zip FILE  read HL7 v2 XML Schema .xsd files from a local ZIP file\n"
+"  --package-dir DIR      read experimental v2+ FHIR StructureDefinition JSON files\n"
+"  --version VERSION      override schema version; required when it cannot be inferred\n"
+"  --source TEXT          source package note stored in schema metadata\n"
+"  --license TEXT         source license stored in schema metadata\n"
+"  --note TEXT            implementation note stored in schema metadata\n"
+"  -h,--help              show this help\n",
         get_script_name());
     exit(status);
 }
 
 const Opts = (
     "package_dir": "package-dir,p=s",
+    "xml_schema_dir": "xml-schema-dir,D=s",
+    "xml_schema_zip": "xml-schema-zip,Z=s",
     "out": "out,o=s",
     "version": "version,V=s",
     "source": "source,s=s",
@@ -58,20 +71,49 @@ const Opts = (
 );
 
 sub process() {
-%ifdef NoJson
-    stderr.printf("json module is required to read FHIR StructureDefinition JSON files\n");
-    exit(2);
-%else
     GetOpt g(Opts);
     hash opts = g.parse3(\ARGV);
     if (opts.help) {
         usage(0);
     }
-    if (!opts.package_dir || !opts.out) {
+    int sources = (opts.package_dir ? 1 : 0) + (opts.xml_schema_dir ? 1 : 0) + (opts.xml_schema_zip ? 1 : 0);
+    if (sources != 1 || !opts.out) {
         usage();
     }
 
-    string package_dir = normalize_dir(opts.package_dir);
+    hash<auto> gen_opts = {};
+    if (opts.version) {
+        gen_opts.version = opts.version;
+    }
+    if (opts.source) {
+        gen_opts.source = opts.source;
+    }
+    if (opts.license) {
+        gen_opts.license = opts.license;
+    }
+    if (opts.note) {
+        gen_opts.note = opts.note;
+    }
+
+    Hl7v2Schema schema;
+    if (opts.package_dir) {
+        schema = generateFromStructureDefinitionPackage(opts.package_dir, gen_opts);
+    } else if (opts.xml_schema_dir) {
+        schema = generateFromXmlSchemaDirectory(opts.xml_schema_dir, gen_opts);
+    } else {
+        schema = generateFromXmlSchemaZip(opts.xml_schema_zip, gen_opts);
+    }
+
+    string output = Hl7v2SchemaValueSerializer::serializeSchema(schema);
+    FileLocationHandler::writeFileToLocation(opts.out, output);
+    printf("Wrote HL7 v2 schema %s with %d segments to %s\n", schema.version, schema.segments.size(), opts.out);
+}
+
+Hl7v2Schema sub generateFromStructureDefinitionPackage(string dir, hash<auto> gen_opts) {
+%ifdef NoJson
+    throw "HL7V2-SCHEMA-GEN-ERROR", "json module is required to read FHIR StructureDefinition JSON files";
+%else
+    string package_dir = normalize_dir(dir);
     if (!is_dir(package_dir)) {
         throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("package directory does not exist: %y", package_dir);
     }
@@ -84,16 +126,7 @@ sub process() {
         throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("no StructureDefinition JSON files found in %y", package_dir);
     }
 
-    hash<auto> gen_opts = {};
-    if (opts.version) {
-        gen_opts.version = opts.version;
-    }
-    if (opts.source) {
-        gen_opts.source = opts.source;
-    }
-    if (opts.license) {
-        gen_opts.license = opts.license;
-    } else if (is_file(package_dir + DirSep + "package.json")) {
+    if (!gen_opts.license && is_file(package_dir + DirSep + "package.json")) {
         hash<auto> package_info = parse_json(ReadOnlyFile::readTextFile(package_dir + DirSep + "package.json"));
         if (package_info.license) {
             gen_opts.license = package_info.license;
@@ -103,15 +136,31 @@ sub process() {
                 package_info.version ?? "");
         }
     }
-    if (opts.note) {
-        gen_opts.note = opts.note;
-    }
 
     Hl7v2StructureDefinitionSchemaGenerator generator();
-    Hl7v2Schema schema = generator.generateSchema(resources, gen_opts);
-    string output = Hl7v2SchemaValueSerializer::serializeSchema(schema);
-    FileLocationHandler::writeFileToLocation(opts.out, output);
-    printf("Wrote HL7 v2 schema %s with %d segments to %s\n", schema.version, schema.segments.size(), opts.out);
+    return generator.generateSchema(resources, gen_opts);
+%endif
+}
+
+Hl7v2Schema sub generateFromXmlSchemaDirectory(string dir, hash<auto> gen_opts) {
+%ifdef NoXml
+    throw "HL7V2-SCHEMA-GEN-ERROR", "xml module is required to read HL7 v2 XML Schema files";
+%else
+    Hl7v2XmlSchemaPackageGenerator generator();
+    return generator.generateSchemaFromDirectory(dir, gen_opts);
+%endif
+}
+
+Hl7v2Schema sub generateFromXmlSchemaZip(string path, hash<auto> gen_opts) {
+%ifdef NoXml
+    throw "HL7V2-SCHEMA-GEN-ERROR", "xml module is required to read HL7 v2 XML Schema files";
+%else
+%ifdef NoZip
+    throw "HL7V2-SCHEMA-GEN-ERROR", "zip module is required to read HL7 v2 XML Schema ZIP files";
+%else
+    Hl7v2XmlSchemaPackageGenerator generator();
+    return generator.generateSchemaFromZip(path, gen_opts);
+%endif
 %endif
 }
 

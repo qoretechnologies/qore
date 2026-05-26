@@ -24,6 +24,14 @@
 
 %modern
 
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
+%try-module zip
+%define NoZip
+%endtry
+
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/FsUtil.qm
@@ -42,6 +50,60 @@ class Hl7v2UtilTest inherits QUnit::Test {
 
         const CustomDelimiterMessage = "MSH*;!%$*SRC*FAC*DST*FAC*202605261200**ADT;A01*MSG0002*P*2.5.1\r"
             "PID*1**12345;;;MRN;MR**Doe;Jane\r";
+
+        const SyntheticSegmentsXsd =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n"
+            "  <xs:element name=\"MSH\" type=\"MSH.CONTENT\">\n"
+            "    <xs:annotation><xs:documentation>Message Header</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:complexType name=\"MSH.CONTENT\">\n"
+            "    <xs:sequence>\n"
+            "      <xs:element ref=\"MSH.1\" minOccurs=\"1\" maxOccurs=\"1\"/>\n"
+            "      <xs:element ref=\"MSH.9\" minOccurs=\"1\" maxOccurs=\"1\"/>\n"
+            "      <xs:element ref=\"MSH.10\" minOccurs=\"1\" maxOccurs=\"1\"/>\n"
+            "    </xs:sequence>\n"
+            "  </xs:complexType>\n"
+            "  <xs:element name=\"PID\">\n"
+            "    <xs:annotation><xs:documentation>Patient Identification</xs:documentation></xs:annotation>\n"
+            "    <xs:complexType>\n"
+            "      <xs:sequence>\n"
+            "        <xs:element ref=\"PID.1\" minOccurs=\"0\" maxOccurs=\"1\"/>\n"
+            "        <xs:element ref=\"PID.3\" minOccurs=\"1\" maxOccurs=\"unbounded\"/>\n"
+            "        <xs:element ref=\"PID.5\" minOccurs=\"1\" maxOccurs=\"unbounded\"/>\n"
+            "      </xs:sequence>\n"
+            "    </xs:complexType>\n"
+            "  </xs:element>\n"
+            "</xs:schema>\n";
+
+        const SyntheticFieldsXsd =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n"
+            "  <xs:simpleType name=\"ST.1\">\n"
+            "    <xs:restriction base=\"ST\"><xs:maxLength value=\"1\"/></xs:restriction>\n"
+            "  </xs:simpleType>\n"
+            "  <xs:simpleType name=\"ST.199\">\n"
+            "    <xs:restriction base=\"ST\"><xs:maxLength value=\"199\"/></xs:restriction>\n"
+            "  </xs:simpleType>\n"
+            "  <xs:element name=\"MSH.1\" type=\"ST.1\">\n"
+            "    <xs:annotation><xs:documentation>Field Separator</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"MSH.9\" type=\"MSG\">\n"
+            "    <xs:annotation><xs:documentation>Message Type</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"MSH.10\" type=\"ST.199\">\n"
+            "    <xs:annotation><xs:documentation>Message Control ID</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"PID.1\" type=\"SI\">\n"
+            "    <xs:annotation><xs:documentation>Set ID - PID</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"PID.3\" type=\"CX\">\n"
+            "    <xs:annotation><xs:documentation>Patient Identifier List</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "  <xs:element name=\"PID.5\" type=\"XPN\">\n"
+            "    <xs:annotation><xs:documentation>Patient Name</xs:documentation></xs:annotation>\n"
+            "  </xs:element>\n"
+            "</xs:schema>\n";
     }
 
     constructor() : QUnit::Test("Hl7v2Util test", "1.0") {
@@ -55,6 +117,9 @@ class Hl7v2UtilTest inherits QUnit::Test {
         addTestCase("schema registry test", \schemaRegistryTest());
         addTestCase("schema validation test", \schemaValidationTest());
         addTestCase("schema generator test", \schemaGeneratorTest());
+        addTestCase("XML schema generator test", \xmlSchemaGeneratorTest());
+        addTestCase("XML schema zip generator test", \xmlSchemaZipGeneratorTest());
+        addTestCase("official local schema zip gate test", \officialLocalSchemaZipGateTest());
         addTestCase("schema data provider test", \schemaDataProviderTest());
         addTestCase("data provider test", \dataProviderTest());
         addTestCase("factory and action catalog test", \factoryAndActionCatalogTest());
@@ -62,6 +127,14 @@ class Hl7v2UtilTest inherits QUnit::Test {
 
         set_return_value(main());
     }
+
+%ifndef NoZip
+    private createSyntheticSchemaZip(string zip_path) {
+        ZipFile zip(zip_path, "w");
+        zip.addText("xsd/segments.xsd", SyntheticSegmentsXsd);
+        zip.addText("xsd/fields.xsd", SyntheticFieldsXsd);
+    }
+%endif
 
     delimiterTest() {
         Hl7v2Delimiters d();
@@ -275,6 +348,101 @@ class Hl7v2UtilTest inherits QUnit::Test {
         assertEq(schema.getSegmentTags(), parsed.getSegmentTags());
     }
 
+    xmlSchemaGeneratorTest() {
+%ifdef NoXml
+        testSkip("no XML module present");
+%else
+        TmpDir tmp();
+        writeText(tmp.path + "/segments.xsd", SyntheticSegmentsXsd);
+        writeText(tmp.path + "/fields.xsd", SyntheticFieldsXsd);
+
+        Hl7v2XmlSchemaPackageGenerator generator();
+        Hl7v2Schema schema = generator.generateSchemaFromDirectory(tmp.path, {
+            "version": "2.5.1",
+            "source": "synthetic local HL7 v2 XML schema package",
+            "license": "MIT",
+        });
+
+        assertEq("2.5.1", schema.version);
+        assertEq("HL7 v2 XML schema package", schema.meta.generated_from);
+        assertEq("Hl7v2XmlSchemaPackageGenerator", schema.meta.generator);
+        assertTrue(schema.meta.note =~ /local user-supplied/);
+        assertEq(("MSH", "PID"), schema.getSegmentTags());
+
+        hash<Hl7v2SegmentDef> msh = schema.getSegmentDef("MSH");
+        assertEq("Message Header", msh.name);
+        assertEq(3, msh.fields.size());
+        assertEq("Field Separator", msh.fields[0].name);
+        assertEq("ST", msh.fields[0].datatype);
+        assertEq("R", msh.fields[0].usage);
+        assertEq(1, msh.fields[0].max_length);
+        assertEq("Message Type", msh.fields[1].name);
+        assertEq("MSG", msh.fields[1].datatype);
+        assertFalse(msh.fields[1].repeating);
+
+        hash<Hl7v2SegmentDef> pid = schema.getSegmentDef("PID");
+        assertEq("Patient Identification", pid.name);
+        assertEq(3, pid.fields.size());
+        assertEq("Patient Identifier List", pid.fields[1].name);
+        assertEq("CX", pid.fields[1].datatype);
+        assertEq("*", pid.fields[1].max_repetitions);
+        assertTrue(pid.fields[1].repeating);
+        assertEq("Patient Name", pid.fields[2].name);
+        assertEq("XPN", pid.fields[2].datatype);
+
+        string serialized = Hl7v2SchemaValueSerializer::serializeSchema(schema);
+        Hl7v2Schema parsed(cast<hash>(Util::parse_to_qore_value(serialized)));
+        assertEq(schema.version, parsed.version);
+        assertEq(schema.getSegmentTags(), parsed.getSegmentTags());
+%endif
+    }
+
+    xmlSchemaZipGeneratorTest() {
+%ifdef NoXml
+        testSkip("no XML module present");
+%else
+%ifdef NoZip
+        testSkip("no zip module present");
+%else
+        TmpDir tmp();
+        string zip_path = tmp.path + "/synthetic-hl7-v251.zip";
+        createSyntheticSchemaZip(zip_path);
+
+        Hl7v2XmlSchemaPackageGenerator generator();
+        Hl7v2Schema schema = generator.generateSchemaFromZip(zip_path, {"version": "2.5.1"});
+        assertEq(("MSH", "PID"), schema.getSegmentTags());
+        assertEq("Message Header", schema.getSegmentDef("MSH").name);
+        assertEq("Patient Identification", schema.getSegmentDef("PID").name);
+%endif
+%endif
+    }
+
+    officialLocalSchemaZipGateTest() {
+        *string zip_path = ENV.HL7V251_SCHEMA_ZIP;
+        if (!zip_path) {
+            testSkip("HL7V251_SCHEMA_ZIP is not set");
+        }
+%ifdef NoXml
+        testSkip("no XML module present");
+%else
+%ifdef NoZip
+        testSkip("no zip module present");
+%else
+        Hl7v2XmlSchemaPackageGenerator generator();
+        Hl7v2Schema schema = generator.generateSchemaFromZip(zip_path, {
+            "version": "2.5.1",
+            "source": zip_path,
+            "note": "Generated from a local licensed HL7 v2.5.1 XML schema ZIP for manual validation only.",
+        });
+
+        assertEq("2.5.1", schema.version);
+        assertTrue(schema.hasSegment("MSH"));
+        assertTrue(schema.hasSegment("PID"));
+        assertTrue(schema.getSegmentTags().size() > 10);
+%endif
+%endif
+    }
+
     schemaDataProviderTest() {
         Hl7v2SchemaDataProvider provider({"path": schemaPath()});
         AbstractDataProviderRecordIterator i = provider.searchRecords();
@@ -455,6 +623,10 @@ class Hl7v2UtilTest inherits QUnit::Test {
         return dirname(get_script_path()) + DirSep + "fixtures" + DirSep + "v251-schema.qv";
     }
 
+    private writeText(string path, string data) {
+        FileLocationHandler::writeFileToLocation(path, data);
+    }
+
     private bool hasIssue(list<hash<Hl7v2ValidationIssue>> issues, string code, string address) {
         foreach hash<Hl7v2ValidationIssue> issue in (issues) {
             if (issue.code == code && issue.address == address) {
@@ -463,4 +635,5 @@ class Hl7v2UtilTest inherits QUnit::Test {
         }
         return False;
     }
+
 }

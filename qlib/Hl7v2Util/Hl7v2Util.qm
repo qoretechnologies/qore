@@ -28,6 +28,14 @@
 %requires(reexport) DataProvider
 %requires(reexport) FileLocationHandler
 
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
+%try-module zip
+%define NoZip
+%endtry
+
 %modern
 
 module Hl7v2Util {
@@ -188,6 +196,8 @@ module Hl7v2Util {
       \c "PID-3(2).1", and \c "OBX-5".
     - Loads generated schema artifacts for structure-aware validation when
       definition tables are available.
+    - Generates schema artifacts from locally supplied HL7 v2 XML schema
+      packages when the XML module is available.
     - Exposes read and write data providers for pipeline integration.
 
     @subsection hl7v2utilexamples Examples
@@ -247,9 +257,14 @@ printf("%s defines %d segments\n", summary.version, summary.counts.segments);
     The module does not require schema artifacts for structure-agnostic parsing
     and writing. Generated schema files are Qore value artifacts consumed by
     @ref Hl7v2Util::Hl7v2SchemaRegistry "Hl7v2SchemaRegistry"; use
-    \c tools/hl7v2-schema-gen.qr to generate such artifacts from HL7 v2+
-    FHIR \c StructureDefinition packages when that source is appropriate for
-    your target version and redistribution policy.
+    \c tools/hl7v2-schema-gen.qr to generate such artifacts from a locally
+    supplied HL7 v2 XML schema package or, for experimental v2+ inputs, from
+    FHIR \c StructureDefinition packages.
+
+    Official HL7 v2 standard artifacts can have redistribution restrictions.
+    This module therefore does not bundle official HL7 schema packages or
+    generated artifacts derived from them; provide a licensed local copy to the
+    generator when such schema support is required.
 
     @subsection hl7v2utiltrademark Trademark Notice
 
@@ -264,6 +279,7 @@ printf("%s defines %d segments\n", summary.version, summary.counts.segments);
     - added the initial \c Hl7v2Util module with structure-agnostic HL7 v2
       parsing, writing, address helpers, schema loading and validation, and
       read/write/schema data providers
+    - added a generator path for locally supplied HL7 v2 XML schema packages
 */
 
 #! Hl7v2Util module namespace

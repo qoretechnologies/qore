@@ -625,6 +625,397 @@ public namespace Hl7v2Util {
         }
     }
 
+%ifndef NoXml
+    #! Generator for HL7 v2 schema artifacts from XML Schema package files
+    public class Hl7v2XmlSchemaPackageGenerator {
+        private {
+            const AttrKey = "^attributes^";
+            const GeneratedFrom = "HL7 v2 XML schema package";
+            const GeneratorName = "Hl7v2XmlSchemaPackageGenerator";
+            const DefaultNote = "Generated from a local user-supplied HL7 v2 XML schema package; no HL7 source "
+                "artifact is bundled with Qore.";
+        }
+
+        #! Generates a schema from all \c .xsd files below the given directory
+        Hl7v2Schema generateSchemaFromDirectory(string dir, *hash<auto> opts = NOTHING) {
+            string source_dir = normalize_dir(dir);
+            if (!is_dir(source_dir)) {
+                throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("HL7 v2 XML schema directory does not exist: %y",
+                    source_dir);
+            }
+            hash<string, string> files = collectXsdFiles(source_dir);
+            if (!files) {
+                throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("no HL7 v2 XML schema .xsd files found in %y",
+                    source_dir);
+            }
+            return generateSchemaFromFiles(files, makeSourceOptions(opts, source_dir));
+        }
+
+        #! Generates a schema from a hash of file names to XML schema text
+        Hl7v2Schema generateSchemaFromFiles(hash<string, string> files, *hash<auto> opts = NOTHING) {
+            if (!files) {
+                throw "HL7V2-SCHEMA-GEN-ERROR", "no HL7 v2 XML schema files supplied";
+            }
+
+            hash<string, hash<auto>> element_map;
+            hash<string, hash<auto>> complex_types;
+            hash<string, hash<auto>> simple_types;
+
+            foreach string name in (sort(keys files)) {
+                if (name !~ /\.xsd$/i) {
+                    continue;
+                }
+                hash<auto> doc = parse_xml(files{name});
+                hash<auto> schema = getSchemaNode(doc, name);
+                mergeNamedNodes(\element_map, getChildren(schema, "element"), name);
+                mergeNamedNodes(\complex_types, getChildren(schema, "complexType"), name);
+                mergeNamedNodes(\simple_types, getChildren(schema, "simpleType"), name);
+            }
+            if (!element_map) {
+                throw "HL7V2-SCHEMA-GEN-ERROR", "no top-level XML schema elements found in supplied files";
+            }
+
+            string version = opts.version ?? inferVersion(opts.source ?? "");
+            hash<string, hash<Hl7v2SegmentDef>> segments;
+            foreach string name in (sort(keys element_map)) {
+                if (name !~ /^[A-Z0-9]{3}$/) {
+                    continue;
+                }
+                *hash<Hl7v2SegmentDef> segment = convertSegment(element_map{name}, element_map, complex_types,
+                    simple_types);
+                if (segment) {
+                    segments{segment.tag} = segment;
+                }
+            }
+            if (!segments) {
+                throw "HL7V2-SCHEMA-GEN-ERROR", "no HL7 v2 segment definitions found in supplied XML schemas";
+            }
+
+            return new Hl7v2Schema(<Hl7v2SchemaData>{
+                "version": version,
+                "meta": <Hl7v2SchemaMeta>{
+                    "version": version,
+                    "source": opts.source,
+                    "generated_from": GeneratedFrom,
+                    "generator": GeneratorName,
+                    "license": opts.license,
+                    "note": opts.note ?? DefaultNote,
+                },
+                "segments": segments,
+            });
+        }
+
+%ifndef NoZip
+        #! Generates a schema from a local ZIP file containing HL7 v2 XML schema files
+        Hl7v2Schema generateSchemaFromZip(string path, *hash<auto> opts = NOTHING) {
+            if (!is_file(path)) {
+                throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("HL7 v2 XML schema ZIP file does not exist: %y", path);
+            }
+
+            hash<string, string> files;
+            ZipFile zip(path, "r");
+            foreach hash<ZipEntryInfo> entry in (zip.entries()) {
+                if (entry.name =~ /\.xsd$/i) {
+                    files{entry.name} = zip.readText(entry.name);
+                }
+            }
+            if (!files) {
+                throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("no HL7 v2 XML schema .xsd entries found in %y", path);
+            }
+            return generateSchemaFromFiles(files, makeSourceOptions(opts, path));
+        }
+%endif
+
+        private hash<auto> makeSourceOptions(*hash<auto> opts, string source) {
+            hash<auto> rv = opts ?? {};
+            if (!rv.source) {
+                rv.source = source;
+            }
+            return rv;
+        }
+
+        private hash<string, string> collectXsdFiles(string dir) {
+            hash<string, string> rv;
+            Dir d();
+            d.chdir(dir);
+            foreach string file in (sort(d.listFiles())) {
+                if (file =~ /\.xsd$/i) {
+                    string path = dir + DirSep + file;
+                    rv{path} = ReadOnlyFile::readTextFile(path);
+                }
+            }
+            foreach string subdir in (sort(d.listDirs())) {
+                rv += collectXsdFiles(dir + DirSep + subdir);
+            }
+            return rv;
+        }
+
+        private string inferVersion(string source) {
+            *list<*string> parts = regex_extract(source, "(2\\.[0-9]+(?:\\.[0-9]+)?)");
+            if (parts) {
+                return parts[0];
+            }
+            throw "HL7V2-SCHEMA-GEN-ERROR",
+                "HL7 v2 schema version must be supplied when it cannot be inferred from the source path";
+        }
+
+        private hash<auto> getSchemaNode(hash<auto> doc, string source) {
+            foreach string key in (keys doc) {
+                if (localName(key) == "schema") {
+                    return cast<hash<auto>>(doc{key});
+                }
+            }
+            throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("XML schema root element not found in %y", source);
+        }
+
+        private mergeNamedNodes(reference<hash<string, hash<auto>>> target, list<hash<auto>> nodes, string source) {
+            foreach hash<auto> node in (nodes) {
+                string name = getAttr(node, "name");
+                if (name) {
+                    target{name} = node;
+                }
+            }
+        }
+
+        private *hash<Hl7v2SegmentDef> convertSegment(hash<auto> element,
+                hash<string, hash<auto>> element_map, hash<string, hash<auto>> complex_types,
+                hash<string, hash<auto>> simple_types) {
+            string tag = getAttr(element, "name");
+            *hash<auto> complex_type = getElementComplexType(element, complex_types);
+            if (!complex_type) {
+                return NOTHING;
+            }
+
+            list<hash<auto>> refs = getSequenceElementRefs(cast<hash<auto>>(complex_type));
+            list<hash<Hl7v2FieldDef>> fields = ();
+            foreach hash<auto> ref_node in (refs) {
+                *hash<Hl7v2FieldDef> field = convertFieldRef(tag, ref_node, element_map, simple_types);
+                if (field) {
+                    push fields, field;
+                }
+            }
+            if (!fields) {
+                return NOTHING;
+            }
+
+            return <Hl7v2SegmentDef>{
+                "tag": tag,
+                "name": getDocumentation(element) ?? tag,
+                "fields": fields,
+                "desc": getDocumentation(element),
+            };
+        }
+
+        private *hash<auto> getElementComplexType(hash<auto> element, hash<string, hash<auto>> complex_types) {
+            auto complex_type = getChild(element, "complexType");
+            if (complex_type) {
+                return cast<hash<auto>>(complex_type);
+            }
+
+            string type = cleanTypeName(getAttr(element, "type"));
+            if (type) {
+                return complex_types{type};
+            }
+            return NOTHING;
+        }
+
+        private list<hash<auto>> getSequenceElementRefs(hash<auto> complex_type) {
+            auto sequence = getChild(complex_type, "sequence");
+            if (!sequence) {
+                return ();
+            }
+            list<hash<auto>> rv = ();
+            foreach hash<auto> element in (getChildren(cast<hash<auto>>(sequence), "element")) {
+                if (getAttr(element, "ref")) {
+                    push rv, element;
+                }
+            }
+            return rv;
+        }
+
+        private *hash<Hl7v2FieldDef> convertFieldRef(string tag, hash<auto> ref_node,
+                hash<string, hash<auto>> element_map, hash<string, hash<auto>> simple_types) {
+            string ref = cleanTypeName(getAttr(ref_node, "ref"));
+            *list<*string> parts = regex_extract(ref, "^" + tag + "\\.([0-9]+)$");
+            if (!parts) {
+                return NOTHING;
+            }
+
+            int position = int(parts[0]);
+            string min_occurs = getAttr(ref_node, "minOccurs");
+            int min = hl7v2_schema_to_int(min_occurs ? min_occurs : "1");
+            string max_occurs = getAttr(ref_node, "maxOccurs");
+            string max_repetitions = normalizeMaxOccurs(max_occurs ? max_occurs : "1");
+            *hash<auto> field_element = element_map{ref};
+            string name = field_element ? getDocumentation(cast<hash<auto>>(field_element)) : NOTHING;
+            if (!name) {
+                name = sprintf("%s-%d", tag, position);
+            }
+            string datatype = field_element ? getFieldType(cast<hash<auto>>(field_element), simple_types) : "-";
+            int max_length = field_element ? getMaxLength(cast<hash<auto>>(field_element), simple_types) : 0;
+
+            return <Hl7v2FieldDef>{
+                "position": position,
+                "name": name,
+                "datatype": datatype,
+                "usage": min > 0 ? Hl7v2SchemaUsage::Required : Hl7v2SchemaUsage::Optional,
+                "min": min,
+                "max_repetitions": max_repetitions,
+                "repeating": max_repetitions != "1",
+                "max_length": max_length > 0 ? max_length : NOTHING,
+                "desc": name,
+            };
+        }
+
+        private string getFieldType(hash<auto> element, hash<string, hash<auto>> simple_types) {
+            string type = cleanTypeName(getAttr(element, "type"));
+            if (type) {
+                if (simple_types{type}) {
+                    string base = getRestrictionBase(simple_types{type});
+                    if (base) {
+                        return base;
+                    }
+                }
+                return type;
+            }
+
+            auto simple_type = getChild(element, "simpleType");
+            if (simple_type) {
+                string base = getRestrictionBase(cast<hash<auto>>(simple_type));
+                if (base) {
+                    return base;
+                }
+            }
+            return "-";
+        }
+
+        private int getMaxLength(hash<auto> element, hash<string, hash<auto>> simple_types) {
+            auto simple_type = getChild(element, "simpleType");
+            if (simple_type) {
+                int len = getSimpleTypeMaxLength(cast<hash<auto>>(simple_type));
+                if (len > 0) {
+                    return len;
+                }
+            }
+
+            string type = cleanTypeName(getAttr(element, "type"));
+            if (type && simple_types{type}) {
+                return getSimpleTypeMaxLength(simple_types{type});
+            }
+            return 0;
+        }
+
+        private int getSimpleTypeMaxLength(hash<auto> simple_type) {
+            auto restriction = getChild(simple_type, "restriction");
+            if (!restriction) {
+                return 0;
+            }
+            auto max_length = getChild(cast<hash<auto>>(restriction), "maxLength");
+            if (!max_length) {
+                return 0;
+            }
+            return hl7v2_schema_to_int(getAttr(cast<hash<auto>>(max_length), "value"));
+        }
+
+        private string getRestrictionBase(hash<auto> simple_type) {
+            auto restriction = getChild(simple_type, "restriction");
+            if (!restriction) {
+                return "";
+            }
+            return cleanTypeName(getAttr(cast<hash<auto>>(restriction), "base"));
+        }
+
+        private string normalizeMaxOccurs(string val) {
+            if (!val || val == "1") {
+                return "1";
+            }
+            if (val == "unbounded") {
+                return "*";
+            }
+            return string(hl7v2_schema_to_int(val));
+        }
+
+        private *string getDocumentation(hash<auto> node) {
+            auto annotation = getChild(node, "annotation");
+            if (!annotation) {
+                return NOTHING;
+            }
+            auto documentation = getChild(cast<hash<auto>>(annotation), "documentation");
+            if (!documentation) {
+                return NOTHING;
+            }
+            return cleanDocumentation(documentation);
+        }
+
+        private *string cleanDocumentation(auto doc) {
+            if (doc.typeCode() == NT_LIST) {
+                foreach auto entry in (doc) {
+                    *string value = cleanDocumentation(entry);
+                    if (value) {
+                        return value;
+                    }
+                }
+                return NOTHING;
+            }
+            if (doc.typeCode() == NT_HASH) {
+                hash h = cast<hash>(doc);
+                if (h{"^value^"}) {
+                    return trim(string(h{"^value^"}));
+                }
+                return NOTHING;
+            }
+
+            string value = trim(string(doc));
+            return value ? value : NOTHING;
+        }
+
+        private auto getChild(hash<auto> node, string child_name) {
+            foreach string key in (keys node) {
+                if (localName(key) == child_name) {
+                    return node{key};
+                }
+            }
+            return NOTHING;
+        }
+
+        private list<hash<auto>> getChildren(hash<auto> node, string child_name) {
+            list<hash<auto>> rv = ();
+            foreach string key in (keys node) {
+                if (localName(key) != child_name) {
+                    continue;
+                }
+                auto val = node{key};
+                if (val.typeCode() == NT_LIST) {
+                    foreach auto item in (val) {
+                        push rv, cast<hash<auto>>(item);
+                    }
+                } else {
+                    push rv, cast<hash<auto>>(val);
+                }
+            }
+            return rv;
+        }
+
+        private string getAttr(hash<auto> node, string name) {
+            hash attrs = cast<hash>(node{AttrKey} ?? {});
+            return attrs{name} ? string(attrs{name}) : "";
+        }
+
+        private string cleanTypeName(string name) {
+            if (!name) {
+                return "";
+            }
+            *list<*string> parts = regex_extract(name, "^(?:[^:]+:)?(.+)$");
+            return parts ? parts[0] : name;
+        }
+
+        private string localName(string name) {
+            *list<*string> parts = regex_extract(name, "^(?:[^:]+:)?(.+)$");
+            return parts ? parts[0] : name;
+        }
+    }
+%endif
+
     #! Serializes schema data as a deterministic Qore value string
     public class Hl7v2SchemaValueSerializer {
         #! Serializes any schema-compatible value
