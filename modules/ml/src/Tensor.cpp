@@ -697,7 +697,7 @@ QoreTensor* QoreTensor::reshape(const QoreListNode* shape_arg, ExceptionSink* xs
             new_count, buffer->size());
         return nullptr;
     }
-    return new QoreTensor(buffer, std::move(n_shape));
+    return new QoreTensor(static_cast<const QoreBufferNode*>(buffer), std::move(n_shape));
 }
 
 QoreTensor* QoreTensor::sliceRows(int64_t offset, int64_t count, bool zero_copy, ExceptionSink* xsink) const {

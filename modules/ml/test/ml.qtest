@@ -454,6 +454,12 @@ public class MlTest inherits QUnit::Test {
         assertEq((4, 1), reshaped.getShape());
         assertEq(((1.0,), (2.0,), (3.0,), (4.0,)), reshaped.toList());
 
+        ML::Tensor reshaped_temp = ML::Tensor::fromColumns((
+            new buffer<float32>((5.0, 7.0)),
+            new buffer<float32>((6.0, 8.0)),
+        ), "float32").reshape((4, 1));
+        assertEq(((5.0,), (6.0,), (7.0,), (8.0,)), reshaped_temp.toList());
+
         ML::Tensor row_slice = from_columns.sliceRows(offset: 1, count: 1);
         assertEq((1, 2), row_slice.getShape());
         assertEq(((3.0, 4.0),), row_slice.toList());
