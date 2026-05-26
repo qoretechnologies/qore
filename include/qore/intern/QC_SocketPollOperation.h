@@ -1622,6 +1622,28 @@ public:
     // client connections own their UDP socket — it must be closed to prevent
     // fd leaks.
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Drain any pending stream data BEFORE sending CONNECTION_CLOSE.
+        // submitQuicRequestNoWake() queues stream data without producing UDP
+        // datagrams; the corresponding WakeSocket command may still be
+        // pending in this thread's cmdq when a fast
+        // closeAll() → cancelByOwner() arrives in the same batch.  Without
+        // this final sendPendingPackets() the data that was successfully
+        // submitted by the application is dropped: the cache entry is gone,
+        // Phase 1 cannot dispatch a Phase 2 send, and the CONNECTION_CLOSE
+        // emitted below discards the still-buffered stream data.  Running
+        // it here (on the I/O thread, with no concurrent continuePoll —
+        // the controller defers abort via pending_aborts when one is in
+        // flight) is safe and matches the locking expectations of normal
+        // sendPendingPackets() callers in continuePoll().
+        if (quic_session) {
+            ngtcp2_tstamp next_expiry = 0;
+            (void)sendPendingPackets(next_expiry, xsink);
+            if (*xsink) {
+                // Best-effort during shutdown: a send error here is fine
+                // because we are about to tear the session down anyway.
+                xsink->clear();
+            }
+        }
         {
             // Hold socket lock for session cleanup (lock ordering: priv->m →
             // quic_sessions_lock). Released before closeIo() which also takes
