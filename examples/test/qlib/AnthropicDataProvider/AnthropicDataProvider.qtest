@@ -594,7 +594,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
             "messages": ({"role": "user", "content": "Hi"},),
             "conversation_key": "test-conv",
         };
-        hash<auto> resp = create.doRequest(req);
+        create.doRequest(req);
         assertEq("test-conv", store.last_save_key);
         assertEq(True, store.last_saved.messages.lsize() > 0);
         # the saved messages should include the user message and assistant response
