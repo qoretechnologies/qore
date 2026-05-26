@@ -116,6 +116,8 @@ public hashdecl OnnxPackageResult {
     *hash<auto> preprocess;
     #! Version-level postprocessing contract metadata
     *hash<auto> postprocess;
+    #! Tokenizer companion contract metadata
+    *hash<auto> tokenizer;
     #! Execution contract metadata
     *hash<auto> execution;
     #! ONNX Runtime provider deployment diagnostics and policy metadata
@@ -209,10 +211,12 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
         *string producer = primary.metadata && primary.metadata.info
             ? primary.metadata.info.producer_name
             : NOTHING;
+        hash<auto> processing_context = buildProcessingContext(artifacts);
+        *hash<auto> tokenizer = processing_context.tokenizer
+            ? cast<hash<auto>>(processing_context.tokenizer) : NOTHING;
         *hash<auto> preprocess = opts.preprocess;
         *hash<auto> postprocess = opts.postprocess;
         if (runtime == "onnxruntime") {
-            hash<auto> processing_context = buildProcessingContext(artifacts);
             preprocess = OnnxProcessingSpecs::normalizePreprocess(opts.preprocess, task, inputs,
                 outputs, processing_context);
             postprocess = OnnxProcessingSpecs::normalizePostprocess(opts.postprocess, task,
@@ -236,8 +240,9 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
             "external_data": buildExternalDataList(artifacts),
             "preprocess": preprocess,
             "postprocess": postprocess,
+            "tokenizer": tokenizer,
             "execution": buildExecutionInfo(runtime, task, primary, inputs, outputs, opts,
-                preprocess, postprocess),
+                dynamic_axes, processing_context, preprocess, postprocess),
             "providers": providers,
             "benchmarks": opts.benchmarks,
             "golden_vectors": opts.golden_vectors,
@@ -445,6 +450,7 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
         if (result.external_data) manifest.external_data = result.external_data;
         if (result.preprocess) manifest.preprocess = result.preprocess;
         if (result.postprocess) manifest.postprocess = result.postprocess;
+        if (result.tokenizer) manifest.tokenizer = result.tokenizer;
         if (result.providers) manifest.providers = result.providers;
         if (result.diagnostics) manifest.diagnostics = result.diagnostics;
         if (result.benchmarks) manifest.benchmarks = result.benchmarks;
@@ -637,11 +643,25 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
     private static hash<auto> buildExecutionInfo(string runtime, string task,
             hash<OnnxPackageArtifactInfo> primary, *list<hash<auto>> inputs,
             *list<hash<auto>> outputs, hash<OnnxPackageOptions> opts,
+            *hash<auto> dynamic_axes, hash<auto> processing_context,
             *hash<auto> preprocess, *hash<auto> postprocess) {
-        hash<auto> plan = cast<hash<auto>>({
-            "type": runtime == "onnxruntime" ? "onnx/" + task : runtime + "/" + task,
+        *hash<auto> input_schema = inputs ? {"tensors": inputs} : NOTHING;
+        *hash<auto> output_schema = outputs ? {"tensors": outputs} : NOTHING;
+        *hash<auto> tokenizer = processing_context.tokenizer
+            ? cast<hash<auto>>(processing_context.tokenizer) : NOTHING;
+        hash<auto> plan = OnnxProcessingSpecs::buildExecutionPlan({
+            "runtime": runtime,
             "task": task,
             "artifact_name": primary.name,
+            "local_executable": runtime == "onnxruntime",
+            "requires": runtime == "onnxruntime" ? ("ml",) : (),
+            "input_schema": input_schema,
+            "output_schema": output_schema,
+            "dynamic_axes": dynamic_axes,
+            "tokenizer": tokenizer,
+            "preprocess": preprocess,
+            "postprocess": postprocess,
+            "config": opts.session_config,
         });
         hash<auto> rv = {
             "runtime": runtime,
@@ -651,21 +671,17 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
             "plan": plan,
             "requires": runtime == "onnxruntime" ? ("ml",) : (),
         };
-        if (inputs) {
-            rv.input_schema = {"tensors": inputs};
-            rv.plan.input_schema = rv.input_schema;
+        if (input_schema) {
+            rv.input_schema = input_schema;
         }
-        if (outputs) {
-            rv.output_schema = {"tensors": outputs};
-            rv.plan.output_schema = rv.output_schema;
+        if (output_schema) {
+            rv.output_schema = output_schema;
         }
         if (preprocess) {
             rv.preprocess = preprocess;
-            rv.plan.preprocess = preprocess;
         }
         if (postprocess) {
             rv.postprocess = postprocess;
-            rv.plan.postprocess = postprocess;
         }
         if (opts.session_config) {
             rv.config = opts.session_config;

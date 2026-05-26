@@ -1,0 +1,74 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchOnnxPackagePlan
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires QoreOnnxTools
+%requires QoreModelRegistry
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchOnnxPackagePlan {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("onnx_package_plan: skipped (ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("onnx_package_plan");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        string dir = tmp_location() + DirSep + "qore_onnx_plan_bench_"
+            + get_random_bytes(4).toHex();
+        on_exit {
+            OnnxBench::cleanupDir(dir);
+        }
+        mkdir_ex(dir, 0755, True);
+
+        int counter = 0;
+        r.bytes_processed = hstat(model_path).size;
+
+        r.measure = sub () {
+            string package_dir = dir + DirSep + "pkg_" + string(counter++);
+            hash<QoreOnnxTools::OnnxPackageResult> package =
+                QoreOnnxTools::OnnxPackageTools::createPackage(model_path, package_dir,
+                    <QoreOnnxTools::OnnxPackageOptions>{
+                        "task": "regression",
+                        "validate": False,
+                        "session_config": <ML::OnnxSessionConfig>{"providers": ()},
+                    });
+            if (package.execution.plan.runtime != "onnxruntime"
+                    || package.execution.plan.postprocess.output_mode != "scalar"
+                    || !package.execution.plan.output_shapes.Y) {
+                throw "BENCHMARK-ERROR",
+                    sprintf("onnx_package_plan returned incomplete execution plan: %y",
+                        package.execution.plan);
+            }
+
+            string registry_dir = package_dir + "_registry";
+            QoreModelRegistry::ModelRegistry registry({"path": registry_dir});
+            string vid = registry.registerPackage(package_dir, {
+                "name": "linear-plan-bench",
+                "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+            });
+            hash<QoreModelRegistry::ModelVersionInfo> manifest =
+                registry.getVersionManifest("linear-plan-bench", vid);
+            if (manifest.execution.plan.runtime != "onnxruntime"
+                    || !manifest.execution.plan.output_shapes.Y
+                    || manifest.diagnostics.kind != "onnx-package") {
+                throw "BENCHMARK-ERROR",
+                    sprintf("registry package plan was incomplete: %y",
+                        manifest.execution.plan);
+            }
+        };
+
+        exit(r.run());
+    }
+}

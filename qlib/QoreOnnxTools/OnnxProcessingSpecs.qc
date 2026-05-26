@@ -238,6 +238,128 @@ public class OnnxProcessingSpecs {
         return rv;
     }
 
+    /** Builds a normalized execution plan that keeps runtime, tokenizer, tensor,
+        preprocessing, postprocessing, and output-shape contracts together.
+
+        @param spec plan input metadata. Recognized keys include \c runtime,
+            \c task, \c artifact_name, \c entry_artifact, \c input_schema,
+            \c output_schema, \c dynamic_axes, \c tokenizer, \c preprocess,
+            \c postprocess, \c requires, \c config, \c local_executable, and
+            optional caller-supplied \c plan metadata.
+
+        @return normalized execution plan metadata
+
+        @par Example
+
+        @code
+hash<auto> plan = QoreOnnxTools::OnnxProcessingSpecs::buildExecutionPlan({
+    "runtime": "onnxruntime",
+    "task": "embedding",
+    "artifact_name": "model.onnx",
+    "input_schema": {"tensors": inputs},
+    "output_schema": {"tensors": outputs},
+    "tokenizer": {"artifact_name": "tokenizer.json"},
+});
+        @endcode
+    */
+    static hash<auto> buildExecutionPlan(hash<auto> spec) {
+        hash<auto> plan = {};
+        if (spec.plan) {
+            plan += cast<hash<auto>>(spec.plan);
+        }
+
+        string runtime = spec.runtime.val() ? string(spec.runtime) : "metadata-only";
+        string task = normalizeTask(spec.task.val() ? string(spec.task) : "raw");
+        *string artifact_name = spec.artifact_name.val()
+            ? string(spec.artifact_name)
+            : (spec.entry_artifact.val() ? string(spec.entry_artifact) : NOTHING);
+        *hash<auto> input_schema = spec.input_schema
+            ? cast<hash<auto>>(spec.input_schema) : NOTHING;
+        *hash<auto> output_schema = spec.output_schema
+            ? cast<hash<auto>>(spec.output_schema) : NOTHING;
+        *hash<auto> dynamic_axes = spec.dynamic_axes
+            ? cast<hash<auto>>(spec.dynamic_axes) : NOTHING;
+        *hash<auto> tokenizer = normalizeTokenizerContract(spec.tokenizer
+            ? cast<hash<auto>>(spec.tokenizer) : NOTHING);
+        *hash<auto> output_shapes = buildOutputShapeMap(output_schema);
+
+        if (!plan.type.val()) {
+            plan.type = runtime == "onnxruntime" ? "onnx/" + task : runtime + "/" + task;
+        }
+        if (!plan.runtime.val()) {
+            plan.runtime = runtime;
+        }
+        if (!plan.task.val()) {
+            plan.task = task;
+        }
+        if (artifact_name.val()) {
+            if (!plan.artifact_name.val()) {
+                plan.artifact_name = artifact_name;
+            }
+            if (!plan.entry_artifact.val()) {
+                plan.entry_artifact = artifact_name;
+            }
+        }
+        if (!exists plan.local_executable) {
+            plan.local_executable = exists spec.local_executable
+                ? (spec.local_executable ? True : False)
+                : runtime == "onnxruntime";
+        }
+        if (!exists plan.requires) {
+            plan.requires = spec.requires ? spec.requires
+                : (runtime == "onnxruntime" ? ("ml",) : ());
+        }
+        if (!exists plan.input_schema && input_schema) {
+            plan.input_schema = input_schema;
+        }
+        if (!exists plan.output_schema && output_schema) {
+            plan.output_schema = output_schema;
+        }
+        if (!exists plan.input_tensors && input_schema && input_schema.tensors) {
+            plan.input_tensors = input_schema.tensors;
+        }
+        if (!exists plan.output_tensors && output_schema && output_schema.tensors) {
+            plan.output_tensors = output_schema.tensors;
+        }
+        if (!exists plan.dynamic_axes && dynamic_axes) {
+            plan.dynamic_axes = dynamic_axes;
+        }
+        if (!exists plan.output_shapes && output_shapes) {
+            plan.output_shapes = output_shapes;
+        }
+        if (!exists plan.tokenizer && tokenizer) {
+            plan.tokenizer = tokenizer;
+        }
+        if (!exists plan.preprocess && spec.preprocess) {
+            plan.preprocess = spec.preprocess;
+        }
+        if (!exists plan.postprocess && spec.postprocess) {
+            plan.postprocess = spec.postprocess;
+        }
+        if (!exists plan.config && spec.config) {
+            plan.config = spec.config;
+        }
+        if (!exists plan.tensor_contract) {
+            hash<auto> tensor_contract = {};
+            if (input_schema) {
+                tensor_contract.input_schema = input_schema;
+            }
+            if (output_schema) {
+                tensor_contract.output_schema = output_schema;
+            }
+            if (dynamic_axes) {
+                tensor_contract.dynamic_axes = dynamic_axes;
+            }
+            if (output_shapes) {
+                tensor_contract.output_shapes = output_shapes;
+            }
+            if (tensor_contract) {
+                plan.tensor_contract = tensor_contract;
+            }
+        }
+        return plan;
+    }
+
     private static string normalizeTask(string task) {
         string t = task.val() ? task.lwr() : "raw";
         t =~ s/^onnx[\/:]//;
@@ -363,6 +485,35 @@ public class OnnxProcessingSpecs {
             }
         }
         return rv;
+    }
+
+    private static *hash<auto> buildOutputShapeMap(*hash<auto> output_schema) {
+        if (!output_schema || !output_schema.tensors) {
+            return NOTHING;
+        }
+        hash<auto> shapes = tensorFieldMap(cast<list<hash<auto>>>(output_schema.tensors),
+            "shape");
+        return shapes ? shapes : NOTHING;
+    }
+
+    private static *hash<auto> normalizeTokenizerContract(*hash<auto> tokenizer) {
+        if (!tokenizer) {
+            return NOTHING;
+        }
+        hash<auto> rv = tokenizer;
+        if (!rv.artifact_name.val() && rv.tokenizer_json.val()) {
+            rv.artifact_name = rv.tokenizer_json;
+        }
+        if (!rv.tokenizer_json.val() && rv.artifact_name.val()) {
+            rv.tokenizer_json = rv.artifact_name;
+        }
+        if (!rv.config_artifact_name.val() && rv.tokenizer_config_json.val()) {
+            rv.config_artifact_name = rv.tokenizer_config_json;
+        }
+        if (!rv.tokenizer_config_json.val() && rv.config_artifact_name.val()) {
+            rv.tokenizer_config_json = rv.config_artifact_name;
+        }
+        return rv ? rv : NOTHING;
     }
 
     private static *string firstTensorName(*list<hash<auto>> tensors) {

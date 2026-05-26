@@ -27,13 +27,13 @@ tracked separately in
   actionable diagnostics and examples.
 - [x] Phase 4: unify ONNX diagnostics across `ML::OnnxModel`,
   DataProviderML, QoreModelRegistry, and CLI tools.
-- [ ] Phase 5: expand registry execution plans so packaged ONNX models can
+- [x] Phase 5: expand registry execution plans so packaged ONNX models can
   describe runtime, tokenizer, tensor, pre/postprocessing, and output-shape
   contracts in one place.
-- [ ] Phase 6: extend benchmarks for raw ONNX, tokenizer + ONNX,
+- [x] Phase 6: extend benchmarks for raw ONNX, tokenizer + ONNX,
   DataProviderML, and QoreModelRegistry execution paths.
-- [ ] Phase 7: update Doxygen docs, module docs, examples, and release notes.
-- [ ] Phase 8: run focused tests, database-backed tests, benchmark smoke tests,
+- [x] Phase 7: update Doxygen docs, module docs, examples, and release notes.
+- [x] Phase 8: run focused tests, database-backed tests, benchmark smoke tests,
   and valgrind validation before finalizing.
 
 ## Validation Notes
@@ -75,3 +75,17 @@ valgrind --quiet --leak-check=full --errors-for-leak-kinds=definite,indirect,pos
   `QORE_DB_CONNSTR_PGSQL=pgsql:omquser/omquser@omquser%supah build/qore
   examples/test/qlib/QoreModelRegistry/QoreModelRegistry.qtest`, and
   `build/qore examples/test/qlib/DataProviderML/DataProviderMLProcessors.qtest`.
+- 2026-05-26: Phase 5 was implemented with normalized ONNX execution plans
+  carrying runtime, entry artifact, tokenizer, input/output schemas, dynamic
+  axes, tensor contracts, output shapes, preprocessing, and postprocessing.
+- 2026-05-26: Phase 6 was implemented with a package/registry plan benchmark
+  smoke case in `bench/cases/bench_onnx_package_plan.qr`; the broader benchmark
+  suite already covers raw ONNX, tokenizer, DataProviderML, and registry-backed
+  ONNX execution paths.
+- 2026-05-26: Phase 7 updated QoreOnnxTools, QoreModelRegistry,
+  DataProviderML, and Qore release notes with user-facing examples and release
+  notes for deployment contracts and diagnostics.
+- 2026-05-26: Phase 8 focused validation passed: qmod rebuild,
+  QoreOnnxTools qtest, PostgreSQL-backed QoreModelRegistry qtest,
+  DataProviderMLProcessors qtest, filtered ONNX benchmark smoke, and valgrind
+  on QoreOnnxTools.qtest.

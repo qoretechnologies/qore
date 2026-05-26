@@ -211,8 +211,10 @@
     - QoreModelRegistry and DataProviderML now support versioned AI model packages
       with named artifacts, safe HuggingFace/PyTorch metadata inspection,
       registry-hosted \c tokenizer.json and \c tokenizer_config.json files,
-      ONNX execution metadata, tensor-backed ONNX inference, and
-      DataProvider-native package/artifact creation workflows
+      normalized ONNX execution plans, preprocessing/postprocessing contracts,
+      output-shape and tensor-contract metadata, actionable ONNX diagnostics,
+      tensor-backed ONNX inference, and DataProvider-native package/artifact
+      creation workflows
     - cryptography: new @ref qorecryptointro "QoreCrypto" envelope-encryption module
     - existing modules updated extensively (DataProvider, RestClient, HttpServer,
       WebSocketClient/Handler/Util, Logger, SqlUtil, etc.) — see

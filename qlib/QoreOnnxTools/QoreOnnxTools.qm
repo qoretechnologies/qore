@@ -54,6 +54,12 @@ module QoreOnnxTools {
     repeatable tool invocations, records metadata, and reports missing Python
     dependencies with actionable installation guidance.
 
+    Package manifests created by this module are self-describing deployment
+    contracts. They include tensor schemas, dynamic axes, tokenizer companion
+    metadata, preprocessing and postprocessing contracts, output-shape maps,
+    provider diagnostics, validation status, benchmark metadata, and examples
+    that can be shown directly by CLI or registry tools.
+
     @par Inspection, Validation, and Benchmark Example
     @code{.q}
 hash<auto> inspection =
@@ -124,9 +130,41 @@ QoreOnnxTools::OnnxQuantizer::quantize(
     converts each record to NumPy arrays and passes them to ONNX Runtime's
     \c CalibrationDataReader.
 
+    @par Package Contract Example
+    @code{.q}
+hash<QoreOnnxTools::OnnxPackageResult> package =
+    QoreOnnxTools::OnnxPackageTools::createPackage(
+        "/models/customer-score.onnx",
+        "/srv/model-packages/customer-score",
+        <QoreOnnxTools::OnnxPackageOptions>{
+            "task": "regression",
+            "minimum_onnxruntime_version": "1.16.0",
+            "dynamic_axes": {"X": (0,)},
+            "benchmarks": {"cpu": {"average_ms": 0.19, "runs": 1000}},
+            "golden_vectors": ({
+                "inputs": {"X": ((41.0, 10000.0, 0.7),)},
+                "outputs": {"Y": ((0.82,),)},
+            },),
+        });
+
+printf("runtime=%s entry=%s output-shape=%y\n",
+    package.execution.plan.runtime,
+    package.execution.plan.entry_artifact,
+    package.execution.plan.output_shapes.Y);
+printf("recommended actions=%y\n", package.diagnostics.recommended_actions);
+    @endcode
+
+    The execution plan is intended for both humans and automation. It keeps
+    \c runtime, \c task, \c entry_artifact, \c input_schema,
+    \c output_schema, \c dynamic_axes, \c tensor_contract, \c tokenizer,
+    \c preprocess, \c postprocess, and \c output_shapes in one place so
+    QoreModelRegistry and DataProviderML can run the package without repeating
+    package-specific configuration.
+
     @par CLI Examples
     @code{.sh}
 qore-onnx check-python --python /opt/onnx/bin/python3
+qore-onnx inspect /models/customer-score.onnx
 qore-onnx inspect --json /models/customer-score.onnx
 qore-onnx validate /models/customer-score.onnx
 qore-onnx benchmark --runs 100 /models/customer-score.onnx
@@ -170,4 +208,17 @@ qore-onnx quantize --method static --calibration-data calibration.json \
       preprocessing/postprocessing contracts, execution metadata, provider
       diagnostics, validation, benchmarks, golden vectors, and
       optimized/quantized artifact lists
+    - Added standard ONNX preprocessing and postprocessing contracts for raw,
+      regression, classification, embedding, reranker, token-classification,
+      sequence-classification, encoder-decoder, and causal-LM package tasks
+    - Added normalized execution plans with runtime, task, entry artifact,
+      tensor contracts, dynamic axes, tokenizer companion metadata, output
+      shapes, preprocessing, and postprocessing in one automation-friendly
+      structure
+    - Added shared actionable diagnostics for inspection, validation, and
+      package creation; \c qore-onnx inspect, \c validate, and \c package now
+      print readable summaries by default and still support machine-readable
+      \c --json output
+    - Added benchmark coverage for ONNX package-plan creation and registry
+      ingestion in \c bench/cases/bench_onnx_package_plan.qr
 */

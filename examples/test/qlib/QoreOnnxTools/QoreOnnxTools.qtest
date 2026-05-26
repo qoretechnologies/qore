@@ -267,6 +267,7 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("X", result.inputs[0].name);
         assertEq("Y", result.outputs[0].name);
         assertTrue(result.external_data.contains("model.onnx.data"));
+        assertEq("tokenizer.json", result.tokenizer.artifact_name);
         assertEq("CPUExecutionProvider", result.providers.active_provider);
         assertEq("safe", result.safety);
         assertTrue(result.executable);
@@ -296,6 +297,13 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("scalar", manifest.postprocess.output_mode);
         assertEq("Y", manifest.postprocess.output_field);
         assertEq("Y", manifest.execution.plan.postprocess.value_output);
+        assertEq("onnxruntime", manifest.execution.plan.runtime);
+        assertEq("model.onnx", manifest.execution.plan.entry_artifact);
+        assertEq("tokenizer.json", manifest.execution.plan.tokenizer.artifact_name);
+        assertEq("tokenizer.json", manifest.tokenizer.artifact_name);
+        assertEq(0, manifest.execution.plan.dynamic_axes.X[0]);
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y);
+        assertEq(0, manifest.execution.plan.tensor_contract.dynamic_axes.X[0]);
         assertEq("Y", manifest.outputs[0].name);
         assertTrue(manifest.validation.valid);
         assertEq(0.0, manifest.benchmarks.baseline.average_ms.toFloat());
@@ -314,6 +322,10 @@ class QoreOnnxToolsTest inherits QUnit::Test {
             "plain ONNX packages should default to raw postprocessing");
         assertEq("raw", default_result.execution.plan.postprocess.output_mode,
             "execution plans should include generated postprocessing contracts");
+        assertEq("onnxruntime", default_result.execution.plan.runtime,
+            "execution plans should include the runtime");
+        assertEq("model.onnx", default_result.execution.plan.entry_artifact,
+            "execution plans should include the entry artifact");
         assertEq("onnx-package", default_result.diagnostics.kind,
             "default package creation should expose package diagnostics");
     }
@@ -362,6 +374,9 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("onnx-preprocess", package.preprocess.kind);
         assertEq("scalar", package.postprocess.output_mode);
         assertEq("Y", package.execution.plan.postprocess.value_output);
+        assertEq("onnxruntime", package.execution.plan.runtime);
+        assertEq("test_linear.onnx", package.execution.plan.entry_artifact);
+        assertEq(package.outputs[0].shape, package.execution.plan.output_shapes.Y);
         assertEq("onnx-package", package.diagnostics.kind);
         assertTrue(package.diagnostics.examples.size() > 0);
         assertTrue(is_file(package.manifest_path));

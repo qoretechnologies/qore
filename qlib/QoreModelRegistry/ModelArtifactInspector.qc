@@ -110,7 +110,8 @@ public class ModelArtifactInspector {
 
         *hash<auto> package_manifest = findPackageManifest(artifacts);
         hash<ModelArtifactInfo> primary = selectPrimaryArtifact(artifacts, package_manifest);
-        hash<TokenizerArtifactInfo> tokenizer = buildTokenizerInfo(artifacts);
+        hash<TokenizerArtifactInfo> tokenizer = buildTokenizerInfo(artifacts,
+            package_manifest);
         *string manifest_framework = package_manifest ? package_manifest.framework : NOTHING;
         *string manifest_runtime = package_manifest ? package_manifest.runtime : NOTHING;
         *string manifest_safety = package_manifest ? package_manifest.safety : NOTHING;
@@ -154,6 +155,9 @@ public class ModelArtifactInspector {
         if (outputs) {
             output_schema = {"tensors": outputs};
         }
+        *hash<auto> dynamic_axes = options.dynamic_axes
+            ?? (package_manifest ? package_manifest.dynamic_axes : NOTHING)
+            ?? buildDynamicAxes(inputs, outputs);
         *hash<auto> execution_config = options.execution_config
             ?? options.session_config
             ?? (runtime == "onnxruntime" ? options.config : NOTHING);
@@ -184,7 +188,7 @@ public class ModelArtifactInspector {
         }
         hash<auto> execution_plan =
             buildExecutionPlan(runtime, task, primary, input_schema, output_schema, option_plan,
-                preprocess, postprocess);
+                preprocess, postprocess, dynamic_axes, tokenizer);
         *hash<auto> provider_info = buildProviderInfo(primary, package_manifest);
         *hash<auto> validation = options.validation
             ?? (package_manifest ? package_manifest.validation : NOTHING)
@@ -207,9 +211,6 @@ public class ModelArtifactInspector {
         } else if (package_manifest && package_manifest.golden_vectors) {
             golden_vectors = cast<list<hash<auto>>>(package_manifest.golden_vectors);
         }
-        *hash<auto> dynamic_axes = options.dynamic_axes
-            ?? (package_manifest ? package_manifest.dynamic_axes : NOTHING)
-            ?? buildDynamicAxes(inputs, outputs);
         *list<string> external_data = buildExternalDataList(artifacts, primary);
         if (!diagnostics && runtime == "onnxruntime") {
             diagnostics = QoreOnnxTools::OnnxDiagnostics::summarizePackage({
@@ -709,8 +710,36 @@ public class ModelArtifactInspector {
     }
 
     private static hash<TokenizerArtifactInfo> buildTokenizerInfo(
-            list<hash<ModelArtifactInfo>> artifacts) {
+            list<hash<ModelArtifactInfo>> artifacts, *hash<auto> package_manifest) {
         hash<TokenizerArtifactInfo> info = <TokenizerArtifactInfo>{};
+        if (package_manifest && package_manifest.tokenizer) {
+            hash<auto> manifest_tokenizer = cast<hash<auto>>(package_manifest.tokenizer);
+            if (manifest_tokenizer.tokenizer_json.val()) {
+                info.tokenizer_json = manifest_tokenizer.tokenizer_json;
+            } else if (manifest_tokenizer.artifact_name.val()) {
+                info.tokenizer_json = manifest_tokenizer.artifact_name;
+            }
+            if (manifest_tokenizer.tokenizer_config_json.val()) {
+                info.tokenizer_config_json = manifest_tokenizer.tokenizer_config_json;
+            } else if (manifest_tokenizer.config_artifact_name.val()) {
+                info.tokenizer_config_json = manifest_tokenizer.config_artifact_name;
+            }
+            if (manifest_tokenizer.special_tokens_map_json.val()) {
+                info.special_tokens_map_json = manifest_tokenizer.special_tokens_map_json;
+            }
+            if (manifest_tokenizer.generation_config_json.val()) {
+                info.generation_config_json = manifest_tokenizer.generation_config_json;
+            }
+            if (manifest_tokenizer.model_max_length) {
+                info.model_max_length = manifest_tokenizer.model_max_length;
+            }
+            if (exists manifest_tokenizer.has_chat_template) {
+                info.has_chat_template = manifest_tokenizer.has_chat_template ? True : False;
+            }
+            if (manifest_tokenizer.special_tokens) {
+                info.special_tokens = manifest_tokenizer.special_tokens;
+            }
+        }
         foreach hash<ModelArtifactInfo> a in (artifacts) {
             switch (a.role) {
                 case "tokenizer":
@@ -911,33 +940,22 @@ public class ModelArtifactInspector {
     private static hash<auto> buildExecutionPlan(string runtime, string task,
             hash<ModelArtifactInfo> primary, *hash<auto> input_schema,
             *hash<auto> output_schema, *hash<auto> option_plan,
-            *hash<auto> preprocess, *hash<auto> postprocess) {
-        hash<auto> plan = {};
-        if (option_plan) {
-            plan += option_plan;
-        }
-        if (!plan.type.val()) {
-            plan.type = runtime == "onnxruntime" ? "onnx/" + task : runtime + "/" + task;
-        }
-        if (!plan.task.val()) {
-            plan.task = task;
-        }
-        if (!plan.artifact_name.val()) {
-            plan.artifact_name = primary.name;
-        }
-        if (!exists plan.input_schema && input_schema) {
-            plan.input_schema = input_schema;
-        }
-        if (!exists plan.output_schema && output_schema) {
-            plan.output_schema = output_schema;
-        }
-        if (!exists plan.preprocess && preprocess) {
-            plan.preprocess = preprocess;
-        }
-        if (!exists plan.postprocess && postprocess) {
-            plan.postprocess = postprocess;
-        }
-        return plan;
+            *hash<auto> preprocess, *hash<auto> postprocess,
+            *hash<auto> dynamic_axes, *hash<TokenizerArtifactInfo> tokenizer) {
+        return QoreOnnxTools::OnnxProcessingSpecs::buildExecutionPlan({
+            "plan": option_plan,
+            "runtime": runtime,
+            "task": task,
+            "artifact_name": primary.name,
+            "local_executable": runtime == "onnxruntime",
+            "requires": runtime == "onnxruntime" ? ("ml",) : (),
+            "input_schema": input_schema,
+            "output_schema": output_schema,
+            "dynamic_axes": dynamic_axes,
+            "tokenizer": tokenizer,
+            "preprocess": preprocess,
+            "postprocess": postprocess,
+        });
     }
 }
 

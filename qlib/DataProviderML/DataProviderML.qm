@@ -1781,7 +1781,11 @@ DataFrame::DataFrame clusters = kmeans.processRecordsShape(
     tokenizer, and metadata versioned together. When a package includes
     \c tokenizer_config.json, those companion settings are loaded with
     \c tokenizer.json so tokenizer utilities can use model-level limits and
-    chat templates.
+    chat templates. For ONNX packages, the processor can also read the
+    registry execution plan's \c runtime, \c entry_artifact,
+    \c output_shapes, \c tokenizer, \c preprocess, \c postprocess, and
+    \c tensor_contract fields instead of requiring every pipeline to repeat
+    package-specific details.
 
     Processors that support registry-backed artifacts include:
     - @ref DataProviderML::QoreTokenizeProcessor "tokenize"
@@ -2002,6 +2006,10 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       \c classification, and \c sequence-classification execution plans to
       produce stable task fields such as \c value, \c label, and \c scores
       while preserving raw ONNX outputs for diagnostics
+    - \c registry-model and registry-backed \c embed-text / \c rerank-text
+      consume normalized ONNX package execution plans with runtime,
+      entry-artifact, tokenizer, tensor-contract, output-shape,
+      preprocessing, and postprocessing metadata
     - \c registry-model supports initial \c causal-lm execution plans for
       registry ONNX packages, including registry tokenizer loading,
       \c input_ids and \c attention_mask tensor construction, greedy decoding,
@@ -2020,7 +2028,9 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
       registry backends for AI pipeline artifacts
     - \c onnx-model and \c registry-model expose ONNX Runtime provider,
       inference-stat, and profile-summary diagnostics through \c getDiagnostics();
-      emitted events can include compact diagnostics when requested
+      emitted events can include compact diagnostics when requested, and
+      registry-backed processors expose actionable package diagnostics from
+      QoreModelRegistry manifests
 
     @subsection dataproviderml_v1_3 DataProviderML v1.3
     - DataProviderML processors now accept \c DataFrameBlock,

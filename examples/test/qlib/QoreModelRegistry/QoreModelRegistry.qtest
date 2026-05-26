@@ -1413,6 +1413,12 @@ class ModelRegistryTest inherits QUnit::Test {
             "plain ONNX packages should expose a generated postprocessing contract");
         assertEq("raw", manifest.execution.plan.postprocess.output_mode,
             "plain ONNX execution plans should expose raw postprocessing metadata");
+        assertEq("onnxruntime", manifest.execution.plan.runtime,
+            "plain ONNX execution plans should expose runtime metadata");
+        assertEq("model.onnx", manifest.execution.plan.entry_artifact,
+            "plain ONNX execution plans should expose the entry artifact");
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y,
+            "plain ONNX execution plans should expose output-shape metadata");
         assertEq("onnx-package", manifest.diagnostics.kind,
             "plain ONNX packages should expose actionable diagnostics");
         assertEq("onnx-package", manifest.execution.diagnostics.kind,
@@ -1484,6 +1490,9 @@ class ModelRegistryTest inherits QUnit::Test {
         assertEq("Y", manifest.execution.plan.postprocess.value_output);
         assertEq("X", manifest.execution.plan.input_schema.tensors[0].name);
         assertEq("Y", manifest.execution.plan.output_schema.tensors[0].name);
+        assertEq("onnxruntime", manifest.execution.plan.runtime);
+        assertEq("model.onnx", manifest.execution.plan.entry_artifact);
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y);
 
         assertThrows("ML-REGISTRY-ERROR", sub() {
             registry.registerPackage(package_dir, {
@@ -1534,6 +1543,10 @@ class ModelRegistryTest inherits QUnit::Test {
             "output tensor contract should be stored at version level");
         assertEq(0, manifest.dynamic_axes.X[0],
             "declared dynamic axis metadata should be stored");
+        assertEq(0, manifest.execution.plan.dynamic_axes.X[0],
+            "declared dynamic axis metadata should be stored in the execution plan");
+        assertEq(manifest.outputs[0].shape, manifest.execution.plan.output_shapes.Y,
+            "execution plan should expose output-shape metadata");
         assertTrue(manifest.external_data.contains("model.onnx.data"),
             "external-data companions should be exposed at version level");
         assertTrue(manifest.validation.valid,
@@ -1622,6 +1635,11 @@ class ModelRegistryTest inherits QUnit::Test {
             "qore-onnx package manifest diagnostics should be ingested");
         assertEq("Y", packaged_manifest.execution.plan.postprocess.value_output,
             "qore-onnx package execution plan should preserve model output binding metadata");
+        assertEq("model.onnx", packaged_manifest.execution.plan.entry_artifact,
+            "qore-onnx package execution plan should preserve the entry artifact");
+        assertEq(packaged_manifest.outputs[0].shape,
+            packaged_manifest.execution.plan.output_shapes.Y,
+            "qore-onnx package execution plan should preserve output-shape metadata");
         assertEq(1, packaged_manifest.benchmarks.cpu.runs,
             "qore-onnx package manifest benchmark metadata should be ingested");
         assertEq(1, packaged_manifest.golden_vectors.size(),

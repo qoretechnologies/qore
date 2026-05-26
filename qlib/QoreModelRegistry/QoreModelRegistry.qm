@@ -259,6 +259,11 @@ printf("task=%s input=%s output=%s provider=%s\n",
     manifest.inputs[0].name,
     manifest.outputs[0].name,
     manifest.providers.active_provider);
+printf("plan runtime=%s entry=%s output-shape=%y\n",
+    manifest.execution.plan.runtime,
+    manifest.execution.plan.entry_artifact,
+    manifest.execution.plan.output_shapes.Y);
+printf("diagnostics=%y\n", manifest.diagnostics.recommended_actions);
 
 # Registry actions operate on the packaged entry artifact and automatically
 # materialize external-data companions before calling ONNX Runtime.
@@ -350,15 +355,21 @@ reg.loadExecutable("torch-source", vid);
       version level: \c task, \c opset, \c producer,
       \c minimum_onnxruntime_version, \c inputs, \c outputs,
       \c dynamic_axes, \c external_data, \c preprocess, \c postprocess,
-      \c providers, \c optimized_artifacts, \c quantized_artifacts,
-      \c validation, \c benchmarks, and \c golden_vectors
+      \c providers, \c diagnostics, \c optimized_artifacts,
+      \c quantized_artifacts, \c validation, \c benchmarks, and
+      \c golden_vectors
+    - ONNX execution plans now keep runtime, entry artifact, tokenizer
+      companion metadata, input/output tensor schemas, dynamic axes,
+      output-shape maps, preprocessing, postprocessing, and the nested
+      \c tensor_contract together for deployment automation
     - Added registry action methods for packaged ONNX versions:
       \c inspectOnnxVersion(), \c validateOnnxVersion(),
       \c benchmarkOnnxVersion(), \c compareOnnxVersions(), and
       \c compareOnnxVersionArtifacts()
     - ModelRegistry DataProvider records now expose ONNX provider diagnostics,
       validation status, tensor contracts, deployment metadata, benchmark
-      metadata, golden vectors, and optimized/quantized artifact lists
+      metadata, golden vectors, actionable diagnostics, and
+      optimized/quantized artifact lists
     - ModelExecutableAdapter ONNX execution methods accept selected output names
       so registry-backed multi-output ONNX packages can avoid materializing
       unused labels, probabilities, logits, or embeddings
