@@ -3685,7 +3685,55 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
-    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink](uint32_t id) -> bool {
+    // Pre-scan the function for every Return opcode and collect the set of
+    // slot IDs that are passed as the return value.  These slots must never be
+    // discarded by scope-exit cleanup scans (UninstantiateLocal's "release all
+    // references to local's object" loop, the closure-var release loop, etc.)
+    // because the value at that slot is the function's return value and must
+    // survive until the Return opcode reads it.
+    //
+    // The scan that prompted this fix lives in UninstantiateLocal: when a
+    // pre-instantiated local goes out of scope the IR interpreter walks
+    // values[] and discards every slot whose internal node pointer matches the
+    // local's value (see commit 5b24307df) so the destructor fires
+    // deterministically at scope exit.  That walk uses
+    // valueUsedLaterInCurrentBlock to skip slots still in use — but the check
+    // only sees instructions in the current basic block.  When the function
+    // body is shaped like `try { return obj; } catch { } /* on_exit body */`,
+    // the Return opcode lives in a successor block, so the walk happily
+    // discards the RefSelf result that holds the function's return value.
+    // The first symptom is a `RUNTIME-TYPE-ERROR: <block return> expects type
+    // 'X', but got no value instead: block missing return statement` even
+    // though the source has a syntactic `return obj;`.
+    //
+    // Collecting the set up-front (rather than extending the scan to walk all
+    // successor blocks) avoids the back-edge / dead-block reachability
+    // questions inherent in a CFG-aware scan and is O(function-size) once per
+    // execution.
+    std::unordered_set<uint32_t> return_value_slot_ids;
+    if (func.blocks.size() > 0) {
+        for (const auto& blk : func.blocks) {
+            if (!blk) {
+                continue;
+            }
+            for (const auto& inst_up : blk->instructions) {
+                if (!inst_up || inst_up->opcode != QoreIROpcode::Return) {
+                    continue;
+                }
+                const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_up.get());
+                if (ret->has_value) {
+                    return_value_slot_ids.insert(ret->value.id);
+                }
+            }
+        }
+    }
+
+    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_value_slot_ids](uint32_t id) -> bool {
+        // A slot that is the operand of any Return in the function must stay
+        // alive across scope exits regardless of basic-block locality.
+        if (return_value_slot_ids.count(id)) {
+            return true;
+        }
         if (!block) {
             return false;
         }
