@@ -4796,8 +4796,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             ping_body = getPingBody();
         }
 
-        # URL manipulation is RestClient-specific (setURL/clearConnectionPath
-        # don't exist on RestClientIo).  Use cast<> so it works with both.
+        # An absolute ping_path (starting with "/") must NOT inherit the
+        # connection's URL path component, otherwise an `api: v1` style
+        # connection turns ping_path `/get_server_info` into
+        # `/v1/get_server_info` and the ping reliably 404s against backends
+        # that expose health endpoints outside the API namespace
+        # (e.g. SGLang at `/get_server_info`).  Both RestClient (sync) and
+        # RestClientIo (async) expose `clearConnectionPath()`.  The absolute-URL
+        # branch (`setURL`) remains RestClient-only since RestClientIo does
+        # not currently expose `setURL`.
         if (client instanceof RestClient) {
             RestClient rc = cast<RestClient>(client);
             if (ping_path =~ /^http/) {
@@ -4806,6 +4813,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             } else if (ping_path[0] == "/") {
                 rc.clearConnectionPath();
             }
+        } else if (ping_path[0] == "/") {
+            client.clearConnectionPath();
         }
 
         # Use restDoRequest (AbstractRestClient API) — works with both
