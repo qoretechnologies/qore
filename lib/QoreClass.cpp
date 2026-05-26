@@ -37,6 +37,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreParseClass.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreLibIntern.h"
 
 #include <algorithm>
 #include <memory>
@@ -6336,13 +6337,16 @@ QoreValue BuiltinNormalMethodVariantBase::evalMethod(QoreObject* self, CodeEvalu
 QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, CodeEvaluationHelper& ceh,
         ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), nullptr, runtime_get_class());
-    QoreValue arg = n.isEnum() ? n.getEnumBaseValue() : n;
+    QoreValue arg = n;
     ValueHolder materialized(xsink);
-    if (arg.isShortString()) {
-        char buf[7];
-        arg.getShortString(buf);
-        materialized = QoreValue(new QoreStringNode(buf, arg.shortStringLen(), QCS_UTF8));
-        arg = *materialized;
+    if (qmethod->getClass() != QC_PSEUDOVALUE) {
+        arg = n.isEnum() ? n.getEnumBaseValue() : n;
+        if (arg.isShortString()) {
+            char buf[7];
+            arg.getShortString(buf);
+            materialized = QoreValue(new QoreStringNode(buf, arg.shortStringLen(), QCS_UTF8));
+            arg = *materialized;
+        }
     }
     return evalImpl(nullptr, (AbstractPrivateData*)&arg, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
 }
