@@ -48,6 +48,36 @@ public class AsyncApiTest inherits QUnit::Test {
 %endif
     }
 
+    #! Returns True if the supplied exception comes from an unavailable network.
+    /** Covers every connect-time failure mode the public-schemas test can hit
+        when the CI runner lacks reachable DNS / outbound HTTPS / a working TLS
+        handshake.  Listed individually rather than matched by regex so a new
+        error class shows up as a hard failure instead of a silent skip.
+
+        - SOCKET-CONNECT-ERROR     - kernel-level connect() refused/unreachable
+        - SOCKET-SSL-ERROR         - TLS handshake failure / bad cert chain
+        - SOCKET-TIMEOUT           - raw socket timed out before completion
+        - QOREADDRINFO-GETINFO-ERROR - getaddrinfo failed (DNS down / NXDOMAIN)
+        - HTTPCLIENT-HOSTNAME-ERROR - resolved-host validation failed
+        - HTTPCLIENT-NEGOTIATE-TIMEOUT - ALPN/HTTP-version negotiation timed out
+        - HTTPCLIENT-CONNECT-TIMEOUT - high-level connect timeout
+        - HTTPCLIENT-TIMEOUT       - request timed out (no body received)
+    */
+    static bool isNetworkError(hash<ExceptionInfo> ex) {
+        switch (ex.err) {
+            case "SOCKET-CONNECT-ERROR":
+            case "SOCKET-SSL-ERROR":
+            case "SOCKET-TIMEOUT":
+            case "QOREADDRINFO-GETINFO-ERROR":
+            case "HTTPCLIENT-HOSTNAME-ERROR":
+            case "HTTPCLIENT-NEGOTIATE-TIMEOUT":
+            case "HTTPCLIENT-CONNECT-TIMEOUT":
+            case "HTTPCLIENT-TIMEOUT":
+                return True;
+        }
+        return False;
+    }
+
     schemaParsingTest() {
         checkModules();
 
@@ -403,9 +433,8 @@ public class AsyncApiTest inherits QUnit::Test {
         try {
             client.connect();
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                testSkip(sprintf("Network unavailable: %s", ex.desc));
+            if (AsyncApiTest::isNetworkError(ex)) {
+                testSkip(sprintf("Network unavailable: %s: %s", ex.err, ex.desc));
             }
             rethrow;
         }
@@ -456,9 +485,9 @@ public class AsyncApiTest inherits QUnit::Test {
 
                 anyPassed = True;
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                    printf("SKIP: Network error fetching %s: %s\n", schemaInfo.name, ex.desc);
+                if (AsyncApiTest::isNetworkError(ex)) {
+                    printf("SKIP: Network error fetching %s: %s: %s\n",
+                        schemaInfo.name, ex.err, ex.desc);
                     continue;
                 }
                 # Some complex schemas may have features not yet fully supported
