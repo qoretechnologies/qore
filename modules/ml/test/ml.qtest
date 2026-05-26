@@ -430,6 +430,25 @@ public class MlTest inherits QUnit::Test {
         assertEq("float32", from_columns.getDtype());
         assertEq((2, 2), from_columns.getShape());
         assertEq(((1.0, 2.0), (3.0, 4.0)), from_columns.toList());
+        assertTrue(from_columns.hostStorage());
+        assertFalse(from_columns.deviceStorage());
+        assertEq(NOTHING, from_columns.deviceInfo());
+        assertTrue(from_columns.getBuffer().hostStorage());
+        assertFalse(from_columns.getBuffer().deviceStorage());
+        assertEq(NOTHING, from_columns.getBuffer().deviceInfo());
+
+        ML::Tensor flat = from_columns.flatten();
+        assertEq((4,), flat.getShape());
+        assertEq((1.0, 2.0, 3.0, 4.0), flat.toList());
+
+        ML::Tensor squeezed = from_columns.reshape((1, 4, 1)).squeeze();
+        assertEq((4,), squeezed.getShape());
+        assertEq((1.0, 2.0, 3.0, 4.0), squeezed.toList());
+
+        assertEq((1, 2, 2), from_columns.unsqueeze(0).getShape());
+        assertEq((2, 1, 2), from_columns.unsqueeze(1).getShape());
+        assertEq((2, 2, 1), from_columns.unsqueeze(-1).getShape());
+        assertEq(from_columns.toList(), from_columns.materialize().toList());
 
         ML::Tensor reshaped = from_columns.reshape((4, 1));
         assertEq((4, 1), reshaped.getShape());
@@ -477,6 +496,9 @@ public class MlTest inherits QUnit::Test {
         });
         assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
             ML::Tensor bad = from_columns.reshape((3,));
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = from_columns.unsqueeze(3);
         });
         assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
             ML::Tensor bad = from_columns.sliceRows(offset: 1, count: 5);

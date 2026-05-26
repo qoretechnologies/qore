@@ -83,6 +83,12 @@ enum class QoreBufferDeviceKind : uint8_t {
     Other,
 };
 
+//! Returns the stable source/API name for a buffer device kind.
+/** @param kind the device or accelerator family
+    @return a lower-case stable name such as \c cuda or \c rocm
+ */
+DLLEXPORT const char* qore_buffer_device_kind_name(QoreBufferDeviceKind kind);
+
 //! Describes the location of external device buffer storage.
 struct QoreBufferDeviceInfo {
     QoreBufferDeviceKind kind = QoreBufferDeviceKind::Unknown;

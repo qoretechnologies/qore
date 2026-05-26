@@ -33,6 +33,36 @@
 
 #include "qore/intern/QoreListIterator.h"
 
+static QoreHashNode* qore_buffer_device_info_hash(const QoreBufferNode* b, ExceptionSink* xsink) {
+   const QoreBufferDeviceInfo* info = b->getDeviceInfo();
+   if (!info) {
+      return nullptr;
+   }
+
+   ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+   rv->setKeyValue("kind", new QoreStringNode(qore_buffer_device_kind_name(info->kind)), xsink);
+   if (*xsink) {
+      return nullptr;
+   }
+   rv->setKeyValue("device_id", info->device_id, xsink);
+   if (*xsink) {
+      return nullptr;
+   }
+   rv->setKeyValue("name", new QoreStringNode(info->name), xsink);
+   if (*xsink) {
+      return nullptr;
+   }
+   rv->setKeyValue("host_storage", b->hasHostStorage(), xsink);
+   if (*xsink) {
+      return nullptr;
+   }
+   rv->setKeyValue("device_storage", b->hasExternalDeviceStorage(), xsink);
+   if (*xsink) {
+      return nullptr;
+   }
+   return rv.release();
+}
+
 //! Methods in this pseudo-class can be executed on @ref buffer "buffer values"
 /**
     Buffers provide dense, homogeneous storage with source-level types such as
@@ -194,6 +224,23 @@ if (!values.hostStorage()) {
 */
 bool <buffer>::hostStorage() [flags=CONSTANT] {
    return b->hasHostStorage();
+}
+
+//! Returns metadata for external device storage
+/**
+    @return device metadata for device-backed buffers, or @ref NOTHING for
+    ordinary host buffers
+
+    @par Example:
+    @code{.py}
+hash<auto> info = values.deviceInfo();
+if (info) {
+    printf("buffer is on %s device %d\n", info.kind, info.device_id);
+}
+    @endcode
+*/
+*hash<auto> <buffer>::deviceInfo() [flags=RET_VALUE_ONLY] {
+   return qore_buffer_device_info_hash(b, xsink);
 }
 
 //! Materializes external device storage into host memory

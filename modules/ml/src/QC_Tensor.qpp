@@ -53,6 +53,50 @@ static int64_t qore_tensor_normalize_axis(const QoreTensor* tensor, int64_t axis
     return axis;
 }
 
+static int64_t qore_tensor_normalize_insert_axis(const QoreTensor* tensor, int64_t axis, const char* method,
+        ExceptionSink* xsink) {
+    int64_t rank = tensor->getRank();
+    if (axis < 0) {
+        axis += rank + 1;
+    }
+    if (axis < 0 || axis > rank) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
+            "%s axis " QLLD " is outside insert range [0, " QLLD "]", method, axis, rank);
+        return -1;
+    }
+    return axis;
+}
+
+static QoreHashNode* qore_tensor_device_info_hash(const QoreBufferNode* buffer, ExceptionSink* xsink) {
+    const QoreBufferDeviceInfo* info = buffer->getDeviceInfo();
+    if (!info) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("kind", new QoreStringNode(qore_buffer_device_kind_name(info->kind)), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("device_id", info->device_id, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("name", new QoreStringNode(info->name), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("host_storage", buffer->hasHostStorage(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("device_storage", buffer->hasExternalDeviceStorage(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return rv.release();
+}
+
 static int64_t qore_tensor_shape_product(const std::vector<int64_t>& shape, size_t begin, size_t end,
         const char* method, ExceptionSink* xsink) {
     int64_t count = 1;
@@ -696,6 +740,90 @@ Tensor Tensor::reshape(list<int> shape) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
 }
 
+//! Creates a rank-1 Tensor view over the same backing buffer
+/** @return a Tensor with shape \c (size(),) sharing the same dense backing
+        buffer
+
+    This is useful when feeding runtimes or postprocessing code that expects a
+    flat vector while preserving zero-copy semantics for the tensor data.
+
+    @par Example
+    @code{.q}
+ML::Tensor scores(data: ((0.1, 0.9), (0.8, 0.2)), dtype: "float32");
+ML::Tensor flat = scores.flatten();
+assertEq((4,), flat.getShape());
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::flatten() [flags=RET_VALUE_ONLY] {
+    if (tensor->getElementCount() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+        xsink->raiseException("ML-TENSOR-SHAPE-ERROR", "flatten() tensor element count overflows int64");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(),
+        {static_cast<int64_t>(tensor->getElementCount())}), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Removes all dimensions of size 1 from the tensor shape
+/** @return a Tensor view sharing the same backing buffer, with singleton
+        dimensions removed
+
+    If all dimensions are singleton dimensions, the result is a scalar tensor
+    with rank 0 and one element.
+
+    @par Example
+    @code{.q}
+ML::Tensor batch(data: new buffer<float32>((1.0f, 2.0f, 3.0f, 4.0f)), shape: (1, 4, 1));
+assertEq((4,), batch.squeeze().getShape());
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::squeeze() [flags=RET_VALUE_ONLY] {
+    std::vector<int64_t> n_shape;
+    const std::vector<int64_t>& old_shape = tensor->getShape();
+    n_shape.reserve(old_shape.size());
+    for (size_t i = 0; i < old_shape.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "squeezing tensor shape")) {
+            return QoreValue();
+        }
+        if (old_shape[i] != 1) {
+            n_shape.push_back(old_shape[i]);
+        }
+    }
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(), std::move(n_shape)), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
+//! Inserts a dimension of size 1 into the tensor shape
+/** @param axis insertion point; negative values count from the end plus one, so
+        \c -1 appends a trailing dimension
+    @return a Tensor view sharing the same backing buffer
+
+    @throw ML-TENSOR-SHAPE-ERROR if \a axis is outside the valid insert range
+
+    @par Example
+    @code{.q}
+ML::Tensor input(data: (1.0, 2.0, 3.0), dtype: "float32");
+ML::Tensor batch = input.unsqueeze(0);
+assertEq((1, 3), batch.getShape());
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::unsqueeze(int axis) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    int64_t resolved_axis = qore_tensor_normalize_insert_axis(tensor, axis, "unsqueeze()", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::vector<int64_t> n_shape = tensor->getShape();
+    n_shape.insert(n_shape.begin() + static_cast<std::vector<int64_t>::difference_type>(resolved_axis), 1);
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(), std::move(n_shape)), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
 //! Returns a contiguous slice of rows along the first dimension
 /** @param offset first row to include
     @param count number of rows to include
@@ -1099,6 +1227,81 @@ int Tensor::size() [flags=CONSTANT] {
 */
 auto Tensor::getBuffer() [flags=RET_VALUE_ONLY] {
     return tensor->refBuffer();
+}
+
+//! Returns @ref True if the tensor backing buffer has external device storage
+/** @return @ref True when the Tensor wraps accelerator or provider-owned
+        device memory
+
+    @par Example
+    @code{.q}
+if (output.deviceStorage()) {
+    output = output.materialize();
+}
+    @endcode
+
+    @since ml 1.2
+*/
+bool Tensor::deviceStorage() [flags=CONSTANT] {
+    return tensor->getBuffer()->hasExternalDeviceStorage();
+}
+
+//! Returns @ref True if the tensor backing buffer has host storage available
+/** @return @ref True when tensor data can be read from host memory without a
+        device-to-host transfer
+
+    @par Example
+    @code{.q}
+if (!output.hostStorage()) {
+    output = output.materialize();
+}
+    @endcode
+
+    @since ml 1.2
+*/
+bool Tensor::hostStorage() [flags=CONSTANT] {
+    return tensor->getBuffer()->hasHostStorage();
+}
+
+//! Returns metadata for tensor device storage
+/** @return device metadata for device-backed tensors, or @ref NOTHING for
+        ordinary host tensors
+
+    @par Example
+    @code{.q}
+hash<auto> info = output.deviceInfo();
+if (info) {
+    printf("provider output is on %s device %d\n", info.kind, info.device_id);
+}
+    @endcode
+
+    @since ml 1.2
+*/
+*hash<auto> Tensor::deviceInfo() [flags=RET_VALUE_ONLY] {
+    return qore_tensor_device_info_hash(tensor->getBuffer(), xsink);
+}
+
+//! Materializes tensor device storage into host memory
+/** @return a Tensor with the same shape and backing buffer after host storage
+        is available
+
+    @throw BUFFER-DEVICE-STORAGE-ERROR if device storage cannot be copied to
+        host memory
+
+    @par Example
+    @code{.q}
+ML::Tensor readable = output.materialize();
+list<auto> values = readable.toList();
+    @endcode
+
+    @since ml 1.2
+*/
+Tensor Tensor::materialize() {
+    if (tensor->getMutableBuffer()->ensureHostStorage(xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreTensor> holder(new QoreTensor(tensor->getBuffer(), tensor->getShape()), xsink);
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
 }
 
 //! Converts the tensor to nested Qore lists using its shape

@@ -477,6 +477,30 @@ void QoreBufferNode::AlignedByteBuffer::clear() {
     len = 0;
 }
 
+const char* qore_buffer_device_kind_name(QoreBufferDeviceKind kind) {
+    switch (kind) {
+        case QoreBufferDeviceKind::Unknown:
+            return "unknown";
+        case QoreBufferDeviceKind::Cuda:
+            return "cuda";
+        case QoreBufferDeviceKind::Rocm:
+            return "rocm";
+        case QoreBufferDeviceKind::OpenCL:
+            return "opencl";
+        case QoreBufferDeviceKind::Vulkan:
+            return "vulkan";
+        case QoreBufferDeviceKind::OneAPI:
+            return "oneapi";
+        case QoreBufferDeviceKind::Metal:
+            return "metal";
+        case QoreBufferDeviceKind::Java:
+            return "java";
+        case QoreBufferDeviceKind::Other:
+            return "other";
+    }
+    return "unknown";
+}
+
 const char* qore_buffer_element_type_name(QoreBufferElementType element_type) {
     switch (element_type) {
         case QoreBufferElementType::Int8:
