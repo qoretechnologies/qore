@@ -165,22 +165,6 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
 
 QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreListNode *args, ExceptionSink *xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
-
-    // Unwrap TAG_ENUM values to their base so that the SSO short-string and
-    // weak-ref branches below see the underlying value. Without this, an enum
-    // whose base is an SSO short string would skip the SSO materialization
-    // branch (n.isShortString() is false on TAG_ENUM bits) and reach a
-    // <string>::* pseudo-method body whose get_pseudo_string_arg() returns
-    // nullptr, crashing on the multiple-inheritance upcast offset.
-    if (n.isEnum()) {
-        // Keep enum identity for pseudo-methods that explicitly expose enum
-        // metadata.  All other pseudo-methods operate on the enum's base value.
-        if (!strcmp(name, "isEnum") || !strcmp(name, "fullType")) {
-            return qore_class_private::evalPseudoMethod(QC_PSEUDOVALUE, n, name, args, rc, xsink);
-        }
-        return pseudo_classes_eval(n.getEnumBaseValue(), name, args, xsink);
-    }
-
     switch (n.getType()) {
         case NT_STRING:
             if (n.isShortString()) {
