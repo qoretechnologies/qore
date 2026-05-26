@@ -136,35 +136,35 @@ public namespace Hl7v2Util {
 
         #! Escapes a scalar HL7 field value
         string escape(string str) {
-            string rv = "";
+            list<string> parts = ();
             for (int i = 0; i < str.size(); i++) {
                 string ch = str[i];
                 if (ch == field_separator) {
-                    rv += escape_character + "F" + escape_character;
+                    push parts, escape_character + "F" + escape_character;
                 } else if (ch == component_separator) {
-                    rv += escape_character + "S" + escape_character;
+                    push parts, escape_character + "S" + escape_character;
                 } else if (ch == repetition_separator) {
-                    rv += escape_character + "R" + escape_character;
+                    push parts, escape_character + "R" + escape_character;
                 } else if (ch == subcomponent_separator) {
-                    rv += escape_character + "T" + escape_character;
+                    push parts, escape_character + "T" + escape_character;
                 } else if (ch == escape_character) {
-                    rv += escape_character + "E" + escape_character;
+                    push parts, escape_character + "E" + escape_character;
                 } else if (ch == "\n") {
-                    rv += escape_character + ".br" + escape_character;
+                    push parts, escape_character + ".br" + escape_character;
                 } else {
-                    rv += ch;
+                    push parts, ch;
                 }
             }
-            return rv;
+            return parts.join("");
         }
 
         #! Unescapes a scalar HL7 field value
         string unescape(string str) {
-            string rv = "";
+            list<string> parts = ();
             for (int i = 0; i < str.size(); i++) {
                 string ch = str[i];
                 if (ch != escape_character) {
-                    rv += ch;
+                    push parts, ch;
                     continue;
                 }
 
@@ -175,10 +175,10 @@ public namespace Hl7v2Util {
                 }
 
                 string code = str.substr(i + 1, end - i - 1);
-                rv += decodeEscapeCode(code);
+                push parts, decodeEscapeCode(code);
                 i = end;
             }
-            return rv;
+            return parts.join("");
         }
 
         #! Decodes one HL7 escape code
@@ -198,11 +198,11 @@ public namespace Hl7v2Util {
                     return "\n";
             }
             if (code =~ /^X(?:[0-9A-Fa-f]{2})+$/) {
-                string rv = "";
+                list<string> parts = ();
                 for (int i = 1; i < code.size(); i += 2) {
-                    rv += chr(code.substr(i, 2).toInt(16));
+                    push parts, chr(code.substr(i, 2).toInt(16));
                 }
-                return rv;
+                return parts.join("");
             }
             return escape_character + code + escape_character;
         }

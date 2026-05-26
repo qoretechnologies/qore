@@ -171,11 +171,11 @@ public namespace Hl7v2Util {
         #! Formats a parsed message
         string formatMessage(hash<Hl7v2MessageInfo> message) {
             setDelimiters(message.delimiters);
-            string rv = "";
+            list<string> segments = ();
             foreach hash<Hl7v2Segment> segment in (message.segments) {
-                rv += formatSegment(segment) + "\r";
+                push segments, formatSegment(segment);
             }
-            return rv;
+            return segments ? segments.join("\r") + "\r" : "";
         }
 
         #! Formats a parsed or simple segment
@@ -349,11 +349,11 @@ public namespace Hl7v2Util {
                     throw "HL7V2-WRITE-ERROR", "MSH segments require MSH-1 and MSH-2 fields";
                 }
                 string field_separator = fields[0].raw;
-                string rv = "MSH" + field_separator + fields[1].raw;
-                for (int i = 2; i < fields.size(); i++) {
-                    rv += field_separator + fields[i].raw;
+                list<string> raw_fields = ();
+                for (int i = 1; i < fields.size(); i++) {
+                    push raw_fields, fields[i].raw;
                 }
-                return rv;
+                return "MSH" + field_separator + raw_fields.join(field_separator);
             }
             list<string> raw_fields = ();
             foreach hash<Hl7v2Field> field in (fields) {
@@ -363,11 +363,11 @@ public namespace Hl7v2Util {
         }
 
         private string formatSimpleSegment(string tag, list<auto> fields) {
-            string rv = tag;
+            list<string> out = (tag,);
             foreach auto field in (fields) {
-                rv += delimiters.getFieldSeparator() + formatSimpleField(field);
+                push out, formatSimpleField(field);
             }
-            return rv;
+            return out.join(delimiters.getFieldSeparator());
         }
 
         private string formatSimpleField(auto field) {
