@@ -170,7 +170,25 @@ public:
     DLLEXPORT QoreListNode* getSchemaV2(ExceptionSink* xsink) const;
 
     //! Returns a hash of column values.
+    /** Preserves the result's efficient storage: temporal columns (Date, Timestamp,
+        Duration) keep their underlying \c buffer<int64> form (microsecond payload).
+        Use this when the consumer can operate on column buffers directly.
+
+        @see toMaterializedColumnHash() for a hash where temporal columns are
+             reconstructed as \c list<date> for callers that need native Qore typing.
+    */
     DLLEXPORT QoreHashNode* toColumnHash(ExceptionSink* xsink) const;
+
+    //! Returns a hash of column values with native Qore typing restored.
+    /** Like \c toColumnHash() but every temporal column is materialized into a
+        \c list<date> with the result's current timezone applied; non-temporal
+        columns pass through with no copy.  Use this only when the consumer
+        requires native typing (e.g., assembling rows for a downstream API that
+        cannot accept \c buffer<int64> microsecond payloads); prefer
+        \c toColumnHash() in performance-sensitive code paths so the columnar
+        representation survives.
+    */
+    DLLEXPORT QoreHashNode* toMaterializedColumnHash(ExceptionSink* xsink) const;
 
     //! Returns a list of row hashes.
     DLLEXPORT QoreListNode* toRows(ExceptionSink* xsink) const;

@@ -3761,6 +3761,81 @@ QoreHashNode* QoreColumnarResult::toColumnHash(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+//! Materialize a temporal int64 buffer column into a list<date>.
+/** Only called from the temporal branch of toMaterializedColumnHash() — caller
+    has already verified \c column.schema is temporal and \c column.data is a
+    \c buffer<int64>.  Null entries (returned by getReferencedEntry() when the
+    underlying buffer slot is NULL) round-trip as NOTHING.
+*/
+static QoreListNode* columnar_buffer_int64_to_date_list(
+        const QoreColumnarResult::Column& column, ExceptionSink* xsink) {
+    const QoreBufferNode* buffer = column.data.get<const QoreBufferNode>();
+    const size_t n = buffer->size();
+    ReferenceHolder<QoreListNode> out(new QoreListNode(dateTypeInfo), xsink);
+    const AbstractQoreZoneInfo* zone = currentTZ();
+    const bool is_relative = (column.schema.kind == QoreColumnarTypeKind::Duration);
+    for (size_t r = 0; r < n; ++r) {
+        if (r && !(r % 100) && qore_check_cancel(xsink, "materializing temporal column to list")) {
+            return nullptr;
+        }
+        ValueHolder raw(buffer->getReferencedEntry(r, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (raw->isNullOrNothing()) {
+            out->push(QoreValue(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            continue;
+        }
+        int64_t seconds = 0;
+        int microseconds = 0;
+        columnar_split_microseconds(raw->getAsBigInt(), seconds, microseconds);
+        DateTimeNode* dt = is_relative
+            ? DateTimeNode::makeRelative(0, 0, 0, 0, 0, seconds, microseconds)
+            : DateTimeNode::makeAbsolute(zone, seconds, microseconds);
+        out->push(QoreValue(dt), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return out.release();
+}
+
+QoreHashNode* QoreColumnarResult::toMaterializedColumnHash(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink,
+                "columnar result materialized column hash")) {
+            return nullptr;
+        }
+        const Column& column = columns[i];
+        // Temporal columns stored as buffer<int64> microseconds need
+        // reconstruction into list<date> — toColumnHash() returns the raw
+        // buffer to preserve the efficient form; this method exists for the
+        // callers that need native typing instead.  Any other column shape
+        // (including a temporal column whose data is already a list<date>
+        // from a non-buffer source) passes through with no copy.
+        bool materialize = columnar_schema_is_temporal(column.schema)
+                && column.data.getType() == NT_BUFFER
+                && column.data.get<const QoreBufferNode>()->getElementType()
+                        == QoreBufferElementType::Int64;
+        QoreValue value = materialize
+                ? QoreValue(columnar_buffer_int64_to_date_list(column, xsink))
+                : column.data.refSelf();
+        if (*xsink) {
+            value.discard(xsink);
+            return nullptr;
+        }
+        rv->setKeyValue(column.name.c_str(), value, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
 QoreListNode* QoreColumnarResult::toRows(ExceptionSink* xsink) const {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
     for (size_t r = 0; r < row_count; ++r) {

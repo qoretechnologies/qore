@@ -692,9 +692,20 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         }
         if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::HashOfLists) {
             if (AbstractDataProcessor::isColumnarResult(data)) {
-                return (AbstractDataProcessor::bufferColumnsToHashList(data.toColumnHash()),);
+                # toMaterializedColumnHash() reconstructs temporal columns as
+                # list<date> directly from the columnar schema (the only place
+                # the temporal type kind is preserved); bufferColumnsToHashList()
+                # below sees plain lists for those columns and is a no-op on
+                # them.  Non-temporal buffer columns still go through toList()
+                # in bufferColumnsToHashList() — there's no schema-driven
+                # reconstruction needed for them.
+                return (AbstractDataProcessor::bufferColumnsToHashList(
+                    data.toMaterializedColumnHash()),);
             }
             if (AbstractDataProcessor::isHashOfBuffers(data)) {
+                # Loose hash-of-buffers input: no schema available, so this
+                # path cannot reconstruct temporal columns.  Callers that need
+                # date-typed output must supply a ColumnarResult.
                 return (AbstractDataProcessor::bufferColumnsToHashList(data),);
             }
             return (data,);

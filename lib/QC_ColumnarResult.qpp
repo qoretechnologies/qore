@@ -203,16 +203,46 @@ auto ColumnarResult::getColumn(string name) [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns a hash of column containers
-/** @return hash keyed by column name
+/** Preserves the result's efficient storage: temporal columns (date, timestamp,
+    duration) keep their underlying \c buffer<int64> form (microsecond payload).
+    Use this when the consumer can operate on column buffers directly.
+
+    @return hash keyed by column name
 
     @par Example:
     @code{.py}
 hash<auto> columns = result.toColumnHash();
 buffer<int64> ids = columns.id;
     @endcode
+
+    @see toMaterializedColumnHash() for a hash where temporal columns are
+         reconstructed as \c list<date> for callers that need native typing.
 */
 hash<auto> ColumnarResult::toColumnHash() [flags=RET_VALUE_ONLY] {
     return result->toColumnHash(xsink);
+}
+
+//! Returns a hash of column containers with native Qore typing restored
+/** Like \c toColumnHash() but every temporal column is materialized into a
+    \c list<date>; non-temporal columns pass through with no copy.  Use this
+    only when the consumer requires native typing (e.g., assembling rows for a
+    downstream API that cannot accept \c buffer<int64> microsecond payloads);
+    prefer \c toColumnHash() in performance-sensitive code paths so the
+    columnar representation survives.
+
+    @return hash keyed by column name; temporal columns are \c list<date>,
+            other columns are returned with no copy
+
+    @par Example:
+    @code{.py}
+hash<auto> columns = result.toMaterializedColumnHash();
+date d0 = columns.date_field[0];  # already a date, not an int64 microsecond
+    @endcode
+
+    @since %Qore 2.4
+*/
+hash<auto> ColumnarResult::toMaterializedColumnHash() [flags=RET_VALUE_ONLY] {
+    return result->toMaterializedColumnHash(xsink);
 }
 
 //! Materializes the result as a list of row hashes
