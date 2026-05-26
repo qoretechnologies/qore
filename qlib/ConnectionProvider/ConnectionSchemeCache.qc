@@ -608,8 +608,18 @@ public class ConnectionSchemeCache {
         if (needs_lock) {
             lck.lock();
         }
-        if (loaded && (rv = cache{scheme})) {
-            return rv;
+        if (loaded) {
+            # A module loaded above may register the scheme for *deferred* initialization (a pending
+            # scheme) rather than registering it directly - for example TypeScriptActionInterface
+            # registers each "tsrest-<app>" application connection scheme as pending when its module
+            # is loaded. Run any pending init that appeared during the load so the scheme is
+            # resolved within this same call instead of being reported as an unknown scheme.
+            if (*code init = remove initmap{scheme}) {
+                init();
+            }
+            if (rv = cache{scheme}) {
+                return rv;
+            }
         }
         if (scheme_loader && (rv = cache{scheme} = scheme_loader(scheme))) {
             return rv;
