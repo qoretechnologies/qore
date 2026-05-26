@@ -1684,40 +1684,84 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     // ConstantList.h comments on "AOT module v3" lifetime).  Net refcount delta
     // across this routine is unchanged (one decref per tracker) — only the
     // ordering moves the decref past the next reload site.
+    // Only rotate the chain when the tracker actually holds a value: a flush
+    // with an empty tracker would otherwise pump the deferred slot's +1 ref
+    // off the chain even though no new value came in.  In the
+    // QoreRepl getVisibleSymbols → collectAllSymbolDetails scenario the po
+    // local holds a boxed QoreBigIntNode (parse options > INT48_MAX with
+    // PO_ALLOW_STATEMENT_NO_EFFECT bit 52); two consecutive temp boundaries
+    // between StoreLocal @po and the call would push %po through tracker →
+    // deferred → (decref) and free the QoreBigIntNode while args[4] still
+    // names the same payload pointer.  Guarding on tracker_val != NOTHING
+    // turns each unmatched flush into a no-op for the chain, preserving the
+    // value until either a real reload site rotates a new value through or
+    // the function-exit cleanup runs.
+    auto rotate_or_skip = [&](llvm::Value* tracker_alloca,
+            llvm::Value* deferred_alloca) {
+        llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
+        llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
+                "tracker_has_value");
+        llvm::Function* parent = builder->GetInsertBlock()->getParent();
+        llvm::BasicBlock* rotate_bb = llvm::BasicBlock::Create(
+                builder->getContext(), "reload_chain_rotate", parent);
+        llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(
+                builder->getContext(), "reload_chain_cont", parent);
+        builder->CreateCondBr(is_set, rotate_bb, cont_bb);
+        builder->SetInsertPoint(rotate_bb);
+        llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_alloca);
+        builder->CreateStore(i64_nothing, tracker_alloca);
+        builder->CreateStore(tracker_val, deferred_alloca);
+        builder->CreateCall(helper, {old_deferred, xsink_arg});
+        builder->CreateBr(cont_bb);
+        builder->SetInsertPoint(cont_bb);
+    };
+
     for (auto& [key, tracker_alloca] : local_reload_trackers) {
         auto deferred_it = local_reload_deferred.find(key);
         if (deferred_it == local_reload_deferred.end()) {
-            // No deferred slot — fall back to immediate decref; this is a
-            // best-effort safety net for paths that never go through
-            // reloadLocalFromRuntime() (which lazily creates the deferred
-            // alloca).  In practice paths that create a tracker also create
-            // its deferred counterpart, so this branch is rare.
-            clear_alloca(tracker_alloca);
+            // No deferred slot — gate the decref on tracker_val != NOTHING so
+            // an empty tracker is a no-op (matches the rotation-path
+            // behavior above).
+            llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
+            llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
+                    "tracker_has_value_noslot");
+            llvm::Function* parent = builder->GetInsertBlock()->getParent();
+            llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(
+                    builder->getContext(), "reload_chain_clear", parent);
+            llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(
+                    builder->getContext(), "reload_chain_clear_cont", parent);
+            builder->CreateCondBr(is_set, clear_bb, cont_bb);
+            builder->SetInsertPoint(clear_bb);
+            builder->CreateStore(i64_nothing, tracker_alloca);
+            builder->CreateCall(helper, {tracker_val, xsink_arg});
+            builder->CreateBr(cont_bb);
+            builder->SetInsertPoint(cont_bb);
             continue;
         }
-        // Read both, swap tracker -> deferred, decref the OLD deferred (which
-        // is from two cycles ago — every consumer of the prior tracker value
-        // has had a chance to retire by now).  Reset tracker to NOTHING so the
-        // next reload starts fresh.
-        llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
-        llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it->second);
-        builder->CreateStore(i64_nothing, tracker_alloca);
-        builder->CreateStore(tracker_val, deferred_it->second);
-        builder->CreateCall(helper, {old_deferred, xsink_arg});
+        rotate_or_skip(tracker_alloca, deferred_it->second);
     }
-    // Any deferred slot whose tracker was already gone (consumed above when
-    // the tracker entry preceded the deferred entry in iteration order, or
-    // belonging to a local that never had a tracker created) still needs to
-    // be drained — the deferred slot is the second-to-last live reference,
-    // not the very last, so decreffing it here matches the established
-    // one-cycle deferral semantics.
+    // Deferred-only slots: drain only when the slot actually has content, so
+    // an empty chain stays empty across flushes.
     for (auto& [key, deferred_alloca] : local_reload_deferred) {
         (void)key;
         if (local_reload_trackers.find(key) != local_reload_trackers.end()) {
             // Already rotated above; skip to avoid double-decref.
             continue;
         }
-        clear_alloca(deferred_alloca);
+        llvm::Value* deferred_val = builder->CreateLoad(i64_type, deferred_alloca);
+        llvm::Value* is_set = builder->CreateICmpNE(deferred_val, i64_nothing,
+                "deferred_has_value");
+        llvm::Function* parent = builder->GetInsertBlock()->getParent();
+        llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(
+                builder->getContext(), "reload_deferred_clear", parent);
+        llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(
+                builder->getContext(), "reload_deferred_clear_cont", parent);
+        builder->CreateCondBr(is_set, clear_bb, cont_bb);
+        builder->SetInsertPoint(clear_bb);
+        builder->CreateStore(i64_nothing, deferred_alloca);
+        builder->CreateCall(helper, {deferred_val, xsink_arg});
+        builder->CreateBr(cont_bb);
+        builder->SetInsertPoint(cont_bb);
     }
 
     if (local_reload_epoch) {
