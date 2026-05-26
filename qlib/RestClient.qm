@@ -484,6 +484,23 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
     #! Returns the target URL with any password masked for safe display/logging
     abstract string getSafeUrl();
 
+    #! Sets the connection path prepended to all request paths
+    /** @param path the connection path (e.g., \c "/api/v2")
+
+        @since RestClient 2.5
+    */
+    abstract setConnectionPath(*string path);
+
+    #! Returns the current connection path
+    /** @since RestClient 2.5
+    */
+    abstract *string getConnectionPath();
+
+    #! Clears the connection path
+    /** @since RestClient 2.5
+    */
+    abstract clearConnectionPath();
+
     #! Returns the current REST schema validator (may be a @ref NullRestSchemaValidator)
     abstract RestSchemaValidator::AbstractRestSchemaValidator getValidator();
 
@@ -4795,8 +4812,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             ping_body = getPingBody();
         }
 
-        # URL manipulation is RestClient-specific (setURL/clearConnectionPath
-        # don't exist on RestClientIo).  Use cast<> so it works with both.
+        # An absolute ping_path (starting with "/") must NOT inherit the
+        # connection's URL path component, otherwise an `api: v1` style
+        # connection turns ping_path `/get_server_info` into
+        # `/v1/get_server_info` and the ping reliably 404s against backends
+        # that expose health endpoints outside the API namespace
+        # (e.g. SGLang at `/get_server_info`).  Both RestClient (sync) and
+        # RestClientIo (async) expose `clearConnectionPath()`.  The absolute-URL
+        # branch (`setURL`) remains RestClient-only since RestClientIo does
+        # not currently expose `setURL`.
         if (client instanceof RestClient) {
             RestClient rc = cast<RestClient>(client);
             if (ping_path =~ /^http/) {
@@ -4805,6 +4829,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             } else if (ping_path[0] == "/") {
                 rc.clearConnectionPath();
             }
+        } else if (ping_path[0] == "/") {
+            client.clearConnectionPath();
         }
 
         # Use restDoRequest (AbstractRestClient API) — works with both
