@@ -1413,6 +1413,10 @@ class ModelRegistryTest inherits QUnit::Test {
             "plain ONNX packages should expose a generated postprocessing contract");
         assertEq("raw", manifest.execution.plan.postprocess.output_mode,
             "plain ONNX execution plans should expose raw postprocessing metadata");
+        assertEq("onnx-package", manifest.diagnostics.kind,
+            "plain ONNX packages should expose actionable diagnostics");
+        assertEq("onnx-package", manifest.execution.diagnostics.kind,
+            "execution metadata should expose actionable diagnostics");
         assertEq("executable", manifest.artifact_kind, "ONNX package should be executable");
         assertTrue(manifest.execution.input_schema.tensors.size() > 0,
             "ONNX input tensor metadata should be stored in execution input_schema");
@@ -1536,6 +1540,8 @@ class ModelRegistryTest inherits QUnit::Test {
             "registration-time ONNX validation should be visible in the manifest");
         assertEq("CPUExecutionProvider", manifest.providers.active_provider,
             "provider diagnostics should expose the active provider");
+        assertEq("onnx-package", manifest.diagnostics.kind,
+            "registration-time ONNX diagnostics should be visible in the manifest");
         assertEq(0.0, manifest.benchmarks.baseline.average_ms,
             "benchmark metadata should be preserved");
         assertEq(1, manifest.golden_vectors.size(),
@@ -1578,6 +1584,8 @@ class ModelRegistryTest inherits QUnit::Test {
             "DataProvider navigation should expose provider diagnostics");
         assertTrue(record.validation_valid,
             "DataProvider navigation should expose validation status");
+        assertEq("onnx-package", record.diagnostics.kind,
+            "DataProvider navigation should expose actionable diagnostics");
         assertEq("X", record.inputs[0].name,
             "DataProvider API metadata should expose input contract fields");
 
@@ -1610,6 +1618,8 @@ class ModelRegistryTest inherits QUnit::Test {
             "qore-onnx package manifest postprocessing contract should be ingested");
         assertEq("onnx-postprocess", packaged_manifest.execution.plan.postprocess.kind,
             "qore-onnx package execution plan should preserve postprocessing contract metadata");
+        assertEq("onnx-package", packaged_manifest.diagnostics.kind,
+            "qore-onnx package manifest diagnostics should be ingested");
         assertEq("Y", packaged_manifest.execution.plan.postprocess.value_output,
             "qore-onnx package execution plan should preserve model output binding metadata");
         assertEq(1, packaged_manifest.benchmarks.cpu.runs,

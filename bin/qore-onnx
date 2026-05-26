@@ -166,7 +166,7 @@ class QoreOnnxCli {
         string input_path = opts.input ?? (ARGV ? shift ARGV : NOTHING);
         requireInput("inspect", input_path);
         writeResult(QoreOnnxTools::OnnxModelTools::inspect(input_path,
-            buildSessionConfig(opts)), opts);
+            buildSessionConfig(opts)), opts, "inspect");
     }
 
     private static nothing validate(hash<auto> opts) {
@@ -174,7 +174,7 @@ class QoreOnnxCli {
         requireInput("validate", input_path);
         hash<QoreOnnxTools::OnnxValidationResult> result =
             QoreOnnxTools::OnnxModelTools::validate(input_path, buildSessionConfig(opts));
-        writeResult(result, opts);
+        writeResult(result, opts, "validate");
         exit(result.valid ? 0 : 1);
     }
 
@@ -225,7 +225,7 @@ class QoreOnnxCli {
             usage(2);
         }
         writeResult(QoreOnnxTools::OnnxPackageTools::createPackage(input_path, output_dir,
-            buildPackageOptions(opts)), opts);
+            buildPackageOptions(opts)), opts, "package");
     }
 
     private static nothing requireInput(string command, *string input_path) {
@@ -372,7 +372,7 @@ class QoreOnnxCli {
 %endif
     }
 
-    private static nothing writeResult(auto result, hash<auto> opts) {
+    private static nothing writeResult(auto result, hash<auto> opts, *string command = NOTHING) {
         if (opts.json) {
 %ifdef NoJson
             throw "QORE-ONNX-ERROR", "the json module is required for --json output";
@@ -381,7 +381,80 @@ class QoreOnnxCli {
 %endif
             return;
         }
+        if (command.val()) {
+            switch (command) {
+                case "inspect":
+                    writeInspectResult(cast<hash<auto>>(result));
+                    return;
+                case "validate":
+                    writeValidationResult(cast<hash<auto>>(result));
+                    return;
+                case "package":
+                    writePackageResult(cast<hash<auto>>(result));
+                    return;
+            }
+        }
         printf("%y\n", result);
+    }
+
+    private static nothing writeInspectResult(hash<auto> result) {
+        printf("ONNX model: %s\n", result.path);
+        printf("  size: %d bytes\n", result.size);
+        printf("  producer: %s\n", result.info.producer_name.val()
+            ? result.info.producer_name : "(unknown)");
+        printf("  active provider: %s\n", result.provider_report.active_provider.val()
+            ? result.provider_report.active_provider : result.info.active_provider);
+        printf("  inputs: %s\n", join(", ", map string($1.name), result.inputs));
+        printf("  outputs: %s\n", join(", ", map string($1.name), result.outputs));
+        writeDiagnostics(result.diagnostics);
+    }
+
+    private static nothing writeValidationResult(hash<auto> result) {
+        printf("ONNX validation: %s\n", result.path);
+        printf("  valid: %y\n", result.valid ? True : False);
+        if (result.issues) {
+            printf("  issues:\n");
+            foreach hash<auto> issue in (result.issues) {
+                printf("    [%s] %s: %s\n", issue.level, issue.code, issue.message);
+                if (issue.hint.val()) {
+                    printf("      hint: %s\n", issue.hint);
+                }
+            }
+        }
+        writeDiagnostics(result.diagnostics);
+    }
+
+    private static nothing writePackageResult(hash<auto> result) {
+        printf("ONNX package: %s\n", result.output_dir);
+        printf("  runtime: %s\n", result.runtime);
+        printf("  task: %s\n", result.task.val() ? result.task : "(none)");
+        printf("  entry artifact: %s\n", result.entry_artifact);
+        printf("  executable: %y\n", result.executable ? True : False);
+        if (result.manifest_path.val()) {
+            printf("  manifest: %s\n", result.manifest_path);
+        }
+        if (result.providers && result.providers.active_provider.val()) {
+            printf("  active provider: %s\n", result.providers.active_provider);
+        }
+        writeDiagnostics(result.diagnostics);
+    }
+
+    private static nothing writeDiagnostics(*hash<auto> diagnostics) {
+        if (!diagnostics) {
+            return;
+        }
+        if (diagnostics.recommended_actions) {
+            printf("  recommended actions:\n");
+            foreach string action in (diagnostics.recommended_actions) {
+                printf("    - %s\n", action);
+            }
+        }
+        if (diagnostics.examples) {
+            printf("  examples:\n");
+            foreach string example in (diagnostics.examples) {
+                printf("    %s\n", example);
+            }
+        }
     }
 
     private static nothing usage(int rc) {

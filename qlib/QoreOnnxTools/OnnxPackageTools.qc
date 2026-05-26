@@ -120,6 +120,8 @@ public hashdecl OnnxPackageResult {
     *hash<auto> execution;
     #! ONNX Runtime provider deployment diagnostics and policy metadata
     *hash<auto> providers;
+    #! Compact actionable package diagnostics summary
+    *hash<auto> diagnostics;
     #! Optimized ONNX/ORT deployment artifacts
     list<hash<auto>> optimized_artifacts = ();
     #! Quantized ONNX deployment artifacts
@@ -157,6 +159,16 @@ public class OnnxPackageTools {
 
         @throw QORE-ONNX-TOOLS-ERROR if the source, target, or manifest options
         are invalid
+
+        @par Example
+
+        @code
+hash<QoreOnnxTools::OnnxPackageResult> package =
+    QoreOnnxTools::OnnxPackageTools::createPackage(
+        "/models/churn.onnx", "/srv/models/churn",
+        <QoreOnnxTools::OnnxPackageOptions>{"task": "regression"});
+log(LL_INFO, "package diagnostics: %y", package.diagnostics);
+        @endcode
     */
     static hash<OnnxPackageResult> createPackage(string source_path, string output_dir,
             *hash<OnnxPackageOptions> options) {
@@ -237,6 +249,7 @@ public class OnnxPackageTools {
             result.validation = OnnxModelTools::validate(output_dir + DirSep + primary.name,
                 opts.session_config);
         }
+        result.diagnostics = OnnxDiagnostics::summarizePackage(result);
 
         if (opts.write_manifest) {
             string manifest_path = output_dir + DirSep + opts.manifest_name;
@@ -433,6 +446,7 @@ public class OnnxPackageTools {
         if (result.preprocess) manifest.preprocess = result.preprocess;
         if (result.postprocess) manifest.postprocess = result.postprocess;
         if (result.providers) manifest.providers = result.providers;
+        if (result.diagnostics) manifest.diagnostics = result.diagnostics;
         if (result.benchmarks) manifest.benchmarks = result.benchmarks;
         if (result.golden_vectors) manifest.golden_vectors = result.golden_vectors;
         list<hash<auto!>> artifacts();

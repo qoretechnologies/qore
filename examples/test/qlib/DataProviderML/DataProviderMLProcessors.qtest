@@ -3010,6 +3010,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertFloat(3.0, results[0].prediction.value, 1e-5);
         assertEq("Y", results[0].prediction.output_name);
         assertTrue(results[0].prediction.raw_outputs.hasKey("Y"));
+        hash<auto> diagnostics = proc.getDiagnostics();
+        assertEq("onnx-package", diagnostics.diagnostics.kind,
+            "registry-model diagnostics should expose package diagnostics");
     }
 
     registryModelOnnxSequenceClassificationPlanOutput() {

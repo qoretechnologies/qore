@@ -143,6 +143,9 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("qore-ml-test", inspection.info.producer_name);
         assertEq("X", inspection.inputs[0].name);
         assertEq("Y", inspection.outputs[0].name);
+        assertEq("onnx-inspection", inspection.diagnostics.kind);
+        assertTrue(inspection.diagnostics.input_names.contains("X"));
+        assertTrue(inspection.diagnostics.output_names.contains("Y"));
 
         hash<QoreOnnxTools::OnnxValidationResult> validation =
             QoreOnnxTools::OnnxModelTools::validate(getTestModelPath());
@@ -150,6 +153,10 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq(0, validation.issues.size());
         assertTrue(exists validation.inspection);
         assertEq("CPUExecutionProvider", validation.provider_report.active_provider);
+        assertEq("onnx-validation", validation.diagnostics.kind);
+        assertTrue(validation.diagnostics.valid);
+        assertEq(0, validation.diagnostics.issue_counts.error);
+        assertTrue(validation.diagnostics.examples.size() > 0);
     }
 
     modelBenchmarkTest() {
@@ -271,11 +278,16 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq(1, (select result.artifacts, $1.role == "tokenizer").size());
         assertTrue(result.validation.valid);
         assertTrue(result.artifacts[0].sha256.val());
+        assertEq("onnx-package", result.diagnostics.kind);
+        assertEq("regression", result.diagnostics.task);
+        assertTrue(result.diagnostics.examples.size() > 0);
 %ifndef NoJson
         hash<auto> manifest = parse_json(ReadOnlyFile::readTextFile(result.manifest_path));
         assertEq("regression", manifest.task);
         assertEq(17, manifest.opset);
         assertEq("model.onnx", manifest.execution.entry_artifact);
+        assertEq("onnx-package", manifest.diagnostics.kind);
+        assertEq("regression", manifest.diagnostics.task);
         assertEq("onnx-preprocess", manifest.preprocess.kind);
         assertEq("regression", manifest.preprocess.task);
         assertEq("feature-matrix", manifest.preprocess.input_mode);
@@ -302,6 +314,8 @@ class QoreOnnxToolsTest inherits QUnit::Test {
             "plain ONNX packages should default to raw postprocessing");
         assertEq("raw", default_result.execution.plan.postprocess.output_mode,
             "execution plans should include generated postprocessing contracts");
+        assertEq("onnx-package", default_result.diagnostics.kind,
+            "default package creation should expose package diagnostics");
     }
 
     qoreOnnxCliSmokeTest() {
@@ -318,9 +332,11 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         hash<auto> inspection = runCliJson(("inspect", "--json", model_path));
         assertEq("qore-ml-test", inspection.info.producer_name);
         assertEq("X", inspection.inputs[0].name);
+        assertEq("onnx-inspection", inspection.diagnostics.kind);
 
         hash<auto> validation = runCliJson(("validate", "--json", model_path));
         assertTrue(validation.valid);
+        assertEq("onnx-validation", validation.diagnostics.kind);
 
         hash<auto> benchmark = runCliJson(("benchmark", "--json", "--runs", "1",
             "--warmup-runs", "1", model_path));
@@ -346,7 +362,15 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("onnx-preprocess", package.preprocess.kind);
         assertEq("scalar", package.postprocess.output_mode);
         assertEq("Y", package.execution.plan.postprocess.value_output);
+        assertEq("onnx-package", package.diagnostics.kind);
+        assertTrue(package.diagnostics.examples.size() > 0);
         assertTrue(is_file(package.manifest_path));
+
+        string package_text = runCliText(("package", "--task", "regression",
+            "--no-validate", model_path, dir.path + DirSep + "pkg-text"));
+        assertTrue(package_text =~ /ONNX package:/);
+        assertTrue(package_text =~ /recommended actions:/);
+        assertTrue(package_text =~ /examples:/);
 
         string calibration_path = dir.path + DirSep + "calibration.json";
         writeTextFile(calibration_path, "[{\"X\":[[1.0],[2.0]]}]\n");
@@ -402,6 +426,16 @@ class QoreOnnxToolsTest inherits QUnit::Test {
 %else
         return parse_json(trim(out));
 %endif
+    }
+
+    private string runCliText(list<string> args) {
+        int rc;
+        string out = backquote(makeCliCommand(args), \rc);
+        assertEq(0, rc, sprintf("qore-onnx text command should succeed: %y\n%s",
+            args, out));
+        assertTrue(trim(out).val(),
+            sprintf("qore-onnx text command returned no output: %y", args));
+        return out;
     }
 
     private static string makeCliCommand(list<string> args) {

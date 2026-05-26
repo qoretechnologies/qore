@@ -189,6 +189,12 @@ public class ModelArtifactInspector {
         *hash<auto> validation = options.validation
             ?? (package_manifest ? package_manifest.validation : NOTHING)
             ?? (primary.metadata ? primary.metadata.validation : NOTHING);
+        *hash<auto> diagnostics;
+        if (exists options.diagnostics) {
+            diagnostics = cast<hash<auto>>(options.diagnostics);
+        } else if (package_manifest && package_manifest.diagnostics) {
+            diagnostics = cast<hash<auto>>(package_manifest.diagnostics);
+        }
         *hash<auto> benchmarks;
         if (exists options.benchmarks) {
             benchmarks = cast<hash<auto>>(options.benchmarks);
@@ -205,6 +211,25 @@ public class ModelArtifactInspector {
             ?? (package_manifest ? package_manifest.dynamic_axes : NOTHING)
             ?? buildDynamicAxes(inputs, outputs);
         *list<string> external_data = buildExternalDataList(artifacts, primary);
+        if (!diagnostics && runtime == "onnxruntime") {
+            diagnostics = QoreOnnxTools::OnnxDiagnostics::summarizePackage({
+                "source_path": path,
+                "output_dir": path,
+                "runtime": runtime,
+                "task": task,
+                "entry_artifact": primary.name,
+                "executable": True,
+                "safety": safety,
+                "inputs": inputs,
+                "outputs": outputs,
+                "preprocess": preprocess,
+                "postprocess": postprocess,
+                "providers": provider_info,
+                "validation": validation,
+                "benchmarks": benchmarks,
+                "golden_vectors": golden_vectors,
+            });
+        }
 
         return cast<hash<ModelVersionInfo>>({
             "version_id": options.version_id,
@@ -235,6 +260,7 @@ public class ModelArtifactInspector {
             "postprocess": postprocess,
             "providers": provider_info,
             "validation": validation,
+            "diagnostics": diagnostics,
             "benchmarks": benchmarks,
             "golden_vectors": golden_vectors,
             "executable": runtime == "qore-ml" || runtime == "onnxruntime",
@@ -253,6 +279,7 @@ public class ModelArtifactInspector {
                 "input_schema": input_schema,
                 "output_schema": output_schema,
                 "config": execution_config,
+                "diagnostics": diagnostics,
             },
             "config": options.config,
         });
@@ -461,6 +488,7 @@ public class ModelArtifactInspector {
             result.execution = json.execution;
             result.providers = json.providers;
             result.validation = json.validation;
+            result.diagnostics = json.diagnostics;
             result.benchmarks = json.benchmarks;
             result.golden_vectors = json.golden_vectors;
         } else if (name == "tokenizer_config.json") {

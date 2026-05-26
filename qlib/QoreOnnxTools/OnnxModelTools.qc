@@ -34,6 +34,10 @@ public hashdecl OnnxValidationIssue {
     string message;
     #! Related input/output/provider name, if applicable
     *string field;
+    #! Suggested remediation for the issue, if applicable
+    *string hint;
+    #! Example command or code snippet showing a related action, if applicable
+    *string example;
 }
 
 #! ONNX model validation result
@@ -46,6 +50,8 @@ public hashdecl OnnxValidationResult {
     *hash<auto> inspection;
     #! Effective provider report, if the model could be loaded
     *hash<auto> provider_report;
+    #! Compact actionable diagnostics summary
+    *hash<auto> diagnostics;
     #! Validation issues
     list<hash<OnnxValidationIssue>> issues;
 }
@@ -206,13 +212,23 @@ public class OnnxModelTools {
         provider diagnostics, and effective provider report
         @throw QORE-ONNX-TOOLS-ERROR if \a path is missing or not a regular file
         @throw ML-ONNX-ERROR if ONNX Runtime cannot load the model
+
+        @par Example
+
+        @code
+hash<auto> info = QoreOnnxTools::OnnxModelTools::inspect(
+    "/models/churn.onnx");
+log(LL_INFO, "active provider: %s", info.provider_report.active_provider);
+log(LL_INFO, "recommended actions: %y",
+    info.diagnostics.recommended_actions);
+        @endcode
     */
     static hash<auto> inspect(string path, *hash<ML::OnnxSessionConfig> session_config) {
         validateModelPath(path);
         hash<ML::OnnxSessionConfig> cfg = normalizeSessionConfig(session_config);
         ML::OnnxModel model(path, cfg);
         hash<ML::OnnxModelInfo> info = model.getModelInfo();
-        return {
+        hash<auto> rv = {
             "path": path,
             "size": hstat(path).size,
             "info": info,
@@ -223,6 +239,8 @@ public class OnnxModelTools {
             "provider_diagnostics": model.getProviderDiagnostics(),
             "provider_report": model.getEffectiveProviderReport(),
         };
+        rv.diagnostics = OnnxDiagnostics::summarizeInspection(rv);
+        return rv;
     }
 
     /** Validates model loadability, provider policy, and tensor metadata.
@@ -230,6 +248,16 @@ public class OnnxModelTools {
         @param path model artifact path
         @param session_config optional ONNX Runtime session configuration
         @return validation result with structured warnings/errors
+
+        @par Example
+
+        @code
+hash<QoreOnnxTools::OnnxValidationResult> result =
+    QoreOnnxTools::OnnxModelTools::validate("/models/churn.onnx");
+if (!result.valid) {
+    throw "DEPLOYMENT-ERROR", result.diagnostics.recommended_actions;
+}
+        @endcode
     */
     static hash<OnnxValidationResult> validate(string path,
             *hash<ML::OnnxSessionConfig> session_config) {
@@ -241,14 +269,20 @@ public class OnnxModelTools {
         };
 
         if (!path.val()) {
-            addIssue(\issues, "error", "empty-path", "model path must not be empty");
+            addIssue(\issues, "error", "empty-path", "model path must not be empty",
+                NOTHING, "Pass a path to an ONNX or ORT artifact.",
+                "qore-onnx validate model.onnx");
             rv.issues = issues;
+            rv.diagnostics = OnnxDiagnostics::summarizeValidation(rv);
             return rv;
         }
         if (!is_file(path)) {
             addIssue(\issues, "error", "not-found",
-                sprintf("model path %y does not exist or is not a regular file", path));
+                sprintf("model path %y does not exist or is not a regular file", path),
+                NOTHING, "Check the model path and package directory before deployment.",
+                "qore-onnx inspect model.onnx");
             rv.issues = issues;
+            rv.diagnostics = OnnxDiagnostics::summarizeValidation(rv);
             return rv;
         }
 
@@ -261,11 +295,14 @@ public class OnnxModelTools {
             validateProviders(\issues, inspection.provider_diagnostics);
         } catch (hash<ExceptionInfo> ex) {
             addIssue(\issues, "error", "load-failed",
-                sprintf("%s: %s", ex.err, ex.desc));
+                sprintf("%s: %s", ex.err, ex.desc), NOTHING,
+                "Verify ONNX Runtime compatibility, external-data files, and provider libraries.",
+                "qore-onnx inspect --session-config session.json " + path);
         }
 
         rv.issues = issues;
         rv.valid = !hasErrors(issues);
+        rv.diagnostics = OnnxDiagnostics::summarizeValidation(rv);
         return rv;
     }
 
@@ -649,23 +686,27 @@ public class OnnxModelTools {
             string kind, list<hash<ML::OnnxTensorInfo>> tensors) {
         if (!tensors) {
             addIssue(\issues, "error", kind + "-missing",
-                sprintf("model has no %s tensors", kind));
+                sprintf("model has no %s tensors", kind), NOTHING,
+                sprintf("Re-export the model with named %s tensors.", kind));
             return;
         }
         foreach hash<ML::OnnxTensorInfo> tensor in (tensors) {
             if (!tensor.name.val()) {
                 addIssue(\issues, "warning", kind + "-unnamed",
-                    sprintf("model has an unnamed %s tensor", kind));
+                    sprintf("model has an unnamed %s tensor", kind), NOTHING,
+                    sprintf("Name all %s tensors during model export.", kind));
             }
             if (!tensor.type.val()) {
                 addIssue(\issues, "warning", kind + "-unknown-type",
                     sprintf("%s tensor %y has no element type", kind, tensor.name),
-                    tensor.name);
+                    tensor.name,
+                    "Provide explicit tensor element types during export.");
             }
             if (!tensor.shape) {
                 addIssue(\issues, "info", kind + "-scalar-or-unknown-shape",
                     sprintf("%s tensor %y is scalar or has unknown shape", kind,
-                        tensor.name), tensor.name);
+                        tensor.name), tensor.name,
+                    "Provide representative benchmark inputs when tensor shapes are dynamic or unknown.");
             }
         }
     }
@@ -676,25 +717,30 @@ public class OnnxModelTools {
             if (diag.required && !diag.appended) {
                 addIssue(\issues, "error", "required-provider-unavailable",
                     sprintf("required provider %s was not configured", diag.name),
-                    diag.name);
+                    diag.name,
+                    sprintf("Install or configure ONNX Runtime provider %s, or remove it from required_providers.", diag.name));
             } else if (diag.requested && !diag.appended) {
                 addIssue(\issues, "warning", "requested-provider-unavailable",
                     sprintf("requested provider %s was not configured", diag.name),
-                    diag.name);
+                    diag.name,
+                    sprintf("Install provider libraries for %s or use an explicit CPU provider configuration.", diag.name));
             }
             if (diag.cpu_fallback) {
                 addIssue(\issues, "warning", "cpu-fallback",
-                    sprintf("provider %s caused CPU fallback", diag.name), diag.name);
+                    sprintf("provider %s caused CPU fallback", diag.name), diag.name,
+                    "Verify device libraries and provider options, or force CPU explicitly for reproducible deployment.");
             }
             if (diag.error.val()) {
                 addIssue(\issues, diag.required ? "error" : "warning", "provider-error",
-                    diag.error, diag.name);
+                    diag.error, diag.name,
+                    sprintf("Review ONNX Runtime provider %s configuration and library paths.", diag.name));
             }
         }
     }
 
     private static nothing addIssue(reference<list<hash<OnnxValidationIssue>>> issues,
-            string level, string code, string message, *string field = NOTHING) {
+            string level, string code, string message, *string field = NOTHING,
+            *string hint = NOTHING, *string example = NOTHING) {
         hash<OnnxValidationIssue> issue = <OnnxValidationIssue>{
             "level": level,
             "code": code,
@@ -702,6 +748,12 @@ public class OnnxModelTools {
         };
         if (field.val()) {
             issue.field = field;
+        }
+        if (hint.val()) {
+            issue.hint = hint;
+        }
+        if (example.val()) {
+            issue.example = example;
         }
         push issues, issue;
     }

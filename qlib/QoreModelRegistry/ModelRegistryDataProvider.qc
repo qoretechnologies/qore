@@ -92,6 +92,9 @@ class ModelRegistryDataProviderHelper {
             rec.validation_valid = version.validation.valid;
             rec.validation_issues = version.validation.issues;
         }
+        if (version.diagnostics) {
+            rec.diagnostics = version.diagnostics;
+        }
         if (version.execution) {
             rec.entry_artifact = version.execution.entry_artifact;
             rec.local_executable = version.execution.local_executable;
@@ -196,6 +199,8 @@ class ModelRegistryDataProviderHelper {
                 "ONNX validation diagnostics", AbstractDataProviderTypeMap."*hash"),
             "validation_issues": new QoreDataField("validation_issues",
                 "ONNX validation issues", AbstractDataProviderTypeMap."list"),
+            "diagnostics": new QoreDataField("diagnostics",
+                "Actionable ONNX/package diagnostics", AbstractDataProviderTypeMap."*hash"),
             "benchmarks": new QoreDataField("benchmarks", "Benchmark metadata",
                 AbstractDataProviderTypeMap."*hash"),
             "golden_vectors": new QoreDataField("golden_vectors",

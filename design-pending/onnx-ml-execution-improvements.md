@@ -21,11 +21,11 @@ tracked separately in
 
 - [x] Phase 1: add GPU-compatible `ML::Tensor` shape/view and storage helper
   APIs.
-- [ ] Phase 2: add standard ONNX pre/postprocessing specs and execution
+- [x] Phase 2: add standard ONNX pre/postprocessing specs and execution
   integration for common embedding, reranking, classifier, and tabular flows.
-- [ ] Phase 3: improve `qore-onnx` inspect, validate, and package UX with
+- [x] Phase 3: improve `qore-onnx` inspect, validate, and package UX with
   actionable diagnostics and examples.
-- [ ] Phase 4: unify ONNX diagnostics across `ML::OnnxModel`,
+- [x] Phase 4: unify ONNX diagnostics across `ML::OnnxModel`,
   DataProviderML, QoreModelRegistry, and CLI tools.
 - [ ] Phase 5: expand registry execution plans so packaged ONNX models can
   describe runtime, tokenizer, tensor, pre/postprocessing, and output-shape
@@ -60,3 +60,18 @@ Use valgrind for native tensor/ONNX changes:
 valgrind --quiet --leak-check=full --errors-for-leak-kinds=definite,indirect,possible \
     --error-exitcode=99 build/qore modules/ml/test/ml.qtest
 ```
+
+## Progress Notes
+
+- 2026-05-26: Phase 2 was implemented with generated ONNX preprocessing and
+  postprocessing contracts in package manifests and registry execution plans.
+- 2026-05-26: Phases 3 and 4 were implemented with shared ONNX diagnostics,
+  human-readable `qore-onnx inspect` / `validate` / `package` output, and
+  diagnostics propagation through QoreModelRegistry and DataProviderML.
+- 2026-05-26: Focused checks for Phases 3 and 4 passed:
+  `cmake --build build --target QoreOnnxTools-qmod QoreModelRegistry-qmod
+  DataProviderML-qmod -j16`,
+  `build/qore examples/test/qlib/QoreOnnxTools/QoreOnnxTools.qtest`,
+  `QORE_DB_CONNSTR_PGSQL=pgsql:omquser/omquser@omquser%supah build/qore
+  examples/test/qlib/QoreModelRegistry/QoreModelRegistry.qtest`, and
+  `build/qore examples/test/qlib/DataProviderML/DataProviderMLProcessors.qtest`.

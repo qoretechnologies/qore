@@ -347,6 +347,7 @@ public class ModelExecutableAdapter {
             rv{"artifact_kind"} = manifest.artifact_kind;
             rv{"framework"} = manifest.framework;
             rv{"execution"} = manifest.execution;
+            rv{"diagnostics"} = manifest.diagnostics;
         }
 
         if (isOnnx()) {
@@ -356,6 +357,17 @@ public class ModelExecutableAdapter {
             rv{"inputs"} = info.inputs;
             rv{"outputs"} = info.outputs;
             rv{"io_binding"} = getTensorBindingDiagnostics();
+            if (!rv.diagnostics) {
+                rv{"diagnostics"} = QoreOnnxTools::OnnxDiagnostics::summarizeInspection({
+                    "path": manifest && manifest.execution
+                        ? manifest.execution.entry_artifact : NOTHING,
+                    "info": info,
+                    "inputs": info.inputs,
+                    "outputs": info.outputs,
+                    "providers": ML::ml_get_onnx_providers(),
+                    "requested_providers": (),
+                });
+            }
         }
 
         return rv;

@@ -481,6 +481,11 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             "manifest": model.getManifest(),
             "inference_stats": model.getInferenceStats(),
         };
+        if (provider_diagnostics && provider_diagnostics.diagnostics) {
+            rv.diagnostics = provider_diagnostics.diagnostics;
+        } else if (model.getManifest() && model.getManifest().diagnostics) {
+            rv.diagnostics = model.getManifest().diagnostics;
+        }
         if (finish_profile) {
             *string profile_path = model.endProfiling();
             if (profile_path.val()) {

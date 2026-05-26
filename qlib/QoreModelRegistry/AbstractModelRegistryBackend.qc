@@ -118,6 +118,8 @@ public hashdecl ModelExecutionInfo {
     *hash<auto> output_schema;
     #! Optional runtime configuration
     *hash<auto> config;
+    #! Compact actionable execution diagnostics summary
+    *hash<auto> diagnostics;
 }
 
 #! Hash describing a model version's metadata
@@ -212,6 +214,10 @@ public hashdecl ModelVersionInfo {
     /** @since QoreModelRegistry 2.5
     */
     *hash<auto> validation;
+    #! Compact actionable ONNX/package diagnostics summary
+    /** @since QoreModelRegistry 2.5
+    */
+    *hash<auto> diagnostics;
     #! Benchmark metadata supplied by deployment tooling or registry callers
     /** @since QoreModelRegistry 2.5
     */
