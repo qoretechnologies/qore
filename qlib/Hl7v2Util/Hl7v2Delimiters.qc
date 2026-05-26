@@ -82,8 +82,7 @@ public namespace Hl7v2Util {
         #! Parses delimiter values from an MSH segment
         parseMshSegment(string msh_segment) {
             if (msh_segment.size() < 8 || msh_segment.substr(0, 3) != "MSH") {
-                throw "HL7V2-DELIMITER-ERROR", sprintf("invalid MSH segment for delimiter parsing: %y",
-                    msh_segment);
+                throw "HL7V2-DELIMITER-ERROR", "invalid MSH segment for delimiter parsing";
             }
             set(msh_segment[3], msh_segment.substr(4, 4));
         }
@@ -171,7 +170,8 @@ public namespace Hl7v2Util {
 
                 int end = str.find(escape_character, i + 1);
                 if (end < 0) {
-                    throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in %y", str);
+                    throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in field value "
+                        "of length %d", str.size());
                 }
 
                 string code = str.substr(i + 1, end - i - 1);

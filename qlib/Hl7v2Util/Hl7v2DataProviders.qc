@@ -27,6 +27,8 @@ public namespace Hl7v2Util {
     #! HL7 v2 read data provider
     public class Hl7v2ReadDataProvider inherits DataProvider::AbstractDataProvider {
         public {
+            const ResponseType = Hl7v2SegmentDataType;
+
             const ConstructorOptions = {
                 "path": <DataProviderOptionInfo>{
                     "display_name": "File Path",
@@ -79,7 +81,7 @@ public namespace Hl7v2Util {
         }
 
         private *hash<string, DataProvider::AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-            return Hl7v2SegmentRecordIterator::getSegmentRecordType();
+            return ResponseType.getFields();
         }
 
         private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
@@ -96,6 +98,9 @@ public namespace Hl7v2Util {
     #! HL7 v2 write data provider
     public class Hl7v2WriteDataProvider inherits DataProvider::AbstractDataProvider {
         public {
+            const RequestType = Hl7v2WriteRecordDataType;
+            const ResponseType = Hl7v2WriteResultDataType;
+
             const ConstructorOptions = {
                 "path": <DataProviderOptionInfo>{
                     "display_name": "File Path",
@@ -111,6 +116,7 @@ public namespace Hl7v2Util {
                 "desc": "HL7 v2 write data provider",
                 "type": "Hl7v2WriteDataProvider",
                 "supports_create": True,
+                "has_record": True,
                 "constructor_options": ConstructorOptions,
             };
         }
@@ -136,25 +142,39 @@ public namespace Hl7v2Util {
             return ProviderInfo;
         }
 
+        private *hash<string, DataProvider::AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
+            return RequestType.getFields();
+        }
+
         private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
             Hl7v2Base base();
             string text;
+            int segments;
             if (exists rec.message) {
-                text = base.formatMessage(rec.message);
+                hash<Hl7v2MessageInfo> message = rec.message;
+                text = base.formatMessage(message);
+                segments = message.segments.size();
             } else if (exists rec.segments) {
+                list<hash<Hl7v2Segment>> segment_list = rec.segments;
                 text = base.formatMessage(<Hl7v2MessageInfo>{
                     "delimiters": base.getDelimiters().getInfo(),
-                    "segments": rec.segments,
+                    "segments": segment_list,
                 });
+                segments = segment_list.size();
             } else if (exists rec.tag && exists rec.fields) {
                 text = base.formatSegment(rec) + "\r";
+                segments = 1;
             } else {
                 throw "HL7V2-WRITE-ERROR", "record must contain `message`, `segments`, or `tag` and `fields`";
             }
             File f();
             f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(text);
-            return rec;
+            return {
+                "path": path,
+                "characters": text.size(),
+                "segments": segments,
+            };
         }
     }
 
@@ -186,16 +206,7 @@ public namespace Hl7v2Util {
         }
 
         *hash<string, DataProvider::AbstractDataField> getRecordType() {
-            return Hl7v2SegmentRecordIterator::getSegmentRecordType();
-        }
-
-        static hash<string, DataProvider::AbstractDataField> getSegmentRecordType() {
-            return {
-                "tag": new DataProvider::QoreDataField("tag", "Segment tag", StringType),
-                "index": new DataProvider::QoreDataField("index", "Segment index", IntType),
-                "fields": new DataProvider::QoreDataField("fields", "Parsed segment fields", AutoListType),
-                "raw": new DataProvider::QoreDataField("raw", "Raw segment text", StringType),
-            };
+            return Hl7v2SegmentDataType.getFields();
         }
 
         private bool nextImpl() {

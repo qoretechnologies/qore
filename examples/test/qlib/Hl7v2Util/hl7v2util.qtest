@@ -164,14 +164,26 @@ class Hl7v2UtilTest inherits QUnit::Test {
         TmpDir tmp();
         string path = tmp.path + "/out.hl7";
         Hl7v2WriteDataProvider writer({"path": path});
+        hash<string, AbstractDataField> create_type = writer.getCreateRecordType();
+        assertTrue(exists create_type.message);
+        assertTrue(exists create_type.segments);
+        assertTrue(exists create_type.tag);
+        assertTrue(exists create_type.fields);
+
         Hl7v2Message msg(Message);
-        writer.createRecord({"message": msg.getMessage()});
+        hash<auto> write_result = writer.createRecord({"message": msg.getMessage()});
+        assertEq(path, write_result.path);
+        assertEq(Message.size(), write_result.characters);
+        assertEq(5, write_result.segments);
         assertEq(Message, ReadOnlyFile::readTextFile(path));
 
         string custom_path = tmp.path + "/custom.hl7";
         Hl7v2WriteDataProvider custom_writer({"path": custom_path});
         Hl7v2Message custom_msg(CustomDelimiterMessage);
-        custom_writer.createRecord({"message": custom_msg.getMessage()});
+        hash<auto> custom_write_result = custom_writer.createRecord({"message": custom_msg.getMessage()});
+        assertEq(custom_path, custom_write_result.path);
+        assertEq(CustomDelimiterMessage.size(), custom_write_result.characters);
+        assertEq(2, custom_write_result.segments);
         assertEq(CustomDelimiterMessage, ReadOnlyFile::readTextFile(custom_path));
 
         Hl7v2ReadDataProvider file_reader({"path": path});
@@ -189,7 +201,22 @@ class Hl7v2UtilTest inherits QUnit::Test {
 
         hash<auto> app = DataProviderActionCatalog::getApp(Hl7v2Util::AppName);
         assertEq("HL7 v2 Messages", app.display_name);
-        assertTrue(app.desc =~ /structure-agnostic/);
+        assertTrue(app.desc =~ /Preserve message structure/);
+
+        hash<DataProviderActionInfo> read_action = DataProviderActionCatalog::getAppActionEx(Hl7v2Util::AppName,
+            "read");
+        assertEq("Hl7v2Segment", read_action.output_type.getName());
+        assertTrue(exists read_action.options.path);
+
+        hash<DataProviderActionInfo> read_data_action = DataProviderActionCatalog::getAppActionEx(
+            Hl7v2Util::AppName, "read-data");
+        assertEq("Hl7v2Segment", read_data_action.output_type.getName());
+        assertTrue(exists read_data_action.options.data);
+
+        hash<DataProviderActionInfo> write_action = DataProviderActionCatalog::getAppActionEx(Hl7v2Util::AppName,
+            "write");
+        assertEq("Hl7v2WriteResult", write_action.output_type.getName());
+        assertTrue(exists write_action.options.path);
 
         list<hash<auto>> actions = DataProviderActionCatalog::getActions(Hl7v2Util::AppName);
         list<string> names = map $1.action, actions;
@@ -209,5 +236,13 @@ class Hl7v2UtilTest inherits QUnit::Test {
         assertThrows("HL7V2-ADDRESS-ERROR", sub () { (new Hl7v2Message(Message)).getAddress("PID-0"); });
         assertThrows("HL7V2-READ-ERROR", sub () { new Hl7v2ReadDataProvider({}); });
         assertThrows("HL7V2-WRITE-ERROR", sub () { new Hl7v2WriteDataProvider({}); });
+
+        try {
+            base.parseMessage("MSH|^~\\&|A\rOBX|1|ST|NOTE||patient-name secret \\F\r");
+            assertTrue(False, "expected HL7V2-ESCAPE-ERROR");
+        } catch (hash<ExceptionInfo> e) {
+            assertEq("HL7V2-ESCAPE-ERROR", e.err);
+            assertFalse(e.desc =~ /patient-name|secret/);
+        }
     }
 }

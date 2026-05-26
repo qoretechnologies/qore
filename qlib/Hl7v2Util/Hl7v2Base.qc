@@ -97,7 +97,7 @@ public namespace Hl7v2Util {
         #! Parses a single HL7 v2 segment
         hash<Hl7v2Segment> parseSegment(string segment, int index = 1) {
             if (segment.size() < 3) {
-                throw "HL7V2-PARSE-ERROR", sprintf("segment too short: %y", segment);
+                throw "HL7V2-PARSE-ERROR", sprintf("segment %d is too short", index);
             }
 
             string tag = segment.substr(0, 3);
@@ -106,8 +106,8 @@ public namespace Hl7v2Util {
             list<hash<Hl7v2Field>> fields = ();
             if (tag == "MSH") {
                 if (segment.size() < 8) {
-                    throw "HL7V2-PARSE-ERROR", sprintf("MSH segment is missing MSH-1/MSH-2 delimiters: %y",
-                        segment);
+                    throw "HL7V2-PARSE-ERROR", sprintf("MSH segment %d is missing MSH-1/MSH-2 delimiters",
+                        index);
                 }
                 Hl7v2Delimiters msh_delimiters(segment);
                 delimiters = msh_delimiters;
@@ -126,8 +126,8 @@ public namespace Hl7v2Util {
                 }
             } else if (segment.size() > 3) {
                 if (segment[3] != delimiters.getFieldSeparator()) {
-                    throw "HL7V2-PARSE-ERROR", sprintf("segment %y does not use the active field separator %y",
-                        segment, delimiters.getFieldSeparator());
+                    throw "HL7V2-PARSE-ERROR", sprintf("segment %d (%s) does not use the active field "
+                        "separator", index, tag);
                 }
                 string rest = segment.substr(4);
                 foreach string raw_field in (splitEscaped(rest, delimiters.getFieldSeparator())) {
@@ -286,7 +286,8 @@ public namespace Hl7v2Util {
             }
 
             if (in_escape) {
-                throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in %y", str);
+                throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in value of length %d",
+                    str.size());
             }
             push rv, current;
             return rv;
@@ -306,7 +307,8 @@ public namespace Hl7v2Util {
                 }
             }
             if (in_escape) {
-                throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in %y", str);
+                throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in value of length %d",
+                    str.size());
             }
             return False;
         }

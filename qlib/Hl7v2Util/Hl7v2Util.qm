@@ -43,9 +43,13 @@ module Hl7v2Util {
             "name": Hl7v2Util::AppName,
             "display_name": "HL7 v2 Messages",
             "short_desc": "Read and write HL7 v2 delimited messages",
-            "desc": "Read and write HL7 v2 pipe-delimited healthcare messages. The first implementation "
-                "is structure-agnostic: it preserves segment order, supports custom delimiters from `MSH`, "
-                "handles HL7 escape sequences, and exposes parsed segments through the DataProvider API.",
+            "desc": "Read and write [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) "
+                "delimited healthcare messages for integration and transformation workflows.\n\n"
+                "**Capabilities**:\n"
+                "- Preserve message structure and custom `Z` segments without requiring a fixed schema\n"
+                "- Read custom delimiters from `MSH` and handle HL7 escape sequences\n"
+                "- Expose one parsed segment per record through the DataProvider API\n"
+                "- Serialize parsed messages or simple segment records back to HL7 v2 text",
             "logo": Hl7v2Logo,
             "logo_file_name": "hl7v2-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -59,7 +63,7 @@ module Hl7v2Util {
             "subtype": "hl7v2read",
             "display_name": "Read HL7 v2 Message",
             "short_desc": "Read HL7 v2 message data from a file",
-            "desc": "Read HL7 v2 message data from a file and return one record per segment.",
+            "desc": "Read HL7 v2 message data from a file and return one typed record per segment.",
             "action_code": DPAT_FIND,
             "cls": "Hl7v2Util::Hl7v2ReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -69,6 +73,7 @@ module Hl7v2Util {
                     "loc": "constructor",
                 }
             ),
+            "output_type": Hl7v2ReadDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": Hl7v2Util::AppName,
@@ -77,7 +82,7 @@ module Hl7v2Util {
             "subtype": "hl7v2read",
             "display_name": "Read HL7 v2 Inline Data",
             "short_desc": "Read HL7 v2 message data from an inline string",
-            "desc": "Read HL7 v2 message data from an inline string and return one record per segment.",
+            "desc": "Read HL7 v2 message data from an inline string and return one typed record per segment.",
             "action_code": DPAT_FIND,
             "cls": "Hl7v2Util::Hl7v2ReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -87,6 +92,7 @@ module Hl7v2Util {
                     "loc": "constructor",
                 }
             ),
+            "output_type": Hl7v2ReadDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": Hl7v2Util::AppName,
@@ -95,7 +101,8 @@ module Hl7v2Util {
             "subtype": "hl7v2write",
             "display_name": "Write HL7 v2 Message",
             "short_desc": "Write HL7 v2 message data to a file",
-            "desc": "Write HL7 v2 message data to a file from parsed segments or simple segment records.",
+            "desc": "Write HL7 v2 message data to a file from parsed segments or simple segment records. "
+                "The response includes the output `path`, serialized character count, and segment count.",
             "action_code": DPAT_CREATE,
             "cls": "Hl7v2Util::Hl7v2WriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -105,6 +112,7 @@ module Hl7v2Util {
                     "loc": "constructor",
                 }
             ),
+            "output_type": Hl7v2WriteDataProvider::ResponseType,
         });
     };
 }
