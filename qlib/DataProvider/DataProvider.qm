@@ -1296,9 +1296,16 @@ if (errors) {
         @c RestClientDataProvider module through the new
         @ref DataProvider::AbstractDataProvider::setGenericApiCallChildBuilder()
         and
-         @ref DataProvider::DataProviderActionCatalog::setGenericApiCallActionBuilder()
-         hooks, keeping the @c DataProvider module free of any direct dependency on a specific
-         REST transport
+        @ref DataProvider::DataProviderActionCatalog::setGenericApiCallActionBuilder()
+        hooks, keeping the @c DataProvider module free of any direct dependency on a specific
+        REST transport
+    - fixed a memory leak where deregistering an app
+      (@ref DataProvider::DataProviderActionCatalog::deregisterDynamicApp() and the internal
+      app-deregistration path) left the app's actions - and the entire option and data-type graph
+      attached to them - in the static top-level action map instead of removing them, causing
+      unbounded memory growth under repeated app/connection registration and deregistration
+    - fixed a memory leak where registering a dynamic app at runtime left an undischarged
+      module-initialization rollback closure on the per-thread implicit module transaction list
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and

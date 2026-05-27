@@ -501,6 +501,17 @@ public class SGLangEmbedder inherits AbstractEmbedder {
         }
     }
 
+    #! SGLang-served instruction-tuned models (e.g. Qwen3-Embedding) are tokenized
+    #! client-side for chunk sizing; declares the served model so a resolver can
+    #! supply its HuggingFace tokenizer.
+    hash<TokenizerRequirement> getTokenizerRequirement() {
+        return <TokenizerRequirement>{
+            "required": True,
+            "id": model_name,
+            "desc": sprintf("SGLang-served model %y (HuggingFace tokenizer)", model_name),
+        };
+    }
+
     list<float> encode(string text, *hash<auto> opts) {
         list<list<float>> rv = encodeBatch((text,), opts);
         return rv[0];

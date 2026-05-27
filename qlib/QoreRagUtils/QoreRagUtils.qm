@@ -332,6 +332,11 @@ RagPipeline pipe(
         self.vector_store = vector_stores[0];
         self.reranker = reranker;
         self.chunker = chunker;
+        # Size chunks in the embedding model's own tokens: give the chunker the
+        # embedder's token counter (when it has one and the chunker has none yet).
+        if (!chunker.getTokenCounter() && embedder.getTokenCounter()) {
+            chunker.setTokenCounter(embedder.getTokenCounter());
+        }
         self.top_k = top_k;
         self.initial_retrieval_k = initial_retrieval_k;
         self.query_transformer = opts.query_transformer;

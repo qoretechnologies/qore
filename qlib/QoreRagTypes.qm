@@ -237,6 +237,58 @@ public hashdecl EmbedderConfig {
     *hash<auto> telemetry_context;
 }
 
+#! Declares whether an embedder needs a client-side tokenizer, and which one
+/** Returned by @ref AbstractEmbedder::getTokenizerRequirement().  An embedder
+    "needs" a client-side tokenizer when token-based chunk sizing should use the
+    embedding model's own tokenizer rather than a character heuristic (e.g.
+    HuggingFace-tokenized models served over HTTP, or local ONNX models).  A
+    consumer-supplied @ref AbstractTokenizerResolver turns the requirement into a
+    parsed \c tokenizer.json.  Retrieval/installation of the tokenizer is
+    deliberately out of scope here (a network/deployment concern); \c source_uri
+    is reserved so an opt-in fetching resolver can be added without an interface
+    change.
+*/
+public hashdecl TokenizerRequirement {
+    #! whether a client-side tokenizer is needed for token-based chunk sizing
+    bool required = False;
+    #! stable identifier of the required tokenizer (e.g. the served/HF model name), when known
+    *string id;
+    #! optional hint for where the tokenizer.json can be retrieved (reserved; not used by the core)
+    *string source_uri;
+    #! human-readable description
+    *string desc;
+}
+
+#! Resolves a @ref TokenizerRequirement to a parsed \c tokenizer.json
+/** Pluggable contract implemented by consumers (e.g. Qorus), which know where
+    tokenizers are installed/bundled.  The core performs no network or filesystem
+    installation; an implementation may consult pre-installed/bundled tokenizers
+    and (optionally, on its own terms) retrieve missing ones.
+*/
+public class AbstractTokenizerResolver {
+    #! Returns a token counter for the requirement, or @ref NOTHING when unavailable
+    /** Implementations map the requirement to a tokenizer they have access to
+        (typically a pre-installed/bundled \c tokenizer.json) and return a ready
+        token counter — an object with an <tt>int countTokens(string)</tt> method
+        (e.g. @ref QoreTokenizerUtils::TokenCounter).  The return type is \c *object
+        so this provider-neutral module does not depend on the tokenizer module;
+        the result is suitable for @ref AbstractEmbedder::setTokenCounter().
+
+        @param req the tokenizer requirement declared by an embedder
+
+        @return a token counter, or @ref NOTHING when no tokenizer is available
+        (callers then fall back to a heuristic)
+    */
+    abstract *object resolve(hash<TokenizerRequirement> req);
+
+    #! Returns @ref True if a tokenizer for the requirement is available
+    /** Default implementation probes @ref resolve(); override for a cheaper check.
+    */
+    bool isAvailable(hash<TokenizerRequirement> req) {
+        return exists resolve(req);
+    }
+}
+
 #! Configuration for a vector-store backend
 public hashdecl VectorStoreConfig {
     #! Backend identifier (e.g. "qdrant", "pgvector")
@@ -441,6 +493,11 @@ public hashdecl RagProviderInfo {
     rate limits) without parsing backend-specific JSON shapes.
 */
 public class AbstractEmbedder {
+    private {
+        #! Optional token counter for chunk sizing (an object with int countTokens(string)); see @ref setTokenCounter()
+        *object token_counter;
+    }
+
     #! Encodes a single piece of text into a vector
     /** @param text the input text
         @param opts optional per-call options; recognized HTTP keys are
@@ -471,6 +528,42 @@ public class AbstractEmbedder {
     #! Returns the model name in use (informational)
     *string getModel() {
         return NOTHING;
+    }
+
+    #! Declares whether this embedder needs a client-side tokenizer for chunk sizing, and which one
+    /** Default: not required.  HuggingFace-tokenized backends (e.g. SGLang-served
+        Qwen3-Embedding, bge-m3, local ONNX models) override this to declare
+        \c required and the tokenizer \c id (typically the model name); a
+        consumer-supplied @ref AbstractTokenizerResolver maps it to a parsed
+        \c tokenizer.json that becomes this embedder's token counter (see
+        @ref setTokenCounter()).  Providers without a usable client-side tokenizer
+        (e.g. Voyage, Gemini) keep the default so callers fall back to a heuristic.
+
+        @return the tokenizer requirement for this embedder
+    */
+    hash<TokenizerRequirement> getTokenizerRequirement() {
+        return <TokenizerRequirement>{"required": False};
+    }
+
+    #! Returns the token counter for chunk sizing, or @ref NOTHING if none is set
+    /** When set (typically a @ref QoreTokenizerUtils::TokenCounter, but any object
+        with an <tt>int countTokens(string)</tt> method works), a chunker can size
+        chunks in this embedding model's own tokens — see
+        @ref AbstractChunker::setTokenCounter().  Typed as \c *object so this
+        provider-neutral module does not depend on the tokenizer module.  The
+        counter must be safe for concurrent \c countTokens() calls or owned
+        per-pipeline (callers typically build a fresh one per pipeline).
+    */
+    *object getTokenCounter() {
+        return token_counter;
+    }
+
+    #! Sets the token counter used for chunk sizing
+    /** @param tc the token counter (an object with <tt>int countTokens(string)</tt>),
+        or @ref NOTHING to clear it
+    */
+    setTokenCounter(*object tc) {
+        token_counter = tc;
     }
 
     #! Encodes a query, signalling the query role for asymmetric/instruction-tuned models
@@ -640,6 +733,11 @@ public class AbstractReranker {
     Implementations must be thread-safe.
 */
 public class AbstractChunker {
+    private {
+        #! Optional token counter (an object with int countTokens(string)); see @ref setTokenCounter()
+        *object token_counter;
+    }
+
     #! Splits content into chunks
     /** @param content the source document text
         @param metadata optional metadata that should be inherited by every chunk
@@ -653,11 +751,35 @@ public class AbstractChunker {
     #! Returns the strategy name (e.g. "structured", "semantic", "fixed")
     abstract string getStrategy();
 
-    #! Approximate token count for a string
-    /** Default implementation uses a 4-chars-per-token heuristic; subclasses
-        backed by a real tokenizer should override.
+    #! Sets the token counter used to size chunks
+    /** When set, @ref approximateTokens() counts tokens with this counter (the
+        embedding model's own tokenizer) instead of the character heuristic, so
+        chunks are sized in the right model's tokens.  A @ref RagPipeline
+        auto-injects its embedder's counter (@ref AbstractEmbedder::getTokenCounter())
+        here at construction.
+
+        @param tc the token counter (an object with <tt>int countTokens(string)</tt>),
+        or @ref NOTHING to clear it
+    */
+    setTokenCounter(*object tc) {
+        token_counter = tc;
+    }
+
+    #! Returns the token counter, or @ref NOTHING if none is set
+    *object getTokenCounter() {
+        return token_counter;
+    }
+
+    #! Token count for a string
+    /** Uses the configured token counter (see @ref setTokenCounter()) for an exact
+        count in the embedding model's tokens; falls back to a 4-chars-per-token
+        heuristic when no counter is set.  Subclasses backed by their own tokenizer
+        may still override.
     */
     int approximateTokens(string text) {
+        if (token_counter) {
+            return token_counter.countTokens(text);
+        }
         return (text.length() / 4) ?? 0;
     }
 }

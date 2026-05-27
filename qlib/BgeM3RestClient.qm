@@ -406,6 +406,16 @@ public class BgeM3FastApiEmbedder inherits AbstractEmbedder {
         }
     }
 
+    #! bge-m3 is tokenized client-side for chunk sizing; declares the model so a
+    #! resolver can supply its HuggingFace tokenizer.
+    hash<TokenizerRequirement> getTokenizerRequirement() {
+        return <TokenizerRequirement>{
+            "required": True,
+            "id": model_name,
+            "desc": sprintf("bge-m3 FastAPI model %y (HuggingFace tokenizer)", model_name),
+        };
+    }
+
     list<float> encode(string text, *hash<auto> opts) {
         list<list<float>> rv = encodeBatch((text,), opts);
         return rv[0];

@@ -64,6 +64,26 @@ public class LocalOnnxEmbedder inherits AbstractEmbedder {
                 "LocalOnnxEmbedder requires 'model_path' in EmbedderConfig";
         }
         self.config = config;
+        # The ONNX model already carries its own tokenizer (options.tokenizer_config);
+        # reuse it as the chunk-sizing token counter so chunks are sized in exactly
+        # the same tokens the model embeds in.  Best-effort: never block construction.
+        if (config.options.tokenizer_config) {
+            try {
+                setTokenCounter(new QoreTokenizerUtils::TokenCounter(
+                    config.options.tokenizer_config));
+            } catch (hash<ExceptionInfo> ex) {
+                # bad tokenizer.json: fall back to the chunker heuristic
+            }
+        }
+    }
+
+    #! Local ONNX models are tokenized client-side; declares the model for chunk sizing
+    hash<TokenizerRequirement> getTokenizerRequirement() {
+        return <TokenizerRequirement>{
+            "required": True,
+            "id": config.model ?? config.model_path,
+            "desc": sprintf("local ONNX model %y", config.model ?? config.model_path),
+        };
     }
 
     #! Encodes a single piece of text into a vector

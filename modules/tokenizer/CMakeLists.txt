@@ -45,6 +45,12 @@ endif()
 
 message(STATUS "utf8proc found - building tokenizer module")
 
+# PCRE2 (8-bit) is required for the regex Split pre-tokenizer (Unicode-aware
+# matching: \p{L}, \p{N}, (?i:...), lookarounds — needed by byte-level BPE
+# tokenizers such as GPT-2/GPT-4/Llama/Qwen).  The PCRE2_* variables are
+# already populated by the top-level build (pkg_check_modules(PCRE2 REQUIRED
+# libpcre2-8)) since libqore links it, and are inherited here via add_subdirectory.
+
 # Start of hacks to simulate installed QoreConfig.cmake
 if (NOT QORE_MODULES_DIR)
     set(QORE_MODULES_DIR ${MODULE_DIR})
@@ -119,11 +125,14 @@ add_custom_target(TOK_QPP_GENERATED_FILES DEPENDS qpp ${TOK_QPP_SOURCES})
 set(tok_module_name "tokenizer")
 
 add_library(${tok_module_name} MODULE ${TOK_CPP_SRC} ${TOK_QPP_SOURCES})
-target_include_directories(${tok_module_name} PRIVATE ${UTF8PROC_INCLUDE_DIRS})
+target_include_directories(${tok_module_name} PRIVATE ${UTF8PROC_INCLUDE_DIRS} ${PCRE2_INCLUDE_DIRS})
 if (UTF8PROC_LIBRARY_DIRS)
     target_link_directories(${tok_module_name} PRIVATE ${UTF8PROC_LIBRARY_DIRS})
 endif()
-target_link_libraries(${tok_module_name} ${UTF8PROC_LIBRARIES})
+if (PCRE2_LIBRARY_DIRS)
+    target_link_directories(${tok_module_name} PRIVATE ${PCRE2_LIBRARY_DIRS})
+endif()
+target_link_libraries(${tok_module_name} ${UTF8PROC_LIBRARIES} ${PCRE2_LIBRARIES})
 add_dependencies(${tok_module_name} libqore TOK_QPP_GENERATED_FILES)
 
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/tokenizer/mainpage.dox ${_dox_src})

@@ -35,6 +35,8 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("gpt2Tokenizer", \gpt2TokenizerTest());
         addTestCase("t5Tokenizer", \t5TokenizerTest());
         addTestCase("gpt2Decode", \gpt2DecodeTest());
+        addTestCase("gpt4StyleSplitTokenizer", \gpt4StyleSplitTokenizerTest());
+        addTestCase("splitBehavior", \splitBehaviorTest());
         addTestCase("llamaTokenizer", \llamaTokenizerTest());
         addTestCase("bertSentencePair", \bertSentencePairTest());
         addTestCase("truncationTest", \truncationTest());
@@ -321,6 +323,96 @@ class TokenizerTest inherits QUnit::Test {
         hash<auto> enc = tok.encode(input);
         string decoded = tok.decode(enc.input_ids);
         assertEq(input, decoded, "GPT-2 round-trip should preserve text exactly");
+    }
+
+    gpt4StyleSplitTokenizerTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        # GPT-4/Qwen-style byte-level BPE: the pre_tokenizer is a Sequence of a
+        # Split{Regex} followed by a ByteLevel.  The Split pattern uses inline
+        # case-insensitive groups (?i:...), Unicode property classes \p{L} / \p{N},
+        # and a lookahead (?!\S) — none of which ECMAScript std::regex supports.
+        # Before the PCRE2-based SplitPreTokenizer this fixture failed to load with
+        # "PRETOKENIZER-CONFIG-ERROR: invalid Split regex pattern".  (gpt2's fixture
+        # uses a bare ByteLevel with no Split, so it never exercised this path.)
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/gpt4-style-split-tokenizer.json");
+
+        # Regression: construction must not throw on the Split regex.
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+        assertEq(50257, tok.getVocabSize(), "GPT-4-style split vocab size");
+
+        # Reference: Python tokenizers (HF) on this exact fixture.
+        hash<auto> enc = tok.encode("The quick brown fox jumps over the lazy dog.");
+        assertEq((464, 2068, 7586, 21831, 18045, 625, 262, 16931, 3290, 13), enc.input_ids,
+            "Split path basic sentence should match HF reference");
+
+        # Exercises the hard regex features: case-insensitive (?i:) on the uppercase
+        # contraction "IT'S", and Unicode \p{L} on the accented letter in "HÉR'S".
+        hash<auto> enc2 = tok.encode("I'm sure they're right; IT'S HÉR'S too.");
+        assertEq((40, 1101, 1654, 484, 821, 826, 26, 7283, 6, 50, 367, 38351, 49, 6, 50, 1165, 13),
+            enc2.input_ids,
+            "Split path (?i:) contractions + \\p{L} accents should match HF reference");
+
+        # \p{L}+ vs \p{N} boundary splitting: letters and digits become separate pieces.
+        assertEq(9, tok.encode("abc123 456def").input_ids.size(),
+            "Split path letter/digit boundary count should match HF reference");
+
+        # Round-trip through the ByteLevel decoder is lossless.
+        string input = "The quick brown fox.";
+        assertEq(input, tok.decode(tok.encode(input).input_ids),
+            "GPT-4-style split round-trip should preserve text");
+    }
+
+    private Tokenizer::HFTokenizer createSplitWordPiece(string behavior) {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        # WordPiece over a Split{"-"} pre-tokenizer: the vocab contains every
+        # pre-token produced by all four behaviors so each maps to exactly one
+        # token, making the segmentation directly observable via enc.tokens.
+        hash<auto> config = {
+            "model": {
+                "type": "WordPiece",
+                "vocab": {
+                    "[UNK]": 0, "a": 1, "b": 2, "c": 3, "-": 4,
+                    "a-": 5, "b-": 6, "-b": 7, "-c": 8,
+                },
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+            "pre_tokenizer": {
+                "type": "Split",
+                "pattern": {"Regex": "-"},
+                "behavior": behavior,
+                "invert": False,
+            },
+        };
+        return new Tokenizer::HFTokenizer(config);
+    }
+
+    splitBehaviorTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        # Verify the four HuggingFace SplitDelimiterBehavior modes against the
+        # reference Python tokenizers library output for "a-b-c" (delimiter "-").
+        assertEq(("a", "-", "b", "-", "c"),
+            createSplitWordPiece("Isolated").encode("a-b-c").tokens,
+            "Isolated keeps the delimiter as its own piece");
+        assertEq(("a", "b", "c"),
+            createSplitWordPiece("Removed").encode("a-b-c").tokens,
+            "Removed drops the delimiter");
+        assertEq(("a-", "b-", "c"),
+            createSplitWordPiece("MergedWithPrevious").encode("a-b-c").tokens,
+            "MergedWithPrevious attaches the delimiter to the preceding piece");
+        assertEq(("a", "-b", "-c"),
+            createSplitWordPiece("MergedWithNext").encode("a-b-c").tokens,
+            "MergedWithNext attaches the delimiter to the following piece");
     }
 
     llamaTokenizerTest() {

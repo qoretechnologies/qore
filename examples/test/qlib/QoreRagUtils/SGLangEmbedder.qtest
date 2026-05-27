@@ -89,6 +89,8 @@ class SGLangEmbedderTest inherits QUnit::Test {
             \testAsymmetricInstructionPrefix());
         addTestCase("dimension truncates+renormalizes the native vector (MRL)",
             \testMrlTruncation());
+        addTestCase("getTokenizerRequirement declares the served model",
+            \testTokenizerRequirement());
         set_return_value(main());
     }
 
@@ -130,6 +132,16 @@ class SGLangEmbedderTest inherits QUnit::Test {
             cfg.api_key = api_key;
         }
         return new SGLangEmbedder(cfg);
+    }
+
+    # The embedder declares it needs a client-side tokenizer (for chunk sizing)
+    # and names the served model; this issues no HTTP call.
+    testTokenizerRequirement() {
+        checkModule();
+        SGLangEmbedder emb = makeEmbedder();
+        hash<TokenizerRequirement> req = emb.getTokenizerRequirement();
+        assertTrue(req.required, "SGLang-served model requires a client-side tokenizer");
+        assertEq("bge-m3", req.id, "tokenizer id is the served model name");
     }
 
     testOpenAiPinning() {
