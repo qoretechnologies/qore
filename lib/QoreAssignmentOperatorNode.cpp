@@ -349,13 +349,13 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         }
         if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
             LocalVar* lvar = vrn->ref.id;
-            if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(narrow_type)) {
+            if (lvar && lvar->isAutoType()) {
                 // Direct assignment replaces the narrowed type, store location for error messages
                 lvar->parseSetNarrowedType(narrow_type, loc);
             }
         } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
             Var* gvar = vrn->ref.var;
-            if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(narrow_type)) {
+            if (gvar && gvar->isAutoType()) {
                 // Direct assignment replaces the narrowed type, store location for error messages
                 gvar->parseSetNarrowedType(narrow_type, loc);
             }

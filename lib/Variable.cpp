@@ -3179,8 +3179,12 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
         narrowedLoc = loc;
         return;
     }
-    // Don't narrow if the new type is also auto
+    // A direct assignment replaces the previous narrowed type.  If the new
+    // value is only known as auto, keeping a previous concrete type is stale.
     if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(name.c_str(), "auto assignment");
         return;
     }
     narrowedTypeInfo = ti;
@@ -3287,8 +3291,12 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation
         narrowedLoc = loc;
         return;
     }
-    // Don't narrow if the new type is also auto
+    // A direct assignment replaces the previous narrowed type.  If the new
+    // value is only known as auto, keeping a previous concrete type is stale.
     if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(getName(), "auto assignment");
         return;
     }
     narrowedTypeInfo = ti;

@@ -8,9 +8,16 @@
 
 %exec-class TypeTest
 
+class AutoTypeSource {
+    auto post() {
+        return {"info": "created"};
+    }
+}
+
 public class TypeTest inherits QUnit::Test {
     constructor() : Test("TypeTest", "1.1") {
         addTestCase("Test type() function", \typeTestMethod());
+        addTestCase("typeCode after auto assignment", \typeCodeAfterAutoAssignment());
         addTestCase("conversions", \conversions());
 
         # Return for compatibility with test harness that checks return value.
@@ -50,6 +57,17 @@ public class TypeTest inherits QUnit::Test {
         assertEq(NT_CLOSURE, (sub(){int x = 5; ++x;}).typeCode());
         assertEq(NT_HASH, {}.typeCode());
         assertEq(NT_STRING, "str".typeCode());
+    }
+
+    typeCodeAfterAutoAssignment() {
+        AutoTypeSource c();
+        hash<auto> h = {"username": "u"};
+        h = map {$1: True}, ("role",);
+        h = c.post();
+
+        assertEq("created", h.info);
+        assertEq(NT_STRING, h.info.typeCode());
+        assertEq(NT_STRING, h{"info"}.typeCode());
     }
 
     conversions() {
