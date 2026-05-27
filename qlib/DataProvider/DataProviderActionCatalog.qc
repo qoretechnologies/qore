@@ -759,8 +759,16 @@ public class DataProviderActionCatalog {
             # add to cache
             appcache{app.name} = app;
 
-            # deregister the app automatically if module initialization fails
-            ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterApp(app.name); });
+            # Register a module-init rollback so that a failed module load automatically undoes this
+            # registration. This is only meaningful inside a module-load transaction (see
+            # DataProvider::tryLoad(), which brackets load_module() with savepoint()/commit()/
+            # rollback()). Dynamic apps are registered at runtime - outside any such transaction -
+            # and are removed explicitly via deregisterDynamicApp(), so a rollback closure for them
+            # is never drained and would leak on the thread_local ImplicitModuleTransaction list;
+            # skip it for dynamic apps.
+            if (!app.dynamic) {
+                ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterApp(app.name); });
+            }
 
             # decide whether to auto-register the framework-injected "Make an API call" action for
             # this app. Positive REST detection: inject iff the connection scheme's `cls` inherits
@@ -1050,7 +1058,11 @@ public class DataProviderActionCatalog {
         }
 
         remove initmap{name};
-        remove app_actionmap{name};
+        # remove the app's actions from both maps together; removing app_actionmap{name} on its
+        # own here (and leaving the top_actionmap cleanup to deregisterAppIntern below) left the
+        # top_actionmap entries - and their option/data-type graphs - leaked in the static map
+        *hash<string, hash<DataProviderActionInfo>> dactions = remove app_actionmap{name};
+        map remove top_actionmap{name + "/" + $1.action}, dactions.values();
         remove initactionmap{name};
         if (exists (*string path = _mod_init_ctx ?? get_module_context_path())) {
             remove appmodmap{name}{path};
@@ -2087,8 +2099,14 @@ public class DataProviderActionCatalog {
     #! Deregisters an app and all its actions if an exception occurs during the other module's initialization
     private:internal static *bool deregisterAppIntern(string name) {
         *hash<DataProviderAppInfo> app = remove appcache{name};
-        remove app_actionmap{name};
+        # capture the app's actions BEFORE dropping the map entry; the top_actionmap cleanup must
+        # iterate the captured actions. Previously app_actionmap{name} was removed first and then
+        # iterated (now empty) to clean top_actionmap, so every action - and the entire option /
+        # data-type graph it holds - was leaked permanently in the static top_actionmap on each
+        # deregistration (unbounded growth under app/connection churn)
+        *hash<string, hash<DataProviderActionInfo>> actions = remove app_actionmap{name};
         remove initactionmap{name};
+        map remove top_actionmap{name + "/" + $1.action}, actions.values();
         if (!app) {
             return;
         }
@@ -2096,8 +2114,6 @@ public class DataProviderActionCatalog {
         if (app.scheme) {
             remove smap{app.scheme};
         }
-        map remove top_actionmap{name + "/" + $1.action}, app_actionmap{name}.values();
-        remove app_actionmap{name};
 
         return True;
     }

@@ -481,6 +481,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("expression tests", \expressionTests());
         addTestCase("get display name", \getDisplayNameTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
+        addTestCase("action deregister cleanup", \actionDeregisterCleanupTest());
         addTestCase("string test", \stringTest());
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
@@ -1045,6 +1046,76 @@ public class DataProviderTest inherits QUnit::Test {
 
         assertTrue(exists DataProviderActionCatalog::deregisterDynamicApp(app));
         assertNothing(DataProviderActionCatalog::getApp(app));
+    }
+
+    #! Regression: deregistering apps must remove their actions from the static top_actionmap
+    /** deregisterAppIntern()/deregisterDynamicApp() previously removed @c app_actionmap{name} before
+        using it to clean @c top_actionmap, so the @c top_actionmap cleanup iterated an already-empty
+        map and every action - together with the entire option/data-type graph it holds - was leaked
+        permanently in the static @c top_actionmap on each register/deregister cycle (unbounded growth
+        under app/connection churn). This asserts the top-level action map returns to its baseline
+        size after deregistration.
+    */
+    actionDeregisterCleanupTest() {
+        int base_actions = DataProviderActionCatalog::getAllActions().size();
+        int base_apps = (DataProviderActionCatalog::getAllApps() ?? ()).size();
+
+        # an option carrying an AbstractDataProviderType, mirroring the (heavy) option/type graph
+        # that the framework-injected make-api-call action attaches to every REST-capable app
+        hash<string, hash<ActionOptionInfo>> opts = {
+            "name": <ActionOptionInfo>{
+                "display_name": "Name",
+                "short_desc": "the name",
+                "desc": "the name",
+                "type": AbstractDataProviderType::get("string"),
+            },
+        };
+
+        int count = 25;
+        list<string> names = ();
+        for (int i = 0; i < count; ++i) {
+            string app = sprintf("RegCleanupApp_%s_%d", get_random_string(8), i);
+            names += app;
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": app,
+                "display_name": app,
+                "short_desc": "t",
+                "desc": "t",
+                "groups": (AppGroup::DataTransformation,),
+                "logo": "data",
+                "logo_mime_type": MimeTypeSvg,
+                "logo_file_name": "t.svg",
+                "dynamic": True,
+            });
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": app,
+                "action": "act",
+                "path": "/act",
+                "display_name": "Act",
+                "short_desc": "a",
+                "desc": "a",
+                "action_code": DPAT_API,
+                "options": opts,
+            });
+        }
+
+        # the actions are present in the top-level map while registered
+        assertEq(base_actions + count, DataProviderActionCatalog::getAllActions().size(),
+            "registered actions appear in the top-level action map");
+
+        # deregister every app
+        map DataProviderActionCatalog::deregisterDynamicApp($1), names;
+
+        # the deregistered actions must be fully removed from the static top_actionmap; before the
+        # fix they leaked here and this size stayed at base_actions + count
+        assertEq(base_actions, DataProviderActionCatalog::getAllActions().size(),
+            "deregistered actions are removed from the top-level action map (no top_actionmap leak)");
+        assertEq(base_apps, (DataProviderActionCatalog::getAllApps() ?? ()).size(),
+            "deregistered apps are removed from the app cache");
+        foreach string app in (names) {
+            assertNothing(DataProviderActionCatalog::getApp(app), "app removed: " + app);
+            assertNothing(DataProviderActionCatalog::getAppAction(app, "act"), "action removed: " + app);
+        }
     }
 
     stringTest() {
