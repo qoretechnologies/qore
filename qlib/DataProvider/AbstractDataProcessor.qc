@@ -584,6 +584,23 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return result;
     }
 
+    #! Returns True if the value is a list of row-record hashes
+    /** @param data the value to test
+
+        @since %DataProvider 3.5
+    */
+    static bool isRecordList(auto data) {
+        if (data.typeCode() != NT_LIST || !data) {
+            return False;
+        }
+        foreach auto record in (data) {
+            if (record.typeCode() != NT_HASH) {
+                return False;
+            }
+        }
+        return True;
+    }
+
     #! Detects the pipeline shape for a runtime value
     /** @param data the value to inspect
 
@@ -642,7 +659,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
             case DataProviderShape::HashOfLists:
                 return data ? data.firstValue().lsize() : 0;
             case DataProviderShape::RowRecords:
-                return 1;
+                return AbstractDataProcessor::isRecordList(data) ? data.size() : 1;
         }
         return 1;
     }
@@ -660,6 +677,9 @@ public class AbstractDataProcessor inherits Qore::Serializable {
     */
     static list<auto> convertShape(auto data, DataProviderShape from_shape, DataProviderShape to_shape) {
         if (from_shape == to_shape) {
+            if (from_shape == DataProviderShape::RowRecords && AbstractDataProcessor::isRecordList(data)) {
+                return data;
+            }
             return (data,);
         }
 
@@ -676,7 +696,8 @@ public class AbstractDataProcessor inherits Qore::Serializable {
             return AbstractDataProcessor::hashListToRecords(data);
         }
         if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::HashOfLists) {
-            return (AbstractDataProcessor::recordsToHashList((data,)),);
+            list<auto> records = AbstractDataProcessor::isRecordList(data) ? data : (data,);
+            return (AbstractDataProcessor::recordsToHashList(records),);
         }
         if (from_shape == DataProviderShape::HashOfLists && to_shape == DataProviderShape::DataFrameBlock) {
             return (AbstractDataProcessor::getDataFrameClass().newObject(data),);
@@ -685,10 +706,12 @@ public class AbstractDataProcessor inherits Qore::Serializable {
             return (AbstractDataProcessor::getDataFrameClass().newObject(data).toColumnarResult(),);
         }
         if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::DataFrameBlock) {
-            return (AbstractDataProcessor::getDataFrameClass().newObject((data,)),);
+            list<auto> records = AbstractDataProcessor::isRecordList(data) ? data : (data,);
+            return (AbstractDataProcessor::getDataFrameClass().newObject(records),);
         }
         if (from_shape == DataProviderShape::RowRecords && to_shape == DataProviderShape::BufferColumns) {
-            return (AbstractDataProcessor::getDataFrameClass().newObject((data,)).toColumnarResult(),);
+            list<auto> records = AbstractDataProcessor::isRecordList(data) ? data : (data,);
+            return (AbstractDataProcessor::getDataFrameClass().newObject(records).toColumnarResult(),);
         }
         if (from_shape == DataProviderShape::BufferColumns && to_shape == DataProviderShape::HashOfLists) {
             if (AbstractDataProcessor::isColumnarResult(data)) {

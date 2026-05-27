@@ -157,10 +157,16 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
     }
 
     #! Applies configured projection to a column hash
-    private hash<auto> selectColumnBlock(hash<auto> records) {
+    private hash<auto> selectColumnBlock(hash<auto> records, int record_count) {
         hash<auto> result;
         foreach hash<auto> i in (field_map.pairIterator()) {
-            result{i.key} = records{i.value};
+            if (!records.hasKey(i.value)) {
+                result{i.key} = AbstractDataProcessor::repeatValue(NOTHING, record_count);
+            } else if (records{i.value}.typeCode() == NT_LIST || records{i.value}.typeCode() == NT_BUFFER) {
+                result{i.key} = records{i.value};
+            } else {
+                result{i.key} = AbstractDataProcessor::repeatValue(records{i.value}, record_count);
+            }
         }
         return result;
     }
@@ -198,11 +204,12 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
                 return selectDataFrame(records);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return ColumnarResult::fromColumnHash(selectColumnBlock(records.toColumnHash()));
+                    return ColumnarResult::fromColumnHash(selectColumnBlock(records.toColumnHash(),
+                        AbstractDataProcessor::shapeRecordCount(records, shape)));
                 }
-                return selectColumnBlock(records);
+                return selectColumnBlock(records, AbstractDataProcessor::shapeRecordCount(records, shape));
             case DataProviderShape::HashOfLists:
-                return selectColumnBlock(records);
+                return selectColumnBlock(records, AbstractDataProcessor::shapeRecordCount(records, shape));
         }
         throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
             self.className(), AbstractDataProcessor::shapeName(shape));

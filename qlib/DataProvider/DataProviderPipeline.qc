@@ -2486,7 +2486,7 @@ public class DataProviderPipeline {
     /** Must be called with the lock held
     */
     private:internal submitDataIntern(auto _data) {
-        ++record_count;
+        record_count += AbstractDataProcessor::shapeRecordCount(_data);
         pmap."0".submit(_data);
     }
 

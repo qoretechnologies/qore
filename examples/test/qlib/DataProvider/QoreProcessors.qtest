@@ -76,6 +76,7 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("select-fields - keep fields", \selectFieldsKeep());
         addTestCase("select-fields - rename fields", \selectFieldsRename());
         addTestCase("select-fields - combined keep and rename", \selectFieldsCombined());
+        addTestCase("select-fields - missing bulk field preserves row count", \selectFieldsMissingBulkField());
         addTestCase("select-fields - empty fields error", \selectFieldsEmpty());
 
         addTestCase("set-fields - add new fields", \setFieldsAddNew());
@@ -209,6 +210,21 @@ class QoreProcessorsTest inherits QUnit::Test {
         hash<auto> record = {"name": "Alice", "email": "a@b.com", "age": 30};
         hash<auto> expected = {"name": "Alice", "customer_email": "a@b.com"};
         assertEq(expected, proc.processRecord(record));
+    }
+
+    selectFieldsMissingBulkField() {
+        QoreSelectFieldsProcessor proc({"fields": "missing"});
+        hash<auto> records = {
+            "id": (1, 2, 3),
+            "name": ("one", "two", "three"),
+        };
+        hash<auto> expected = {
+            "missing": (NOTHING, NOTHING, NOTHING),
+        };
+        auto result = proc.processRecordsShape(records, DataProviderShape::HashOfLists);
+        assertEq(expected, result);
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result),
+            "missing projected column must preserve bulk row count");
     }
 
     selectFieldsEmpty() {
