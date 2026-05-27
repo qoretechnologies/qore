@@ -59,6 +59,8 @@ public class AsyncApiTest inherits QUnit::Test {
         - SOCKET-TIMEOUT           - raw socket timed out before completion
         - QOREADDRINFO-GETINFO-ERROR - getaddrinfo failed (DNS down / NXDOMAIN)
         - HTTPCLIENT-HOSTNAME-ERROR - resolved-host validation failed
+        - HTTPCLIENT-CONNECT-ERROR - high-level HTTP connection failed
+        - HTTPCLIENT-NEGOTIATE-ERROR - ALPN/HTTP-version negotiation failed
         - HTTPCLIENT-NEGOTIATE-TIMEOUT - ALPN/HTTP-version negotiation timed out
         - HTTPCLIENT-CONNECT-TIMEOUT - high-level connect timeout
         - HTTPCLIENT-TIMEOUT       - request timed out (no body received)
@@ -70,12 +72,34 @@ public class AsyncApiTest inherits QUnit::Test {
             case "SOCKET-TIMEOUT":
             case "QOREADDRINFO-GETINFO-ERROR":
             case "HTTPCLIENT-HOSTNAME-ERROR":
+            case "HTTPCLIENT-CONNECT-ERROR":
+            case "HTTPCLIENT-NEGOTIATE-ERROR":
             case "HTTPCLIENT-NEGOTIATE-TIMEOUT":
             case "HTTPCLIENT-CONNECT-TIMEOUT":
             case "HTTPCLIENT-TIMEOUT":
                 return True;
         }
         return False;
+    }
+
+    #! Returns True for transient HTTP responses from the external public schema host.
+    static bool isExternalDependencyStatus(int statusCode) {
+        switch (statusCode) {
+            case 403:
+            case 408:
+            case 429:
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+                return True;
+        }
+        return False;
+    }
+
+    #! Returns the external public schema host used by publicSchemasTest().
+    static string getPublicSchemaBaseUrl() {
+        return ENV.ASYNCAPI_PUBLIC_SCHEMA_BASE_URL ?? "https://raw.githubusercontent.com";
     }
 
     schemaParsingTest() {
@@ -408,25 +432,27 @@ public class AsyncApiTest inherits QUnit::Test {
     publicSchemasTest() {
         checkModules();
 
+        string baseUrl = AsyncApiTest::getPublicSchemaBaseUrl();
+
         # Official AsyncAPI example schemas from the spec repository
         # Pinned to v3.0.0 tag to avoid breakage when upstream bumps the spec version
         list<hash<auto>> publicSchemas = (
             {
                 "name": "simple-asyncapi",
-                "url": "https://raw.githubusercontent.com/asyncapi/spec/v3.0.0/examples/simple-asyncapi.yml",
+                "path": "/asyncapi/spec/v3.0.0/examples/simple-asyncapi.yml",
                 "expectedTitle": "Account Service",
                 "expectedApiVersion": "1.0.0",
             },
             {
                 "name": "streetlights-mqtt-asyncapi",
-                "url": "https://raw.githubusercontent.com/asyncapi/spec/v3.0.0/examples/streetlights-mqtt-asyncapi.yml",
+                "path": "/asyncapi/spec/v3.0.0/examples/streetlights-mqtt-asyncapi.yml",
                 "expectedTitle": "Streetlights MQTT API",
                 "expectedApiVersion": "1.0.0",
             },
         );
 
         HTTPClient client({
-            "url": "https://raw.githubusercontent.com",
+            "url": baseUrl,
             "timeout": 10s,
             "connect_timeout": 10s,
         });
@@ -434,7 +460,8 @@ public class AsyncApiTest inherits QUnit::Test {
             client.connect();
         } catch (hash<ExceptionInfo> ex) {
             if (AsyncApiTest::isNetworkError(ex)) {
-                testSkip(sprintf("Network unavailable: %s: %s", ex.err, ex.desc));
+                testSkip("External public AsyncAPI schema dependency unavailable: %s: %s",
+                    ex.err, ex.desc);
             }
             rethrow;
         }
@@ -445,22 +472,22 @@ public class AsyncApiTest inherits QUnit::Test {
         for (int i = 0; i < publicSchemas.size(); i++) {
             hash<auto> schemaInfo = publicSchemas[i];
             try {
-                # Extract path from full URL
-                string path = schemaInfo.url;
-                path =~ s/https:\/\/raw\.githubusercontent\.com//;
-
                 # Fetch the schema from GitHub
                 hash<auto> info;
-                *string yamlContent = client.get(path, NOTHING, \info);
+                *string yamlContent = client.get(schemaInfo.path, NOTHING, \info);
                 int statusCode = info."response-headers".status_code;
                 if (statusCode != 200) {
-                    printf("SKIP: Could not fetch %s (HTTP %d)\n", schemaInfo.name, statusCode);
-                    continue;
+                    if (AsyncApiTest::isExternalDependencyStatus(statusCode)) {
+                        testSkip("External public AsyncAPI schema dependency returned HTTP %d for %s",
+                            statusCode, schemaInfo.name);
+                    }
+                    assertEq(200, statusCode,
+                        sprintf("External public AsyncAPI schema %s should be available", schemaInfo.name));
                 }
 
                 if (!exists yamlContent) {
-                    printf("SKIP: Empty response for %s\n", schemaInfo.name);
-                    continue;
+                    testSkip("External public AsyncAPI schema dependency returned an empty response for %s",
+                        schemaInfo.name);
                 }
 
                 # Parse the schema
@@ -486,9 +513,8 @@ public class AsyncApiTest inherits QUnit::Test {
                 anyPassed = True;
             } catch (hash<ExceptionInfo> ex) {
                 if (AsyncApiTest::isNetworkError(ex)) {
-                    printf("SKIP: Network error fetching %s: %s: %s\n",
+                    testSkip("External public AsyncAPI schema dependency unavailable while fetching %s: %s: %s",
                         schemaInfo.name, ex.err, ex.desc);
-                    continue;
                 }
                 # Some complex schemas may have features not yet fully supported
                 if (ex.err =~ /RUNTIME-TYPE-ERROR/) {
