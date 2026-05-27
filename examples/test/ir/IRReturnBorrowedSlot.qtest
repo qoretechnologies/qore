@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires FsUtil
 
 %exec-class IRReturnBorrowedSlotTest
 
@@ -35,6 +36,8 @@ class IRReturnBorrowedSlotTest inherits QUnit::Test {
     constructor() : QUnit::Test("IRReturnBorrowedSlotTest", "1.0", \ARGV) {
         addTestCase("borrowed object return slots survive IR/JIT cleanup",
             \testBorrowedObjectReturnSlot());
+        addTestCase("self-referential return survives IR scope cleanup",
+            \testSelfReferentialReturnSlot());
 
         set_return_value(main());
     }
@@ -58,5 +61,35 @@ class IRReturnBorrowedSlotTest inherits QUnit::Test {
             object<IRReturnBorrowedSlotObject> obj = lookupThroughDotEval("a");
             assertEq(7, obj.getValue(), "borrowed object must remain live after return cleanup");
         }
+    }
+
+    testSelfReferentialReturnSlot() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script(NOTHING, ".q");
+        script.file.write("%modern\n");
+        script.file.write("class T { public { any self_ref; int value = 23; } constructor() { self_ref = self; } }\n");
+        script.file.write("T sub f() { *T ref = new T(); ref.self_ref = ref; return ref; }\n");
+        script.file.write("T t = f(); printf(\"%d\\n\", t.value);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string stdout = ReadOnlyFile::readTextFile(out.path);
+        string stderr = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && stderr =~ /exec-mode/ && stderr =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+        assertEq(0, rc, "self-referential object return must not crash in IR mode: " + stderr);
+        assertEq("23\n", stdout, "returned object should remain valid after callee scope cleanup");
     }
 }

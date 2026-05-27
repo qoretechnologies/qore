@@ -640,7 +640,6 @@ struct IRCallFrame {
     // results that must be discarded at statement boundaries to prevent long-running
     // threads from holding references that block object destruction.
     std::vector<uint32_t> ephemeral_weak_ref_slots;
-
     // (Reserved for potential future per-frame diagnostic state; the
     // silent-fail trace uses a thread-local in QoreIRInterpreter.cpp so
     // cross-frame failure propagation remains visible.)
@@ -3613,6 +3612,40 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     QoreIRBasicBlock* block = func.blocks.front().get();
     QoreIRBasicBlock* prev_block = nullptr;
     size_t ip = 0;
+    const bool trace_ir_refs = getenv("QORE_IR_TRACE_REFS") != nullptr;
+    const bool trace_ir_refs_deep = getenv("QORE_IR_TRACE_REFS_DEEP") != nullptr;
+    // Deep ref tracing intentionally dereferences object internals; leave it
+    // off unless narrowing an IR lifetime/refcount bug under a debugger.
+    auto traceIRRef = [&](const QoreIRInstruction* trace_inst, const char* event, uint32_t slot, QoreValue val,
+            const char* action = nullptr) {
+        if (!trace_ir_refs) {
+            return;
+        }
+        const uint64_t raw = val.rawBits();
+        const AbstractQoreNode* node = val.hasNode() ? val.getInternalNode() : nullptr;
+        fprintf(stderr, "[ir-ref] func='%s' block='%s' ip=%zu opcode=%s(%d) event=%s slot=%u raw=0x%016llx "
+            "node=%p has_node=%d",
+            func.name.c_str(), block ? block->name.c_str() : "<none>", ip,
+            trace_inst ? getOpcodeName(static_cast<int>(trace_inst->opcode)) : "<none>",
+            trace_inst ? static_cast<int>(trace_inst->opcode) : -1, event, slot,
+            static_cast<unsigned long long>(raw), static_cast<const void*>(node), node ? 1 : 0);
+        if (action) {
+            fprintf(stderr, " action=%s", action);
+        }
+        if (trace_ir_refs_deep && node) {
+            qore_type_t type = node->getType();
+            fprintf(stderr, " type=%d", static_cast<int>(type));
+            if (type == NT_OBJECT) {
+                auto* priv = qore_object_private::get(*const_cast<QoreObject*>(
+                    static_cast<const QoreObject*>(node)));
+                fprintf(stderr, " refs=%d rrefs=%d rcount=%d rset=%p deferred=%d recursive_found=%d status=%d",
+                    priv->references.load(), priv->rrefs.load(), priv->rcount, static_cast<void*>(priv->rset),
+                    priv->deferred_scan ? 1 : 0, priv->recursive_ref_found ? 1 : 0, priv->status);
+            }
+        }
+        fputc('\n', stderr);
+        fflush(stderr);
+    };
 
     // NOTE: QoreIRStackLocation was removed - it was adding extra frames to exception
     // callstacks with the wrong line numbers.  Instead, runtime_loc is updated
@@ -3711,27 +3744,36 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // questions inherent in a CFG-aware scan and is O(function-size) once per
     // execution.
     std::unordered_set<uint32_t> return_value_slot_ids;
+    std::unordered_set<uint32_t> return_preserve_slot_ids;
     if (func.blocks.size() > 0) {
         for (const auto& blk : func.blocks) {
             if (!blk) {
                 continue;
             }
             for (const auto& inst_up : blk->instructions) {
-                if (!inst_up || inst_up->opcode != QoreIROpcode::Return) {
+                if (!inst_up) {
                     continue;
                 }
-                const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_up.get());
-                if (ret->has_value) {
-                    return_value_slot_ids.insert(ret->value.id);
+                if (inst_up->opcode == QoreIROpcode::Return) {
+                    const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_up.get());
+                    if (ret->has_value) {
+                        return_value_slot_ids.insert(ret->value.id);
+                    }
+                } else if (inst_up->opcode == QoreIROpcode::RefSelf && inst_up->result.isValid()) {
+                    // RefSelf is currently emitted only to preserve return values across
+                    // scope cleanup. Protect it directly so object cleanup scans cannot
+                    // release the preserved return before the Return opcode reads it.
+                    return_preserve_slot_ids.insert(inst_up->result.id);
                 }
             }
         }
     }
 
-    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_value_slot_ids](uint32_t id) -> bool {
+    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_value_slot_ids,
+            &return_preserve_slot_ids](uint32_t id) -> bool {
         // A slot that is the operand of any Return in the function must stay
         // alive across scope exits regardless of basic-block locality.
-        if (return_value_slot_ids.count(id)) {
+        if (return_value_slot_ids.count(id) || return_preserve_slot_ids.count(id)) {
             return true;
         }
         if (!block) {
@@ -3759,6 +3801,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             if (isTerminator(future->opcode)) {
                 break;
+            }
+        }
+        return false;
+    };
+
+    auto valueNodeEscapesAsReturn = [&values, &return_value_slot_ids,
+            &return_preserve_slot_ids](const AbstractQoreNode* node) -> bool {
+        if (!node) {
+            return false;
+        }
+        for (uint32_t id : return_value_slot_ids) {
+            if (id < values.size() && values[id].hasNode() && values[id].getInternalNode() == node) {
+                return true;
+            }
+        }
+        for (uint32_t id : return_preserve_slot_ids) {
+            if (id < values.size() && values[id].hasNode() && values[id].getInternalNode() == node) {
+                return true;
             }
         }
         return false;
@@ -4498,8 +4558,10 @@ next_instruction:
                     return false;
                 }
                 QoreValue val = getIRValue(values, inst->operands.front());
-                setOwnedValueSlot(values, cleanup, inst->result.id,
-                    val.hasNode() ? val.refSelf() : val, xsink);
+                traceIRRef(inst, "refself.input", inst->operands.front().id, val);
+                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                traceIRRef(inst, "refself.output", inst->result.id, out);
+                setOwnedValueSlot(values, cleanup, inst->result.id, out, xsink);
                 ++ip;
                 break;
             }
@@ -7083,8 +7145,12 @@ load_local_done:
                                 && local_init_slots[var_slot_id] != UINT32_MAX) {
                             uint32_t init_slot = local_init_slots[var_slot_id];
                             if (valueUsedLaterInCurrentBlock(init_slot)) {
+                                if (init_slot < values.size()) {
+                                    traceIRRef(inst, "uninst.init-slot", init_slot, values[init_slot], "keep");
+                                }
                                 // keep it alive for the future use below
                             } else if (init_slot < values.size()) {
+                                traceIRRef(inst, "uninst.init-slot", init_slot, values[init_slot], "discard");
                                 values[init_slot].discard(xsink);
                                 values[init_slot] = QoreValue();
                                 local_init_slots[var_slot_id] = UINT32_MAX;
@@ -7096,10 +7162,12 @@ load_local_done:
                             std::vector<uint32_t> kept_load_slots;
                             for (uint32_t vid : local_load_slots[var_slot_id]) {
                                 if (valueUsedLaterInCurrentBlock(vid)) {
+                                    traceIRRef(inst, "uninst.load-slot", vid, values[vid], "keep");
                                     kept_load_slots.push_back(vid);
                                     continue;
                                 }
                                 if (vid < values.size()) {
+                                    traceIRRef(inst, "uninst.load-slot", vid, values[vid], "discard");
                                     values[vid].discard(xsink);
                                     values[vid] = QoreValue();
                                 }
@@ -7164,8 +7232,17 @@ load_local_done:
                                                     break;
                                                 }
                                                 if (used_later) {
+                                                    traceIRRef(inst, "uninst.closure-value-scan", vi, values[vi],
+                                                        "keep");
                                                     continue;
                                                 }
+                                                if (valueNodeEscapesAsReturn(node_ptr)) {
+                                                    traceIRRef(inst, "uninst.closure-value-scan", vi, values[vi],
+                                                        "keep-return-peer");
+                                                    continue;
+                                                }
+                                                traceIRRef(inst, "uninst.closure-value-scan", vi, values[vi],
+                                                    "discard");
                                                 values[vi].discard(xsink);
                                                 values[vi] = QoreValue();
                                             }
@@ -7206,8 +7283,15 @@ load_local_done:
                                                 break;
                                             }
                                             if (used_later) {
+                                                traceIRRef(inst, "uninst.local-value-scan", vi, values[vi], "keep");
                                                 continue;
                                             }
+                                            if (valueNodeEscapesAsReturn(node_ptr)) {
+                                                traceIRRef(inst, "uninst.local-value-scan", vi, values[vi],
+                                                    "keep-return-peer");
+                                                continue;
+                                            }
+                                            traceIRRef(inst, "uninst.local-value-scan", vi, values[vi], "discard");
                                             values[vi].discard(xsink);
                                             values[vi] = QoreValue();
                                         }
@@ -7232,12 +7316,16 @@ load_local_done:
                                                 continue;
                                             }
                                             if (valueUsedLaterInCurrentBlock(vi)) {
+                                                traceIRRef(inst, "uninst.container-scan", vi, values[vi], "keep");
                                                 continue;
                                             }
                                             if (local_owned_slots.count(vi)) {
+                                                traceIRRef(inst, "uninst.container-scan", vi, values[vi],
+                                                    "keep-local-owned");
                                                 continue;
                                             }
                                             if (needs_scan(values[vi].getInternalNode())) {
+                                                traceIRRef(inst, "uninst.container-scan", vi, values[vi], "discard");
                                                 values[vi].discard(xsink);
                                                 values[vi] = QoreValue();
                                             }
@@ -7290,8 +7378,17 @@ load_local_done:
                                                     break;
                                                 }
                                                 if (used_later) {
+                                                    traceIRRef(inst, "uninst.closure-cvv-scan", vi, values[vi],
+                                                        "keep");
                                                     continue;
                                                 }
+                                                if (valueNodeEscapesAsReturn(node_ptr)) {
+                                                    traceIRRef(inst, "uninst.closure-cvv-scan", vi, values[vi],
+                                                        "keep-return-peer");
+                                                    continue;
+                                                }
+                                                traceIRRef(inst, "uninst.closure-cvv-scan", vi, values[vi],
+                                                    "discard");
                                                 values[vi].discard(xsink);
                                                 values[vi] = QoreValue();
                                             }
@@ -11678,12 +11775,23 @@ lvalue_path_unary_done:
                 if (ret->has_value) {
                     QoreValue val = getIRValue(values, ret->value);
                     bool owned_return_slot = removeCleanupEntry(cleanup, ret->value.id);
-                    if (val.hasNode()) {
+                    traceIRRef(inst, "return.input", ret->value.id, val,
+                        owned_return_slot ? "owned" : "borrowed");
+                    if (owned_return_slot && ret->value.id < values.size()) {
+                        // Match ReturnStatement::takeReferencedValue(): an owned IR slot is already a
+                        // referenced return value, so move it out instead of refSelf()+discard.  The latter
+                        // can collect self-referential objects while returning them.
+                        return_value = values[ret->value.id];
+                        values[ret->value.id] = QoreValue();
+                        traceIRRef(inst, "return.move-owned", ret->value.id, return_value);
+                    } else if (val.hasNode()) {
                         return_value = val.refSelf();
+                        traceIRRef(inst, "return.output", ret->value.id, return_value);
                         if (ret->value.id < values.size()) {
                             // Borrowed return slots are not owned by this IR frame.  After refSelf(), the
                             // added reference belongs to return_value, so only owned slots can be discarded.
                             if (owned_return_slot) {
+                                traceIRRef(inst, "return.discard-slot", ret->value.id, values[ret->value.id]);
                                 values[ret->value.id].discard(xsink);
                             }
                             values[ret->value.id] = QoreValue();  // Set to NOTHING instead of erase
