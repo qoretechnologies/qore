@@ -11677,11 +11677,15 @@ lvalue_path_unary_done:
                 auto* ret = static_cast<QoreIRReturnInstruction*>(inst);
                 if (ret->has_value) {
                     QoreValue val = getIRValue(values, ret->value);
-                    removeCleanupEntry(cleanup, ret->value.id);
+                    bool owned_return_slot = removeCleanupEntry(cleanup, ret->value.id);
                     if (val.hasNode()) {
                         return_value = val.refSelf();
                         if (ret->value.id < values.size()) {
-                            values[ret->value.id].discard(xsink);
+                            // Borrowed return slots are not owned by this IR frame.  After refSelf(), the
+                            // added reference belongs to return_value, so only owned slots can be discarded.
+                            if (owned_return_slot) {
+                                values[ret->value.id].discard(xsink);
+                            }
                             values[ret->value.id] = QoreValue();  // Set to NOTHING instead of erase
                         }
                     } else {
