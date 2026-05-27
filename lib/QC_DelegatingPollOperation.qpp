@@ -257,7 +257,7 @@ qclass DelegatingPollOperation [
         signature: \c code<nothing(hash<SocketPollResultInfo>)>
     @param done_counter optional Counter to decrement when the operation completes
 */
-DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code on_complete, *Counter done_counter)
+DelegatingPollOperation::constructor(AbstractPollOperation operation, *code on_complete, *Counter done_counter)
         [flags=NAMED_ARGS] {
     QoreObject* inner_obj = const_cast<QoreObject*>(operation);
 

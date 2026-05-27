@@ -229,6 +229,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module hashdecl member compound lvalue",
             \testAOTModuleHashdeclMemberCompoundLValue());
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
+        addTestCase("AOT module namespace constant refs",
+            \testAOTModuleNamespaceConstantRefs());
         addTestCase("AOT module nested class constant refs",
             \testAOTModuleNestedClassConstantRefs());
         addTestCase("AOT module BCA hashdecl class constants",
@@ -6416,6 +6418,66 @@ printf(\"%s:%s:%s:%s:%s\\n\", h.Accept, a.prompt, s[0], s[1], l.\"X-Later\");
             "nested class const-ref qmod load is quiet: " + out);
         assertEq("application/json:consent:read:write:ok\n", out,
             "source-stripped qmod preserves nested sibling class constant refs");
+    }
+
+    testAOTModuleNamespaceConstantRefs() {
+        string tmp_dir = sprintf("/tmp/aot_namespace_const_ref_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNamespaceConstRef {
+    version = \"1.0\";
+    desc = \"AOT namespace constant reference regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTNamespaceConstRef {
+    const Base = {
+        \"alpha\": \"A\",
+    };
+    const Extra = {
+        \"beta\": \"B\",
+    };
+    public const Combined = {
+        \"base\": Base,
+        \"merged\": Base + Extra,
+    };
+}
+";
+        string qm_path = tmp_dir + "/AOTNamespaceConstRef.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNamespaceConstRef.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "namespace const-ref module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNamespaceConstRef
+
+hash<auto> h = AOTNamespaceConstRef::Combined;
+printf(\"%s:%s:%s\\n\", h.base.alpha, h.merged.alpha, h.merged.beta);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertFalse(out.regex("cannot resolve const_ref"),
+            "namespace const-ref qmod load is quiet: " + out);
+        assertEq("A:A:B\n", out,
+            "source-stripped qmod preserves namespace constant refs");
     }
 
     testAOTModuleBcaHashdeclClassConstants() {

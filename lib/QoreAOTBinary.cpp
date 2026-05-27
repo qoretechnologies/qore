@@ -11707,13 +11707,116 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
     const bool has_pending_flag =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
 
+    struct PendingNamespaceConstant {
+        std::string name;
+        std::string type_path;
+        uint32_t ns_idx;
+        uint8_t access;
+        uint8_t is_pub;
+        uint8_t pending;
+        const QoreTypeInfo* type_info = nullptr;
+        std::vector<uint8_t> value_blob;
+    };
+
+    std::vector<PendingNamespaceConstant> pending_constants;
+    pending_constants.reserve(count);
+
     for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant registration")) {
+            error = "AOT namespace constant registration cancelled";
+            return false;
+        }
         const char* name = reader.readStringRef(ptr);
         const char* type_path = reader.readStringRef(ptr);
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint8_t access = QoreAOTBinaryReader::readU8(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
         uint8_t pending = has_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+
+        std::vector<uint8_t> value_blob;
+        if (!readDeferredClassConstantValue(reader, ptr, end, error, value_blob)) {
+            error = "namespace constant '" + std::string(name ? name : "(null)") + "': " + error;
+            return false;
+        }
+        if (!error.empty()) {
+            error = "namespace constant '" + std::string(name ? name : "(null)") + "': " + error;
+            return false;
+        }
+
+        if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
+            error = "invalid namespace index " + std::to_string(ns_idx) +
+                " for constant '" + std::string(name ? name : "(null)") + "'";
+            return false;
+        }
+        if (!name || !*name) {
+            error = "invalid empty name for namespace constant";
+            return false;
+        }
+
+        // Skip if constant already exists (from dependency module).
+        {
+            const QoreTypeInfo* existing_ti = nullptr;
+            bool found = false;
+            ns_list[ns_idx]->constant.find(name, existing_ti, found);
+            if (found) {
+                printd(2, "AOT: skipping constant '%s' - already exists (from dependency)\n", name);
+                continue;
+            }
+        }
+
+        const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
+        if (!error.empty()) {
+            printd(0, "AOT: failed to resolve type '%s' for const '%s': %s\n",
+                type_path ? type_path : "(null)", name ? name : "(null)", error.c_str());
+            error = "cannot resolve type '" + std::string(type_path ? type_path : "(null)") +
+                "' for constant '" + std::string(name) + "': " + error;
+            return false;
+        }
+
+        // Register a shell before deserializing any namespace constant value.
+        // Folded container literals can contain VT_CONST_REF entries pointing
+        // to sibling namespace constants from the same module, and the
+        // ConstantList iteration order is not a dependency order.
+        ConstantEntry* ce = new ConstantEntry(getBlobLocation(), name, QoreValue(),
+            ti, is_pub != 0, true, false, static_cast<ClassAccess>(access));
+        ns_list[ns_idx]->constant.addEntry(name, ce);
+
+        if (pending) {
+            // Pending init-func: parser-time references to this constant must
+            // defer to runtime until the init-func populates saved_val.
+            ce->aot_shell_pending = true;
+            ce->val.discard(nullptr);
+            ce->val = new RuntimeConstantRefNode(&loc_builtin, ce,
+                /*aot_deferred=*/true);
+        }
+
+        pending_constants.push_back({name, type_path ? type_path : "", ns_idx,
+            access, is_pub, pending, ti, std::move(value_blob)});
+    }
+
+    rebuildAOTRootIndexes(pgm);
+
+    for (size_t i = 0; i < pending_constants.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant value resolution")) {
+            error = "AOT namespace constant value resolution cancelled";
+            return false;
+        }
+        auto& pc = pending_constants[i];
+        if (pc.pending) {
+            continue;
+        }
+
+        ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
+        if (!ce) {
+            error = "AOT cannot resolve deferred value for namespace constant '";
+            error += pc.name;
+            error += "': constant entry was not registered";
+            return false;
+        }
+
+        const uint8_t* vptr = pc.value_blob.data();
+        const uint8_t* vend = vptr + pc.value_blob.size();
+        std::string value_error;
         struct ConstRefDeferGuard {
             const QoreAOTBinaryReader& r;
             bool prev;
@@ -11723,55 +11826,29 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             }
             ~ConstRefDeferGuard() { r.defer_unresolved_const_refs = prev; }
         } defer_guard(reader, true);
-        QoreValue val = reader.readValue(ptr, end, error);
-        if (!error.empty()) {
-            error = "namespace constant '" + std::string(name ? name : "(null)") + "': " + error;
+        QoreValue val = reader.readValue(vptr, vend, value_error);
+        if (!value_error.empty()) {
+            val.discard(nullptr);
+            error = "namespace constant '" + pc.name + "': " + value_error;
+            return false;
+        }
+        if (vptr != vend) {
+            val.discard(nullptr);
+            error = "AOT namespace constant value did not consume serialized payload for '";
+            error += pc.name;
+            error += "'";
             return false;
         }
 
-        // Add constant to namespace
-        if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
-            val.discard(nullptr);
-            error = "invalid namespace index " + std::to_string(ns_idx) +
-                " for constant '" + std::string(name ? name : "(null)") + "'";
-            return false;
-        }
-        if (!name || !*name) {
-            val.discard(nullptr);
-            error = "invalid empty name for namespace constant";
-            return false;
-        }
-
-        // Skip if constant already exists (from dependency module)
-        {
-            const QoreTypeInfo* existing_ti = nullptr;
-            bool found = false;
-            ns_list[ns_idx]->constant.find(name, existing_ti, found);
-            if (found) {
-                printd(2, "AOT: skipping constant '%s' - already exists (from dependency)\n", name);
-                val.discard(nullptr);
-                continue;
-            }
-        }
-
-        const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
-        if (!error.empty()) {
-            val.discard(nullptr);
-            printd(0, "AOT: failed to resolve type '%s' for const '%s': %s\n",
-                type_path ? type_path : "(null)", name ? name : "(null)", error.c_str());
-            error = "cannot resolve type '" + std::string(type_path ? type_path : "(null)") +
-                "' for constant '" + std::string(name) + "': " + error;
-            return false;
-        }
-        const QoreTypeInfo* final_ti = ti ? ti : val.getTypeInfo();
-        if (!pending && final_ti && val.hasNode()
+        const QoreTypeInfo* final_ti = pc.type_info ? pc.type_info : val.getTypeInfo();
+        if (final_ti && val.hasNode()
                 && (val.getType() == NT_HASH || val.getType() == NT_LIST)) {
             ExceptionSink xs;
             QoreTypeInfo::retypeValue(val, final_ti, &xs);
             if (xs.isException()) {
                 xs.clear();
             }
-            QoreTypeInfo::acceptInputMember(final_ti, name, val, &xs);
+            QoreTypeInfo::acceptInputMember(final_ti, pc.name.c_str(), val, &xs);
             if (xs.isException()) {
                 QoreValue e = xs.getExceptionErr();
                 QoreValue d = xs.getExceptionDesc();
@@ -11783,29 +11860,35 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
                     ? ds_str->c_str() : "(?desc)";
                 printd(0, "AOT deser: namespace constant '%s' narrowing "
                     "to '%s' failed: %s: %s\n",
-                    name, type_path ? type_path : "(null)", es, ds);
+                    pc.name.c_str(), pc.type_path.c_str(), es, ds);
                 xs.clear();
             }
         }
-        // Create as user constant (not builtin) with proper pub flag.
-        // Using add() would mark the constant as builtin, which causes
-        // scanMergeCommittedNamespace to skip it (isUserPublic() returns false).
-        // Create the ConstantEntry directly with: pub = is_pub, init = true (value
-        // already resolved), builtin = false (user constant from AOT module).
-        ConstantEntry* ce = new ConstantEntry(getBlobLocation(), name, val,
-            final_ti, is_pub != 0, true, false,
-            static_cast<ClassAccess>(access));
-        if (pending) {
-            // Pending init-func: parser-time references to this constant must
-            // defer to runtime (when the init-func populates saved_val) instead
-            // of folding the NOTHING placeholder.  Swap val for a self-
-            // referential RuntimeConstantRefNode; setRuntimeValue() will keep
-            // this shell and populate saved_val once the init-func runs.
-            ce->aot_shell_pending = true;
-            ce->val.discard(nullptr);
-            ce->val = new RuntimeConstantRefNode(&loc_builtin, ce, /*aot_deferred=*/true);
+
+        ce->val.discard(nullptr);
+        ce->val = val;
+        ce->typeInfo = final_ti;
+        pc.value_blob.clear();
+    }
+
+    ExceptionSink xsink;
+    for (size_t i = 0; i < pending_constants.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant materialization")) {
+            error = "AOT namespace constant materialization cancelled";
+            return false;
         }
-        ns_list[ns_idx]->constant.addEntry(name, ce);
+        auto& pc = pending_constants[i];
+        if (pc.pending) {
+            continue;
+        }
+        ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
+        if (!ce || ce->aot_shell_pending) {
+            continue;
+        }
+        ce->materializeRuntimeRefs(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
     }
 
     return true;

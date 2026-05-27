@@ -6275,7 +6275,7 @@ int QoreSocketObject::sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, co
 }
 
 int QoreSocketObject::setQuicClientStreamStreaming(int64_t stream_id, ExceptionSink* xsink) {
-    if (qore_on_async_io_thread()) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
         if (session) {
             session->setStreamStreaming(stream_id);
