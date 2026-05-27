@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  TokenCounting.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreRagUtils
+%requires QUnit
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class TokenCountingTest
+
+#! Minimal embedder; carries no tokenizer by default (exercises the base
+#! AbstractEmbedder::getTokenizerRequirement() default + the counter slot).
+class StubEmbedder inherits AbstractEmbedder {
+    list<float> encode(string text, *hash<auto> opts) {
+        return (1.0, 2.0, 3.0);
+    }
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        list<list<float>> rv = ();
+        foreach string t in (texts) {
+            push rv, encode(t, opts);
+        }
+        return rv;
+    }
+    int getDimension() {
+        return 3;
+    }
+}
+
+#! Minimal vector store (only needed to construct a RagPipeline).
+class StubVectorStore inherits AbstractVectorStore {
+    upsert(list<hash<VectorRecord>> records) {}
+    deleteByIds(list<string> ids) {}
+    list<hash<VectorSearchResult>> search(list<float> query_vector, int k, *hash<auto> filter) {
+        list<hash<VectorSearchResult>> rv = ();
+        return rv;
+    }
+    string getCollection() { return "stub"; }
+    int getDimension() { return 3; }
+}
+
+#! Minimal chunker exposing the inherited approximateTokens().
+class StubChunker inherits AbstractChunker {
+    list<hash<ChunkInfo>> chunk(string content, *hash<auto> metadata) {
+        return (<ChunkInfo>{"index": 0, "content": content,
+            "token_count": approximateTokens(content), "metadata": metadata},);
+    }
+    string getStrategy() { return "stub"; }
+}
+
+public class TokenCountingTest inherits QUnit::Test {
+    public {
+        # Minimal WordPiece tokenizer.json (parsed hash) for a TokenCounter.
+        const TokenizerConfig = {
+            "model": {
+                "type": "WordPiece",
+                "vocab": {
+                    "[UNK]": 0, "hello": 1, "world": 2, "the": 3, "a": 4, "!": 5,
+                },
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+        };
+    }
+
+    constructor() : Test("TokenCountingTest", "1.0") {
+        addTestCase("embedderRequirementDefault", \embedderRequirementDefaultTest());
+        addTestCase("embedderCounterSlot", \embedderCounterSlotTest());
+        addTestCase("chunkerCounterVsHeuristic", \chunkerCounterVsHeuristicTest());
+        addTestCase("pipelineAutoInject", \pipelineAutoInjectTest());
+        set_return_value(main());
+    }
+
+    private *object makeCounter() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        try {
+            return new QoreTokenizerUtils::TokenCounter(TokenizerConfig);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("tokenizer module not available: %s: %s", ex.err, ex.desc));
+        }
+    }
+
+    embedderRequirementDefaultTest() {
+        # Base default: an embedder with no tokenizer declares not-required.
+        StubEmbedder e();
+        hash<TokenizerRequirement> req = e.getTokenizerRequirement();
+        assertFalse(req.required, "base embedder requires no client-side tokenizer");
+        assertNothing(e.getTokenCounter(), "no counter set initially");
+    }
+
+    embedderCounterSlotTest() {
+        *object tc = makeCounter();
+        StubEmbedder e();
+        e.setTokenCounter(tc);
+        assertEq(tc, e.getTokenCounter(), "getTokenCounter returns the set counter");
+        e.setTokenCounter(NOTHING);
+        assertNothing(e.getTokenCounter(), "counter can be cleared");
+    }
+
+    chunkerCounterVsHeuristicTest() {
+        *object tc = makeCounter();
+        # A string the tokenizer counts very differently from the 4-chars heuristic.
+        string s = strmul("hello ", 10);
+        int heuristic = (s.length() / 4) ?? 0;
+        int exact = cast<object>(tc).countTokens(s);
+        assertNeq(heuristic, exact,
+            "test string must distinguish the heuristic from the real tokenizer");
+
+        StubChunker c();
+        assertEq(heuristic, c.approximateTokens(s),
+            "without a counter, approximateTokens uses the 4-chars heuristic");
+        c.setTokenCounter(tc);
+        assertEq(exact, c.approximateTokens(s),
+            "with a counter, approximateTokens delegates to the real tokenizer");
+    }
+
+    pipelineAutoInjectTest() {
+        *object tc = makeCounter();
+
+        # Embedder carrying a counter → pipeline injects it into a counter-less chunker.
+        StubEmbedder withCounter();
+        withCounter.setTokenCounter(tc);
+        StubChunker chunker1();
+        StubVectorStore store1();
+        RagPipeline p1(withCounter, store1, NOTHING, chunker1);
+        assertEq(tc, chunker1.getTokenCounter(),
+            "pipeline injects the embedder's counter into the chunker");
+
+        # Embedder without a counter → chunker keeps none.
+        StubEmbedder noCounter();
+        StubChunker chunker2();
+        StubVectorStore store2();
+        RagPipeline p2(noCounter, store2, NOTHING, chunker2);
+        assertNothing(chunker2.getTokenCounter(),
+            "no embedder counter → chunker counter stays unset");
+
+        # An explicit chunker counter is not overwritten.
+        StubChunker chunker3();
+        chunker3.setTokenCounter(tc);
+        StubEmbedder other();
+        StubVectorStore store3();
+        RagPipeline p3(other, store3, NOTHING, chunker3);
+        assertEq(tc, chunker3.getTokenCounter(),
+            "an explicit chunker counter is preserved");
+    }
+}

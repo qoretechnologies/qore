@@ -285,6 +285,13 @@ class BgeM3FastApiEmbedderTest inherits QUnit::Test {
         # getModel must not issue an HTTP call
         assertEq("bge-m3", emb.getModel());
         assertEq(0, handler.requests.size());
+
+        # bge-m3 declares it needs a client-side tokenizer for chunk sizing;
+        # this also issues no HTTP call.
+        hash<TokenizerRequirement> req = emb.getTokenizerRequirement();
+        assertTrue(req.required, "bge-m3 requires a client-side tokenizer");
+        assertEq("bge-m3", req.id, "tokenizer id is the model name");
+        assertEq(0, handler.requests.size());
     }
 
     testApiKeyForwarded() {
