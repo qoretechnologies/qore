@@ -10,7 +10,47 @@
 
 #include "SplitPreTokenizer.h"
 
+#include <cctype>
+
 namespace QoreTokenizer {
+
+//! Escapes an ASCII literal so it matches verbatim as a PCRE2 pattern
+/** Escapes every ASCII non-word character (so regex metacharacters become
+    literals); multibyte UTF-8 bytes (>= 0x80) and word characters are left
+    untouched.  Used for the \c {"String": "..."} literal pattern form.
+*/
+static std::string escapeLiteral(const std::string& lit) {
+    std::string out;
+    out.reserve(lit.size() * 2);
+    for (unsigned char c : lit) {
+        if (c < 0x80 && !(std::isalnum(c) || c == '_')) {
+            out.push_back('\\');
+        }
+        out.push_back(static_cast<char>(c));
+    }
+    return out;
+}
+
+//! Returns the byte length of the UTF-8 character starting at \a pos (>= 1)
+static size_t utf8CharLen(const std::string& s, size_t pos) {
+    if (pos >= s.size()) {
+        return 1;
+    }
+    unsigned char c = static_cast<unsigned char>(s[pos]);
+    if (c < 0x80) {
+        return 1;
+    }
+    if ((c & 0xE0) == 0xC0) {
+        return 2;
+    }
+    if ((c & 0xF0) == 0xE0) {
+        return 3;
+    }
+    if ((c & 0xF8) == 0xF0) {
+        return 4;
+    }
+    return 1; // invalid lead byte: advance one byte to make forward progress
+}
 
 static std::string extractPattern(const QoreHashNode* config, ExceptionSink* xsink) {
     QoreValue pv = config->getKeyValue("pattern");
@@ -30,10 +70,7 @@ static std::string extractPattern(const QoreHashNode* config, ExceptionSink* xsi
         rv = ph->getKeyValue("String");
         if (!rv.isNullOrNothing()) {
             const QoreStringNode* s = rv.get<const QoreStringNode>();
-            // Escape for literal match
-            std::string lit = s ? s->c_str() : "";
-            return std::regex_replace(lit, std::regex(R"([-[\]{}()*+?.,\\^$|#\s])"),
-                R"(\$&)");
+            return escapeLiteral(s ? s->c_str() : "");
         }
     }
     // Plain string
@@ -43,12 +80,24 @@ static std::string extractPattern(const QoreHashNode* config, ExceptionSink* xsi
 
 SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* xsink) {
     std::string pat = extractPattern(config, xsink);
-    if (*xsink) return;
-    try {
-        pattern = std::regex(pat);
-    } catch (const std::regex_error& e) {
+    if (*xsink) {
+        return;
+    }
+
+    // PCRE2_UTF: codepoint-correct matching over UTF-8 input.
+    // PCRE2_UCP: \w, \d, \s, \p{...} use full Unicode properties.
+    // These together make HuggingFace Split patterns (\p{L}, \p{N}, (?i:...),
+    // lookarounds) work as written — std::regex (ECMAScript) supports none of them.
+    int errornumber = 0;
+    PCRE2_SIZE erroroffset = 0;
+    re = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pat.c_str()), PCRE2_ZERO_TERMINATED,
+        PCRE2_UTF | PCRE2_UCP, &errornumber, &erroroffset, nullptr);
+    if (!re) {
+        PCRE2_UCHAR buf[256];
+        pcre2_get_error_message(errornumber, buf, sizeof(buf));
         xsink->raiseException("PRETOKENIZER-CONFIG-ERROR",
-            "invalid Split regex pattern: %s", e.what());
+            "invalid Split regex pattern at offset %d: %s",
+            static_cast<int>(erroroffset), reinterpret_cast<const char*>(buf));
         return;
     }
 
@@ -57,54 +106,97 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     behavior = bs ? bs->c_str() : "Removed";
 }
 
+SplitPreTokenizer::~SplitPreTokenizer() {
+    if (re) {
+        pcre2_code_free(re);
+    }
+}
+
 std::vector<PreToken> SplitPreTokenizer::pretokenize(const std::string& text) const {
     std::vector<PreToken> result;
-    if (text.empty()) return result;
-
-    std::sregex_iterator it(text.begin(), text.end(), pattern);
-    std::sregex_iterator end;
-
-    size_t last_end = 0;
-
-    while (it != end) {
-        size_t match_start = it->position();
-        size_t match_len = it->length();
-        std::string matched = it->str();
-
-        // Add text before match
-        if (match_start > last_end) {
-            std::string before = text.substr(last_end, match_start - last_end);
-            if (!before.empty()) {
-                result.push_back({before, last_end});
-            }
-        }
-
-        // Handle the match based on behavior
-        if (behavior == "Isolated") {
-            result.push_back({matched, match_start});
-        } else if (behavior == "MergedWithNext") {
-            // Will merge with the next segment in the next iteration
-            // For now, just add it
-            result.push_back({matched, match_start});
-        } else if (behavior == "MergedWithPrevious") {
-            if (!result.empty()) {
-                result.back().text += matched;
-            } else {
-                result.push_back({matched, match_start});
-            }
-        }
-        // "Removed" — skip the match
-
-        last_end = match_start + match_len;
-        ++it;
+    if (text.empty() || !re) {
+        return result;
     }
 
-    // Add remaining text
-    if (last_end < text.size()) {
-        std::string remaining = text.substr(last_end);
-        if (!remaining.empty()) {
-            result.push_back({remaining, last_end});
+    pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, nullptr);
+    if (!md) {
+        return result;
+    }
+    ON_BLOCK_EXIT(pcre2_match_data_free, md);
+
+    PCRE2_SPTR subject = reinterpret_cast<PCRE2_SPTR>(text.c_str());
+    PCRE2_SIZE subject_len = text.size();
+    PCRE2_SIZE offset = 0;
+    size_t last_end = 0;
+
+    // For the "MergedWithNext" behavior a matched delimiter is held back and
+    // prepended to the following emitted segment; pending_prefix is empty in all
+    // other behaviors (a Split has a single behavior for every match).
+    std::string pending_prefix;
+    size_t pending_start = 0;
+    auto emitSegment = [&](const std::string& seg, size_t start, size_t end) {
+        if (!pending_prefix.empty()) {
+            result.push_back({pending_prefix + seg, pending_start, end});
+            pending_prefix.clear();
+        } else {
+            result.push_back({seg, start, end});
         }
+    };
+
+    while (offset <= subject_len) {
+        int rc = pcre2_match(re, subject, subject_len, offset, 0, md, nullptr);
+        if (rc < 0) {
+            // PCRE2_ERROR_NOMATCH (no further matches) or a hard error (e.g. bad
+            // UTF-8): stop; any remaining text is emitted as the trailing segment.
+            break;
+        }
+        PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
+        size_t match_start = ov[0];
+        size_t match_end = ov[1];
+        size_t match_len = match_end - match_start;
+
+        // Emit any unmatched text before this match as its own segment.
+        if (match_start > last_end) {
+            emitSegment(text.substr(last_end, match_start - last_end), last_end, match_start);
+        }
+
+        // Handle the matched (delimiter) text according to the configured behavior.
+        if (behavior == "Isolated") {
+            emitSegment(text.substr(match_start, match_len), match_start, match_end);
+        } else if (behavior == "MergedWithNext") {
+            // Hold the delimiter back; it prepends to the next emitted segment.
+            if (pending_prefix.empty()) {
+                pending_start = match_start;
+            }
+            pending_prefix += text.substr(match_start, match_len);
+        } else if (behavior == "MergedWithPrevious") {
+            if (!result.empty()) {
+                result.back().text += text.substr(match_start, match_len);
+                result.back().end = match_end;
+            } else {
+                emitSegment(text.substr(match_start, match_len), match_start, match_end);
+            }
+        }
+        // "Removed": drop the matched (delimiter) text.
+
+        last_end = match_end;
+
+        // Advance the search position. Guard against zero-length matches (which
+        // would otherwise loop forever) by stepping one full UTF-8 character so
+        // the next search starts on a codepoint boundary (required by PCRE2_UTF).
+        if (match_end > offset) {
+            offset = match_end;
+        } else {
+            offset = match_end + utf8CharLen(text, match_end);
+        }
+    }
+
+    // Emit any trailing unmatched text (flushing a pending MergedWithNext prefix).
+    if (last_end < text.size()) {
+        emitSegment(text.substr(last_end), last_end, text.size());
+    } else if (!pending_prefix.empty()) {
+        // A delimiter matched at the very end with nothing after it.
+        result.push_back({pending_prefix, pending_start, text.size()});
     }
 
     return result;
