@@ -8893,7 +8893,10 @@ static bool aotInitTraceEnabled() {
     return enabled;
 }
 
-static QoreRecursiveThreadLock aot_init_execution_lock;
+static QoreRecursiveThreadLock& get_aot_init_execution_lock() {
+    static QoreRecursiveThreadLock lock;
+    return lock;
+}
 
 //! Extract dependency module names from source \%requires directives
 /** Parses the source to find all \%requires directives and extracts the module names.
@@ -10380,7 +10383,7 @@ static void executeInitFunctions(
     // AOT init functions can load further modules and can run generated code
     // that mutates module/static state. Keep this phase reentrant but serialized
     // across threads, matching the effective source-module initialization model.
-    AutoLocker aot_init_al(aot_init_execution_lock);
+    AutoLocker aot_init_al(get_aot_init_execution_lock());
 
     if (aotInitTraceEnabled()) {
         fprintf(stderr, "[aot-init] execute module=%s pgm=%p shadow=%p exec_infos=%zu descriptors=%zu path=%s\n",
