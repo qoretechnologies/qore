@@ -1803,7 +1803,9 @@ public class PipelineMetricsCollector {
         # Compute delta metrics for the interval since the previous snapshot.  Use the
         # monotonic clock baseline so a realtime clock step between the previous and
         # current snapshot can never produce a negative interval.
-        int effective_prev_mono_us = prev_snapshot_mono_us ?: collection_start_mono_us;
+        int effective_prev_mono_us = prev_snapshot_mono_us
+            ? prev_snapshot_mono_us
+            : collection_start_mono_us;
         int interval_ms = (now_mono_us - effective_prev_mono_us) / 1000;
         int delta_submitted = total_submitted - prev_submitted;
         int delta_completed = total_completed - prev_completed;
