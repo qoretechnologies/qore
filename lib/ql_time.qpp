@@ -1556,6 +1556,43 @@ int clock_getmicros() [flags=CONSTANT] {
     return q_clock_getmicros();
 }
 
+//! Returns a monotonic-clock timestamp in microseconds, immune to realtime clock adjustments.
+/** Unlike @ref clock_getmicros() (which reads @c CLOCK_REALTIME and is affected by NTP slewing,
+    VM time synchronization, and manual clock adjustments), this function reads a monotonic
+    clock source (@c CLOCK_MONOTONIC on Linux/BSD, @c CLOCK_UPTIME_RAW on Darwin) and is
+    guaranteed to be non-decreasing over the lifetime of the process.
+
+    Use this function for elapsed-time measurements and deadline arithmetic where wall-clock
+    semantics are not required.  Two consecutive calls always satisfy
+    @c clock_get_monotonic_us() >= prev, so durations derived by subtraction can never be
+    negative — eliminating a class of intermittent failures observed when subtracting
+    @ref now_us() values across realtime clock jumps on virtualized CI runners.
+
+    The returned value has no fixed epoch: it is only meaningful when compared with another
+    value returned by this function in the same process.  Do NOT use it for wall-clock
+    display, log timestamps, or cross-process time exchange — use @ref now_us() or
+    @ref clock_getmicros() for those.
+
+    @return a monotonic timestamp in microseconds; non-decreasing across calls in the same
+        process; the absolute value has no defined meaning across processes or reboots.
+
+    @par Example:
+    @code{.py}
+int start = clock_get_monotonic_us();
+do_work();
+int elapsed_us = clock_get_monotonic_us() - start;
+    @endcode
+
+    @see
+    - clock_getmicros()
+    - now_us()
+
+    @since %Qore 2.3
+*/
+int clock_get_monotonic_us() [flags=CONSTANT] {
+    return q_get_monotonic_us();
+}
+
 //! Converts an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone to a date in the local time zone
 /** @param milliseconds an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone
 

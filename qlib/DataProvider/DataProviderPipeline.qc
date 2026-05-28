@@ -1120,8 +1120,16 @@ public class PipelineMetricsCollector {
         #! Total records completed
         int total_completed = 0;
 
-        #! Timestamps for throughput calculation
+        #! Wall-clock collection start (CLOCK_REALTIME, exposed as snapshot.start_time)
         date collection_start;
+
+        #! Monotonic collection start in microseconds — used for all elapsed-time arithmetic
+        /** Required because the realtime clock can step backward (NTP slewing, VM time
+            synchronization), producing negative @c duration_secs / @c interval_ms when
+            two @ref now_us() captures straddle the step.  The monotonic clock is
+            guaranteed non-decreasing so elapsed values are always >= 0.
+        */
+        int collection_start_mono_us;
 
         #! Last callback invocation time
         *date last_callback_time;
@@ -1131,6 +1139,9 @@ public class PipelineMetricsCollector {
 
         #! Previous snapshot time (NOTHING until first getSnapshotIntern() call)
         *date prev_snapshot_time;
+
+        #! Previous snapshot's monotonic timestamp in microseconds (0 until first getSnapshotIntern())
+        int prev_snapshot_mono_us = 0;
 
         #! Previous total submitted count
         int prev_submitted = 0;
@@ -1168,6 +1179,7 @@ public class PipelineMetricsCollector {
         self.parent := parent;
         self.collector = collector;
         collection_start = now_us();
+        collection_start_mono_us = clock_get_monotonic_us();
         # Cache collector thresholds to avoid virtual method calls per record
         try {
             cached_record_interval = collector.getRecordInterval();
@@ -1662,14 +1674,16 @@ public class PipelineMetricsCollector {
             prev_submitted = 0;
             prev_completed = 0;
             remove prev_snapshot_time;
+            prev_snapshot_mono_us = 0;
             prev_element_snap = {};
 
             # Reset callback tracking
             records_since_callback = 0;
             remove last_callback_time;
 
-            # Reset collection start time
+            # Reset collection start time (both wall-clock and monotonic baselines)
             collection_start = now_us();
+            collection_start_mono_us = clock_get_monotonic_us();
 
             # Reset per-element counters (preserve structure: element_id, element_type, class_name)
             foreach string elem_id in (keys element_metrics) {
@@ -1734,7 +1748,10 @@ public class PipelineMetricsCollector {
     */
     private hash<PipelineMetricsSnapshot> getSnapshotIntern() {
         date now = now_us();
-        float duration_secs = (now - collection_start).durationSecondsFloat();
+        # Use the monotonic clock for elapsed-time arithmetic so a realtime clock step
+        # (NTP slewing, VM time sync) can never produce a negative duration.
+        int now_mono_us = clock_get_monotonic_us();
+        float duration_secs = (now_mono_us - collection_start_mono_us) / 1000000.0;
         # Use total_submitted (input rate) for throughput, not total_completed.
         # In fan-out pipelines, total_completed sums completions from ALL branches
         # (e.g. 2 branches × 100 records = 200 completed), which inflates the throughput
@@ -1783,9 +1800,11 @@ public class PipelineMetricsCollector {
             total_errors += em.error_count;
         }
 
-        # Compute delta metrics for the interval since the previous snapshot
-        date effective_prev_time = prev_snapshot_time ?? collection_start;
-        int interval_ms = (now - effective_prev_time).durationMilliseconds();
+        # Compute delta metrics for the interval since the previous snapshot.  Use the
+        # monotonic clock baseline so a realtime clock step between the previous and
+        # current snapshot can never produce a negative interval.
+        int effective_prev_mono_us = prev_snapshot_mono_us ?: collection_start_mono_us;
+        int interval_ms = (now_mono_us - effective_prev_mono_us) / 1000;
         int delta_submitted = total_submitted - prev_submitted;
         int delta_completed = total_completed - prev_completed;
         float delta_secs = interval_ms / 1000.0;
@@ -1833,6 +1852,7 @@ public class PipelineMetricsCollector {
 
         # Update prev_* state (still inside the lock — safe)
         prev_snapshot_time = now;
+        prev_snapshot_mono_us = now_mono_us;
         prev_submitted = total_submitted;
         prev_completed = total_completed;
         # Only snapshot elements that appear in delta output (non-queue, non-mapper)
