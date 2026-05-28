@@ -1599,6 +1599,33 @@ int64 q_epoch_us(int &us) {
     return ts.tv_sec;
 }
 
+// returns a monotonic-clock timestamp in microseconds (immune to realtime clock adjustments).
+// Used for deadline arithmetic and elapsed-time measurements where CLOCK_REALTIME would be
+// fragile under NTP slewing / VM time sync / chronyd corrections.  Falls back to CLOCK_REALTIME
+// only on systems that lack a monotonic clock (extremely rare modern systems).
+int64 q_get_monotonic_us() {
+#if (defined(DARWIN) && defined(CLOCK_UPTIME_RAW)) || defined(CLOCK_MONOTONIC)
+    struct timespec ts;
+#endif
+#if defined(DARWIN) && defined(CLOCK_UPTIME_RAW)
+    // CLOCK_UPTIME_RAW: monotonic, does not advance while sleeping (preferred for deadlines).
+    // CLOCK_MONOTONIC on Darwin advances while suspended, which is fine for our use too -
+    // either is correct here.
+    if (clock_gettime(CLOCK_UPTIME_RAW, &ts) == 0) {
+        return (int64)ts.tv_sec * 1000000LL + (int64)(ts.tv_nsec / 1000);
+    }
+#endif
+#if defined(CLOCK_MONOTONIC)
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+        return (int64)ts.tv_sec * 1000000LL + (int64)(ts.tv_nsec / 1000);
+    }
+#endif
+    // Fallback: realtime clock (vulnerable to adjustments, but better than nothing).
+    int us;
+    int64 secs = q_epoch_us(us);
+    return secs * 1000000LL + us;
+}
+
 // returns seconds since epoch and gets nanoseconds
 int64 q_epoch_ns(int &ns) {
 #ifdef HAVE_CLOCK_GETTIME

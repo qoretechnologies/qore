@@ -36,7 +36,50 @@
 #include <cerrno>
 #include <cstring>
 
+#if !defined(DARWIN) && defined(CLOCK_MONOTONIC)
+static bool qore_condition_use_monotonic_clock() {
+    static const bool rv = []() {
+        pthread_condattr_t attr;
+        if (pthread_condattr_init(&attr) != 0) {
+            return false;
+        }
+
+        int rc = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+        if (rc == 0) {
+            pthread_cond_t c;
+            rc = pthread_cond_init(&c, &attr);
+            if (rc == 0) {
+                pthread_cond_destroy(&c);
+            }
+        }
+
+        pthread_condattr_destroy(&attr);
+        return rc == 0;
+    }();
+    return rv;
+}
+#endif
+
 QoreCondition::QoreCondition() {
+#if !defined(DARWIN) && defined(CLOCK_MONOTONIC)
+    // Initialize the condvar against CLOCK_MONOTONIC so pthread_cond_timedwait deadlines
+    // are immune to realtime clock adjustments (NTP slewing, VM time sync, chronyd).
+    // Without this, a backward realtime jump between deadline computation and the wait
+    // can shorten the wait (observed as Alpine arm64 CI flake: a 400ms safety timeout
+    // returning at ~160ms). Older systems that cannot initialize monotonic condvars
+    // keep the previous CLOCK_REALTIME behavior.
+    if (qore_condition_use_monotonic_clock()) {
+        pthread_condattr_t attr;
+        if (pthread_condattr_init(&attr) == 0) {
+            if (pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0
+                && pthread_cond_init(&c, &attr) == 0) {
+                pthread_condattr_destroy(&attr);
+                return;
+            }
+            pthread_condattr_destroy(&attr);
+        }
+    }
+#endif
     pthread_cond_init(&c, 0);
 }
 
@@ -104,17 +147,30 @@ int QoreCondition::wait2(pthread_mutex_t* m, int64 timeout_ms) {
     return rc;
 #endif // DEBUG
 #else // !DARWIN
-    struct timeval now;
+    struct timespec now;
     struct timespec tmout;
 
 #ifdef DEBUG
     int64 timeout_ms_orig = timeout_ms;
 #endif // DEBUG
 
-    gettimeofday(&now, 0);
+    // Read the same clock the condvar was initialized with: CLOCK_MONOTONIC when it is
+    // supported by the platform, otherwise fall back to gettimeofday() so the deadline
+    // matches the default CLOCK_REALTIME-backed condvar.
+#if defined(CLOCK_MONOTONIC)
+    if (qore_condition_use_monotonic_clock() && clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
+        // fall through to deadline computation
+    } else
+#endif
+    {
+        struct timeval tv;
+        gettimeofday(&tv, 0);
+        now.tv_sec = tv.tv_sec;
+        now.tv_nsec = (long)tv.tv_usec * 1000;
+    }
     int64 secs = timeout_ms / 1000;
     timeout_ms -= secs * 1000;
-    int64 nsecs = now.tv_usec * 1000 + timeout_ms * 1000000;
+    int64 nsecs = (int64)now.tv_nsec + timeout_ms * 1000000;
     int64 dsecs = nsecs / 1000000000;
     nsecs -= dsecs * 1000000000;
     tmout.tv_sec = now.tv_sec + secs + dsecs;
@@ -126,7 +182,7 @@ int QoreCondition::wait2(pthread_mutex_t* m, int64 timeout_ms) {
 #ifndef DEBUG
     return pthread_cond_timedwait(&c, m, &tmout);
 #else // !DEBUG
-    //printd(5, "QoreCondition::wait(%p, " QLLD ") this=%p now=%d.%09d trigger=%d.%09d\n", m, timeout_ms, this, now.tv_sec, now.tv_usec * 1000, tmout.tv_sec, tmout.tv_nsec);
+    //printd(5, "QoreCondition::wait(%p, " QLLD ") this=%p now=%d.%09d trigger=%d.%09d\n", m, timeout_ms, this, now.tv_sec, now.tv_nsec, tmout.tv_sec, tmout.tv_nsec);
     int rc = pthread_cond_timedwait(&c, m, &tmout);
     if (rc && rc != ETIMEDOUT) {
         printd(0, "QoreCondition::wait(m=%p, timeout_ms=%d) pthread_cond_timedwait() returned %d %s\n", m, timeout_ms_orig, rc, strerror(rc));

@@ -240,11 +240,21 @@ bool qore_set_async_io_thread_for_test(bool value) {
 }
 #endif
 
-//! Returns the current time in microseconds since the epoch
+//! Returns a monotonic-clock timestamp in microseconds (for internal deadline arithmetic).
+/** All controller-internal deadlines (PollInfo::timeout_date_us, poll_timeout_deadline_us,
+    autostop_idle_since, timeout_heap entries, EINTR-retry remaining_us) are set and compared
+    via this function, so the clock must be consistent across all such uses but does NOT need
+    to match wall-clock time.  CLOCK_MONOTONIC is used so deadlines are not skewed by realtime
+    clock adjustments (NTP slewing, VM time sync) - without this, a backward realtime jump
+    can collapse a timed wait to a fraction of the intended duration (observed as a CI flake
+    in waitForNotifierExplicitSafetyTimeoutTest on Alpine arm64).
+
+    NOTE: this is distinct from `Cmd::timer_deadline_us` (AddTimer), which is a wall-clock
+    absolute deadline produced from `DateTime::getEpochMicrosecondsUTC()` - that flow uses
+    realtime semantics and is compared via `QoreEventLoop::q_epoch_us_fast()`, not this.
+*/
 static int64 get_epoch_us() {
-    int us;
-    int64 secs = q_epoch_us(us);
-    return secs * 1000000LL + us;
+    return q_get_monotonic_us();
 }
 
 static int start_socket_async_io_owner(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {

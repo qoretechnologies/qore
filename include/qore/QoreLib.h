@@ -173,6 +173,14 @@ DLLEXPORT int64 q_epoch_us(int &us);
 //! returns the seconds and nanoseconds from the epoch
 DLLEXPORT int64 q_epoch_ns(int &us);
 
+//! returns a monotonic-clock timestamp in microseconds (immune to realtime clock adjustments)
+/** Use for deadline arithmetic and elapsed-time measurements where wall-clock semantics
+    are not required.  On Linux/BSD this uses CLOCK_MONOTONIC; on Darwin it uses
+    CLOCK_UPTIME_RAW.  Falls back to CLOCK_REALTIME-based gettimeofday() only on systems
+    that lack a monotonic clock (extremely rare).
+*/
+DLLEXPORT int64 q_get_monotonic_us();
+
 //! thread-safe basename function (resulting pointer must be free()ed)
 DLLEXPORT char* q_basename(const char* path);
 
