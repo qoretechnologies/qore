@@ -1223,6 +1223,491 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc(const QoreHashNo
     return columnar_descriptor_from_desc_hash(desc, fallback, xsink);
 }
 
+static constexpr int64 COLUMNAR_RESULT_SERIALIZATION_VERSION = 1;
+
+static size_t columnar_bitmap_bytes(size_t bits) {
+    return (bits + 7) / 8;
+}
+
+static bool columnar_bitmap_get(const uint8_t* bytes, size_t index) {
+    return bytes[index / 8] & (uint8_t(1) << (index % 8));
+}
+
+static void columnar_bitmap_set(uint8_t* bytes, size_t index, bool value) {
+    uint8_t mask = uint8_t(1) << (index % 8);
+    if (value) {
+        bytes[index / 8] |= mask;
+    } else {
+        bytes[index / 8] &= ~mask;
+    }
+}
+
+static BinaryNode* columnar_binary_from_bytes(const void* data, size_t size) {
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+    if (size) {
+        bin->append(data, size);
+    }
+    return bin.release();
+}
+
+static BinaryNode* columnar_copy_bitmap(const uint8_t* bytes, size_t bit_offset, size_t length,
+        const char* context, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!bytes && length) {
+        xsink->raiseException("SERIALIZATION-ERROR", "missing bitmap data while %s", context);
+        return nullptr;
+    }
+
+    size_t byte_count = columnar_bitmap_bytes(length);
+    std::vector<uint8_t> normalized(byte_count, 0);
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, context)) {
+            return nullptr;
+        }
+        columnar_bitmap_set(normalized.data(), i, columnar_bitmap_get(bytes, bit_offset + i));
+    }
+    return columnar_binary_from_bytes(normalized.data(), normalized.size());
+}
+
+static int columnar_checked_storage_size(QoreBufferElementType element_type, size_t length, size_t& byte_count,
+        const char* error, ExceptionSink* xsink) {
+    size_t element_size = qore_buffer_element_storage_size(element_type);
+    if (!element_size) {
+        xsink->raiseException(error,
+            "buffer<%s> does not have byte-addressable storage", qore_buffer_element_type_name(element_type));
+        return -1;
+    }
+    if (length > std::numeric_limits<size_t>::max() / element_size) {
+        xsink->raiseException(error,
+            "buffer<%s> length " QSD " overflows serialized byte size",
+            qore_buffer_element_type_name(element_type), length);
+        return -1;
+    }
+    byte_count = length * element_size;
+    return 0;
+}
+
+static void columnar_set_hash_string(QoreHashNode& h, const char* key, const char* value, ExceptionSink* xsink) {
+    h.setKeyValue(key, new QoreStringNode(value), xsink);
+}
+
+static QoreHashNode* columnar_serialize_raw_buffer(const QoreBufferNode* buffer, ExceptionSink* xsink) {
+    assert(xsink);
+    if (buffer->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    const QoreBufferElementType element_type = buffer->getElementType();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    columnar_set_hash_string(**rv, "storage", "buffer-raw-v1", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    columnar_set_hash_string(**rv, "element_type", qore_buffer_element_type_name(element_type), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("nullable", buffer->hasNullableElements(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("length", static_cast<int64>(buffer->size()), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (element_type == QoreBufferElementType::Decimal128) {
+        rv->setKeyValue("precision", static_cast<int64>(buffer->getDecimalPrecision()), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        rv->setKeyValue("scale", static_cast<int64>(buffer->getDecimalScale()), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    SimpleRefHolder<BinaryNode> data;
+    if (element_type == QoreBufferElementType::Bool) {
+        data = columnar_copy_bitmap(static_cast<const uint8_t*>(buffer->getRawData()),
+            buffer->getRawDataBitOffset(), buffer->size(), "serializing buffer<bool> data", xsink);
+    } else {
+        size_t byte_count = 0;
+        if (columnar_checked_storage_size(element_type, buffer->size(), byte_count, "SERIALIZATION-ERROR", xsink)) {
+            return nullptr;
+        }
+        const void* raw = buffer->getRawData();
+        if (!raw && byte_count) {
+            xsink->raiseException("SERIALIZATION-ERROR",
+                "missing raw data while serializing buffer<%s>", qore_buffer_element_type_name(element_type));
+            return nullptr;
+        }
+        data = columnar_binary_from_bytes(raw, byte_count);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("data", data.release(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (buffer->hasNullableElements()) {
+        const uint8_t* validity = buffer->getRawValidityData();
+        if (validity) {
+            SimpleRefHolder<BinaryNode> validity_bin(columnar_copy_bitmap(validity,
+                buffer->getRawValidityBitOffset(), buffer->size(), "serializing buffer validity bitmap", xsink));
+            if (*xsink) {
+                return nullptr;
+            }
+            rv->setKeyValue("validity", validity_bin.release(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    return rv.release();
+}
+
+static QoreHashNode* columnar_serialize_list_buffer(const QoreBufferNode* buffer, ExceptionSink* xsink) {
+    assert(xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    columnar_set_hash_string(**rv, "storage", "buffer-list-v1", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    columnar_set_hash_string(**rv, "element_type", qore_buffer_element_type_name(buffer->getElementType()), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("nullable", buffer->hasNullableElements(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (buffer->getElementType() == QoreBufferElementType::Decimal128) {
+        rv->setKeyValue("precision", static_cast<int64>(buffer->getDecimalPrecision()), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        rv->setKeyValue("scale", static_cast<int64>(buffer->getDecimalScale()), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    rv->setKeyValue("values", buffer->toList(xsink), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
+static QoreHashNode* columnar_serialize_column_data(const QoreColumnarResult::Column& column,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    if (column.data.getType() == NT_BUFFER) {
+        const QoreBufferNode* buffer = column.data.get<const QoreBufferNode>();
+        return buffer->getElementType() == QoreBufferElementType::String
+            ? columnar_serialize_list_buffer(buffer, xsink)
+            : columnar_serialize_raw_buffer(buffer, xsink);
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    columnar_set_hash_string(**rv, "storage", "value", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("value", column.data.refSelf(), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
+static QoreValue columnar_required_key(const QoreHashNode* h, const char* key, const char* context,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    bool exists = false;
+    QoreValue value = h ? h->getKeyValueExistence(key, exists) : QoreValue();
+    if (!exists) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "missing key '%s' while deserializing %s", key, context);
+        return QoreValue();
+    }
+    return value;
+}
+
+static std::string columnar_required_string(const QoreHashNode* h, const char* key, const char* context,
+        ExceptionSink* xsink) {
+    QoreValue value = columnar_required_key(h, key, context, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+    if (value.getType() != NT_STRING) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "key '%s' while deserializing %s has type '%s'; expecting 'string'",
+            key, context, value.getTypeName());
+        return std::string();
+    }
+    QoreStringValueHelper str(value);
+    return std::string(str->c_str());
+}
+
+static int64 columnar_required_int(const QoreHashNode* h, const char* key, const char* context,
+        ExceptionSink* xsink) {
+    QoreValue value = columnar_required_key(h, key, context, xsink);
+    if (*xsink) {
+        return 0;
+    }
+    if (value.getType() != NT_INT) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "key '%s' while deserializing %s has type '%s'; expecting 'int'",
+            key, context, value.getTypeName());
+        return 0;
+    }
+    return value.getAsBigInt();
+}
+
+static int64 columnar_optional_int(const QoreHashNode* h, const char* key, int64 def, const char* context,
+        ExceptionSink* xsink) {
+    bool exists = false;
+    QoreValue value = h->getKeyValueExistence(key, exists);
+    if (!exists) {
+        return def;
+    }
+    if (value.getType() != NT_INT) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "key '%s' while deserializing %s has type '%s'; expecting 'int'",
+            key, context, value.getTypeName());
+        return def;
+    }
+    return value.getAsBigInt();
+}
+
+static bool columnar_required_bool(const QoreHashNode* h, const char* key, const char* context,
+        ExceptionSink* xsink) {
+    QoreValue value = columnar_required_key(h, key, context, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (value.getType() != NT_BOOLEAN) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "key '%s' while deserializing %s has type '%s'; expecting 'bool'",
+            key, context, value.getTypeName());
+        return false;
+    }
+    return value.getAsBool();
+}
+
+static const QoreHashNode* columnar_required_hash(const QoreHashNode* h, const char* key, const char* context,
+        ExceptionSink* xsink) {
+    QoreValue value = columnar_required_key(h, key, context, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (value.getType() != NT_HASH) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "key '%s' while deserializing %s has type '%s'; expecting 'hash'",
+            key, context, value.getTypeName());
+        return nullptr;
+    }
+    return value.get<const QoreHashNode>();
+}
+
+static const QoreListNode* columnar_required_list(const QoreHashNode* h, const char* key, const char* context,
+        ExceptionSink* xsink) {
+    QoreValue value = columnar_required_key(h, key, context, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (value.getType() != NT_LIST) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "key '%s' while deserializing %s has type '%s'; expecting 'list'",
+            key, context, value.getTypeName());
+        return nullptr;
+    }
+    return value.get<const QoreListNode>();
+}
+
+static const BinaryNode* columnar_required_binary(const QoreHashNode* h, const char* key, const char* context,
+        ExceptionSink* xsink) {
+    QoreValue value = columnar_required_key(h, key, context, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (value.getType() != NT_BINARY) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "key '%s' while deserializing %s has type '%s'; expecting 'binary'",
+            key, context, value.getTypeName());
+        return nullptr;
+    }
+    return value.get<const BinaryNode>();
+}
+
+static QoreBufferElementType columnar_required_buffer_type(const QoreHashNode* h, const char* context,
+        ExceptionSink* xsink) {
+    std::string type_name = columnar_required_string(h, "element_type", context, xsink);
+    if (*xsink) {
+        return QoreBufferElementType::Invalid;
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    if (!qore_buffer_element_type_from_name(type_name.c_str(), element_type)) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "invalid buffer element type '%s' while deserializing %s", type_name.c_str(), context);
+    }
+    return element_type;
+}
+
+struct ColumnarSerializedBufferOwner {
+    std::vector<uint8_t> data;
+    std::vector<uint8_t> validity;
+};
+
+static int columnar_copy_binary(const BinaryNode* bin, std::vector<uint8_t>& out) {
+    out.resize(bin->size());
+    if (!out.empty()) {
+        memcpy(out.data(), bin->getPtr(), out.size());
+    }
+    return 0;
+}
+
+static QoreValue columnar_deserialize_raw_buffer(const QoreHashNode* h, ExceptionSink* xsink) {
+    static constexpr const char* context = "raw columnar buffer";
+    QoreBufferElementType element_type = columnar_required_buffer_type(h, context, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (element_type == QoreBufferElementType::String) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "raw serialization is not supported for buffer<string>");
+        return QoreValue();
+    }
+
+    bool nullable = columnar_required_bool(h, "nullable", context, xsink);
+    int64 length_int = columnar_required_int(h, "length", context, xsink);
+    const BinaryNode* data_bin = columnar_required_binary(h, "data", context, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (length_int < 0) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "raw columnar buffer length " QLLD " is invalid", length_int);
+        return QoreValue();
+    }
+    size_t length = static_cast<size_t>(length_int);
+    if (static_cast<int64>(length) != length_int) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "raw columnar buffer length " QLLD " cannot be represented on this platform", length_int);
+        return QoreValue();
+    }
+
+    size_t expected_data_size = element_type == QoreBufferElementType::Bool
+        ? columnar_bitmap_bytes(length) : 0;
+    if (element_type != QoreBufferElementType::Bool
+            && columnar_checked_storage_size(element_type, length, expected_data_size, "DESERIALIZATION-ERROR",
+                xsink)) {
+        return QoreValue();
+    }
+    if (data_bin->size() != expected_data_size) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "raw columnar buffer data has " QSD " bytes; expecting " QSD,
+            data_bin->size(), expected_data_size);
+        return QoreValue();
+    }
+
+    const BinaryNode* validity_bin = nullptr;
+    bool has_validity = false;
+    QoreValue validity_value = h->getKeyValueExistence("validity", has_validity);
+    if (has_validity) {
+        if (!nullable) {
+            xsink->raiseException("DESERIALIZATION-ERROR",
+                "raw columnar buffer has a validity bitmap but is marked non-nullable");
+            return QoreValue();
+        }
+        if (validity_value.getType() != NT_BINARY) {
+            xsink->raiseException("DESERIALIZATION-ERROR",
+                "raw columnar buffer validity has type '%s'; expecting 'binary'",
+                validity_value.getTypeName());
+            return QoreValue();
+        }
+        validity_bin = validity_value.get<const BinaryNode>();
+        size_t expected_validity_size = columnar_bitmap_bytes(length);
+        if (validity_bin->size() != expected_validity_size) {
+            xsink->raiseException("DESERIALIZATION-ERROR",
+                "raw columnar buffer validity has " QSD " bytes; expecting " QSD,
+                validity_bin->size(), expected_validity_size);
+            return QoreValue();
+        }
+    }
+
+    int32_t precision = static_cast<int32_t>(
+        columnar_optional_int(h, "precision", 38, context, xsink));
+    int32_t scale = static_cast<int32_t>(columnar_optional_int(h, "scale", 0, context, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    if (!length) {
+        return element_type == QoreBufferElementType::Decimal128
+            ? QoreValue(new QoreBufferNode(element_type, nullable, 0, precision, scale))
+            : QoreValue(new QoreBufferNode(element_type, nullable, 0));
+    }
+
+    std::shared_ptr<ColumnarSerializedBufferOwner> owner = std::make_shared<ColumnarSerializedBufferOwner>();
+    columnar_copy_binary(data_bin, owner->data);
+    const uint8_t* validity = nullptr;
+    int64 null_count = 0;
+    if (validity_bin) {
+        columnar_copy_binary(validity_bin, owner->validity);
+        validity = owner->validity.data();
+        null_count = -1;
+    }
+
+    QoreBufferNode* buffer = element_type == QoreBufferElementType::Decimal128
+        ? QoreBufferNode::wrapExternalStorage(element_type, nullable, length, owner->data.data(), validity, owner,
+            null_count, precision, scale, xsink)
+        : QoreBufferNode::wrapExternalStorage(element_type, nullable, length, owner->data.data(), validity, owner,
+            null_count, xsink);
+    return *xsink ? QoreValue() : QoreValue(buffer);
+}
+
+static QoreValue columnar_deserialize_list_buffer(const QoreHashNode* h, ExceptionSink* xsink) {
+    static constexpr const char* context = "list columnar buffer";
+    QoreBufferElementType element_type = columnar_required_buffer_type(h, context, xsink);
+    bool nullable = columnar_required_bool(h, "nullable", context, xsink);
+    const QoreListNode* values = columnar_required_list(h, "values", context, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    int32_t precision = static_cast<int32_t>(
+        columnar_optional_int(h, "precision", 38, context, xsink));
+    int32_t scale = static_cast<int32_t>(columnar_optional_int(h, "scale", 0, context, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return element_type == QoreBufferElementType::Decimal128
+        ? QoreValue(new QoreBufferNode(element_type, nullable, values, xsink, precision, scale))
+        : QoreValue(new QoreBufferNode(element_type, nullable, values, xsink));
+}
+
+static QoreValue columnar_deserialize_column_data(const QoreHashNode* h, ExceptionSink* xsink) {
+    static constexpr const char* context = "columnar column data";
+    std::string storage = columnar_required_string(h, "storage", context, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    if (storage == "value") {
+        return columnar_required_key(h, "value", context, xsink).refSelf();
+    }
+    if (storage == "buffer-raw-v1") {
+        return columnar_deserialize_raw_buffer(h, xsink);
+    }
+    if (storage == "buffer-list-v1") {
+        return columnar_deserialize_list_buffer(h, xsink);
+    }
+
+    xsink->raiseException("DESERIALIZATION-ERROR",
+        "unsupported columnar column data storage '%s'", storage.c_str());
+    return QoreValue();
+}
+
 static void columnar_shape_apply_schema(ColumnarShape& shape, const QoreColumnarTypeDescriptor& schema) {
     if (schema.kind == QoreColumnarTypeKind::Decimal128
             || schema.buffer_type == QoreBufferElementType::Decimal128) {
@@ -3660,6 +4145,138 @@ QoreColumnarResult* QoreColumnarResult::fromRows(const QoreListNode* rows, const
     }
 
     return fromColumnHash(*columns, desc, xsink);
+}
+
+QoreHashNode* QoreColumnarResult::serialize(ExceptionSink* xsink) const {
+    assert(xsink);
+    if (row_count > static_cast<size_t>(std::numeric_limits<int64>::max())) {
+        xsink->raiseException("SERIALIZATION-ERROR",
+            "columnar result row count " QSD " cannot be represented in serialized data", row_count);
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("version", COLUMNAR_RESULT_SERIALIZATION_VERSION, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("row_count", static_cast<int64>(row_count), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreListNode> serialized_columns(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "serializing columnar result columns")) {
+            return nullptr;
+        }
+
+        const Column& column = columns[i];
+        ReferenceHolder<QoreHashNode> ch(new QoreHashNode(autoTypeInfo), xsink);
+        ch->setKeyValue("name", new QoreStringNode(column.name), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ch->setKeyValue("schema", columnar_descriptor_to_hash(column.schema, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ch->setKeyValue("data", columnar_serialize_column_data(column, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        serialized_columns->push(ch.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    rv->setKeyValue("columns", serialized_columns.release(), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
+QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!sdata) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "missing serialized columnar result payload");
+        return nullptr;
+    }
+
+    int64 version = columnar_required_int(sdata, "version", "columnar result", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (version != COLUMNAR_RESULT_SERIALIZATION_VERSION) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "unsupported columnar result serialization version " QLLD "; expecting " QLLD,
+            version, COLUMNAR_RESULT_SERIALIZATION_VERSION);
+        return nullptr;
+    }
+
+    int64 row_count_int = columnar_required_int(sdata, "row_count", "columnar result", xsink);
+    const QoreListNode* serialized_columns = columnar_required_list(sdata, "columns", "columnar result", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (row_count_int < 0) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "serialized columnar result row_count " QLLD " is invalid", row_count_int);
+        return nullptr;
+    }
+    size_t expected_rows = static_cast<size_t>(row_count_int);
+    if (static_cast<int64>(expected_rows) != row_count_int) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "serialized columnar result row_count " QLLD " cannot be represented on this platform", row_count_int);
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreColumnarResult> rv(new QoreColumnarResult, xsink);
+    for (size_t i = 0; i < serialized_columns->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "deserializing columnar result columns")) {
+            return nullptr;
+        }
+
+        QoreValue column_value = serialized_columns->retrieveEntry(i);
+        if (column_value.getType() != NT_HASH) {
+            xsink->raiseException("DESERIALIZATION-ERROR",
+                "serialized columnar result column " QSD " has type '%s'; expecting 'hash'",
+                i, column_value.getTypeName());
+            return nullptr;
+        }
+        const QoreHashNode* column_hash = column_value.get<const QoreHashNode>();
+
+        std::string name = columnar_required_string(column_hash, "name", "columnar result column", xsink);
+        const QoreHashNode* schema_hash = columnar_required_hash(column_hash, "schema", "columnar result column",
+            xsink);
+        const QoreHashNode* data_hash = columnar_required_hash(column_hash, "data", "columnar result column",
+            xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        QoreColumnarTypeDescriptor fallback;
+        fallback.name = name;
+        QoreColumnarTypeDescriptor schema = columnar_descriptor_from_desc_hash(schema_hash, fallback, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ValueHolder data(columnar_deserialize_column_data(data_hash, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->addColumn(name.c_str(), data.release(), schema, xsink)) {
+            return nullptr;
+        }
+    }
+
+    if (rv->numRows() != expected_rows) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "serialized columnar result row_count " QLLD " does not match column row count " QLLD,
+            static_cast<int64>(expected_rows), static_cast<int64>(rv->numRows()));
+        return nullptr;
+    }
+
+    return rv.release();
 }
 
 const QoreColumnarResult::Column* QoreColumnarResult::getColumn(size_t index) const {

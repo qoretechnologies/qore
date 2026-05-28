@@ -131,6 +131,21 @@ public:
     DLLEXPORT static QoreColumnarResult* fromRows(const QoreListNode* rows, const QoreHashNode* desc,
         ExceptionSink* xsink);
 
+    //! Creates a columnar result from a serialized payload.
+    /** @param sdata serialized payload produced by serialize()
+        @param xsink exception sink for validation, allocation, and cancellation errors
+        @return a new columnar result, or nullptr if an exception was raised
+        @throw DESERIALIZATION-ERROR if the payload has an unsupported version or invalid shape
+     */
+    DLLEXPORT static QoreColumnarResult* deserialize(const QoreHashNode* sdata, ExceptionSink* xsink);
+
+    //! Returns a serialized payload for this columnar result.
+    /** @param xsink exception sink for allocation and cancellation errors
+        @return a versioned hash payload that can be passed to deserialize()
+        @throw SERIALIZATION-ERROR if a column cannot be represented in the serialization format
+     */
+    DLLEXPORT QoreHashNode* serialize(ExceptionSink* xsink) const;
+
     //! Adds a column and takes ownership of @a data.
     DLLEXPORT int addColumn(const char* name, QoreValue data, QoreColumnarColumnType column_type,
         QoreBufferElementType buffer_type, bool nullable, const char* native_type, ExceptionSink* xsink);

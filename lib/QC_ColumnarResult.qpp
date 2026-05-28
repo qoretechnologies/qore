@@ -8,6 +8,60 @@
 */
 
 #include <qore/QoreColumnarResult.h>
+#include "qore/intern/QC_ColumnarResult.h"
+#include "qore/intern/QC_Serializable.h"
+
+static QoreHashNode* ColumnarResult_serializer(const QoreObject& self, const QoreColumnarResult& result,
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
+    ReferenceHolder<QoreHashNode> payload(result.serialize(xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder payload_value((*payload)->hashRefSelf(), xsink);
+    ValueHolder serialized_payload(context.serializeValue(*payload_value, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("payload", serialized_payload.release(), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
+static void ColumnarResult_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
+    if (!sdata) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "missing serialization data for the ColumnarResult class");
+        return;
+    }
+
+    QoreValue payload_value = sdata->getKeyValue("payload");
+    if (!payload_value) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "missing serialization key 'payload' for the ColumnarResult class");
+        return;
+    }
+
+    ValueHolder payload(context.deserializeValue(payload_value, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    if (payload->getType() != NT_HASH) {
+        xsink->raiseException("DESERIALIZATION-ERROR",
+            "ColumnarResult serialization key 'payload' has type '%s'; expecting 'hash'",
+            payload->getTypeName());
+        return;
+    }
+
+    ReferenceHolder<QoreColumnarResult> result(
+        QoreColumnarResult::deserialize(payload->get<const QoreHashNode>(), xsink), xsink);
+    if (!*xsink) {
+        self.setPrivate(CID_COLUMNARRESULT, result.release());
+    }
+}
 
 //! Dense column-oriented SQL result set
 /** Represents a SQL result set as ordered typed columns. Primitive numeric and
@@ -61,7 +115,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromQuery(ds,
 
     @since %Qore 2.3
 */
-qclass ColumnarResult [arg=QoreColumnarResult* result; ns=Qore::SQL; flags=final];
+qclass ColumnarResult [arg=QoreColumnarResult* result; ns=Qore::SQL; flags=final; vparent=Serializable;
+    serializer=reinterpret_cast<q_serializer_t>(ColumnarResult_serializer);
+    deserializer=ColumnarResult_deserializer];
 
 //! ColumnarResult objects cannot be copied
 /** @throw COPY-ERROR always thrown
