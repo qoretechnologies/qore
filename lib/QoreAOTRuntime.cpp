@@ -37,6 +37,7 @@
 #include <cstdlib>
 
 #include <qore/ModuleManager.h>
+#include <qore/QoreThreadLock.h>
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_program_private.h"
@@ -8892,6 +8893,8 @@ static bool aotInitTraceEnabled() {
     return enabled;
 }
 
+static QoreRecursiveThreadLock aot_init_execution_lock;
+
 //! Extract dependency module names from source \%requires directives
 /** Parses the source to find all \%requires directives and extracts the module names.
     Skips "qore" since it's always available.
@@ -10373,6 +10376,11 @@ static void executeInitFunctions(
     if (exec_infos.empty() || descriptors.empty()) {
         return;
     }
+
+    // AOT init functions can load further modules and can run generated code
+    // that mutates module/static state. Keep this phase reentrant but serialized
+    // across threads, matching the effective source-module initialization model.
+    AutoLocker aot_init_al(aot_init_execution_lock);
 
     if (aotInitTraceEnabled()) {
         fprintf(stderr, "[aot-init] execute module=%s pgm=%p shadow=%p exec_infos=%zu descriptors=%zu path=%s\n",
