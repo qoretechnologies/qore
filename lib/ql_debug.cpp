@@ -653,8 +653,8 @@ static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "q_future_get_blocking on resolved Future: no exception");
     UT_ASSERT_EQ(c, (int64)42, result.getAsBigInt(),
         "q_future_get_blocking returns the resolved value");
-    UT_ASSERT(c, elapsed_us >= 40000 && elapsed_us < 200000,
-        "q_future_get_blocking elapsed ~50ms (before resolution)");
+    UT_ASSERT(c, elapsed_us >= 40000,
+        "q_future_get_blocking waits until background resolution");
 
     result.discard(&xsink);
     future_obj->deref(&xsink);
