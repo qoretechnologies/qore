@@ -339,3 +339,40 @@ nothing AbstractConnectionPool::setWarningCallback(int warning_ms, code callback
 nothing AbstractConnectionPool::clearWarningCallback() {
     cp->clearWarningCallback(xsink);
 }
+
+//! Blocks the calling thread until at least \a n threads are waiting for a pool resource.
+/** Provides a deterministic synchronization point for tests and admin code that needs to
+    know other threads have actually entered the in-pool wait — polling
+    @ref AbstractConnectionPool::getStats() "getStats().wait_count" is fragile.  The
+    method returns as soon as the in-pool wait count reaches \a n, and is interrupted by
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()"
+    (raising \c PROGRAM-INTERRUPTED) just like the other interruptible pool waits.
+
+    @param n the minimum number of in-pool waiters to wait for; must be >= 1
+    @param timeout_ms the maximum time to wait in milliseconds; integers are interpreted
+        as milliseconds; relative date/time values are interpreted literally with a
+        maximum resolution of milliseconds; a value <= 0 means wait indefinitely
+
+    @return @ref True "True" when the in-pool wait count reached \a n within the
+        timeout; @ref False "False" if the timeout elapsed first.
+
+    @throw CONNECTIONPOOL-ERROR \a n is less than 1
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a
+        @ref Qore::SandboxManager "SandboxManager" attached and
+        @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()"
+        is called while the method is blocked
+
+    @since %Qore 2.3
+*/
+bool AbstractConnectionPool::waitForWaiters(int n, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+    if (n < 1) {
+        xsink->raiseException("CONNECTIONPOOL-ERROR",
+            "waitForWaiters(n=" QLLD ") requires n >= 1", n);
+        return QoreValue();
+    }
+    int rc = cp->waitForWaiters((int)n, timeout_ms, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rc == 0;
+}

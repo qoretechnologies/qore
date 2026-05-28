@@ -867,9 +867,26 @@ class QuicComprehensiveTest inherits QUnit::Test {
                     cli.submitQuicRequest("GET", path);
                     ctrl.wakeSocket(cli);
 
-                    # Wait for server
-                    server_q.get(internal_to);
-                    hash<auto> req = server_op.getOutput();
+                    # Wait for server.  Each completion is checked explicitly:
+                    # without these checks a controller-side timeout or cancel
+                    # would surface as "RUNTIME-TYPE-ERROR: <lvalue> expects
+                    # type 'hash<auto>', but got no value instead" from the
+                    # getOutput() assignment below, masking which step actually
+                    # failed.
+                    *hash<SocketPollResultInfo> srv_res = server_q.get(internal_to);
+                    if (!exists srv_res) {
+                        throw "TIMEOUT", sprintf("conn %d: server receive returned no result",
+                            conn_idx);
+                    }
+                    if (srv_res.ex) {
+                        throw "POLL-OP-ERROR", sprintf("conn %d: server receive: %s: %s",
+                            conn_idx, srv_res.ex.err, srv_res.ex.desc);
+                    }
+                    *hash<auto> req = server_op.getOutput();
+                    if (!exists req) {
+                        throw "TIMEOUT", sprintf("conn %d: server receive had no output "
+                            "(canceled=%y)", conn_idx, srv_res.canceled);
+                    }
 
                     # Send response
                     string resp_body = sprintf("Connection %d OK", conn_idx);
@@ -882,11 +899,31 @@ class QuicComprehensiveTest inherits QUnit::Test {
                         "key": "server-send-" + string(conn_idx),
                         "to": internal_to,
                     });
-                    send_q.get(internal_to);
+                    *hash<SocketPollResultInfo> send_res = send_q.get(internal_to);
+                    if (!exists send_res) {
+                        throw "TIMEOUT", sprintf("conn %d: server send returned no result",
+                            conn_idx);
+                    }
+                    if (send_res.ex) {
+                        throw "POLL-OP-ERROR", sprintf("conn %d: server send: %s: %s",
+                            conn_idx, send_res.ex.err, send_res.ex.desc);
+                    }
 
                     # Wait for client response
-                    client_q.get(internal_to);
-                    hash<auto> resp = client_op.getOutput();
+                    *hash<SocketPollResultInfo> cli_res = client_q.get(internal_to);
+                    if (!exists cli_res) {
+                        throw "TIMEOUT", sprintf("conn %d: client response returned no result",
+                            conn_idx);
+                    }
+                    if (cli_res.ex) {
+                        throw "POLL-OP-ERROR", sprintf("conn %d: client response: %s: %s",
+                            conn_idx, cli_res.ex.err, cli_res.ex.desc);
+                    }
+                    *hash<auto> resp = client_op.getOutput();
+                    if (!exists resp) {
+                        throw "TIMEOUT", sprintf("conn %d: client response had no output "
+                            "(canceled=%y)", conn_idx, cli_res.canceled);
+                    }
 
                     { AutoLock al(m); results += {
                         "conn": conn_idx,

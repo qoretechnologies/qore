@@ -438,12 +438,16 @@ Datasource* DatasourcePool::getDSIntern(bool& new_ds, int64& wait_total, Excepti
         //printd(5, "DatasourcePool::getDSIntern() this: %p tl_timeout_ms: %d max: %d\n", this, tl_timeout_ms, max);
         // otherwise we sleep until a connection becomes available
         ++wait_count;
-        int64 warn_start = q_clock_getmicros();
+        // Monotonic clock for the elapsed-time measurement: a realtime clock jump
+        // (NTP slewing, VM time sync) between warn_start and the post-wait read
+        // would otherwise skew wait_total and cause the warning callback to mis-fire
+        // (or fail to fire).  Same fix and rationale as ConnectionPool::acquire().
+        int64 warn_start = q_get_monotonic_us();
         int rc = tl_timeout_ms ? wait((QoreThreadLock*)this, tl_timeout_ms) : wait((QoreThreadLock*)this);
         wait_count--;
 
         // add waiting time to total time
-        wait_total += (q_clock_getmicros() - warn_start);
+        wait_total += (q_get_monotonic_us() - warn_start);
 
         if (!valid) {
             xsink->raiseException("DATASOURCEPOOL-ERROR", "%s:%s@%s: DatasourcePool deleted while TID %d waiting " \

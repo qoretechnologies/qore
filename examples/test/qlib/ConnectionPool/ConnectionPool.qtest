@@ -131,8 +131,41 @@ class ConnectionPoolTest inherits QUnit::Test {
         addTestCase("RestClientPool", \testRestClientPool());
         addTestCase("RestClientPool min pre-create", \testRestClientPoolMinPreCreate());
         addTestCase("destructor calls destroyResource", \testDestructorCallsDestroyResource());
+        addTestCase("waitForWaiters", \testWaitForWaiters());
 
         set_return_value(main());
+    }
+
+    testWaitForWaiters() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 1, "timeout_ms": 5000});
+
+        # With no waiters and a bounded timeout, returns False once the timeout
+        # elapses.  (0 / negative timeouts mean "wait indefinitely", matching
+        # the convention of Queue::get(); use a small positive timeout here so
+        # the assertion completes in well under a second.)
+        assertEq(False, pool.waitForWaiters(1, 50ms),
+            "n=1 with 50ms timeout and no waiters returns False");
+
+        # Single waiter: returns True once the background thread is blocked
+        TestResource r1 = pool.acquire();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            TestResource r2 = pool.acquire();
+            on_exit pool.release();
+        }();
+        assertTrue(pool.waitForWaiters(1, 30s),
+            "waitForWaiters(1, 30s) returns True after background enters wait");
+        assertEq(1, pool.getStats().wait_count,
+            "wait_count is exactly 1 after waitForWaiters(1) returns");
+        pool.release();
+        done.waitForZero();
+        assertEq(0, pool.getStats().wait_count,
+            "wait_count returns to 0 after background exits the wait");
+
+        # Reject n < 1
+        assertThrows("CONNECTIONPOOL-ERROR", sub () { pool.waitForWaiters(0, 1s); });
+        assertThrows("CONNECTIONPOOL-ERROR", sub () { pool.waitForWaiters(-1, 1s); });
     }
 
     testBasicAcquireRelease() {
@@ -427,10 +460,16 @@ class ConnectionPoolTest inherits QUnit::Test {
         Counter done(1);
         background sub () {
             on_exit done.dec();
-            # This will block for ~100ms waiting for the resource, exceeding the 10ms threshold
+            # This will block waiting for the resource, exceeding the 10ms threshold
             TestResource r2 = pool.acquire();
             on_exit pool.release();
         }();
+
+        # Wait deterministically until the background thread is actually blocked
+        # in acquire() before holding the resource, so the warning threshold check
+        # fires regardless of runner scheduling jitter.
+        assertTrue(pool.waitForWaiters(1, 30s),
+            "background thread entered in-pool wait within 30s");
 
         # Hold the resource for 100ms so the waiter exceeds the warning threshold
         usleep(100ms);
@@ -452,6 +491,8 @@ class ConnectionPoolTest inherits QUnit::Test {
             TestResource r3 = pool.acquire();
             on_exit pool.release();
         }();
+        assertTrue(pool.waitForWaiters(1, 30s),
+            "second background thread entered in-pool wait within 30s");
         usleep(50ms);
         pool.release();
         done2.waitForZero();

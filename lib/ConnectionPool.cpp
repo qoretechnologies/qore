@@ -60,7 +60,7 @@ void ConnectionPool::init(ExceptionSink* xsink) {
             return;
         }
         pool.push_back(resource);
-        last_released.push_back(q_clock_getmicros());
+        last_released.push_back(q_get_monotonic_us());
         free_list.push_back(i);
         ++live_count;
     }
@@ -86,7 +86,7 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
         return resource->objectRefSelf();
     }
 
-    int64 start_us = q_clock_getmicros();
+    int64 start_us = q_get_monotonic_us();
 
     while (true) {
         // Try to get a free resource (LIFO for cache warmth)
@@ -147,11 +147,11 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
             }
             if (idx >= 0) {
                 pool[idx] = resource;
-                last_released[idx] = q_clock_getmicros();
+                last_released[idx] = q_get_monotonic_us();
             } else {
                 idx = (int)pool.size();
                 pool.push_back(resource);
-                last_released.push_back(q_clock_getmicros());
+                last_released.push_back(q_get_monotonic_us());
             }
             ++live_count;
             tmap[tid] = idx;
@@ -168,12 +168,14 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
 
         // Pool exhausted -- wait for a free resource
         ++wait_count_val;
+        wait_count_cond.broadcast();
 
         if (timeout_ms > 0) {
-            int64 elapsed_us = q_clock_getmicros() - start_us;
+            int64 elapsed_us = q_get_monotonic_us() - start_us;
             int64 remaining_ms = timeout_ms - elapsed_us / 1000;
             if (remaining_ms <= 0) {
                 --wait_count_val;
+                wait_count_cond.broadcast();
                 ++total_timeouts;
                 xsink->raiseException("CONNECTIONPOOL-ERROR",
                     "timed out waiting for a free resource after " QLLD " ms "
@@ -186,6 +188,7 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
             wait(this);
         }
         --wait_count_val;
+        wait_count_cond.broadcast();
 
         if (!valid) {
             xsink->raiseException("CONNECTIONPOOL-ERROR",
@@ -195,7 +198,7 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
 
         // Check if wait exceeded warning threshold
         if (warning_ms > 0 && warning_callback) {
-            int64 elapsed_us = q_clock_getmicros() - start_us;
+            int64 elapsed_us = q_get_monotonic_us() - start_us;
             int64 elapsed_ms = elapsed_us / 1000;
             if (elapsed_ms >= warning_ms) {
                 ReferenceHolder<ResolvedCallReferenceNode> cb(
@@ -250,7 +253,7 @@ void ConnectionPool::release(ExceptionSink* xsink) {
 
     {
         AutoLocker al(this);
-        last_released[idx] = q_clock_getmicros();
+        last_released[idx] = q_get_monotonic_us();
         free_list.push_back(idx);
         if (wait_count_val > 0) {
             signal();
@@ -341,7 +344,7 @@ int ConnectionPool::cleanupIdle(ExceptionSink* xsink) {
         return 0;
     }
 
-    int64 cutoff_us = q_clock_getmicros() - idle_timeout_ms * 1000;
+    int64 cutoff_us = q_get_monotonic_us() - idle_timeout_ms * 1000;
 
     std::vector<QoreObject*> to_destroy;
 
@@ -406,6 +409,39 @@ void ConnectionPool::clearWarningCallback(ExceptionSink* xsink) {
     }
     warning_arg.discard(xsink);
     warning_arg = QoreValue();
+}
+
+int ConnectionPool::waitForWaiters(int n, int64 timeout_ms, ExceptionSink* xsink) {
+    SafeLocker sl(this);
+    if (wait_count_val >= n) {
+        return 0;
+    }
+    if (timeout_ms <= 0) {
+        while (wait_count_val < n) {
+            int rc = wait_count_cond.waitWithInterrupt(this, xsink);
+            if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+    int64 deadline_us = q_get_monotonic_us() + timeout_ms * 1000;
+    while (wait_count_val < n) {
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            return -1;
+        }
+        int64 remaining_ms = remaining_us / 1000;
+        if (remaining_ms <= 0) {
+            remaining_ms = 1;
+        }
+        int rc = wait_count_cond.waitWithInterrupt(this, remaining_ms, xsink);
+        if (rc == QORE_COND_RESULT_INTERRUPTED) {
+            return -1;
+        }
+        // rc == QORE_COND_RESULT_TIMEOUT or SUCCESS: loop re-checks the condition.
+    }
+    return 0;
 }
 
 // --- QoreConnectionPool: bridges back to Qore ---

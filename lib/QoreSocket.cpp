@@ -9797,7 +9797,7 @@ PrivateQoreSocketTimeoutHelper::~PrivateQoreSocketTimeoutHelper() {
     if (!sock)
         return;
 
-    int64 dt = q_clock_getmicros() - start;
+    int64 dt = q_get_monotonic_us() - start;
     if (dt >= sock->tl_warning_us.load(std::memory_order_relaxed)) {
         sock->doTimeoutWarning(op, dt);
     }
@@ -9819,7 +9819,7 @@ void PrivateQoreSocketThroughputHelper::finalize(int64 bytes) {
         return;
     }
 
-    int64 dt = q_clock_getmicros() - start;
+    int64 dt = q_get_monotonic_us() - start;
     if (send) {
         sock->tp_bytes_sent.fetch_add(bytes, std::memory_order_relaxed);
         sock->tp_us_sent.fetch_add(dt, std::memory_order_relaxed);

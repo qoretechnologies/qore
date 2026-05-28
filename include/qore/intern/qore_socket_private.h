@@ -289,7 +289,12 @@ public:
 
 class PrivateQoreSocketTimeoutBase {
 public:
-    DLLLOCAL PrivateQoreSocketTimeoutBase(qore_socket_private* s) : sock(s), start(sock ? q_clock_getmicros() : 0) {
+    // Monotonic clock for the elapsed-time measurement (timeout warning and throughput
+    // accounting): a realtime clock jump between this capture and the post-op read in
+    // the helpers' destructors / finalize() would otherwise skew dt and mis-fire the
+    // socket timeout/throughput warning callbacks.  Matches ConnectionPool and
+    // DatasourcePool.
+    DLLLOCAL PrivateQoreSocketTimeoutBase(qore_socket_private* s) : sock(s), start(sock ? q_get_monotonic_us() : 0) {
     }
 
 protected:
