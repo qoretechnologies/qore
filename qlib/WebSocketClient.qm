@@ -256,6 +256,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       closure throws) is now caught and logged in \c handleAsyncShutdown() instead of silently aborting the
       reconnect, and a terminal reconnect failure clears the in-flight latch so a later
       @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" can retry
+    - improved disconnect/reconnect diagnostics: a connection teardown that will reconnect now logs the reason
+      at \c INFO level (previously the only \c INFO line came from the reconnect-thread start, which is absent
+      if the thread spawn fails), and a terminal WebSocket close is now logged at \c INFO instead of \c DEBUG
+      so the close code and reason are visible at the default log level
     - added async I/O support using the global @ref AsyncSocketIo::AsyncSocketIoController for scalable,
       non-blocking WebSocket client connections; enabled by default for HTTP/1.1 connections
       - added the \c async_io constructor option (default @ref True); the option is retained for compatibility,
@@ -2497,6 +2501,15 @@ ws.setEventQueue();
 
             if (reconnect && !stop) {
                 should_reconnect = True;
+                # Diagnostic breadcrumb at INFO level: without this, a shutdown
+                # that will reconnect only logs via startReconnect()'s "starting
+                # reconnect in TID N" message — which never prints if start_thread()
+                # throws, making the disconnect invisible at the default INFO level
+                # (the per-message "closed"/"error" logs in processAsyncMessage()
+                # are logDebug and thus hidden).  Always record the reason here so a
+                # silent-death investigation has a starting point.
+                logInfo("Disconnected websocket connection; will reconnect (async)%s",
+                    async_close_cause.val() ? sprintf(" (cause: %s)", async_close_cause) : "");
             } else {
                 if (stop) {
                     logInfo("Disconnected websocket connection on external request (async)");
@@ -2570,7 +2583,12 @@ ws.setEventQueue();
                 return WSEDC_CONTINUE;
             }
             case "closed": {
-                logDebug("Connection closed: code %d: %y", msg.code, msg.reason);
+                # logged at INFO (not DEBUG): a terminal close is the start of a
+                # disconnect/reconnect cycle and must be visible at the default log
+                # level for post-mortem diagnosis (see the handleAsyncShutdown
+                # breadcrumb) — a DEBUG-only line here is why the cloud-bot's
+                # 2026-05-29 silent disconnect left no trace at INFO
+                logInfo("Connection closed: code %d: %y", msg.code, msg.reason);
                 return WSEDC_BREAK;
             }
             case "error": {
