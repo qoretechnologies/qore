@@ -249,6 +249,13 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_4 v2.4
+    - fixed a wedged-connection bug where @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()"
+      returned @ref False and could not recover when the async event thread had exited (\c tid cleared) while
+      auto-reconnect was enabled; @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" now detects
+      this state and starts a fresh connection.  A failure to schedule the reconnect (e.g. the thread-spawn
+      closure throws) is now caught and logged in \c handleAsyncShutdown() instead of silently aborting the
+      reconnect, and a terminal reconnect failure clears the in-flight latch so a later
+      @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" can retry
     - added async I/O support using the global @ref AsyncSocketIo::AsyncSocketIoController for scalable,
       non-blocking WebSocket client connections; enabled by default for HTTP/1.1 connections
       - added the \c async_io constructor option (default @ref True); the option is retained for compatibility,
@@ -1257,33 +1264,79 @@ ws.connect();
     /** @return True if the reconnect was started
     */
     bool reconnect() {
-        AutoLock al(m);
+        bool need_start = False;
+        *int old_tid;
+        {
+            AutoLock al(m);
 
-        if (!tid) {
-            return False;
-        }
+            if (stop) {
+                return False;
+            }
 
-        if (!reconnect) {
-            reconnect = True;
-        }
+            if (!reconnect) {
+                reconnect = True;
+            }
 
-        # check if already reconnecting
-        if (!stop && !do_reconnect) {
-            do_reconnect = True;
-            # wake up any sleeping threads
-            sleep_cond.broadcast();
-            if (poll_op) {
-                # Send close frame for async mode
-                if (!async_close_sent && !poll_op.goalReached()) {
-                    async_close_sent = True;
-                    poll_op.sendClose(WSCC_NormalClosure);
+            if (!tid) {
+                # Wedged state recovery: the event thread is gone but auto-reconnect
+                # is enabled.  This happens when handleAsyncShutdown() reached
+                # clearTid() but never managed to schedule startReconnect() — for
+                # example because start_thread() threw, the spawned doReconnect
+                # thread died before updating tid, or a re-entrant disconnectUnlocked()
+                # cleared tid via a path that skips reconnect scheduling.  Without
+                # this branch, isOpen() stays False, isReconnecting() stays True, and
+                # reconnect() returns False forever; nothing else recovers.
+                #
+                # Use do_reconnect as an in-flight latch so concurrent reconnect()
+                # callers don't double-spawn doReconnect threads.  doReconnect's
+                # entry path will run reconnectPreamble() (a no-op disconnect since
+                # nothing is open) and then drive a fresh connect.
+                if (do_reconnect) {
+                    return True;
                 }
-                wakeAsyncIo();
+                do_reconnect = True;
+                need_start = True;
+            } else if (!do_reconnect) {
+                do_reconnect = True;
+                # wake up any sleeping threads
+                sleep_cond.broadcast();
+                if (poll_op) {
+                    # Send close frame for async mode
+                    if (!async_close_sent && !poll_op.goalReached()) {
+                        async_close_sent = True;
+                        poll_op.sendClose(WSCC_NormalClosure);
+                    }
+                    wakeAsyncIo();
+                }
+            }
+            old_tid = tid;
+            if (old_tid) {
+                # wait for the event thread to terminate
+                waitTidCleared(old_tid);
             }
         }
-        # wait for the event thread to terminate
-        waitTidCleared(tid);
 
+        if (need_start) {
+            try {
+                startReconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                # Recovery itself failed (e.g. ServiceApi::startThread() threw).
+                # Release the in-flight latch so the next reconnect() call can retry.
+                {
+                    AutoLock al(m);
+                    do_reconnect = False;
+                }
+                try {
+                    logError("startReconnect from reconnect() recovery path failed: %s",
+                        get_exception_string(ex));
+                } catch (hash<ExceptionInfo> ex0) {
+                    if (ex0.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+                rethrow;
+            }
+        }
         return True;
     }
 
@@ -2464,7 +2517,23 @@ ws.setEventQueue();
         }
 
         if (should_reconnect) {
-            startReconnect();
+            try {
+                startReconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                # startReconnect() threw (e.g. start_thread() refused the new
+                # thread).  clearTid() has already run, so tid==0 and
+                # do_reconnect==False; the next external reconnect() call will see
+                # the wedged state and recover via its tid==0 branch.  Log so the
+                # silent disconnect is at least diagnosable post-mortem.
+                try {
+                    logError("startReconnect from handleAsyncShutdown failed: %s",
+                        get_exception_string(ex));
+                } catch (hash<ExceptionInfo> ex0) {
+                    if (ex0.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+            }
         }
     }
 
@@ -2579,6 +2648,21 @@ ws.setEventQueue();
         } catch (hash<ExceptionInfo> ex) {
             try {
                 logError("Failed to reconnect: %s", get_exception_string(ex));
+            } catch (hash<ExceptionInfo> ex0) {
+                if (ex0.err != "OBJECT-ALREADY-DELETED") {
+                    rethrow;
+                }
+            }
+            # Release the in-flight latch so external reconnect() can retry.
+            # clearTid() (which also clears do_reconnect) normally runs on the
+            # next clean shutdown, but if we got here via the recovery path in
+            # reconnect() and the new connect attempt failed terminally, tid is
+            # still 0 and do_reconnect would stay True forever — wedging
+            # reconnect() in its "another caller already kicked off recovery"
+            # short-circuit.
+            try {
+                AutoLock al(m);
+                do_reconnect = False;
             } catch (hash<ExceptionInfo> ex0) {
                 if (ex0.err != "OBJECT-ALREADY-DELETED") {
                     rethrow;
