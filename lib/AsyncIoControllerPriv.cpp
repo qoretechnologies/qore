@@ -4204,6 +4204,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             bool timed_out;
             bool completed;
             bool was_ready;  // true if triggered by a ready event (kqueue/epoll)
+            bool socket_wait_generation_changed;
         };
         std::vector<PollResult> poll_results;
 
@@ -4228,11 +4229,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             result.timed_out = op.timed_out;
             result.completed = false;
             result.was_ready = op.was_ready;
+            result.socket_wait_generation_changed = false;
 
             auto wait_it = t.cache.find(op.key);
             if (wait_it != t.cache.end()) {
                 result.ex_hash = makeSocketWaitGenerationException(wait_it->second, xsink);
                 if (result.ex_hash) {
+                    // The stale-fd guard is the terminal reason.  If the
+                    // operation timeout also expired, do not run timeout
+                    // abort/cleanup against the current socket fd.
+                    result.timed_out = false;
+                    result.socket_wait_generation_changed = true;
                     poll_results.push_back(std::move(result));
                     continue;
                 }
@@ -4527,8 +4534,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     bool should_close = false;
                     if (result.ex_hash && !result.timed_out) {
                         // Error path: close unless this is only the controller's
-                        // operation timeout.
-                        should_close = true;
+                        // operation timeout or fd-generation guard.  The guard
+                        // means the wait observed a stale fd; closing here could
+                        // close a replacement fd owned by the socket.
+                        should_close = !result.socket_wait_generation_changed;
                     }
                     if (!should_close && pinfo.spop_base && pinfo.spop_base->needsCloseOnComplete()) {
                         // C++ operation declares the connection is terminal
