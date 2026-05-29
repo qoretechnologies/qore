@@ -24,6 +24,8 @@ class AOTCollectionNothingTest inherits QUnit::Test {
             \testExecModesDirectIndexCollectionNothing());
         addTestCase("AOT qmod direct-index collection operators preserve NOTHING",
             \testAOTQmodDirectIndexCollectionNothing());
+        addTestCase("AOT qmod constants can be NOTHING or NULL",
+            \testAOTQmodFalseyConstants());
 
         set_return_value(main());
     }
@@ -86,7 +88,18 @@ module AOTCollectionNothingMod {
 }
 
 public namespace AOTCollectionNothingMod {
+public const NothingConst = NOTHING;
+public const NullConst = NULL;
+public const FalseConst = False;
+public const ZeroConst = 0;
+public const EmptyStringConst = \"\";
+
 " + collectionNothingFunctions("public") + "
+
+public string sub verifyConstants() {
+    return sprintf(\"nothing:%s\\nnull:%s\\nfalse:%s\\nzero:%s\\nempty-string:%s\\n\", kind(NothingConst),
+        kind(NullConst), kind(FalseConst), kind(ZeroConst), kind(EmptyStringConst));
+}
 }
 ";
     }
@@ -148,5 +161,40 @@ printf(\"%s\", AOTCollectionNothingMod::verify());
             "source module direct-index collection operators");
         assertEq(expectedOutput(), runModule(qmod_dir, script_path),
             "AOT qmod direct-index collection operators");
+    }
+
+    testAOTQmodFalseyConstants() {
+        TmpDir tmp("qore-aot-falsey-constants-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTCollectionNothingMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern
+%requires AOTCollectionNothingMod
+printf(\"%s\", AOTCollectionNothingMod::verifyConstants());
+");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTCollectionNothingMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled falsey constant module: " + compile_out);
+
+        string expected = "nothing:missing\nnull:NULL\nfalse:bool\nzero:integer\nempty-string:string\n";
+        assertEq(expected, runModule(src_dir, script_path),
+            "source module falsey constants");
+        assertEq(expected, runModule(qmod_dir, script_path),
+            "AOT qmod falsey constants");
     }
 }

@@ -797,8 +797,9 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            QoreValue rv = qore_aot_resolve_constant_path_value(pgm, ref1, true, true);
-            if (!rv) {
+            bool resolved = false;
+            QoreValue rv = qore_aot_resolve_constant_path_value(pgm, ref1, true, true, &resolved);
+            if (!resolved) {
                 printd(0, "AOT v2: cannot resolve constant '%s'\n", ref1);
                 return 0;
             }

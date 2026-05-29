@@ -103,6 +103,7 @@ public:
         builtin : 1,      // builtin vs user
         delayed_eval : 1, // delayed evaluation
         has_init_expr : 1, // had a delayed-eval init expression (for AOT)
+        saved_val_set : 1, // saved_val contains a runtime value or preserved init expression
         aot_shell_pending : 1, // AOT-deserialized shell whose init-func has not run
         external_stub : 1, // qcc --stub declaration; value is supplied by the runtime host
         external_stub_dependent : 1 // initializer references an external stub constant
@@ -143,7 +144,8 @@ public:
 
     //! Returns true if the constant's value has been initialized
     DLLLOCAL bool hasValue() const {
-        return static_cast<bool>(saved_val) || (val && val.getType() != NT_RTCONSTREF);
+        return init && !aot_shell_pending && !external_stub
+            && (saved_val_set || val.getType() != NT_RTCONSTREF);
     }
 
     //! Sets the runtime value (val + saved_val) for AOT init functions
@@ -500,7 +502,7 @@ protected:
         // saved_val remains empty — fall back to evaluating ce->val in that
         // case so AOT init functions referencing builtin constants get the
         // correct value instead of NOTHING.
-        if (ce->saved_val) {
+        if (ce->saved_val_set) {
             return ce->saved_val.eval(needs_deref, xsink);
         }
         // AOT pending shell: ce->val is a self-referential RuntimeConstantRefNode
@@ -551,7 +553,7 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        if (ce->saved_val) {
+        if (ce->saved_val_set) {
             return ce->saved_val.getAsString(str, foff, xsink);
         }
         if (ce->external_stub) {
@@ -572,7 +574,7 @@ public:
     }
 
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
-        if (ce->saved_val) {
+        if (ce->saved_val_set) {
             return ce->saved_val.getAsString(del, foff, xsink);
         }
         if (ce->external_stub) {
@@ -595,7 +597,7 @@ public:
     }
 
     DLLLOCAL virtual const char* getTypeName() const {
-        if (ce->saved_val) {
+        if (ce->saved_val_set) {
             return ce->saved_val.getTypeName();
         }
         if (ce->external_stub || ce->aot_shell_pending || !ce->hasValue()) {

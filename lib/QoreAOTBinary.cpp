@@ -707,9 +707,10 @@ static bool resolveDeferredConstRefDefault(std::string& path, QoreValue& default
         default_val.discard(nullptr);
         default_val = QoreValue();
     }
+    bool resolved = false;
     QoreValue v = qore_aot_resolve_constant_path_value(pgm, path.c_str(),
-        true, true);
-    if (!v) {
+        true, true, &resolved);
+    if (!resolved) {
         error = "AOT cannot resolve deferred constant-ref default '";
         error += path;
         error += "' for ";
@@ -1151,7 +1152,11 @@ static bool aot_parse_size_component(const std::string& path, size_t& pos, size_
     return true;
 }
 
-static QoreValue aot_resolve_constant_path_tail(QoreValue cur, const std::string& encoded, size_t pos) {
+static QoreValue aot_resolve_constant_path_tail(QoreValue cur, const std::string& encoded, size_t pos,
+        bool* resolved = nullptr) {
+    if (resolved) {
+        *resolved = false;
+    }
     while (pos < encoded.size()) {
         char seg = encoded[pos++];
         size_t len_or_index = 0;
@@ -1197,6 +1202,9 @@ static QoreValue aot_resolve_constant_path_tail(QoreValue cur, const std::string
         cur = next;
     }
 
+    if (resolved) {
+        *resolved = true;
+    }
     return cur;
 }
 
@@ -1218,8 +1226,9 @@ private:
         }
 
         QoreValue base = ce->getReferencedValue();
-        QoreValue rv = aot_resolve_constant_path_tail(base, encoded_path, tail_pos);
-        if (!rv && xsink) {
+        bool resolved = false;
+        QoreValue rv = aot_resolve_constant_path_tail(base, encoded_path, tail_pos, &resolved);
+        if (!resolved && xsink) {
             xsink->raiseException("AOT-CONSTANT-PATH-ERROR",
                 "cannot resolve AOT-deserialized constant path '%s' from base constant '%s'",
                 encoded_path.c_str(), ce->getName());
@@ -1548,7 +1557,10 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
 }
 
 QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
-        bool defer_if_pending, bool wrap_top_level_if_ready) {
+        bool defer_if_pending, bool wrap_top_level_if_ready, bool* resolved) {
+    if (resolved) {
+        *resolved = false;
+    }
     if (!path || !*path) {
         return QoreValue();
     }
@@ -1568,6 +1580,9 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
         }
         if (!ce) {
             return QoreValue();
+        }
+        if (resolved) {
+            *resolved = true;
         }
         if (wrap_top_level_if_ready && ce->hasValue()) {
             return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce));
@@ -1601,6 +1616,9 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     }
     if (!ce->hasValue()) {
         if (defer_if_pending) {
+            if (resolved) {
+                *resolved = true;
+            }
             if (pos == encoded.size()) {
                 return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce, true));
             }
@@ -1610,7 +1628,11 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     }
 
     QoreValue cur = ce->getReferencedValue();
-    QoreValue rv = aot_resolve_constant_path_tail(cur, encoded, pos);
+    bool tail_resolved = false;
+    QoreValue rv = aot_resolve_constant_path_tail(cur, encoded, pos, &tail_resolved);
+    if (resolved) {
+        *resolved = tail_resolved;
+    }
     if (trace_const) {
         fprintf(stderr, "[aot-init] resolve constant result path=%s type=%s has_node=%d\n",
             path, rv.getTypeName(), (int)rv.hasNode());
@@ -3148,9 +3170,10 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 error = "no current program for const_ref resolution";
                 return QoreValue();
             }
+            bool resolved = false;
             QoreValue rv = qore_aot_resolve_constant_path_value(pgm, fqn,
-                defer_unresolved_const_refs, wrap_const_ref_in_rcr);
-            if (!rv) {
+                defer_unresolved_const_refs, wrap_const_ref_in_rcr, &resolved);
+            if (!resolved) {
                 error = std::string("cannot resolve const_ref '") + fqn
                     + "' in the current program; if this reference came from qcc --stub, "
                     "the runtime host must inject the external constant before loading the AOT binary";

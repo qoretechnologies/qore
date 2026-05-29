@@ -294,8 +294,9 @@ static QoreValue read_node_EN_CONST_REF(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);
     if (!name.empty()) {
-        QoreValue rv = qore_aot_resolve_constant_path_value(ctx.pgm, name.c_str(), true);
-        if (rv) {
+        bool resolved = false;
+        QoreValue rv = qore_aot_resolve_constant_path_value(ctx.pgm, name.c_str(), true, false, &resolved);
+        if (resolved) {
             return rv;
         }
         printd(0, "AOT EXPR_TREE: cannot resolve constant '%s'\n", name.c_str());

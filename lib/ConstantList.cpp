@@ -50,7 +50,8 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
         bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access)
         : loc(loc), name(n), typeInfo(ti), val(val), in_init(false), pub(n_pub),
         init(n_init), builtin(n_builtin), delayed_eval(false), has_init_expr(false),
-        aot_shell_pending(false), external_stub(false), external_stub_dependent(false), access(n_access) {
+        saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
+        access(n_access) {
     QoreProgram* pgm = getProgram();
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
@@ -69,6 +70,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         typeInfo(old.typeInfo), val(old.val.refSelf()),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         has_init_expr(old.has_init_expr),
+        saved_val_set(old.saved_val_set),
         aot_shell_pending(old.aot_shell_pending),
         external_stub(old.external_stub),
         external_stub_dependent(old.external_stub_dependent),
@@ -87,9 +89,13 @@ void ConstantEntry::del(QoreListNode& l) {
 #ifdef DEBUG
     aot_init_expr.clear();
 #endif
-    if (saved_val) {
+    if (saved_val_set) {
         val.discard(nullptr);
-        l.push(saved_val, nullptr);
+        if (saved_val.hasNode()) {
+            l.push(saved_val, nullptr);
+        } else {
+            saved_val.clear();
+        }
 #ifdef DEBUG
         val.clear();
         saved_val.clear();
@@ -109,7 +115,7 @@ void ConstantEntry::del(ExceptionSink* xsink) {
 #ifdef DEBUG
     aot_init_expr.clear();
 #endif
-    if (saved_val) {
+    if (saved_val_set) {
         val.discard(xsink);
         saved_val.discard(xsink);
 #ifdef DEBUG
@@ -153,6 +159,7 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
         val = result;
         saved_val = result.refSelf();
     }
+    saved_val_set = true;
     init = true;
     aot_shell_pending = false;
     if (getenv("QORE_AOT_INIT_TRACE")) {
@@ -177,6 +184,7 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
     val = resolved;
     saved_val.discard(xsink);
     saved_val = resolved.refSelf();
+    saved_val_set = true;
 }
 
 void ConstantEntry::makeExternalStubDeclaration() {
@@ -189,6 +197,7 @@ void ConstantEntry::makeExternalStubDeclaration() {
     init = true;
 
     saved_val.discard(nullptr);
+    saved_val_set = false;
     aot_init_expr.discard(nullptr);
 
     QoreValue placeholder = val;
@@ -273,6 +282,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
     delayed_eval = true;
     saved_val = val.takeIfNode();
+    saved_val_set = true;
     val = new RuntimeConstantRefNode(loc, this);
     return err;
 }
@@ -283,7 +293,7 @@ int ConstantEntry::parseCommitRuntimeInit() {
     }
     delayed_eval = false;
     has_init_expr = true;
-    assert(saved_val);
+    assert(saved_val_set);
     assert(saved_val.needsEval());
 
     // Preserve the init expression for AOT lowering before evaluation consumes it.
@@ -292,6 +302,7 @@ int ConstantEntry::parseCommitRuntimeInit() {
 
     if (external_stub_dependent) {
         saved_val.discard(nullptr);
+        saved_val_set = false;
         return 0;
     }
 
@@ -310,6 +321,7 @@ int ConstantEntry::parseCommitRuntimeInit() {
             QoreValue nv = v.takeReferencedValue();
             saved_val.discard(&xsink);
             saved_val = nv;
+            saved_val_set = true;
             typeInfo = saved_val.getTypeInfo();
             assert(!saved_val.getInternalNode() || !saved_val.needsEval());
         } else {
@@ -328,6 +340,7 @@ int ConstantEntry::parseCommitRuntimeInit() {
         xsink.clear();
         external_stub_dependent = true;
         saved_val.discard(nullptr);
+        saved_val_set = false;
         return 0;
     }
 
@@ -351,7 +364,7 @@ const QoreValue& ConstantEntry::resolveRtConstRef(const QoreValue& start) {
     const QoreValue* v = &start;
     for (unsigned i = 0; v->getType() == NT_RTCONSTREF && i < 65536; ++i) {
         ConstantEntry* rce = v->get<const RuntimeConstantRefNode>()->getConstantEntry();
-        if (!rce->saved_val) {
+        if (!rce->saved_val_set) {
             return rce->aot_shell_pending || rce->external_stub ? *v : rce->saved_val;
         }
         v = &rce->saved_val;

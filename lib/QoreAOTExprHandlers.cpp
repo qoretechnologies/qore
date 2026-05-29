@@ -717,9 +717,10 @@ static QoreValue read_expr_runtime_const_ref(AOTExprReadCtx& ctx) {
     if (!const_name || !*const_name) {
         return QoreValue();
     }
+    bool resolved = false;
     QoreValue rv = qore_aot_resolve_constant_path_value(ctx.pgm, const_name,
-        true, ctx.reader.wrap_const_ref_in_rcr);
-    if (!rv) {
+        true, ctx.reader.wrap_const_ref_in_rcr, &resolved);
+    if (!resolved) {
         ctx.error = std::string("cannot resolve runtime constant reference '") + const_name
             + "' in the current program; if this reference came from qcc --stub, "
             "the runtime host must inject the external constant before loading the AOT binary";

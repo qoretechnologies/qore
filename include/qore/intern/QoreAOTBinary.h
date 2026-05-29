@@ -77,7 +77,7 @@ bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
 
 //! Resolves a top-level or encoded nested AOT constant path to a runtime value.
 QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
-    bool defer_if_pending, bool wrap_top_level_if_ready = false);
+    bool defer_if_pending, bool wrap_top_level_if_ready = false, bool* resolved = nullptr);
 
 //! Returns the canonical AOT-serializable type path for \a ti.
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow = false);
