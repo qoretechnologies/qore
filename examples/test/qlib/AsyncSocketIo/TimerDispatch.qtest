@@ -14,7 +14,62 @@ public class TimerDispatchTest inherits QUnit::Test {
     constructor() : Test("TimerDispatchTest", "1.0") {
         addTestCase("closure udata fires off I/O thread", \closureFiresOffIoThread());
         addTestCase("funcref udata fires off I/O thread", \funcrefFiresOffIoThread());
+        addTestCase("owner-tagged timer callback is drainable", \ownerTaggedTimerDrained());
+        addTestCase("cancelTimer stops a not-yet-fired timer", \cancelTimerStopsTimer());
         set_return_value(main());
+    }
+
+    # An owner-tagged timer's fired-but-still-running callback must be drainable
+    # via flushCallbacksByOwner(): the call must BLOCK until the in-flight callback
+    # completes.  This is the mechanism the DiscordWebSocketClient destructor relies
+    # on to guarantee no watchdog callback touches destroyed members.  Without owner
+    # tagging, flushCallbacksByOwner() cannot see the callback and returns immediately.
+    ownerTaggedTimerDrained() {
+        AsyncSocketIoController ctrl();
+        on_exit delete ctrl;
+
+        string owner = "test-owner-" + get_random_string(8);
+        Counter started(1);
+        bool callback_done = False;
+        # callback marks itself started, sleeps long enough to stay in flight while
+        # the test calls flush, then records completion
+        ctrl.addTimer(now_us() + 10ms, sub () {
+            started.dec();
+            usleep(1s);
+            callback_done = True;
+        }, owner);
+
+        # wait until the callback is actually running (fired + dispatched to a worker)
+        assertEq(0, started.waitForZero(10s), "owner-tagged timer callback did not start within 10s");
+
+        # flush must block for the remainder of the callback's 1s sleep
+        date t0 = now_us();
+        ctrl.flushCallbacksByOwner(owner);
+        date elapsed = now_us() - t0;
+
+        assertTrue(callback_done, "flushCallbacksByOwner() must wait for the in-flight callback to finish");
+        # the callback was ~10ms+dispatch into its 1s sleep when flush was called, so
+        # flush must have blocked for a substantial fraction of a second; a generous
+        # lower bound avoids flakiness while still proving flush actually waited
+        assertGe(500ms, elapsed, "flushCallbacksByOwner() returned too fast to have waited for the callback");
+    }
+
+    # cancelTimer() on a not-yet-fired timer returns True and the callback never runs
+    cancelTimerStopsTimer() {
+        AsyncSocketIoController ctrl();
+        on_exit delete ctrl;
+
+        bool fired = False;
+        int id = ctrl.addTimer(now_us() + 30s, sub () {
+            fired = True;
+        });
+        assertGt(0, id, "addTimer must return a positive timer id");
+        assertTrue(ctrl.cancelTimer(id), "cancelTimer must return True for a live, not-yet-fired timer");
+        # a second cancel of the same id must report not-found
+        assertFalse(ctrl.cancelTimer(id), "second cancelTimer of the same id must return False");
+        # give any (erroneously) dispatched callback a chance to run, then confirm it did not
+        usleep(200ms);
+        assertFalse(fired, "a cancelled timer's callback must never fire");
     }
 
     # Encodes the contract documented on AsyncIoController::addTimer():

@@ -404,6 +404,24 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::addTimer(deadline, callback);
     }
 
+    #! Adds an owner-tagged timer that fires at the given deadline
+    /** Identical to @ref addTimer(date, code) but tags the timer's callback dispatch with \a owner so a
+        teardown path can deterministically drain a fired-but-not-yet-run callback via
+        @ref flushCallbacksByOwner() (in addition to cancelling not-yet-fired timers with
+        @ref cancelTimer()).  Use this for watchdog/heartbeat timers whose callback closes over an object
+        that may be destroyed while the timer is in flight.
+
+        @param deadline the absolute time when the timer should fire
+        @param callback the closure to call when the timer fires
+        @param owner the owner identifier to tag the callback dispatch with (so it is drainable via
+        @ref flushCallbacksByOwner())
+
+        @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
+    */
+    int addTimer(date deadline, code<nothing()> callback, string owner) {
+        return Qore::AsyncIoController::addTimer(deadline, callback, owner);
+    }
+
     #! Cancels a pending timer
     /** @param timer_id the timer ID returned by addTimer()
         @return @ref True "True" if the timer was found and canceled; @ref False "False" if

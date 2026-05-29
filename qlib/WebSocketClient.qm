@@ -247,6 +247,21 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @subsection wsc_v2_4 v2.4
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketClient
       metadata always resolves the typed AsyncAPI validator members and methods
+    - fixed a wedged-connection bug where @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()"
+      returned @ref False and could not recover when the async event thread had exited (\c tid cleared) while
+      auto-reconnect was enabled; @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" now detects
+      this state and starts a fresh connection.  A failure to schedule the reconnect (e.g. the thread-spawn
+      closure throws) is now caught and logged in \c handleAsyncShutdown() instead of silently aborting the
+      reconnect, and a terminal reconnect failure clears the in-flight latch so a later
+      @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" can retry
+    - improved disconnect/reconnect diagnostics: a connection teardown that will reconnect now logs the reason
+      at \c INFO level (previously the only \c INFO line came from the reconnect-thread start, which is absent
+      if the thread spawn fails), and a terminal WebSocket close is now logged at \c INFO instead of \c DEBUG
+      so the close code and reason are visible at the default log level
+    - the destructor now deterministically drains in-flight async I/O controller callbacks for the connection
+      (via \c flushCallbacksByOwner()) after waiting for delivery tasks, closing a teardown race where a
+      controller callback already dispatched to a worker could touch destroyed members (previously survived
+      only via \c OBJECT-ALREADY-DELETED guards)
     - added async I/O support using the global @ref AsyncSocketIo::AsyncSocketIoController for scalable,
       non-blocking WebSocket client connections; enabled by default for HTTP/1.1 connections
       - added the \c async_io constructor option (default @ref True); the option is retained for compatibility,
@@ -857,6 +872,27 @@ WebSocketClient ws(\event(), {
                 "indicates a bug: a delivery task was accounted for but never decremented",
                 delivery_thread_counter.getCount(), delivery_pending);
         }
+        # Synchronous shutdown gate for the controller layer: the delivery-task
+        # counter above only covers WS-layer deliverInBackground() tasks, not the
+        # async I/O controller's onComplete/abort callbacks (the on_poll_complete
+        # closure that calls scheduleDelivery()).  stopAsyncIo() cancels pending
+        # controller ops via cancelByOwner(), but a callback already dispatched to a
+        # worker can still be running and would touch destroyed members after we
+        # return — today only survived via OBJECT-ALREADY-DELETED guards in
+        # scheduleDelivery().  Drain them deterministically here.  Safe: we are past
+        # the delivery_thread_id==gettid() early-return, so this thread is not itself
+        # an owner-tagged callback worker, so flushCallbacksByOwner() cannot wait on
+        # itself.  Best-effort: the controller may already be torn down at process
+        # exit.
+        if (async_owner.val()) {
+            try {
+                AsyncSocketIo::AsyncSocketIoController controller =
+                    AsyncSocketIo::getGlobalAsyncIoController();
+                controller.flushCallbacksByOwner(async_owner);
+            } catch (hash<ExceptionInfo> ex) {
+                # controller unavailable during shutdown — nothing left to drain
+            }
+        }
     }
 
     #! returns the URL given in the constructor
@@ -1255,13 +1291,13 @@ ws.connect();
     /** @return True if the reconnect was started
     */
     bool reconnect() {
-        bool async_reconnect = False;
+        bool need_start = False;
         bool notify_closed = False;
 
         {
             AutoLock al(m);
 
-            if (!tid) {
+            if (stop) {
                 return False;
             }
 
@@ -1269,38 +1305,62 @@ ws.connect();
                 reconnect = True;
             }
 
-            # check if already reconnecting
-            if (!stop && !do_reconnect) {
+            if (!tid) {
+                # Wedged state recovery: the event thread is gone but auto-reconnect
+                # is enabled.  This happens when handleAsyncShutdown() reached
+                # clearTid() but never managed to schedule startReconnect() — for
+                # example because start_thread() threw, the spawned doReconnect
+                # thread died before updating tid, or a re-entrant disconnectUnlocked()
+                # cleared tid via a path that skips reconnect scheduling.  Without
+                # this branch, isOpen() stays False, isReconnecting() stays True, and
+                # reconnect() returns False forever; nothing else recovers.
+                #
+                # Use do_reconnect as an in-flight latch so concurrent reconnect()
+                # callers don't double-spawn doReconnect threads.  doReconnect's
+                # entry path will run reconnectPreamble() (a no-op disconnect since
+                # nothing is open) and then drive a fresh connect.
+                if (do_reconnect) {
+                    return True;
+                }
                 do_reconnect = True;
-                # wake up any sleeping threads
-                sleep_cond.broadcast();
-                if (poll_op) {
-                    # Send close frame for async mode
-                    if (!async_close_sent && !poll_op.goalReached()) {
-                        async_close_sent = True;
-                        sendClose(WSCC_NormalClosure);
-                    }
-                    wakeAsyncIo();
-                }
-            }
-
-            if (tid == -1) {
-                # Async mode has no event thread; -1 is only a sentinel.  Clean
-                # up directly instead of waiting for a thread termination signal
-                # that might never be produced if no delivery task is active.
-                stopAsyncIo();
-                shutdownAndCloseUnlocked();
-                {
-                    AutoLock dal(delivery_mutex);
-                    delivery_active = False;
-                }
-                clearTid();
-                cid = -1;
-                async_reconnect = True;
-                notify_closed = True;
+                need_start = True;
             } else {
-                # wait for the event thread to terminate
-                waitTidCleared(tid);
+                # check if already reconnecting
+                if (!do_reconnect) {
+                    do_reconnect = True;
+                    # wake up any sleeping threads
+                    sleep_cond.broadcast();
+                    if (poll_op) {
+                        # Send close frame for async mode
+                        if (!async_close_sent && !poll_op.goalReached()) {
+                            async_close_sent = True;
+                            sendClose(WSCC_NormalClosure);
+                        }
+                        wakeAsyncIo();
+                    }
+                }
+
+                if (tid == -1) {
+                    # Async mode has no event thread; -1 is only a sentinel.  Clean
+                    # up directly instead of waiting for a thread termination signal
+                    # that might never be produced if no delivery task is active.
+                    stopAsyncIo();
+                    shutdownAndCloseUnlocked();
+                    {
+                        AutoLock dal(delivery_mutex);
+                        delivery_active = False;
+                    }
+                    clearTid();
+                    # clearTid() releases do_reconnect; keep the reconnect latch set
+                    # until startReconnect() has been scheduled.
+                    do_reconnect = True;
+                    cid = -1;
+                    need_start = True;
+                    notify_closed = True;
+                } else {
+                    # wait for the event thread to terminate
+                    waitTidCleared(tid);
+                }
             }
         }
 
@@ -1320,10 +1380,27 @@ ws.connect();
             }
         }
 
-        if (async_reconnect) {
-            startReconnect();
+        if (need_start) {
+            try {
+                startReconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                # Recovery itself failed (e.g. ServiceApi::startThread() threw).
+                # Release the in-flight latch so the next reconnect() call can retry.
+                {
+                    AutoLock al(m);
+                    do_reconnect = False;
+                }
+                try {
+                    logError("startReconnect from reconnect() failed: %s",
+                        get_exception_string(ex));
+                } catch (hash<ExceptionInfo> ex0) {
+                    if (ex0.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+                rethrow;
+            }
         }
-
         return True;
     }
 
@@ -2491,6 +2568,15 @@ ws.setEventQueue();
 
             if (reconnect && !stop) {
                 should_reconnect = True;
+                # Diagnostic breadcrumb at INFO level: without this, a shutdown
+                # that will reconnect only logs via startReconnect()'s "starting
+                # reconnect in TID N" message — which never prints if start_thread()
+                # throws, making the disconnect invisible at the default INFO level
+                # (the per-message "closed"/"error" logs in processAsyncMessage()
+                # are logDebug and thus hidden).  Always record the reason here so a
+                # silent-death investigation has a starting point.
+                logInfo("Disconnected websocket connection; will reconnect (async)%s",
+                    async_close_cause.val() ? sprintf(" (cause: %s)", async_close_cause) : "");
             } else {
                 if (stop) {
                     logInfo("Disconnected websocket connection on external request (async)");
@@ -2511,7 +2597,23 @@ ws.setEventQueue();
         }
 
         if (should_reconnect) {
-            startReconnect();
+            try {
+                startReconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                # startReconnect() threw (e.g. start_thread() refused the new
+                # thread).  clearTid() has already run, so tid==0 and
+                # do_reconnect==False; the next external reconnect() call will see
+                # the wedged state and recover via its tid==0 branch.  Log so the
+                # silent disconnect is at least diagnosable post-mortem.
+                try {
+                    logError("startReconnect from handleAsyncShutdown failed: %s",
+                        get_exception_string(ex));
+                } catch (hash<ExceptionInfo> ex0) {
+                    if (ex0.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+            }
         }
     }
 
@@ -2548,7 +2650,12 @@ ws.setEventQueue();
                 return WSEDC_CONTINUE;
             }
             case "closed": {
-                logDebug("Connection closed: code %d: %y", msg.code, msg.reason);
+                # logged at INFO (not DEBUG): a terminal close is the start of a
+                # disconnect/reconnect cycle and must be visible at the default log
+                # level for post-mortem diagnosis (see the handleAsyncShutdown
+                # breadcrumb) — a DEBUG-only line here is why the cloud-bot's
+                # 2026-05-29 silent disconnect left no trace at INFO
+                logInfo("Connection closed: code %d: %y", msg.code, msg.reason);
                 return WSEDC_BREAK;
             }
             case "error": {
@@ -2626,6 +2733,21 @@ ws.setEventQueue();
         } catch (hash<ExceptionInfo> ex) {
             try {
                 logError("Failed to reconnect: %s", get_exception_string(ex));
+            } catch (hash<ExceptionInfo> ex0) {
+                if (ex0.err != "OBJECT-ALREADY-DELETED") {
+                    rethrow;
+                }
+            }
+            # Release the in-flight latch so external reconnect() can retry.
+            # clearTid() (which also clears do_reconnect) normally runs on the
+            # next clean shutdown, but if we got here via the recovery path in
+            # reconnect() and the new connect attempt failed terminally, tid is
+            # still 0 and do_reconnect would stay True forever — wedging
+            # reconnect() in its "another caller already kicked off recovery"
+            # short-circuit.
+            try {
+                AutoLock al(m);
+                do_reconnect = False;
             } catch (hash<ExceptionInfo> ex0) {
                 if (ex0.err != "OBJECT-ALREADY-DELETED") {
                     rethrow;

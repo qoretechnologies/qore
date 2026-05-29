@@ -689,8 +689,11 @@ void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashN
     enqueue(std::move(item));
 }
 
-void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args) {
-    enqueue({nullptr, nullptr, callback, args, DT_CALLBACK, nullptr, std::string()});
+void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
+        const std::string& owner) {
+    AsyncWorkItem item{nullptr, nullptr, callback, args, DT_CALLBACK, nullptr, std::string()};
+    item.owner = owner;
+    enqueue(std::move(item));
 }
 
 void QoreCallDispatcher::dispatchContinuePollAsync(QoreObject* spop_obj,
@@ -3587,7 +3590,7 @@ void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsi
 }
 
 int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue udata,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, const std::string& owner) {
     // Pre-allocate ID from atomic counter (no lock needed)
     int64_t id = next_ctrl_timer_id.fetch_add(1);
 
@@ -3623,6 +3626,7 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         // the old thread to finish, causing the timer to fire with no callback
         TimerInfo tinfo;
         tinfo.udata = udata.refSelf();
+        tinfo.owner = owner;
         timer_info_map[id] = tinfo;
 
         IoThreadContext& target = ctx();
@@ -4960,6 +4964,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         struct TimerEvent {
             int64_t id;
             QoreValue udata;
+            std::string owner;
         };
         std::vector<TimerEvent> timer_events;
         ResolvedCallReferenceNode* cb_snapshot = nullptr;
@@ -5038,7 +5043,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         int64_t tid_val = events[i].timer_id;
                         auto it = timer_info_map.find(tid_val);
                         if (it != timer_info_map.end()) {
-                            timer_events.push_back({tid_val, it->second.udata});
+                            timer_events.push_back({tid_val, it->second.udata, it->second.owner});
                             timer_info_map.erase(it);
                         }
                     }
@@ -5059,10 +5064,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         }
         for (auto& te : timer_events) {
             if (te.udata.getType() == NT_RUNTIME_CLOSURE || te.udata.getType() == NT_FUNCREF) {
-                // udata is a code reference — dispatch it asynchronously
+                // udata is a code reference — dispatch it asynchronously, tagged with
+                // the timer's owner (if any) so a teardown path can drain a
+                // fired-but-not-yet-run callback via flushCallbacksByOwner()
                 ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
                 code_ref->ref();
-                call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr);
+                call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr, te.owner);
             } else if (cb_snapshot) {
                 // Fall back to the registered timer callback for non-code udata
                 ReferenceHolder<QoreHashNode> timer_hash(

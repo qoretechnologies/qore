@@ -560,6 +560,31 @@ static int AsyncIoController::addTimer(date deadline, auto user_data) [dom=NETWO
     return ctrl->addTimer(deadline, user_data, xsink);
 }
 
+//! Adds an owner-tagged timer on the global singleton
+/** Identical to @ref addTimer(date, auto) but tags the timer's callback dispatch with \a owner, so a
+    teardown path can deterministically drain a fired-but-not-yet-run callback via
+    @ref flushCallbacksByOwner() (in addition to cancelling not-yet-fired timers with @ref cancelTimer()).
+    This closes the teardown race where a timer fires, its callback is dispatched to a worker, and the
+    owning object is destroyed before the callback runs.
+
+    @param deadline the absolute deadline for the timer
+    @param udata either a closure/call-reference to dispatch, or arbitrary user data
+        to deliver through the @ref setTimerCallback() handler
+    @param owner the owner identifier to tag the timer's callback dispatch with
+    @return the unique timer ID
+    @since %Qore 2.4
+*/
+static int AsyncIoController::addTimer(date deadline, auto udata, string owner) [dom=NETWORK,PROCESS] {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return 0;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    return ctrl->addTimer(deadline, udata, xsink, owner->c_str());
+}
+
 //! Cancels a timer on the global singleton
 /** @param timer_id the timer ID returned by @ref addTimer()
     @return @ref True "True" if the timer was found and canceled
