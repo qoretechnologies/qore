@@ -12435,7 +12435,13 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
 }
 
 SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl,
-        SocketSource* source, bool defer_init) : SocketAcceptPollSocketOperationBase(sock), accepted_socket_obj(xsink),
+        SocketSource* source, bool defer_init) : SocketAcceptPollSocketOperationBase(sock),
+        // Store a null ExceptionSink* in this long-lived holder rather than the
+        // constructor's transient stack sink: deref()/abort() deref the cached
+        // object with a valid current sink, and this null guards the
+        // ~ReferenceHolder fallback against using a dangling sink (matches the
+        // FtpControlPollOperation client_sock_obj convention).
+        accepted_socket_obj(nullptr),
         source(source) {
     sgoal = ssl ? SPG_ACCEPT_SSL : SPG_ACCEPT;
     init(xsink, defer_init);
@@ -15694,7 +15700,7 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
         : SocketPollSocketOperationBase(sock), send_data(response_data),
           buf(reinterpret_cast<const char*>(response_data->getPtr())),
           size(response_data->size()),
-          idle_timeout_ms(idle_timeout_ms), header_output(xsink) {
+          idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -15873,7 +15879,7 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
           content_length(content_length),
           chunked_encoding(chunked),
           fused(fused),
-          idle_timeout_ms(idle_timeout_ms), header_output(xsink) {
+          idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
 
     if (!is->isIoThreadSafe()) {
         xsink->raiseException("HTTP-STREAM-ERROR", "InputStream is not I/O thread safe");
@@ -17963,7 +17969,7 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
 }
 
 SocketRecvFromPollOperation::SocketRecvFromPollOperation(ExceptionSink* xsink, size_t max_size,
-        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock), max_size(max_size), output(xsink) {
+        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock), max_size(max_size), output(nullptr) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid

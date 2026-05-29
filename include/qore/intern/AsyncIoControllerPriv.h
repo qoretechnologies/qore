@@ -93,6 +93,7 @@ public:
         DT_CONTINUE_POLL,   //!< Call continuePoll() on spop_obj and send result back to I/O thread
         DT_STREAM_DATA_NOTIFY, //!< Call onStreamData(stream_id) on spop_obj (stream queue drain notification)
         DT_POLL_COMPLETE_NOTIFY, //!< Call onPollComplete() on spop_obj (WebSocket frame arrival notification)
+        DT_DEREF_DRAIN,     //!< Drain the controller's deferred-deref queue on a worker thread (controller set)
     };
 
     //! Async work item for fire-and-forget dispatch
@@ -173,6 +174,20 @@ public:
     */
     DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
         const std::string& owner = std::string());
+
+    //! Schedule a worker thread to drain the controller's deferred-deref queue
+    /** Fire-and-forget: enqueues a DT_DEREF_DRAIN item so a worker thread (which
+        has a valid registered thread context and its own ExceptionSink) runs the
+        deferred QoreObject derefs — and therefore any Qore-level destructors —
+        instead of the async I/O thread.  Running those destructors on the I/O
+        thread is illegal (it may block the event loop or re-enter the
+        controller) and, worse, can assimilate destructor exceptions into a sink
+        whose owning context has already been torn down (the Alpine/musl
+        SIGSEGV in HTTPClient.qtest).
+
+        @param controller the owning controller (referenced — released by the worker)
+    */
+    DLLLOCAL void dispatchDerefDrain(AsyncIoControllerPriv* controller);
 
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
@@ -540,6 +555,38 @@ public:
 
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
+
+    //! Defers the deref/discard of a value that may hold a QoreObject with a Qore destructor
+    /** The async I/O thread must never run Qore-level object destructors: doing so
+        executes arbitrary Qore code on the event-loop thread (which may block it or
+        re-enter the controller) and can assimilate the destructor's exceptions into
+        an ExceptionSink whose owning context has been torn down — the root cause of
+        the Alpine/musl SIGSEGV in @c ExceptionSink::assimilate during HTTPClient.qtest.
+
+        Scalar values (no embedded node) are discarded inline because they cannot run
+        Qore code.  Node-bearing values (objects, hashes, lists, closures) are queued
+        and drained later on a valid worker thread (@ref drainDeferredDerefs via a
+        @ref QoreCallDispatcher::DT_DEREF_DRAIN dispatch) or, during teardown, on the
+        valid thread driving the teardown — never on the I/O thread itself.
+
+        Ownership of @a v's reference is transferred to the queue.
+
+        @param v the value to deref/discard on a safe thread
+    */
+    DLLLOCAL void deferDeref(QoreValue v);
+
+    //! Drains the deferred-deref queue, discarding each queued value with @a xsink
+    /** Must be called on a valid thread (a dispatcher worker at run time, or the
+        teardown thread during shutdown) — never on the async I/O thread.
+        @param xsink the exception sink of the (valid) calling thread
+    */
+    DLLLOCAL void drainDeferredDerefs(ExceptionSink* xsink);
+
+    //! Schedules a worker drain of the deferred-deref queue if one is not already pending
+    /** Called by the I/O thread at a safe point (no controller lock held).  Queuing
+        (@ref deferDeref) is decoupled from scheduling so deferDeref can run while the
+        controller lock is held without inverting lock order against the dispatcher. */
+    DLLLOCAL void scheduleDeferredDrainIfNeeded();
 
 private:
     //! I/O thread commands
@@ -1084,6 +1131,16 @@ private:
 
     //! Atomic counter for pre-allocating timer IDs across threads
     std::atomic<int64_t> next_ctrl_timer_id{1};
+
+    //! Deferred-deref queue: values whose deref/discard must not run on the I/O thread
+    /** Populated by @ref deferDeref (called from the I/O thread instead of an inline
+        deref/discard) and emptied by @ref drainDeferredDerefs on a worker or teardown
+        thread.  Each entry owns one reference. */
+    std::deque<QoreValue> deferred_deref_values;
+    QoreThreadLock deferred_deref_lock;          //!< Guards @ref deferred_deref_values
+    //! True while a DT_DEREF_DRAIN worker is already scheduled/in-flight, so the I/O
+    //! thread does not pile up redundant drain dispatches each poll iteration.
+    bool deferred_drain_scheduled = false;
 
     // --- Internal methods ---
 
