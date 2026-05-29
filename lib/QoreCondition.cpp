@@ -36,51 +36,30 @@
 #include <cerrno>
 #include <cstring>
 
-#if !defined(DARWIN) && defined(CLOCK_MONOTONIC)
-static bool qore_condition_use_monotonic_clock() {
-    static const bool rv = []() {
-        pthread_condattr_t attr;
-        if (pthread_condattr_init(&attr) != 0) {
-            return false;
-        }
-
-        int rc = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
-        if (rc == 0) {
-            pthread_cond_t c;
-            rc = pthread_cond_init(&c, &attr);
-            if (rc == 0) {
-                pthread_cond_destroy(&c);
-            }
-        }
-
-        pthread_condattr_destroy(&attr);
-        return rc == 0;
-    }();
-    return rv;
-}
+// On non-Darwin platforms with a monotonic clock, drive timed waits from CLOCK_MONOTONIC instead of
+// the default CLOCK_REALTIME so that timeouts measure true elapsed (physical) time and cannot be
+// shortened or lengthened by wall-clock steps from NTP / host time adjustments.  The reference clock
+// is fixed at compile time so the condition variable (set here) and the absolute deadline computed in
+// wait2() always use the same clock.  Darwin uses pthread_cond_timedwait_relative_np() with a relative
+// timeout, which is already step-immune, so it needs no clock attribute.
+#if !defined(DARWIN) && defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_MONOTONIC)
+#define QORE_COND_CLOCK CLOCK_MONOTONIC
 #endif
 
 QoreCondition::QoreCondition() {
-#if !defined(DARWIN) && defined(CLOCK_MONOTONIC)
-    // Initialize the condvar against CLOCK_MONOTONIC so pthread_cond_timedwait deadlines
-    // are immune to realtime clock adjustments (NTP slewing, VM time sync, chronyd).
-    // Without this, a backward realtime jump between deadline computation and the wait
-    // can shorten the wait (observed as Alpine arm64 CI flake: a 400ms safety timeout
-    // returning at ~160ms). Older systems that cannot initialize monotonic condvars
-    // keep the previous CLOCK_REALTIME behavior.
-    if (qore_condition_use_monotonic_clock()) {
-        pthread_condattr_t attr;
-        if (pthread_condattr_init(&attr) == 0) {
-            if (pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0
-                && pthread_cond_init(&c, &attr) == 0) {
-                pthread_condattr_destroy(&attr);
-                return;
-            }
-            pthread_condattr_destroy(&attr);
-        }
-    }
+#ifdef QORE_COND_CLOCK
+    pthread_condattr_t attr;
+    pthread_condattr_init(&attr);
+    int rc = pthread_condattr_setclock(&attr, QORE_COND_CLOCK);
+    // pthread_condattr_setclock(CLOCK_MONOTONIC) is supported on all targeted non-Darwin platforms
+    // (glibc, musl); a failure here would desynchronize the cond clock from wait2()'s deadline clock.
+    assert(!rc);
+    (void)rc;
+    pthread_cond_init(&c, &attr);
+    pthread_condattr_destroy(&attr);
+#else
+    pthread_cond_init(&c, nullptr);
 #endif
-    pthread_cond_init(&c, 0);
 }
 
 QoreCondition::~QoreCondition() {
@@ -147,33 +126,37 @@ int QoreCondition::wait2(pthread_mutex_t* m, int64 timeout_ms) {
     return rc;
 #endif // DEBUG
 #else // !DARWIN
-    struct timespec now;
     struct timespec tmout;
 
 #ifdef DEBUG
     int64 timeout_ms_orig = timeout_ms;
 #endif // DEBUG
 
-    // Read the same clock the condvar was initialized with: CLOCK_MONOTONIC when it is
-    // supported by the platform, otherwise fall back to gettimeofday() so the deadline
-    // matches the default CLOCK_REALTIME-backed condvar.
-#if defined(CLOCK_MONOTONIC)
-    if (qore_condition_use_monotonic_clock() && clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
-        // fall through to deadline computation
-    } else
+    // base the absolute deadline on the same clock the condition variable uses (see the ctor):
+    // CLOCK_MONOTONIC where available so timeouts are immune to wall-clock steps, else CLOCK_REALTIME.
+    int64 base_sec;
+    int64 base_nsec;
+#ifdef HAVE_CLOCK_GETTIME
+    struct timespec now;
+#ifdef QORE_COND_CLOCK
+    clock_gettime(QORE_COND_CLOCK, &now);
+#else
+    clock_gettime(CLOCK_REALTIME, &now);
 #endif
-    {
-        struct timeval tv;
-        gettimeofday(&tv, 0);
-        now.tv_sec = tv.tv_sec;
-        now.tv_nsec = (long)tv.tv_usec * 1000;
-    }
+    base_sec = now.tv_sec;
+    base_nsec = now.tv_nsec;
+#else
+    struct timeval now;
+    gettimeofday(&now, 0);
+    base_sec = now.tv_sec;
+    base_nsec = (int64)now.tv_usec * 1000;
+#endif
     int64 secs = timeout_ms / 1000;
     timeout_ms -= secs * 1000;
-    int64 nsecs = (int64)now.tv_nsec + timeout_ms * 1000000;
+    int64 nsecs = base_nsec + timeout_ms * 1000000;
     int64 dsecs = nsecs / 1000000000;
     nsecs -= dsecs * 1000000000;
-    tmout.tv_sec = now.tv_sec + secs + dsecs;
+    tmout.tv_sec = base_sec + secs + dsecs;
     tmout.tv_nsec = nsecs;
 
     // make sure mutex is locked

@@ -1565,12 +1565,12 @@ int clock_getmicros() [flags=CONSTANT] {
     Use this function for elapsed-time measurements and deadline arithmetic where wall-clock
     semantics are not required.  Two consecutive calls always satisfy
     @c clock_get_monotonic_us() >= prev, so durations derived by subtraction can never be
-    negative — eliminating a class of intermittent failures observed when subtracting
+    negative, eliminating a class of intermittent failures observed when subtracting
     @ref now_us() values across realtime clock jumps on virtualized CI runners.
 
     The returned value has no fixed epoch: it is only meaningful when compared with another
     value returned by this function in the same process.  Do NOT use it for wall-clock
-    display, log timestamps, or cross-process time exchange — use @ref now_us() or
+    display, log timestamps, or cross-process time exchange; use @ref now_us() or
     @ref clock_getmicros() for those.
 
     @return a monotonic timestamp in microseconds; non-decreasing across calls in the same
@@ -1585,12 +1585,38 @@ int elapsed_us = clock_get_monotonic_us() - start;
 
     @see
     - clock_getmicros()
+    - clock_getmicros_monotonic()
     - now_us()
 
     @since %Qore 2.3
 */
 int clock_get_monotonic_us() [flags=CONSTANT] {
     return q_get_monotonic_us();
+}
+
+//! Returns a monotonic clock value in microseconds, suitable for measuring elapsed time and enforcing timeouts
+/** Unlike clock_getmicros() and the other clock_get*() / system-time functions, the value returned is
+    read from a monotonic clock and is therefore immune to wall-clock adjustments (for example NTP
+    corrections or manual changes to the system time).  It has no defined epoch and only the
+    difference between two values is meaningful; use it to measure how much real time has elapsed.
+
+    @return a monotonic clock value in microseconds (1/1000000 second intervals); only differences
+    between values returned by this function are meaningful
+
+    @par Example:
+    @code{.py}
+int start = clock_getmicros_monotonic();
+# ... do work ...
+int elapsed_us = clock_getmicros_monotonic() - start;
+    @endcode
+
+    @see
+    - clock_getmicros()
+
+    @since %Qore 2.3
+*/
+int clock_getmicros_monotonic() [flags=CONSTANT] {
+    return q_clock_getmicros_monotonic();
 }
 
 //! Converts an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone to a date in the local time zone

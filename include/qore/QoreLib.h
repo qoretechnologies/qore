@@ -181,6 +181,17 @@ DLLEXPORT int64 q_epoch_ns(int &us);
 */
 DLLEXPORT int64 q_get_monotonic_us();
 
+//! returns a monotonic clock value in microseconds
+/** Unlike q_epoch_us() and the other epoch/wall-clock functions, this value comes from a monotonic
+    clock (CLOCK_MONOTONIC where available) and is therefore immune to wall-clock (CLOCK_REALTIME)
+    steps from NTP or host time adjustments.  It has no defined epoch and is only meaningful for
+    measuring elapsed durations and enforcing timeouts.  Falls back to the wall clock if no monotonic
+    clock is available.
+
+    @since %Qore 2.3
+*/
+DLLEXPORT int64 q_clock_getmicros_monotonic();
+
 //! thread-safe basename function (resulting pointer must be free()ed)
 DLLEXPORT char* q_basename(const char* path);
 
