@@ -293,13 +293,6 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
         clear_socket_async_io_owner(sock, xsink);
         socket_async_io = false;
     }
-    // sock_obj/sock are Socket objects with C++-only destructors (no Qore
-    // destructor); deref'ing them here promptly releases the fd and is safe on
-    // any thread.  spop_obj/poll_info/other can transitively hold Qore objects
-    // with Qore-level destructors, so when cleanup() runs on the async I/O
-    // thread their deref must be deferred to a worker (controller->deferDeref).
-    // When there is no controller back-reference (e.g. an abandoned/default
-    // PollInfo) we cannot defer, so fall back to an inline deref.
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -309,27 +302,15 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
         sock = nullptr;
     }
     if (spop_obj) {
-        if (controller) {
-            controller->deferDeref(QoreValue(spop_obj));
-        } else {
-            spop_obj->deref(xsink);
-        }
+        spop_obj->deref(xsink);
         spop_obj = nullptr;
     }
     if (poll_info) {
-        if (controller) {
-            controller->deferDeref(QoreValue(poll_info));
-        } else {
-            poll_info->deref(xsink);
-        }
+        poll_info->deref(xsink);
         poll_info = nullptr;
     }
     if (other) {
-        if (controller) {
-            controller->deferDeref(QoreValue(other));
-        } else {
-            other->deref(xsink);
-        }
+        other->deref(xsink);
         other = nullptr;
     }
     if (queue) {
@@ -654,14 +635,6 @@ void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj, const s
     AsyncWorkItem item{spop_obj, nullptr, nullptr, nullptr, DT_POLL_COMPLETE_NOTIFY, nullptr,
         std::string()};
     item.owner = owner;
-    enqueue(std::move(item));
-}
-
-void QoreCallDispatcher::dispatchDerefDrain(AsyncIoControllerPriv* controller) {
-    // Reference the controller for the lifetime of the work item; the worker
-    // releases it after draining (mirrors the DT_CONTINUE_POLL controller ref).
-    controller->ref();
-    AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, DT_DEREF_DRAIN, controller, std::string()};
     enqueue(std::move(item));
 }
 
@@ -1190,19 +1163,6 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                         &work_xsink), &work_xsink);
                     break;
                 }
-                case DT_DEREF_DRAIN: {
-                    // Drain the controller's deferred-deref queue on this worker
-                    // thread (valid registered thread + valid work_xsink), so any
-                    // Qore-level object destructors run here instead of on the
-                    // async I/O thread.
-                    method_name = "derefDrain";
-                    if (async_item.controller) {
-                        async_item.controller->drainDeferredDerefs(&work_xsink);
-                        async_item.controller->deref(&work_xsink);
-                        async_item.controller = nullptr;
-                    }
-                    break;
-                }
             }
         }
 
@@ -1426,73 +1386,7 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
             tinfo.udata.discard(xsink);
         }
         timer_info_map.clear();
-        // Flush anything the I/O-thread exit deferred just before we tore the
-        // I/O thread / dispatcher down — this runs on the (valid) teardown
-        // thread, never the exited I/O thread.
-        drainDeferredDerefs(xsink);
         delete this;
-    }
-}
-
-void AsyncIoControllerPriv::deferDeref(QoreValue v) {
-    // Scalars carry no node and no reference and cannot run Qore code, so there
-    // is nothing to free and nothing unsafe about dropping them inline.
-    if (!v.hasNode()) {
-        return;
-    }
-    // Only queue here (ownership of v's reference transfers to the queue).  We do
-    // NOT schedule the drain in this call: deferDeref() may run while the caller
-    // holds the controller lock m (e.g. the I/O-thread exit cleanup), and
-    // scheduling acquires the dispatcher lock — decoupling queue from schedule
-    // keeps the lock order clean.  The I/O thread calls
-    // scheduleDeferredDrainIfNeeded() at a safe point in its loop, and teardown
-    // flushes the queue directly via drainDeferredDerefs().
-    AutoLocker al(deferred_deref_lock);
-    deferred_deref_values.push_back(v);
-}
-
-void AsyncIoControllerPriv::scheduleDeferredDrainIfNeeded() {
-    // Called from the I/O thread loop at a point where no controller lock is held.
-    // Schedules a single worker drain (one in flight at a time).  Skipped during
-    // teardown (shutting_down) or when no dispatcher exists — those values are
-    // flushed by the teardown drain on a valid thread.  ensureCallDispatcher() is
-    // deliberately not used here: recreating a just-stopped dispatcher during
-    // teardown would be incorrect.
-    QoreCallDispatcher* cd = nullptr;
-    {
-        AutoLocker al(deferred_deref_lock);
-        if (deferred_deref_values.empty() || deferred_drain_scheduled || shutting_down) {
-            return;
-        }
-        cd = call_dispatcher.load(std::memory_order_acquire);
-        if (!cd) {
-            return;
-        }
-        deferred_drain_scheduled = true;
-    }
-    cd->dispatchDerefDrain(this);
-}
-
-void AsyncIoControllerPriv::drainDeferredDerefs(ExceptionSink* xsink) {
-    // Drain in batches: a destructor running here may defer further values, so
-    // loop until the queue is genuinely empty under the lock.
-    while (true) {
-        std::deque<QoreValue> local;
-        {
-            AutoLocker al(deferred_deref_lock);
-            if (deferred_deref_values.empty()) {
-                deferred_drain_scheduled = false;
-                return;
-            }
-            local.swap(deferred_deref_values);
-        }
-        for (QoreValue& v : local) {
-            v.discard(xsink);
-            // A destructor exception must not abort draining the rest.
-            if (xsink && *xsink) {
-                xsink->clear();
-            }
-        }
     }
 }
 
@@ -3287,13 +3181,6 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
         }
     }
 
-    // The I/O thread and all dispatcher workers are now stopped, so no thread
-    // can add to or drain the deferred-deref queue concurrently.  Flush it here,
-    // on the (valid) thread driving stop(), so any object destructors deferred
-    // by the I/O-thread exit run on a live thread with a valid sink rather than
-    // on the now-gone I/O thread.
-    drainDeferredDerefs(xsink);
-
     {
         AutoLocker al(m);
         shutting_down = false;
@@ -3560,10 +3447,6 @@ void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
     for (auto& [id, tinfo] : stolen_timers) {
         tinfo.udata.discard(xsink);
     }
-    // Flush any values deferred by the I/O thread; clearCrossModuleRefs runs on
-    // a valid teardown thread (qore_async_io_controller_pre_cleanup), so any
-    // Qore destructors run safely here rather than on the I/O thread.
-    drainDeferredDerefs(xsink);
 }
 
 void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsink) {
@@ -3876,11 +3759,6 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     std::unordered_set<std::string> ssl_deferred_hashes;
 
     while (true) {
-        // Hand off any values the I/O thread deferred last iteration to a worker
-        // thread for deref/discard (so their Qore destructors never run here).
-        // Done at the top of the loop with no controller lock held.
-        scheduleDeferredDrainIfNeeded();
-
         // Process commands
         if (processCommands(t, xsink)) {
             break;  // Quit command received
@@ -5049,16 +4927,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cb_snapshot, args);
                 }
             }
-            // Defer the udata deref off the I/O thread: a closure/object udata
-            // would otherwise run its Qore destructor here (illegal on the I/O
-            // thread and the source of the assimilate-on-torn-down-sink crash).
-            // Ownership of te.udata's reference transfers to the deferred queue.
-            deferDeref(te.udata);
+            te.udata.discard(xsink);
         }
         if (cb_snapshot) {
-            // Likewise defer the timer-callback deref — it may be a closure whose
-            // destruction derefs captured Qore objects.
-            deferDeref(QoreValue(cb_snapshot));
+            cb_snapshot->deref(xsink);
         }
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
@@ -5138,14 +5010,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.sock_hash_to_keys.clear();
         t.socket_refcounts.clear();
 
-        // Clean up any remaining timers.  Defer the udata deref off this
-        // (exiting) I/O thread — a closure/object udata would otherwise run its
-        // Qore destructor on a thread that is being torn down.  The values are
-        // flushed by the worker drain (autostop, controller still alive) or by
-        // stop()'s post-teardown drain (full shutdown).
+        // Clean up any remaining timers
         for (auto& [id, tinfo] : timer_info_map) {
             t.loop->cancelTimer(id);
-            deferDeref(tinfo.udata);
+            tinfo.udata.discard(xsink);
         }
         timer_info_map.clear();
 
@@ -6904,8 +6772,7 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         // when accessing result members)
         log(QORE_LOG_LEVEL_ERROR, "deliverResult: buildResultHash returned null for %s; "
             "skipping onComplete dispatch", spop_obj->getClassName());
-        // Defer: spop_obj may be a Qore poll op whose destructor runs Qore code.
-        deferDeref(QoreValue(spop_obj));
+        spop_obj->deref(xsink);
         return;
     }
 
@@ -6916,7 +6783,7 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         queue->push(xsink, queue_result);
         if (!dispatch_on_complete) {
             if (spop_obj) {
-                deferDeref(QoreValue(spop_obj));
+                spop_obj->deref(xsink);
             }
             return;
         }
@@ -6937,10 +6804,10 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         log(QORE_LOG_LEVEL_ERROR, "deliverResult: dropping result for %s — no onComplete "
             "and no queue", spop_obj ? spop_obj->getClassName() : "null");
         if (spop_obj) {
-            deferDeref(QoreValue(spop_obj));
+            spop_obj->deref(xsink);
         }
         if (result) {
-            deferDeref(QoreValue(result));
+            result->deref(xsink);
         }
     }
 }
