@@ -793,7 +793,34 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
             string delta = GeminiBodyShape::extractText(parsed);
             *string finish_reason = parsed.candidates[0].finishReason;
+            # Detect a tool-call (functionCall) part in this chunk.  "Thinking"
+            # Gemini models (e.g. gemini-3.5-flash) stream the functionCall in a
+            # chunk that carries no text and no finishReason — the finishReason
+            # arrives in a later, content-empty chunk.  Such a chunk matches
+            # neither the text-delta nor the finish branch below, so without
+            # this its tool call is silently dropped and the turn looks like
+            # "no tool calls and no text".  Non-thinking models (e.g.
+            # gemini-2.5-flash) pack the functionCall and finishReason into one
+            # chunk, which is still delivered (and harvested) via the finish
+            # branch.
+            bool has_tool_call = False;
+            foreach hash<auto> part in (parsed.candidates[0].content.parts ?? ()) {
+                if (part.functionCall.typeCode() == NT_HASH) {
+                    has_tool_call = True;
+                    break;
+                }
+            }
             if (delta.val()) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+            } else if (has_tool_call && !finish_reason.val()) {
+                # Forward a tool-call-only chunk for accumulation.  Guarded on
+                # !finish_reason so a chunk that also carries finishReason is
+                # delivered exactly once (via the finish branch below),
+                # avoiding a duplicate tool-call harvest.
                 callback(<QoreLlmUtils::ChatStreamEvent>{
                     "event": evt.event,
                     "delta": delta,

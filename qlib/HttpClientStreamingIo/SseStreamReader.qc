@@ -124,11 +124,28 @@ public class SseStreamReader {
     */
     *hash<SseMessageInfo> readEvent(*timeout timeout_ms) {
         while (!done) {
-            # Check buffer for a complete SSE event (delimited by \n\n)
-            int sep = sse_buffer.find("\n\n");
+            # Check buffer for a complete SSE event.  Events are delimited by a
+            # blank line, which is "\n\n" (LF framing) or "\r\n\r\n" (CRLF
+            # framing).  Detecting only "\n\n" silently merges every event of a
+            # CRLF-framed stream (e.g. Google Gemini's streamGenerateContent)
+            # because "\r\n\r\n" does not contain "\n\n": the buffer is only
+            # flushed at end-of-stream, concatenating multiple JSON payloads
+            # into one data field that then fails to parse.  Detect both forms
+            # and consume up to whichever blank-line boundary appears first.
+            int sep_lf = sse_buffer.find("\n\n");
+            int sep_crlf = sse_buffer.find("\r\n\r\n");
+            int sep;
+            int sep_len;
+            if (sep_crlf >= 0 && (sep_lf < 0 || sep_crlf < sep_lf)) {
+                sep = sep_crlf;
+                sep_len = 4;
+            } else {
+                sep = sep_lf;
+                sep_len = 2;
+            }
             if (sep >= 0) {
-                string event_text = sse_buffer.substr(0, sep + 2);
-                sse_buffer = sse_buffer.substr(sep + 2);
+                string event_text = sse_buffer.substr(0, sep + sep_len);
+                sse_buffer = sse_buffer.substr(sep + sep_len);
                 *hash<SseMessageInfo> evt =
                     Socket::parseServerSentEvent(event_text);
                 if (isCommentOnlyEvent(evt)) {
