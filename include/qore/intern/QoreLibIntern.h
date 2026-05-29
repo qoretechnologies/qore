@@ -1199,6 +1199,8 @@ DLLLOCAL int do_toupper(QoreString& str, const QoreString& src, ExceptionSink* x
 
 DLLLOCAL int64 q_clock_getmillis();
 DLLLOCAL int64 q_clock_getmicros();
+// monotonic microsecond clock; for measuring elapsed durations/timeouts (immune to wall-clock steps)
+DLLLOCAL int64 q_clock_getmicros_monotonic();
 DLLLOCAL int64 q_clock_getnanos();
 
 DLLLOCAL void qore_init_random_salt();

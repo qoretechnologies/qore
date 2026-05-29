@@ -2179,6 +2179,18 @@ int64 q_clock_getmicros() {
     return seconds * 1000000ll + us;
 }
 
+int64 q_clock_getmicros_monotonic() {
+#ifdef HAVE_CLOCK_GETTIME
+    struct timespec ts;
+    if (!clock_gettime(CLOCK_MONOTONIC, &ts)) {
+        return (int64)ts.tv_sec * 1000000ll + ts.tv_nsec / 1000;
+    }
+    printd(0, "clock_gettime(CLOCK_MONOTONIC) failed: %s\n", strerror(errno));
+#endif
+    // fall back to the wall clock if a monotonic clock is unavailable
+    return q_clock_getmicros();
+}
+
 int64 q_clock_getnanos() {
     int ns;
     int64 seconds = q_epoch_ns(ns);
