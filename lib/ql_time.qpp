@@ -1552,6 +1552,31 @@ int clock_getmicros() [flags=CONSTANT] {
     return q_clock_getmicros();
 }
 
+//! Returns a monotonic clock value in microseconds, suitable for measuring elapsed time and enforcing timeouts
+/** Unlike clock_getmicros() and the other clock_get*() / system-time functions, the value returned is
+    read from a monotonic clock and is therefore immune to wall-clock adjustments (for example NTP
+    corrections or manual changes to the system time).  It has no defined epoch and only the
+    difference between two values is meaningful; use it to measure how much real time has elapsed.
+
+    @return a monotonic clock value in microseconds (1/1000000 second intervals); only differences
+    between values returned by this function are meaningful
+
+    @par Example:
+    @code{.py}
+int start = clock_getmicros_monotonic();
+# ... do work ...
+int elapsed_us = clock_getmicros_monotonic() - start;
+    @endcode
+
+    @see
+    - clock_getmicros()
+
+    @since %Qore 2.3
+*/
+int clock_getmicros_monotonic() [flags=CONSTANT] {
+    return q_clock_getmicros_monotonic();
+}
+
 //! Converts an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone to a date in the local time zone
 /** @param ms an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone
 
