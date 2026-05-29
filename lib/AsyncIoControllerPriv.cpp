@@ -4453,6 +4453,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     unregisterExtraFds(t, result.key, xsink);
                     unregisterFromEventLoop(t, result.key, xsink);
 
+                    if (result.timed_out) {
+                        bool worker_abort = pinfo.has_qore_abort
+                            || (pinfo.spop_base && pinfo.spop_base->needsWorkerDispatch());
+                        if (worker_abort && on_async_io_thread) {
+                            ensureCallDispatcher();
+                            pinfo.spop_obj->ref();
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(pinfo.spop_obj,
+                                pinfo.owner);
+                        } else if (pinfo.spop_base && !pinfo.has_qore_abort) {
+                            pinfo.spop_base->abort(xsink);
+                        } else {
+                            callAbort(pinfo.spop_obj, xsink);
+                        }
+                    }
+
                     bool handled = pinfo.spop_base
                         ? pinfo.spop_base->handleCompletion(false, result.ex_hash, xsink)
                         : false;

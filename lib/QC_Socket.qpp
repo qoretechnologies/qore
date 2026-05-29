@@ -923,7 +923,7 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
     }
     if (ex_holder) {
         if (accept_timeout_returns_nothing && socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")
-                && !strcmp(static_cast<SocketPollOperationBase*>(accept_poller)->getStateImpl(), "accepting")) {
+                && accept_poller->timeoutBeforeAccept()) {
             return QoreValue();
         }
         socket_raise_poll_result_exception(*ex_holder, xsink);

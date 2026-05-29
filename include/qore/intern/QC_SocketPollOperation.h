@@ -411,6 +411,7 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        aborted_before_accept = state == SPS_ACCEPTING;
         // Clear poll_state and accepted_socket to prevent memory accumulation on timeout
         poll_state.reset();
         // See deref(): deref with the current valid xsink, not the stale stored one.
@@ -428,6 +429,10 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual QoreValue getOutput() const override;
+
+    DLLLOCAL bool timeoutBeforeAccept() const {
+        return aborted_before_accept || state == SPS_ACCEPTING;
+    }
 
 protected:
     mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
@@ -479,6 +484,7 @@ private:
     int sgoal = 0;
     bool initialized = false;
     bool controller_deferred_init = false;
+    bool aborted_before_accept = false;
     int controller_deferred_tid = -1;
 
     DLLLOCAL virtual const char* getStateImpl() const override {
