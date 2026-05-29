@@ -77,6 +77,11 @@ module DiscordWebSocketClient {
     @section discordwebsocketclientrelnotes Release Notes
 
     @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
+    - the HELLO and RESUME watchdog timers are now armed with a stable per-instance owner tag, and the
+      destructor drains them via @ref AsyncSocketIo::AsyncSocketIoController::flushCallbacksByOwner()
+      "flushCallbacksByOwner()" after cancelling, closing the teardown race where a watchdog timer fires
+      and its callback is dispatched to a worker just as the client is destroyed (previously survived only
+      via \c OBJECT-ALREADY-DELETED guards in the watchdog callbacks)
     - fixed a bug where a server-initiated \c Heartbeat request (gateway opcode 1) caused an unhandled
       \c DISCORD-ERROR exception, killing the gateway connection and silently stopping event delivery;
       the client now responds immediately with a heartbeat as required by the Discord gateway protocol
@@ -423,6 +428,16 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         #! RESUME watchdog: consecutive silent resumes (escalation/observability)
         int resume_miss_count = 0;
 
+        #! Stable per-instance owner tag for the HELLO/RESUME watchdog timer callbacks
+        /** Both watchdog timers are armed with this owner so the destructor can
+            deterministically drain a fired-but-not-yet-run watchdog callback via
+            @ref AsyncSocketIo::AsyncSocketIoController::flushCallbacksByOwner()
+            before members are destroyed, closing the teardown race where a timer
+            fires and its callback is dispatched to a worker just as the object is
+            deleted.  Set once in the constructor.
+        */
+        string watchdog_owner;
+
         #! API version
         int api = DefaultApi;
     }
@@ -442,6 +457,9 @@ DiscordWebSocketClient ws();
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
     */
     constructor(*hash<auto> opts) : WebSocketClientWithSerialization(DiscordWebSocketClient::getOptions(opts)) {
+        # stable owner tag for watchdog timer callbacks so the destructor can drain
+        # an in-flight watchdog callback (see watchdog_owner)
+        watchdog_owner = "dwsc-wd-" + get_random_string(16);
     }
 
     #! Deletes the object
@@ -450,6 +468,23 @@ DiscordWebSocketClient ws();
         # fire on an already-deleted object
         cancelHelloWatchdog();
         cancelResumeWatchdog();
+        # cancelTimer() above removes a not-yet-fired timer, but a watchdog that
+        # already fired may have its callback dispatched to a worker and not yet
+        # run; drain those deterministically via the watchdog owner tag so a
+        # callback cannot touch destroyed members.  Safe from self-deadlock: the
+        # watchdog callbacks (helloWatchdogFired/resumeWatchdogFired) hold a self
+        # ref while running, so the destructor cannot run on a watchdog worker
+        # mid-callback, and the worker decrements the owner count before its
+        # final self-deref that could trigger this destructor.
+        if (watchdog_owner.val()) {
+            try {
+                AsyncSocketIo::AsyncSocketIoController controller =
+                    AsyncSocketIo::getGlobalAsyncIoController();
+                controller.flushCallbacksByOwner(watchdog_owner);
+            } catch (hash<ExceptionInfo> ex) {
+                # controller unavailable during shutdown — nothing left to drain
+            }
+        }
         stopHeartbeatThread();
     }
 
@@ -662,7 +697,7 @@ hash<auto> h = ws.getInfo();
             hello_watchdog_timer = 0;
         }
         hello_watchdog_timer = controller.addTimer(now_us() + milliseconds(HelloWatchdogTimeoutMs),
-            \helloWatchdogFired());
+            \helloWatchdogFired(), watchdog_owner);
     }
 
     #! Cancels the HELLO watchdog (HELLO received, or connection closing / shutting down)
@@ -740,7 +775,7 @@ hash<auto> h = ws.getInfo();
             resume_watchdog_timer = 0;
         }
         resume_watchdog_timer = controller.addTimer(now_us() + milliseconds(ResumeWatchdogTimeoutMs),
-            \resumeWatchdogFired());
+            \resumeWatchdogFired(), watchdog_owner);
     }
 
     #! Cancels the RESUME watchdog (RESUMED/DISPATCH or INVALID_SESSION received, or teardown)

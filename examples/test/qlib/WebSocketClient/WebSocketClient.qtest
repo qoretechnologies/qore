@@ -227,6 +227,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     constructor() : Test("WebSocketClientTest", "1.0") {
         addTestCase("reconnect test", \reconnectTest());
+        addTestCase("wedged-state reconnect recovery", \wedgedReconnectRecoveryTest());
         addTestCase("data provider test", \dataProviderTest());
         addTestCase("WebSocketClient tests", \webSocketClientTests());
         addTestCase("HTTP/1.1 async WebSocket tests", \http1AsyncWebSocketTests());
@@ -482,6 +483,103 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         observer.wait(EVENT_WS_PONG);
         assertGe(3, observer.l.size());
         assertEq(EVENT_WS_PONG, observer.getLastMessageId());
+    }
+
+    #! Verifies reconnect() recovers from the wedged tid==0 state
+    /** Repros the cloud-bot Discord-gateway wedge: when handleAsyncShutdown()
+        reaches clearTid() but never schedules startReconnect() (e.g. start_thread()
+        throws inside the recovery path), the client is left at
+        @verbatim tid==0, do_reconnect==False, reconnect==True, isOpen()==False @endverbatim
+        and the old reconnect() short-circuited with @ref False, leaving the
+        connection permanently dead with auto-reconnect on.
+
+        Tests two scenarios:
+        - (a) fresh client with reconnect==True (tid==0 since never connected)
+          must successfully kick off a connect via reconnect()
+        - (b) post-disconnect wedge: a subclass forces startReconnect() to throw
+          on the first call (simulating the silent start_thread() failure),
+          handleAsyncShutdown()'s new try/catch swallows it, and the next
+          reconnect() call recovers via the tid==0 branch
+    */
+    wedgedReconnectRecoveryTest() {
+        # (a) reconnect() on a never-connected client with reconnect==True must
+        # kick off a fresh connect via the tid==0 recovery branch instead of
+        # the old "return False if tid==0" short-circuit
+        {
+            MyObserver observer();
+            WedgedTestWebSocketClient c({
+                "url": "ws://localhost:" + linfo.port,
+                "logger": logger,
+                "reconnect": True,
+            });
+            on_exit delete c;
+            c.registerObserver(observer);
+
+            assertFalse(c.isOpen());
+            assertNothing(c.getTidForTest());
+            assertFalse(c.getDoReconnectForTest());
+
+            bool rv = c.reconnect();
+            assertTrue(rv, "reconnect() on wedged-equivalent state must return True");
+
+            # the recovery path must have actually started doReconnect
+            observer.wait(EVENT_WS_CONNECTED);
+            assertTrue(c.isOpen(), "wedged-state recovery must end with an open connection");
+        }
+
+        # (b) post-disconnect wedge: arm the subclass to throw on the first
+        # startReconnect() call, then trigger a server-side disconnect.  The
+        # handleAsyncShutdown() try/catch swallows the throw, leaving the
+        # documented wedge; a manual reconnect() must recover from it.
+        {
+            MyObserver observer();
+            WedgedTestWebSocketClient c({
+                "url": "ws://localhost:" + linfo.port,
+                "logger": logger,
+                "reconnect": True,
+            });
+            on_exit delete c;
+            c.registerObserver(observer);
+
+            c.connect();
+            observer.wait(EVENT_WS_CONNECTED);
+            assertTrue(c.isOpen());
+
+            # Arm the injected failure: the next startReconnect() will throw
+            c.throw_on_next_start_reconnect = True;
+            observer.clear();
+
+            # Provoke a server-side disconnect by stopping the listener
+            int saved_port = linfo.port;
+            mServer.stopListenerID(linfo.id);
+
+            # Wait for the client to detect disconnection
+            observer.wait(EVENT_WS_CLOSED);
+
+            # Without the fix: handleAsyncShutdown() rethrows out of the
+            # ThreadPool task and the wedge silently locks in.  With the fix:
+            # the throw is caught + logged, tid==0, do_reconnect==False.
+            date deadline = now_us() + 3s;
+            while ((c.isOpen() || c.getTidForTest()) && now_us() < deadline) {
+                sleep(50ms);
+            }
+            assertFalse(c.isOpen(), "expected closed state after server stop");
+            assertNothing(c.getTidForTest(), "expected wedged tid==0 after injected throw");
+            assertFalse(c.getDoReconnectForTest(), "expected do_reconnect cleared after wedge");
+            assertGe(1, c.start_reconnect_calls, "startReconnect was at least attempted once");
+
+            # Restart the listener on the same port so the recovery has somewhere to go
+            linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": saved_port});
+
+            # The fix in reconnect() must observe tid==0 and kick off a fresh
+            # doReconnect rather than returning False
+            observer.clear();
+            bool rv = c.reconnect();
+            assertTrue(rv, "wedged reconnect() must return True (recovery initiated)");
+
+            observer.wait(EVENT_WS_CONNECTED);
+            assertTrue(c.isOpen(), "wedged-state recovery must reconnect successfully");
+        }
     }
 
     dataProviderTest() {
@@ -1275,6 +1373,42 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
         wsHandler.waitForNewConnection(gen);
         assertFalse(wsHandler.last_hdr.cookie.val(), "no cookie header without cookie option");
+    }
+}
+
+#! Test subclass that exposes private state and can inject a startReconnect() failure
+/** Used by wedgedReconnectRecoveryTest() to reproduce the cloud-bot wedge
+    where handleAsyncShutdown() reaches clearTid() but then fails to schedule
+    startReconnect() (e.g. start_thread() throws), leaving the client at
+    tid==0, do_reconnect==False, reconnect==True, isOpen()==False with no
+    recovery possible via the old reconnect() short-circuit.
+*/
+class WedgedTestWebSocketClient inherits WebSocketClientWithSerialization {
+    public {
+        #! When True, the next startReconnect() call throws and clears this flag
+        bool throw_on_next_start_reconnect = False;
+        #! How many times startReconnect() was called (for sanity in assertions)
+        int start_reconnect_calls = 0;
+    }
+
+    constructor(hash<auto> opts) : WebSocketClientWithSerialization(opts) {
+    }
+
+    #! Accessor for inherited private state (post-clearTid wedge has tid==0/NOTHING)
+    *int getTidForTest() { return tid; }
+    #! Accessor for inherited private state (post-clearTid wedge has do_reconnect==False)
+    /** Coerces uninitialised state (NOTHING on a never-connected client) to False
+        so the assertions can use assertFalse() against a clean bool.
+    */
+    bool getDoReconnectForTest() { return do_reconnect ?? False; }
+
+    private startReconnect() {
+        ++start_reconnect_calls;
+        if (throw_on_next_start_reconnect) {
+            throw_on_next_start_reconnect = False;
+            throw "TEST-INJECTED-FAILURE", "simulating start_thread() / startReconnect() failure";
+        }
+        WebSocketClient::startReconnect();
     }
 }
 

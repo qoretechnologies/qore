@@ -78,16 +78,21 @@ class FutureTest inherits QUnit::Test {
 
     testTimeoutIsDeadline() {
         # Regression test for the per-iteration-restart bug: get(timeout)
-        # must enforce a wall-clock deadline, not a fresh window each time
+        # must enforce an elapsed-time deadline, not a fresh window each time
         # the cond fires.  Pre-fix, a get(500ms) under heavy threading load
         # could be extended indefinitely by spurious pthread wakeups (Qorus
         # issue 1704: 120s request_timeout failed to fire; thread parked in
         # FutureImpl::get() for 30+ minutes against slow LLM endpoints).
+        #
+        # Measure with the monotonic clock, not now_us()/the wall clock: the
+        # timeout is now a physical-elapsed-time deadline (immune to wall-clock
+        # steps), and a CLOCK_REALTIME step from NTP between sampling t0 and the
+        # internal wait would otherwise corrupt a wall-clock measurement here.
         Promise p();
         Future f = p.getFuture();
-        date t0 = now_us();
+        int t0_us = clock_getmicros_monotonic();
         assertThrows("FUTURE-TIMEOUT", sub() { f.get(500ms); });
-        int elapsed_ms = (now_us() - t0).durationMilliseconds();
+        int elapsed_ms = (clock_getmicros_monotonic() - t0_us) / 1000;
         # Generous upper bound: 500ms timeout should not stretch past 1500ms
         # even on a heavily loaded test runner.  Lower bound asserts we did
         # actually wait, not return spuriously early.

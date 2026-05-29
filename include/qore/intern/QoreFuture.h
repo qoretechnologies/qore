@@ -132,14 +132,18 @@ public:
         // fire; thread parked in FutureImpl::get() for 30+ minutes against
         // slow-streaming LLM endpoints).  Compute an absolute deadline in
         // microseconds and recompute `remaining` per iteration so the
-        // timeout fires at the intended wall-clock time regardless of
-        // spurious wakes.  Mirrors the deadline pattern in
+        // timeout fires at the intended time regardless of spurious wakes.
+        //
+        // Use a monotonic clock for both the deadline and the per-iteration `now_us` below so the
+        // timeout measures true elapsed (physical) time and cannot be shortened or extended by
+        // wall-clock (CLOCK_REALTIME) steps from NTP / host time adjustments.  QoreCondition's timed
+        // wait is likewise monotonic, so the relative cond_timeout_ms maps to the same physical
+        // interval.  Mirrors the deadline pattern in
         // include/qore/AbstractHttpPollConnection.h:109-111.
         const bool has_deadline = (timeout_ms > 0);
         int64 deadline_us = 0;
         if (has_deadline) {
-            int us;
-            deadline_us = q_epoch_us(us) * 1000000LL + us + timeout_ms * 1000LL;
+            deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000LL;
         }
 
         AutoLocker al(&lock);
@@ -147,8 +151,7 @@ public:
         while (state == PENDING) {
             int64 cond_timeout_ms;
             if (has_deadline) {
-                int us;
-                int64 now_us = q_epoch_us(us) * 1000000LL + us;
+                int64 now_us = q_clock_getmicros_monotonic();
                 int64 remaining_us = deadline_us - now_us;
                 if (remaining_us <= 0) {
                     --waiting;

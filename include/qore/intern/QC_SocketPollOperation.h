@@ -391,7 +391,19 @@ public:
             // An explicit discard() before delete makes the release explicit
             // and survives any future reordering in the destructor chain.
             poll_state.reset();
-            accepted_socket_obj = nullptr;
+            // Deref the cached accepted-socket QoreObject with the CURRENT (valid)
+            // xsink, not the one stored in the ReferenceHolder at construction
+            // time.  accepted_socket_obj is a long-lived member, so its stored
+            // ExceptionSink* (the constructor's transient stack sink) is dangling
+            // by the time this poll op is destroyed — often on a different thread
+            // (an async I/O worker / the controller's deferred-deref drain).  The
+            // accepted socket QoreObject can run a Qore-level destructor, which
+            // assimilates exceptions into that sink; using the stale sink is the
+            // root cause of the Alpine/musl SIGSEGV in ExceptionSink::assimilate.
+            // release() detaches the pointer without using the stored sink.
+            if (QoreObject* o = accepted_socket_obj.release()) {
+                o->deref(xsink);
+            }
             accepted_socket.discard();
             sock->deref(xsink);
             delete this;
@@ -401,7 +413,10 @@ public:
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         // Clear poll_state and accepted_socket to prevent memory accumulation on timeout
         poll_state.reset();
-        accepted_socket_obj = nullptr;
+        // See deref(): deref with the current valid xsink, not the stale stored one.
+        if (QoreObject* o = accepted_socket_obj.release()) {
+            o->deref(xsink);
+        }
         accepted_socket.discard();
         SocketAcceptPollSocketOperationBase::abort(xsink);
     }

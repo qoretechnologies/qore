@@ -60,7 +60,7 @@ void ConnectionPool::init(ExceptionSink* xsink) {
             return;
         }
         pool.push_back(resource);
-        last_released.push_back(q_clock_getmicros());
+        last_released.push_back(q_clock_getmicros_monotonic());
         free_list.push_back(i);
         ++live_count;
     }
@@ -86,7 +86,7 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
         return resource->objectRefSelf();
     }
 
-    int64 start_us = q_clock_getmicros();
+    int64 start_us = q_clock_getmicros_monotonic();
 
     while (true) {
         // Try to get a free resource (LIFO for cache warmth)
@@ -147,11 +147,11 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
             }
             if (idx >= 0) {
                 pool[idx] = resource;
-                last_released[idx] = q_clock_getmicros();
+                last_released[idx] = q_clock_getmicros_monotonic();
             } else {
                 idx = (int)pool.size();
                 pool.push_back(resource);
-                last_released.push_back(q_clock_getmicros());
+                last_released.push_back(q_clock_getmicros_monotonic());
             }
             ++live_count;
             tmap[tid] = idx;
@@ -170,7 +170,7 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
         ++wait_count_val;
 
         if (timeout_ms > 0) {
-            int64 elapsed_us = q_clock_getmicros() - start_us;
+            int64 elapsed_us = q_clock_getmicros_monotonic() - start_us;
             int64 remaining_ms = timeout_ms - elapsed_us / 1000;
             if (remaining_ms <= 0) {
                 --wait_count_val;
@@ -195,7 +195,7 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
 
         // Check if wait exceeded warning threshold
         if (warning_ms > 0 && warning_callback) {
-            int64 elapsed_us = q_clock_getmicros() - start_us;
+            int64 elapsed_us = q_clock_getmicros_monotonic() - start_us;
             int64 elapsed_ms = elapsed_us / 1000;
             if (elapsed_ms >= warning_ms) {
                 ReferenceHolder<ResolvedCallReferenceNode> cb(
@@ -250,7 +250,7 @@ void ConnectionPool::release(ExceptionSink* xsink) {
 
     {
         AutoLocker al(this);
-        last_released[idx] = q_clock_getmicros();
+        last_released[idx] = q_clock_getmicros_monotonic();
         free_list.push_back(idx);
         if (wait_count_val > 0) {
             signal();
@@ -341,7 +341,7 @@ int ConnectionPool::cleanupIdle(ExceptionSink* xsink) {
         return 0;
     }
 
-    int64 cutoff_us = q_clock_getmicros() - idle_timeout_ms * 1000;
+    int64 cutoff_us = q_clock_getmicros_monotonic() - idle_timeout_ms * 1000;
 
     std::vector<QoreObject*> to_destroy;
 
