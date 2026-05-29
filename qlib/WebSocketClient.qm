@@ -260,6 +260,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       at \c INFO level (previously the only \c INFO line came from the reconnect-thread start, which is absent
       if the thread spawn fails), and a terminal WebSocket close is now logged at \c INFO instead of \c DEBUG
       so the close code and reason are visible at the default log level
+    - the destructor now deterministically drains in-flight async I/O controller callbacks for the connection
+      (via \c flushCallbacksByOwner()) after waiting for delivery tasks, closing a teardown race where a
+      controller callback already dispatched to a worker could touch destroyed members (previously survived
+      only via \c OBJECT-ALREADY-DELETED guards)
     - added async I/O support using the global @ref AsyncSocketIo::AsyncSocketIoController for scalable,
       non-blocking WebSocket client connections; enabled by default for HTTP/1.1 connections
       - added the \c async_io constructor option (default @ref True); the option is retained for compatibility,
@@ -869,6 +873,27 @@ WebSocketClient ws(\event(), {
                 "proceeding with destruction (counter=%d, delivery_pending=%d) — this "
                 "indicates a bug: a delivery task was accounted for but never decremented",
                 delivery_thread_counter.getCount(), delivery_pending);
+        }
+        # Synchronous shutdown gate for the controller layer: the delivery-task
+        # counter above only covers WS-layer deliverInBackground() tasks, not the
+        # async I/O controller's onComplete/abort callbacks (the on_poll_complete
+        # closure that calls scheduleDelivery()).  stopAsyncIo() cancels pending
+        # controller ops via cancelByOwner(), but a callback already dispatched to a
+        # worker can still be running and would touch destroyed members after we
+        # return — today only survived via OBJECT-ALREADY-DELETED guards in
+        # scheduleDelivery().  Drain them deterministically here.  Safe: we are past
+        # the delivery_thread_id==gettid() early-return, so this thread is not itself
+        # an owner-tagged callback worker, so flushCallbacksByOwner() cannot wait on
+        # itself.  Best-effort: the controller may already be torn down at process
+        # exit.
+        if (async_owner.val()) {
+            try {
+                AsyncSocketIo::AsyncSocketIoController controller =
+                    AsyncSocketIo::getGlobalAsyncIoController();
+                controller.flushCallbacksByOwner(async_owner);
+            } catch (hash<ExceptionInfo> ex) {
+                # controller unavailable during shutdown — nothing left to drain
+            }
         }
     }
 
