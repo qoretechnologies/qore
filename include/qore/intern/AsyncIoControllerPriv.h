@@ -124,8 +124,10 @@ public:
     //! Dispatch a code callback asynchronously (for timer events)
     /** @param callback the callback code (referenced — ownership transferred)
         @param args the argument list (referenced — ownership transferred, or nullptr)
+        @param owner optional owner identifier for per-owner flush tracking (empty = untracked)
     */
-    DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args);
+    DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
+        const std::string& owner = std::string());
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -473,9 +475,13 @@ public:
     /** @param deadline the absolute deadline
         @param udata Qore user data to associate with the timer (referenced)
         @param xsink for exception handling
+        @param owner optional owner identifier; when set, the timer's callback dispatch is tracked under
+        this owner so it can be drained via flushCallbacksByOwner() (enables deterministic teardown of
+        fired-but-not-yet-run timer callbacks)
         @return the timer ID (> 0)
     */
-    DLLLOCAL int64_t addTimer(const DateTimeNode* deadline, QoreValue udata, ExceptionSink* xsink);
+    DLLLOCAL int64_t addTimer(const DateTimeNode* deadline, QoreValue udata, ExceptionSink* xsink,
+        const std::string& owner = std::string());
 
     //! Cancels a timer
     /** @param id the timer ID returned by addTimer()
@@ -833,6 +839,7 @@ private:
     //! Timer info stored under lock
     struct TimerInfo {
         QoreValue udata;                //!< Referenced Qore user data
+        std::string owner;              //!< Owner identifier for per-owner callback flush (empty if untracked)
     };
 
     //! Per-I/O-thread context — each thread owns its own event loop, cache, and socket state
