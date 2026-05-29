@@ -144,8 +144,8 @@ public:
 
     //! Returns true if the constant's value has been initialized
     DLLLOCAL bool hasValue() const {
-        return init && !aot_shell_pending && !external_stub
-            && (saved_val_set || val.getType() != NT_RTCONSTREF);
+        return !aot_shell_pending && !external_stub
+            && (saved_val_set || (init && val.getType() != NT_RTCONSTREF));
     }
 
     //! Sets the runtime value (val + saved_val) for AOT init functions

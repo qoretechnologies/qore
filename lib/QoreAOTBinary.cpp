@@ -10860,14 +10860,15 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) 
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (ce) {
                 ce->loc = getBlobLocation();
-            }
-            if (pcc.pending_init) {
-                // Pending init-func: parser-time references must defer to
-                // runtime.  Look the new ConstantEntry back up and swap its
-                // val for a self-referential RuntimeConstantRefNode; the
-                // init-func populates saved_val when it runs at register time.
-                if (ce) {
-                    ce->aot_shell_pending = true;
+                // Every class constant shell starts without its serialized value.
+                // Keep it pending so sibling constants that refer forward do not
+                // resolve to the placeholder value installed by addUserConstant().
+                ce->aot_shell_pending = true;
+                if (pcc.pending_init) {
+                    // Pending init-func: parser-time references must defer to
+                    // runtime.  Swap val for a self-referential
+                    // RuntimeConstantRefNode; the init-func populates saved_val
+                    // when it runs at register time.
                     ce->val.discard(nullptr);
                     ce->val = new RuntimeConstantRefNode(&loc_builtin, ce,
                         /*aot_deferred=*/true);
