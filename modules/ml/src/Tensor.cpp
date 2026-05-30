@@ -916,6 +916,8 @@ QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* devic
 
     const QoreBufferNode* host_buf = host->getBuffer();
     QoreBufferElementType et = host_buf->getElementType();
+    // ML::Tensor buffers are non-nullable by construction (the Tensor constructor rejects
+    // nullable buffers), so device tensors never need a validity bitmap on upload
     if (et == QoreBufferElementType::Bool) {
         xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
             "device upload does not support bit-packed bool buffers");
