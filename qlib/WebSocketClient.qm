@@ -881,11 +881,17 @@ WebSocketClient ws(\event(), {
         # controller ops via cancelByOwner(), but a callback already dispatched to a
         # worker can still be running and would touch destroyed members after we
         # return — today only survived via OBJECT-ALREADY-DELETED guards in
-        # scheduleDelivery().  Drain them deterministically here.  Safe: we are past
-        # the delivery_thread_id==gettid() early-return, so this thread is not itself
-        # an owner-tagged callback worker, so flushCallbacksByOwner() cannot wait on
-        # itself.  Best-effort: the controller may already be torn down at process
-        # exit.
+        # scheduleDelivery().  Drain them deterministically here.  Self-wait safety:
+        # this destructor can run ON the dispatcher worker that is executing one of
+        # this owner's callbacks (when on_poll_complete drops the client's last
+        # reference) — the delivery_thread_id==gettid() guard above does NOT catch
+        # that, because the callback-worker pool is distinct from the WS delivery
+        # thread.  flushCallbacksByOwner() is nonetheless safe because the
+        # dispatcher's waitForOwnerIdle() excludes the calling worker's own
+        # in-flight item (see current_callback_owner in AsyncIoControllerPriv.cpp);
+        # without that exclusion the worker would wait for itself and deadlock the
+        # whole dispatcher (the WebSocketPerfTest CI hang).  Best-effort: the
+        # controller may already be torn down at process exit.
         if (async_owner.val()) {
             try {
                 AsyncSocketIo::AsyncSocketIoController controller =

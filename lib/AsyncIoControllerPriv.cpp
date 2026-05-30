@@ -205,6 +205,18 @@ static thread_local bool inside_continue_poll_batch = false;
 //! making such operations promptly interruptible on cancel/shutdown.
 static thread_local std::string current_continue_poll_owner;
 
+//! Owner of the callback (DT_CALLBACK / DT_ON_COMPLETE / DT_ABORT / stream /
+//! poll-complete) currently being dispatched on this (worker) thread, or empty
+//! when this thread is not running an owner-tagged callback.  Set by
+//! workerLoop() around each dispatch and read by waitForOwnerIdle() so that a
+//! re-entrant flushCallbacksByOwner() — issued from a destructor that fires
+//! synchronously inside the callback when it drops the owner object's last
+//! reference — excludes this worker's own still-counted item from the wait
+//! predicate instead of waiting for itself forever.  Without this, a WebSocket
+//! teardown (on_poll_complete closure releases the last WebSocketClient ref →
+//! destructor → flushCallbacksByOwner(async_owner)) deadlocks the dispatcher.
+static thread_local std::string current_callback_owner;
+
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
 }
@@ -772,8 +784,15 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
         if (!item.owner.empty()) {
             auto it = active_per_owner.find(item.owner);
             if (it != active_per_owner.end()) {
-                if (--it->second <= 0) {
+                // Wake at count 0 (external waiters) or 1 (a re-entrant
+                // waitForOwnerIdle() caller that excludes its own item); a
+                // decrement to >= 2 satisfies no waiter.  See
+                // current_callback_owner.
+                const int nv = --it->second;
+                if (nv <= 0) {
                     active_per_owner.erase(it);
+                }
+                if (nv <= 1) {
                     owner_idle_cond.broadcast();
                 }
             }
@@ -858,8 +877,15 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
             if (!it->owner.empty()) {
                 auto oit = active_per_owner.find(it->owner);
                 if (oit != active_per_owner.end()) {
-                    if (--oit->second <= 0) {
+                    // Wake at count 0 (external waiters) or 1 (a re-entrant
+                    // waitForOwnerIdle() caller that excludes its own item); a
+                    // decrement to >= 2 satisfies no waiter.  See
+                    // current_callback_owner.
+                    const int nv = --oit->second;
+                    if (nv <= 0) {
                         active_per_owner.erase(oit);
+                    }
+                    if (nv <= 1) {
                         owner_idle_cond.broadcast();
                     }
                 }
@@ -900,10 +926,20 @@ void QoreCallDispatcher::waitForOwnerIdle(const std::string& owner) {
     if (owner.empty()) {
         return;
     }
+    // If this thread is itself a worker currently running an owner-tagged
+    // callback for this same owner — i.e. flushCallbacksByOwner() was reached
+    // re-entrantly from a destructor that fired synchronously inside that
+    // callback when it dropped the owner object's last reference — then this
+    // worker's own item is still counted in active_per_owner (it is only
+    // decremented after the dispatch returns; see workerLoop).  Exclude it from
+    // the wait, otherwise the worker waits for itself and the dispatcher
+    // deadlocks (WebSocketClient teardown).  See current_callback_owner.  For
+    // any normal external caller self == 0, preserving the original semantics.
+    const int self = (current_callback_owner == owner) ? 1 : 0;
     AutoLocker al(m);
     while (true) {
         auto it = active_per_owner.find(owner);
-        if (it == active_per_owner.end() || it->second == 0) {
+        if (it == active_per_owner.end() || it->second <= self) {
             break;
         }
         owner_idle_cond.wait(m);
@@ -1022,6 +1058,34 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 owner_shutting_down = shutting_down_owners.count(async_item.owner) > 0;
             }
         }
+
+        // Publish this item's owner for the duration of the dispatch so a
+        // re-entrant flushCallbacksByOwner() (from a destructor fired
+        // synchronously inside the callback when it releases the owner object's
+        // last reference) excludes this worker's own still-counted item instead
+        // of deadlocking on itself.  reset() is called just before the per-owner
+        // decrement below — after that point active_per_owner no longer counts
+        // this item, so the destructor-during-deref path is covered by the
+        // decrement-before-deref ordering rather than by this exclusion (and
+        // keeping it set there would wrongly skip a genuine concurrent callback
+        // for the same owner).  Save/restore + reset-on-destruct keeps the
+        // thread-local balanced on every exit path.  See current_callback_owner.
+        struct CallbackOwnerGuard {
+            std::string prev;
+            bool armed;
+            CallbackOwnerGuard(const std::string& o) : prev(current_callback_owner), armed(true) {
+                current_callback_owner = o;
+            }
+            void reset() {
+                if (armed) {
+                    current_callback_owner = prev;
+                    armed = false;
+                }
+            }
+            ~CallbackOwnerGuard() {
+                reset();
+            }
+        } cb_owner_guard(async_item.owner);
 
         if (pgm_shutting_down || owner_shutting_down) {
             if (async_item.type == DT_CONTINUE_POLL && async_item.controller) {
@@ -1194,6 +1258,13 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             work_xsink.clear();
         }
 
+        // The dispatch is complete: stop excluding this item from
+        // waitForOwnerIdle() before we decrement its per-owner count, so a
+        // destructor fired during the derefs below sees the true remaining
+        // count (this item already removed) rather than skipping a genuine
+        // concurrent same-owner callback.
+        cb_owner_guard.reset();
+
         // Drop per-owner tracking for this work item BEFORE derefing any
         // referenced objects.  spop_obj holds a back-chain to the owner (e.g.
         // HttpClientPollOperation → HttpClientConnection → HttpClientConnectionManager),
@@ -1206,8 +1277,17 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             AutoLocker al(m);
             auto it = active_per_owner.find(async_item.owner);
             if (it != active_per_owner.end()) {
-                if (--it->second <= 0) {
+                // Wake waiters when the count reaches 0 (external callers) OR 1
+                // (a re-entrant waitForOwnerIdle() caller — a worker draining
+                // its OWN owner from a destructor — breaks at count == 1, its
+                // own still-counted item).  A decrement to >= 2 can satisfy no
+                // waiter (self is at most 1), so broadcasting there would be a
+                // pure spurious wakeup.  See current_callback_owner.
+                const int nv = --it->second;
+                if (nv <= 0) {
                     active_per_owner.erase(it);
+                }
+                if (nv <= 1) {
                     owner_idle_cond.broadcast();
                 }
             }
