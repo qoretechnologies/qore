@@ -16,6 +16,8 @@ public class TimerDispatchTest inherits QUnit::Test {
         addTestCase("owner-tagged timer callback is drainable", \ownerTaggedTimerDrained());
         addTestCase("self-draining destructor on worker does not deadlock",
             \selfDrainingDestructorOnWorkerNoDeadlock());
+        addTestCase("self-draining destructor holding a sibling lock does not deadlock",
+            \selfDrainingDestructorWithSiblingLockNoDeadlock());
         addTestCase("cancelTimer stops a not-yet-fired timer", \cancelTimerStopsTimer());
         set_return_value(main());
     }
@@ -59,6 +61,56 @@ public class TimerDispatchTest inherits QUnit::Test {
         assertEq(0, destructed.waitForZero(30s),
             "self-draining destructor deadlocked the dispatcher worker: "
             "flushCallbacksByOwner() waited for its own in-flight callback");
+    }
+
+    # Regression for the harder half of the WebSocketPerfTest CI hang: a
+    # destructor that drains its owner via flushCallbacksByOwner() while HOLDING a
+    # lock that a SIBLING callback for the same owner needs.  This is the field
+    # scenario where the I/O thread dispatched several onPollComplete callbacks for
+    # one connection; one callback's destructor called flushCallbacksByOwner()
+    # while holding the connection's delivery_mutex, and the sibling callbacks were
+    # blocked acquiring that same delivery_mutex.  A blocking drain waits for the
+    # siblings, the siblings wait for the lock, the lock is held by the draining
+    # worker — deadlock.  Excluding only the worker's OWN item (the first-cut fix)
+    # does NOT help here; the dispatcher must not block a callback worker at all.
+    selfDrainingDestructorWithSiblingLockNoDeadlock() {
+        AsyncSocketIoController ctrl();
+        on_exit delete ctrl;
+
+        string owner = "siblinglock-" + get_random_string(8);
+        Mutex shared();          # stands in for WebSocketClient::delivery_mutex
+        Counter startedA(1);
+        Counter aHoldsLock(1);
+        Counter bDone(1);
+        Counter destructed(1);
+
+        SelfDrainingOwner obj(owner, destructed);
+
+        # Sibling callback B (same owner): waits until A holds `shared`, then blocks
+        # acquiring it.  It must be in flight so that — without the fix — A's drain
+        # would wait for it.
+        ctrl.addTimer(now_us() + 10ms, sub () {
+            aHoldsLock.waitForZero(30s);
+            AutoLock bl(shared);   # blocks while A holds `shared`
+            bDone.dec();
+        }, owner);
+
+        # Callback A (same owner): grabs `shared`, then deletes obj whose destructor
+        # calls flushCallbacksByOwner(owner) WHILE A still holds `shared`.
+        ctrl.addTimer(now_us() + 10ms, sub () {
+            startedA.dec();
+            AutoLock al(shared);
+            aHoldsLock.dec();      # B may now race for `shared` (it will block)
+            delete obj;            # destructor -> flushCallbacksByOwner(owner)
+        }, owner);
+
+        assertEq(0, startedA.waitForZero(10s), "callback A did not start within 10s");
+        # Both must complete: the destructor's drain must not block holding `shared`
+        # (else A and B deadlock), and B must then acquire `shared` and finish.
+        assertEq(0, destructed.waitForZero(30s),
+            "self-draining destructor holding a sibling lock deadlocked the dispatcher");
+        assertEq(0, bDone.waitForZero(30s),
+            "sibling callback never acquired the lock (dispatcher deadlock)");
     }
 
     # An owner-tagged timer's fired-but-still-running callback must be drainable
