@@ -685,3 +685,187 @@ existing sandbox model already covers the module.
 - [x] Benchmarks show the break-even points and real speedups.
 - [x] Valgrind/ASan host validation and CUDA memory validation are recorded (valgrind clean on host paths; compute-sanitizer memcheck clean on device + copy-to-host paths).
 - [x] Doxygen docs are updated (release notes deferred until the branch is released).
+
+---
+
+## Follow-up Implementation Plan (post-V1)
+
+V1 (Phases 0–8 above) delivered a complete, GPU-validated single-process **CUDA**
+device-binding pipeline: device inputs bind without a host copy, provider-managed
+device outputs return as device-backed `ML::Tensor` values with a copy-to-host
+callback, the policy flows through DataProviderML and QoreModelRegistry, and
+host/device transfers are observable. This section plans the remaining work from the
+Open Questions, in priority order. Follow-up phases are numbered `F1..F7` to
+distinguish them from V1's Phases 0–8.
+
+### Shared groundwork already in place (provider-neutral, no new HW needed)
+
+These exist and are reused by every provider below, so per-provider work is small:
+
+- `normalizeProviderName()` already resolves `cuda`, `tensorrt`, `openvino`,
+  `dml`/`directml`, `rocm`, and `coreml` aliases.
+- Provider-option metadata exists for CUDA, TensorRT, OpenVINO, DML, and ROCm.
+- `appendProvider()` has explicit V2-options branches for CUDA and TensorRT and a
+  generic `Ort::SessionOptions::AppendExecutionProvider(name, opts)` fallback that
+  already works for ROCm, OpenVINO, DML, and CoreML.
+- The device→host substrate (`QoreBufferNode::wrapExternalDeviceStorage` +
+  `QoreBufferDeviceCopyToHostCallback`), the `OnnxDeviceBindingPolicy`, the transfer
+  counters, and `ML::Tensor::mockDevice` (host memory tagged as a device kind with a
+  `memcpy` copy-back) are all provider-neutral.
+- Device-kind mapping (`deviceKindToOrtMemoryName` maps `Cuda→"Cuda"`, `Rocm→"Hip"`;
+  `deviceKindFromName`, `ortDeviceTypeToKind`, `inputDeviceMatchesProvider`) already
+  understands CUDA, TensorRT (CUDA family), and ROCm.
+
+**The only genuinely provider-specific code is the allocator + copy callback**
+(`onnxCudaCopyToHost`/`cudaMemcpy` under `HAVE_CUDART`, and the CUDA-only reject in
+`wrapOnnxDeviceOutput`). That is why the whole CUDA feature was developed and unit
+-tested via `mockDevice` *before* a GPU was available, and why most follow-up logic is
+HW-free testable.
+
+### Phase F1 — Host→device upload + automatic input upload (gating piece)
+
+**Problem:** today the only source of a real device buffer is an ONNX output, so the
+only zero-copy device path is "ONNX output → ONNX input". Nothing can upload host data
+to the device, so `host_to_device_transfers` is structurally always 0.
+
+**Changes (all in `modules/ml/`, `HAVE_CUDART` first):**
+- A device allocator/owner: `cudaMalloc` + `cudaMemcpy(H2D)`, wrapped via
+  `wrapExternalDeviceStorage` with an owner whose destructor `cudaFree`s, reusing a
+  `cudaMemcpy(D2H)` copy-back. Mirror the existing `qore_ml_make_mock_device_tensor`
+  in `Tensor.cpp`.
+- Public API `ML::Tensor::toDevice(string kind = "cuda", int device_id = 0)` and
+  `<buffer>::toDevice(...)` — the real counterpart of `mockDevice`.
+- Optional policy `device_binding.upload_host_inputs`: when set, `prepareInputValue()`
+  uploads a host input to the active device and binds it zero-copy, incrementing
+  `db_host_to_device_transfers`. This makes the H2D counter truthful and enables the
+  "CPU producer → device consumer" mixed-pipeline case.
+
+**Tests:** HW-free via a mock allocator for API/ownership/counter wiring; HW-gated
+`toDevice()` → zero-copy input round-trip; valgrind host paths; compute-sanitizer on
+malloc/free/memcpy.
+
+### Phase F2 — ROCm device binding (near-mechanical CUDA mirror)
+
+**Changes:** `HAVE_HIPRT` CMake detection mirroring `HAVE_CUDART`; an `onnxHipCopyToHost`
+(`hipMemcpy`) and a HIP upload allocator; generalize `wrapOnnxDeviceOutput` to dispatch
+the copy callback on `dev_info.kind` (Cuda→cuda, Rocm→hip) instead of the current
+CUDA-only reject. MemoryInfo (`"Hip"`) and `inputDeviceMatchesProvider(Rocm)` already
+exist. Add ROCm/HIP process-lifetime suppressions to `qore.supp`.
+
+**Tests:** HW-free via `mockDevice` tagged `rocm` (kind-dispatch, fallback, diagnostics,
+"no ROCm runtime" negative path). HW-gated validation needs an **AMD GPU + a ROCm build
+of ONNX Runtime** (the CUDA tarball has no ROCm EP); deferred to an AMD runner.
+
+### Phase F3 — Pinned (page-locked) host buffers (`host_accessible`)
+
+**Changes:** a `host_accessible`/pinned placement; `cudaHostAlloc`/`cudaFreeHost`-backed
+host allocation behind `Tensor::pinnedHost()`/a `toDevice` option; switch the copy
+callbacks to `cudaMemcpyAsync` + stream sync when an endpoint is pinned. Benefit: ~2×
+DMA bandwidth and copy/compute overlap on the materialize and host-fallback paths.
+
+**Tests:** HW-free allocation/ownership; HW-gated bandwidth-delta benchmark.
+
+### Phase F4 — Production hardening (session pool + writable preallocated outputs)
+
+**Changes:** audit `OnnxSessionPool` + device binding so retained device buffers do not
+pin provider arenas unboundedly; add GPU-memory counters to pool stats; add a "writable
+device buffer" marker to the substrate and accept it in `prepareOutputTensorValue()`
+(currently rejects device buffers) for caller-owned ring/double buffers, gated behind
+the marker per the V1 caution.
+
+**Tests:** HW-free validation/marker logic; HW-gated stress (repeated runs, binding
+reuse, async pool) under compute-sanitizer.
+
+### Phase F5 — Provider reach
+
+Split by what the provider's device-memory model allows:
+
+- **F5a EP acceleration (compute only, no device-memory retention)** for **OpenVINO**
+  and **DirectML**, whose memory is opaque (OpenVINO remote tensors / DML D3D12
+  resources), *not* raw pointers. Work: validate the generic append path, add EP-option
+  validation, and ensure device binding **resolves to host** (no-op) and reports that
+  truthfully. OpenVINO's default device is the **x86 CPU**, so the EP itself is testable
+  with no GPU; DirectML is **Windows-only** (testable on the WARP software adapter).
+- **F5b TensorRT** — already appended and treated as CUDA-family; work is validation +
+  benchmarks. Shares CUDA device memory.
+
+### Phase F6 — Correctness completeness
+
+- **Nullable device buffers:** ONNX tensors carry no validity bitmap. Decide policy
+  (reject nullable into device tensors, or carry the validity mask host-side) in
+  `validateDirectBuffer`/`prepareInputValue`; add nullable-column tests.
+- **Sandboxing domain:** tag the device-binding/upload entry points with a functional
+  domain so restricted programs (`PO_NO_UNCONTROLLED_APIS`) can deny accelerator use.
+
+### Phase F7 — Break-even benchmarks + docs
+
+Run the four device benches across batch `1,8,32,128,512` × {CPU, CUDA} ×
+{host-materialized, device-retained}; tabulate the crossover into `bench/baselines/`;
+extend the mainpage device section with the provider support matrix and break-even
+guidance.
+
+### Hardware / SDK availability for development and testing
+
+| Provider | Build w/o HW? | Run/test w/o HW? | HW-free coverage | Needs HW |
+|----------|---------------|------------------|------------------|----------|
+| **CUDA** | n/a (present) | n/a | — | validated on RTX 3090 Ti / CUDA 12.4 / ORT 1.24 |
+| **ROCm** | Yes (ROCm/HIP dev pkgs; no AMD GPU needed to compile) | Partial | `mockDevice` rocm kind-dispatch, fallback, diagnostics, negative paths | real `hipMemcpy` binding needs an **AMD GPU + ROCm ORT build** (no CPU emulator) |
+| **OpenVINO** | Yes | **Yes for EP acceleration** (default device is the x86 CPU) | full EP load/inference/diagnostics + device binding resolving to host | zero-copy **device memory** needs an **Intel GPU/NPU** + remote-tensor interop (separate mechanism) |
+| **DirectML** | No (Windows-only, D3D12) | Windows only, via **WARP** software adapter | on a Windows runner: EP load + inference | real DX12 GPU for perf; device memory needs D3D12 interop (separate mechanism) |
+
+**Key nuance:** ROCm is the only true mirror of the CUDA work. OpenVINO and DirectML do
+not expose raw device pointers, so their *zero-copy device-memory* path is a separate
+interop layer, not a small extension; the realistic near-term deliverable for them is
+**EP acceleration** (F5a), which for OpenVINO is fully testable on a CPU.
+
+---
+
+## Apple Silicon / macOS Optimization (future)
+
+Apple Silicon changes the cost model fundamentally and deserves a dedicated optimization
+pass once the cross-platform device-binding abstraction is stable.
+
+### Unified Memory Architecture (UMA) changes the contract
+
+On Apple Silicon the CPU, GPU, and Apple Neural Engine (ANE) share one physical memory
+pool. Consequences for this design:
+
+- **Host↔device copies are largely unnecessary.** A "device buffer" and its host view
+  can be the *same* physical memory (`MTLBuffer` with `MTLStorageModeShared`). The
+  copy-to-host callback becomes a no-op (or at most a cache/coherency barrier), and
+  `materialize_outputs` should be effectively free. The transfer counters should report
+  **zero** device↔host copies on UMA rather than fabricating them — this aligns with the
+  design principle "truthful zero-copy".
+- **`host_accessible`/pinned (Phase F3) is moot** on UMA — all memory is already host
+  accessible; no `cudaHostAlloc` analog is needed.
+- The `QoreBufferDeviceKind::Metal` value already exists; a Metal placement should be
+  flagged UMA so the policy/diagnostics layer skips copy accounting.
+
+### Execution providers on macOS
+
+- **CoreML EP** (`CoreMLExecutionProvider`, already normalized) is the primary path: it
+  dispatches to ANE/GPU/CPU and manages its own memory. It does **not** expose raw device
+  pointers, so the value is *EP acceleration* (like OpenVINO/DML in F5a), not raw
+  zero-copy device buffers. CoreML EP fuses subgraphs into a single node (relevant to the
+  profiler-diagnostics note already in `ml.qtest`).
+- **MPS / Metal**: if a future Metal compute path is added, `MTLStorageModeShared`
+  buffers give genuine zero-copy CPU↔GPU sharing — the one place a real device-pointer
+  binding makes sense on Apple, and where UMA makes it cheapest.
+
+### Build/detection notes for later
+
+- Detect `Accelerate.framework`, `Metal.framework`, `CoreML.framework`; gate a future
+  Metal copy/alloc path behind a `HAVE_METAL` analog to `HAVE_CUDART`/`HAVE_HIPRT`.
+- ONNX Runtime macOS builds ship the CoreML EP; there is no general raw-pointer "Metal
+  EP" equivalent to CUDA, so plan CoreML as acceleration-only and treat any Metal
+  zero-copy work as a separate, UMA-aware mechanism.
+- macOS memory validation uses Instruments / the Metal validation layer and AddressSanitizer
+  rather than valgrind or compute-sanitizer.
+
+### Acceptance for the Apple pass
+
+- CoreML EP loads and accelerates inference on Apple Silicon; CPU-only macOS unchanged.
+- On a Metal/UMA placement, diagnostics report **zero** host↔device transfers (truthful),
+  not synthetic copies.
+- No copy-to-host work is performed for UMA buffers; `materialize_outputs` is a no-op
+  there.
