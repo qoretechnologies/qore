@@ -174,6 +174,7 @@ resp = rc.restGet("/api/data");
     - Public API: \c setOAuth2Options(), \c getOAuth2Options(), \c getNewToken()
     - Token URL can be absolute (different server) or relative (same server)
     - Support for \c oauth2_token_use_basic_auth and \c oauth2_token_auth_secret_only
+    - Support for OAuth2 client assertion token-endpoint authentication
     - \c bin/rest updated with OAuth2 CLI options
 
     @subsection restclientio_v1_0 Version 1.0
@@ -446,6 +447,9 @@ hash<RestResponseInfo> resp = f.get(30s);
           \c "authorization_code", \c "implicit", or \c "none")
         - \c oauth2_client_id: OAuth2 client ID
         - \c oauth2_client_secret: OAuth2 client secret
+        - \c oauth2_client_assertion_type: OAuth2 client assertion type
+        - \c oauth2_client_assertion: static OAuth2 client assertion
+        - \c oauth2_client_assertion_provider: \c code<string()> returning a fresh OAuth2 client assertion
         - \c oauth2_token_url: OAuth2 token endpoint URL (absolute or relative)
         - \c oauth2_alt_token_url: alternate token URL; if set, token requests are routed here and \c oauth2_token_url is included as a body arg (useful for proxy-based token services)
         - \c oauth2_scopes: OAuth2 scopes (list of strings)
@@ -565,6 +569,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *string oauth2_client_id;
             #! OAuth2 client secret
             *string oauth2_client_secret;
+            #! OAuth2 client assertion type
+            *string oauth2_client_assertion_type;
+            #! OAuth2 static client assertion
+            *string oauth2_client_assertion;
+            #! OAuth2 client assertion provider called before each token request
+            *code<string()> oauth2_client_assertion_provider;
             #! OAuth2 scopes
             *softlist<string> oauth2_scopes;
             #! OAuth2 scope separator character (default: space)
@@ -755,6 +765,31 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "custom_token_location": True,
             };
 
+            #! OAuth2 option requirements per grant type
+            const OAuth2GrantOptions = {
+                "authorization_code": (
+                    "oauth2_auth_url",
+                    "oauth2_client_id",
+                    "oauth2_client_secret",
+                    "oauth2_redirect_url",
+                    "oauth2_token_url",
+                ),
+                "implicit": (
+                    "oauth2_auth_url",
+                    "oauth2_client_id",
+                    "oauth2_redirect_url",
+                ),
+                "client_credentials": (
+                    "oauth2_client_id",
+                    "oauth2_token_url",
+                ),
+                "password": (
+                    "oauth2_client_id",
+                    "oauth2_client_secret",
+                    "oauth2_token_url",
+                ),
+            };
+
             #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
             /** Unknown keys cause a @c RESTCLIENTIO-OPTION-ERROR at construction time. This set
                 intentionally mirrors the options declared by @ref RestClient::RestConnection
@@ -829,6 +864,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "oauth2_grant_type": True,
                 "oauth2_client_id": True,
                 "oauth2_client_secret": True,
+                "oauth2_client_assertion_type": True,
+                "oauth2_client_assertion": True,
+                "oauth2_client_assertion_provider": True,
                 "oauth2_token_url": True,
                 "oauth2_alt_token_url": True,
                 "oauth2_scopes": True,
@@ -1025,6 +1063,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             if (opts.oauth2_client_secret) {
                 oauth2_client_secret = opts.oauth2_client_secret;
+            }
+            if (opts.oauth2_client_assertion_type) {
+                oauth2_client_assertion_type = opts.oauth2_client_assertion_type;
+            }
+            if (opts.oauth2_client_assertion) {
+                oauth2_client_assertion = opts.oauth2_client_assertion;
+            }
+            if (opts.oauth2_client_assertion_provider) {
+                oauth2_client_assertion_provider = opts.oauth2_client_assertion_provider;
             }
             if (opts.oauth2_token_url) {
                 oauth2_token_url = opts.oauth2_token_url;
@@ -2920,6 +2967,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @throw OAUTH2-ERROR if the options are invalid
         */
         setOAuth2Options(hash<auto> new_opts) {
+            checkOAuth2Options(new_opts);
             {
                 AutoWriteLock al(config_lock);
                 if (new_opts.oauth2_grant_type) {
@@ -2930,6 +2978,15 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
                 if (new_opts.oauth2_client_secret) {
                     oauth2_client_secret = new_opts.oauth2_client_secret;
+                }
+                if (new_opts.oauth2_client_assertion_type) {
+                    oauth2_client_assertion_type = new_opts.oauth2_client_assertion_type;
+                }
+                if (new_opts.oauth2_client_assertion) {
+                    oauth2_client_assertion = new_opts.oauth2_client_assertion;
+                }
+                if (new_opts.oauth2_client_assertion_provider) {
+                    oauth2_client_assertion_provider = new_opts.oauth2_client_assertion_provider;
                 }
                 if (new_opts.oauth2_token_url) {
                     oauth2_token_url = new_opts.oauth2_token_url;
@@ -2977,7 +3034,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     password = new_opts.password;
                 }
             }
-            checkOAuth2Options(new_opts);
         }
 
         #! Returns the current OAuth2 options
@@ -2996,6 +3052,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 "oauth2_auth_args": oauth2_auth_args,
                 "oauth2_auth_url": oauth2_auth_url,
                 "oauth2_auto_refresh": oauth2_auto_refresh,
+                "oauth2_client_assertion": oauth2_client_assertion,
+                "oauth2_client_assertion_provider": oauth2_client_assertion_provider,
+                "oauth2_client_assertion_type": oauth2_client_assertion_type,
                 "oauth2_client_id": oauth2_client_id,
                 "oauth2_client_secret": oauth2_client_secret,
                 "oauth2_grant_type": oauth2_grant_type,
@@ -3084,30 +3143,66 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @throw OAUTH2-ERROR if the options are invalid
         */
         private checkOAuth2Options(hash<auto> opts) {
-            *string grant_type = opts.oauth2_grant_type;
+            *string grant_type = opts.oauth2_grant_type ?? oauth2_grant_type;
             if (!exists grant_type || grant_type == "none") {
                 return;
             }
-            *list<string> req_opts = RestClient::RestClient::OAuth2GrantOptions{grant_type};
+            hash<auto> effective = getOAuth2Options() + opts;
+            *list<string> req_opts = OAuth2GrantOptions{grant_type};
             if (!req_opts) {
                 throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y is unknown; known grant types: %y",
-                    grant_type, keys RestClient::RestClient::OAuth2GrantOptions);
+                    grant_type, keys OAuth2GrantOptions);
             }
             foreach string req_opt in (req_opts) {
-                if (!opts.hasKey(req_opt)) {
+                if (!effective.hasKey(req_opt) || !effective{req_opt}.val()) {
                     throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y, but this "
                         "option is not set; options provided: %y", grant_type, req_opt, keys opts);
                 }
             }
+            validateOAuth2ClientAssertionOptions(effective);
+            if (grant_type == "client_credentials" && !effective.oauth2_client_secret.val()
+                    && !hasOAuth2ClientAssertion(effective)) {
+                throw "OAUTH2-ERROR", "OAuth2 grant type \"client_credentials\" requires option "
+                    "\"oauth2_client_secret\" or OAuth2 client assertion options";
+            }
             if (grant_type == "password") {
-                if (!opts.username && !username) {
+                if (!effective.username.val()) {
                     throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
                         "password; no username is set";
                 }
-                if (!opts.password && !password) {
+                if (!effective.password.val()) {
                     throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
                         "password; no password is set";
                 }
+            }
+        }
+
+        #! Returns True if OAuth2 client assertion authentication is configured
+        private bool hasOAuth2ClientAssertion(hash<auto> opts) {
+            return opts.oauth2_client_assertion.val() || opts.oauth2_client_assertion_provider;
+        }
+
+        #! Validates OAuth2 client assertion options
+        private validateOAuth2ClientAssertionOptions(hash<auto> opts) {
+            if (!opts.oauth2_client_assertion.val() && !opts.oauth2_client_assertion_provider
+                    && !opts.oauth2_client_assertion_type.val()) {
+                return;
+            }
+            if (!opts.oauth2_client_assertion_type.val()
+                    || opts.oauth2_client_assertion_type.typeCode() != NT_STRING) {
+                throw "OAUTH2-ERROR",
+                    "OAuth2 client assertion authentication requires string option "
+                    "\"oauth2_client_assertion_type\"";
+            }
+            if (opts.oauth2_client_assertion.val()
+                    && opts.oauth2_client_assertion.typeCode() != NT_STRING) {
+                throw "OAUTH2-ERROR",
+                    "OAuth2 client assertion authentication requires string option "
+                    "\"oauth2_client_assertion\"";
+            }
+            if (!opts.oauth2_client_assertion.val() && !opts.oauth2_client_assertion_provider) {
+                throw "OAUTH2-ERROR", "OAuth2 client assertion authentication requires option "
+                    "\"oauth2_client_assertion\" or \"oauth2_client_assertion_provider\"";
             }
         }
 
@@ -3309,7 +3404,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     "be manually authorized before it can be used", grant_type);
             }
             string client_id;
-            string client_secret;
+            *string client_secret;
+            *string client_assertion_type;
+            *string client_assertion;
+            *code<string()> client_assertion_provider;
             *hash<auto> token_args;
             *softlist<string> scopes;
             string scope_sep;
@@ -3323,6 +3421,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 AutoReadLock al(config_lock);
                 client_id = oauth2_client_id;
                 client_secret = oauth2_client_secret;
+                client_assertion_type = oauth2_client_assertion_type;
+                client_assertion = oauth2_client_assertion;
+                client_assertion_provider = oauth2_client_assertion_provider;
                 token_args = oauth2_token_args;
                 scopes = oauth2_scopes;
                 scope_sep = oauth2_scope_separator_char;
@@ -3335,9 +3436,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             hash<auto> login = {
                 "client_id": client_id,
-                "client_secret": client_secret,
                 "grant_type": grant_type,
             } + token_args;
+            addOAuth2ClientAuthentication(\login, client_secret, client_assertion_type,
+                client_assertion, client_assertion_provider);
             # When using alt token URL, pass the real token URL and auth flags as body args for the proxy
             if (alt_token_url) {
                 login.oauth2_token_url = token_url;
@@ -3364,7 +3466,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         private hash<auto> getOAuth2RefreshInfo() {
             string client_id;
-            string client_secret;
+            *string client_secret;
+            *string client_assertion_type;
+            *string client_assertion;
+            *code<string()> client_assertion_provider;
             *string ref_token;
             *hash<auto> token_args;
             *string alt_token_url;
@@ -3375,6 +3480,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 AutoReadLock al(config_lock);
                 client_id = oauth2_client_id;
                 client_secret = oauth2_client_secret;
+                client_assertion_type = oauth2_client_assertion_type;
+                client_assertion = oauth2_client_assertion;
+                client_assertion_provider = oauth2_client_assertion_provider;
                 ref_token = refresh_token;
                 token_args = oauth2_token_args;
                 alt_token_url = oauth2_alt_token_url;
@@ -3384,10 +3492,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             hash<auto> rv = {
                 "client_id": client_id,
-                "client_secret": client_secret,
                 "grant_type": "refresh_token",
                 "refresh_token": ref_token,
             } + token_args;
+            addOAuth2ClientAuthentication(\rv, client_secret, client_assertion_type,
+                client_assertion, client_assertion_provider);
             # When using alt token URL, pass the real token URL and auth flags as body args for the proxy
             if (alt_token_url) {
                 rv.oauth2_token_url = token_url;
@@ -3398,6 +3507,27 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
             }
             return rv;
+        }
+
+        #! Adds OAuth2 token-endpoint client authentication fields to a form body
+        private addOAuth2ClientAuthentication(reference<hash<auto>> login, *string client_secret,
+                *string client_assertion_type, *string client_assertion,
+                *code<string()> client_assertion_provider) {
+            if (client_assertion_provider) {
+                string assertion = client_assertion_provider();
+                if (!assertion) {
+                    throw "OAUTH2-ERROR", "OAuth2 client assertion provider returned an empty assertion";
+                }
+                login.client_assertion = assertion;
+                login.client_assertion_type = client_assertion_type;
+                return;
+            }
+            if (client_assertion.val()) {
+                login.client_assertion = client_assertion;
+                login.client_assertion_type = client_assertion_type;
+                return;
+            }
+            login.client_secret = client_secret;
         }
 
         #! Performs an initial OAuth2 login
