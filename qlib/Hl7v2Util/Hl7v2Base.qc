@@ -363,6 +363,22 @@ public namespace Hl7v2Util {
         }
 
         private string formatSimpleSegment(string tag, list<auto> fields) {
+            if (tag == "MSH") {
+                if (!fields) {
+                    throw "HL7V2-WRITE-ERROR", "MSH segments require MSH-2 encoding characters";
+                }
+                string encoding_characters = string(fields[0]);
+                if (encoding_characters.size() < 4) {
+                    throw "HL7V2-WRITE-ERROR", sprintf("MSH-2 encoding characters must have at least four "
+                        "characters: %y", encoding_characters);
+                }
+                list<string> msh_out = ("MSH" + delimiters.getFieldSeparator() + encoding_characters,);
+                for (int i = 1; i < fields.size(); i++) {
+                    push msh_out, formatSimpleField(fields[i]);
+                }
+                return msh_out.join(delimiters.getFieldSeparator());
+            }
+
             list<string> out = (tag,);
             foreach auto field in (fields) {
                 push out, formatSimpleField(field);

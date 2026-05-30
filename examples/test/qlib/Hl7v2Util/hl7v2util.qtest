@@ -114,6 +114,7 @@ class Hl7v2UtilTest inherits QUnit::Test {
         addTestCase("roundtrip test", \roundtripTest());
         addTestCase("custom delimiter test", \customDelimiterTest());
         addTestCase("writer test", \writerTest());
+        addTestCase("ORU R01 builder test", \oruR01BuilderTest());
         addTestCase("schema registry test", \schemaRegistryTest());
         addTestCase("schema validation test", \schemaValidationTest());
         addTestCase("schema generator test", \schemaGeneratorTest());
@@ -227,6 +228,94 @@ class Hl7v2UtilTest inherits QUnit::Test {
             "fields": ("1", "ST", "NOTE", "", "A|B^C~D&E\\F\nG"),
         });
         assertEq("OBX|1|ST|NOTE||A\\F\\B\\S\\C\\R\\D\\T\\E\\E\\F\\.br\\G", escaped);
+    }
+
+    oruR01BuilderTest() {
+        string msg = Hl7v2Util::hl7v2_build_oru_r01({
+            "message_control_id": "ORU0001",
+            "sending_application": "QORE",
+            "sending_facility": "EDGE",
+            "receiving_application": "EHR",
+            "receiving_facility": "HOSP",
+            "timestamp": "20260530120000",
+            "patient": {
+                "id": "12345",
+                "assigning_authority": "MRN",
+                "identifier_type": "MR",
+                "family_name": "Doe",
+                "given_name": "Jane",
+                "birth_date": "19800101",
+                "sex": "F",
+            },
+            "order": {
+                "placer_order_number": "ORD0001",
+                "filler_order_number": "FILL0001",
+                "universal_service_id": {"code": "RESULTS", "text": "Observation Results", "coding_system": "L"},
+                "observation_time": "20260530115900",
+                "result_status": "F",
+            },
+            "observations": ({
+                "code": "8867-4",
+                "text": "Heart rate",
+                "coding_system": "LN",
+                "value": 72,
+                "units": {"code": "/min", "text": "beats/minute", "coding_system": "UCUM"},
+                "reference_range": "60-100",
+                "abnormal_flags": "N",
+            }, {
+                "observation_id": {"code": "NOTE", "text": "Nursing note", "coding_system": "L"},
+                "value": "Patient reported value | separator",
+                "result_status": "F",
+            }),
+        });
+
+        Hl7v2Message parsed(msg);
+        assertEq(("MSH", "PID", "OBR", "OBX", "OBX"), map $1.tag, parsed.getSegments());
+        assertEq("ORU", parsed.getAddress("MSH-9.1"));
+        assertEq("R01", parsed.getAddress("MSH-9.2"));
+        assertEq("ORU_R01", parsed.getAddress("MSH-9.3"));
+        assertEq("ORU0001", parsed.getAddress("MSH-10"));
+        assertEq("12345", parsed.getAddress("PID-3.1"));
+        assertEq("MR", parsed.getAddress("PID-3.5"));
+        assertEq("Doe", parsed.getAddress("PID-5.1"));
+        assertEq("Jane", parsed.getAddress("PID-5.2"));
+        assertEq("RESULTS", parsed.getAddress("OBR-4.1"));
+
+        list<hash<Hl7v2Segment>> obx = select parsed.getSegments(), $1.tag == "OBX";
+        assertEq(2, obx.size());
+        Hl7v2Base base();
+        base.setDelimiters(parsed.getMessage().delimiters);
+        assertEq("NM", base.getFieldValue(obx[0], 2));
+        assertEq("8867-4", base.getFieldValue(obx[0], 3, NOTHING, 1));
+        assertEq("Heart rate", base.getFieldValue(obx[0], 3, NOTHING, 2));
+        assertEq("72", base.getFieldValue(obx[0], 5));
+        assertEq("/min", base.getFieldValue(obx[0], 6, NOTHING, 1));
+        assertEq("60-100", base.getFieldValue(obx[0], 7));
+        assertEq("N", base.getFieldValue(obx[0], 8));
+        assertEq("ST", base.getFieldValue(obx[1], 2));
+        assertEq("NOTE", base.getFieldValue(obx[1], 3, NOTHING, 1));
+        assertEq("Patient reported value | separator", base.getFieldValue(obx[1], 5));
+
+        assertThrows("HL7V2-ORU-ERROR", sub () {
+            Hl7v2Util::hl7v2_build_oru_r01({
+                "patient": {"id": "12345"},
+                "observations": ({"code": "8867-4", "value": 72},),
+            });
+        });
+        assertThrows("HL7V2-ORU-ERROR", sub () {
+            Hl7v2Util::hl7v2_build_oru_r01({
+                "message_control_id": "ORU0002",
+                "patient": {"id": "12345"},
+                "observations": (),
+            });
+        });
+        assertThrows("HL7V2-ORU-ERROR", sub () {
+            Hl7v2Util::hl7v2_build_oru_r01({
+                "message_control_id": "ORU0003",
+                "patient": {"id": "12345"},
+                "observations": ({"value": 72},),
+            });
+        });
     }
 
     schemaRegistryTest() {

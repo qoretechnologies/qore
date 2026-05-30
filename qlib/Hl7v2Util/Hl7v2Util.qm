@@ -194,6 +194,8 @@ module Hl7v2Util {
       \c "\\R\\", \c "\\T\\", \c "\\E\\", and \c "\\.br\\".
     - Provides address helpers for common expressions such as \c "MSH-9",
       \c "PID-3(2).1", and \c "OBX-5".
+    - Builds \c ORU^R01 observation result messages from structured patient,
+      order, and observation hashes.
     - Loads generated schema artifacts for structure-aware validation when
       definition tables are available.
     - Generates schema artifacts from locally supplied HL7 v2 XML schema
@@ -213,6 +215,30 @@ printf("Message type: %s\n", h.getAddress("MSH-9"));
 printf("Patient family name: %s\n", h.getAddress("PID-5.1"));
 
 string roundtrip = h.getText();
+    @endcode
+
+    Build an observation result message:
+
+    @code{.py}
+%requires Hl7v2Util
+
+string result_msg = Hl7v2Util::hl7v2_build_oru_r01({
+    "message_control_id": "ORU-0001",
+    "sending_application": "QORE",
+    "receiving_application": "EHR",
+    "patient": {
+        "id": "12345",
+        "family_name": "Doe",
+        "given_name": "Jane",
+    },
+    "observations": ({
+        "code": "8867-4",
+        "text": "Heart rate",
+        "coding_system": "LN",
+        "value": 72,
+        "units": {"code": "/min", "text": "beats/minute", "coding_system": "UCUM"},
+    },),
+});
     @endcode
 
     DataProvider usage:
@@ -280,6 +306,7 @@ printf("%s defines %d segments\n", summary.version, summary.counts.segments);
       parsing, writing, address helpers, schema loading and validation, and
       read/write/schema data providers
     - added a generator path for locally supplied HL7 v2 XML schema packages
+    - added \c ORU^R01 observation result message builders
 */
 
 #! Hl7v2Util module namespace
