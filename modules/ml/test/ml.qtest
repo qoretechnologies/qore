@@ -3894,6 +3894,22 @@ public class MlTest inherits QUnit::Test {
         assertEq(0, stats.total_rejections);
         assertEq(0, stats.total_timeouts);
 
+        # the pool aggregates device-binding transfer counters across its sessions; a
+        # tensor run on the CPU provider produces one host output and no device transfers
+        hash<auto> tresult = pool.runTensors({"X": ((4.0,),)});
+        assertTrue(tresult.Y instanceof ML::Tensor);
+        stats = pool.getPoolStats();
+        assertTrue(stats.hasKey("device_binding"), "pool stats must include a device_binding block");
+        assertTrue(stats.device_binding.host_outputs >= 1, "a tensor pool run counts a host output");
+        assertEq(0, stats.device_binding.device_outputs);
+        assertEq(0, stats.device_binding.device_to_host_transfers);
+        # the GPU-memory snapshot is present only on CUDA-enabled builds with a device
+        if (stats.hasKey("device_memory")) {
+            assertTrue(stats.device_memory.total_bytes > 0, "device memory snapshot must report total");
+            assertEq(stats.device_memory.total_bytes - stats.device_memory.free_bytes,
+                stats.device_memory.used_bytes);
+        }
+
         list<hash<ML::OnnxTensorInfo>> inputs = pool.getInputInfo();
         assertEq("X", inputs[0].name);
         list<hash<ML::OnnxTensorInfo>> outputs = pool.getOutputInfo();

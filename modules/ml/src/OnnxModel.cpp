@@ -3842,6 +3842,16 @@ QoreHashNode* QoreOnnxModel::getInferenceStats(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+void QoreOnnxModel::accumulateDeviceBindingCounters(DeviceBindingCounters& acc) const {
+    acc.zero_copy_inputs += db_zero_copy_inputs.load(std::memory_order_relaxed);
+    acc.host_fallback_inputs += db_host_fallback_inputs.load(std::memory_order_relaxed);
+    acc.device_outputs += db_device_outputs.load(std::memory_order_relaxed);
+    acc.host_outputs += db_host_outputs.load(std::memory_order_relaxed);
+    acc.output_materializations += db_output_materializations.load(std::memory_order_relaxed);
+    acc.host_to_device_transfers += db_host_to_device_transfers.load(std::memory_order_relaxed);
+    acc.device_to_host_transfers += db_device_to_host_transfers.load(std::memory_order_relaxed);
+}
+
 void QoreOnnxModel::resetInferenceStats() {
     std::lock_guard<std::mutex> lock(stats_mutex);
     inference_run_count = 0;
@@ -5597,6 +5607,50 @@ QoreHashNode* QoreOnnxSessionPool::getPoolStats(ExceptionSink* xsink) const {
     rv->setKeyValue("async_errors", static_cast<int64_t>(async_errors.load()), xsink);
     rv->setKeyValue("async_batches", static_cast<int64_t>(async_batches.load()), xsink);
     rv->setKeyValue("async_batch_items", static_cast<int64_t>(async_batch_items.load()), xsink);
+
+    // aggregate device-binding transfer counters across all pooled sessions so mixed
+    // CPU/GPU serving can report truthful host/device transfer totals
+    QoreOnnxModel::DeviceBindingCounters db;
+    for (const auto& session : sessions) {
+        if (session) {
+            session->accumulateDeviceBindingCounters(db);
+        }
+    }
+    ReferenceHolder<QoreHashNode> db_hash(new QoreHashNode(autoTypeInfo), xsink);
+    db_hash->setKeyValue("zero_copy_inputs", static_cast<int64_t>(db.zero_copy_inputs), xsink);
+    db_hash->setKeyValue("host_fallback_inputs", static_cast<int64_t>(db.host_fallback_inputs), xsink);
+    db_hash->setKeyValue("device_outputs", static_cast<int64_t>(db.device_outputs), xsink);
+    db_hash->setKeyValue("host_outputs", static_cast<int64_t>(db.host_outputs), xsink);
+    db_hash->setKeyValue("output_materializations",
+        static_cast<int64_t>(db.output_materializations), xsink);
+    db_hash->setKeyValue("host_to_device_transfers",
+        static_cast<int64_t>(db.host_to_device_transfers), xsink);
+    db_hash->setKeyValue("device_to_host_transfers",
+        static_cast<int64_t>(db.device_to_host_transfers), xsink);
+    rv->setKeyValue("device_binding", db_hash.release(), xsink);
+
+#ifdef HAVE_CUDART
+    // current-device GPU memory snapshot so operators can watch for memory pressure from
+    // long-lived device buffers; NOTHING when no CUDA device/context is available
+    {
+        size_t free_bytes = 0;
+        size_t total_bytes = 0;
+        if (cudaMemGetInfo(&free_bytes, &total_bytes) == cudaSuccess) {
+            ReferenceHolder<QoreHashNode> mem(new QoreHashNode(autoTypeInfo), xsink);
+            mem->setKeyValue("free_bytes", static_cast<int64_t>(free_bytes), xsink);
+            mem->setKeyValue("total_bytes", static_cast<int64_t>(total_bytes), xsink);
+            mem->setKeyValue("used_bytes", static_cast<int64_t>(total_bytes - free_bytes), xsink);
+            rv->setKeyValue("device_memory", mem.release(), xsink);
+        } else {
+            // clear the sticky error so it does not leak into later CUDA calls
+            cudaGetLastError();
+        }
+    }
+#endif
+
+    if (*xsink) {
+        return nullptr;
+    }
     return rv.release();
 }
 

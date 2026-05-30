@@ -199,6 +199,20 @@ public:
     //! Ends ONNX Runtime profiling and returns the generated profile path
     DLLLOCAL QoreStringNode* endProfiling(ExceptionSink* xsink);
 
+    //! Aggregate device-binding transfer counters (for pool-level reporting)
+    struct DeviceBindingCounters {
+        uint64_t zero_copy_inputs = 0;
+        uint64_t host_fallback_inputs = 0;
+        uint64_t device_outputs = 0;
+        uint64_t host_outputs = 0;
+        uint64_t output_materializations = 0;
+        uint64_t host_to_device_transfers = 0;
+        uint64_t device_to_host_transfers = 0;
+    };
+
+    //! Adds this session's device-binding transfer counters into an accumulator
+    DLLLOCAL void accumulateDeviceBindingCounters(DeviceBindingCounters& acc) const;
+
     //! Returns Qore-side inference counters and latency stats
     DLLLOCAL QoreHashNode* getInferenceStats(ExceptionSink* xsink) const;
 
