@@ -424,6 +424,7 @@ public class ProviderIndexUtil {
         TypedHash dp_arg_info_th = TypedHash::forName("DataProvider::DataProviderArgInfo");
         # get the AbstractDataProviderTypeMap value
         hash<auto> type_map = Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue();
+        hash<auto> shape_map = getDataProviderShapeMap();
         # get the UiOptionViewMap for enum deserialization
         *hash<auto> ui_view_map = Constant::forName("DataProvider::UiOptionViewMap").getValue();
 
@@ -452,7 +453,7 @@ public class ProviderIndexUtil {
             if (rv.actioninfomap) {
                 rv.actioninfomap = deserializeActions(rv.actioninfomap, action_info_th, option_info_th, path_vars_th,
                     dp_info_th, dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th, dp_sig_info_th,
-                    dp_arg_info_th, type_map, ui_view_map);
+                    dp_arg_info_th, type_map, shape_map, ui_view_map);
                 foreach hash<auto> i in (rv.actioninfomap.pairIterator()) {
                     map rv.top_actioninfomap{i.key + "/" + $1.key} = $1.value, i.value.pairIterator();
                 }
@@ -469,7 +470,7 @@ public class ProviderIndexUtil {
             TypedHash action_info_th, TypedHash option_info_th, TypedHash path_vars_th, TypedHash dp_info_th,
             TypedHash dp_opt_info_th, TypedHash dp_exp_info_th, TypedHash mapper_key_info_th,
             TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map,
-            *hash<auto> ui_view_map) {
+            hash<auto> shape_map, *hash<auto> ui_view_map) {
         hash<auto> rv;
         foreach hash<auto> i in (actioninfomap.pairIterator()) {
             foreach hash<auto> j in (i.value.pairIterator()) {
@@ -489,7 +490,7 @@ public class ProviderIndexUtil {
                     }, j.value.options.pairIterator()),
                     "data_provider_info": deserializeDataProviderInfo(j.value.data_provider_info, dp_info_th,
                         dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th,
-                        dp_sig_info_th, dp_arg_info_th, type_map),
+                        dp_sig_info_th, dp_arg_info_th, type_map, shape_map),
                 });
             }
         }
@@ -499,25 +500,34 @@ public class ProviderIndexUtil {
     #! Deserialize data provider info
     static private *hash<auto> deserializeDataProviderInfo(*hash<auto> info, TypedHash dp_info_th,
             TypedHash dp_opt_info_th, TypedHash dp_exp_info_th, TypedHash mapper_key_info_th,
-            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map) {
+            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map,
+            hash<auto> shape_map) {
         if (!info) {
             return;
+        }
+        hash<auto> rv;
+        foreach hash<auto> i in (info.pairIterator()) {
+            if (i.key == "bulk_read_shapes" || i.key == "bulk_create_shapes" || i.key == "bulk_upsert_shapes") {
+                rv{i.key} = map deserializeDataProviderShape($1, shape_map), i.value;
+            } else {
+                rv{i.key} = i.value;
+            }
         }
         foreach string key in ("constructor", "create", "upsert", "search", "request", "child_create", "child_delete",
             "add_field", "update_field", "delete_field", "send_message") {
             key += "_options";
-            if (info{key}) {
-                info{key} = map {
+            if (rv{key}) {
+                rv{key} = map {
                     $1.key: dp_opt_info_th.doCast($1.value + {
                         "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
                         "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
                             $1.value.element_allowed_values),
                         "type": (map type_map{$1} ?? type_map."auto", $1.value.type),
                     }),
-                }, info{key}.pairIterator();
+                }, rv{key}.pairIterator();
             }
         }
-        return dp_info_th.doCast(info + {
+        return dp_info_th.doCast(rv + {
             "expressions": (map {
                 $1.key: dp_exp_info_th.doCast($1.value + {
                     "args": (map dp_sig_info_th.doCast($1 + {
@@ -528,17 +538,39 @@ public class ProviderIndexUtil {
                     }), $1.value.arg_info),
                     "return_type": type_map{$1.value.return_type} ?? type_map."auto",
                 })
-            }, info.expressions.pairIterator()),
+            }, rv.expressions.pairIterator()),
             "events": (map {
                 $1.key: dp_msg_info_th.doCast($1.value)
-            }, info.events.pairIterator()),
+            }, rv.events.pairIterator()),
             "mapper_keys": (map {
                 $1.key: mapper_key_info_th.doCast($1.value)
-            }, info.mapper_keys.pairIterator()),
+            }, rv.mapper_keys.pairIterator()),
             "messages": (map {
                 $1.key: dp_msg_info_th.doCast($1.value)
-            }, info.messages.pairIterator()),
+            }, rv.messages.pairIterator()),
         });
+    }
+
+    #! Returns the map used to deserialize data provider shapes from the provider index
+    static private hash<auto> getDataProviderShapeMap() {
+        return {
+            "RowRecords": Constant::forName("DataProvider::DataProviderShape::RowRecords").getValue(),
+            "1": Constant::forName("DataProvider::DataProviderShape::RowRecords").getValue(),
+            "HashOfLists": Constant::forName("DataProvider::DataProviderShape::HashOfLists").getValue(),
+            "2": Constant::forName("DataProvider::DataProviderShape::HashOfLists").getValue(),
+            "BufferColumns": Constant::forName("DataProvider::DataProviderShape::BufferColumns").getValue(),
+            "3": Constant::forName("DataProvider::DataProviderShape::BufferColumns").getValue(),
+            "DataFrameBlock": Constant::forName("DataProvider::DataProviderShape::DataFrameBlock").getValue(),
+            "4": Constant::forName("DataProvider::DataProviderShape::DataFrameBlock").getValue(),
+        };
+    }
+
+    #! Deserialize a data provider shape from the provider index
+    static private auto deserializeDataProviderShape(auto shape, hash<auto> shape_map) {
+        if (exists shape_map{shape.toString()}) {
+            return shape_map{shape.toString()};
+        }
+        throw "PROVIDER-INDEX-ERROR", sprintf("unknown data provider shape %y", shape);
     }
 
     #! Writes the index to the configured directory

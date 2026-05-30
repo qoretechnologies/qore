@@ -163,7 +163,14 @@ public class ProviderIndex inherits ProviderIndexUtil {
         if (!info) {
             return;
         }
-        hash<auto> rv += info;
+        hash<auto> rv;
+        foreach hash<auto> i in (info.pairIterator()) {
+            if (i.key == "bulk_read_shapes" || i.key == "bulk_create_shapes" || i.key == "bulk_upsert_shapes") {
+                rv{i.key} = map AbstractDataProcessor::shapeName($1), i.value;
+            } else {
+                rv{i.key} = i.value;
+            }
+        }
         foreach string key in ("constructor", "create", "upsert", "search", "request", "child_create", "child_delete",
             "add_field", "update_field", "delete_field", "send_message") {
             key += "_options";

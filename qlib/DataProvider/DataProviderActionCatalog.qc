@@ -612,10 +612,11 @@ public class DataProviderActionCatalog {
     #! Registers an app for deferred initialization / initialization on demand
     /** @param app the application to register
         @param init the initialization code that will register the app
+        @param module_context optional module path to associate with the app while running \a init
 
         @since DataProvider 3.0
     */
-    static registerPendingApp(string app, code init) {
+    static registerPendingApp(string app, code init, *string module_context) {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -633,7 +634,7 @@ public class DataProviderActionCatalog {
 
         initmap{app} = {
             "init": init,
-            "module_context": get_module_context_path(),
+            "module_context": module_context ?? get_module_context_path(),
         };
     }
 
