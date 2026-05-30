@@ -290,6 +290,16 @@ private:
     //! Parse and validate the device_binding policy from a config hash
     DLLLOCAL void configureDeviceBinding(const QoreHashNode* config, ExceptionSink* xsink);
 
+    //! Resolves the target device for a provider-managed output binding.
+    /** @param device optional explicit {kind, device_id} hash; NOTHING uses the
+            device_binding policy / active provider
+        @param out filled with the resolved device when the result is true
+        @return true if outputs should be bound to device memory (see \a out);
+            false for CPU memory (either policy-selected or host fallback)
+    */
+    DLLLOCAL bool resolveOutputDeviceInfo(const QoreHashNode* device,
+        QoreBufferDeviceInfo& out, ExceptionSink* xsink) const;
+
     //! Create a path-based session, falling back to CPU if an auto-selected provider fails
     DLLLOCAL void createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
         const QoreHashNode* config, ExceptionSink* xsink);
@@ -517,6 +527,8 @@ public:
     DLLLOCAL void bindInputs(const QoreHashNode* inputs, ExceptionSink* xsink);
     DLLLOCAL void bindOutput(const char* name, ExceptionSink* xsink);
     DLLLOCAL void bindOutputs(ExceptionSink* xsink);
+    DLLLOCAL void bindOutputDevice(const char* name, const QoreHashNode* device, ExceptionSink* xsink);
+    DLLLOCAL void bindOutputsDevice(const QoreHashNode* device, ExceptionSink* xsink);
     DLLLOCAL void bindOutputTensor(const char* name, const QoreObject* tensor_obj,
         ExceptionSink* xsink);
     DLLLOCAL void clearInputs();
@@ -537,6 +549,8 @@ private:
 
     DLLLOCAL void bindInputUnlocked(const char* name, QoreValue value, ExceptionSink* xsink);
     DLLLOCAL void bindOutputUnlocked(const char* name, ExceptionSink* xsink);
+    DLLLOCAL void bindOutputDeviceUnlocked(const char* name, const QoreHashNode* device,
+        ExceptionSink* xsink);
     DLLLOCAL void bindOutputTensorUnlocked(const char* name, const QoreObject* tensor_obj,
         ExceptionSink* xsink);
     DLLLOCAL void clearInputsUnlocked();

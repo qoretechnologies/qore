@@ -152,6 +152,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
         addTestCase("OnnxModel dtype coverage", \onnxTypeCoverageTest());
         addTestCase("OnnxModel device_binding config", \onnxDeviceBindingConfigTest());
+        addTestCase("OnnxModel device output fallback", \onnxDeviceOutputFallbackTest());
+        addTestCase("OnnxModel device output (CUDA)", \onnxDeviceOutputCudaTest());
         addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
@@ -3136,6 +3138,27 @@ public class MlTest inherits QUnit::Test {
         return False;
     }
 
+    private bool skipOnnxCuda() {
+        if (skipOnnx()) {
+            return True;
+        }
+        # the CUDA provider must be present in the build AND usable at runtime
+        try {
+            ML::OnnxModel m(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA"},),
+                "fail_on_provider_fallback": True,
+            });
+            if (m.getEffectiveProviderReport().active_provider != "CUDAExecutionProvider") {
+                testSkip("CUDA execution provider not active");
+                return True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("CUDA execution provider not available: " + ex.err);
+            return True;
+        }
+        return False;
+    }
+
     private string getMultiInputModelPath() {
         string dir = get_script_dir();
         string path = dir + "/../../modules/ml/test/data/test_multi_input.onnx";
@@ -3420,6 +3443,95 @@ public class MlTest inherits QUnit::Test {
                 },
             });
         });
+    }
+
+    onnxDeviceOutputFallbackTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # device output requested but only CPU is active and no host fallback -> error
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CPU"},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+            });
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0,)), shape: (1, 1)));
+            assertThrows("ML-ONNX-DEVICE-UNAVAILABLE", sub () {
+                b.bindOutputsDevice();
+            });
+        }
+
+        # with allow_host_fallback, device binding falls back to CPU output
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CPU"},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True, "allow_host_fallback": True,
+                },
+            });
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0,)), shape: (1, 1)));
+            b.bindOutputsDevice();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertEq(False, y.deviceStorage());   # CPU output, not device-backed
+            assertFloat(3.0, y.toList()[0][0], 1e-5);
+        }
+    }
+
+    onnxDeviceOutputCudaTest() {
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+        });
+        assertEq("CUDAExecutionProvider", model.getEffectiveProviderReport().active_provider);
+
+        # provider-managed device output stays on device until a host read
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1)));
+            b.bindOutputsDevice();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertTrue(y.deviceStorage(), "output should be device-resident");
+            assertEq(False, y.hostStorage(), "output should not be on host before a read");
+            assertEq("cuda", y.deviceInfo().kind);
+            assertEq(0, y.deviceInfo().device_id);
+            # reading materializes once via cudaMemcpy
+            assertEq(((3.0,), (5.0,), (7.0,)), y.toList());
+            assertTrue(y.hostStorage(), "output should be on host after materialization");
+        }
+
+        # explicit device hash on a single output
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((5.0,)), shape: (1, 1)));
+            b.bindOutputDevice("Y", {"kind": "cuda", "device_id": 0});
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertTrue(y.deviceStorage());
+            assertEq((((11.0,),)), y.toList());
+        }
+
+        # materialize_outputs forces the device output to host before returning
+        {
+            ML::OnnxModel model2(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True, "materialize_outputs": True,
+                },
+            });
+            ML::OnnxIoBinding b = model2.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((4.0,)), shape: (1, 1)));
+            b.bindOutputsDevice();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertTrue(y.hostStorage(), "materialize_outputs should pre-materialize to host");
+            assertEq((((9.0,),)), y.toList());
+        }
     }
 
     onnxIoBindingTest() {

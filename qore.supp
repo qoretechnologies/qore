@@ -472,3 +472,25 @@
    fun:*yyparse*
    ...
 }
+
+# ============================================================================
+# CUDA driver / runtime — cuInit/cudaMalloc allocate process-lifetime context
+# state that the NVIDIA driver does not free at exit. These are not Qore leaks;
+# GPU memory is validated with compute-sanitizer, not valgrind.
+# ============================================================================
+
+{
+   cuda_driver_init_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible
+   ...
+   obj:*libcuda.so*
+}
+
+{
+   cuda_runtime_init_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible
+   ...
+   obj:*libcudart.so*
+}
