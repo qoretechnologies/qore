@@ -933,8 +933,36 @@ pool. Consequences for this design:
 
 ### Acceptance for the Apple pass
 
-- CoreML EP loads and accelerates inference on Apple Silicon; CPU-only macOS unchanged.
-- On a Metal/UMA placement, diagnostics report **zero** host↔device transfers (truthful),
+- [x] CoreML EP loads and accelerates inference on Apple Silicon; CPU-only macOS unchanged.
+- [ ] On a Metal/UMA placement, diagnostics report **zero** host↔device transfers (truthful),
   not synthetic copies.
-- No copy-to-host work is performed for UMA buffers; `materialize_outputs` is a no-op
+- [ ] No copy-to-host work is performed for UMA buffers; `materialize_outputs` is a no-op
   there.
+
+### Apple Silicon Implementation Status
+
+#### Phase M1 — CoreML EP acceleration + truthful host resolution (2026-05-30)
+
+**Done and validated on Apple Silicon (arm64, ORT 1.24.1 macOS tarball):**
+
+- ml module builds and loads on macOS arm64 against `/opt/onnxruntime` (CoreML EP, WebGPU
+  EP, CPU EP discoverable via `ML::ml_get_onnx_providers()`).
+- CoreML EP accelerates `OnnxModel::run()` and `OnnxIoBinding::run()` end to end (verified
+  on the `test_linear.onnx` fixture, output 2x+1 correct).
+- New helper `providerHasRawDeviceMemory()` in `modules/ml/src/OnnxModel.cpp` classifies
+  providers; raw-device-memory providers (CUDA/TensorRT/ROCm) keep the existing
+  device-binding path, EP-acceleration providers (CoreML/OpenVINO/DirectML/WebGPU)
+  resolve to host **without** consulting `allow_host_fallback`.
+- New atomic counter `db_provider_host_resolutions` surfaced through
+  `OnnxModel::getInferenceStats().device_binding.provider_host_resolutions` and
+  aggregated in `OnnxSessionPool::getPoolStats()`. Makes "the EP resolved to host because
+  it has no device memory" observable, distinct from materialize/fallback paths.
+- `resolveOutputDeviceInfo()` is no longer `const` because it now mutates the counter.
+- Test helper `skipOnnxCoreML()` and two new tests in `modules/ml/test/ml.qtest`:
+  `onnxCoreMLAccelerationTest` (end-to-end correctness) and
+  `onnxDeviceBindingCoreMLResolvesToHostTest` (counter contract: zero transfers,
+  `provider_host_resolutions == 1`, `host_outputs == 1`, `device_outputs == 0`).
+- Full ml.qtest: 322/322 passing, 2404 assertions, no warnings. CUDA-specific tests
+  self-skip on Apple as designed.
+- Mainpage device section extended with a "Provider Classes" subsection and an
+  "Apple Silicon (CoreML)" note.

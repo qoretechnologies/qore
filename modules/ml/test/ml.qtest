@@ -158,6 +158,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel device output fallback", \onnxDeviceOutputFallbackTest());
         addTestCase("OnnxModel device output (CUDA)", \onnxDeviceOutputCudaTest());
         addTestCase("OnnxModel device input (CUDA)", \onnxDeviceInputCudaTest());
+        addTestCase("OnnxModel CoreML acceleration", \onnxCoreMLAccelerationTest());
+        addTestCase("OnnxModel device binding resolves to host (CoreML)", \onnxDeviceBindingCoreMLResolvesToHostTest());
         addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
@@ -3276,6 +3278,27 @@ public class MlTest inherits QUnit::Test {
         return False;
     }
 
+    private bool skipOnnxCoreML() {
+        if (skipOnnx()) {
+            return True;
+        }
+        # the CoreML provider must be present in the build AND usable at runtime
+        try {
+            ML::OnnxModel m(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+                "fail_on_provider_fallback": True,
+            });
+            if (m.getEffectiveProviderReport().active_provider != "CoreMLExecutionProvider") {
+                testSkip("CoreML execution provider not active");
+                return True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("CoreML execution provider not available: " + ex.err);
+            return True;
+        }
+        return False;
+    }
+
     private string getMultiInputModelPath() {
         string dir = get_script_dir();
         string path = dir + "/../../modules/ml/test/data/test_multi_input.onnx";
@@ -3708,6 +3731,73 @@ public class MlTest inherits QUnit::Test {
             ML::Tensor y = b.run(tensors: True).Y;
             assertEq((((11.0,),)), y.toList());   # 2*5+1
         }
+    }
+
+    onnxCoreMLAccelerationTest() {
+        if (skipOnnxCoreML()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+            "fail_on_provider_fallback": True,
+        });
+        assertEq("CoreMLExecutionProvider", model.getEffectiveProviderReport().active_provider);
+
+        # OnnxModel.run() path (nested-list input, shape inferred; returns flat list)
+        {
+            hash<auto> result = model.run({"X": ((1.0,), (2.0,), (3.0,))});
+            assertEq((3.0, 5.0, 7.0), result.Y);   # 2x+1, returned as flat list in non-tensor mode
+        }
+
+        # OnnxIoBinding.run() path
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)),
+                                             shape: (3, 1)));
+            b.bindOutputs();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertEq(((3.0,), (5.0,), (7.0,)), y.toList());
+            assertEq(False, y.deviceStorage());   # CoreML manages its own opaque memory
+            assertTrue(y.hostStorage());
+        }
+    }
+
+    onnxDeviceBindingCoreMLResolvesToHostTest() {
+        if (skipOnnxCoreML()) {
+            return;
+        }
+
+        # CoreML is an EP-acceleration provider with no raw device memory exposed;
+        # a device_binding request must resolve to host with truthful counters
+        # (no fabricated device->host or host->device transfers) and without
+        # consulting allow_host_fallback
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True,
+                "default_output_device": "provider",
+            },
+        });
+        assertEq("CoreMLExecutionProvider", model.getEffectiveProviderReport().active_provider);
+
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1)));
+        b.bindOutputsDevice();   # must not raise on CoreML
+        ML::Tensor y = b.run(tensors: True).Y;
+        assertEq(((3.0,), (5.0,), (7.0,)), y.toList());
+        assertEq(False, y.deviceStorage(), "CoreML output must resolve to host (no raw device memory)");
+        assertTrue(y.hostStorage());
+
+        hash<auto> db = model.getInferenceStats().device_binding;
+        assertEq(1, db.host_outputs, "tensor output landed on host");
+        assertEq(0, db.device_outputs, "no provider-managed device output (CoreML has no device memory)");
+        assertEq(0, db.host_to_device_transfers, "no fabricated H2D copy on EP-acceleration provider");
+        assertEq(0, db.device_to_host_transfers, "no fabricated D2H copy on EP-acceleration provider");
+        assertEq(0, db.output_materializations, "no materialize step (CoreML output is host-native)");
+        assertEq(1, db.provider_host_resolutions,
+            "CoreML resolved to host truthfully (EP-acceleration provider with opaque memory)");
     }
 
     onnxIoBindingTest() {

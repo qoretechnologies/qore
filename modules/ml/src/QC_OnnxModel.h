@@ -208,6 +208,7 @@ public:
         uint64_t output_materializations = 0;
         uint64_t host_to_device_transfers = 0;
         uint64_t device_to_host_transfers = 0;
+        uint64_t provider_host_resolutions = 0;
     };
 
     //! Adds this session's device-binding transfer counters into an accumulator
@@ -294,6 +295,9 @@ private:
     std::atomic<uint64_t> db_output_materializations{0};   //!< device outputs forced to host (materialize_outputs)
     std::atomic<uint64_t> db_host_to_device_transfers{0};  //!< host->device copies performed
     std::atomic<uint64_t> db_device_to_host_transfers{0};  //!< device->host copies performed
+    std::atomic<uint64_t> db_provider_host_resolutions{0}; //!< EP-acceleration providers (CoreML/OpenVINO/DML/WebGPU)
+                                                           //!< whose outputs returned to host truthfully (no
+                                                           //!< raw device memory, no fabricated transfer)
 
     //! Initialize the Ort::Env and populate session options from the config hash
     /** Shared between the path-based and memory-based configured constructors.
@@ -324,7 +328,7 @@ private:
             false for CPU memory (either policy-selected or host fallback)
     */
     DLLLOCAL bool resolveOutputDeviceInfo(const QoreHashNode* device,
-        QoreBufferDeviceInfo& out, ExceptionSink* xsink) const;
+        QoreBufferDeviceInfo& out, ExceptionSink* xsink);
 
     //! Returns true if a device-resident input buffer can be bound directly to
     //! the active execution provider (matching device family).

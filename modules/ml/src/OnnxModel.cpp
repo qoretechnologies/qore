@@ -175,6 +175,17 @@ QoreBufferDeviceKind deviceKindFromName(const std::string& name) {
     return QoreBufferDeviceKind::Unknown;
 }
 
+//! Returns true if the named ONNX Runtime provider exposes raw device memory
+//! that ORT can bind outputs to (CUDA, TensorRT, ROCm).  Returns false for
+//! CPU and EP-acceleration providers whose memory is opaque to user code
+//! (CoreML, OpenVINO, DirectML, WebGPU).  EP-acceleration providers still
+//! accelerate inference; their outputs simply come back to host memory.
+bool providerHasRawDeviceMemory(const std::string& name) {
+    return name == "CUDAExecutionProvider"
+        || name == "TensorrtExecutionProvider"
+        || name == "ROCMExecutionProvider";
+}
+
 //! Maps an ONNX Runtime memory-info device type back to a Qore device kind.
 QoreBufferDeviceKind ortDeviceTypeToKind(OrtMemoryInfoDeviceType dt, const std::string& alloc_name) {
     if (dt == OrtMemoryInfoDeviceType_GPU) {
@@ -1467,7 +1478,7 @@ bool QoreOnnxModel::inputDeviceMatchesProvider(const QoreBufferDeviceInfo& dinfo
 }
 
 bool QoreOnnxModel::resolveOutputDeviceInfo(const QoreHashNode* device,
-        QoreBufferDeviceInfo& out, ExceptionSink* xsink) const {
+        QoreBufferDeviceInfo& out, ExceptionSink* xsink) {
     // explicit {kind, device_id} hash overrides policy
     if (device) {
         QoreValue kind_val = device->getKeyValue("kind");
@@ -1519,6 +1530,18 @@ bool QoreOnnxModel::resolveOutputDeviceInfo(const QoreHashNode* device,
         out.device_id = policy_id;
         out.name = active_provider;
         return true;
+    }
+
+    // EP-acceleration providers (CoreML on macOS, OpenVINO, DirectML, WebGPU)
+    // accelerate inference but manage their own opaque memory; outputs come back
+    // to host transparently.  Satisfy the device_binding intent by resolving to
+    // host with a truthful counter, no fabricated transfer, no error -- this
+    // matches the design's "truthful zero-copy" principle for EP-acceleration
+    // providers that do not expose raw device pointers.
+    if (!active_provider.empty() && active_provider != "CPUExecutionProvider"
+            && !providerHasRawDeviceMemory(active_provider)) {
+        db_provider_host_resolutions.fetch_add(1, std::memory_order_relaxed);
+        return false;
     }
 
     // active provider is CPU-only
@@ -3834,6 +3857,8 @@ QoreHashNode* QoreOnnxModel::getInferenceStats(ExceptionSink* xsink) const {
         static_cast<int64_t>(db_host_to_device_transfers.load(std::memory_order_relaxed)), xsink);
     db->setKeyValue("device_to_host_transfers",
         static_cast<int64_t>(db_device_to_host_transfers.load(std::memory_order_relaxed)), xsink);
+    db->setKeyValue("provider_host_resolutions",
+        static_cast<int64_t>(db_provider_host_resolutions.load(std::memory_order_relaxed)), xsink);
     rv->setKeyValue("device_binding", db.release(), xsink);
 
     if (*xsink) {
@@ -3850,6 +3875,7 @@ void QoreOnnxModel::accumulateDeviceBindingCounters(DeviceBindingCounters& acc) 
     acc.output_materializations += db_output_materializations.load(std::memory_order_relaxed);
     acc.host_to_device_transfers += db_host_to_device_transfers.load(std::memory_order_relaxed);
     acc.device_to_host_transfers += db_device_to_host_transfers.load(std::memory_order_relaxed);
+    acc.provider_host_resolutions += db_provider_host_resolutions.load(std::memory_order_relaxed);
 }
 
 void QoreOnnxModel::resetInferenceStats() {
@@ -3866,6 +3892,7 @@ void QoreOnnxModel::resetInferenceStats() {
     db_output_materializations.store(0, std::memory_order_relaxed);
     db_host_to_device_transfers.store(0, std::memory_order_relaxed);
     db_device_to_host_transfers.store(0, std::memory_order_relaxed);
+    db_provider_host_resolutions.store(0, std::memory_order_relaxed);
 }
 
 QoreHashNode* QoreOnnxModel::saveOptimized(const char* output_path, const QoreHashNode* config,
@@ -5627,6 +5654,8 @@ QoreHashNode* QoreOnnxSessionPool::getPoolStats(ExceptionSink* xsink) const {
         static_cast<int64_t>(db.host_to_device_transfers), xsink);
     db_hash->setKeyValue("device_to_host_transfers",
         static_cast<int64_t>(db.device_to_host_transfers), xsink);
+    db_hash->setKeyValue("provider_host_resolutions",
+        static_cast<int64_t>(db.provider_host_resolutions), xsink);
     rv->setKeyValue("device_binding", db_hash.release(), xsink);
 
 #ifdef HAVE_CUDART

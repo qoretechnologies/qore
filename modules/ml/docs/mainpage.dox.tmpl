@@ -481,6 +481,37 @@ if (caps.has_onnx) {
     | \c require_zero_copy_inputs | Reject device inputs that cannot be bound without a host copy. |
     | \c require_zero_copy_outputs | Reject outputs that cannot be returned as device-backed buffers. |
 
+    @subsubsection mlalgo_onnx_device_provider_classes Provider Classes
+
+    Execution providers fall into three groups for the purposes of device binding:
+
+    - <b>Raw-device-memory providers</b> (CUDA, TensorRT, ROCm) expose device
+      pointers that ONNX Runtime can bind outputs to directly. Device-binding requests
+      flow through to the provider and outputs come back as device-backed
+      @ref Qore::ML::Tensor "Tensors".
+    - <b>EP-acceleration providers</b> (CoreML on macOS, OpenVINO, DirectML,
+      WebGPU) accelerate inference on a non-CPU device but manage their own opaque
+      memory; user code cannot bind to a raw device pointer. A device-binding request
+      with one of these as the active provider <b>resolves to host</b>: outputs come
+      back to host memory, no fabricated host/device transfers are reported, and the
+      \c provider_host_resolutions counter is incremented so the reduction is
+      observable. This is intentional and matches the "truthful zero-copy" design
+      principle -- no error is raised even when \c allow_host_fallback is False, because
+      the EP acceleration is itself the device path being honored.
+    - <b>CPU provider</b> -- a device-binding request against CPU is a configuration
+      error and raises \c ML-ONNX-DEVICE-UNAVAILABLE unless \c allow_host_fallback is
+      True.
+
+    @subsubsection mlalgo_onnx_device_macos Apple Silicon (CoreML)
+
+    macOS / Apple Silicon ships the CoreML execution provider as the primary
+    accelerator. CoreML manages its own memory and does not expose raw device
+    pointers, so it is treated as an EP-acceleration provider (above): a
+    device-binding request resolves to host with zero transfers and a
+    \c provider_host_resolutions bump. CoreML accelerates inference on the
+    ANE/GPU/CPU transparently; outputs are returned as host @ref Qore::ML::Tensor
+    "Tensors".
+
     Provider-managed device outputs are requested through the reusable I/O binding with
     @ref Qore::ML::OnnxIoBinding::bindOutputsDevice() "bindOutputsDevice()" or
     @ref Qore::ML::OnnxIoBinding::bindOutputDevice() "bindOutputDevice()". A device-resident
@@ -489,7 +520,8 @@ if (caps.has_onnx) {
     callback. Host/device transfers are observable through the \c device_binding block of
     @ref Qore::ML::OnnxModel::getInferenceStats() "getInferenceStats()" (\c zero_copy_inputs,
     \c host_fallback_inputs, \c device_outputs, \c host_outputs, \c output_materializations,
-    and the \c host_to_device_transfers / \c device_to_host_transfers totals).
+    \c host_to_device_transfers, \c device_to_host_transfers, and
+    \c provider_host_resolutions for EP-acceleration providers that resolve to host).
 
     @code{.py}
 hash<Qore::ML::OnnxSessionConfig> cfg = <Qore::ML::OnnxSessionConfig>{
