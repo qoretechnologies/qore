@@ -117,4 +117,9 @@ private:
 DLLLOCAL QoreObject* qore_ml_tensor_to_object(QoreTensor* tensor, QoreProgram* pgm,
     ExceptionSink* xsink);
 
+//! Testing/diagnostic helper: returns a copy of host tagged as residing on the
+//! named device, with a host-copy-back callback (no real accelerator required).
+DLLLOCAL QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host,
+    const char* device_kind, int64_t device_id, ExceptionSink* xsink);
+
 #endif // _QORE_MODULE_ML_QC_TENSOR_H

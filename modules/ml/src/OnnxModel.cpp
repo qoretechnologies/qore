@@ -35,6 +35,7 @@
 #include <onnxruntime_session_options_config_keys.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <numeric>
 #include <cstring>
@@ -46,11 +47,6 @@
 #include <unordered_set>
 
 // Hashdecl extern declarations
-extern const TypedHashDecl* hashdeclOnnxTensorInfo;
-extern const TypedHashDecl* hashdeclOnnxModelInfo;
-extern const TypedHashDecl* hashdeclOnnxProviderConfig;
-extern const TypedHashDecl* hashdeclOnnxSessionConfig;
-extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 
 namespace {
 
@@ -142,6 +138,69 @@ const void* getOnnxTensorDataPointer(const Ort::Value& tensor, ONNXTensorElement
         default:
             return nullptr;
     }
+}
+
+// --- device <-> ONNX Runtime memory-info mapping (Phase A4) -----------------
+//
+// The classic Ort::MemoryInfo(name, allocator_type, device_id, mem_type) ctor and
+// the GetDeviceType()/GetDeviceId()/GetAllocatorName() accessors are available in
+// every supported ONNX Runtime release (1.20+), so no CreateMemoryInfo_V2 /
+// HAVE_ORT_MEMORYINFO_V2 feature guard is needed here.
+
+//! ONNX Runtime allocator/memory-info name for a Qore device kind, or nullptr if
+//! ONNX Runtime has no device allocator for that kind.
+const char* deviceKindToOrtMemoryName(QoreBufferDeviceKind kind) {
+    switch (kind) {
+        case QoreBufferDeviceKind::Cuda: return "Cuda";
+        case QoreBufferDeviceKind::Rocm: return "Hip";  // ORT ROCm allocator name
+        default: return nullptr;
+    }
+}
+
+//! Maps an ONNX Runtime memory-info device type back to a Qore device kind.
+QoreBufferDeviceKind ortDeviceTypeToKind(OrtMemoryInfoDeviceType dt, const std::string& alloc_name) {
+    if (dt == OrtMemoryInfoDeviceType_GPU) {
+        std::string n = alloc_name;
+        std::transform(n.begin(), n.end(), n.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+        if (n.find("hip") != std::string::npos || n.find("rocm") != std::string::npos) {
+            return QoreBufferDeviceKind::Rocm;
+        }
+        return QoreBufferDeviceKind::Cuda;  // default GPU allocator -> CUDA
+    }
+    return QoreBufferDeviceKind::Unknown;
+}
+
+//! Builds an Ort::MemoryInfo for a device descriptor.  Returns CPU memory info
+//! when dev is null or describes host/unknown storage; raises
+//! ML-ONNX-DEVICE-MISMATCH for a device kind ONNX Runtime cannot address.
+Ort::MemoryInfo makeOrtMemoryInfo(const QoreBufferDeviceInfo* dev, ExceptionSink* xsink) {
+    if (!dev || dev->kind == QoreBufferDeviceKind::Unknown) {
+        return Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    }
+    const char* name = deviceKindToOrtMemoryName(dev->kind);
+    if (!name) {
+        xsink->raiseException("ML-ONNX-DEVICE-MISMATCH",
+            "device buffer is on a '%s' device, which ONNX Runtime cannot bind directly",
+            qore_buffer_device_kind_name(dev->kind));
+        return Ort::MemoryInfo(nullptr);
+    }
+    int id = dev->device_id >= 0 ? static_cast<int>(dev->device_id) : 0;
+    return Ort::MemoryInfo(name, OrtArenaAllocator, id, OrtMemTypeDefault);
+}
+
+//! Inspects an ONNX output tensor's memory info; on non-CPU memory fills out and
+//! returns true, otherwise returns false (host/CPU memory).
+//! (Consumed by Phase C provider-managed device output wrapping.)
+[[maybe_unused]] bool ortValueToDeviceInfo(const Ort::Value& value, QoreBufferDeviceInfo& out) {
+    Ort::ConstMemoryInfo mi = value.GetTensorMemoryInfo();
+    if (mi.GetDeviceType() == OrtMemoryInfoDeviceType_CPU) {
+        return false;
+    }
+    out.name = mi.GetAllocatorName();
+    out.kind = ortDeviceTypeToKind(mi.GetDeviceType(), out.name);
+    out.device_id = mi.GetDeviceId();
+    return true;
 }
 
 const char* onnxElementTypeName(ONNXTensorElementDataType type) {
@@ -1061,26 +1120,31 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
 }
 
 std::string QoreOnnxModel::normalizeProviderName(const std::string& name) {
-    if (name == "CPU" || name == "CPUExecutionProvider") {
+    // match aliases case-insensitively; users may write e.g. "cuda", "CUDA", or
+    // the canonical "CUDAExecutionProvider"
+    std::string lname = name;
+    std::transform(lname.begin(), lname.end(), lname.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+
+    if (lname == "cpu" || lname == "cpuexecutionprovider") {
         return "CPUExecutionProvider";
     }
-    if (name == "CUDA" || name == "CUDAExecutionProvider") {
+    if (lname == "cuda" || lname == "cudaexecutionprovider") {
         return "CUDAExecutionProvider";
     }
-    if (name == "TensorRT" || name == "TensorRTExecutionProvider"
-            || name == "TensorrtExecutionProvider") {
+    if (lname == "tensorrt" || lname == "tensorrtexecutionprovider") {
         return "TensorrtExecutionProvider";
     }
-    if (name == "CoreML" || name == "CoreMLExecutionProvider") {
+    if (lname == "coreml" || lname == "coremlexecutionprovider") {
         return "CoreMLExecutionProvider";
     }
-    if (name == "OpenVINO" || name == "OpenVINOExecutionProvider") {
+    if (lname == "openvino" || lname == "openvinoexecutionprovider") {
         return "OpenVINOExecutionProvider";
     }
-    if (name == "DML" || name == "DirectML" || name == "DmlExecutionProvider") {
+    if (lname == "dml" || lname == "directml" || lname == "dmlexecutionprovider") {
         return "DmlExecutionProvider";
     }
-    if (name == "ROCM" || name == "ROCm" || name == "ROCMExecutionProvider") {
+    if (lname == "rocm" || lname == "rocmexecutionprovider") {
         return "ROCMExecutionProvider";
     }
     return name;
@@ -1175,6 +1239,107 @@ void QoreOnnxModel::configureProviderPolicy(const QoreHashNode* config, Exceptio
                 return;
             }
         }
+    }
+
+    configureDeviceBinding(config, xsink);
+}
+
+void QoreOnnxModel::configureDeviceBinding(const QoreHashNode* config, ExceptionSink* xsink) {
+    // reset to defaults; an absent device_binding leaves device binding disabled
+    device_binding = OnnxDeviceBindingPolicy();
+
+    if (!config) {
+        return;
+    }
+
+    QoreValue db_val = config->getKeyValue("device_binding");
+    if (db_val.isNullOrNothing()) {
+        return;
+    }
+    if (db_val.getType() != NT_HASH) {
+        xsink->raiseException("ML-ONNX-DEVICE-BINDING-ERROR",
+            "invalid device_binding value; expected a hash<OnnxDeviceBindingConfig>");
+        return;
+    }
+    const QoreHashNode* db = db_val.get<const QoreHashNode>();
+
+    QoreValue enabled_val = db->getKeyValue("enabled");
+    if (!enabled_val.isNullOrNothing()) {
+        device_binding.enabled = enabled_val.getAsBool();
+    }
+
+    QoreValue host_fallback_val = db->getKeyValue("allow_host_fallback");
+    if (!host_fallback_val.isNullOrNothing()) {
+        device_binding.allow_host_fallback = host_fallback_val.getAsBool();
+    }
+
+    QoreValue materialize_val = db->getKeyValue("materialize_outputs");
+    if (!materialize_val.isNullOrNothing()) {
+        device_binding.materialize_outputs = materialize_val.getAsBool();
+    }
+
+    QoreValue zc_in_val = db->getKeyValue("require_zero_copy_inputs");
+    if (!zc_in_val.isNullOrNothing()) {
+        device_binding.require_zero_copy_inputs = zc_in_val.getAsBool();
+    }
+
+    QoreValue zc_out_val = db->getKeyValue("require_zero_copy_outputs");
+    if (!zc_out_val.isNullOrNothing()) {
+        device_binding.require_zero_copy_outputs = zc_out_val.getAsBool();
+    }
+
+    QoreValue out_dev_val = db->getKeyValue("default_output_device");
+    if (!out_dev_val.isNullOrNothing()) {
+        QoreStringValueHelper out_dev(out_dev_val);
+        std::string spec = out_dev->c_str();
+        // optional ":<device_id>" suffix on an explicit provider/device name
+        std::string name = spec;
+        std::string id_part;
+        size_t colon = spec.find(':');
+        if (colon != std::string::npos) {
+            name = spec.substr(0, colon);
+            id_part = spec.substr(colon + 1);
+        }
+
+        std::string lname = name;
+        std::transform(lname.begin(), lname.end(), lname.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+
+        if (lname == "cpu") {
+            device_binding.default_output_device = OnnxOutputDevice::Cpu;
+        } else if (lname == "provider") {
+            device_binding.default_output_device = OnnxOutputDevice::Provider;
+        } else {
+            device_binding.default_output_device = OnnxOutputDevice::Explicit;
+            device_binding.device_name = normalizeProviderName(name);
+        }
+
+        if (!id_part.empty()) {
+            try {
+                device_binding.device_id = std::stoll(id_part);
+            } catch (const std::exception&) {
+                xsink->raiseException("ML-ONNX-DEVICE-BINDING-ERROR",
+                    "invalid device_binding.default_output_device '%s'; the ':<device_id>' "
+                    "suffix must be an integer", spec.c_str());
+                return;
+            }
+            if (device_binding.device_id < 0) {
+                xsink->raiseException("ML-ONNX-DEVICE-BINDING-ERROR",
+                    "invalid device_binding.default_output_device '%s'; device id must be >= 0",
+                    spec.c_str());
+                return;
+            }
+        }
+    }
+
+    // a require_zero_copy_* or materialize policy is meaningless without enabling binding
+    if (!device_binding.enabled
+        && (device_binding.require_zero_copy_inputs || device_binding.require_zero_copy_outputs
+            || device_binding.materialize_outputs)) {
+        xsink->raiseException("ML-ONNX-DEVICE-BINDING-ERROR",
+            "device_binding.require_zero_copy_inputs/require_zero_copy_outputs/materialize_outputs "
+            "require device_binding.enabled = True");
+        return;
     }
 }
 
@@ -1725,6 +1890,26 @@ QoreHashNode* QoreOnnxModel::getEffectiveProviderReport(ExceptionSink* xsink) co
     rv->setKeyValue("fail_on_provider_fallback", fail_on_provider_fallback, xsink);
     rv->setKeyValue("cpu_fallback_used", cpu_fallback_used, xsink);
     rv->setKeyValue("auto_provider_selected", auto_provider_selected, xsink);
+
+    ReferenceHolder<QoreHashNode> db(new QoreHashNode(autoTypeInfo), xsink);
+    db->setKeyValue("enabled", device_binding.enabled, xsink);
+    const char* out_dev = "provider";
+    switch (device_binding.default_output_device) {
+        case OnnxOutputDevice::Cpu: out_dev = "cpu"; break;
+        case OnnxOutputDevice::Provider: out_dev = "provider"; break;
+        case OnnxOutputDevice::Explicit: out_dev = "explicit"; break;
+    }
+    db->setKeyValue("default_output_device", new QoreStringNode(out_dev), xsink);
+    if (!device_binding.device_name.empty()) {
+        db->setKeyValue("device_name", new QoreStringNode(device_binding.device_name), xsink);
+    }
+    db->setKeyValue("device_id", device_binding.device_id, xsink);
+    db->setKeyValue("allow_host_fallback", device_binding.allow_host_fallback, xsink);
+    db->setKeyValue("materialize_outputs", device_binding.materialize_outputs, xsink);
+    db->setKeyValue("require_zero_copy_inputs", device_binding.require_zero_copy_inputs, xsink);
+    db->setKeyValue("require_zero_copy_outputs", device_binding.require_zero_copy_outputs, xsink);
+    rv->setKeyValue("device_binding", db.release(), xsink);
+
     return rv.release();
 }
 
@@ -2300,7 +2485,12 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
         }
     }
 
-    Ort::MemoryInfo mem_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    // Phase B will pass a device descriptor here when an input buffer carries
+    // external device storage; for now all inputs are bound from host memory.
+    Ort::MemoryInfo mem_info = makeOrtMemoryInfo(nullptr, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     if (direct_buffer) {
         if (validateDirectBuffer(meta, direct_buffer, direct_shape, xsink)) {
             return nullptr;

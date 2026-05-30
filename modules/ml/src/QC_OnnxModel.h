@@ -56,6 +56,14 @@ DLLLOCAL extern QoreClass* QC_ONNXRUNOPTIONS;
 DLLLOCAL extern QoreClass* QC_ONNXIOBINDING;
 DLLLOCAL extern QoreClass* QC_ONNXSESSIONPOOL;
 
+// ONNX hashdecls (defined by the qpp-generated registration code in ql_ml.cpp)
+extern const TypedHashDecl* hashdeclOnnxTensorInfo;
+extern const TypedHashDecl* hashdeclOnnxModelInfo;
+extern const TypedHashDecl* hashdeclOnnxProviderConfig;
+extern const TypedHashDecl* hashdeclOnnxDeviceBindingConfig;
+extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
+
 DLLLOCAL void preinitOnnxModelClass();
 DLLLOCAL void preinitOnnxRunOptionsClass();
 DLLLOCAL void preinitOnnxIoBindingClass();
@@ -97,6 +105,25 @@ struct OnnxProviderDiagnostic {
     bool auto_selected = false;
     bool active = false;
     bool cpu_fallback = false;
+};
+
+//! Output device placement for provider-managed device binding
+enum class OnnxOutputDevice {
+    Cpu,        //!< force CPU output memory
+    Provider,   //!< use the active non-CPU provider's device memory
+    Explicit,   //!< a named provider/device (see device_name/device_id)
+};
+
+//! Parsed OnnxSessionConfig.device_binding policy
+struct OnnxDeviceBindingPolicy {
+    bool enabled = false;
+    OnnxOutputDevice default_output_device = OnnxOutputDevice::Provider;
+    std::string device_name;        //!< normalized provider name when default_output_device == Explicit
+    int64_t device_id = -1;         //!< explicit device id, or -1 for provider default
+    bool allow_host_fallback = false;
+    bool materialize_outputs = false;
+    bool require_zero_copy_inputs = false;
+    bool require_zero_copy_outputs = false;
 };
 
 struct OnnxBoundOrtValue;
@@ -230,6 +257,7 @@ private:
     bool allow_cpu_fallback = true;
     bool fail_on_provider_fallback = false;
     bool cpu_fallback_used = false;
+    OnnxDeviceBindingPolicy device_binding;
     bool profiling_enabled = false;
     std::string profiling_file_prefix;
     std::string last_profile_file;
@@ -258,6 +286,9 @@ private:
 
     //! Configure provider behavior from a config hash
     DLLLOCAL void configureProviderPolicy(const QoreHashNode* config, ExceptionSink* xsink);
+
+    //! Parse and validate the device_binding policy from a config hash
+    DLLLOCAL void configureDeviceBinding(const QoreHashNode* config, ExceptionSink* xsink);
 
     //! Create a path-based session, falling back to CPU if an auto-selected provider fails
     DLLLOCAL void createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,

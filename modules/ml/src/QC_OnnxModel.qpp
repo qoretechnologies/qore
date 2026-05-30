@@ -30,11 +30,6 @@
 #include "QC_OnnxModel.h"
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
-extern const TypedHashDecl* hashdeclOnnxTensorInfo;
-extern const TypedHashDecl* hashdeclOnnxModelInfo;
-extern const TypedHashDecl* hashdeclOnnxProviderConfig;
-extern const TypedHashDecl* hashdeclOnnxSessionConfig;
-extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 
 //! Per-run ONNX Runtime options
 /** Configures options for one ONNX Runtime inference call. Use this class when

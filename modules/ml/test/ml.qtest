@@ -44,6 +44,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("Tensor basics", \tensorBasicTest());
         addTestCase("Tensor string dtype", \tensorStringTest());
         addTestCase("Tensor native postprocessing", \tensorPostprocessingTest());
+        addTestCase("Tensor mock device buffer", \tensorMockDeviceTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -150,6 +151,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel inference", \onnxInferenceTest());
         addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
         addTestCase("OnnxModel dtype coverage", \onnxTypeCoverageTest());
+        addTestCase("OnnxModel device_binding config", \onnxDeviceBindingConfigTest());
         addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
@@ -524,6 +526,43 @@ public class MlTest inherits QUnit::Test {
         ML::Tensor inferred(data: ("red", "green", "blue"));
         assertEq("string", inferred.getDtype());
         assertEq(("red", "green", "blue"), inferred.toList());
+    }
+
+    tensorMockDeviceTest() {
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+        assertEq(False, host.deviceStorage());
+        assertTrue(host.hostStorage());
+
+        # a fresh mock device tensor lives only on the (fake) device
+        ML::Tensor dev = host.mockDevice("cuda", 0);
+        assertTrue(dev.deviceStorage());
+        assertEq("float32", dev.getDtype());
+        assertEq((2, 2), dev.getShape());
+
+        hash<auto> di = dev.deviceInfo();
+        assertEq("cuda", di.kind);
+        assertEq(0, di.device_id);
+        assertEq(True, di.device_storage);
+
+        # reading transparently materializes back to identical host values
+        assertEq(host.toList(), dev.toList());
+        assertTrue(dev.hostStorage());
+
+        # explicit materialize() on a fresh mock yields identical data
+        ML::Tensor dev2 = host.mockDevice("rocm", 3);
+        assertEq("rocm", dev2.deviceInfo().kind);
+        assertEq(3, dev2.deviceInfo().device_id);
+        ML::Tensor mat = dev2.materialize();
+        assertEq(host.toList(), mat.toList());
+
+        # default device_kind is cuda
+        assertEq("cuda", host.mockDevice().deviceInfo().kind);
+
+        # bit-packed bool buffers are rejected
+        ML::Tensor bhost(data: new buffer<bool>((True, False, True, False)), shape: (2, 2));
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () {
+            bhost.mockDevice("cuda", 0);
+        });
     }
 
     tensorPostprocessingTest() {
@@ -3298,6 +3337,87 @@ public class MlTest inherits QUnit::Test {
                 "u32_in": ((1,),),
                 "u64_in": (("-1",),),
                 "s_in": (("x",),),
+            });
+        });
+    }
+
+    onnxDeviceBindingConfigTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # default: no device_binding -> disabled, provider output, no device requested
+        {
+            ML::OnnxModel model(getTestModelPath());
+            hash<auto> db = model.getEffectiveProviderReport().device_binding;
+            assertEq(False, db.enabled);
+            assertEq("provider", db.default_output_device);
+            assertEq(False, db.allow_host_fallback);
+            assertEq(False, db.materialize_outputs);
+            assertEq(-1, db.device_id);
+        }
+
+        # full device_binding policy parses and is reflected in the report
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cpu",
+                    "allow_host_fallback": True,
+                    "materialize_outputs": True,
+                    "require_zero_copy_inputs": True,
+                    "require_zero_copy_outputs": True,
+                },
+            });
+            hash<auto> db = model.getEffectiveProviderReport().device_binding;
+            assertEq(True, db.enabled);
+            assertEq("cpu", db.default_output_device);
+            assertEq(True, db.allow_host_fallback);
+            assertEq(True, db.materialize_outputs);
+            assertEq(True, db.require_zero_copy_inputs);
+            assertEq(True, db.require_zero_copy_outputs);
+        }
+
+        # explicit provider device with a device id ("cuda:0")
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cuda:0",
+                },
+            });
+            hash<auto> db = model.getEffectiveProviderReport().device_binding;
+            assertEq("explicit", db.default_output_device);
+            assertEq("CUDAExecutionProvider", db.device_name);
+            assertEq(0, db.device_id);
+        }
+
+        # invalid: non-integer device id suffix
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cuda:abc",
+                },
+            });
+        });
+
+        # invalid: negative device id
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cuda:-1",
+                },
+            });
+        });
+
+        # invalid: zero-copy/materialize policy without enabling binding
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "require_zero_copy_outputs": True,
+                },
             });
         });
     }
