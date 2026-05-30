@@ -184,9 +184,13 @@ nothing OnnxIoBinding::bindOutputs() {
         provider is active and host fallback is not allowed
     @throw ML-ONNX-DEVICE-BINDING-ERROR the requested device is unknown or invalid
 
+    @note This method binds accelerator device memory and is in the
+        \c QDOM_UNCONTROLLED_API functional domain, so it is unavailable to programs
+        parsed with \c PO_NO_UNCONTROLLED_APIS.
+
     @since %ML 2.6
 */
-nothing OnnxIoBinding::bindOutputDevice(string name, *hash<auto> device) [flags=NAMED_ARGS] {
+nothing OnnxIoBinding::bindOutputDevice(string name, *hash<auto> device) [flags=NAMED_ARGS; dom=UNCONTROLLED_API] {
     binding->bindOutputDevice(name->c_str(), device, xsink);
 }
 
@@ -197,9 +201,13 @@ nothing OnnxIoBinding::bindOutputDevice(string name, *hash<auto> device) [flags=
 
     @see OnnxIoBinding::bindOutputDevice()
 
+    @note This method binds accelerator device memory and is in the
+        \c QDOM_UNCONTROLLED_API functional domain, so it is unavailable to programs
+        parsed with \c PO_NO_UNCONTROLLED_APIS.
+
     @since %ML 2.6
 */
-nothing OnnxIoBinding::bindOutputsDevice(*hash<auto> device) [flags=NAMED_ARGS] {
+nothing OnnxIoBinding::bindOutputsDevice(*hash<auto> device) [flags=NAMED_ARGS; dom=UNCONTROLLED_API] {
     binding->bindOutputsDevice(device, xsink);
 }
 

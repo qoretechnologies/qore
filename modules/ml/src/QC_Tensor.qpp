@@ -823,9 +823,13 @@ ML::Tensor dev = host.toDevice("cuda", 0);   # resident on GPU 0
     @note Use this to keep data resident on the device across multiple inference calls;
         for a one-shot host input the execution provider already manages the transfer.
 
+    @note This method uses an external accelerator runtime and is in the
+        \c QDOM_UNCONTROLLED_API functional domain, so it is unavailable to programs
+        parsed with \c PO_NO_UNCONTROLLED_APIS.
+
     @since %ML 2.7
 */
-Tensor Tensor::toDevice(string device_kind = "cuda", int device_id = 0) [flags=RET_VALUE_ONLY] {
+Tensor Tensor::toDevice(string device_kind = "cuda", int device_id = 0) [flags=RET_VALUE_ONLY; dom=UNCONTROLLED_API] {
     ReferenceHolder<QoreTensor> holder(
         qore_ml_make_device_tensor(tensor, device_kind->c_str(), device_id, xsink), xsink);
     if (*xsink) {
@@ -856,9 +860,13 @@ ML::Tensor dev = staging.toDevice("cuda", 0);
     @note Pinned host memory is a limited system resource; allocate it for buffers that are
         repeatedly transferred, not for one-off data.
 
+    @note This method uses an external accelerator runtime and is in the
+        \c QDOM_UNCONTROLLED_API functional domain, so it is unavailable to programs
+        parsed with \c PO_NO_UNCONTROLLED_APIS.
+
     @since %ML 2.7
 */
-Tensor Tensor::pinnedHost() [flags=RET_VALUE_ONLY] {
+Tensor Tensor::pinnedHost() [flags=RET_VALUE_ONLY; dom=UNCONTROLLED_API] {
     ReferenceHolder<QoreTensor> holder(qore_ml_make_pinned_tensor(tensor, xsink), xsink);
     if (*xsink) {
         return QoreValue();

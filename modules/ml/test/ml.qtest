@@ -47,6 +47,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("Tensor mock device buffer", \tensorMockDeviceTest());
         addTestCase("Tensor device upload (CUDA)", \tensorDeviceUploadTest());
         addTestCase("Tensor pinned host buffer (CUDA)", \tensorPinnedHostTest());
+        addTestCase("device entry-point sandboxing", \deviceSandboxDomainTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -651,6 +652,36 @@ public class MlTest inherits QUnit::Test {
         assertEq((((3.0,), (5.0,), (7.0,))), y.toList());
         assertEq(1, model.getInferenceStats().device_binding.zero_copy_inputs,
             "a pinned-then-uploaded device input must be bound zero-copy");
+    }
+
+    deviceSandboxDomainTest() {
+        # the device-binding entry points are in the QDOM_UNCONTROLLED_API functional
+        # domain, so a program parsed with PO_NO_UNCONTROLLED_APIS is rejected at parse
+        # time when it calls them (no accelerator required - this is a parse-time check).
+        # Each check uses a fresh restricted program so the rejection is independent.
+        code parse_restricted = sub (string code_str, string label) {
+            Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+            p.loadModule("ml");
+            p.parse(code_str, label);
+        };
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"cuda\", 0); }", "toDevice"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("ML::Tensor sub f(ML::Tensor t) { return t.pinnedHost(); }", "pinnedHost"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("nothing sub f(ML::OnnxIoBinding b) { b.bindOutputsDevice(); }", "bindOutputsDevice"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("nothing sub f(ML::OnnxIoBinding b) { b.bindOutputDevice(\"Y\"); }", "bindOutputDevice"));
+
+        # an unrestricted program parses the same device call without error
+        Program allowed(PO_NEW_STYLE);
+        allowed.loadModule("ml");
+        allowed.parse("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"cuda\", 0); }", "ok-device");
+
+        # host-only tensor methods remain callable under PO_NO_UNCONTROLLED_APIS
+        Program host_ok(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+        host_ok.loadModule("ml");
+        host_ok.parse("list<int> sub g(ML::Tensor t) { return t.getShape(); }", "ok-host");
     }
 
     tensorPostprocessingTest() {
@@ -3741,6 +3772,16 @@ public class MlTest inherits QUnit::Test {
         ML::Tensor y = result.x_out;
         assertEq((2, 1), y.getShape());
         assertEq(((8.0,), (13.0,)), y.toList());
+
+        # a device-backed tensor (immutable external storage) cannot be used as a
+        # preallocated output: v1 requires provider-managed device output allocation
+        # via bindOutputDevice(), not caller-preallocated writable device buffers
+        ML::OnnxIoBinding binding2 = model.createBinding();
+        binding2.bindInput(name: "x_in", value: input);
+        ML::Tensor device_out = output.mockDevice("cuda", 0);
+        assertThrows("ML-ONNX-BINDING-ERROR", sub () {
+            binding2.bindOutputTensor(name: "x_out", output: device_out);
+        });
     }
 
     onnxOptimizedArtifactTest() {

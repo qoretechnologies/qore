@@ -792,8 +792,18 @@ device buffer" marker to the substrate and accept it in `prepareOutputTensorValu
 (currently rejects device buffers) for caller-owned ring/double buffers, gated behind
 the marker per the V1 caution.
 
-**Tests:** HW-free validation/marker logic; HW-gated stress (repeated runs, binding
-reuse, async pool) under compute-sanitizer.
+**Status (pool counters): done.** `OnnxSessionPool::getPoolStats()` aggregates
+device-binding transfer counters across pooled sessions (`device_binding` block) and, on
+CUDA-enabled builds, reports a `device_memory` free/total/used snapshot (`cudaMemGetInfo`)
+so operators can watch for memory pressure.
+
+**Decision (writable preallocated device outputs): keep immutable for v1** (per the
+design's "Preallocated device outputs" caution). `prepareOutputTensorValue()` already
+rejects buffers wrapping immutable external/device storage
+(`ML-ONNX-BINDING-ERROR`), and the measured device-retained provider-managed path already
+delivers the win (2.13×), so a writable-device-buffer marker in the core `QoreBufferNode`
+substrate is not justified now. Users use `bindOutputDevice()` for provider-managed device
+output allocation; revisit if ring/double-buffer reuse proves necessary.
 
 ### Phase F5 — Provider reach
 
@@ -813,8 +823,14 @@ Split by what the provider's device-memory model allows:
 - **Nullable device buffers:** ONNX tensors carry no validity bitmap. Decide policy
   (reject nullable into device tensors, or carry the validity mask host-side) in
   `validateDirectBuffer`/`prepareInputValue`; add nullable-column tests.
-- **Sandboxing domain:** tag the device-binding/upload entry points with a functional
-  domain so restricted programs (`PO_NO_UNCONTROLLED_APIS`) can deny accelerator use.
+- **Sandboxing domain: done.** The device-binding/upload entry points
+  (`Tensor::toDevice`, `Tensor::pinnedHost`, `OnnxIoBinding::bindOutputDevice`/
+  `bindOutputsDevice`) are tagged `dom=UNCONTROLLED_API`
+  (`QDOM_UNCONTROLLED_API`), so programs parsed with `PO_NO_UNCONTROLLED_APIS` are rejected
+  at parse time when they call them, while module loading and host-only ml features remain
+  available. This required exposing the existing `QDOM_UNCONTROLLED_API` constant to the
+  `qpp` domain syntax (one-line `dmap` addition in `lib/qpp.cpp`). Validated by a parse-time
+  sandbox test (no accelerator needed).
 
 ### Phase F7 — Break-even benchmarks + docs
 
