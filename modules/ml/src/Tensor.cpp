@@ -916,13 +916,22 @@ QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* devic
             "device_id must be >= 0; got " QLLD, (long long)device_id);
         return nullptr;
     }
+
+#ifdef HAVE_METAL
+    // Metal/UMA upload: allocate an MTLBuffer with MTLStorageModeShared so the
+    // device and host see the same physical bytes (Apple Silicon).  Implemented
+    // in Tensor_Metal.mm.
+    if (kind == QoreBufferDeviceKind::Metal) {
+        return qore_ml_make_metal_uma_tensor(host, device_id, xsink);
+    }
+#endif
+
 #ifdef HAVE_CUDART
-    // v1 uploads target CUDA device memory; other device families (rocm, etc.) are
-    // planned but require their own runtime allocator/copy path
+    // CUDA uploads target real device memory via cudaMalloc + cudaMemcpy(H2D).
     if (kind != QoreBufferDeviceKind::Cuda) {
         xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
-            "host->device upload is only implemented for the 'cuda' device kind in this build; "
-            "got '%s'", device_kind ? device_kind : "");
+            "host->device upload is not implemented for the '%s' device kind in this build",
+            device_kind ? device_kind : "");
         return nullptr;
     }
 
@@ -988,10 +997,20 @@ QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* devic
     return new QoreTensor(dev_buf.release(), host->getShape());
 #else
     (void)host;
+#  ifdef HAVE_METAL
+    // Metal kind was handled above; reaching here means a non-Metal kind on a
+    // Metal-only build (mac without CUDA).  Report truthfully: Metal is the
+    // only upload backend in this build.
+    xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+        "host->device upload to the '%s' device kind is not implemented in this build; "
+        "only the 'metal' device kind is supported on this Apple Silicon ml build",
+        device_kind ? device_kind : "");
+#  else
     (void)kind;
     xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
-        "this ml build has no CUDA runtime support, so tensors cannot be uploaded to a "
-        "device; rebuild with CUDA");
+        "this ml build has no device-upload backend; rebuild with CUDA on Linux or with "
+        "Metal framework support on Apple Silicon");
+#  endif
     return nullptr;
 #endif
 }
@@ -1036,11 +1055,26 @@ QoreTensor* qore_ml_make_pinned_tensor(const QoreTensor* host, ExceptionSink* xs
         return nullptr;
     }
     return new QoreTensor(buf.release(), host->getShape());
+#elif defined(HAVE_METAL)
+    // Apple Silicon UMA: all host memory is already device-accessible.  "Pinning"
+    // (page-locking for faster DMA) is moot because there is no DMA hop -- the GPU
+    // reads from the same physical memory as the CPU.  Honor the API by returning
+    // a Tensor sharing the same host buffer: zero allocation, zero copy, and
+    // portable code that calls pinnedHost().toDevice("metal") still works (the
+    // device upload allocates an MTLBuffer once).  This is the option-B "honest
+    // no-op" recorded in the design doc's Apple Silicon section.
+    if (host_buf->hasExternalDeviceStorage() && host_buf->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreBufferNode> buf(
+        static_cast<QoreBufferNode*>(host_buf->refSelf()), xsink);
+    return new QoreTensor(buf.release(), host->getShape());
 #else
     (void)host;
     xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
-        "this ml build has no CUDA runtime support, so pinned host buffers are unavailable; "
-        "rebuild with CUDA");
+        "this ml build has no host-pinning backend; rebuild with CUDA on Linux "
+        "(on Apple Silicon UMA, pinning is moot and pinnedHost() returns the "
+        "input tensor unchanged)");
     return nullptr;
 #endif
 }

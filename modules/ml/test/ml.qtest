@@ -160,6 +160,10 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel device input (CUDA)", \onnxDeviceInputCudaTest());
         addTestCase("OnnxModel CoreML acceleration", \onnxCoreMLAccelerationTest());
         addTestCase("OnnxModel device binding resolves to host (CoreML)", \onnxDeviceBindingCoreMLResolvesToHostTest());
+        addTestCase("Tensor device upload (Metal/UMA)", \tensorMetalDeviceUploadTest());
+        addTestCase("OnnxModel device input (Metal/UMA)", \onnxDeviceInputMetalTest());
+        addTestCase("OnnxModel Metal materialize_outputs no-op", \onnxDeviceMaterializeMetalTest());
+        addTestCase("Tensor pinnedHost on Apple Silicon (UMA no-op)", \tensorPinnedHostMetalTest());
         addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
@@ -667,7 +671,9 @@ public class MlTest inherits QUnit::Test {
             p.parse(code_str, label);
         };
         assertThrows("PARSE-EXCEPTION", parse_restricted,
-            ("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"cuda\", 0); }", "toDevice"));
+            ("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"cuda\", 0); }", "toDevice-cuda"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"metal\", 0); }", "toDevice-metal"));
         assertThrows("PARSE-EXCEPTION", parse_restricted,
             ("ML::Tensor sub f(ML::Tensor t) { return t.pinnedHost(); }", "pinnedHost"));
         assertThrows("PARSE-EXCEPTION", parse_restricted,
@@ -3278,6 +3284,15 @@ public class MlTest inherits QUnit::Test {
         return False;
     }
 
+    private bool skipMetal() {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        if (!caps.has_metal) {
+            testSkip("Metal/UMA device-buffer support not compiled in (HAVE_METAL undefined)");
+            return True;
+        }
+        return False;
+    }
+
     private bool skipOnnxCoreML() {
         if (skipOnnx()) {
             return True;
@@ -3798,6 +3813,126 @@ public class MlTest inherits QUnit::Test {
         assertEq(0, db.output_materializations, "no materialize step (CoreML output is host-native)");
         assertEq(1, db.provider_host_resolutions,
             "CoreML resolved to host truthfully (EP-acceleration provider with opaque memory)");
+    }
+
+    tensorMetalDeviceUploadTest() {
+        if (skipMetal()) {
+            return;
+        }
+
+        # Apple Silicon UMA: an MTLBuffer with MTLStorageModeShared is the same
+        # physical memory CPU-side and GPU-side, so toDevice("metal") wraps the
+        # input bytes in a Metal-tagged device buffer with a no-op copy-back.
+        ML::Tensor host = new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0, 6.0)),
+                                          shape: (2, 3));
+        assertEq(False, host.deviceStorage());
+        assertTrue(host.hostStorage());
+
+        ML::Tensor dev = host.toDevice("metal", 0);
+        assertTrue(dev.deviceStorage(), "toDevice('metal') must produce a device-tagged tensor");
+        assertEq(False, dev.hostStorage(),
+            "Metal-tagged buffer has no Qore-owned host storage until materialized");
+        hash<auto> info = dev.deviceInfo();
+        assertEq("metal", info.kind);
+        assertEq(0, info.device_id);
+
+        # toList() materializes: substrate fills its own host slot from the same
+        # UMA bytes -- correct values, no real DMA hop
+        assertEq(((1.0, 2.0, 3.0), (4.0, 5.0, 6.0)), dev.toList());
+        assertTrue(dev.hostStorage(), "materialize after toList()");
+
+        # negative paths
+        assertThrows("ML-TENSOR-DEVICE-ERROR",
+            sub() { host.toDevice("metal", -1); });
+    }
+
+    onnxDeviceInputMetalTest() {
+        if (skipMetal() || skipOnnx()) {
+            return;
+        }
+
+        # Metal-tagged input bound to a CPU provider: UMA means the GPU and CPU
+        # share the same physical bytes, so any provider can read the Metal
+        # buffer through CPU memory info with zero copies and zero transfers.
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+        });
+
+        ML::Tensor host_in = new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)),
+                                             shape: (3, 1));
+        ML::Tensor metal_in = host_in.toDevice("metal", 0);
+        assertTrue(metal_in.deviceStorage());
+
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", metal_in);
+        b.bindOutput("Y");
+        ML::Tensor y = b.run(tensors: True).Y;
+        assertEq(((3.0,), (5.0,), (7.0,)), y.toList());   # 2x+1
+
+        hash<auto> db = model.getInferenceStats().device_binding;
+        assertEq(1, db.zero_copy_inputs,
+            "Metal/UMA input must bind zero-copy through CPU memory info");
+        assertEq(0, db.host_fallback_inputs);
+        assertEq(0, db.host_to_device_transfers,
+            "Metal/UMA: no H2D transfer (CPU and GPU see the same physical bytes)");
+        assertEq(0, db.device_to_host_transfers,
+            "Metal/UMA: no D2H transfer on input binding");
+    }
+
+    onnxDeviceMaterializeMetalTest() {
+        if (skipMetal() || skipOnnx()) {
+            return;
+        }
+
+        # An ml::Tensor that is Metal-tagged and then read via toList() (which calls
+        # the substrate ensureHostStorage -> metalSharedCopyToHost) does NOT count as
+        # a device->host transfer in the OnnxModel counters because no Metal output
+        # came back from ORT; the substrate-level materialization is a UMA memcpy and
+        # is invisible to the OnnxModel transfer counters by construction.
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True,
+                "materialize_outputs": True,
+            },
+        });
+
+        ML::Tensor metal_in = (new ML::Tensor(data: new buffer<float32>((4.0,)), shape: (1, 1)))
+            .toDevice("metal", 0);
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", metal_in);
+        b.bindOutput("Y");
+        ML::Tensor y = b.run(tensors: True).Y;
+        assertEq((((9.0,),)), y.toList());   # 2*4+1
+
+        hash<auto> db = model.getInferenceStats().device_binding;
+        assertEq(1, db.zero_copy_inputs);
+        assertEq(0, db.host_to_device_transfers, "Metal/UMA H2D stays 0 truthfully");
+        assertEq(0, db.device_to_host_transfers,
+            "no D2H from ORT (CPU output) and Metal materialization is not counted");
+    }
+
+    tensorPinnedHostMetalTest() {
+        if (skipMetal()) {
+            return;
+        }
+
+        # On Apple Silicon UMA, pinning is moot (no DMA hop to accelerate); pinnedHost()
+        # returns a Tensor sharing the same host buffer (no allocation, no copy) so
+        # portable code that calls .pinnedHost().toDevice("metal") still works.
+        ML::Tensor host = new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)),
+                                          shape: (3,));
+        ML::Tensor pinned = host.pinnedHost();
+        assertEq(False, pinned.deviceStorage());
+        assertTrue(pinned.hostStorage());
+        assertEq((1.0, 2.0, 3.0), pinned.toList());
+
+        # pinnedHost().toDevice("metal") composes correctly: Metal upload allocates the
+        # MTLBuffer; the pinned no-op did not allocate anything earlier
+        ML::Tensor dev = pinned.toDevice("metal", 0);
+        assertTrue(dev.deviceStorage());
+        assertEq((1.0, 2.0, 3.0), dev.toList());
     }
 
     onnxIoBindingTest() {

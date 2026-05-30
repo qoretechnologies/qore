@@ -860,6 +860,13 @@ ML::Tensor dev = staging.toDevice("cuda", 0);
     @note Pinned host memory is a limited system resource; allocate it for buffers that are
         repeatedly transferred, not for one-off data.
 
+    @note On Apple Silicon / macOS (Unified Memory Architecture), pinning is moot --
+        the CPU and GPU share one physical memory pool, so there is no DMA hop to
+        accelerate.  pinnedHost() on Apple builds returns a Tensor sharing the same
+        host buffer (no allocation, no copy) so portable code that calls
+        \c features.pinnedHost().toDevice("metal") still works correctly; the Metal
+        upload allocates an \c MTLBuffer once via @ref Tensor::toDevice().
+
     @note This method uses an external accelerator runtime and is in the
         \c QDOM_UNCONTROLLED_API functional domain, so it is unavailable to programs
         parsed with \c PO_NO_UNCONTROLLED_APIS.

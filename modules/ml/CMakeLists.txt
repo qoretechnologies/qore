@@ -193,6 +193,25 @@ if (HAVE_ONNXRUNTIME)
     endif()
 endif()
 
+# Optional Metal framework on Apple Silicon / macOS, used to allocate UMA
+# (Unified Memory Architecture) device buffers via MTLBuffer with
+# MTLStorageModeShared.  On UMA, "device" and "host" memory are the same
+# physical bytes -- the copy-to-host callback is a no-op, transfer counters
+# stay 0, and pinnedHost() is moot.  Never required: non-Apple builds and
+# CoreML-only macOS builds simply lack the upload path and report it clearly.
+set(HAVE_METAL FALSE)
+if (APPLE AND HAVE_ONNXRUNTIME)
+    find_library(METAL_FRAMEWORK Metal)
+    find_library(FOUNDATION_FRAMEWORK Foundation)
+    if (METAL_FRAMEWORK AND FOUNDATION_FRAMEWORK)
+        message(STATUS "Metal framework found - macOS Metal/UMA device buffers enabled")
+        set(HAVE_METAL TRUE)
+        list(APPEND ML_CPP_SRC src/Tensor_Metal.mm)
+    else()
+        message(STATUS "Metal framework not found - macOS Metal/UMA device buffers disabled")
+    endif()
+endif()
+
 set(QORE_DOX_ML_TMPL_SRC
     docs/mainpage.dox.tmpl
 )
@@ -215,6 +234,11 @@ if (HAVE_ONNXRUNTIME)
     if (HAVE_CUDART)
         target_compile_definitions(${ml_module_name} PRIVATE HAVE_CUDART)
         target_link_libraries(${ml_module_name} CUDA::cudart)
+    endif()
+    if (HAVE_METAL)
+        target_compile_definitions(${ml_module_name} PRIVATE HAVE_METAL)
+        target_link_libraries(${ml_module_name} ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK})
+        set_source_files_properties(src/Tensor_Metal.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     endif()
 endif()
 add_dependencies(${ml_module_name} libqore ML_QPP_GENERATED_FILES)

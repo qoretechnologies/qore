@@ -201,10 +201,14 @@ QoreBufferDeviceKind ortDeviceTypeToKind(OrtMemoryInfoDeviceType dt, const std::
 }
 
 //! Builds an Ort::MemoryInfo for a device descriptor.  Returns CPU memory info
-//! when dev is null or describes host/unknown storage; raises
-//! ML-ONNX-DEVICE-MISMATCH for a device kind ONNX Runtime cannot address.
+//! when dev is null, describes host/unknown storage, or is on an Apple Silicon
+//! Metal/UMA device (UMA: the GPU and CPU see the same physical bytes, so ORT
+//! can bind to them through CPU memory info -- this is the truthful zero-copy
+//! path on Apple).  Raises ML-ONNX-DEVICE-MISMATCH for a device kind ONNX
+//! Runtime cannot address.
 Ort::MemoryInfo makeOrtMemoryInfo(const QoreBufferDeviceInfo* dev, ExceptionSink* xsink) {
-    if (!dev || dev->kind == QoreBufferDeviceKind::Unknown) {
+    if (!dev || dev->kind == QoreBufferDeviceKind::Unknown
+            || dev->kind == QoreBufferDeviceKind::Metal) {
         return Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
     }
     const char* name = deviceKindToOrtMemoryName(dev->kind);
@@ -1474,6 +1478,14 @@ bool QoreOnnxModel::inputDeviceMatchesProvider(const QoreBufferDeviceInfo& dinfo
     if (dinfo.kind == QoreBufferDeviceKind::Rocm) {
         return active_provider == "ROCMExecutionProvider";
     }
+    if (dinfo.kind == QoreBufferDeviceKind::Metal) {
+        // Apple Silicon UMA: Metal-tagged buffers are CPU-addressable at the same
+        // physical address as the GPU sees, so any active provider (CPU, CoreML,
+        // WebGPU) can bind them through CPU memory info with zero copies.  The
+        // counter contract is enforced in callers: no host->device transfer is
+        // performed and none is bumped for Metal-kind buffers.
+        return true;
+    }
     return false;
 }
 
@@ -2730,9 +2742,14 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             return nullptr;
         }
         // host fallback: the host path below materializes the device buffer to host
-        // (a device->host transfer) so the existing CPU binding path can be used
+        // so the existing CPU binding path can be used.  For a real device->host
+        // hop (CUDA/ROCm) bump the transfer counter; for Apple Silicon Metal/UMA
+        // there is no DMA hop -- the bytes are already host-visible -- so the
+        // truthful zero-transfer accounting requires skipping the bump.
         db_host_fallback_inputs.fetch_add(1, std::memory_order_relaxed);
-        db_device_to_host_transfers.fetch_add(1, std::memory_order_relaxed);
+        if (!dinfo || dinfo->kind != QoreBufferDeviceKind::Metal) {
+            db_device_to_host_transfers.fetch_add(1, std::memory_order_relaxed);
+        }
     }
 
     Ort::MemoryInfo mem_info = makeOrtMemoryInfo(nullptr, xsink);

@@ -134,4 +134,15 @@ DLLLOCAL QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host,
 //! or the buffer is a bit-packed bool buffer.
 DLLLOCAL QoreTensor* qore_ml_make_pinned_tensor(const QoreTensor* host, ExceptionSink* xsink);
 
+#ifdef HAVE_METAL
+//! Uploads a host tensor's data to a Metal MTLBuffer with MTLStorageModeShared
+//! (UMA: CPU and GPU share one physical memory pool).  Returns a Metal-kind
+//! device-backed tensor whose copy-to-host callback is a memcpy from the same
+//! physical bytes -- truthful: no host<->device DMA hop occurs.  Raises
+//! ML-TENSOR-DEVICE-ERROR when the buffer is a bit-packed bool buffer or
+//! Metal allocation fails.  Implemented in Tensor_Metal.mm (Objective-C++).
+DLLLOCAL QoreTensor* qore_ml_make_metal_uma_tensor(const QoreTensor* host,
+    int64_t device_id, ExceptionSink* xsink);
+#endif
+
 #endif // _QORE_MODULE_ML_QC_TENSOR_H

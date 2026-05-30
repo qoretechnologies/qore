@@ -650,6 +650,12 @@ hashdecl Qore::ML::CrossValidationFold {
 hashdecl Qore::ML::MLCapabilities {
     //! whether ONNX Runtime support is compiled in
     bool has_onnx;
+    //! whether Apple Silicon Metal/UMA device-buffer support is compiled in
+    /** When True, @ref Tensor::toDevice() accepts \c "metal" and produces a
+        UMA-shared MTLBuffer-backed device tensor with zero host<->device
+        transfers (the GPU sees the same physical bytes as the CPU).
+    */
+    bool has_metal;
     //! list of available native algorithm names
     list<string> native_algorithms;
     //! Eigen version string
@@ -803,6 +809,12 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     rv->setKeyValue("has_onnx", true, xsink);
 #else
     rv->setKeyValue("has_onnx", false, xsink);
+#endif
+
+#ifdef HAVE_METAL
+    rv->setKeyValue("has_metal", true, xsink);
+#else
+    rv->setKeyValue("has_metal", false, xsink);
 #endif
 
     // Build native algorithms list
