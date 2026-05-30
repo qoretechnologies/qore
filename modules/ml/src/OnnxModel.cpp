@@ -1570,7 +1570,13 @@ void QoreOnnxModel::loadMetadata(ExceptionSink* xsink) {
         input_meta[i].element_type = tensor_info.GetElementType();
         input_meta[i].shape = tensor_info.GetShape();
         input_meta[i].symbolic_shape.clear();
-        std::vector<const char*> symbolic_dims = tensor_info.GetSymbolicDimensions();
+        // ONNX Runtime's C++ API has no zero-arg vector-returning overload for
+        // symbolic dimensions (unlike GetShape()); the symbolic dim count matches
+        // the tensor rank, so size the out-param array to the shape's length.
+        std::vector<const char*> symbolic_dims(input_meta[i].shape.size(), nullptr);
+        if (!symbolic_dims.empty()) {
+            tensor_info.GetSymbolicDimensions(symbolic_dims.data(), symbolic_dims.size());
+        }
         input_meta[i].symbolic_shape.reserve(symbolic_dims.size());
         for (const char* dim : symbolic_dims) {
             input_meta[i].symbolic_shape.push_back(dim ? dim : "");
@@ -1589,7 +1595,13 @@ void QoreOnnxModel::loadMetadata(ExceptionSink* xsink) {
         output_meta[i].element_type = tensor_info.GetElementType();
         output_meta[i].shape = tensor_info.GetShape();
         output_meta[i].symbolic_shape.clear();
-        std::vector<const char*> symbolic_dims = tensor_info.GetSymbolicDimensions();
+        // ONNX Runtime's C++ API has no zero-arg vector-returning overload for
+        // symbolic dimensions (unlike GetShape()); the symbolic dim count matches
+        // the tensor rank, so size the out-param array to the shape's length.
+        std::vector<const char*> symbolic_dims(output_meta[i].shape.size(), nullptr);
+        if (!symbolic_dims.empty()) {
+            tensor_info.GetSymbolicDimensions(symbolic_dims.data(), symbolic_dims.size());
+        }
         output_meta[i].symbolic_shape.reserve(symbolic_dims.size());
         for (const char* dim : symbolic_dims) {
             output_meta[i].symbolic_shape.push_back(dim ? dim : "");
