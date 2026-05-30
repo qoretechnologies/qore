@@ -1758,12 +1758,15 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # processor through a DataFrame tensor window.  CPU output memory works on
         # any platform (no real accelerator required) and exercises the full
         # device-binding config plumbing plus transfer diagnostics.  CPU outputs
-        # must be reported as host outputs with no device transfers.
+        # must be reported as host outputs with no device transfers.  The CPU
+        # execution provider is forced so the policy semantics are deterministic
+        # regardless of whether the ONNX Runtime build has a GPU provider.
         DataProviderML::QoreOnnxModelProcessor proc({
             "model_path": getTestModelPath(),
             "fields": "x",
             "window_size": 5,
             "output_mode": "tensor",
+            "execution_providers": "CPUExecutionProvider",
             "device_binding": True,
             "output_device": "cpu",
         });
@@ -1799,12 +1802,13 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "disabled device binding should not surface a config block");
 
         # Requesting provider output memory with no non-CPU provider and no host
-        # fallback must raise a clear device-unavailable error.
+        # fallback must raise a clear device-unavailable error (CPU provider forced).
         DataProviderML::QoreOnnxModelProcessor strict_proc({
             "model_path": getTestModelPath(),
             "fields": "x",
             "window_size": 5,
             "output_mode": "tensor",
+            "execution_providers": "CPUExecutionProvider",
             "device_binding": True,
             "output_device": "provider",
         });
@@ -1814,12 +1818,14 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
 
         # The same request with host fallback allowed must succeed and report a
-        # host output (provider memory unavailable, materialized to host path).
+        # host output (provider memory unavailable, materialized to host path;
+        # CPU provider forced so no real device output is produced on GPU builds).
         DataProviderML::QoreOnnxModelProcessor fallback_proc({
             "model_path": getTestModelPath(),
             "fields": "x",
             "window_size": 5,
             "output_mode": "tensor",
+            "execution_providers": "CPUExecutionProvider",
             "device_binding": True,
             "output_device": "provider",
             "allow_host_fallback": True,
