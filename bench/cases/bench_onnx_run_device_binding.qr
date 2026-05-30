@@ -1,0 +1,55 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchOnnxRunDeviceBinding
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+#! Measures the reusable I/O binding with provider-managed device output binding.
+/** With the default CPU provider the policy resolves to CPU output memory; set
+    QORE_BENCH_ONNX_PROVIDER=CUDA to retain outputs on the device (zero device->host
+    copy in the hot loop). Device-binding transfer counters are printed after the run.
+*/
+class BenchOnnxRunDeviceBinding {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("onnx_run_device_binding: skipped (ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("onnx_run_device_binding");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        ML::OnnxModel model(model_path, OnnxBench::deviceSessionConfig());
+        ML::OnnxIoBinding binding = model.createBinding();
+
+        ML::Tensor input = new ML::Tensor(OnnxBench::makeFloat32Input(rows), (rows, 1));
+        binding.bindInput(name: "X", value: input);
+        binding.bindOutputsDevice();
+        # one-time correctness check (materializes the output once, outside timing)
+        OnnxBench::verifyTensorOutput("onnx_run_device_binding", binding.run(tensors: True).Y, rows);
+
+        r.setup = sub () {
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = binding.run(tensors: True);
+            # shape-only check so device-resident outputs are not materialized in the hot loop
+            OnnxBench::verifyTensorShape("onnx_run_device_binding", result.Y, rows);
+        };
+
+        int rc = r.run();
+        OnnxBench::reportTransfers("onnx_run_device_binding", model.getInferenceStats().device_binding);
+        exit(rc);
+    }
+}

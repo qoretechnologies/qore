@@ -1183,10 +1183,9 @@ public class ModelRegistry {
             config = session_config;
         } else if (artifact.metadata && artifact.metadata.deployment
                 && artifact.metadata.deployment.session_config) {
-            config = cast<hash<ML::OnnxSessionConfig>>(
-                artifact.metadata.deployment.session_config);
+            config = normalizeOnnxSessionConfig(artifact.metadata.deployment.session_config);
         } else if (meta.execution && meta.execution.config) {
-            config = cast<hash<ML::OnnxSessionConfig>>(meta.execution.config);
+            config = normalizeOnnxSessionConfig(meta.execution.config);
         } else {
             config = <ML::OnnxSessionConfig>{"providers": ()};
         }
@@ -1286,6 +1285,42 @@ public class ModelRegistry {
         }
     }
 
+    #! Private: builds a normalized ONNX session config from version execution metadata
+    /** Restores nested hashdecls lost across registry serialization (JSON/REST
+        transports preserve hash contents but not Qore hashdecl types) and applies any
+        declared device-binding policy from the execution metadata so device-capable
+        providers can keep tensors resident on the device.
+    */
+    private static *hash<ML::OnnxSessionConfig> onnxSessionConfigFromMeta(hash<ModelVersionInfo> meta) {
+        *hash<auto> raw = meta.execution ? meta.execution.config : NOTHING;
+        *hash<auto> device_binding = meta.execution ? meta.execution.device_binding : NOTHING;
+        if (!raw && !device_binding) {
+            return NOTHING;
+        }
+        hash<auto> h = raw ?? {};
+        # explicit session-config device-binding wins; otherwise inherit the execution policy
+        if (!exists h.device_binding && device_binding) {
+            h.device_binding = device_binding;
+        }
+        return normalizeOnnxSessionConfig(h);
+    }
+
+    #! Private: restores OnnxSessionConfig nested hashdecls lost across registry serialization
+    private static hash<ML::OnnxSessionConfig> normalizeOnnxSessionConfig(hash<auto> raw) {
+        hash<auto> h = raw;
+        if (exists h.device_binding) {
+            h.device_binding = cast<hash<ML::OnnxDeviceBindingConfig>>(h.device_binding);
+        }
+        if (exists h.providers) {
+            list<hash<ML::OnnxProviderConfig>> provs;
+            foreach auto p in (h.providers) {
+                push provs, cast<hash<ML::OnnxProviderConfig>>(p);
+            }
+            h.providers = provs;
+        }
+        return cast<hash<ML::OnnxSessionConfig>>(h);
+    }
+
     #! Private: returns the explicitly requested primary ONNX provider, if any
     private static *string getExplicitPrimaryProvider(hash<ML::OnnxSessionConfig> config) {
         if (!exists config.providers) {
@@ -1353,9 +1388,7 @@ public class ModelRegistry {
     private object loadOnnxExecutable(string name, string version_id,
             hash<ModelVersionInfo> meta, string entry_artifact) {
         validatePackageArtifactName(entry_artifact);
-        *hash<ML::OnnxSessionConfig> config = meta.execution && meta.execution.config
-            ? cast<hash<ML::OnnxSessionConfig>>(meta.execution.config)
-            : NOTHING;
+        *hash<ML::OnnxSessionConfig> config = onnxSessionConfigFromMeta(meta);
         list<string> external_files = getOnnxExternalDataArtifactNames(meta, entry_artifact);
 
         if (!external_files) {

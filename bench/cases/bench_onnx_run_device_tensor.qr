@@ -1,0 +1,50 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchOnnxRunDeviceTensor
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+#! Measures model.runTensors() with a device-binding session policy.
+/** With the default CPU provider the policy resolves to CPU output memory, so the
+    benchmark runs everywhere; set QORE_BENCH_ONNX_PROVIDER=CUDA to run inference on
+    the device. Device-binding transfer counters are printed after the run.
+*/
+class BenchOnnxRunDeviceTensor {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("onnx_run_device_tensor: skipped (ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("onnx_run_device_tensor");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        ML::OnnxModel model(model_path, OnnxBench::deviceSessionConfig());
+        ML::Tensor input;
+
+        r.setup = sub () {
+            input = new ML::Tensor(OnnxBench::makeFloat32Input(rows), (rows, 1));
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = model.runTensors({"X": input});
+            # shape-only check so device-resident outputs are not materialized in the hot loop
+            OnnxBench::verifyTensorShape("onnx_run_device_tensor", result.Y, rows);
+        };
+
+        int rc = r.run();
+        OnnxBench::reportTransfers("onnx_run_device_tensor", model.getInferenceStats().device_binding);
+        exit(rc);
+    }
+}

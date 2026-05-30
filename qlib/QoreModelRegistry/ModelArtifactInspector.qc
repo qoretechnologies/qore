@@ -161,6 +161,11 @@ public class ModelArtifactInspector {
         *hash<auto> execution_config = options.execution_config
             ?? options.session_config
             ?? (runtime == "onnxruntime" ? options.config : NOTHING);
+        # device-buffer binding policy: explicit option wins, else inherit any policy
+        # already present in the session config or the package manifest
+        *hash<auto> execution_device_binding = options.device_binding
+            ?? (execution_config ? execution_config.device_binding : NOTHING)
+            ?? (package_manifest ? package_manifest.device_binding : NOTHING);
         *hash<auto> source_preprocess;
         if (exists options.preprocess) {
             source_preprocess = cast<hash<auto>>(options.preprocess);
@@ -280,6 +285,7 @@ public class ModelArtifactInspector {
                 "input_schema": input_schema,
                 "output_schema": output_schema,
                 "config": execution_config,
+                "device_binding": execution_device_binding,
                 "diagnostics": diagnostics,
             },
             "config": options.config,

@@ -65,6 +65,68 @@ public namespace OnnxBench {
         return caps.has_onnx && is_file(model_path);
     }
 
+    #! Execution provider for device benchmarks (QORE_BENCH_ONNX_PROVIDER, e.g. "CUDA"); NOTHING = CPU
+    public *string sub onnxProvider() {
+        *string p = ENV.QORE_BENCH_ONNX_PROVIDER;
+        return p.val() ? p : NOTHING;
+    }
+
+    #! Device-output policy: "provider" when a non-CPU provider is requested, else "cpu"
+    /** Override with QORE_BENCH_ONNX_OUTPUT_DEVICE. The "cpu" default lets device
+        benchmarks run on CPU-only ONNX Runtime builds (outputs are host memory);
+        set QORE_BENCH_ONNX_PROVIDER=CUDA to exercise real device-resident outputs.
+    */
+    public string sub onnxOutputDevice() {
+        *string d = ENV.QORE_BENCH_ONNX_OUTPUT_DEVICE;
+        if (d.val()) {
+            return d;
+        }
+        return onnxProvider() ? "provider" : "cpu";
+    }
+
+    #! Whether device outputs are forced to host (QORE_BENCH_ONNX_MATERIALIZE=1); default device-retained
+    public bool sub onnxMaterializeOutputs() {
+        return ENV.QORE_BENCH_ONNX_MATERIALIZE.toInt() ? True : False;
+    }
+
+    #! Builds an OnnxSessionConfig with the optional provider and a device-binding policy
+    /** Host fallback is allowed so the benchmark still runs when a requested device
+        provider is unavailable (it falls back to CPU host memory and reports it).
+    */
+    public hash<ML::OnnxSessionConfig> sub deviceSessionConfig() {
+        list<hash<ML::OnnxProviderConfig>> providers = ();
+        *string p = onnxProvider();
+        if (p) {
+            push providers, <ML::OnnxProviderConfig>{"name": p};
+        }
+        return <ML::OnnxSessionConfig>{
+            "providers": providers,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True,
+                "default_output_device": onnxOutputDevice(),
+                "materialize_outputs": onnxMaterializeOutputs(),
+                "allow_host_fallback": True,
+            },
+        };
+    }
+
+    #! Prints device-binding transfer counters from a getInferenceStats().device_binding hash
+    public nothing sub reportTransfers(string name, hash<auto> t) {
+        printf("  %s transfers: device_outputs=%d host_outputs=%d device_to_host=%d "
+            "host->device=%d host_fallback_inputs=%d zero_copy_inputs=%d materializations=%d\n",
+            name, t.device_outputs, t.host_outputs, t.device_to_host_transfers,
+            t.host_to_device_transfers, t.host_fallback_inputs, t.zero_copy_inputs,
+            t.output_materializations);
+    }
+
+    #! Verifies only the tensor output shape (does not read values, so device-resident outputs are not materialized)
+    public nothing sub verifyTensorShape(string name, ML::Tensor tensor, int rows) {
+        if (tensor.getShape() != (rows, 1)) {
+            throw "BENCHMARK-ERROR",
+                sprintf("%s returned shape %y; expected (%d, 1)", name, tensor.getShape(), rows);
+        }
+    }
+
     public string sub modelPath() {
         string path = get_script_dir() + "/../../modules/ml/test/data/test_linear.onnx";
         if (is_file(path)) {
