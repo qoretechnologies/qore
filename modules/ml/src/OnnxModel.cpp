@@ -207,6 +207,32 @@ Ort::MemoryInfo makeOrtMemoryInfo(const QoreBufferDeviceInfo* dev, ExceptionSink
     return Ort::MemoryInfo(name, OrtArenaAllocator, id, OrtMemTypeDefault);
 }
 
+//! Creates an ONNX tensor over an external device pointer (no host copy) for the
+//! directly-wrappable fixed-width numeric types.  Returns a null value for types
+//! that cannot be wrapped zero-copy (caller must check onnxTypeCanWrapExternalOutput).
+Ort::Value createDeviceInputTensor(ONNXTensorElementDataType type, const Ort::MemoryInfo& mem,
+        const void* device_ptr, size_t count, const std::vector<int64_t>& shape) {
+    void* p = const_cast<void*>(device_ptr);
+    const int64_t* s = shape.data();
+    size_t sn = shape.size();
+    switch (type) {
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+            return Ort::Value::CreateTensor<float>(mem, static_cast<float*>(p), count, s, sn);
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+            return Ort::Value::CreateTensor<double>(mem, static_cast<double*>(p), count, s, sn);
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+            return Ort::Value::CreateTensor<int8_t>(mem, static_cast<int8_t*>(p), count, s, sn);
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+            return Ort::Value::CreateTensor<int16_t>(mem, static_cast<int16_t*>(p), count, s, sn);
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+            return Ort::Value::CreateTensor<int32_t>(mem, static_cast<int32_t*>(p), count, s, sn);
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            return Ort::Value::CreateTensor<int64_t>(mem, static_cast<int64_t*>(p), count, s, sn);
+        default:
+            return Ort::Value(nullptr);
+    }
+}
+
 //! Inspects an ONNX output tensor's memory info; on non-CPU memory fills out and
 //! returns true, otherwise returns false (host/CPU memory).
 bool ortValueToDeviceInfo(const Ort::Value& value, QoreBufferDeviceInfo& out) {
@@ -1429,6 +1455,17 @@ void QoreOnnxModel::configureDeviceBinding(const QoreHashNode* config, Exception
     }
 }
 
+bool QoreOnnxModel::inputDeviceMatchesProvider(const QoreBufferDeviceInfo& dinfo) const {
+    if (dinfo.kind == QoreBufferDeviceKind::Cuda) {
+        return active_provider == "CUDAExecutionProvider"
+            || active_provider == "TensorrtExecutionProvider";
+    }
+    if (dinfo.kind == QoreBufferDeviceKind::Rocm) {
+        return active_provider == "ROCMExecutionProvider";
+    }
+    return false;
+}
+
 bool QoreOnnxModel::resolveOutputDeviceInfo(const QoreHashNode* device,
         QoreBufferDeviceInfo& out, ExceptionSink* xsink) const {
     // explicit {kind, device_id} hash overrides policy
@@ -2563,7 +2600,7 @@ static int validateDirectTensorShape(const TensorMeta& meta, const std::vector<i
 }
 
 static int validateDirectBuffer(const TensorMeta& meta, const QoreBufferNode* buffer,
-        const std::vector<int64_t>& shape, ExceptionSink* xsink) {
+        const std::vector<int64_t>& shape, ExceptionSink* xsink, bool require_host_storage = true) {
     if (buffer->hasNullableElements()) {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
             "input tensor '%s': nullable buffer elements cannot be passed to ONNX Runtime; impute or filter "
@@ -2594,7 +2631,9 @@ static int validateDirectBuffer(const TensorMeta& meta, const QoreBufferNode* bu
             qore_buffer_element_type_name(buffer->getElementType()));
         return -1;
     }
-    if (buffer->ensureHostStorage(xsink)) {
+    // Materialize device storage to host for the host binding path; the zero-copy
+    // device path passes require_host_storage=false to avoid the host copy.
+    if (require_host_storage && buffer->ensureHostStorage(xsink)) {
         return -1;
     }
 
@@ -2637,8 +2676,38 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
         }
     }
 
-    // Phase B will pass a device descriptor here when an input buffer carries
-    // external device storage; for now all inputs are bound from host memory.
+    // Device-resident input: bind the ONNX tensor directly over the provider
+    // device pointer (no host copy) when the device matches the active provider
+    // and the dtype is directly wrappable; otherwise fall back to materializing
+    // the buffer to host (unless require_zero_copy_inputs forbids it).
+    if (direct_buffer && direct_buffer->hasExternalDeviceStorage()) {
+        const QoreBufferDeviceInfo* dinfo = direct_buffer->getDeviceInfo();
+        bool can_zero_copy = dinfo && inputDeviceMatchesProvider(*dinfo)
+            && onnxTypeCanWrapExternalOutput(meta.element_type);
+        if (can_zero_copy) {
+            if (validateDirectBuffer(meta, direct_buffer, direct_shape, xsink, false)) {
+                return nullptr;
+            }
+            bound->shape = direct_shape;
+            Ort::MemoryInfo dev_mem = makeOrtMemoryInfo(dinfo, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            bound->value = createDeviceInputTensor(meta.element_type, dev_mem,
+                direct_buffer->getDeviceData(), direct_buffer->size(), bound->shape);
+            return bound;
+        }
+        if (device_binding.require_zero_copy_inputs) {
+            xsink->raiseException("ML-ONNX-DEVICE-BINDING-ERROR",
+                "input tensor '%s' on a '%s' device cannot be bound zero-copy to the active "
+                "provider '%s' (dtype or device mismatch); require_zero_copy_inputs is set",
+                meta.name.c_str(), dinfo ? qore_buffer_device_kind_name(dinfo->kind) : "unknown",
+                active_provider.empty() ? "CPUExecutionProvider" : active_provider.c_str());
+            return nullptr;
+        }
+        // else: fall through; the host path below materializes the device buffer
+    }
+
     Ort::MemoryInfo mem_info = makeOrtMemoryInfo(nullptr, xsink);
     if (*xsink) {
         return nullptr;

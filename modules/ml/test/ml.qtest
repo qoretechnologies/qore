@@ -154,6 +154,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel device_binding config", \onnxDeviceBindingConfigTest());
         addTestCase("OnnxModel device output fallback", \onnxDeviceOutputFallbackTest());
         addTestCase("OnnxModel device output (CUDA)", \onnxDeviceOutputCudaTest());
+        addTestCase("OnnxModel device input (CUDA)", \onnxDeviceInputCudaTest());
         addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
@@ -3531,6 +3532,65 @@ public class MlTest inherits QUnit::Test {
             ML::Tensor y = b.run(tensors: True).Y;
             assertTrue(y.hostStorage(), "materialize_outputs should pre-materialize to host");
             assertEq((((9.0,),)), y.toList());
+        }
+    }
+
+    onnxDeviceInputCudaTest() {
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+        });
+
+        # zero-copy device -> device chaining: a device output fed back as input
+        # must be bound directly without materializing to host
+        {
+            ML::OnnxIoBinding b1 = model.createBinding();
+            b1.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1)));
+            b1.bindOutputsDevice();
+            ML::Tensor y1 = b1.run(tensors: True).Y;   # device-resident: 2x+1
+            assertEq(False, y1.hostStorage());
+
+            ML::OnnxIoBinding b2 = model.createBinding();
+            b2.bindInput("X", y1);                       # device input, zero-copy
+            b2.bindOutputsDevice();
+            ML::Tensor y2 = b2.run(tensors: True).Y;     # 2*(2x+1)+1 = 4x+3
+            assertEq(False, y1.hostStorage(),
+                "device input must be bound zero-copy (no host materialization)");
+            assertEq((((7.0,), (11.0,), (15.0,))), y2.toList());
+        }
+
+        # require_zero_copy_inputs rejects a device input that cannot be bound
+        # directly to the active provider (here a mock ROCm buffer on a CUDA session)
+        {
+            ML::OnnxModel strict(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True, "require_zero_copy_inputs": True,
+                },
+            });
+            ML::OnnxIoBinding b = strict.createBinding();
+            ML::Tensor rocm_in = (new ML::Tensor(data: new buffer<float32>((1.0,)), shape: (1, 1))).mockDevice("rocm", 0);
+            assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+                b.bindInput("X", rocm_in);
+            });
+        }
+
+        # without require_zero_copy_inputs, an incompatible device input falls back
+        # to host materialization and still runs correctly
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            ML::Tensor rocm_in = (new ML::Tensor(data: new buffer<float32>((5.0,)), shape: (1, 1))).mockDevice("rocm", 0);
+            assertEq(False, rocm_in.hostStorage());
+            b.bindInput("X", rocm_in);    # incompatible device -> host fallback materializes at bind
+            assertTrue(rocm_in.hostStorage(), "incompatible device input should materialize to host");
+            b.bindOutput("Y");
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertEq((((11.0,),)), y.toList());   # 2*5+1
         }
     }
 

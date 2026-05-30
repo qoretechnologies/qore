@@ -300,6 +300,10 @@ private:
     DLLLOCAL bool resolveOutputDeviceInfo(const QoreHashNode* device,
         QoreBufferDeviceInfo& out, ExceptionSink* xsink) const;
 
+    //! Returns true if a device-resident input buffer can be bound directly to
+    //! the active execution provider (matching device family).
+    DLLLOCAL bool inputDeviceMatchesProvider(const QoreBufferDeviceInfo& dinfo) const;
+
     //! Create a path-based session, falling back to CPU if an auto-selected provider fails
     DLLLOCAL void createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
         const QoreHashNode* config, ExceptionSink* xsink);
