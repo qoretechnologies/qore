@@ -861,32 +861,31 @@ not expose raw device pointers, so their *zero-copy device-memory* path is a sep
 interop layer, not a small extension; the realistic near-term deliverable for them is
 **EP acceleration** (F5a), which for OpenVINO is fully testable on a CPU.
 
-### Status after the F1 session (2026-05-30, dev box: RTX 3090 Ti / CUDA 12.4 / ORT 1.24)
+### Status (2026-05-30, dev box: RTX 3090 Ti / CUDA 12.4 / ORT 1.24)
 
-- **F1 — done and GPU-validated** (`ML::Tensor::toDevice`); automatic per-run upload
-  descoped (see F1 above).
-- **F6 nullable policy — already resolved, no code needed.** The `ML::Tensor`
-  constructor rejects nullable buffers (`ML-TENSOR-ERROR`), and `validateDirectBuffer`
-  independently rejects `hasNullableElements()` device inputs, so a nullable buffer can
-  never reach a device tensor. The open question "policy for nullable device buffers" is
-  answered: reject at the tensor boundary.
-- **F2 (ROCm), F5 (OpenVINO / DirectML / TensorRT) — confirmed HW/SDK-blocked on this
-  box** and not implementable here: no HIP SDK (`/opt/rocm` absent), no TensorRT runtime
-  (`libnvinfer` absent though the ORT TensorRT EP lib ships in `/opt`), no OpenVINO ORT
-  build, and DirectML is Windows-only. These need the AMD / Intel-GPU / Windows runners
-  named in the table above. Committing `#ifdef`-guarded backends that cannot be compiled
-  or run here would be untested code and is intentionally deferred.
-- **F3 (pinned host buffers), F4 (writable preallocated device outputs + pool GPU
-  counters), F6 (sandbox domain) — testable here but open.** F4's writable-output marker
-  and F6's accelerator sandbox domain modify *core* (`QoreBufferNode` substrate / the
-  sandbox model) and hinge on the design's open questions (immutable-only outputs?
-  which functional domain?); they should be steered before implementing in shared core.
-  F3 (a CUDA-only `cudaHostAlloc` optimization) is self-contained in the ml module.
-- **F7 break-even tables — limited by current fixtures.** The shipped test models
-  (`test_linear`, etc.) are too small to amortize GPU launch/transfer overhead, so a
-  break-even sweep on them would only show "CPU wins for trivial models". A compelling
-  table needs a larger model fixture; the device benchmark *harness* (F7) is in place and
-  reports transfer counts.
+Done and GPU-validated on this box:
+
+- **F1** — `ML::Tensor::toDevice` host→device upload (automatic per-run upload descoped).
+- **F3** — `ML::Tensor::pinnedHost` page-locked host buffers (materialize-path pinning
+  deferred; needs a core host-allocator hook).
+- **F4** — `OnnxSessionPool` device-binding transfer aggregation + `device_memory`
+  (`cudaMemGetInfo`) snapshot. Writable preallocated device outputs **kept immutable**
+  for v1 (already rejected; regression-tested).
+- **F6** — nullable resolved at the `ML::Tensor` boundary (no code); device entry points
+  tagged `dom=UNCONTROLLED_API` so `PO_NO_UNCONTROLLED_APIS` programs are parse-rejected
+  (required a one-line `qpp` `dmap` addition).
+- **F7** — compute-heavy MLP fixture (`test_mlp.onnx` + `gen_test_mlp.py`) and
+  `bench/onnx_device_breakeven.qr`; results in `bench/baselines/onnx_device_breakeven.md`
+  (CUDA beats CPU from batch 1 → ~105× at 512; device-retained beats materialized
+  1.18×→2.13×).
+
+Deferred — HW/SDK-blocked on this box (need the AMD / Intel-GPU / Windows runners in the
+table above):
+
+- **F2 (ROCm)** — no HIP SDK (`/opt/rocm` absent), no AMD GPU, ml links the CUDA ORT.
+- **F5 (OpenVINO / DirectML / TensorRT)** — no OpenVINO ORT build; `libnvinfer` absent so
+  the ORT TensorRT EP cannot load; DirectML is Windows-only. Committing `#ifdef`-guarded
+  backends that cannot be compiled or run here would be untested code.
 
 ---
 
