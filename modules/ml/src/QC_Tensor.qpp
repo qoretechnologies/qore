@@ -834,6 +834,38 @@ Tensor Tensor::toDevice(string device_kind = "cuda", int device_id = 0) [flags=R
     return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
 }
 
+//! Returns a copy of this tensor backed by page-locked (pinned) host memory
+/** Allocates page-locked host memory and copies this tensor's data into it, returning a
+    new host-resident Tensor that is functionally identical (same dtype, shape, and values)
+    but whose backing @ref buffer uses pinned memory.  Pinned memory is transferred to and
+    from accelerator devices over a faster DMA path, so a pinned tensor reused as an
+    @ref Tensor::toDevice() upload source amortizes its allocation across repeated uploads.
+
+    @return a new host-resident Tensor backed by pinned memory, with the same dtype and shape
+
+    @throw ML-TENSOR-DEVICE-ERROR if the build has no device runtime, the buffer is a
+        bit-packed bool buffer, or pinned-memory allocation fails
+
+    @par Example:
+    @code{.py}
+ML::Tensor staging = features.pinnedHost();   # pin once
+# repeated fast uploads from the same page-locked staging buffer
+ML::Tensor dev = staging.toDevice("cuda", 0);
+@endcode
+
+    @note Pinned host memory is a limited system resource; allocate it for buffers that are
+        repeatedly transferred, not for one-off data.
+
+    @since %ML 2.7
+*/
+Tensor Tensor::pinnedHost() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreTensor> holder(qore_ml_make_pinned_tensor(tensor, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
 //! Removes all dimensions of size 1 from the tensor shape
 /** @return a Tensor view sharing the same backing buffer, with singleton
         dimensions removed

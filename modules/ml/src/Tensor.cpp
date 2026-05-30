@@ -61,6 +61,18 @@ struct CudaUploadOwner {
     }
 };
 
+//! Owner for a page-locked (pinned) host allocation produced by cudaHostAlloc; frees it
+//! with cudaFreeHost on destruction.  Pinned host memory gives faster host<->device DMA.
+struct CudaPinnedOwner {
+    void* host_ptr = nullptr;
+
+    DLLLOCAL ~CudaPinnedOwner() {
+        if (host_ptr) {
+            cudaFreeHost(host_ptr);
+        }
+    }
+};
+
 //! Copy-to-host callback for uploaded CUDA device buffers: cudaMemcpy device->host.
 int cudaUploadCopyToHost(void* host_data, uint8_t* /*host_validity*/, size_t length,
         const void* device_data, const uint8_t* /*device_validity*/,
@@ -980,6 +992,55 @@ QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* devic
     xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
         "this ml build has no CUDA runtime support, so tensors cannot be uploaded to a "
         "device; rebuild with CUDA");
+    return nullptr;
+#endif
+}
+
+QoreTensor* qore_ml_make_pinned_tensor(const QoreTensor* host, ExceptionSink* xsink) {
+    const QoreBufferNode* host_buf = host->getBuffer();
+    if (host_buf->getElementType() == QoreBufferElementType::Bool) {
+        xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+            "pinned host buffers do not support bit-packed bool buffers");
+        return nullptr;
+    }
+#ifdef HAVE_CUDART
+    // a device-resident source must be materialized to host before pinning
+    if (host_buf->hasExternalDeviceStorage() && host_buf->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    QoreBufferElementType et = host_buf->getElementType();
+    size_t n = host_buf->size();
+    size_t byte_size = n * qore_buffer_element_storage_size(et);
+
+    auto owner = std::make_shared<CudaPinnedOwner>();
+    if (byte_size) {
+        cudaError_t err = cudaHostAlloc(&owner->host_ptr, byte_size, cudaHostAllocDefault);
+        if (err != cudaSuccess) {
+            xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+                "failed to allocate %zu bytes of pinned host memory: %s", byte_size,
+                cudaGetErrorString(err));
+            return nullptr;
+        }
+        memcpy(owner->host_ptr, host_buf->getRawData(), byte_size);
+    }
+
+    // page-locked memory is ordinary host storage (no device-copy callback needed); it is
+    // immutable like other externally-wrapped buffers and exists to accelerate host<->device
+    // DMA when used as an upload source
+    ReferenceHolder<QoreBufferNode> buf(
+        QoreBufferNode::wrapExternalStorage(et, false, n, owner->host_ptr, nullptr,
+            std::static_pointer_cast<const void>(owner), 0, xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return new QoreTensor(buf.release(), host->getShape());
+#else
+    (void)host;
+    xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+        "this ml build has no CUDA runtime support, so pinned host buffers are unavailable; "
+        "rebuild with CUDA");
     return nullptr;
 #endif
 }

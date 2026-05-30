@@ -516,6 +516,13 @@ printf("device_outputs=%d device->host=%d\n",
     transfers.device_outputs, transfers.device_to_host_transfers);
     @endcode
 
+    Host data can be made device-resident explicitly with
+    @ref Qore::ML::Tensor::toDevice() "Tensor::toDevice()", which uploads a tensor to
+    accelerator memory (CUDA) and returns a device-backed tensor that binds zero-copy as a
+    model input or chains across device inference without round-tripping through host. For
+    buffers transferred repeatedly, @ref Qore::ML::Tensor::pinnedHost() "Tensor::pinnedHost()"
+    returns a page-locked host copy that uploads over a faster DMA path.
+
     The same policy is available to higher layers: the DataProviderML
     \c QoreOnnxModelProcessor accepts \c device_binding, \c output_device,
     \c materialize_outputs, \c allow_host_fallback, and \c require_zero_copy options and

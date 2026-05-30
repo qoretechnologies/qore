@@ -774,6 +774,16 @@ DMA bandwidth and copy/compute overlap on the materialize and host-fallback path
 
 **Tests:** HW-free allocation/ownership; HW-gated bandwidth-delta benchmark.
 
+**Status: `Tensor::pinnedHost()` implemented and GPU-validated** (`cudaHostAlloc` host
+allocation wrapped as external host storage, freed via the owner with `cudaFreeHost`; a
+pinned tensor uploads zero-copy correctly). compute-sanitizer clean (0 leaked) and
+valgrind clean. **Scope note:** the device→host *materialize* path cannot use pinned
+destinations from the ml module — `ensureHostStorage()` lives in core `libqore`, which
+does not link CUDA, so it allocates pageable host memory. Pinning the materialize
+destination and the `cudaMemcpyAsync`/stream-overlap variant are deferred (they need a
+core hook to let a module supply the host allocator); `pinnedHost()` delivers the
+upload-source speedup, which is the part achievable without core changes.
+
 ### Phase F4 — Production hardening (session pool + writable preallocated outputs)
 
 **Changes:** audit `OnnxSessionPool` + device binding so retained device buffers do not

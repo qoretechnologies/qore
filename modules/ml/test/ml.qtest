@@ -46,6 +46,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("Tensor native postprocessing", \tensorPostprocessingTest());
         addTestCase("Tensor mock device buffer", \tensorMockDeviceTest());
         addTestCase("Tensor device upload (CUDA)", \tensorDeviceUploadTest());
+        addTestCase("Tensor pinned host buffer (CUDA)", \tensorPinnedHostTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -612,6 +613,44 @@ public class MlTest inherits QUnit::Test {
         assertEq((((3.0,), (5.0,), (7.0,))), y.toList());
         assertEq(1, model.getInferenceStats().device_binding.zero_copy_inputs,
             "an uploaded device input must be bound zero-copy");
+    }
+
+    tensorPinnedHostTest() {
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+
+        # bit-packed bool buffers are rejected on any build (checked before the device runtime)
+        ML::Tensor bhost(data: new buffer<bool>((True, False)), shape: (2,));
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { bhost.pinnedHost(); });
+
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        # a pinned tensor is host-resident and functionally identical to the source
+        ML::Tensor pinned = host.pinnedHost();
+        assertTrue(pinned.hostStorage());
+        assertEq(False, pinned.deviceStorage());
+        assertEq("float32", pinned.getDtype());
+        assertEq((2, 2), pinned.getShape());
+        assertEq(host.toList(), pinned.toList());
+
+        # a pinned tensor uploads to the device and produces correct inference results
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True, "require_zero_copy_inputs": True,
+            },
+        });
+        ML::Tensor host_in(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1));
+        ML::Tensor input = host_in.pinnedHost().toDevice("cuda", 0);
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", input);
+        b.bindOutputsDevice();
+        ML::Tensor y = b.run(tensors: True).Y;          # 2x+1
+        assertEq((((3.0,), (5.0,), (7.0,))), y.toList());
+        assertEq(1, model.getInferenceStats().device_binding.zero_copy_inputs,
+            "a pinned-then-uploaded device input must be bound zero-copy");
     }
 
     tensorPostprocessingTest() {

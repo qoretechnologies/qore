@@ -129,4 +129,9 @@ DLLLOCAL QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host,
 DLLLOCAL QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host,
     const char* device_kind, int64_t device_id, ExceptionSink* xsink);
 
+//! Returns a copy of host backed by page-locked (pinned) host memory for faster
+//! host<->device DMA; raises ML-TENSOR-DEVICE-ERROR when the build has no device runtime
+//! or the buffer is a bit-packed bool buffer.
+DLLLOCAL QoreTensor* qore_ml_make_pinned_tensor(const QoreTensor* host, ExceptionSink* xsink);
+
 #endif // _QORE_MODULE_ML_QC_TENSOR_H
