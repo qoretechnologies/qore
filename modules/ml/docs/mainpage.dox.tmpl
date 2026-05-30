@@ -461,6 +461,68 @@ if (caps.has_onnx) {
 }
     @endcode
 
+    @subsection mlalgo_onnx_device GPU Device Binding (Zero-Copy)
+
+    On builds with a device-capable execution provider (CUDA first), ONNX inputs and
+    outputs can stay resident on the accelerator instead of always copying through host
+    memory. Device binding is opt-in and never changes CPU-only behavior: on a CPU
+    provider, or when a requested device path is unavailable, the policy resolves to host
+    memory (optionally with an explicit error instead of a silent fallback).
+
+    Device binding is configured through the @ref Qore::ML::OnnxDeviceBindingConfig
+    "device_binding" field of @ref Qore::ML::OnnxSessionConfig "OnnxSessionConfig":
+
+    | Field | Meaning |
+    |-------|---------|
+    | \c enabled | Enables device-aware input/output binding. |
+    | \c default_output_device | \c "cpu", \c "provider", or an explicit \c "<provider>:<device_id>" such as \c "cuda:0". |
+    | \c allow_host_fallback | Allow host copies when a requested device path is unavailable (default \c False). |
+    | \c materialize_outputs | Force returned device outputs to host before returning (default \c False). |
+    | \c require_zero_copy_inputs | Reject device inputs that cannot be bound without a host copy. |
+    | \c require_zero_copy_outputs | Reject outputs that cannot be returned as device-backed buffers. |
+
+    Provider-managed device outputs are requested through the reusable I/O binding with
+    @ref Qore::ML::OnnxIoBinding::bindOutputsDevice() "bindOutputsDevice()" or
+    @ref Qore::ML::OnnxIoBinding::bindOutputDevice() "bindOutputDevice()". A device-resident
+    output is returned as a device-backed @ref Qore::ML::Tensor "Tensor"; reading its host
+    values (for example with \c toList()) materializes it once through a provider copy-to-host
+    callback. Host/device transfers are observable through the \c device_binding block of
+    @ref Qore::ML::OnnxModel::getInferenceStats() "getInferenceStats()" (\c zero_copy_inputs,
+    \c host_fallback_inputs, \c device_outputs, \c host_outputs, \c output_materializations,
+    and the \c host_to_device_transfers / \c device_to_host_transfers totals).
+
+    @code{.py}
+hash<Qore::ML::OnnxSessionConfig> cfg = <Qore::ML::OnnxSessionConfig>{
+    "providers": (<Qore::ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+    "device_binding": <Qore::ML::OnnxDeviceBindingConfig>{
+        "enabled": True,
+        "default_output_device": "provider",   # keep outputs on the GPU
+        "materialize_outputs": False,           # do not copy back to host automatically
+        "allow_host_fallback": False,           # raise instead of silently using CPU memory
+    },
+};
+Qore::ML::OnnxModel model("/path/to/model.onnx", cfg);
+
+Qore::ML::OnnxIoBinding binding = model.createBinding();
+binding.bindInput(name: "X", value: input_tensor);
+binding.bindOutputsDevice();                    # provider-managed device output allocation
+hash<auto> result = binding.run(tensors: True);
+Qore::ML::Tensor output = result.Y;             # device-resident; no host copy yet
+printf("device output: %y\n", output.deviceInfo());
+
+# inspect host/device transfer counters
+hash<auto> transfers = model.getInferenceStats().device_binding;
+printf("device_outputs=%d device->host=%d\n",
+    transfers.device_outputs, transfers.device_to_host_transfers);
+    @endcode
+
+    The same policy is available to higher layers: the DataProviderML
+    \c QoreOnnxModelProcessor accepts \c device_binding, \c output_device,
+    \c materialize_outputs, \c allow_host_fallback, and \c require_zero_copy options and
+    reports transfer counters through its \c getDiagnostics(); QoreModelRegistry execution
+    manifests can carry a \c device_binding block that is propagated into the loaded session
+    and honored by the model execution adapter.
+
     @section mlpersistence Model Persistence
 
     Save trained models so they survive restarts and can be shared between systems.

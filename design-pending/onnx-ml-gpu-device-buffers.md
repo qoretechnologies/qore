@@ -672,16 +672,16 @@ existing sandbox model already covers the module.
 
 ## Completion Checklist
 
-- [ ] Public buffer/tensor device metadata methods are complete and documented.
-- [ ] ONNX provider/device to `Ort::MemoryInfo` mapping is implemented.
-- [ ] Device-backed input tensors bind without host copy when compatible.
-- [ ] Provider-managed device output allocation is implemented.
-- [ ] Device ONNX outputs return as device-backed `ML::Tensor` values.
-- [ ] Host materialization is explicit, tested, and diagnosed.
+- [x] Public buffer/tensor device metadata methods are complete and documented.
+- [x] ONNX provider/device to `Ort::MemoryInfo` mapping is implemented.
+- [x] Device-backed input tensors bind without host copy when compatible.
+- [x] Provider-managed device output allocation is implemented.
+- [x] Device ONNX outputs return as device-backed `ML::Tensor` values.
+- [x] Host materialization is explicit, tested, and diagnosed.
 - [x] DataProviderML propagates device policy and reports transfer diagnostics.
 - [x] QoreModelRegistry manifests can express device policy.
-- [ ] CPU-only builds and tests remain green.
-- [ ] GPU validation passes on at least one CUDA-capable runner.
-- [ ] Benchmarks show the break-even points and real speedups.
-- [ ] Valgrind/ASan host validation and CUDA memory validation are recorded.
-- [ ] Doxygen docs and release notes are updated.
+- [x] CPU-only builds and tests remain green.
+- [x] GPU validation passes on at least one CUDA-capable runner (RTX 3090 Ti, CUDA 12.4, ORT 1.24 GPU).
+- [x] Benchmarks show the break-even points and real speedups.
+- [x] Valgrind/ASan host validation and CUDA memory validation are recorded (valgrind clean on host paths; compute-sanitizer memcheck clean on device + copy-to-host paths).
+- [x] Doxygen docs are updated (release notes deferred until the branch is released).
