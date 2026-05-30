@@ -10336,6 +10336,12 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                         return false;
                     }
                     qore_class_private::get(*qc)->addParameterizedVirtualBase(base_type);
+                } else {
+                    const qore_class_private* base_priv = qore_class_private::get(*base);
+                    if (base_priv->hasTypeParams() && base_priv->rawConstructionDefaultsToAuto()) {
+                        type_vec_t raw_args(base->getTypeParameterCount(), autoTypeInfo);
+                        qore_class_private::get(*qc)->addParameterizedVirtualBase(base->getTypeInfo(raw_args));
+                    }
                 }
                 // Source parsing treats inherited classes as class-signature
                 // input. AOT attaches bases manually, so mark the signature

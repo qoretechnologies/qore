@@ -26,6 +26,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
             \moduleBindsDependencyPublicOurGlobal());
         addTestCase("AOT module preserves inherited concrete method bodies",
             \modulePreservesInheritedConcreteMethodBody());
+        addTestCase("AOT module preserves raw generic base compatibility",
+            \modulePreservesRawGenericBaseCompatibility());
 
         set_return_value(main());
     }
@@ -213,6 +215,71 @@ printf(\"seen=%y\\n\", AOTModuleLoadsModuleInInit::seen());
         string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("seen=True\nEXIT=0\n", run_out,
             "nested module loads from AOT module init must not leak into the outer module context");
+    }
+
+    modulePreservesRawGenericBaseCompatibility() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/AOTRawGenericBase.qm";
+        string qmod_path = tmp_dir + "/AOTRawGenericBase.qmod";
+        string script_path = tmp_dir + "/run-raw-generic-base.qr";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTRawGenericBase {
+    version = \"1.0\";
+    desc = \"raw generic base compatibility regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTRawGenericBase {
+    public class RawPollOperation inherits Qore::AbstractPollOperation {
+        string getGoal() {
+            return \"done\";
+        }
+
+        string getState() {
+            return \"done\";
+        }
+
+        bool goalReached() {
+            return True;
+        }
+
+        *hash<Qore::SocketPollInfo> continuePoll() {
+            return NOTHING;
+        }
+    }
+
+    public string sub verify() {
+        RawPollOperation op();
+        Qore::DelegatingPollOperation wrapped(op, sub (hash<Qore::SocketPollResultInfo> result) {
+        });
+        return op instanceof Qore::AbstractPollOperation ? \"ok\" : \"bad\";
+    }
+}
+");
+        f.close();
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled raw generic base module: " + compile_out);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTRawGenericBase
+
+printf(\"%s\\n\", AOTRawGenericBase::verify());
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("ok\nEXIT=0\n", run_out,
+            "AOT raw legacy generic base must match wildcard generic APIs");
     }
 
     moduleBindsDependencyPublicOurGlobal() {
