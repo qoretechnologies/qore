@@ -89,11 +89,6 @@ extern const TypedHashDecl* hashdeclGMMResult;
 extern const TypedHashDecl* hashdeclKNNClassificationResult;
 extern const TypedHashDecl* hashdeclKNNRegressionResult;
 extern const TypedHashDecl* hashdeclMLCapabilities;
-extern const TypedHashDecl* hashdeclOnnxTensorInfo;
-extern const TypedHashDecl* hashdeclOnnxModelInfo;
-extern const TypedHashDecl* hashdeclOnnxProviderConfig;
-extern const TypedHashDecl* hashdeclOnnxSessionConfig;
-extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 extern const TypedHashDecl* hashdeclStandardScalerInfo;
 extern const TypedHashDecl* hashdeclMinMaxScalerInfo;
 extern const TypedHashDecl* hashdeclImputerInfo;
@@ -443,6 +438,31 @@ hashdecl Qore::ML::OnnxProviderDiagnostic {
     *string error;
 }
 
+//! ONNX device-buffer binding policy
+/** Controls whether ONNX inputs/outputs are bound directly to execution-provider
+    device memory (e.g. CUDA GPU buffers) instead of being copied through host
+    memory.  All fields are optional; the policy only takes effect when a non-CPU
+    execution provider is active.  On CPU-only builds or CPU-only sessions these
+    options parse normally and requesting a device path raises an actionable
+    @c ML-ONNX-DEVICE-* exception unless host fallback is allowed.
+
+    @since %ML 2.6
+*/
+hashdecl Qore::ML::OnnxDeviceBindingConfig {
+    //! enables device-aware input/output binding; default False
+    *bool enabled;
+    //! default device for provider-managed outputs: "cpu", "provider", or an explicit provider/device name; default "provider"
+    *string default_output_device;
+    //! allow host copies when a requested device path is unavailable; default False
+    *bool allow_host_fallback;
+    //! force returned device outputs to host storage before returning; default False
+    *bool materialize_outputs;
+    //! reject device inputs that cannot be bound without a host copy; default False
+    *bool require_zero_copy_inputs;
+    //! reject outputs that cannot be returned as device-backed buffers; default False
+    *bool require_zero_copy_outputs;
+}
+
 //! ONNX session configuration
 /** Controls ONNX Runtime session options including execution providers, threading,
     and graph optimization.
@@ -494,6 +514,8 @@ hashdecl Qore::ML::OnnxSessionConfig {
     *string save_model_format;
     //! raw ONNX Runtime session config entries; values are converted to strings
     *hash<auto> config;
+    //! device-buffer binding policy for GPU/accelerator execution providers
+    *hash<OnnxDeviceBindingConfig> device_binding;
 }
 
 //! ONNX model metadata

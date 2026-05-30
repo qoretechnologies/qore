@@ -56,6 +56,14 @@ DLLLOCAL extern QoreClass* QC_ONNXRUNOPTIONS;
 DLLLOCAL extern QoreClass* QC_ONNXIOBINDING;
 DLLLOCAL extern QoreClass* QC_ONNXSESSIONPOOL;
 
+// ONNX hashdecls (defined by the qpp-generated registration code in ql_ml.cpp)
+extern const TypedHashDecl* hashdeclOnnxTensorInfo;
+extern const TypedHashDecl* hashdeclOnnxModelInfo;
+extern const TypedHashDecl* hashdeclOnnxProviderConfig;
+extern const TypedHashDecl* hashdeclOnnxDeviceBindingConfig;
+extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
+
 DLLLOCAL void preinitOnnxModelClass();
 DLLLOCAL void preinitOnnxRunOptionsClass();
 DLLLOCAL void preinitOnnxIoBindingClass();
@@ -97,6 +105,25 @@ struct OnnxProviderDiagnostic {
     bool auto_selected = false;
     bool active = false;
     bool cpu_fallback = false;
+};
+
+//! Output device placement for provider-managed device binding
+enum class OnnxOutputDevice {
+    Cpu,        //!< force CPU output memory
+    Provider,   //!< use the active non-CPU provider's device memory
+    Explicit,   //!< a named provider/device (see device_name/device_id)
+};
+
+//! Parsed OnnxSessionConfig.device_binding policy
+struct OnnxDeviceBindingPolicy {
+    bool enabled = false;
+    OnnxOutputDevice default_output_device = OnnxOutputDevice::Provider;
+    std::string device_name;        //!< normalized provider name when default_output_device == Explicit
+    int64_t device_id = -1;         //!< explicit device id, or -1 for provider default
+    bool allow_host_fallback = false;
+    bool materialize_outputs = false;
+    bool require_zero_copy_inputs = false;
+    bool require_zero_copy_outputs = false;
 };
 
 struct OnnxBoundOrtValue;
@@ -230,6 +257,7 @@ private:
     bool allow_cpu_fallback = true;
     bool fail_on_provider_fallback = false;
     bool cpu_fallback_used = false;
+    OnnxDeviceBindingPolicy device_binding;
     bool profiling_enabled = false;
     std::string profiling_file_prefix;
     std::string last_profile_file;
@@ -258,6 +286,23 @@ private:
 
     //! Configure provider behavior from a config hash
     DLLLOCAL void configureProviderPolicy(const QoreHashNode* config, ExceptionSink* xsink);
+
+    //! Parse and validate the device_binding policy from a config hash
+    DLLLOCAL void configureDeviceBinding(const QoreHashNode* config, ExceptionSink* xsink);
+
+    //! Resolves the target device for a provider-managed output binding.
+    /** @param device optional explicit {kind, device_id} hash; NOTHING uses the
+            device_binding policy / active provider
+        @param out filled with the resolved device when the result is true
+        @return true if outputs should be bound to device memory (see \a out);
+            false for CPU memory (either policy-selected or host fallback)
+    */
+    DLLLOCAL bool resolveOutputDeviceInfo(const QoreHashNode* device,
+        QoreBufferDeviceInfo& out, ExceptionSink* xsink) const;
+
+    //! Returns true if a device-resident input buffer can be bound directly to
+    //! the active execution provider (matching device family).
+    DLLLOCAL bool inputDeviceMatchesProvider(const QoreBufferDeviceInfo& dinfo) const;
 
     //! Create a path-based session, falling back to CPU if an auto-selected provider fails
     DLLLOCAL void createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
@@ -486,6 +531,8 @@ public:
     DLLLOCAL void bindInputs(const QoreHashNode* inputs, ExceptionSink* xsink);
     DLLLOCAL void bindOutput(const char* name, ExceptionSink* xsink);
     DLLLOCAL void bindOutputs(ExceptionSink* xsink);
+    DLLLOCAL void bindOutputDevice(const char* name, const QoreHashNode* device, ExceptionSink* xsink);
+    DLLLOCAL void bindOutputsDevice(const QoreHashNode* device, ExceptionSink* xsink);
     DLLLOCAL void bindOutputTensor(const char* name, const QoreObject* tensor_obj,
         ExceptionSink* xsink);
     DLLLOCAL void clearInputs();
@@ -506,6 +553,8 @@ private:
 
     DLLLOCAL void bindInputUnlocked(const char* name, QoreValue value, ExceptionSink* xsink);
     DLLLOCAL void bindOutputUnlocked(const char* name, ExceptionSink* xsink);
+    DLLLOCAL void bindOutputDeviceUnlocked(const char* name, const QoreHashNode* device,
+        ExceptionSink* xsink);
     DLLLOCAL void bindOutputTensorUnlocked(const char* name, const QoreObject* tensor_obj,
         ExceptionSink* xsink);
     DLLLOCAL void clearInputsUnlocked();

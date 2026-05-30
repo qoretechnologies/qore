@@ -179,6 +179,20 @@ else()
     message(STATUS "ONNX Runtime not found - OnnxModel class will throw MISSING-FEATURE-ERROR")
 endif()
 
+# Optional CUDA runtime, used only to copy ONNX CUDA device-output buffers back to
+# host memory.  Never required: CPU-only (and ROCm) builds simply cannot
+# materialize CUDA device outputs and report that clearly at runtime.
+set(HAVE_CUDART FALSE)
+if (HAVE_ONNXRUNTIME)
+    find_package(CUDAToolkit QUIET)
+    if (CUDAToolkit_FOUND AND TARGET CUDA::cudart)
+        message(STATUS "CUDA runtime found (${CUDAToolkit_VERSION}) - ONNX device-output copy-to-host enabled")
+        set(HAVE_CUDART TRUE)
+    else()
+        message(STATUS "CUDA runtime not found - ONNX CUDA device outputs will be unavailable")
+    endif()
+endif()
+
 set(QORE_DOX_ML_TMPL_SRC
     docs/mainpage.dox.tmpl
 )
@@ -198,6 +212,10 @@ if (HAVE_ONNXRUNTIME)
         target_link_directories(${ml_module_name} PRIVATE ${ONNXRUNTIME_LIBRARY_DIRS})
     endif()
     target_link_libraries(${ml_module_name} ${ONNXRUNTIME_LIBRARIES})
+    if (HAVE_CUDART)
+        target_compile_definitions(${ml_module_name} PRIVATE HAVE_CUDART)
+        target_link_libraries(${ml_module_name} CUDA::cudart)
+    endif()
 endif()
 add_dependencies(${ml_module_name} libqore ML_QPP_GENERATED_FILES)
 

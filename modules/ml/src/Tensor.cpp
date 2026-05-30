@@ -30,8 +30,44 @@
 #include <cstring>
 #include <limits>
 #include <vector>
+#include <memory>
+#include <string>
 
 namespace {
+
+//! Owner for a mock device buffer: holds the "device" bytes (really host memory)
+//! alive for the lifetime of the wrapping QoreBufferNode.
+struct MockDeviceOwner {
+    std::vector<uint8_t> bytes;
+};
+
+//! Copy-to-host callback for mock device buffers; the bytes already live in host
+//! memory, so materialization is a plain memcpy of the owner-held bytes.
+int mockDeviceCopyToHost(void* host_data, uint8_t* /*host_validity*/, size_t /*length*/,
+        const void* device_data, const uint8_t* /*device_validity*/,
+        const QoreBufferDeviceInfo& /*device_info*/, const void* owner, ExceptionSink* /*xsink*/) {
+    const MockDeviceOwner* o = static_cast<const MockDeviceOwner*>(owner);
+    if (o && !o->bytes.empty()) {
+        memcpy(host_data, device_data, o->bytes.size());
+    }
+    return 0;
+}
+
+//! Maps a lower-case device-kind name to a QoreBufferDeviceKind for the mock helper.
+QoreBufferDeviceKind mockDeviceKindFromName(const char* name) {
+    std::string n = name ? name : "";
+    for (char& c : n) {
+        c = static_cast<char>((c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c);
+    }
+    if (n == "cuda") return QoreBufferDeviceKind::Cuda;
+    if (n == "rocm" || n == "hip") return QoreBufferDeviceKind::Rocm;
+    if (n == "opencl") return QoreBufferDeviceKind::OpenCL;
+    if (n == "vulkan") return QoreBufferDeviceKind::Vulkan;
+    if (n == "oneapi") return QoreBufferDeviceKind::OneAPI;
+    if (n == "metal") return QoreBufferDeviceKind::Metal;
+    if (n == "java") return QoreBufferDeviceKind::Java;
+    return QoreBufferDeviceKind::Other;
+}
 
 struct inferred_tensor_type_t {
     bool has_int = false;
@@ -751,8 +787,10 @@ QoreListNode* QoreTensor::getShapeList(ExceptionSink* xsink) const {
 
 QoreValue QoreTensor::toListImpl(size_t depth, size_t& offset, ExceptionSink* xsink) const {
     if (depth >= shape.size()) {
-        QoreValue value = buffer->getReferencedEntry(offset++, xsink);
-        return value.refSelf();
+        // getReferencedEntry() already returns an owned reference; transfer it
+        // directly. Calling refSelf() here would take a second reference and
+        // leak the first.
+        return buffer->getReferencedEntry(offset++, xsink);
     }
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
@@ -779,4 +817,40 @@ QoreObject* qore_ml_tensor_to_object(QoreTensor* tensor, QoreProgram* pgm, Excep
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_TENSOR, pgm), xsink);
     (*obj)->setPrivate(CID_TENSOR, tensor_holder.release());
     return obj.release();
+}
+
+QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host, const char* device_kind,
+        int64_t device_id, ExceptionSink* xsink) {
+    const QoreBufferNode* host_buf = host->getBuffer();
+    QoreBufferElementType et = host_buf->getElementType();
+    if (et == QoreBufferElementType::Bool) {
+        xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+            "mock device tensors do not support bit-packed bool buffers");
+        return nullptr;
+    }
+
+    size_t n = host_buf->size();
+    size_t byte_size = n * qore_buffer_element_storage_size(et);
+
+    // copy the host bytes into the owner; these stand in for device memory
+    auto owner = std::make_shared<MockDeviceOwner>();
+    owner->bytes.resize(byte_size);
+    if (byte_size) {
+        memcpy(owner->bytes.data(), host_buf->getRawData(), byte_size);
+    }
+
+    QoreBufferDeviceInfo info;
+    info.kind = mockDeviceKindFromName(device_kind);
+    info.device_id = device_id;
+    info.name = std::string(qore_buffer_device_kind_name(info.kind)) + ":" + std::to_string(device_id);
+
+    const void* device_data = owner->bytes.data();
+    ReferenceHolder<QoreBufferNode> dev_buf(
+        QoreBufferNode::wrapExternalDeviceStorage(et, false, n, device_data, nullptr,
+            std::static_pointer_cast<const void>(owner), 0, info, mockDeviceCopyToHost, xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return new QoreTensor(dev_buf.release(), host->getShape());
 }

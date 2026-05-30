@@ -30,11 +30,6 @@
 #include "QC_OnnxModel.h"
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
-extern const TypedHashDecl* hashdeclOnnxTensorInfo;
-extern const TypedHashDecl* hashdeclOnnxModelInfo;
-extern const TypedHashDecl* hashdeclOnnxProviderConfig;
-extern const TypedHashDecl* hashdeclOnnxSessionConfig;
-extern const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 
 //! Per-run ONNX Runtime options
 /** Configures options for one ONNX Runtime inference call. Use this class when
@@ -172,6 +167,40 @@ nothing OnnxIoBinding::bindOutput(string name) [flags=NAMED_ARGS] {
 */
 nothing OnnxIoBinding::bindOutputs() {
     binding->bindOutputs(xsink);
+}
+
+//! Binds one output to ONNX Runtime-managed device memory
+/** Requests that ONNX Runtime allocate this output on an execution-provider
+    device (e.g. a CUDA GPU) instead of host memory.  The returned tensor stays
+    device-resident until a host read materializes it (unless
+    @ref OnnxDeviceBindingConfig.materialize_outputs is set).
+
+    @param name model output tensor name
+    @param device optional explicit @code{"kind": "cuda", "device_id": 0}@endcode
+        hash; when NOTHING the session's device_binding policy and active provider
+        select the device
+
+    @throw ML-ONNX-DEVICE-UNAVAILABLE a device output was requested but no device
+        provider is active and host fallback is not allowed
+    @throw ML-ONNX-DEVICE-BINDING-ERROR the requested device is unknown or invalid
+
+    @since %ML 2.6
+*/
+nothing OnnxIoBinding::bindOutputDevice(string name, *hash<auto> device) [flags=NAMED_ARGS] {
+    binding->bindOutputDevice(name->c_str(), device, xsink);
+}
+
+//! Binds all model outputs to ONNX Runtime-managed device memory
+/** @param device optional explicit @code{"kind": "cuda", "device_id": 0}@endcode
+        hash; when NOTHING the session's device_binding policy and active provider
+        select the device
+
+    @see OnnxIoBinding::bindOutputDevice()
+
+    @since %ML 2.6
+*/
+nothing OnnxIoBinding::bindOutputsDevice(*hash<auto> device) [flags=NAMED_ARGS] {
+    binding->bindOutputsDevice(device, xsink);
 }
 
 //! Binds one output to a preallocated numeric Tensor

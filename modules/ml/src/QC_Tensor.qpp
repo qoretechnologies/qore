@@ -766,6 +766,33 @@ Tensor Tensor::flatten() [flags=RET_VALUE_ONLY] {
     return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
 }
 
+//! Testing/diagnostic helper that returns a device-backed copy of this tensor
+/** Returns a new Tensor whose backing @ref buffer is tagged as residing on the
+    named device (e.g. \c "cuda") with a host-copy-back callback, allowing
+    device-buffer code paths (@ref Tensor::deviceStorage(),
+    @ref Tensor::deviceInfo(), @ref Tensor::materialize()) to be exercised without
+    a real accelerator.  The data is held in host memory; reads transparently
+    "materialize" it back.  Intended for tests and diagnostics, not production use.
+
+    @param device_kind the device family to tag the buffer with (e.g. \c "cuda",
+        \c "rocm", \c "opencl"); defaults to \c "cuda"
+    @param device_id the device id to record; defaults to 0
+
+    @return a new device-backed Tensor with the same dtype and shape
+
+    @throw ML-TENSOR-DEVICE-ERROR if the tensor uses a bit-packed bool buffer
+
+    @since %ML 2.6
+*/
+Tensor Tensor::mockDevice(string device_kind = "cuda", int device_id = 0) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreTensor> holder(
+        qore_ml_make_mock_device_tensor(tensor, device_kind->c_str(), device_id, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
 //! Removes all dimensions of size 1 from the tensor shape
 /** @return a Tensor view sharing the same backing buffer, with singleton
         dimensions removed

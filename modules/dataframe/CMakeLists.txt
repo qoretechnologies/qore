@@ -177,6 +177,10 @@ set(DF_CPP_SRC
     src/df_parquet.cpp
 )
 
+# Note: develop scopes -std=c++20 to df_parquet.cpp for Arrow >= 14 headers
+# (std::span); this branch already compiles everything with -std=c++20, so no
+# per-file override is needed here.
+
 # Process QPP files
 qore_wrap_qpp_value(DF_QPP_SOURCES DOXLIST _dox_src METALIST DF_QPP_META_SRC ${DF_QPP_SRC})
 add_custom_target(DF_QPP_GENERATED_FILES DEPENDS qpp ${DF_QPP_SOURCES})
