@@ -823,6 +823,14 @@ Run the four device benches across batch `1,8,32,128,512` × {CPU, CUDA} ×
 extend the mainpage device section with the provider support matrix and break-even
 guidance.
 
+**Status: done.** Added a compute-heavy MLP fixture (`modules/ml/test/data/test_mlp.onnx`
++ `gen_test_mlp.py`, `X(b,256)->Y(b,512)`) because the toy `test_linear` model is too
+small to amortize GPU overhead. `bench/onnx_device_breakeven.qr` sweeps batch
+`1,8,32,128,512` × {CPU, CUDA host-materialized, CUDA device-retained}; results recorded
+in `bench/baselines/onnx_device_breakeven.md`. On the RTX 3090 Ti CUDA beats CPU from
+batch 1 (1.87×, growing to ~105× at batch 512), and device-retained output beats
+host-materialized 1.18×→2.13× as the wide output amortizes the avoided device→host copy.
+
 ### Hardware / SDK availability for development and testing
 
 | Provider | Build w/o HW? | Run/test w/o HW? | HW-free coverage | Needs HW |
