@@ -55,6 +55,9 @@ public class ModelExecutableAdapter {
 
         #! Number of tensor runs executed through the reusable binding
         int tensor_binding_run_count = 0;
+
+        #! Whether the manifest enables device-aware output binding for this version
+        bool device_binding_enabled = False;
     }
 
     #! Creates an execution adapter around a loaded model object
@@ -71,6 +74,9 @@ public class ModelExecutableAdapter {
         self.manifest = manifest;
         runtime = manifest ? (manifest.runtime ?? (manifest.execution ? manifest.execution.runtime : NOTHING)
             ?? inferRuntime(model)) : inferRuntime(model);
+        if (manifest && manifest.execution && manifest.execution.device_binding) {
+            device_binding_enabled = manifest.execution.device_binding.enabled ?? False;
+        }
     }
 
     #! Returns the wrapped executable model object
@@ -357,6 +363,7 @@ public class ModelExecutableAdapter {
             rv{"inputs"} = info.inputs;
             rv{"outputs"} = info.outputs;
             rv{"io_binding"} = getTensorBindingDiagnostics();
+            rv{"device_binding"} = getDeviceBindingDiagnostics();
             if (!rv.diagnostics) {
                 rv{"diagnostics"} = QoreOnnxTools::OnnxDiagnostics::summarizeInspection({
                     "path": manifest && manifest.execution
@@ -438,10 +445,18 @@ public class ModelExecutableAdapter {
     }
 
     #! Binds selected outputs or all outputs to ONNX Runtime-managed memory
+    /** When the manifest enables device binding, outputs are bound to the configured
+        device (provider memory by default) so they can be returned device-resident;
+        the ONNX session resolves CPU vs device placement from the device-binding policy.
+    */
     private bindTensorOutputsUnlocked(ML::OnnxIoBinding binding, *list<string> output_names) {
         binding.clearOutputs();
         if (!exists output_names) {
-            binding.bindOutputs();
+            if (device_binding_enabled) {
+                binding.bindOutputsDevice();
+            } else {
+                binding.bindOutputs();
+            }
             return;
         }
 
@@ -452,7 +467,11 @@ public class ModelExecutableAdapter {
                     sprintf("duplicate ONNX output name %y; output names must be unique", name);
             }
             seen{name} = True;
-            binding.bindOutput(name: name);
+            if (device_binding_enabled) {
+                binding.bindOutputDevice(name: name);
+            } else {
+                binding.bindOutput(name: name);
+            }
         }
     }
 
@@ -475,6 +494,25 @@ public class ModelExecutableAdapter {
             ML::OnnxIoBinding binding = cast<ML::OnnxIoBinding>(tensor_binding);
             rv.output_signature = tensor_binding_output_signature;
             rv.bound_outputs = binding.getBoundOutputNames();
+        }
+        return rv;
+    }
+
+    #! Returns device-binding policy and host/device transfer diagnostics
+    /** @return a hash describing whether device binding is enabled for this version,
+        the manifest device-binding policy, the active execution provider, and
+        cumulative host/device transfer counters so mixed CPU/GPU registry pipelines
+        can explain where transfers happen
+
+        @since QoreModelRegistry 2.6
+    */
+    private hash<auto> getDeviceBindingDiagnostics() {
+        hash<auto> rv = {
+            "enabled": device_binding_enabled,
+            "transfers": model.getInferenceStats().device_binding,
+        };
+        if (manifest && manifest.execution && manifest.execution.device_binding) {
+            rv.policy = manifest.execution.device_binding;
         }
         return rv;
     }

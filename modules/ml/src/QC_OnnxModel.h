@@ -269,6 +269,18 @@ private:
     double last_inference_ms = 0.0;
     double max_inference_ms = 0.0;
 
+    //! Device-binding transfer counters (atomic; updated during input/output binding)
+    /** These make host/device placement and materialization observable so mixed
+        CPU/GPU pipelines can report truthful transfer diagnostics.
+    */
+    std::atomic<uint64_t> db_zero_copy_inputs{0};          //!< device inputs bound directly (no copy)
+    std::atomic<uint64_t> db_host_fallback_inputs{0};      //!< device inputs materialized to host before binding
+    std::atomic<uint64_t> db_device_outputs{0};            //!< provider outputs returned device-backed
+    std::atomic<uint64_t> db_host_outputs{0};              //!< tensor outputs returned as host memory
+    std::atomic<uint64_t> db_output_materializations{0};   //!< device outputs forced to host (materialize_outputs)
+    std::atomic<uint64_t> db_host_to_device_transfers{0};  //!< host->device copies performed
+    std::atomic<uint64_t> db_device_to_host_transfers{0};  //!< device->host copies performed
+
     //! Initialize the Ort::Env and populate session options from the config hash
     /** Shared between the path-based and memory-based configured constructors.
         @return true if env and options were populated; false if an exception was raised

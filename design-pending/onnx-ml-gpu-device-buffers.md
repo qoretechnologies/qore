@@ -678,8 +678,8 @@ existing sandbox model already covers the module.
 - [ ] Provider-managed device output allocation is implemented.
 - [ ] Device ONNX outputs return as device-backed `ML::Tensor` values.
 - [ ] Host materialization is explicit, tested, and diagnosed.
-- [ ] DataProviderML propagates device policy and reports transfer diagnostics.
-- [ ] QoreModelRegistry manifests can express device policy.
+- [x] DataProviderML propagates device policy and reports transfer diagnostics.
+- [x] QoreModelRegistry manifests can express device policy.
 - [ ] CPU-only builds and tests remain green.
 - [ ] GPU validation passes on at least one CUDA-capable runner.
 - [ ] Benchmarks show the break-even points and real speedups.

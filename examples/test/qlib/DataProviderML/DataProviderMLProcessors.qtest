@@ -113,6 +113,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # ONNX model tests
         addTestCase("onnx-model - basic inference", \onnxModelBasicInference());
         addTestCase("onnx-model - diagnostics", \onnxModelDiagnostics());
+        addTestCase("onnx-model - device binding diagnostics", \onnxModelDeviceBindingDiagnostics());
         addTestCase("onnx-model - flush partial", \onnxModelFlushPartial());
         addTestCase("onnx-model - DataFrameBlock tensor path", \onnxModelDataFrameTensorPath());
         addTestCase("onnx-model - DataFrameBlock multi-column tensor path",
@@ -243,6 +244,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             \registryModelOnnxRealMultiInputColumnOutput());
         addTestCase("registry-model - input map row output",
             \registryModelOnnxInputMapRowOutput());
+        addTestCase("registry-model - ONNX device binding adapter",
+            \registryModelOnnxDeviceBindingAdapter());
         addTestCase("tokenize - registry tokenizer", \tokenizeRegistryTokenizer());
         addTestCase("tokenize - DataFrameBlock shape", \tokenizeDataFrameShape());
         addTestCase("tokenize - BufferColumns shape", \tokenizeBufferColumnsShape());
@@ -1741,6 +1744,93 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "profile summary should include the test model operator");
         assertTrue(diag.profile_summary.provider_names.contains("CPUExecutionProvider"),
             "profile summary should include the active CPU execution provider");
+    }
+
+    onnxModelDeviceBindingDiagnostics() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Device binding only engages on the tensor I/O-binding path, so drive the
+        # processor through a DataFrame tensor window.  CPU output memory works on
+        # any platform (no real accelerator required) and exercises the full
+        # device-binding config plumbing plus transfer diagnostics.  CPU outputs
+        # must be reported as host outputs with no device transfers.
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 5,
+            "output_mode": "tensor",
+            "device_binding": True,
+            "output_device": "cpu",
+        });
+
+        DataFrame::DataFrame df({
+            "x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0)),
+        });
+        hash<auto> result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertTrue(result.Y instanceof ML::Tensor, "device-binding tensor run should produce a tensor output");
+
+        hash<auto> diag = proc.getDiagnostics();
+        assertTrue(diag.hasKey("device_binding"), "diagnostics must include a device_binding block");
+        hash<auto> db = diag.device_binding;
+        assertTrue(db.enabled, "device_binding diagnostics must report enabled = True");
+        assertEq("cpu", db.config.default_output_device, "configured output device should be surfaced");
+        assertEq(True, db.policy.enabled, "effective policy must report device binding enabled");
+        # CPU output binding: outputs are host, no device->host transfers
+        assertTrue(db.transfers.host_outputs >= 1, "CPU device-binding outputs should be host outputs");
+        assertEq(0, db.transfers.device_outputs, "CPU output binding must not produce device outputs");
+        assertEq(0, db.transfers.device_to_host_transfers, "CPU output binding must not transfer device->host");
+        assertEq(0, db.transfers.host_to_device_transfers, "no host->device transfers expected on CPU");
+
+        # device_binding disabled by default: diagnostics still present, reported disabled
+        DataProviderML::QoreOnnxModelProcessor cpu_proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 3,
+        });
+        hash<auto> cpu_diag = cpu_proc.getDiagnostics();
+        assertEq(False, cpu_diag.device_binding.enabled,
+            "default processor must report device binding disabled");
+        assertFalse(cpu_diag.device_binding.hasKey("config"),
+            "disabled device binding should not surface a config block");
+
+        # Requesting provider output memory with no non-CPU provider and no host
+        # fallback must raise a clear device-unavailable error.
+        DataProviderML::QoreOnnxModelProcessor strict_proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 5,
+            "output_mode": "tensor",
+            "device_binding": True,
+            "output_device": "provider",
+        });
+        assertThrows("ML-ONNX-DEVICE-UNAVAILABLE", sub () {
+            DataFrame::DataFrame sdf({"x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0))});
+            strict_proc.processRecordsShape(sdf, DataProviderShape::DataFrameBlock);
+        });
+
+        # The same request with host fallback allowed must succeed and report a
+        # host output (provider memory unavailable, materialized to host path).
+        DataProviderML::QoreOnnxModelProcessor fallback_proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 5,
+            "output_mode": "tensor",
+            "device_binding": True,
+            "output_device": "provider",
+            "allow_host_fallback": True,
+        });
+        DataFrame::DataFrame fdf({"x": new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0))});
+        hash<auto> fb_result = fallback_proc.processRecordsShape(fdf, DataProviderShape::DataFrameBlock);
+        assertTrue(fb_result.Y instanceof ML::Tensor, "host-fallback device binding should produce a tensor output");
+        hash<auto> fb_db = fallback_proc.getDiagnostics().device_binding;
+        assertTrue(fb_db.transfers.host_outputs >= 1, "host-fallback outputs should be host outputs");
+        assertEq(0, fb_db.transfers.device_outputs, "host fallback must not produce device outputs");
+%endif
     }
 
     onnxModelFlushPartial() {
@@ -3576,6 +3666,59 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertFloat(3.0, outputs[0][0], 1e-5);
         assertFloat(9.0, outputs[3][0], 1e-5);
 %endif
+    }
+
+    registryModelOnnxDeviceBindingAdapter() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Build a device-binding session (CPU output memory works without a real
+        # accelerator) and wrap it in a registry adapter whose manifest enables
+        # device binding.  The adapter must bind device outputs and surface
+        # truthful host/device transfer diagnostics.
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True,
+                "default_output_device": "cpu",
+            },
+        });
+
+        hash<QoreModelRegistry::ModelVersionInfo> manifest = <QoreModelRegistry::ModelVersionInfo>{
+            "version_id": "v-device-1",
+            "name": "linear-device",
+            "algorithm": "onnx",
+            "created": "2026-01-01T00:00:00Z",
+            "file_size": 0,
+            "format": "onnx",
+            "runtime": "onnxruntime",
+            "execution": <QoreModelRegistry::ModelExecutionInfo>{
+                "runtime": "onnxruntime",
+                "local_executable": True,
+                "device_binding": {
+                    "enabled": True,
+                    "default_output_device": "cpu",
+                },
+            },
+        };
+
+        QoreModelRegistry::ModelExecutableAdapter adapter(model, manifest);
+        assertTrue(adapter.isOnnx(), "adapter should report ONNX runtime");
+
+        ML::Tensor input(((1.0,), (2.0,), (3.0,)), NOTHING, "float32");
+        hash<auto> outputs = adapter.runTensors({"X": input});
+        assertTrue(outputs.Y instanceof ML::Tensor, "device-binding adapter run should return a tensor output");
+
+        hash<auto> diag = adapter.getProviderDiagnostics();
+        assertTrue(diag.hasKey("device_binding"), "adapter diagnostics must include a device_binding block");
+        assertTrue(diag.device_binding.enabled, "adapter must report device binding enabled from the manifest");
+        assertEq(True, diag.device_binding.policy.enabled,
+            "adapter should surface the manifest device-binding policy");
+        assertTrue(diag.device_binding.transfers.host_outputs >= 1,
+            "CPU device-binding adapter outputs should be host outputs");
+        assertEq(0, diag.device_binding.transfers.device_outputs,
+            "CPU output binding must not produce device outputs");
     }
 
     registryModelOnnxInputMapColumnOutput() {

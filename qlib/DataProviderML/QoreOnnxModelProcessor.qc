@@ -47,6 +47,20 @@ QoreOnnxModelProcessor gpu_proc({
     "cuda_device_id": "0",
     "intra_op_threads": 4,
 });
+
+# With zero-copy GPU device binding: keep outputs resident on the device and
+# report host/device transfer counts through getDiagnostics()
+QoreOnnxModelProcessor dev_proc({
+    "model_path": "/path/to/model.onnx",
+    "fields": "feature1,feature2",
+    "window_size": 50,
+    "execution_providers": "CUDA",
+    "cuda_device_id": "0",
+    "output_mode": "tensor",
+    "device_binding": True,
+    "output_device": "provider",
+    "materialize_outputs": False,
+});
     @endcode
 
 */
@@ -169,6 +183,61 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                     "only used when 'CUDA' is listed in `execution_providers`; "
                     "defaults to `\"0\"`",
                 "type": AbstractDataProviderTypeMap."*string",
+            },
+            "device_binding": <DataProviderOptionInfo>{
+                "display_name": "Enable Device Binding",
+                "short_desc": "Bind inputs/outputs on the provider device (zero-copy GPU)",
+                "desc": "Enables device-aware input/output binding so compatible GPU/accelerator "
+                    "buffers stay resident on the device instead of copying through host memory. "
+                    "Only effective with a non-CPU execution provider (e.g. CUDA); CPU execution "
+                    "is unaffected. Transfer counts are reported by `getDiagnostics()`. "
+                    "Default: `False`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+                "example_value": True,
+            },
+            "output_device": <DataProviderOptionInfo>{
+                "display_name": "Output Device",
+                "short_desc": "Where ONNX Runtime allocates outputs",
+                "desc": "Target device for provider-managed outputs when `device_binding` is "
+                    "enabled: `cpu` forces host output memory, `provider` uses the active "
+                    "non-CPU provider's device memory, or an explicit `<provider>:<device_id>` "
+                    "such as `cuda:0`. Default: `provider`",
+                "type": AbstractDataProviderTypeMap."*string",
+                "default_value": "provider",
+                "example_value": "provider",
+            },
+            "materialize_outputs": <DataProviderOptionInfo>{
+                "display_name": "Materialize Outputs",
+                "short_desc": "Copy device outputs to host before returning",
+                "desc": "When `device_binding` is enabled, force returned device outputs to host "
+                    "storage before returning (records one device-to-host transfer per output). "
+                    "Leave disabled to keep outputs device-resident for downstream device-aware "
+                    "steps. Default: `False`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+                "example_value": False,
+            },
+            "allow_host_fallback": <DataProviderOptionInfo>{
+                "display_name": "Allow Host Fallback",
+                "short_desc": "Permit host copies when a device path is unavailable",
+                "desc": "When `device_binding` is enabled, allow host copies when a requested "
+                    "device input/output path is unavailable instead of raising an error. "
+                    "Default: `False`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+                "example_value": False,
+            },
+            "require_zero_copy": <DataProviderOptionInfo>{
+                "display_name": "Require Zero-Copy",
+                "short_desc": "Reject device transfers that are not zero-copy",
+                "desc": "When `device_binding` is enabled, reject device inputs that cannot be "
+                    "bound without a host copy and outputs that cannot be returned as "
+                    "device-backed buffers (sets both `require_zero_copy_inputs` and "
+                    "`require_zero_copy_outputs`). Default: `False`",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+                "example_value": False,
             },
             "intra_op_threads": <DataProviderOptionInfo>{
                 "display_name": "Intra-Op Threads",
@@ -294,6 +363,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         #! Whether event output includes runtime diagnostics
         bool include_diagnostics = False;
 
+        #! Whether device-aware input/output binding is enabled
+        bool device_binding_enabled = False;
+
+        #! Resolved device-binding policy passed to the ONNX session (when enabled)
+        *hash<ML::OnnxDeviceBindingConfig> device_binding_config;
+
         #! Runtime/provider diagnostics captured after model construction
         hash<auto> provider_diagnostics;
 
@@ -388,6 +463,19 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         if (exists copts.profile_file_prefix) {
             session_config.profile_file_prefix = copts.profile_file_prefix;
         }
+        if (copts.device_binding) {
+            hash<ML::OnnxDeviceBindingConfig> dbc = <ML::OnnxDeviceBindingConfig>{
+                "enabled": True,
+                "default_output_device": copts.output_device ?? "provider",
+                "allow_host_fallback": copts.allow_host_fallback ?? False,
+                "materialize_outputs": copts.materialize_outputs ?? False,
+                "require_zero_copy_inputs": copts.require_zero_copy ?? False,
+                "require_zero_copy_outputs": copts.require_zero_copy ?? False,
+            };
+            session_config.device_binding = dbc;
+            device_binding_config = dbc;
+            device_binding_enabled = True;
+        }
 
         # Load the model
         if (session_config.providers || exists session_config.intra_op_threads
@@ -395,7 +483,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 || exists session_config.graph_optimization_level
                 || exists session_config.log_severity
                 || exists session_config.enable_profiling
-                || exists session_config.profile_file_prefix) {
+                || exists session_config.profile_file_prefix
+                || exists session_config.device_binding) {
             model = new ML::OnnxModel(model_path, session_config);
         } else {
             model = new ML::OnnxModel(model_path);
@@ -461,6 +550,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             "outputs": model.getOutputInfo(),
             "inference_stats": model.getInferenceStats(),
             "io_binding": getIoBindingDiagnostics(),
+            "device_binding": getDeviceBindingDiagnostics(),
         };
         if (finish_profile) {
             *string profile_path = model.endProfiling();
@@ -589,10 +679,18 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     }
 
     #! Binds selected outputs or all outputs to ONNX Runtime-managed memory
+    /** When device binding is enabled, outputs are bound to the configured device
+        (provider memory by default) so they can be returned device-resident; the
+        ONNX session resolves CPU vs device placement from the device-binding policy.
+    */
     private bindIoOutputsUnlocked(ML::OnnxIoBinding binding) {
         binding.clearOutputs();
         if (!exists output_names) {
-            binding.bindOutputs();
+            if (device_binding_enabled) {
+                binding.bindOutputsDevice();
+            } else {
+                binding.bindOutputs();
+            }
             return;
         }
 
@@ -603,8 +701,33 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                     sprintf("duplicate ONNX output name %y; output names must be unique", name);
             }
             seen{name} = True;
-            binding.bindOutput(name: name);
+            if (device_binding_enabled) {
+                binding.bindOutputDevice(name: name);
+            } else {
+                binding.bindOutput(name: name);
+            }
         }
+    }
+
+    #! Returns device-binding policy and host/device transfer diagnostics
+    /** @return a hash describing whether device binding is enabled, the effective
+        device-binding policy, the active execution provider, and cumulative
+        host/device transfer counters so mixed CPU/GPU pipelines can explain where
+        transfers happen
+
+        @since DataProviderML 1.4
+    */
+    private hash<auto> getDeviceBindingDiagnostics() {
+        hash<auto> rv = {
+            "enabled": device_binding_enabled,
+            "active_provider": model.getProviderInfo(),
+            "policy": provider_diagnostics.device_binding,
+            "transfers": model.getInferenceStats().device_binding,
+        };
+        if (device_binding_enabled) {
+            rv.config = device_binding_config;
+        }
+        return rv;
     }
 
     #! Returns reusable I/O binding diagnostics for optimized tensor output paths

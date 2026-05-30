@@ -40,7 +40,7 @@
 %endtry
 
 module QoreModelRegistry {
-    version = "2.5.0";
+    version = "2.6.0";
     desc = "user module providing an ML model registry with pluggable storage backends for versioning, tagging, and deployment management";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";

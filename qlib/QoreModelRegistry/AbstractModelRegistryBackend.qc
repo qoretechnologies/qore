@@ -118,6 +118,18 @@ public hashdecl ModelExecutionInfo {
     *hash<auto> output_schema;
     #! Optional runtime configuration
     *hash<auto> config;
+    #! Optional device-buffer binding policy for GPU/accelerator execution providers
+    /** Mirrors @ref ML::OnnxDeviceBindingConfig fields (\c enabled,
+        \c default_output_device, \c allow_host_fallback, \c materialize_outputs,
+        \c require_zero_copy_inputs, \c require_zero_copy_outputs). When present it is
+        propagated into the ONNX session's \c device_binding policy as the version is
+        loaded for execution, so device-capable providers (e.g. CUDA) can keep tensors
+        resident on the device. CPU-only execution remains the default; this block is
+        ignored for CPU output memory.
+
+        @since QoreModelRegistry 2.6
+    */
+    *hash<auto> device_binding;
     #! Compact actionable execution diagnostics summary
     *hash<auto> diagnostics;
 }

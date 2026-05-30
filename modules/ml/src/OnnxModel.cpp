@@ -2695,6 +2695,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             }
             bound->value = createDeviceInputTensor(meta.element_type, dev_mem,
                 direct_buffer->getDeviceData(), direct_buffer->size(), bound->shape);
+            db_zero_copy_inputs.fetch_add(1, std::memory_order_relaxed);
             return bound;
         }
         if (device_binding.require_zero_copy_inputs) {
@@ -2705,7 +2706,10 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
                 active_provider.empty() ? "CPUExecutionProvider" : active_provider.c_str());
             return nullptr;
         }
-        // else: fall through; the host path below materializes the device buffer
+        // host fallback: the host path below materializes the device buffer to host
+        // (a device->host transfer) so the existing CPU binding path can be used
+        db_host_fallback_inputs.fetch_add(1, std::memory_order_relaxed);
+        db_device_to_host_transfers.fetch_add(1, std::memory_order_relaxed);
     }
 
     Ort::MemoryInfo mem_info = makeOrtMemoryInfo(nullptr, xsink);
@@ -3524,12 +3528,20 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value&& tensor, Except
         if (*xsink) {
             return QoreValue();
         }
-        if (device_binding.materialize_outputs && buffer->ensureHostStorage(xsink)) {
-            return QoreValue();
+        db_device_outputs.fetch_add(1, std::memory_order_relaxed);
+        if (device_binding.materialize_outputs) {
+            if (buffer->ensureHostStorage(xsink)) {
+                return QoreValue();
+            }
+            db_output_materializations.fetch_add(1, std::memory_order_relaxed);
+            db_device_to_host_transfers.fetch_add(1, std::memory_order_relaxed);
         }
         ReferenceHolder<QoreTensor> qore_tensor(new QoreTensor(buffer.release(), std::move(shape)), xsink);
         return qore_ml_tensor_to_object(qore_tensor.release(), getProgram(), xsink);
     }
+
+    // any tensor output that is not provider device memory is returned as host memory
+    db_host_outputs.fetch_add(1, std::memory_order_relaxed);
 
     if (onnxTypeCanWrapExternalOutput(type)) {
         std::shared_ptr<Ort::Value> owner = std::make_shared<Ort::Value>(std::move(tensor));
@@ -3805,6 +3817,25 @@ QoreHashNode* QoreOnnxModel::getInferenceStats(ExceptionSink* xsink) const {
         ? QoreValue() : QoreValue(new QoreStringNode(profile_prefix)), xsink);
     rv->setKeyValue("last_profile_file", profile_file.empty()
         ? QoreValue() : QoreValue(new QoreStringNode(profile_file)), xsink);
+
+    // device-binding transfer counters: make host/device placement and materialization observable
+    ReferenceHolder<QoreHashNode> db(new QoreHashNode(autoTypeInfo), xsink);
+    db->setKeyValue("zero_copy_inputs",
+        static_cast<int64_t>(db_zero_copy_inputs.load(std::memory_order_relaxed)), xsink);
+    db->setKeyValue("host_fallback_inputs",
+        static_cast<int64_t>(db_host_fallback_inputs.load(std::memory_order_relaxed)), xsink);
+    db->setKeyValue("device_outputs",
+        static_cast<int64_t>(db_device_outputs.load(std::memory_order_relaxed)), xsink);
+    db->setKeyValue("host_outputs",
+        static_cast<int64_t>(db_host_outputs.load(std::memory_order_relaxed)), xsink);
+    db->setKeyValue("output_materializations",
+        static_cast<int64_t>(db_output_materializations.load(std::memory_order_relaxed)), xsink);
+    db->setKeyValue("host_to_device_transfers",
+        static_cast<int64_t>(db_host_to_device_transfers.load(std::memory_order_relaxed)), xsink);
+    db->setKeyValue("device_to_host_transfers",
+        static_cast<int64_t>(db_device_to_host_transfers.load(std::memory_order_relaxed)), xsink);
+    rv->setKeyValue("device_binding", db.release(), xsink);
+
     if (*xsink) {
         return nullptr;
     }
@@ -3818,6 +3849,13 @@ void QoreOnnxModel::resetInferenceStats() {
     total_inference_ms = 0.0;
     last_inference_ms = 0.0;
     max_inference_ms = 0.0;
+    db_zero_copy_inputs.store(0, std::memory_order_relaxed);
+    db_host_fallback_inputs.store(0, std::memory_order_relaxed);
+    db_device_outputs.store(0, std::memory_order_relaxed);
+    db_host_outputs.store(0, std::memory_order_relaxed);
+    db_output_materializations.store(0, std::memory_order_relaxed);
+    db_host_to_device_transfers.store(0, std::memory_order_relaxed);
+    db_device_to_host_transfers.store(0, std::memory_order_relaxed);
 }
 
 QoreHashNode* QoreOnnxModel::saveOptimized(const char* output_path, const QoreHashNode* config,

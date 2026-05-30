@@ -1193,6 +1193,12 @@ public class ModelRegistry {
         if (artifact.format == "ort") {
             config.load_model_format = "ORT";
         }
+        # propagate the manifest's device-binding policy into the session unless the
+        # caller-supplied session config already carries one
+        if (!exists config.device_binding && meta.execution && meta.execution.device_binding) {
+            config.device_binding =
+                cast<hash<ML::OnnxDeviceBindingConfig>>(meta.execution.device_binding);
+        }
         return config;
     }
 
