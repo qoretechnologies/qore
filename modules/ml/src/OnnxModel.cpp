@@ -272,11 +272,11 @@ int bufferToFloat16Vector(const QoreBufferNode& buffer, std::vector<Ort::Float16
         if (i && !(i % 100) && qore_check_cancel(xsink, "converting tensor buffer to ONNX float16 input")) {
             return -1;
         }
-        QoreValue value = buffer.getReferencedEntry(i, xsink);
+        ValueHolder value(buffer.getReferencedEntry(i, xsink), xsink);
         if (*xsink) {
             return -1;
         }
-        out.push_back(Ort::Float16_t(static_cast<float>(value.getAsFloat())));
+        out.push_back(Ort::Float16_t(static_cast<float>(value->getAsFloat())));
     }
     return 0;
 }
@@ -288,11 +288,11 @@ int bufferToBFloat16Vector(const QoreBufferNode& buffer, std::vector<Ort::BFloat
         if (i && !(i % 100) && qore_check_cancel(xsink, "converting tensor buffer to ONNX bfloat16 input")) {
             return -1;
         }
-        QoreValue value = buffer.getReferencedEntry(i, xsink);
+        ValueHolder value(buffer.getReferencedEntry(i, xsink), xsink);
         if (*xsink) {
             return -1;
         }
-        out.push_back(Ort::BFloat16_t(static_cast<float>(value.getAsFloat())));
+        out.push_back(Ort::BFloat16_t(static_cast<float>(value->getAsFloat())));
     }
     return 0;
 }
@@ -305,12 +305,12 @@ int bufferToUnsignedVector(const QoreBufferNode& buffer, std::vector<T>& out,
         if (i && !(i % 100) && qore_check_cancel(xsink, "converting tensor buffer to unsigned ONNX input")) {
             return -1;
         }
-        QoreValue value = buffer.getReferencedEntry(i, xsink);
+        ValueHolder value(buffer.getReferencedEntry(i, xsink), xsink);
         if (*xsink) {
             return -1;
         }
         uint64_t parsed;
-        if (qoreValueToUInt64(value, max_value, type_name, parsed, xsink)) {
+        if (qoreValueToUInt64(*value, max_value, type_name, parsed, xsink)) {
             return -1;
         }
         out.push_back(static_cast<T>(parsed));
@@ -2415,17 +2415,17 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
                     if (i && !(i % 100) && qore_check_cancel(xsink, "converting string tensor input")) {
                         return nullptr;
                     }
-                    QoreValue entry = direct_buffer->getReferencedEntry(i, xsink);
+                    ValueHolder entry(direct_buffer->getReferencedEntry(i, xsink), xsink);
                     if (*xsink) {
                         return nullptr;
                     }
-                    if (entry.getType() != NT_STRING) {
+                    if (entry->getType() != NT_STRING) {
                         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                             "input tensor '%s': string buffer element %zu has type '%s'; expected string",
-                            meta.name.c_str(), i, entry.getFullTypeName());
+                            meta.name.c_str(), i, entry->getFullTypeName());
                         return nullptr;
                     }
-                    QoreStringValueHelper str(entry);
+                    QoreStringValueHelper str(*entry);
                     bound->strings->push_back(str->c_str());
                 }
                 for (size_t i = 0; i < bound->strings->size(); ++i) {
@@ -3957,17 +3957,17 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                         if (i && !(i % 100) && qore_check_cancel(xsink, "converting string tensor input")) {
                             return nullptr;
                         }
-                        QoreValue entry = direct_buffer->getReferencedEntry(i, xsink);
+                        ValueHolder entry(direct_buffer->getReferencedEntry(i, xsink), xsink);
                         if (*xsink) {
                             return nullptr;
                         }
-                        if (entry.getType() != NT_STRING) {
+                        if (entry->getType() != NT_STRING) {
                             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                                 "input tensor '%s': string buffer element %zu has type '%s'; expected string",
-                                meta.name.c_str(), i, entry.getFullTypeName());
+                                meta.name.c_str(), i, entry->getFullTypeName());
                             return nullptr;
                         }
-                        QoreStringValueHelper str(entry);
+                        QoreStringValueHelper str(*entry);
                         strings.push_back(str->c_str());
                     }
                     for (const auto& str : strings) {

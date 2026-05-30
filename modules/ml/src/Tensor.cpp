@@ -751,8 +751,10 @@ QoreListNode* QoreTensor::getShapeList(ExceptionSink* xsink) const {
 
 QoreValue QoreTensor::toListImpl(size_t depth, size_t& offset, ExceptionSink* xsink) const {
     if (depth >= shape.size()) {
-        QoreValue value = buffer->getReferencedEntry(offset++, xsink);
-        return value.refSelf();
+        // getReferencedEntry() already returns an owned reference; transfer it
+        // directly. Calling refSelf() here would take a second reference and
+        // leak the first.
+        return buffer->getReferencedEntry(offset++, xsink);
     }
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
