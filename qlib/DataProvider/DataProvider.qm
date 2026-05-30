@@ -1299,6 +1299,12 @@ if (errors) {
         @ref DataProvider::DataProviderActionCatalog::setGenericApiCallActionBuilder()
         hooks, keeping the @c DataProvider module free of any direct dependency on a specific
         REST transport
+    - added an optional \c module_context argument to
+      @ref DataProvider::DataProviderActionCatalog::registerPendingApp() so that callers
+      registering an app on behalf of another module can associate the correct module path with
+      the app (reported by
+      @ref DataProvider::DataProviderActionCatalog::getModulePathsForApp()); when omitted, the
+      current module context is used as before, preserving backwards compatibility
     - fixed a memory leak where deregistering an app
       (@ref DataProvider::DataProviderActionCatalog::deregisterDynamicApp() and the internal
       app-deregistration path) left the app's actions - and the entire option and data-type graph

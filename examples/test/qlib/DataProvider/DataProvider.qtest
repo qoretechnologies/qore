@@ -678,6 +678,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("get display name", \getDisplayNameTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("action deregister cleanup", \actionDeregisterCleanupTest());
+        addTestCase("pending app module context", \pendingAppModuleContextTest());
         addTestCase("string test", \stringTest());
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
@@ -1421,6 +1422,57 @@ public class DataProviderTest inherits QUnit::Test {
             assertNothing(DataProviderActionCatalog::getApp(app), "app removed: " + app);
             assertNothing(DataProviderActionCatalog::getAppAction(app, "act"), "action removed: " + app);
         }
+    }
+
+    pendingAppModuleContextTest() {
+        # the 3-arg registerPendingApp() form must associate the explicitly supplied module context
+        # with the app, so that getModulePathsForApp() reports it after on-demand initialization
+        string app = sprintf("PendingCtxApp_%s", get_random_string(8));
+        string module_path = sprintf("/path/to/%s.qm", get_random_string(8));
+
+        hash<DataProviderAppInfo> app_info = <DataProviderAppInfo>{
+            "name": app,
+            "display_name": app,
+            "short_desc": "t",
+            "desc": "t",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "t.svg",
+            "dynamic": True,
+        };
+
+        # before init, no module paths are associated
+        assertNothing(DataProviderActionCatalog::getModulePathsForApp(app),
+            "no module paths before pending app is initialized");
+
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            DataProviderActionCatalog::registerApp(app_info);
+        }, module_path);
+
+        # trigger on-demand initialization
+        assertEq(app_info, DataProviderActionCatalog::getApp(app),
+            "pending app is initialized on demand");
+
+        # the explicitly supplied module context must be associated with the app, independent of the
+        # caller's current module context (which is empty at the top level here)
+        assertEq((module_path,), DataProviderActionCatalog::getModulePathsForApp(app),
+            "explicit module context is associated with the app after init");
+
+        DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertNothing(DataProviderActionCatalog::getApp(app), "app removed after deregistration");
+
+        # the 2-arg backward-compatible form must still work without an explicit module context
+        string app2 = sprintf("PendingCtxApp2_%s", get_random_string(8));
+        hash<DataProviderAppInfo> app2_info = app_info;
+        app2_info.name = app2;
+        app2_info.display_name = app2;
+        DataProviderActionCatalog::registerPendingApp(app2, sub () {
+            DataProviderActionCatalog::registerApp(app2_info);
+        });
+        assertEq(app2_info, DataProviderActionCatalog::getApp(app2),
+            "2-arg registerPendingApp() form initializes the app on demand");
+        DataProviderActionCatalog::deregisterDynamicApp(app2);
     }
 
     stringTest() {
