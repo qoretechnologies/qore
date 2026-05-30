@@ -793,6 +793,47 @@ Tensor Tensor::mockDevice(string device_kind = "cuda", int device_id = 0) [flags
     return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
 }
 
+//! Uploads this tensor's data to accelerator device memory and returns a device-backed Tensor
+/** Allocates device memory on the selected accelerator, copies this tensor's host data
+    to it (a host→device transfer), and returns a new Tensor whose backing @ref buffer is
+    device-resident with a real device→host copy-back callback.  The returned tensor can be
+    bound zero-copy as an @ref Qore::ML::OnnxModel input on a matching execution provider,
+    or chained into further device inference, without round-tripping through host memory;
+    reading its host values (e.g. @ref Tensor::toList()) materializes it once.
+
+    Unlike @ref Tensor::mockDevice() (a test helper that tags host memory), this performs a
+    real device allocation and copy and requires an accelerator runtime in the build.
+
+    @param device_kind the device family to upload to; only \c "cuda" is supported in this
+        release; defaults to \c "cuda"
+    @param device_id the device ordinal to allocate on; defaults to 0
+
+    @return a new device-backed Tensor with the same dtype and shape
+
+    @throw ML-TENSOR-DEVICE-ERROR if the device kind is unsupported, the build has no device
+        runtime, the buffer is a bit-packed bool buffer, or a device allocation/copy fails
+
+    @par Example:
+    @code{.py}
+ML::Tensor host(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+ML::Tensor dev = host.toDevice("cuda", 0);   # resident on GPU 0
+# bind dev as a zero-copy input to a CUDA ONNX model, or chain device inference
+@endcode
+
+    @note Use this to keep data resident on the device across multiple inference calls;
+        for a one-shot host input the execution provider already manages the transfer.
+
+    @since %ML 2.7
+*/
+Tensor Tensor::toDevice(string device_kind = "cuda", int device_id = 0) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreTensor> holder(
+        qore_ml_make_device_tensor(tensor, device_kind->c_str(), device_id, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_ml_tensor_to_object(holder.release(), getProgram(), xsink);
+}
+
 //! Removes all dimensions of size 1 from the tensor shape
 /** @return a Tensor view sharing the same backing buffer, with singleton
         dimensions removed

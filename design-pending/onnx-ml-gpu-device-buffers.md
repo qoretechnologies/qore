@@ -733,16 +733,25 @@ to the device, so `host_to_device_transfers` is structurally always 0.
   `wrapExternalDeviceStorage` with an owner whose destructor `cudaFree`s, reusing a
   `cudaMemcpy(D2H)` copy-back. Mirror the existing `qore_ml_make_mock_device_tensor`
   in `Tensor.cpp`.
-- Public API `ML::Tensor::toDevice(string kind = "cuda", int device_id = 0)` and
-  `<buffer>::toDevice(...)` — the real counterpart of `mockDevice`.
-- Optional policy `device_binding.upload_host_inputs`: when set, `prepareInputValue()`
-  uploads a host input to the active device and binds it zero-copy, incrementing
-  `db_host_to_device_transfers`. This makes the H2D counter truthful and enables the
-  "CPU producer → device consumer" mixed-pipeline case.
+- Public API `ML::Tensor::toDevice(string kind = "cuda", int device_id = 0)` — the real
+  counterpart of `mockDevice`. (A `<buffer>::toDevice()` pseudo-method is intentionally
+  *not* added: buffer pseudo-methods live in core `libqore`, which does not link CUDA;
+  the upload primitive must live in the ml module, so `Tensor::toDevice()` is the home,
+  matching the existing `Tensor::mockDevice` precedent.)
 
-**Tests:** HW-free via a mock allocator for API/ownership/counter wiring; HW-gated
-`toDevice()` → zero-copy input round-trip; valgrind host paths; compute-sanitizer on
-malloc/free/memcpy.
+**Status: implemented and GPU-validated** (`Tensor::toDevice` does `cudaMalloc` +
+`cudaMemcpy(H2D)`, frees via the owner destructor, and reuses a `cudaMemcpy(D2H)`
+copy-back; an uploaded tensor binds zero-copy as a CUDA input — `zero_copy_inputs`
+counter confirmed). compute-sanitizer memcheck clean and 0 leaked allocations; valgrind
+clean on host paths.
+
+**Descoped — automatic per-run host→device upload (`upload_host_inputs` policy):**
+evaluated and intentionally *not* implemented. For a device execution provider ONNX
+Runtime already performs the host→device transfer internally and efficiently, so forcing
+an explicit Qore-side upload on every run adds an allocation and copy for no benefit; the
+genuine "keep data resident across runs" case is served by explicit `toDevice()`. The
+`db_host_to_device_transfers` counter remains for genuine future host→device copy paths
+(e.g. an Arrow-GPU upload).
 
 ### Phase F2 — ROCm device binding (near-mechanical CUDA mirror)
 

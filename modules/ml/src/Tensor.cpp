@@ -33,6 +33,10 @@
 #include <memory>
 #include <string>
 
+#ifdef HAVE_CUDART
+#include <cuda_runtime.h>
+#endif
+
 namespace {
 
 //! Owner for a mock device buffer: holds the "device" bytes (really host memory)
@@ -40,6 +44,43 @@ namespace {
 struct MockDeviceOwner {
     std::vector<uint8_t> bytes;
 };
+
+#ifdef HAVE_CUDART
+//! Owner for a real CUDA device buffer produced by host->device upload: holds the
+//! cudaMalloc'd device pointer and frees it on destruction; records the element byte
+//! size so the copy-to-host callback can size the device->host transfer.
+struct CudaUploadOwner {
+    void* device_ptr = nullptr;
+    size_t element_size = 0;
+
+    DLLLOCAL ~CudaUploadOwner() {
+        if (device_ptr) {
+            // best-effort free at buffer end-of-life; errors here are not actionable
+            cudaFree(device_ptr);
+        }
+    }
+};
+
+//! Copy-to-host callback for uploaded CUDA device buffers: cudaMemcpy device->host.
+int cudaUploadCopyToHost(void* host_data, uint8_t* /*host_validity*/, size_t length,
+        const void* device_data, const uint8_t* /*device_validity*/,
+        const QoreBufferDeviceInfo& info, const void* owner, ExceptionSink* xsink) {
+    const CudaUploadOwner* o = static_cast<const CudaUploadOwner*>(owner);
+    size_t bytes = length * (o ? o->element_size : 0);
+    if (!bytes) {
+        return 0;
+    }
+    cudaError_t err = cudaMemcpy(host_data, device_data, bytes, cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+            "failed to copy %zu bytes from %s device %lld to host: %s", bytes,
+            qore_buffer_device_kind_name(info.kind), (long long)info.device_id,
+            cudaGetErrorString(err));
+        return -1;
+    }
+    return 0;
+}
+#endif
 
 //! Copy-to-host callback for mock device buffers; the bytes already live in host
 //! memory, so materialization is a plain memcpy of the owner-held bytes.
@@ -853,4 +894,90 @@ QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host, const char* 
         return nullptr;
     }
     return new QoreTensor(dev_buf.release(), host->getShape());
+}
+
+QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* device_kind,
+        int64_t device_id, ExceptionSink* xsink) {
+    QoreBufferDeviceKind kind = mockDeviceKindFromName(device_kind);
+    if (device_id < 0) {
+        xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+            "device_id must be >= 0; got " QLLD, (long long)device_id);
+        return nullptr;
+    }
+#ifdef HAVE_CUDART
+    // v1 uploads target CUDA device memory; other device families (rocm, etc.) are
+    // planned but require their own runtime allocator/copy path
+    if (kind != QoreBufferDeviceKind::Cuda) {
+        xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+            "host->device upload is only implemented for the 'cuda' device kind in this build; "
+            "got '%s'", device_kind ? device_kind : "");
+        return nullptr;
+    }
+
+    const QoreBufferNode* host_buf = host->getBuffer();
+    QoreBufferElementType et = host_buf->getElementType();
+    if (et == QoreBufferElementType::Bool) {
+        xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+            "device upload does not support bit-packed bool buffers");
+        return nullptr;
+    }
+    // a device-resident source must be materialized to host before re-uploading
+    if (host_buf->hasExternalDeviceStorage() && host_buf->ensureHostStorage(xsink)) {
+        return nullptr;
+    }
+
+    size_t n = host_buf->size();
+    size_t elem_size = qore_buffer_element_storage_size(et);
+    size_t byte_size = n * elem_size;
+
+    cudaError_t err = cudaSetDevice(static_cast<int>(device_id));
+    if (err != cudaSuccess) {
+        xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+            "cannot select CUDA device " QLLD ": %s", (long long)device_id, cudaGetErrorString(err));
+        return nullptr;
+    }
+
+    auto owner = std::make_shared<CudaUploadOwner>();
+    owner->element_size = elem_size;
+    if (byte_size) {
+        err = cudaMalloc(&owner->device_ptr, byte_size);
+        if (err != cudaSuccess) {
+            xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+                "failed to allocate %zu bytes on CUDA device " QLLD ": %s", byte_size,
+                (long long)device_id, cudaGetErrorString(err));
+            return nullptr;
+        }
+        err = cudaMemcpy(owner->device_ptr, host_buf->getRawData(), byte_size,
+            cudaMemcpyHostToDevice);
+        if (err != cudaSuccess) {
+            // owner destructor frees the allocation
+            xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+                "failed to copy %zu bytes to CUDA device " QLLD ": %s", byte_size,
+                (long long)device_id, cudaGetErrorString(err));
+            return nullptr;
+        }
+    }
+
+    QoreBufferDeviceInfo info;
+    info.kind = QoreBufferDeviceKind::Cuda;
+    info.device_id = device_id;
+    info.name = std::string(qore_buffer_device_kind_name(info.kind)) + ":" + std::to_string(device_id);
+
+    const void* device_data = owner->device_ptr;
+    ReferenceHolder<QoreBufferNode> dev_buf(
+        QoreBufferNode::wrapExternalDeviceStorage(et, false, n, device_data, nullptr,
+            std::static_pointer_cast<const void>(owner), 0, info, cudaUploadCopyToHost, xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return new QoreTensor(dev_buf.release(), host->getShape());
+#else
+    (void)host;
+    (void)kind;
+    xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
+        "this ml build has no CUDA runtime support, so tensors cannot be uploaded to a "
+        "device; rebuild with CUDA");
+    return nullptr;
+#endif
 }

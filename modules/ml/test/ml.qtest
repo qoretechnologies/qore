@@ -45,6 +45,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("Tensor string dtype", \tensorStringTest());
         addTestCase("Tensor native postprocessing", \tensorPostprocessingTest());
         addTestCase("Tensor mock device buffer", \tensorMockDeviceTest());
+        addTestCase("Tensor device upload (CUDA)", \tensorDeviceUploadTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -566,6 +567,51 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-TENSOR-DEVICE-ERROR", sub () {
             bhost.mockDevice("cuda", 0);
         });
+    }
+
+    tensorDeviceUploadTest() {
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+
+        # a negative device id is rejected before the device runtime is touched (any build)
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { host.toDevice("cuda", -1); });
+        # unsupported device kinds and bit-packed bool buffers raise (CUDA-only upload in v1)
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { host.toDevice("opencl", 0); });
+        ML::Tensor bhost(data: new buffer<bool>((True, False)), shape: (2,));
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { bhost.toDevice("cuda", 0); });
+
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        # real host->device upload: the result is device-resident and materializes back
+        # to identical host values through the device->host copy-back callback
+        ML::Tensor dev = host.toDevice("cuda", 0);
+        assertTrue(dev.deviceStorage());
+        assertEq(False, dev.hostStorage());
+        assertEq("cuda", dev.deviceInfo().kind);
+        assertEq(0, dev.deviceInfo().device_id);
+        assertEq("float32", dev.getDtype());
+        assertEq((2, 2), dev.getShape());
+        assertEq(host.toList(), dev.toList());
+        assertTrue(dev.hostStorage(), "device tensor is materialized to host after a read");
+
+        # an uploaded device tensor binds zero-copy as a CUDA model input (no host copy)
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True, "require_zero_copy_inputs": True,
+            },
+        });
+        ML::Tensor host_in(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1));
+        ML::Tensor input = host_in.toDevice("cuda", 0);
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", input);
+        b.bindOutputsDevice();
+        ML::Tensor y = b.run(tensors: True).Y;          # 2x+1, device-resident
+        assertEq((((3.0,), (5.0,), (7.0,))), y.toList());
+        assertEq(1, model.getInferenceStats().device_binding.zero_copy_inputs,
+            "an uploaded device input must be bound zero-copy");
     }
 
     tensorPostprocessingTest() {
