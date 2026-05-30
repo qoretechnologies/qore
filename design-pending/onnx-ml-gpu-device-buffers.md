@@ -934,9 +934,9 @@ pool. Consequences for this design:
 ### Acceptance for the Apple pass
 
 - [x] CoreML EP loads and accelerates inference on Apple Silicon; CPU-only macOS unchanged.
-- [ ] On a Metal/UMA placement, diagnostics report **zero** host↔device transfers (truthful),
+- [x] On a Metal/UMA placement, diagnostics report **zero** host↔device transfers (truthful),
   not synthetic copies.
-- [ ] No copy-to-host work is performed for UMA buffers; `materialize_outputs` is a no-op
+- [x] No copy-to-host work is performed for UMA buffers; `materialize_outputs` is a no-op
   there.
 
 ### Apple Silicon Implementation Status
@@ -966,3 +966,64 @@ pool. Consequences for this design:
   self-skip on Apple as designed.
 - Mainpage device section extended with a "Provider Classes" subsection and an
   "Apple Silicon (CoreML)" note.
+
+#### Phase M2 — Metal/UMA zero-copy device buffers (2026-05-30)
+
+**Done and validated on Apple Silicon (arm64, ORT 1.24.1):**
+
+- New `Tensor_Metal.mm` (Objective-C++ with ARC) provides
+  `qore_ml_make_metal_uma_tensor`: allocates an `MTLBuffer` with
+  `MTLResourceStorageModeShared` and wraps as a Metal-kind device-tagged buffer
+  via `wrapExternalDeviceStorage`. `MetalSharedOwner` holds the
+  `id<MTLBuffer>` strongly under ARC; release happens in the dtor.
+- `metalSharedCopyToHost` is a memcpy from the same UMA bytes (the substrate's
+  ensureHostStorage contract) -- no DMA hop. The transfer counter contract is
+  enforced one level up in `OnnxModel.cpp`.
+- `Tensor.cpp::qore_ml_make_device_tensor` dispatches by `kind`: Metal goes to
+  the Metal allocator, CUDA keeps the existing path, other kinds raise truthfully.
+  The `HAVE_CUDART` `#else` branch reports what backends *are* available.
+- `OnnxModel.cpp::makeOrtMemoryInfo` returns CPU memory info for Metal-kind
+  buffers (UMA: bytes are CPU-addressable; ORT binds through CPU).
+- `OnnxModel.cpp::inputDeviceMatchesProvider(Metal)` returns true for any active
+  provider (UMA bytes are universally readable).
+- `OnnxModel.cpp::prepareInputValue` host-fallback path skips
+  `db_device_to_host_transfers` bump for Metal-kind buffers.
+- `Tensor.cpp::qore_ml_make_pinned_tensor` on Apple Silicon returns a Tensor
+  sharing the same host buffer (option B: honest UMA no-op, portable
+  `.pinnedHost().toDevice("metal")` composes correctly). `pinnedHost()` qpp
+  doc updated.
+- `MLCapabilities.has_metal` field added (set from `HAVE_METAL`).
+- Build: `CMakeLists.txt` `HAVE_METAL` detection block (APPLE +
+  `HAVE_ONNXRUNTIME`), `find_library` Metal/Foundation, `-fobjc-arc` on
+  `Tensor_Metal.mm`.
+- Tests: `skipMetal()` helper plus four new tests
+  (`tensorMetalDeviceUploadTest`, `onnxDeviceInputMetalTest`,
+  `onnxDeviceMaterializeMetalTest`, `tensorPinnedHostMetalTest`);
+  `deviceSandboxDomainTest` extended with `toDevice("metal")`.
+- Full ml.qtest: 326/326 passing, 2429 assertions.
+
+#### Phase M3 — Validation + benchmarks + docs (2026-05-30)
+
+**Memory validation:**
+
+- ASan build (`-fsanitize=address`): ml.qtest 326/326 passing, no ASan reports.
+- Metal API Validation Layer (`MTL_DEBUG_LAYER=1`): no validation warnings or
+  errors during ml.qtest run.
+- `leaks --atExit` over 50 cycles of toDevice("metal") + materialize +
+  pinnedHost + toDevice: **0 leaks, 0 leaked bytes**.
+
+**Benchmark (Apple Silicon, MLP `X(b,256)->Y(b,512)`):**
+
+CoreML EP crosses CPU at batch 8 (1.37x) and scales to 17.07x at batch 512.
+Recorded in `bench/baselines/onnx_device_breakeven.md`. `bench/onnx_device_breakeven.qr`
+now sweeps CPU + CUDA + CoreML in a single script (each provider's column
+shows "n/a" when that backend is unavailable, so the script runs unchanged on
+Linux and Apple Silicon).
+
+**Docs:**
+
+- Mainpage "Apple Silicon" subsection rewritten to cover both CoreML EP and
+  Metal/UMA paths, including a code example showing
+  `toDevice("metal").bindInput()` on a CoreML model with truthful counter
+  reporting.
+- This design doc's "Acceptance for the Apple pass" checklist fully ticked.

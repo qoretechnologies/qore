@@ -36,6 +36,36 @@ Median wall-clock over 12 iterations (3 warmup):
   output feeds another device-aware step; only materialize when host code must read the
   values. The crossover where retention matters most is larger batches and wider outputs.
 
+## Result (Apple Silicon / CoreML EP / ONNX Runtime 1.24.1, 2026-05-30)
+
+Median wall-clock over 12 iterations (3 warmup) on Apple Silicon (arm64).
+CoreML on macOS is an EP-acceleration provider: it accelerates inference on the
+ANE/GPU/CPU but does not expose raw device pointers, so there is no
+"device-retained" variant — outputs come back to host transparently.
+
+| batch | CPU ms | CoreML ms | CoreML vs CPU |
+|------:|-------:|----------:|--------------:|
+|     1 |  0.127 |     0.374 |         0.34x |
+|     8 |  0.290 |     0.211 |         1.37x |
+|    32 |  1.109 |     0.252 |         4.40x |
+|   128 |  4.389 |     0.526 |         8.34x |
+|   512 | 17.937 |     1.051 |        17.07x |
+
+### Interpretation
+
+- **Crossover at batch 8:** at batch 1 the CoreML dispatch overhead (model
+  partition, kernel launch on the chosen unit) costs more than the compute it
+  saves; from batch 8 onward CoreML wins and scales aggressively (17× at batch
+  512).
+- **Truthful zero-transfer accounting** holds throughout — the per-run
+  `device_binding` block reports zero host↔device transfers when CoreML is
+  active because no raw device pointer ever leaves the EP. The
+  `provider_host_resolutions` counter increments instead of any synthetic
+  transfer.
+- **Guidance:** prefer CoreML once batches reach ~8 samples for compute-bound
+  models on Apple Silicon. For inference-bound but very-small-batch workloads
+  (interactive single-sample requests), the CPU EP is faster.
+
 ## Caveats
 
 - The shipped `test_linear.onnx` toy model is too small to show any of this — its compute
@@ -43,3 +73,5 @@ Median wall-clock over 12 iterations (3 warmup):
   numbers require a realistically-sized model like `test_mlp.onnx`.
 - Absolute numbers are hardware-specific; the *ratios* and *crossover trends* are the
   portable takeaways.
+- The CoreML numbers above are from a single Apple Silicon Mac; the exact
+  crossover batch will vary across M-series chips and macOS versions.

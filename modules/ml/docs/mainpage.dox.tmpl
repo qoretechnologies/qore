@@ -502,15 +502,68 @@ if (caps.has_onnx) {
       error and raises \c ML-ONNX-DEVICE-UNAVAILABLE unless \c allow_host_fallback is
       True.
 
-    @subsubsection mlalgo_onnx_device_macos Apple Silicon (CoreML)
+    @subsubsection mlalgo_onnx_device_macos Apple Silicon (CoreML + Metal/UMA)
 
-    macOS / Apple Silicon ships the CoreML execution provider as the primary
-    accelerator. CoreML manages its own memory and does not expose raw device
-    pointers, so it is treated as an EP-acceleration provider (above): a
-    device-binding request resolves to host with zero transfers and a
-    \c provider_host_resolutions bump. CoreML accelerates inference on the
-    ANE/GPU/CPU transparently; outputs are returned as host @ref Qore::ML::Tensor
-    "Tensors".
+    macOS / Apple Silicon has two distinct device paths, and the contract is
+    different from CUDA because of the Apple **Unified Memory Architecture (UMA):**
+    the CPU and GPU share one physical memory pool, so a "device buffer" can be
+    the same physical bytes as its host view.
+
+    - **CoreML EP** is the primary accelerator: it dispatches inference to the
+      ANE, GPU, or CPU and manages its own opaque memory. CoreML is treated as
+      an EP-acceleration provider (above) -- a device-binding request resolves
+      to host with zero transfers and a \c provider_host_resolutions bump.
+      Outputs are returned as host @ref Qore::ML::Tensor "Tensors".
+
+    - **Metal/UMA buffers** (via @ref Qore::ML::Tensor::toDevice()
+      "Tensor::toDevice(\"metal\")") allocate an \c MTLBuffer with
+      \c MTLStorageModeShared. On UMA, the CPU and GPU see the bytes at the same
+      physical address, so binding a Metal-tagged input to any provider (CPU,
+      CoreML, WebGPU) is zero-copy through CPU memory info. The transfer
+      counters report **zero** host↔device transfers truthfully -- no DMA hop
+      ever occurs. \c materialize_outputs is effectively free on UMA.
+
+    - @ref Qore::ML::Tensor::pinnedHost() "Tensor::pinnedHost()" is moot on
+      Apple Silicon (there is no DMA hop to accelerate). The Apple build returns
+      a Tensor sharing the same host buffer (no allocation, no copy) with a doc
+      note, so portable code that calls \c features.pinnedHost().toDevice(...)
+      still works correctly.
+
+    Apple Silicon device support is gated by \c MLCapabilities.has_metal in
+    @ref Qore::ML::ml_get_capabilities() "ml_get_capabilities()". When
+    \c has_metal is False (non-Apple builds), \c Tensor::toDevice("metal") raises
+    \c ML-TENSOR-DEVICE-ERROR with a clear message.
+
+    @code{.py}
+%requires ml
+
+if (!ML::ml_get_capabilities().has_metal) {
+    return;   # not Apple Silicon, no Metal/UMA backend
+}
+
+# Upload a host tensor to a Metal MTLBuffer (MTLStorageModeShared): zero copy on UMA
+ML::Tensor features = new ML::Tensor(data: new buffer<float32>(my_floats), shape: (n, d));
+ML::Tensor on_gpu  = features.toDevice("metal", 0);
+printf("kind=%s, transfers will stay 0 on UMA\n", on_gpu.deviceInfo().kind);
+
+# Bind a Metal-tagged input to a CoreML model.  inputDeviceMatchesProvider() returns
+# true for Metal on any provider; the binding goes through CPU memory info because
+# the UMA bytes are already host-addressable.  zero_copy_inputs increments;
+# host_to_device_transfers stays at 0.
+ML::OnnxModel m("/path/to/model.onnx", <ML::OnnxSessionConfig>{
+    "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+    "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+});
+ML::OnnxIoBinding b = m.createBinding();
+b.bindInput("X", on_gpu);
+b.bindOutput("Y");
+ML::Tensor y = b.run(tensors: True).Y;
+
+hash<auto> tr = m.getInferenceStats().device_binding;
+printf("zero-copy=%d, transfers (H2D/D2H)=%d/%d, provider_host=%d\n",
+    tr.zero_copy_inputs, tr.host_to_device_transfers,
+    tr.device_to_host_transfers, tr.provider_host_resolutions);
+    @endcode
 
     Provider-managed device outputs are requested through the reusable I/O binding with
     @ref Qore::ML::OnnxIoBinding::bindOutputsDevice() "bindOutputsDevice()" or
