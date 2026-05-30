@@ -80,6 +80,11 @@ set(DF_CPP_SRC
 # Conditional Arrow/Parquet support
 if (HAVE_ARROW)
     list(APPEND DF_CPP_SRC src/df_parquet.cpp)
+    # Apache Arrow >= 14 public headers (e.g. parquet/metadata.h) use std::span,
+    # which requires C++20.  The project otherwise builds with -std=c++17 (set in
+    # the top-level CMAKE_CXX_FLAGS); compile only the Arrow-consuming translation
+    # unit with C++20 so the later -std=c++20 flag overrides the earlier -std=c++17.
+    set_source_files_properties(src/df_parquet.cpp PROPERTIES COMPILE_OPTIONS "-std=c++20")
 endif()
 
 # Process QPP files
