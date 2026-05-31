@@ -7785,7 +7785,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     llvm::InitializeNativeTargetAsmParser();
 
     llvm::LLVMContext ctx;
-    std::string mod_name_san = sanitizeCIdentifier(fileBasenameNoExt(target_canon));
+    std::string mod_name_san = scriptBatchSourceId(target_canon);
     auto module = std::make_unique<llvm::Module>(
         "qore_aot_script_" + mod_name_san, ctx);
 
@@ -7939,11 +7939,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             (int)metadata_blob.size());
     }
 
-    // Emit fragment symbols (slice 5).  App-name = sanitized
-    // basename of the target file so different files in the same
-    // app get distinct symbols.  Order stays 0 for script mode
-    // (slice 5's alphabetical ordering doesn't apply — there's no
-    // single `.qm` primary in script context).
+    // Emit fragment symbols (slice 5).  App-name = canonical source identity
+    // so single-source and batch script compiles export the same symbols.
+    // Order stays 0 for script mode (slice 5's alphabetical ordering doesn't
+    // apply — there's no single `.qm` primary in script context).
     const std::string app_name = mod_name_san;  // reuse basename as app label
     const std::string file_san = mod_name_san;
     emitFragmentSymbols(ctx, *module, app_name, file_san, metadata_blob,
