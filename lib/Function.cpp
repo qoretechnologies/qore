@@ -4509,7 +4509,7 @@ const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
     return cached_ir->ast_visible_body_locals;
 }
 
-void UserVariantBase::setCachedIR(QoreIRFunction* ir) {
+void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const {
     cached_ir = ir;
     if (cached_ir) {
         cached_ir->computeIROnlyLocals();
@@ -4564,7 +4564,31 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir) {
         cached_ir->cached_pre_instantiated = cached_pre_inst;
     }
     std::call_once(ir_lower_once, []{});  // consume the flag safely
-    current_tier.store(TIER_IR, std::memory_order_release);
+    if (promote_to_ir) {
+        current_tier.store(TIER_IR, std::memory_order_release);
+    }
+}
+
+bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lock(aot_debug_ir_mutex);
+    if (cached_ir) {
+        return true;
+    }
+    if (!cached_aot_ctx || !cached_aot_ctx->hasLazyDebugIR()) {
+        return false;
+    }
+
+    std::string error;
+    std::unique_ptr<QoreIRFunction> ir = cached_aot_ctx->materializeDebugIR(name, error);
+    if (!ir) {
+        xsink->raiseException("AOT-DEBUG-IR-ERROR",
+            "could not materialize source-stripped AOT debug IR for '%s': %s",
+            name ? name : "<fn>", error.empty() ? "unknown error" : error.c_str());
+        return false;
+    }
+
+    setCachedIR(ir.release(), false);
+    return true;
 }
 
 void UserVariantBase::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
@@ -5637,18 +5661,18 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
 
-    // Native JIT/AOT code has no Qore DebugProgram hooks.  If a program allows
-    // debugging, a debugger can attach after this function has already started,
-    // so dispatch-time "currently attached" checks are insufficient.  Prefer AST
-    // when available; source-stripped AOT variants have no AST body, so use the
-    // serialized IR debug representation.
-    bool debugger_may_run = (po & PO_ALLOW_DEBUGGER)
-        || qore_program_private::get(*pgm)->hasDebuggerAttached();
-    if (tier != TIER_AST && debugger_may_run) {
+    // Native JIT/AOT code has no Qore DebugProgram hooks.  Keep the native tier
+    // for programs that merely allow debugger attachment, and switch to AST/IR
+    // only once a debugger is actually attached.
+    if (tier != TIER_AST && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         if (statements) {
             tier = TIER_AST;
-        } else if (cached_ir) {
-            tier = TIER_IR;
+        } else {
+            if (materializeAOTDebugIR(name, xsink)) {
+                tier = TIER_IR;
+            } else if (*xsink) {
+                return QoreValue();
+            }
         }
     }
 

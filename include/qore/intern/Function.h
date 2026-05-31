@@ -840,6 +840,8 @@ protected:
     //! Specialized IR functions keyed by concrete receiver and method type arguments
     mutable std::mutex specialized_ir_mutex;
     mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
+    //! Protects lazy source-stripped AOT debug IR materialization.
+    mutable std::mutex aot_debug_ir_mutex;
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -869,6 +871,8 @@ protected:
     DLLLOCAL QoreValue evalSpecializedIR(const char* name, const QoreIRFunction* ir,
             ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
             bool caller_has_frame_boundary) const;
+    //! Materialize source-stripped AOT debug IR on demand when a debugger is attached.
+    DLLLOCAL bool materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const;
 
     //! Attempt JIT compilation; called via std::call_once
     DLLLOCAL void attemptJITCompilation() const;
@@ -1020,8 +1024,8 @@ public:
     }
 
     //! Set cached IR for a variant reconstructed from AOT binary.
-    //! Promotes directly to TIER_IR (no AST body, no AOT fn).
-    DLLLOCAL void setCachedIR(QoreIRFunction* ir);
+    //! Promotes directly to TIER_IR by default for variants without an AOT function.
+    DLLLOCAL void setCachedIR(QoreIRFunction* ir, bool promote_to_ir = true) const;
 
     //! Returns a pointer to the deopt counter for JIT guard failure tracking
     DLLLOCAL void* getDeoptCounterPtr() const {

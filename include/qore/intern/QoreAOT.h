@@ -65,6 +65,7 @@ class QoreStringNode;
 class QoreTypeInfo;
 class QoreValue;
 struct QoreModuleInitContext;
+struct QoreAOTDebugMetadata;
 class StatementBlock;
 class TypedHashDecl;
 class UserVariantBase;
@@ -166,8 +167,12 @@ struct QoreAOTContext {
     //! Used in strip-source mode where AST-based stmts[] are not available.
     std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
 
-    //! Deserialized full function IR used as a non-source debug fallback for source-stripped AOT.
-    std::unique_ptr<QoreIRFunction> debug_ir;
+    //! Shared serialized AOT metadata used to lazily materialize debug IR.
+    std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
+    //! Offset of this function's debug IR payload from the start of the SLOT_MAPS section.
+    uint32_t debug_ir_slot_map_offset = 0;
+    //! Serialized debug IR payload size. Zero means no lazy debug IR is available.
+    uint32_t debug_ir_size = 0;
 
     //! Owned IR function kept alive for LValuePath instruction pointers.
     //! LValuePath instructions reference path data in the IR function; the function must
@@ -202,6 +207,14 @@ struct QoreAOTContext {
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();
+
+    //! Returns true when source-stripped debug IR can be materialized lazily.
+    bool hasLazyDebugIR() const {
+        return debug_metadata && debug_ir_size;
+    }
+
+    //! Deserialize the stored debug IR payload for debugger execution.
+    std::unique_ptr<QoreIRFunction> materializeDebugIR(const char* name, std::string& error);
 
     //! Allocate arrays based on slot counts
     void allocate() {
