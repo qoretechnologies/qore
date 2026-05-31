@@ -1468,7 +1468,10 @@ struct qore_httpclient_priv {
     }
 
     //! Clears the streaming receive channel, closing it if open
-    DLLLOCAL void clearStreamingChannel() {
+    DLLLOCAL void clearStreamingChannel(QoreChannel* expected = nullptr) {
+        if (expected && streaming_recv_channel != expected) {
+            return;
+        }
         if (streaming_recv_channel) {
             streaming_recv_channel->close();
             ExceptionSink xsink;
@@ -4785,6 +4788,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         // sendAndStream mode: store channel for later reads,
                         // don't drain the body
                         if (streaming) {
+                            AutoLocker al(msock->m);
                             clearStreamingChannel();
                             channel->ref();
                             streaming_recv_channel = *channel;
@@ -5407,6 +5411,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     } else {
                         // Store the channel for later reads via
                         // readHTTPChunk / readServerSentEvent
+                        AutoLocker al(msock->m);
                         clearStreamingChannel();
                         channel->ref();
                         streaming_recv_channel = *channel;
@@ -7206,18 +7211,26 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
+    QoreChannel* ch_raw = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->streaming_recv_channel) {
+            ch_raw = http_priv->streaming_recv_channel;
+            ch_raw->ref();
+        }
+    }
+    if (!ch_raw) {
         // No channel — not in conn_mgr streaming mode
         return nullptr;
     }
-
-    QoreChannel* ch = http_priv->streaming_recv_channel;
+    ReferenceHolder<QoreChannel> ch(ch_raw, xsink);
 
     bool timed_out = false;
     bool has_value = false;
     ValueHolder rv(ch->recv(timeout_ms <= 0 ? 0 : timeout_ms, xsink, timed_out, has_value), xsink);
     if (*xsink) {
-        http_priv->clearStreamingChannel();
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
         return nullptr;
     }
     if (timed_out) {
@@ -7227,7 +7240,8 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     }
     if (!has_value) {
         // Channel closed = EOF
-        http_priv->clearStreamingChannel();
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
         return new QoreHashNode(autoTypeInfo);
     }
 
@@ -7240,7 +7254,8 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     // Check for error
     QoreValue err_val = h->getKeyValue("err");
     if (!err_val.isNullOrNothing()) {
-        http_priv->clearStreamingChannel();
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
         std::string err_str = "HTTP-CLIENT-RECEIVE-ERROR";
         if (err_val.getType() == NT_STRING) {
             QoreStringValueHelper err(err_val);
@@ -7267,7 +7282,8 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     // Check for end_stream
     QoreValue end_val = h->getKeyValue("end_stream");
     if (!end_val.isNullOrNothing()) {
-        http_priv->clearStreamingChannel();
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
         return new QoreHashNode(autoTypeInfo);  // empty = EOF
     }
 
@@ -7282,16 +7298,23 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
-        return nullptr;
-    }
-
     // Check buffer for complete SSE event (double newline delimiter)
     while (true) {
-        size_t sep = http_priv->sse_recv_buffer.find("\n\n");
-        if (sep != std::string::npos) {
-            std::string event_text = http_priv->sse_recv_buffer.substr(0, sep + 2);
-            http_priv->sse_recv_buffer.erase(0, sep + 2);
+        bool have_event = false;
+        std::string event_text;
+        {
+            SafeLocker sl(priv->m);
+            if (!http_priv->streaming_recv_channel) {
+                return nullptr;
+            }
+            size_t sep = http_priv->sse_recv_buffer.find("\n\n");
+            if (sep != std::string::npos) {
+                event_text = http_priv->sse_recv_buffer.substr(0, sep + 2);
+                http_priv->sse_recv_buffer.erase(0, sep + 2);
+                have_event = true;
+            }
+        }
+        if (have_event) {
             // Parse SSE event using the static Socket method
             SimpleRefHolder<QoreStringNode> event_str(
                 new QoreStringNode(event_text.c_str(), event_text.size(), QCS_UTF8));
@@ -7310,9 +7333,15 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
         QoreValue body_val = chunk->getKeyValue("body");
         if (body_val.isNullOrNothing()) {
             // EOF — parse any remaining buffer
-            if (!http_priv->sse_recv_buffer.empty()) {
-                std::string remaining = http_priv->sse_recv_buffer;
-                http_priv->sse_recv_buffer.clear();
+            std::string remaining;
+            {
+                SafeLocker sl(priv->m);
+                if (!http_priv->sse_recv_buffer.empty()) {
+                    remaining = http_priv->sse_recv_buffer;
+                    http_priv->sse_recv_buffer.clear();
+                }
+            }
+            if (!remaining.empty()) {
                 SimpleRefHolder<QoreStringNode> event_str(
                     new QoreStringNode(remaining.c_str(), remaining.size(), QCS_UTF8));
                 return parseSseEvent(xsink, **event_str);
@@ -7321,13 +7350,20 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
         }
 
         // Append body to buffer
+        std::string body;
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
-            http_priv->sse_recv_buffer.append(
-                reinterpret_cast<const char*>(bin->getPtr()), bin->size());
+            body.assign(reinterpret_cast<const char*>(bin->getPtr()), bin->size());
         } else if (body_val.getType() == NT_STRING) {
             QoreStringValueHelper str(body_val);
-            http_priv->sse_recv_buffer.append(str->c_str(), str->size());
+            body.assign(str->c_str(), str->size());
+        }
+        if (!body.empty()) {
+            SafeLocker sl(priv->m);
+            if (!http_priv->streaming_recv_channel) {
+                return nullptr;
+            }
+            http_priv->sse_recv_buffer.append(body);
         }
     }
 }
@@ -7338,8 +7374,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
-        return nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (!http_priv->streaming_recv_channel) {
+            return nullptr;
+        }
     }
 
     // Drain all chunks into a string
@@ -7377,8 +7416,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
-        return nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (!http_priv->streaming_recv_channel) {
+            return nullptr;
+        }
     }
 
     // Drain all chunks into a binary node
@@ -7418,6 +7460,7 @@ QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* 
 }
 
 bool QoreHttpClientObject::hasStreamingChannel() const {
+    SafeLocker sl(priv->m);
     return http_priv->streaming_recv_channel != nullptr
         || !http_priv->sse_recv_buffer.empty();
 }
@@ -7428,12 +7471,21 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         return false;
     }
 
-    if (http_priv->streaming_recv_channel) {
+    QoreChannel* ch_raw = nullptr;
+    {
+        SafeLocker sl(priv->m);
         // Consider buffered SSE text as immediately-pending — matches
         // readServerSentEventConnMgr which drains this buffer first.
         if (!http_priv->sse_recv_buffer.empty()) {
             return true;
         }
+        if (http_priv->streaming_recv_channel) {
+            ch_raw = http_priv->streaming_recv_channel;
+            ch_raw->ref();
+        }
+    }
+    if (ch_raw) {
+        ReferenceHolder<QoreChannel> ch(ch_raw, xsink);
         // Non-destructive wait on the channel: blocks up to timeout_ms
         // for the channel to become non-empty or closed.  Returning true
         // on "closed" is correct — the caller's next readHTTPChunk /
@@ -7441,7 +7493,7 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         // the wait, a busy caller (e.g. ServerSentEventClient::eventLoop)
         // would burn CPU polling size() instead of blocking like the
         // legacy msock path did.
-        return http_priv->streaming_recv_channel->waitReadable(timeout_ms, xsink);
+        return ch->waitReadable(timeout_ms, xsink);
     }
     // No streaming channel: delegate to the Socket method, which executes its
     // readiness poll through the async I/O controller.
@@ -7661,8 +7713,18 @@ bool QoreHttpClientObject::getNoDelay() const {
 }
 
 bool QoreHttpClientObject::isConnected() const {
-    if (http_priv->streaming_recv_channel) {
-        return !http_priv->streaming_recv_channel->isClosed();
+    QoreChannel* ch_raw = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->streaming_recv_channel) {
+            ch_raw = http_priv->streaming_recv_channel;
+            ch_raw->ref();
+        }
+    }
+    if (ch_raw) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreChannel> ch(ch_raw, &xsink);
+        return !ch->isClosed();
     }
     if (http_priv->msock->socket->isOpen()) {
         return true;
