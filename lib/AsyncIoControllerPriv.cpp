@@ -224,6 +224,19 @@ static thread_local std::string current_continue_poll_owner;
 */
 static thread_local bool in_async_continue_poll_worker = false;
 
+//! True for the whole duration of a callback dispatch on this (worker) thread —
+//! i.e. while workerLoop() is running any callback (DT_CALLBACK / DT_ON_COMPLETE
+//! / DT_ABORT / stream / poll-complete) and its deref/cleanup section.  Read by
+//! waitForOwnerIdle() so a re-entrant flushCallbacksByOwner() — reached from a
+//! destructor that runs synchronously inside the callback (or inside a deref's
+//! destructor chain) when it drops an object's last reference — returns
+//! immediately instead of blocking.  A callback worker can NEVER safely block in
+//! waitForOwnerIdle(): it would wait for its own still-counted item, and/or for
+//! sibling callbacks for the same owner that are blocked on a lock (e.g.
+//! WebSocketClient::delivery_mutex) held by this worker's own call chain.  Both
+//! cycles were observed hanging WebSocketPerfTest at process exit.
+static thread_local bool on_callback_worker = false;
+
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
 }
@@ -980,6 +993,31 @@ void QoreCallDispatcher::waitForOwnerIdle(const std::string& owner) {
     if (owner.empty()) {
         return;
     }
+    // A dispatcher callback worker must NEVER block here.
+    //
+    // flushCallbacksByOwner() can be reached re-entrantly from a destructor that
+    // runs synchronously inside a dispatched callback — e.g. WebSocketClient
+    // teardown, where an owner-tagged onPollComplete callback drops the client's
+    // last reference and its destructor calls flushCallbacksByOwner(async_owner).
+    // A worker that blocks waiting for its owner to drain deadlocks the
+    // dispatcher in two distinct ways, BOTH observed in WebSocketPerfTest:
+    //   1. self-wait: the worker's OWN in-flight item is counted in
+    //      active_per_owner and is only decremented after the dispatch returns —
+    //      which cannot happen while it blocks here;
+    //   2. sibling-lock cycle: other callbacks for the same owner (the I/O thread
+    //      dispatches one onPollComplete per push, with no in-flight dedup) are
+    //      blocked acquiring a lock (WebSocketClient::delivery_mutex) that is held
+    //      by THIS worker's own destructor call chain — so they can never drain.
+    // There is no safe way to wait from inside a callback, so return immediately.
+    // This is the dispatcher-level analogue of WebSocketClient's existing
+    // delivery_thread_id==gettid() guard.  Safety: callers run cancelByOwner()
+    // before the flush and the callbacks themselves are guarded by
+    // OBJECT-ALREADY-DELETED (weak self) + SmartMutex Lock_Deleted checks, so a
+    // not-yet-run callback firing after destruction is handled, not a crash.
+    // External callers (not on a callback worker) still block until fully drained.
+    if (on_callback_worker) {
+        return;
+    }
     AutoLocker al(m);
     while (true) {
         auto it = active_per_owner.find(owner);
@@ -1102,6 +1140,24 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 owner_shutting_down = shutting_down_owners.count(async_item.owner) > 0;
             }
         }
+
+        // Mark this thread as a dispatcher callback worker for the WHOLE
+        // iteration (dispatch + the deref/cleanup section below), so that a
+        // re-entrant flushCallbacksByOwner() — reached from a destructor that
+        // runs synchronously inside the callback OR inside a deref's destructor
+        // chain — is recognised as running on a callback worker and returns
+        // immediately instead of blocking and deadlocking the dispatcher.  Save/
+        // restore keeps the flag balanced on every exit path; it is intentionally
+        // NOT cleared early.  See on_callback_worker and waitForOwnerIdle().
+        struct CallbackWorkerGuard {
+            bool prev;
+            CallbackWorkerGuard() : prev(on_callback_worker) {
+                on_callback_worker = true;
+            }
+            ~CallbackWorkerGuard() {
+                on_callback_worker = prev;
+            }
+        } cb_worker_guard;
 
         if (pgm_shutting_down || owner_shutting_down) {
             if (async_item.type == DT_CONTINUE_POLL && async_item.controller) {
@@ -1279,14 +1335,21 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             work_xsink.clear();
         }
 
+        // NOTE: cb_worker_guard stays set through this cleanup section (it is
+        // only restored when the workerLoop iteration ends), so on_callback_worker
+        // remains true while the derefs below run their destructors.  This ensures a
+        // re-entrant flushCallbacksByOwner() from a destructor fired during a deref
+        // (e.g. spop_obj's final deref → owner destructor) is recognised as running
+        // on a callback worker and returns immediately rather than blocking — see
+        // waitForOwnerIdle() and on_callback_worker.
+
         // Drop per-owner tracking for this work item BEFORE derefing any
         // referenced objects.  spop_obj holds a back-chain to the owner (e.g.
         // HttpClientPollOperation → HttpClientConnection → HttpClientConnectionManager),
         // so its final deref can run the owner's destructor → closeAll() →
-        // flushCallbacksByOwner(owner), which waits for active_per_owner[owner]
-        // to reach zero.  If the worker's own count were still present, the
-        // worker would wait for itself and deadlock.  Mirrors the per-program
-        // ordering fix below.
+        // flushCallbacksByOwner(owner).  Decrementing here keeps active_per_owner
+        // accurate for any external (non-worker) waiter even if this worker's
+        // teardown is lengthy.  Mirrors the per-program ordering fix below.
         if (!async_item.owner.empty()) {
             AutoLocker al(m);
             auto it = active_per_owner.find(async_item.owner);

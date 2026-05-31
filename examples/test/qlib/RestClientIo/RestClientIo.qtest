@@ -153,6 +153,8 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
         *string expected_client_id;
         #! Expected client_secret (if set)
         *string expected_client_secret;
+        #! Last parsed form-urlencoded request body
+        *hash<auto> last_params;
         #! Access token to return
         string return_token = "test-access-token";
         #! Refresh token to return
@@ -176,6 +178,12 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
     resetRequestCount() {
         AutoLock al(mtx);
         request_count = 0;
+        remove last_params;
+    }
+
+    hash<auto> getLastParams() {
+        AutoLock al(mtx);
+        return last_params ?? {};
     }
 
     setReturnToken(string token) {
@@ -206,10 +214,14 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
         }
 
         # Parse form-urlencoded body
-        hash<auto> params;
+        hash<auto> params = {};
         if (body) {
             string body_str = body.typeCode() == NT_BINARY ? body.toString() : body;
             params = parse_uri_query("?" + body_str).params;
+        }
+        {
+            AutoLock al(mtx);
+            last_params = params;
         }
 
         # Check for basic auth
@@ -220,6 +232,11 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
             return makeResponse(401, make_json({"error": "invalid_client",
                 "error_description": sprintf("expected client_id %y, got %y",
                     expected_client_id, params.client_id)}),
+                {"Content-Type": MimeTypeJson});
+        } else if (expected_client_secret && params.client_secret != expected_client_secret) {
+            return makeResponse(401, make_json({"error": "invalid_client",
+                "error_description": sprintf("expected client_secret %y, got %y",
+                    expected_client_secret, params.client_secret)}),
                 {"Content-Type": MimeTypeJson});
         }
 
@@ -486,6 +503,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("auto plain http fallback caching", \testAutoPlainHttpFallbackCaching());
         addTestCase("auto plain http concurrent fallback", \testAutoPlainHttpConcurrentFallback());
         addTestCase("oauth2 client_credentials", \testOAuth2ClientCredentials());
+        addTestCase("oauth2 client assertion", \testOAuth2ClientAssertion());
         addTestCase("oauth2 password grant", \testOAuth2PasswordGrant());
         addTestCase("oauth2 proactive refresh", \testOAuth2ProactiveRefresh());
         addTestCase("oauth2 refresh within window", \testOAuth2RefreshWithinWindow());
@@ -1506,6 +1524,53 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 %endif
     }
 
+    testOAuth2ClientAssertion() {
+%ifndef NoJson
+        OAuth2TokenHandler assertion_handler("assertion-client", NOTHING);
+        assertion_handler.setReturnToken("assertion-token");
+        assertion_handler.setReturnRefreshToken(NOTHING);
+        server.setHandler("/oauth/assertion", "/oauth/assertion", MimeTypeFormUrlEncoded,
+            assertion_handler);
+
+        int provider_calls = 0;
+        code<string()> assertion_provider = string sub () {
+            ++provider_calls;
+            return "assertion-" + provider_calls;
+        };
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "assertion-client",
+            "oauth2_token_url": "/oauth/assertion",
+            "oauth2_client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+            "oauth2_client_assertion_provider": assertion_provider,
+        });
+        on_exit rest.close();
+
+        assertEq(1, provider_calls);
+        assertEq(1, assertion_handler.getRequestCount());
+        assertEq("assertion-token", rest.getToken());
+
+        hash<auto> params = assertion_handler.getLastParams();
+        assertEq("client_credentials", params.grant_type);
+        assertEq("assertion-client", params.client_id);
+        assertEq("urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+            decode_url(params.client_assertion_type));
+        assertEq("assertion-1", params.client_assertion);
+        assertFalse(params.hasKey("client_secret"));
+
+        hash<auto> opts = rest.getOAuth2Options();
+        assertEq("assertion-client", opts.oauth2_client_id);
+        assertEq("urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+            opts.oauth2_client_assertion_type);
+        assertTrue(opts.oauth2_client_assertion_provider ? True : False);
+%endif
+    }
+
     testOAuth2PasswordGrant() {
 %ifndef NoJson
         token_handler.resetRequestCount();
@@ -1826,7 +1891,32 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "data": "json",
                 "accept_all_certs": True,
                 "oauth2_grant_type": "client_credentials",
-                # Missing client_id, client_secret, token_url
+                # Missing client_id and token_url
+            });
+        });
+
+        # client_credentials can use a secret or a client assertion, but not neither
+        assertThrows("OAUTH2-ERROR", sub () {
+            new RestClientIo::RestClientIo({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "data": "json",
+                "accept_all_certs": True,
+                "oauth2_grant_type": "client_credentials",
+                "oauth2_client_id": "test",
+                "oauth2_token_url": "/oauth/token",
+            });
+        });
+
+        # Client assertion auth requires the assertion type
+        assertThrows("OAUTH2-ERROR", sub () {
+            new RestClientIo::RestClientIo({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "data": "json",
+                "accept_all_certs": True,
+                "oauth2_grant_type": "client_credentials",
+                "oauth2_client_id": "test",
+                "oauth2_token_url": "/oauth/token",
+                "oauth2_client_assertion": "assertion",
             });
         });
 

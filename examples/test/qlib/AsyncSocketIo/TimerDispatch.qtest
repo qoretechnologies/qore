@@ -15,8 +15,103 @@ public class TimerDispatchTest inherits QUnit::Test {
         addTestCase("closure udata fires off I/O thread", \closureFiresOffIoThread());
         addTestCase("funcref udata fires off I/O thread", \funcrefFiresOffIoThread());
         addTestCase("owner-tagged timer callback is drainable", \ownerTaggedTimerDrained());
+        addTestCase("self-draining destructor on worker does not deadlock",
+            \selfDrainingDestructorOnWorkerNoDeadlock());
+        addTestCase("self-draining destructor holding a sibling lock does not deadlock",
+            \selfDrainingDestructorWithSiblingLockNoDeadlock());
         addTestCase("cancelTimer stops a not-yet-fired timer", \cancelTimerStopsTimer());
         set_return_value(main());
+    }
+
+    # Regression for the WebSocketPerfTest CI hang (self-deadlock in the
+    # AsyncIoController callback dispatcher): a destructor that drains its OWN
+    # owner via flushCallbacksByOwner() must not deadlock when it runs on the
+    # dispatcher worker that is executing one of that owner's callbacks.
+    #
+    # In the field this was WebSocketClient::destructor, reached from the
+    # on_poll_complete callback when that callback released the client's last
+    # reference: it called flushCallbacksByOwner(async_owner) →
+    # waitForOwnerIdle(), which blocked until active_per_owner[async_owner]
+    # reached zero — but the worker's OWN in-flight callback kept the count at
+    # 1, so the worker waited for itself, wedging the dispatcher and hanging
+    # process exit.  The fix makes waitForOwnerIdle() exclude the calling
+    # worker's own item (see current_callback_owner in AsyncIoControllerPriv.cpp).
+    selfDrainingDestructorOnWorkerNoDeadlock() {
+        AsyncSocketIoController ctrl();
+        on_exit delete ctrl;
+
+        string owner = "selfdrain-" + get_random_string(8);
+        Counter started(1);
+        Counter destructed(1);
+
+        SelfDrainingOwner obj(owner, destructed);
+
+        # Owner-tagged timer whose callback deletes obj from WITHIN the
+        # dispatched callback, running obj's destructor on the very worker that
+        # is executing this owner's callback — so active_per_owner[owner] >= 1
+        # while the destructor calls flushCallbacksByOwner(owner).
+        ctrl.addTimer(now_us() + 10ms, sub () {
+            started.dec();
+            delete obj;
+        }, owner);
+
+        assertEq(0, started.waitForZero(10s),
+            "owner-tagged timer callback did not start within 10s");
+        # If the dispatcher self-deadlocks, destructed never reaches zero and
+        # this times out — a deterministic failure rather than an infinite hang.
+        assertEq(0, destructed.waitForZero(30s),
+            "self-draining destructor deadlocked the dispatcher worker: "
+            "flushCallbacksByOwner() waited for its own in-flight callback");
+    }
+
+    # Regression for the harder half of the WebSocketPerfTest CI hang: a
+    # destructor that drains its owner via flushCallbacksByOwner() while HOLDING a
+    # lock that a SIBLING callback for the same owner needs.  This is the field
+    # scenario where the I/O thread dispatched several onPollComplete callbacks for
+    # one connection; one callback's destructor called flushCallbacksByOwner()
+    # while holding the connection's delivery_mutex, and the sibling callbacks were
+    # blocked acquiring that same delivery_mutex.  A blocking drain waits for the
+    # siblings, the siblings wait for the lock, the lock is held by the draining
+    # worker — deadlock.  Excluding only the worker's OWN item (the first-cut fix)
+    # does NOT help here; the dispatcher must not block a callback worker at all.
+    selfDrainingDestructorWithSiblingLockNoDeadlock() {
+        AsyncSocketIoController ctrl();
+        on_exit delete ctrl;
+
+        string owner = "siblinglock-" + get_random_string(8);
+        Mutex shared();          # stands in for WebSocketClient::delivery_mutex
+        Counter startedA(1);
+        Counter aHoldsLock(1);
+        Counter bDone(1);
+        Counter destructed(1);
+
+        SelfDrainingOwner obj(owner, destructed);
+
+        # Sibling callback B (same owner): waits until A holds `shared`, then blocks
+        # acquiring it.  It must be in flight so that — without the fix — A's drain
+        # would wait for it.
+        ctrl.addTimer(now_us() + 10ms, sub () {
+            aHoldsLock.waitForZero(30s);
+            AutoLock bl(shared);   # blocks while A holds `shared`
+            bDone.dec();
+        }, owner);
+
+        # Callback A (same owner): grabs `shared`, then deletes obj whose destructor
+        # calls flushCallbacksByOwner(owner) WHILE A still holds `shared`.
+        ctrl.addTimer(now_us() + 10ms, sub () {
+            startedA.dec();
+            AutoLock al(shared);
+            aHoldsLock.dec();      # B may now race for `shared` (it will block)
+            delete obj;            # destructor -> flushCallbacksByOwner(owner)
+        }, owner);
+
+        assertEq(0, startedA.waitForZero(10s), "callback A did not start within 10s");
+        # Both must complete: the destructor's drain must not block holding `shared`
+        # (else A and B deadlock), and B must then acquire `shared` and finish.
+        assertEq(0, destructed.waitForZero(30s),
+            "self-draining destructor holding a sibling lock deadlocked the dispatcher");
+        assertEq(0, bDone.waitForZero(30s),
+            "sibling callback never acquired the lock (dispatcher deadlock)");
     }
 
     # An owner-tagged timer's fired-but-still-running callback must be drainable
@@ -105,5 +200,33 @@ public class TimerDispatchTest inherits QUnit::Test {
         ctrl.addTimer(now_us() + 50ms, cb);
         assertEq(0, cnt.waitForZero(10s), "timer funcref did not fire within 10s");
         assertNeq(caller_tid, fire_tid, "funcref must run on a dispatcher worker, not the caller");
+    }
+}
+
+#! An object whose destructor drains its OWN async-I/O owner.
+/** Models WebSocketClient::destructor, which calls
+    flushCallbacksByOwner(async_owner) and can itself run on the dispatcher
+    worker that is executing one of that owner's callbacks (when the callback
+    drops the object's last reference).
+*/
+class SelfDrainingOwner {
+    private {
+        string owner;
+        Counter destructed;
+    }
+
+    constructor(string n_owner, Counter n_destructed) {
+        owner = n_owner;
+        destructed = n_destructed;
+    }
+
+    destructor() {
+        # Drain our own owner.  When this destructor runs on the dispatcher
+        # worker that is executing this owner's callback, that worker's own
+        # in-flight item keeps active_per_owner[owner] >= 1; waitForOwnerIdle()
+        # must exclude it rather than wait for itself.
+        AsyncSocketIoController controller = getGlobalAsyncIoController();
+        controller.flushCallbacksByOwner(owner);
+        destructed.dec();
     }
 }

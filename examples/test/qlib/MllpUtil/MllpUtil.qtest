@@ -81,9 +81,46 @@ class MllpUtilTest inherits QUnit::Test {
         assertEq("AE", info.acknowledgment_code);
         assertEq("validation failed", info.text_message);
         assertFalse(info.accepted);
+        assertEq(1, info.errors.size());
+        assertEq("207", info.errors[0].error_code);
+        assertEq("Application internal error", info.errors[0].error_text);
+        assertEq("E", info.errors[0].severity);
+        assertEq("validation failed", info.errors[0].user_message);
+
+        string reject_ack = MllpUtil::mllp_build_ack(Message, MllpUtil::MllpAckCode::ApplicationReject,
+            "invalid observation", {
+                "error": {
+                    "location": ("OBX", "1", "5"),
+                    "error_code": {"code": "102", "text": "Data type error", "coding_system": "HL70357"},
+                    "severity": "E",
+                    "user_message": "OBX-5 must match OBX-2",
+                },
+            });
+        info = MllpUtil::mllp_parse_ack(reject_ack);
+        assertEq("AR", info.acknowledgment_code);
+        assertFalse(info.accepted);
+        assertEq(1, info.errors.size());
+        assertEq("OBX^1^5", info.errors[0].location);
+        assertEq("102", info.errors[0].error_code);
+        assertEq("Data type error", info.errors[0].error_text);
+        assertEq("OBX-5 must match OBX-2", info.errors[0].user_message);
+
+        string custom = "MSH*;!%$*SRC*FAC*DST*FAC*202605261200**ORU;R01*MSG0002*P*2.5.1\r"
+            "PID*1**12345;;;MRN;MR**Doe;Jane\r";
+        string custom_ack = MllpUtil::mllp_build_ack(custom);
+        assertTrue(custom_ack =~ /^MSH\*;!%\$/);
+        Hl7v2Util::Hl7v2Message custom_ack_msg(custom_ack);
+        assertEq("ACK", custom_ack_msg.getAddress("MSH-9.1"));
+        assertEq("R01", custom_ack_msg.getAddress("MSH-9.2"));
+        assertEq("MSG0002", custom_ack_msg.getAddress("MSA-2"));
 
         assertThrows("MLLP-ACK-ERROR", sub () {
             MllpUtil::mllp_parse_ack("MSH|^~\\&|A|B|C|D|202605261200||ACK|ACK1|P|2.5.1\r");
+        });
+        assertThrows("MLLP-ACK-ERROR", sub () {
+            MllpUtil::mllp_build_ack(Message, MllpUtil::MllpAckCode::ApplicationError, "bad", {
+                "errors": ("bad",),
+            });
         });
     }
 
