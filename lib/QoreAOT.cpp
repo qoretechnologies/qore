@@ -7599,6 +7599,15 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         return false;
     }
 
+    std::string output_canon;
+    {
+        char* r = realpath(output_path.c_str(), nullptr);
+        if (r) {
+            output_canon = r;
+            free(r);
+        }
+    }
+
     QoreParseOptions po = parse_options;
 
     ExceptionSink xsink;
@@ -7633,6 +7642,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // QoreAOTBinaryReader::open), so extracted_frags can go out of
     // scope after resolveAll returns.
     std::vector<QoreAOTExtractedFragment> extracted_frags;
+    std::unique_ptr<QoreAOTBinaryMultiDeserializer> sibling_mdes;
     if (!library_paths.empty()) {
         // Scan each -L dir.
         for (const std::string& libdir : library_paths) {
@@ -7661,17 +7671,27 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 }
                 QoreStringValueHelper fn(fn_val);
                 std::string qo_path = libdir + "/" + fn->c_str();
+                if (!output_canon.empty()) {
+                    char* qo_real = realpath(qo_path.c_str(), nullptr);
+                    if (qo_real) {
+                        bool skip = output_canon == qo_real;
+                        qo_path = qo_real;
+                        free(qo_real);
+                        if (skip) {
+                            continue;
+                        }
+                    }
+                }
                 if (!readQoFragmentBlobs(qo_path, extracted_frags, error)) {
                     return false;
                 }
             }
         }
 
-        // Phase 1 + Phase 2 via multi-deserializer.  Must run under a
-        // ProgramRuntimeParseContextHelper so deserializer-driven
-        // UserVariantBase construction can call
-        // parse_get_parse_options() (same invariant the runtime
-        // module-init path observes — see QoreAOTRuntime.cpp:6911).
+        // Phase 1 via multi-deserializer.  Only create sibling shells here.
+        // The target source is parsed before Phase 2 below so siblings that
+        // depend on target declarations can resolve cleanly during the later
+        // cross-blob pass.
         if (!extracted_frags.empty()) {
             ExceptionSink pch_xsink;
             ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
@@ -7680,11 +7700,11 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 error = "failed to set parse context for sibling preload";
                 return false;
             }
-            QoreAOTBinaryMultiDeserializer mdes(*qpgm);
+            auto mdes = std::make_unique<QoreAOTBinaryMultiDeserializer>(*qpgm);
             bool preload_failed = false;
             std::string deser_error;
             for (auto& frag : extracted_frags) {
-                if (!mdes.addBlob(frag.bytes.data(),
+                if (!mdes->addBlob(frag.bytes.data(),
                         static_cast<uint32_t>(frag.bytes.size()),
                         deser_error)) {
                     error = "preload of '" + frag.symbol_name + "' failed: "
@@ -7694,12 +7714,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 }
             }
             if (!preload_failed) {
-                std::string resolve_error;
-                if (!mdes.resolveAll(resolve_error)) {
-                    error = "sibling .qo cross-resolution failed: "
-                        + resolve_error;
-                    preload_failed = true;
-                }
+                sibling_mdes = std::move(mdes);
             }
             if (preload_failed) {
                 return false;
@@ -7717,11 +7732,48 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         error = "parse error in target file: " + target_canon;
         return false;
     }
+
+    // Resolve sibling fragments far enough that the normal Qore
+    // parseCommit() below can commit the combined source/stub/AOT program in
+    // one pass.  Must run under a ProgramRuntimeParseContextHelper so
+    // deserializer-driven UserVariantBase construction can call
+    // parse_get_parse_options() (same invariant the runtime module-init path
+    // observes — see QoreAOTRuntime.cpp:6911).
+    if (sibling_mdes) {
+        ExceptionSink pch_xsink;
+        ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
+        if (pch_xsink.isException()) {
+            pch_xsink.handleExceptions();
+            error = "failed to set parse context for sibling preload";
+            return false;
+        }
+        std::string resolve_error;
+        if (!sibling_mdes->resolveForSourceParse(resolve_error)) {
+            error = "sibling .qo cross-resolution failed: " + resolve_error;
+            return false;
+        }
+    }
+
     qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "parse commit failed: " + target_canon;
         return false;
+    }
+
+    if (sibling_mdes) {
+        ExceptionSink pch_xsink;
+        ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
+        if (pch_xsink.isException()) {
+            pch_xsink.handleExceptions();
+            error = "failed to set parse context for sibling preload";
+            return false;
+        }
+        std::string resolve_error;
+        if (!sibling_mdes->finalizeAfterSourceParse(resolve_error)) {
+            error = "sibling .qo finalization failed: " + resolve_error;
+            return false;
+        }
     }
     if (wsink.isException()) {
         wsink.handleWarnings();

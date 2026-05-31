@@ -2335,6 +2335,149 @@ public:
         return true;
     }
 
+    //! Resolve sibling blobs far enough that a following source parseCommit()
+    //! can commit the combined source/stub/AOT program in one normal pass.
+    bool resolveForSourceParse(std::string& error) {
+        auto runSessionPhase = [this, &error](const char* context, auto&& fn) -> bool {
+            size_t i = 0;
+            for (auto& sess : sessions) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+                    error = std::string("operation cancelled during ") + context;
+                    return false;
+                }
+                if (!fn(*sess)) {
+                    return false;
+                }
+                ++i;
+            }
+            return true;
+        };
+
+        if (!runSessionPhase("AOT type resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveTypes(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT class constant shell registration",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.registerClassConstantShellsPhase(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT namespace constant resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveNamespaceConstantsPhase(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT class constant value resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveClassConstantValuesPhase(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT global resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveStaticsAndConstants(error);
+                })) {
+            return false;
+        }
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+        if (!runSessionPhase("AOT function and method deserialization",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.deserializeFunctionsAndMethods(error);
+                })) {
+            return false;
+        }
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+        if (!runSessionPhase("AOT static member resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveStaticMembersPhase(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT member resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveMembers(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT base class map rebuild",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.rebuildBaseClassSmlPhase(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT inherited member import",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.importInheritedMembersPhase(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT class commit prepare",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.commitClassesPrepare(error);
+                })) {
+            return false;
+        }
+        return true;
+    }
+
+    //! Finish AOT-only post-commit work after source parseCommit().
+    bool finalizeAfterSourceParse(std::string& error) {
+        auto runSessionPhase = [this, &error](const char* context, auto&& fn) -> bool {
+            size_t i = 0;
+            for (auto& sess : sessions) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+                    error = std::string("operation cancelled during ") + context;
+                    return false;
+                }
+                if (!fn(*sess)) {
+                    return false;
+                }
+                ++i;
+            }
+            return true;
+        };
+
+        if (!runSessionPhase("AOT abstract import",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.commitClassesImportAbstract(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT abstract resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.commitClassesResolveAbstract(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT class validation",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.commitClassesValidate(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT pre-index finalization",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.finalizePreIndex(error);
+                })) {
+            return false;
+        }
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+        return runSessionPhase("AOT post-index finalization",
+            [&error](QoreAOTBinaryDeserializer& sess) {
+                return sess.finalizePostIndex(error);
+            });
+    }
+
     //! Number of blobs currently in-session.
     size_t sessionCount() const { return sessions.size(); }
 

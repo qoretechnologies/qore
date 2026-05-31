@@ -1550,7 +1550,12 @@ void qore_class_private::parseCommit() {
             // add parent classes to signature if creating for the first time
             if (has_sig_changes && scl) {
                 for (auto& i : *scl) {
-                    assert((*i).sclass);
+                    if (!(*i).sclass) {
+                        (*i).tryResolveClass(cls, true);
+                        if (!(*i).sclass) {
+                            continue;
+                        }
+                    }
                     (*i).sclass->priv->parseCommit();
                     do_sig(csig, *i);
                 }
