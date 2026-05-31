@@ -76,7 +76,23 @@ fi
 echo "  confirmed: stub produced no .qo; target has 1 register entry point"
 
 echo ""
-echo "=== Step 4: batch mode with --stub ==="
+echo "=== Step 4: custom output basename drives register identity ==="
+cat > "${TMP}/simple.qc" <<'EOF'
+%modern
+
+int sub answer() {
+    return 0;
+}
+EOF
+CUSTOM_QO="${TMP}/custom-target.qo"
+"${QCC}" -c -o "${CUSTOM_QO}" "${TMP}/simple.qc" >/dev/null
+nm "${CUSTOM_QO}" | grep -q "T qore_custom_target_custom_target_script_register"
+LD_LIBRARY_PATH=build "${QCC}" -o "${TMP}/custom-app" -e answer "${CUSTOM_QO}" >/dev/null
+LD_LIBRARY_PATH=build "${TMP}/custom-app"
+echo "  confirmed: custom .qo filename controls qcc link glue symbols"
+
+echo ""
+echo "=== Step 5: batch mode with --stub ==="
 cat > "${TMP}/target2.qc" <<'EOF'
 %modern
 
