@@ -553,30 +553,44 @@ public class HttpAsyncSocketIoController {
         remove persistent_queues{key};
     }
 
-    #! Returns the persistent queue for a connection, or NOTHING if none
+    #! Routes a request to a persistent queue if one is still registered
     /** @param key the socket unique hash identifying the connection
         @param hdr the request headers to test against the filter (if any)
-        @return the Queue if a dedicated thread is waiting and the filter passes, or NOTHING
+        @param entry the queue entry to push if routing succeeds
+        @param before_push optional internal callback run while routing is
+            committed but before the entry is pushed
+        @return True if the request was pushed to the dedicated thread, False otherwise
     */
-    *Queue getPersistentQueue(string key, *hash<auto> hdr) {
+    bool pushPersistentQueue(string key, *hash<auto> hdr, hash<auto> entry,
+            *code<nothing()> before_push) {
         # Copy references under the lock, then release before invoking the filter
         # to avoid holding the mutex during a user-provided callback
-        *code filter;
+        *code<bool(hash<auto>)> filter;
         *Queue queue;
         {
             persistent_queue_mutex.lock();
             on_exit persistent_queue_mutex.unlock();
             if (!persistent_queues{key}) {
-                return;
+                return False;
             }
             filter = persistent_queues{key}.filter;
             queue = persistent_queues{key}.queue;
         }
         # Invoke the filter outside the lock
         if (filter && !filter(hdr)) {
-            return;
+            return False;
         }
-        return queue;
+
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        if (!persistent_queues{key} || persistent_queues{key}.queue !== queue) {
+            return False;
+        }
+        if (before_push) {
+            before_push();
+        }
+        queue.push(entry);
+        return True;
     }
 
     private hash<auto> addPersistentQueueClosures(hash<auto> header_info) {
@@ -591,21 +605,17 @@ public class HttpAsyncSocketIoController {
     }
 
     private bool routeRequestToPersistentQueue(string uh, hash<HttpConnectionInfo> conn_info) {
-        *Queue pq = getPersistentQueue(uh, conn_info.hdr);
-        if (!pq) {
-            return False;
-        }
-
-        log(LoggerLevel::DEBUG, "HTTP/1.x request routed to persistent queue: %y %s %s",
-            uh, conn_info.hdr.method, conn_info.hdr.path);
-        {
-            AutoWriteLock al(m);
-            remove connections{uh};
-        }
-        pq.push({
+        if (!pushPersistentQueue(uh, conn_info.hdr, {
             "type": "request",
             "conn_info": conn_info,
-        });
+        }, sub () {
+            log(LoggerLevel::DEBUG, "HTTP/1.x request routed to persistent queue: %y %s %s",
+                uh, conn_info.hdr.method, conn_info.hdr.path);
+            AutoWriteLock al(m);
+            remove connections{uh};
+        })) {
+            return False;
+        }
         return True;
     }
 
@@ -1776,26 +1786,23 @@ public class HttpAsyncSocketIoController {
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection, route the request to it instead of the pool
-        *Queue pq = getPersistentQueue(persistent_uh, hdr);
-        if (pq) {
+        *code resume_reading;
+        if (body_streaming) {
+            resume_reading = sub () {
+                resumeMultiplexedReading(h3op, uh, HttpConnectionState::Http3);
+            };
+        }
+        if (pushPersistentQueue(persistent_uh, hdr, {
+            "type": "request",
+            "conn_info": conn_info,
+            "stream_id": stream_id,
+            "body_streaming": body_streaming,
+            "resume_reading": resume_reading,
+        }, sub () {
             log(LoggerLevel::DEBUG, "HTTP/3 request routed to persistent queue: %y "
                 "session=%d stream=%d %s %s",
                 persistent_uh, session_id, stream_id, request.method, request.path);
-            # Build resume callback for body_streaming
-            *code resume_reading;
-            if (body_streaming) {
-                resume_reading = sub () {
-                    resumeMultiplexedReading(h3op, uh,
-                        HttpConnectionState::Http3);
-                };
-            }
-            pq.push({
-                "type": "request",
-                "conn_info": conn_info,
-                "stream_id": stream_id,
-                "body_streaming": body_streaming,
-                "resume_reading": resume_reading,
-            });
+        })) {
             return;
         }
 
@@ -3584,25 +3591,22 @@ public class HttpAsyncSocketIoController {
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection and the request matches the session filter, route the request
         # to the dedicated thread instead of the pool
-        *Queue pq = getPersistentQueue(uh, hdr);
-        if (pq) {
+        *code resume_reading;
+        if (body_streaming) {
+            resume_reading = sub () {
+                resumeMultiplexedReading(h2op, uh, HttpConnectionState::Http2);
+            };
+        }
+        if (pushPersistentQueue(uh, hdr, {
+            "type": "request",
+            "conn_info": conn_info,
+            "stream_id": stream_id,
+            "body_streaming": body_streaming,
+            "resume_reading": resume_reading,
+        }, sub () {
             log(LoggerLevel::DEBUG, "HTTP/2 request routed to persistent queue: %y stream=%d %s %s",
                 uh, stream_id, request.method, request.path);
-            # Build resume callback for body_streaming
-            *code resume_reading;
-            if (body_streaming) {
-                resume_reading = sub () {
-                    resumeMultiplexedReading(h2op, uh,
-                        HttpConnectionState::Http2);
-                };
-            }
-            pq.push({
-                "type": "request",
-                "conn_info": conn_info,
-                "stream_id": stream_id,
-                "body_streaming": body_streaming,
-                "resume_reading": resume_reading,
-            });
+        })) {
             return;
         }
 
