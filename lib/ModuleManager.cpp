@@ -415,8 +415,11 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
         tpgm->addFeature(name.c_str());
     }
 
-    // make sure getProgram() returns this Program when module_ns_init() is called
-    ProgramCallContextHelper pcch(tpgm);
+    // Make sure getProgram() returns this Program when module_ns_init() is called.
+    // A call-only context is not enough when a child Program loads a module from
+    // a thread already running in its parent Program; getProgram() prefers
+    // current_pgm over call_program_context.
+    QoreProgramContextHelper pcch(tpgm);
 
     RootQoreNamespace* rns = tpgm->getRootNS();
     QoreNamespace* qns = tpgm->getQoreNS();
@@ -770,15 +773,14 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
         }
     }
 
-    // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
-    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+    OptLocker ol(&mutex);
     loadModuleIntern(xsink, wsink, name, pgm, reexport, MOD_OP_NONE, 0, 0, mpgm, load_opt, warning_mask,
         mod_desc_func);
     return xsink ? -1 : 0;
 }
 
 void QoreModuleManager::loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm) {
-    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+    OptLocker ol(&mutex);
     loadModuleIntern(xsink, xsink, name, pgm);
 }
 
@@ -821,8 +823,7 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         return 0;
     }
 
-    // serialize with other module loads unless we are nested inside one already
-    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+    OptLocker ol(&mutex);
 
     // tag any namespaces created by the module's init callback with the module name
     QoreModuleNameContextHelper mnch(feature);
@@ -842,7 +843,7 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
 
     // mirror qore_check_load_module_intern: merge the module's namespace into tpgm
     {
-        AutoUnlocker au(module_load_depth == 0 ? &mutex : nullptr);
+        AutoUnlocker au(&mutex);
         mi->addToProgram(tpgm, xsink);
     }
     return xsink ? -1 : 0;
@@ -1021,7 +1022,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     //printd(5, "QoreModuleManager::loadModuleIntern() name: '%s' path: '%s' reexport: %d pgm: %p\n", name,
     //    raw_path ? raw_path : "n/a", reexport, pgm);
-    QoreThreadLock* unlock_lock = module_load_depth == 0 ? &mutex : nullptr;
+    QoreThreadLock* unlock_lock = &mutex;
 
     // check for special "qore" feature
     if (!raw_path && !strcmp(name, "qore")) {
@@ -1578,8 +1579,7 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
             return -1;
         }
 
-        // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
-        OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+        OptLocker ol(&mutex);
         // Load module; handle reexport flag separately to ensure correct module context
         mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, false, mo, &iv);
         // If reexport directive is present, register module for reexport (module context is correct here)
@@ -1587,8 +1587,7 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
             ModuleReExportHelper mrh(mod, true);
         }
     } else {
-        // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
-        OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+        OptLocker ol(&mutex);
         // Load module; handle reexport flag separately to ensure correct module context
         mod = loadModuleIntern(xsink, wsink, name, pgm, false);
         // If reexport directive is present, register module for reexport (module context is correct here)
@@ -1660,8 +1659,7 @@ int QoreModuleManager::importModuleNSUnlocked(const char* name, QoreProgram* pgm
 
 void QoreModuleManager::registerUserModuleFromSource(const char* name, const char* src, QoreProgram* pgm,
         ExceptionSink& xsink) {
-    // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
-    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+    OptLocker ol(&mutex);
     loadModuleIntern(xsink, xsink, name, pgm, false, MOD_OP_NONE, 0, src);
 }
 
@@ -2166,11 +2164,16 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // we do for user modules
     assert(!mpgm);
 
-    // Load dependencies BEFORE adding this module to the load map to prevent
-    // cross-thread circular dependency deadlocks (AB-BA deadlocks). Use
-    // path_pgm for search-path layering: AOT qmods expose source %requires as
-    // binary-module dependencies, and those must honor the importing Program's
-    // %prepend-module-path / %append-module-path lists.
+    // Reserve this module in the load map before loading dependencies.  A
+    // dependency's own ModuleLoadMapHelper unlocks the module-manager mutex
+    // while its init code runs; without this reservation, another thread can
+    // start loading the same parent module before this thread reaches the
+    // parent's own initialization.
+    ModuleLoadMapHelper mlmh(name, false);
+
+    // Use path_pgm for search-path layering: AOT qmods expose source %requires
+    // as binary-module dependencies, and those must honor the importing
+    // Program's %prepend-module-path / %append-module-path lists.
     if (!mod_info.dependencies.empty()) {
         for (std::string& dep : mod_info.dependencies) {
             loadModuleIntern(xsink, xsink, dep.c_str(), path_pgm);
@@ -2179,10 +2182,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             }
         }
     }
-
-    // Add this module to the load map for its own initialization
-    // This must be AFTER dependency loading to prevent AB-BA deadlocks
-    ModuleLoadMapHelper mlmh(name);
+    mlmh.unlock();
 
     // see if a module with this name is already registered
     QoreAbstractModule* mi = findModuleUnlocked(name);
@@ -2257,8 +2257,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     try {
         assert(q_gettid());
-        // The ModuleLoadMapHelper at line 1811 already handles unlocking for
-        // init — no need for a second one here.
+        // The ModuleLoadMapHelper above handles unlocking for init.
         assert(mod_info.init);
         printd(5, "QoreModuleManager::loadBinaryModuleFromDesc(%s) %s: calling module_init@%p\n", path,
             name, mod_info.init);
@@ -2416,8 +2415,7 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     // issue #4254: must run module commands unlocked
     QoreAbstractModule* mi;
     {
-        // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
-        OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+        OptLocker ol(&mutex);
         mi = loadModuleIntern(xsink, xsink, mname, pgm);
 
         if (xsink) {
@@ -2444,8 +2442,7 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     // issue #4254: must run module commands unlocked
     QoreAbstractModule* mi;
     {
-        // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
-        OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+        OptLocker ol(&mutex);
         mi = loadModuleIntern(*xsink, *xsink, mname, pgm);
         if (!mi && !*xsink) {
             xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot load builtin feature '%s' "
@@ -2548,19 +2545,23 @@ char version_list_t::set(const char* v) {
     return '\0';
 }
 
-ModuleLoadMapHelper::ModuleLoadMapHelper(const char* feature) : did_unlock(false) {
+ModuleLoadMapHelper::ModuleLoadMapHelper(const char* feature, bool unlock_now) : unlocked(false) {
     assert(QMM.module_load_map.find(feature) == QMM.module_load_map.end());
     i = QMM.module_load_map.insert(QoreModuleManager::module_load_map_t::value_type(feature, q_gettid())).first;
 
     // increment nested load depth counter
     ++module_load_depth;
 
-    // Only unlock if no other ModuleLoadMapHelper is active (i.e., we're the outermost one)
-    // If the map has exactly 1 entry (this one), we're the outermost helper
-    if (QMM.module_load_map.size() == 1) {
-        // run initialization unlocked
+    if (unlock_now) {
+        unlock();
+    }
+}
+
+void ModuleLoadMapHelper::unlock() {
+    if (!unlocked) {
+        // Run initialization unlocked.
         QMM.mutex.unlock();
-        did_unlock = true;
+        unlocked = true;
     }
 }
 
@@ -2568,8 +2569,7 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
     // decrement nested load depth counter
     --module_load_depth;
 
-    // Only lock if we unlocked in the constructor (i.e., we're the outermost helper)
-    if (did_unlock) {
+    if (unlocked) {
         QMM.mutex.lock();
     }
 
@@ -2577,7 +2577,7 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
     QMM.module_load_map.erase(i);
 
     // make sure and broadcast on the condition var inside the lock
-    if (did_unlock && QMM.module_load_waiting) {
+    if (QMM.module_load_waiting) {
         QMM.module_load_cond.broadcast();
     }
 }

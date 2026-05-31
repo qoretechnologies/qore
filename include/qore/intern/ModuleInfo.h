@@ -860,12 +860,14 @@ protected:
 
 class ModuleLoadMapHelper {
 public:
-    DLLLOCAL ModuleLoadMapHelper(const char* feature);
+    DLLLOCAL ModuleLoadMapHelper(const char* feature, bool unlock_now = true);
     DLLLOCAL ~ModuleLoadMapHelper();
+
+    DLLLOCAL void unlock();
 
 private:
     QoreModuleManager::module_load_map_t::iterator i;
-    bool did_unlock;  // true if we unlocked the mutex (and should re-lock it)
+    bool unlocked;
 };
 
 #endif

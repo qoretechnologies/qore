@@ -20,6 +20,7 @@
 public class DataProviderAOTTest inherits QUnit::Test {
     constructor() : Test("DataProvider AOT Test", "1.0") {
         addTestCase("provider index preserves type cache", \providerIndexPreservesTypeCache());
+        addTestCase("child Program imports preserve type map", \childProgramImportsPreserveTypeMap());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -70,5 +71,53 @@ public class DataProviderAOTTest inherits QUnit::Test {
         hash<string, bool> after_map = map {$1: True}, after;
         assertTrue(after_map{"/qore/hash"}, "registered type cache contains builtin hash type after index read");
         assertEq(before, after, "ProviderIndexUtil read must not reset the shared DataProvider type cache");
+    }
+
+    childProgramImportsPreserveTypeMap() {
+        Counter cnt(5);
+        list<string> failures = ();
+        Mutex mtx();
+
+        code record_failure = sub (string message) {
+            AutoLock al(mtx);
+            push failures, message;
+        };
+
+        for (int thread_index = 0; thread_index < 4; ++thread_index) {
+            background sub (int idx) {
+                on_exit cnt.dec();
+                try {
+                    for (int i = 0; i < 25; ++i) {
+                        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+                        p.loadModule("SqlUtil");
+                        p.loadModule("DataProvider");
+                        p.parsePending("hash<auto> sub childSmoke() { return {}; }", "child-smoke");
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    record_failure(sprintf("loader %d failed: %s: %s", idx, ex.err, ex.desc));
+                }
+            }(thread_index);
+        }
+
+        background sub () {
+            on_exit cnt.dec();
+            try {
+                for (int i = 0; i < 10000; ++i) {
+                    auto softint_type = AbstractDataProviderTypeMap."softint";
+                    if (softint_type.typeCode() != NT_OBJECT) {
+                        throw "DATAPROVIDER-AOT-TYPE-MAP-ERROR",
+                            sprintf("AbstractDataProviderTypeMap.\"softint\" has type code %d",
+                                softint_type.typeCode());
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                record_failure(sprintf("reader failed: %s: %s", ex.err, ex.desc));
+            }
+        }();
+
+        assertEq(0, cnt.waitForZero(30s), "concurrent child Program imports completed");
+        assertEq((), failures, "concurrent child Program imports must not corrupt the DataProvider type map");
+        assertEq(NT_OBJECT, AbstractDataProviderTypeMap."softint".typeCode(),
+            "DataProvider type map remains initialized after child Program imports");
     }
 }

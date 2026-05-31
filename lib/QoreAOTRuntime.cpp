@@ -9792,6 +9792,12 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
         ExceptionSink* external_xsink) {
     printd(5, "AOT ns_init called: root_ns=%p qore_ns=%p\n", (void*)root_ns, (void*)qore_ns);
 
+    // Applying an AOT module to a Program walks shared module namespace trees,
+    // loads reexported modules, updates per-module init state, and executes
+    // generated init functions.  None of that is safe to interleave with the
+    // same work for another Program using the same shared AOT module metadata.
+    AutoLocker aot_module_al(get_aot_init_execution_lock());
+
     ExceptionSink local_xsink;
     ExceptionSink& xsink = external_xsink ? *external_xsink : local_xsink;
     auto raise_ns_init_error = [&](const std::string& msg) {
@@ -10733,7 +10739,7 @@ static void executeInitFunctions(
                 // same AOT user module into another Program must not rewrite the
                 // shared ConstantEntry that compiled module code resolves against.
                 // refSelf() each time because setRuntimeValue takes ownership.
-                if (target_ce) {
+                if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
                 if (shadow_ce && shadow_ce != target_ce
@@ -10800,7 +10806,7 @@ static void executeInitFunctions(
                 // can rewrite values that earlier module-init side effects stored
                 // by identity.
                 // refSelf() each time because setRuntimeValue takes ownership.
-                if (target_ce) {
+                if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
                 if (shadow_ce && shadow_ce != target_ce
