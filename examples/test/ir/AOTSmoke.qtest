@@ -197,6 +197,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testCrossModuleSameName());
         addTestCase("AOT qcc stub external constants",
             \testQccStubExternalConstants());
+        addTestCase("AOT qcc script define excludes inactive branches",
+            \testQccScriptDefineExcludesInactiveBranches());
         addTestCase("AOT linked .qo replays module commands",
             \testAOTLinkedQoModuleCommands());
         addTestCase("AOT qmod dependency honors prepend module path",
@@ -5634,6 +5636,46 @@ sub main() {
             "missing host constant diagnostic explains the qcc --stub contract: " + run_missing);
         assertTrue(run_missing.regex("EXIT=1"),
             "missing host constant fails fast instead of using a stub placeholder: " + run_missing);
+    }
+
+    testQccScriptDefineExcludesInactiveBranches() {
+        string tmp_dir = sprintf("/tmp/aot_qcc_define_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/IfdefBranch.qr";
+        string qo_path = tmp_dir + "/IfdefBranch.qo";
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+%ifdef QorusServer
+int sub branch() {
+    return 1;
+}
+%else
+int sub branch() {
+    return missing_bareword;
+}
+%endif
+
+sub main() {
+    printf(\"%d\\n\", branch());
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --define=QorusServer -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_path, src_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc single-file script mode applies --define before parsing: "
+            + compile_out);
     }
 
     testAOTLinkedQoModuleCommands() {

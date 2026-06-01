@@ -802,6 +802,7 @@ public:
         @param include_source embed source text in metadata
         @param require_modules modules to require before parsing
         @param stub_files source files that provide declarations only
+        @param parse_defines parse-time defines to apply to the target
         @return true on success, false on failure
     */
     static bool compileScriptFile(const char* target_file,
@@ -813,7 +814,8 @@ public:
                                   const char* target_triple = nullptr,
                                   bool include_source = false,
                                   const std::vector<std::string>& require_modules = {},
-                                  const std::vector<std::string>& stub_files = {});
+                                  const std::vector<std::string>& stub_files = {},
+                                  const std::vector<std::string>& parse_defines = {});
 
     //! Package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`

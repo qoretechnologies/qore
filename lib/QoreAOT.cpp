@@ -7366,6 +7366,23 @@ static bool resolveParseOptionFlag(const std::string& name,
     return false;
 }
 
+static void apply_parse_defines(QoreProgram* pgm,
+        const std::vector<std::string>& parse_defines) {
+    for (const std::string& def : parse_defines) {
+        std::string name;
+        QoreValue val;
+        size_t eq = def.find('=');
+        if (eq == std::string::npos) {
+            name = def;
+            val = QoreValue(true);
+        } else {
+            name = def.substr(0, eq);
+            val = QoreValue::makeStringValue(def.substr(eq + 1));
+        }
+        pgm->parseDefine(name.c_str(), val);
+    }
+}
+
 bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& target_files,
         const std::string& output_dir,
@@ -7466,19 +7483,7 @@ bool QoreAOT::compileScriptFilesBatch(
     // from the oracle module we haven't loaded).  Default value is
     // the Qore literal `True` to mirror bin/qdsp-style
     // `qpgm->parseDefine("NAME", true)` idioms.
-    for (const std::string& def : parse_defines) {
-        std::string name;
-        QoreValue val;
-        size_t eq = def.find('=');
-        if (eq == std::string::npos) {
-            name = def;
-            val = QoreValue(true);
-        } else {
-            name = def.substr(0, eq);
-            val = QoreValue::makeStringValue(def.substr(eq + 1));
-        }
-        qpgm->parseDefine(name.c_str(), val);
-    }
+    apply_parse_defines(*qpgm, parse_defines);
 
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.
@@ -7573,7 +7578,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 const char* target_triple,
                                 bool include_source,
                                 const std::vector<std::string>& require_modules,
-                                const std::vector<std::string>& stub_files) {
+                                const std::vector<std::string>& stub_files,
+                                const std::vector<std::string>& parse_defines) {
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
@@ -7619,6 +7625,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         return false;
     }
     qpgm->setScriptPath(target_canon.c_str());
+
+    apply_parse_defines(*qpgm, parse_defines);
 
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.

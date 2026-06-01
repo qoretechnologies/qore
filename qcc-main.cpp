@@ -3838,7 +3838,8 @@ int main(int argc, char** argv) {
                 target_triple,
                 include_source,
                 load_modules,
-                stub_files)) {
+                stub_files,
+                parse_defines)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
