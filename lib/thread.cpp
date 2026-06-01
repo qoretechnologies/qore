@@ -1340,10 +1340,12 @@ cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist) {
     cvv_vec_t* cv = nullptr;
     for (lvar_set_t::const_iterator i = vlist->begin(), e = vlist->end(); i != e; ++i) {
         LocalVar* lv = *i;
-        ClosureVarValue* stack_cvv = thread_try_find_closure_var(lv->getName());
+        ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(lv->getName());
         ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(lv);
-        ClosureVarValue* cvv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
-            : (env_cvv ? env_cvv : stack_cvv);
+        ClosureVarValue* cvv = frame_cvv ? frame_cvv : env_cvv;
+        if (!cvv) {
+            cvv = thread_try_find_closure_var(lv->getName());
+        }
         assert(cvv);
         if (!cvv) {
             continue;

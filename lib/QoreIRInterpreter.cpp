@@ -995,6 +995,21 @@ static bool hasCleanupEntry(const std::vector<uint32_t>& cleanup, uint32_t id) {
     return std::find(cleanup.begin(), cleanup.end(), id) != cleanup.end();
 }
 
+static bool qore_ir_direct_params_runtime_safe(const QoreIRFunction* ir) {
+    if (!ir || !ir->direct_params_eligible) {
+        return false;
+    }
+
+    for (const auto& i : ir->param_local_vars) {
+        const LocalVar* lv = i.second;
+        if (lv && lv->closureUse()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // Sets a value slot without discarding the previous value. Only use this for
 // scalar or borrowed values; owned node values in loop-reexecuted slots must
 // use setValueSlot() so the previous iteration's value is released.
@@ -1236,6 +1251,30 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
     return stored;
 }
 
+static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
+    if (!var) {
+        return nullptr;
+    }
+
+    if (thread_has_runtime_closure_env()) {
+        ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(var->getName());
+        if (frame_cvv) {
+            return frame_cvv;
+        }
+
+        ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(var);
+        if (env_cvv) {
+            return env_cvv;
+        }
+    }
+
+    ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
+    if (!cvv) {
+        cvv = thread_try_get_runtime_closure_var(var);
+    }
+    return cvv;
+}
+
 // Write-through for closure variable stores: writes the value to the actual
 // ClosureVarValue so that changes are visible outside the IR interpreter.
 static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
@@ -1246,26 +1285,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     // a nested function call has pushed its own CVV on cvstack (different from
     // the closure's captured CVV for the same LocalVar*), the write must go to
     // the NESTED function's own CVV, not the captured one.
-    ClosureVarValue* cv = nullptr;
-    if (thread_has_runtime_closure_env()) {
-        ClosureVarValue* stack_cvv = thread_try_find_closure_var(var->getName());
-        ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(var);
-        if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
-            // Nested function call pushed its own CVV on top
-            cv = stack_cvv;
-        } else if (env_cvv) {
-            cv = env_cvv;
-        } else {
-            cv = stack_cvv;
-        }
-    }
-    if (!cv) {
-        // Regular function body or closure variable not in rtenv: use cvstack
-        cv = thread_try_find_closure_var(var->getName());
-        if (!cv) {
-            cv = thread_try_get_runtime_closure_var(var);
-        }
-    }
+    ClosureVarValue* cv = resolve_closure_var_value(var);
     if (!cv) {
         // Closure variable not found — fall back to local stack assignment.
         // This happens when a function has closureUse() variables but executes
@@ -1294,24 +1314,7 @@ static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, Except
         return;
     }
     // See LocalVar::eval / assignClosureVarValue for lookup priority strategy.
-    ClosureVarValue* cv = nullptr;
-    if (thread_has_runtime_closure_env()) {
-        ClosureVarValue* stack_cvv = thread_try_find_closure_var(var->getName());
-        ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(var);
-        if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
-            cv = stack_cvv;
-        } else if (env_cvv) {
-            cv = env_cvv;
-        } else {
-            cv = stack_cvv;
-        }
-    }
-    if (!cv) {
-        cv = thread_try_find_closure_var(var->getName());
-        if (!cv) {
-            cv = thread_try_get_runtime_closure_var(var);
-        }
-    }
+    ClosureVarValue* cv = resolve_closure_var_value(var);
     if (!cv) {
         // Fall back to local stack assignment
         LValueHelper helper(xsink);
@@ -5181,34 +5184,7 @@ load_local_done:
                                 locals_instantiated[local_inst->slot_id] = true;
                             }
                         }
-                        // See LocalVar::eval for the lookup priority strategy.
-                        // In summary: when inside a closure body AND a newer
-                        // CVV has been pushed on cvstack (by a nested function
-                        // call from the closure body), prefer the cvstack CVV.
-                        // This handles parameters of nested functions correctly
-                        // — they should read the nested function's own value,
-                        // not the closure's captured value.
-                        ClosureVarValue* cv = nullptr;
-                        if (thread_has_runtime_closure_env()) {
-                            ClosureVarValue* stack_cvv = thread_try_find_closure_var(
-                                local_inst->local->getName());
-                            ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(
-                                local_inst->local);
-                            if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
-                                // Nested function call pushed its own CVV on top
-                                cv = stack_cvv;
-                            } else if (env_cvv) {
-                                cv = env_cvv;
-                            } else {
-                                cv = stack_cvv;
-                            }
-                        }
-                        if (!cv) {
-                            cv = thread_try_find_closure_var(local_inst->local->getName());
-                            if (!cv) {
-                                cv = thread_try_get_runtime_closure_var(local_inst->local);
-                            }
-                        }
+                        ClosureVarValue* cv = resolve_closure_var_value(local_inst->local);
                         if (cv) {
                             is_weak_ref_local = isWeakReferenceType(cv->val.getType());
                             if (is_weak_ref_local) {
@@ -9325,10 +9301,7 @@ load_local_done:
                                     ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                 }
                             } else {
-                                ClosureVarValue* cvv = thread_try_find_closure_var(lv->getName());
-                                if (!cvv) {
-                                    cvv = thread_try_get_runtime_closure_var(lv);
-                                }
+                                ClosureVarValue* cvv = resolve_closure_var_value(lv);
                                 if (cvv && cvv->val.getType() == NT_REFERENCE) {
                                     ref = reinterpret_cast<ReferenceNode*>(cvv->val.v.n);
                                 }
@@ -10294,7 +10267,7 @@ lvalue_path_unary_done:
                             // to avoid stale pointers when modules are unloaded (especially dynamically-loaded ones)
                             // Only inline if caller and callee are in the same program
                             bool same_program = (uvb->pgm == direct_inst->pgm);
-                            if (same_program && callee_ir && callee_ir->direct_params_eligible
+                            if (same_program && qore_ir_direct_params_runtime_safe(callee_ir)
                                     && uvb->isStaticallyFastCallEligible()
                                     && !uvb->hasCachedFunction()
                                     && !direct_inst->has_ref_args

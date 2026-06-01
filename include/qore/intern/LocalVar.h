@@ -611,25 +611,30 @@ public:
         //     (the nested function's own var), NOT the captured one. This is
         //     the key difference vs case 1.
         //
-        // Strategy: look up both stack_cvv (by name, topmost) and env_cvv
-        // (by LocalVar* in closure's cmap). If stack_cvv != env_cvv, we're in
-        // case 3 and must use stack_cvv. Otherwise use env_cvv if present.
+        // Strategy: look up both frame_cvv (by name, in the current call frame)
+        // and env_cvv (by LocalVar* in closure's cmap). If frame_cvv != env_cvv,
+        // we're in case 3 and must use frame_cvv. Otherwise use env_cvv if
+        // present. A same-named CVV from an older frame is not a nested callee's
+        // own variable and must not override the lexical closure environment.
         ClosureVarValue* val = nullptr;
         if (thread_has_runtime_closure_env()) {
-            ClosureVarValue* stack_cvv = thread_try_find_closure_var(name.c_str());
+            ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(name.c_str());
             ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(this);
-            if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
+            if (frame_cvv && env_cvv && frame_cvv != env_cvv) {
                 // Case 3: nested function pushed its own CVV after the closure's
                 // captured one. Prefer the nested function's own variable.
-                val = stack_cvv;
+                val = frame_cvv;
             } else if (env_cvv) {
-                // Case 1: direct closure body (or env_cvv == stack_cvv on
+                // Case 1: direct closure body (or env_cvv == frame_cvv on
                 // same thread). Use the closure's captured CVV.
                 val = env_cvv;
             } else {
                 // Closure env doesn't have this LocalVar (nested function's
                 // own local not in any outer closure's capture set).
-                val = stack_cvv;
+                val = frame_cvv;
+                if (!val) {
+                    val = thread_try_find_closure_var(name.c_str());
+                }
             }
         } else {
             // Case 2: direct function body. Prefer cvstack (by name, topmost).
@@ -686,9 +691,17 @@ public:
             }
             return val->isRef();
         }
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
-        if (!val) {
-            val = thread_try_get_runtime_closure_var(this);
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            val = thread_try_find_closure_var_in_current_frame(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        } else {
+            val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
         }
         return val ? val->isRef() : false;
     }
@@ -712,11 +725,21 @@ public:
             return val->getLValue(lvh, for_remove, ti, rti);
         }
 
-        // Prefer cvstack lookup (topmost = current function's own variable).
-        // Use try_find() for AOT safety (see eval() comment).
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
-        if (!val) {
-            val = thread_try_get_runtime_closure_var(this);
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            // Prefer only the current frame's own CVV over the lexical closure
+            // environment; older same-named CVVs belong to outer frames.
+            val = thread_try_find_closure_var_in_current_frame(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        } else {
+            // Prefer cvstack lookup (topmost = current function's own variable).
+            // Use try_find() for AOT safety (see eval() comment).
+            val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
         }
         if (!val && !thread_has_runtime_closure_env()) {
             // Only lazily instantiate when NOT inside a closure body (see eval() comment)
@@ -738,11 +761,19 @@ public:
             return val->remove(lvrh, typeInfo);
         }
 
-        // Prefer cvstack lookup (topmost = current function's own variable).
-        // Use try_find() for AOT safety (see eval() comment).
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
-        if (!val) {
-            val = thread_try_get_runtime_closure_var(this);
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            val = thread_try_find_closure_var_in_current_frame(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        } else {
+            // Prefer cvstack lookup (topmost = current function's own variable).
+            // Use try_find() for AOT safety (see eval() comment).
+            val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
         }
         if (!val) {
             return;
