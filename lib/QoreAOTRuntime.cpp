@@ -8552,6 +8552,24 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
     return true;
 }
 
+//! Decide whether a recorded AOT dependency that failed to load is genuinely unavailable.
+/** AOT dependency lists are built from the parsed program's feature lists at compile time, so they
+    name exactly the modules that were loaded when the artifact was compiled — including optional
+    %try-module modules whose %ifndef-guarded code (e.g. json's make_json) was baked in.  Such a
+    module is therefore a hard runtime requirement: if it is genuinely unavailable the compiled
+    function/type slots that reference it cannot be registered, which otherwise surfaces as a cryptic
+    "unsupported AOT slot metadata" error far from the real cause.
+
+    A failed load is only tolerated for a circular/in-progress dependency, which is still registered
+    in the module map.  The module map must be queried with the correct locking discipline: the
+    source-stripped module-init paths (qore_aot_module_init_v2 / _v3) run with the module-loading
+    mutex held (inherited from loadBinaryModuleFromDesc) and must use the unlocked lookup, while the
+    executable/script entry points (qore_aot_run_v2 / _v3, qore_aot_module_init,
+    qore_aot_script_register / _end_batch) run without the mutex and use the locking lookup. */
+static bool aotRequiredDepUnavailable(const char* dep, bool module_lock_held) {
+    return module_lock_held ? !QMM.findModuleUnlocked(dep) : !QMM.findModule(dep);
+}
+
 extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
     const uint8_t* metadata, int metadata_len,
@@ -8630,6 +8648,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 
         // Load module dependencies before deserialization so that module classes,
         // functions, etc. are available when resolving base classes and types
+        bool dep_unavailable = false;
         {
             std::vector<std::string> deps;
             std::string dep_error;
@@ -8642,9 +8661,23 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                         printd(2, "AOT v2: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
                         xsink.clear();
+                        if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                            xsink.raiseException("AOT-ERROR",
+                                "the AOT-compiled program (%s) requires module '%s', which could not "
+                                "be loaded; the program was AOT-compiled against '%s' (its compiled "
+                                "code references that module's symbols) and cannot be loaded without it",
+                                (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                            xsink.handleExceptions();
+                            dep_unavailable = true;
+                            break;
+                        }
                     }
                 }
             }
+        }
+        if (dep_unavailable) {
+            rc = 2;
+            break;
         }
 
         // Deserialize namespace tree from metadata (replaces source parsing)
@@ -9321,6 +9354,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         // QoreProgram::parse(); AOT binaries skip parse() so we set it up explicitly.
         // NOTE: runtime=false to avoid premature doTopLevelInstantiation() before
         // setLVarsFromAOTContext() has populated the top-level LVList.
+        bool dep_unavailable_v3 = false;
         {
             ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
             if (xsink.isException()) {
@@ -9340,9 +9374,23 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                         printd(2, "AOT v3: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
                         xsink.clear();
+                        if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                            xsink.raiseException("AOT-ERROR",
+                                "the AOT-compiled program (%s) requires module '%s', which could not "
+                                "be loaded; the program was AOT-compiled against '%s' (its compiled "
+                                "code references that module's symbols) and cannot be loaded without it",
+                                (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                            xsink.handleExceptions();
+                            dep_unavailable_v3 = true;
+                            break;
+                        }
                     }
                 }
             }
+        }
+        if (dep_unavailable_v3) {
+            rc = 2;
+            break;
         }
 
         // Deserialize namespace tree from metadata (replaces source parsing)
@@ -9637,9 +9685,22 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         // Try to load the module (it may already be loaded, which is fine)
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
-            // Circular dependency or other issue - clear error and continue
-            // The types might be resolved later when the requiring script is parsed
             xsink.clear();
+            // A genuinely-missing dependency is a hard error (this init path runs with the
+            // module-loading mutex unlocked, so use the locking lookup); only a circular/in-progress
+            // dependency, still registered in the module map, is tolerated.
+            if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                QoreStringNode* err = new QoreStringNodeMaker(
+                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                    "and cannot be loaded without it",
+                    mod_name ? mod_name : "<unknown>",
+                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
+            // Circular dependency or other in-progress load - tolerate and continue.
+            // The types might be resolved later when the requiring script is parsed.
         }
     }
 
@@ -10241,14 +10302,31 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
     // Load each dependency module into this program.
     // runTimeLoadModule will call addToProgram which imports the namespace.
+    //
+    // The dependency list reflects the modules loaded when the .qmod was compiled (including
+    // optional %try-module modules whose code was baked into the binary), so a genuinely-missing
+    // dependency is a hard error — see the matching loop in qore_aot_module_init_v3 for details.
     for (const std::string& dep : deps) {
         printd(5, "AOT module v2 '%s': loading dependency '%s'\n", mod_name, dep.c_str());
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
-            // Circular dependency or other issue - clear error and continue
-            // The types might be resolved later when the requiring script is parsed
-            printd(5, "AOT module v2 '%s': dependency '%s' load error (rc=%d)\n", mod_name, dep.c_str(), rc);
             xsink.clear();
+            if (aotRequiredDepUnavailable(dep.c_str(), true)) {
+                // Genuinely missing (not a circular/in-progress load) — hard error.
+                printd(5, "AOT module v2 '%s': required dependency '%s' is unavailable\n",
+                    mod_name, dep.c_str());
+                QoreStringNode* err = new QoreStringNodeMaker(
+                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                    "and cannot be loaded without it",
+                    mod_name ? mod_name : "<unknown>",
+                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
+            // Circular dependency or other in-progress load - tolerate and continue.
+            printd(5, "AOT module v2 '%s': dependency '%s' load tolerated (rc=%d, module present)\n",
+                mod_name, dep.c_str(), rc);
         }
     }
 
@@ -11073,14 +11151,40 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     // Load each dependency module into this program.
     // runTimeLoadModule will call addToProgram which imports the namespace.
+    //
+    // The dependency list is built from the parsed program's feature lists at compile time
+    // (see serializeDependencies()), so it lists exactly the modules that were loaded when the
+    // .qmod was compiled — including optional %try-module modules whose %ifndef-guarded code
+    // (e.g. json's make_json) was baked into the binary.  Such a module is therefore a hard
+    // runtime requirement: if it is genuinely unavailable the compiled function/type slots that
+    // reference it cannot be registered, which previously surfaced as a cryptic "unsupported AOT
+    // slot metadata" error.  Fail here with a clear message instead.
+    //
+    // A failed load is only tolerated for a circular/in-progress dependency, which is still
+    // registered in the module map (findModuleUnlocked != nullptr); the module-loading mutex is
+    // held across AOT init (see aot_module_map note), so the unlocked lookup is correct here.
     for (const std::string& dep : deps) {
         printd(5, "AOT module v3 '%s': loading dependency '%s'\n", mod_name, dep.c_str());
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
-            // Circular dependency or other issue - clear error and continue
-            // The types might be resolved later when the requiring script is parsed
-            printd(5, "AOT module v3 '%s': dependency '%s' load error (rc=%d)\n", mod_name, dep.c_str(), rc);
             xsink.clear();
+            if (aotRequiredDepUnavailable(dep.c_str(), true)) {
+                // Genuinely missing (not a circular/in-progress load) — hard error.
+                printd(5, "AOT module v3 '%s': required dependency '%s' is unavailable\n",
+                    mod_name, dep.c_str());
+                QoreStringNode* err = new QoreStringNodeMaker(
+                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                    "and cannot be loaded without it",
+                    mod_name ? mod_name : "<unknown>",
+                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
+            // Circular dependency or other in-progress load - tolerate and continue.
+            // The types might be resolved later when the requiring script is parsed.
+            printd(5, "AOT module v3 '%s': dependency '%s' load tolerated (rc=%d, module present)\n",
+                mod_name, dep.c_str(), rc);
         }
     }
 
@@ -11481,9 +11585,18 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                 int dep_rc = MM.runTimeLoadModule(&xsink, dep.c_str(), tpgm);
                 if (dep_rc < 0 || xsink.isException()) {
                     printd(2, "qore_aot_script_register(%s): dependency '%s' load error "
-                        "(rc=%d) - continuing; may resolve later or via fallback\n",
-                        label ? label : "<script>", dep.c_str(), dep_rc);
+                        "(rc=%d)\n", label ? label : "<script>", dep.c_str(), dep_rc);
                     xsink.clear();
+                    if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                        xsink.raiseException("AOT-ERROR",
+                            "the AOT-compiled script (%s) requires module '%s', which could not be "
+                            "loaded; the script was AOT-compiled against '%s' (its compiled code "
+                            "references that module's symbols) and cannot be loaded without it",
+                            label ? label : "<script>", dep.c_str(), dep.c_str());
+                        xsink.handleExceptions();
+                        return 7;
+                    }
+                    // else: circular/in-progress dependency (still registered) - tolerate.
                 }
                 ++dep_cancel_i;
             }
@@ -11721,9 +11834,18 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     int dep_rc = MM.runTimeLoadModule(&xsink, dep.c_str(), tpgm);
                     if (dep_rc < 0 || xsink.isException()) {
                         printd(2, "qore_aot_script_end_batch(%s): dependency '%s' load "
-                            "error (rc=%d) - continuing\n",
-                            d.label.c_str(), dep.c_str(), dep_rc);
+                            "error (rc=%d)\n", d.label.c_str(), dep.c_str(), dep_rc);
                         xsink.clear();
+                        if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                            xsink.raiseException("AOT-ERROR",
+                                "the AOT-compiled script (%s) requires module '%s', which could not be "
+                                "loaded; the script was AOT-compiled against '%s' (its compiled code "
+                                "references that module's symbols) and cannot be loaded without it",
+                                d.label.c_str(), dep.c_str(), dep.c_str());
+                            xsink.handleExceptions();
+                            return 13;
+                        }
+                        // else: circular/in-progress dependency (still registered) - tolerate.
                     }
                     ++dep_load_i;
                 }

@@ -2488,6 +2488,9 @@ if (str)
     - There is one special feature name: \c "qore". This pseudo-feature can be used to check the minimum %Qore version; if this feature is requested with version information, then the %Qore library's version information is used for the version number comparison.
     - No type can be given with the \c %%try-module variable declaration; the value assigned to the variable will be a @ref hash_type "hash".
 
+    @note
+    <b>Behavior with AOT compilation:</b> \c %%try-module describes an <i>optional</i> dependency at parse time, but when a module is compiled ahead-of-time (to a \c .qmod with @ref qcc_tool "qcc"), the optional code path is resolved at <i>compile</i> time. If the module loaded successfully during compilation, the code guarded by the corresponding \c %%ifndef block (which references that module's functions, classes, constants, etc.) is lowered into the compiled binary, so the optional module becomes a <b>hard runtime dependency</b> of the resulting AOT artifact: it is recorded in the artifact's dependency list and is loaded automatically when the artifact is loaded. If it cannot be loaded at runtime, loading the AOT module fails with a clear error naming the missing module. Conversely, if the module was <i>not</i> available during compilation, the \c %%ifndef-guarded fallback code is compiled instead and the module is not a runtime dependency. In other words, an AOT artifact requires exactly the optional modules that were present when it was built; to produce an artifact that runs without an optional module, compile it in an environment where that module is absent.
+
     @see @ref requires "%requires" for a similar parse directive where errors are handled with the default parse exception handler
 
     @since %Qore 0.8.6; the variant without the @ref variable_declarations "variable declaration" was introduced in %Qore 0.8.6.1
