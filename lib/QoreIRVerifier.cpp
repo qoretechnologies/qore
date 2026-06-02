@@ -1327,6 +1327,21 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
     }
 }
 
+bool QoreIRFunction::isDirectParamsRuntimeSafe() const {
+    if (!direct_params_eligible) {
+        return false;
+    }
+
+    for (const auto& i : param_local_vars) {
+        const LocalVar* lv = i.second;
+        if (lv && lv->closureUse()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
 

@@ -2439,6 +2439,9 @@ public:
         return pos == std::string::npos ? n_name : n_name.substr(0, pos);
     }
 
+    //! @return true if direct parameter passing is enabled and no parameter local is closure-captured
+    bool isDirectParamsRuntimeSafe() const;
+
     std::string name;
     std::string display_name;
     //! Source QoreFunction this IR was lowered from — used by

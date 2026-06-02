@@ -6498,21 +6498,6 @@ static bool qore_rt_method_fast_call_eligible(const AbstractQoreFunctionVariant*
         : qore_rt_user_fast_call_eligible(variant);
 }
 
-static bool qore_ir_direct_params_runtime_safe(const QoreIRFunction* ir) {
-    if (!ir || !ir->direct_params_eligible) {
-        return false;
-    }
-
-    for (const auto& i : ir->param_local_vars) {
-        const LocalVar* lv = i.second;
-        if (lv && lv->closureUse()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info) {
     const QoreTypeInfo* rt = sig->getReturnTypeInfo();
@@ -6577,7 +6562,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
-    bool use_direct_params = qore_ir_direct_params_runtime_safe(ir)
+    bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
         && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
     if (!use_direct_params) {
@@ -6757,7 +6742,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
-    bool use_direct_params = qore_ir_direct_params_runtime_safe(ir)
+    bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
         && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
     LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);
@@ -7331,7 +7316,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
-    bool use_direct_params = qore_ir_direct_params_runtime_safe(ir)
+    bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
         && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
     LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);
@@ -11335,7 +11320,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
-    bool use_direct_params = qore_ir_direct_params_runtime_safe(ir)
+    bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
         && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
     LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);

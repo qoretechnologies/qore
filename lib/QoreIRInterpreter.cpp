@@ -995,21 +995,6 @@ static bool hasCleanupEntry(const std::vector<uint32_t>& cleanup, uint32_t id) {
     return std::find(cleanup.begin(), cleanup.end(), id) != cleanup.end();
 }
 
-static bool qore_ir_direct_params_runtime_safe(const QoreIRFunction* ir) {
-    if (!ir || !ir->direct_params_eligible) {
-        return false;
-    }
-
-    for (const auto& i : ir->param_local_vars) {
-        const LocalVar* lv = i.second;
-        if (lv && lv->closureUse()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 // Sets a value slot without discarding the previous value. Only use this for
 // scalar or borrowed values; owned node values in loop-reexecuted slots must
 // use setValueSlot() so the previous iteration's value is released.
@@ -10267,7 +10252,7 @@ lvalue_path_unary_done:
                             // to avoid stale pointers when modules are unloaded (especially dynamically-loaded ones)
                             // Only inline if caller and callee are in the same program
                             bool same_program = (uvb->pgm == direct_inst->pgm);
-                            if (same_program && qore_ir_direct_params_runtime_safe(callee_ir)
+                            if (same_program && callee_ir && callee_ir->isDirectParamsRuntimeSafe()
                                     && uvb->isStaticallyFastCallEligible()
                                     && !uvb->hasCachedFunction()
                                     && !direct_inst->has_ref_args
