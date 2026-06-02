@@ -81,6 +81,13 @@ option(QORE_BUILD_AOT_MODULES
        "Build AOT-compiled .qmod artifacts alongside each user module via qcc"
        ON)
 
+option(QORE_INSTALL_DEPENDS_ON_ALL
+       "Make the install target build the all target before installing"
+       OFF)
+if (NOT QORE_INSTALL_DEPENDS_ON_ALL)
+    set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
+endif()
+
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
